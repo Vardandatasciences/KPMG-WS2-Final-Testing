@@ -202,6 +202,9 @@ urlpatterns = [
     
     # Frontend v1 compatibility routes
     path('api/v1/rfps/', include('tprm_backend.rfp.urls')),  # Frontend compatibility for /api/v1/rfps/
+    path('api/v1/vendor-approval/', include('tprm_backend.apps.vendor_approval.urls')),  # Frontend compatibility for /api/v1/vendor-approval/
+    path('api/v1/vendor-core/', include('tprm_backend.apps.vendor_core.urls')),  # Frontend compatibility for /api/v1/vendor-core/
+    path('api/v1/vendor-questionnaire/', include('tprm_backend.apps.vendor_questionnaire.urls')),  # Frontend compatibility for /api/v1/vendor-questionnaire/
     # RFP responses endpoints for /api/v1/ compatibility
     path('api/v1/rfp-responses-detail/<int:response_id>/', rfp_response_views.get_rfp_response_by_id, name='get_rfp_response_by_id_v1'),
     path('api/v1/rfp-responses-list/', rfp_response_views.get_rfp_responses, name='get_rfp_responses_v1'),

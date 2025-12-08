@@ -2042,120 +2042,99 @@ def get_approvals_by_requester(request):
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
 def get_users(request):
-
-    """Get all users for dropdown selection"""
+    """Get all users for dropdown selection from tprm_integration database"""
 
     try:
-
-        with get_db_connection().cursor() as cursor:
-
-            cursor.execute("""
-
-                SELECT UserId, UserName, Email, CreatedAt 
-
-                FROM users 
-
-                ORDER BY UserName
-
-            """)
-
-            columns = [col[0] for col in cursor.description]
-
-            users = [dict(zip(columns, row)) for row in cursor.fetchall()]
-
+        # Import RBAC model
+        from tprm_backend.rbac.models import RBACTPRM
+        
+        # Get active users from tprm_integration database using ORM
+        # Filter for active users if is_active field exists
+        users_queryset = Users.objects.using('tprm').all()
+        
+        # Try to filter by is_active if the field exists
+        try:
+            users_queryset = users_queryset.filter(is_active__in=['Y', 'y', '1', 'Yes', 'YES'])
+        except:
+            # If is_active filtering fails, continue with all users
+            pass
+        
+        users_queryset = users_queryset.order_by('user_name')
+        
+        # Get role information from rbac_tprm table
+        user_role_map = {}
+        
+        try:
+            # Query rbac_tprm to get role information
+            with get_db_connection().cursor() as cursor:
+                cursor.execute("""
+                    SELECT DISTINCT UserId, Role
+                    FROM rbac_tprm
+                    WHERE (IsActive = 'Y' OR IsActive = 'y' OR IsActive = '1' OR UPPER(IsActive) = 'Y')
+                """)
+                
+                for row in cursor.fetchall():
+                    user_id = row[0]
+                    role = row[1] if len(row) > 1 and row[1] else None
+                    
+                    if user_id and role:
+                        user_role_map[user_id] = role
+        except Exception as rbac_error:
+            print(f"[USERS_API] Warning: Could not fetch role from rbac_tprm: {str(rbac_error)}")
+            # Continue without role data
+        
+        # Build user list with proper formatting
+        users_list = []
+        for user in users_queryset:
+            user_id = user.user_id
+            username = user.user_name or ''
             
-
-            # Add mock data for additional fields needed by frontend
-
-            for user in users:
-
-                user['id'] = user['UserId']
-
-                user['first_name'] = user['UserName'].split(' ')[0] if ' ' in user['UserName'] else user['UserName']
-
-                user['last_name'] = user['UserName'].split(' ')[1] if ' ' in user['UserName'] else ''
-
-                user['role'] = 'Manager' if 'admin' in user['UserName'].lower() else 'Employee'
-
-                user['department'] = 'IT' if 'admin' in user['UserName'].lower() else 'Operations'
-
+            # Split username into first and last name
+            name_parts = username.split(' ', 1)
+            first_name = name_parts[0] if name_parts else username
+            last_name = name_parts[1] if len(name_parts) > 1 else ''
             
-
-            return Response(users, status=status.HTTP_200_OK)
-
+            # Get role from rbac_tprm, fallback to parsing username
+            role = user_role_map.get(user_id)
+            if not role:
+                # Fallback: try to infer from username
+                if 'admin' in username.lower():
+                    role = 'Manager'
+                else:
+                    role = 'Employee'
             
+            # Get department from user's department_id, fallback to default
+            if user.department_id:
+                department = f'Department {user.department_id}'
+            else:
+                department = 'General'
+            
+            user_data = {
+                'id': user_id,
+                'UserId': user_id,
+                'UserName': username,
+                'Email': user.email or '',
+                'first_name': first_name,
+                'last_name': last_name,
+                'role': role,
+                'department': department,
+                'CreatedAt': user.created_at.isoformat() if user.created_at else None
+            }
+            users_list.append(user_data)
+        
+        print(f"[USERS_API] Successfully fetched {len(users_list)} users from tprm_integration database")
+        return Response(users_list, status=status.HTTP_200_OK)
 
     except Exception as e:
-
-        print(f"Error fetching users: {str(e)}")
-
-        # Return mock data if database fails
-
-        mock_users = [
-
-            {
-
-                'id': 1,
-
-                'UserId': 1,
-
-                'UserName': 'John Admin',
-
-                'Email': 'john.admin@company.com',
-
-                'first_name': 'John',
-
-                'last_name': 'Admin',
-
-                'role': 'Manager',
-
-                'department': 'IT'
-
-            },
-
-            {
-
-                'id': 2,
-
-                'UserId': 2,
-
-                'UserName': 'Jane Manager',
-
-                'Email': 'jane.manager@company.com',
-
-                'first_name': 'Jane',
-
-                'last_name': 'Manager',
-
-                'role': 'Manager',
-
-                'department': 'Operations'
-
-            },
-
-            {
-
-                'id': 3,
-
-                'UserId': 3,
-
-                'UserName': 'Bob Employee',
-
-                'Email': 'bob.employee@company.com',
-
-                'first_name': 'Bob',
-
-                'last_name': 'Employee',
-
-                'role': 'Employee',
-
-                'department': 'Finance'
-
-            }
-
-        ]
-
-        return Response(mock_users, status=status.HTTP_200_OK)
+        print(f"[USERS_API] Error fetching users: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        # Return error response instead of mock data
+        return Response({
+            'error': f'Failed to fetch users from database: {str(e)}',
+            'message': 'Please ensure the users table exists in tprm_integration database and is accessible.'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 

@@ -440,7 +440,7 @@ const getVendorIdForUser = async (userId) => {
       // Try multiple response format patterns
       let tempVendorData = null
       
-      // Pattern 1: response.data.data.temp_vendor
+      // Pattern 1: response.data.data.temp_vendor (most common DRF format)
       if (response.data && response.data.data && response.data.data.temp_vendor) {
         tempVendorData = response.data.data.temp_vendor
         console.log('✅ Found vendor via pattern 1 (response.data.data.temp_vendor)')
@@ -459,6 +459,11 @@ const getVendorIdForUser = async (userId) => {
       else if (response.data && response.data.id && (response.data.userid == userId || response.data.user_id == userId)) {
         tempVendorData = response.data
         console.log('✅ Found vendor via pattern 4 (response.data is vendor object)')
+      }
+      // Pattern 5: Check if response.data.data exists and has id (nested structure)
+      else if (response.data && response.data.data && response.data.data.id) {
+        tempVendorData = response.data.data
+        console.log('✅ Found vendor via pattern 5 (response.data.data)')
       }
       
       if (tempVendorData) {
@@ -614,7 +619,18 @@ const loadVendorAssignments = async () => {
     console.log('Response data:', response.data)
     console.log('Response status:', response.status)
     
-    vendorAssignments.value = response.data || response
+    // Handle different response formats
+    if (Array.isArray(response.data)) {
+      vendorAssignments.value = response.data
+    } else if (Array.isArray(response)) {
+      vendorAssignments.value = response
+    } else if (response.data && Array.isArray(response.data)) {
+      vendorAssignments.value = response.data
+    } else {
+      console.warn('Unexpected response format:', response)
+      vendorAssignments.value = []
+    }
+    
     console.log('Set vendorAssignments.value to:', vendorAssignments.value)
     console.log('Number of assignments found:', vendorAssignments.value ? vendorAssignments.value.length : 0)
     
@@ -663,6 +679,19 @@ const loadVendorAssignments = async () => {
       data: error.response?.data,
       status: error.response?.status
     })
+    
+    // Show user-friendly error message
+    if (error.response?.status === 404) {
+      console.log('⚠️ No assignments found for this vendor (404)')
+      vendorAssignments.value = []
+    } else if (error.response?.status === 400) {
+      console.error('⚠️ Bad request - vendor_id might be invalid')
+      showError('Invalid Request', error.response?.data?.error || 'Invalid vendor ID provided')
+    } else {
+      showError('Error Loading Assignments', error.response?.data?.error || error.message || 'Failed to load vendor assignments. Please try again.')
+    }
+    
+    vendorAssignments.value = []
   }
 }
 

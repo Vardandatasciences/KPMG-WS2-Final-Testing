@@ -220,8 +220,8 @@ class TempVendor(VendorBaseModel):
         verbose_name_plural = 'Temporary Vendors'
 
     def save(self, *args, **kwargs):
-        # Use default database (which is configured to use tprm_integration)
-        kwargs['using'] = 'default'
+        # Use tprm database (which is configured to use tprm_integration)
+        kwargs['using'] = 'tprm'
         super().save(*args, **kwargs)
     
     def __str__(self):

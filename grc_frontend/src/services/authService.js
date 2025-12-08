@@ -34,34 +34,20 @@ class AuthService {
                 )
                
                 if (!isAuthEndpoint) {
+                    // Check if token is expired and refresh if needed
+                    await this.checkAndRefreshToken()
+                   
                     const token = localStorage.getItem('access_token')
                     if (token) {
-                        // Only check and refresh token if it's close to expiring (not on every request)
-                        // This prevents unnecessary refresh attempts that could cause logout loops
-                        const accessTokenExpires = localStorage.getItem('access_token_expires')
-                        if (accessTokenExpires) {
-                            const expirationTime = new Date(accessTokenExpires)
-                            const currentTime = new Date()
-                            const timeUntilExpiration = expirationTime.getTime() - currentTime.getTime()
-                            
-                            // Only refresh if token expires in less than 10 minutes
-                            if (timeUntilExpiration < 10 * 60 * 1000 && timeUntilExpiration > 0) {
-                                // Token is close to expiring, try to refresh (but don't block the request if it fails)
-                                this.checkAndRefreshToken().catch(err => {
-                                    console.warn('⚠️ Token refresh check failed (non-blocking):', err.message)
-                                })
-                            }
-                        }
-                        
                         config.headers.Authorization = `Bearer ${token}`
                         // Reduced logging - only log for important requests
                         if (config.url.includes('/jwt/') || config.url.includes('/api/risk/')) {
                             console.log(`🔐 [AuthService] Adding JWT token to request: ${config.method.toUpperCase()} ${config.url}`)
                         }
                     } else {
-                        // No token available - but don't block the request, let it go through
-                        // The backend will return 401 if auth is required, and the response interceptor will handle it
-                        console.warn(`⚠️ [AuthService] No JWT token found for request: ${config.method.toUpperCase()} ${config.url}`)
+                        // No token available - reject the request to prevent 401 errors
+                        console.warn(`⚠️ [AuthService] No JWT token found for request: ${config.method.toUpperCase()} ${config.url} - blocking request`)
+                        return Promise.reject(new Error('No authentication token available. Please login again.'))
                     }
                 }
                 return config
@@ -89,12 +75,6 @@ class AuthService {
                
                 // Handle 401 errors (token expired)
                 if (error.response && error.response.status === 401 && !originalRequest._retry) {
-                    // Don't try to refresh if we're already refreshing or logging out
-                    if (this.isRefreshing || this.isLoggingOut) {
-                        console.warn('⚠️ Refresh already in progress or logging out - skipping refresh attempt')
-                        return Promise.reject(error)
-                    }
-                    
                     console.log('🔄 401 error detected - attempting token refresh...')
                    
                     // Mark this request as retried to prevent infinite loops
@@ -117,13 +97,12 @@ class AuthService {
                             return axios(originalRequest)
                         } else {
                             console.warn('❌ Token refresh failed - user will need to login again')
-                            // Don't force logout immediately - let the user continue with limited access
-                            // Only clear tokens if we've exceeded max attempts (handled in refreshAccessToken)
+                            // Don't force logout, let the user continue with limited access
                             return Promise.reject(error)
                         }
                     } catch (refreshError) {
                         console.error('❌ Error during token refresh:', refreshError)
-                        // Don't force logout immediately - let the user continue with limited access
+                        // Don't force logout, let the user continue with limited access
                         return Promise.reject(error)
                     }
                 }
@@ -347,11 +326,6 @@ class AuthService {
  
     async checkAndRefreshToken() {
         try {
-            // Don't refresh if we're already refreshing or logging out
-            if (this.isRefreshing || this.isLoggingOut) {
-                return false
-            }
-            
             // First check if we have an access token at all
             const accessToken = localStorage.getItem('access_token')
             if (!accessToken) {
@@ -361,19 +335,17 @@ class AuthService {
             
             const accessTokenExpires = localStorage.getItem('access_token_expires')
             if (!accessTokenExpires) {
-                // Token exists but no expiration info - don't try to refresh automatically
-                // This prevents unnecessary refresh attempts that could cause logout loops
-                // The token will be validated by the backend, and if it's invalid, the response interceptor will handle it
-                console.warn('⚠️ No access token expiration found - skipping automatic refresh')
-                return false
+                // Token exists but no expiration info - try to refresh anyway
+                console.warn('⚠️ No access token expiration found, attempting refresh...')
+                return await this.refreshAccessToken()
             }
 
             const expirationTime = new Date(accessTokenExpires)
             const currentTime = new Date()
             const timeUntilExpiration = expirationTime.getTime() - currentTime.getTime()
            
-            // Only refresh if token expires in less than 10 minutes AND is not already expired
-            if (timeUntilExpiration < 10 * 60 * 1000 && timeUntilExpiration > 0) {
+            // Refresh token if it expires in less than 10 minutes (more aggressive)
+            if (timeUntilExpiration < 10 * 60 * 1000) {
                 console.log('🔄 Access token expires soon, refreshing...')
                 return await this.refreshAccessToken()
             }
@@ -568,18 +540,11 @@ class AuthService {
         
         // Redirect to login if requested (default: true)
         // Only redirect if not already on login page and not during explicit logout
-        // Also check if we're in the middle of a form submission to avoid interrupting user work
-        if (shouldRedirect && 
-            window.location.pathname !== '/login' && 
-            window.location.pathname !== '/' &&
-            !this.isLoggingOut) {
+        if (shouldRedirect && window.location.pathname !== '/login' && window.location.pathname !== '/') {
             console.log('🔄 Redirecting to login page...')
             // Use setTimeout to allow cleanup to complete first
             setTimeout(() => {
-                // Double-check we're still not logged in before redirecting
-                if (!localStorage.getItem('access_token')) {
-                    window.location.href = '/login'
-                }
+                window.location.href = '/login'
             }, 100)
         }
     }

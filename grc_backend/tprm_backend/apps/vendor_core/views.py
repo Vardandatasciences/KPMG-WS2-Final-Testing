@@ -1260,11 +1260,11 @@ class TempVendorViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
             
             vendor_logger.info(f"Fetching user data for logged-in UserId: {user_id}")
             
-            # Get user role from rbac_tprm table
+            # Get user role from rbac_tprm table (in tprm_integration database)
             user_role = None
             user_rbac_permissions = None
             try:
-                rbac_entry = RBACTPRM.objects.filter(user_id=user_id).first()
+                rbac_entry = RBACTPRM.objects.using('tprm').filter(user_id=user_id).first()
                 if rbac_entry:
                     user_role = rbac_entry.role
                     # Get relevant vendor permissions
@@ -1280,8 +1280,8 @@ class TempVendorViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
             except Exception as rbac_error:
                 vendor_logger.error(f"Error fetching RBAC data for user {user_id}: {str(rbac_error)}")
             
-            # Step 1: Get temp_vendor record by UserId
-            temp_vendor = TempVendor.objects.filter(userid=user_id).first()
+            # Step 1: Get temp_vendor record by UserId from tprm_integration database
+            temp_vendor = TempVendor.objects.using('tprm').filter(userid=user_id).first()
             response_id = None
             
             if temp_vendor:
@@ -1313,16 +1313,16 @@ class TempVendorViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
                         current_stage = None
                         if temp_vendor.lifecycle_stage:
                             try:
-                                current_stage = VendorLifecycleStages.objects.get(stage_id=temp_vendor.lifecycle_stage)
+                                current_stage = VendorLifecycleStages.objects.using('tprm').get(stage_id=temp_vendor.lifecycle_stage)
                             except VendorLifecycleStages.DoesNotExist:
                                 pass
                         
-                        tracker_entries = LifecycleTracker.objects.filter(vendor_id=temp_vendor.id).order_by('started_at')
+                        tracker_entries = LifecycleTracker.objects.using('tprm').filter(vendor_id=temp_vendor.id).order_by('started_at')
                         tracker_data = []
                         for entry in tracker_entries:
                             stage_info = None
                             try:
-                                stage_info = VendorLifecycleStages.objects.get(stage_id=entry.lifecycle_stage)
+                                stage_info = VendorLifecycleStages.objects.using('tprm').get(stage_id=entry.lifecycle_stage)
                             except VendorLifecycleStages.DoesNotExist:
                                 pass
                             
@@ -1519,17 +1519,17 @@ class TempVendorViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
                         current_stage = None
                         if temp_vendor.lifecycle_stage:
                             try:
-                                current_stage = VendorLifecycleStages.objects.get(stage_id=temp_vendor.lifecycle_stage)
+                                current_stage = VendorLifecycleStages.objects.using('tprm').get(stage_id=temp_vendor.lifecycle_stage)
                             except VendorLifecycleStages.DoesNotExist:
                                 pass
                         
                         # Get lifecycle tracker entries
-                        tracker_entries = LifecycleTracker.objects.filter(vendor_id=temp_vendor.id).order_by('started_at')
+                        tracker_entries = LifecycleTracker.objects.using('tprm').filter(vendor_id=temp_vendor.id).order_by('started_at')
                         tracker_data = []
                         for entry in tracker_entries:
                             stage_info = None
                             try:
-                                stage_info = VendorLifecycleStages.objects.get(stage_id=entry.lifecycle_stage)
+                                stage_info = VendorLifecycleStages.objects.using('tprm').get(stage_id=entry.lifecycle_stage)
                             except VendorLifecycleStages.DoesNotExist:
                                 pass
                             

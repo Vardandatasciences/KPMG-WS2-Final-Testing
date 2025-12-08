@@ -934,8 +934,8 @@ class QuestionnaireAssignmentViewSet(VendorAuthenticationMixin, viewsets.ModelVi
     
     @action(detail=False, methods=['get'])
     def get_vendors(self, request):
-        """Get list of available vendors for assignment"""
-        vendors = TempVendor.objects.all()
+        """Get list of available vendors for assignment from tprm_integration database"""
+        vendors = TempVendor.objects.using('tprm').all()
         vendor_list = [
             {
                 'id': vendor.id,
@@ -951,8 +951,8 @@ class QuestionnaireAssignmentViewSet(VendorAuthenticationMixin, viewsets.ModelVi
     
     @action(detail=False, methods=['get'])
     def get_active_questionnaires(self, request):
-        """Get list of active questionnaires for assignment"""
-        questionnaires = Questionnaires.objects.filter(status='ACTIVE')
+        """Get list of active questionnaires for assignment from tprm_integration database"""
+        questionnaires = Questionnaires.objects.using('tprm').filter(status='ACTIVE')
         questionnaire_list = [
             {
                 'questionnaire_id': q.questionnaire_id,
@@ -1012,7 +1012,7 @@ class QuestionnaireResponseViewSet(VendorAuthenticationMixin, viewsets.ModelView
     
     @action(detail=False, methods=['get'])
     def get_vendor_assignments(self, request):
-        """Get assignments for a specific vendor"""
+        """Get assignments for a specific vendor from tprm_integration database"""
         vendor_id = request.query_params.get('vendor_id')
         if not vendor_id:
             return Response(
@@ -1020,23 +1020,54 @@ class QuestionnaireResponseViewSet(VendorAuthenticationMixin, viewsets.ModelView
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        assignments = QuestionnaireAssignments.objects.filter(
-            temp_vendor_id=vendor_id
-        ).select_related('questionnaire', 'temp_vendor')
-        
-        assignment_list = []
-        for assignment in assignments:
-            assignment_list.append({
-                'assignment_id': assignment.assignment_id,
-                'questionnaire_id': assignment.questionnaire.questionnaire_id,
-                'questionnaire_name': assignment.questionnaire.questionnaire_name,
-                'status': assignment.status,
-                'assigned_date': assignment.assigned_date,
-                'due_date': assignment.due_date,
-                'vendor_name': assignment.temp_vendor.company_name
-            })
-        
-        return Response(assignment_list)
+        try:
+            # Convert vendor_id to integer
+            try:
+                vendor_id = int(vendor_id)
+            except (ValueError, TypeError):
+                return Response(
+                    {'error': f'Invalid vendor_id: {vendor_id}. Must be a valid integer.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            print(f"[GET_VENDOR_ASSIGNMENTS] Fetching assignments for vendor_id: {vendor_id}")
+            
+            # Use 'tprm' database to query from tprm_integration
+            # Try both temp_vendor_id and temp_vendor__id in case of field name differences
+            assignments = QuestionnaireAssignments.objects.using('tprm').filter(
+                temp_vendor_id=vendor_id
+            ).select_related('questionnaire', 'temp_vendor')
+            
+            print(f"[GET_VENDOR_ASSIGNMENTS] Found {assignments.count()} assignments for vendor_id: {vendor_id}")
+            
+            assignment_list = []
+            for assignment in assignments:
+                try:
+                    assignment_data = {
+                        'assignment_id': assignment.assignment_id,
+                        'questionnaire_id': assignment.questionnaire.questionnaire_id,
+                        'questionnaire_name': assignment.questionnaire.questionnaire_name,
+                        'status': assignment.status,
+                        'assigned_date': assignment.assigned_date.isoformat() if assignment.assigned_date else None,
+                        'due_date': assignment.due_date.isoformat() if assignment.due_date else None,
+                        'vendor_name': assignment.temp_vendor.company_name if assignment.temp_vendor else 'Unknown Vendor'
+                    }
+                    assignment_list.append(assignment_data)
+                except Exception as e:
+                    print(f"[GET_VENDOR_ASSIGNMENTS] Error processing assignment {assignment.assignment_id}: {str(e)}")
+                    continue
+            
+            print(f"[GET_VENDOR_ASSIGNMENTS] Returning {len(assignment_list)} assignments")
+            return Response(assignment_list)
+            
+        except Exception as e:
+            print(f"[GET_VENDOR_ASSIGNMENTS] Error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {'error': f'Failed to fetch vendor assignments: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     @action(detail=False, methods=['get'])
     def get_assignment_responses(self, request):
@@ -1048,13 +1079,14 @@ class QuestionnaireResponseViewSet(VendorAuthenticationMixin, viewsets.ModelView
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        assignment = get_object_or_404(QuestionnaireAssignments, assignment_id=assignment_id)
+        # Use 'tprm' database to query from tprm_integration
+        assignment = get_object_or_404(QuestionnaireAssignments.objects.using('tprm'), assignment_id=assignment_id)
         questions = assignment.questionnaire.questions.all().order_by('display_order')
         
-        # Get existing responses
+        # Get existing responses from tprm_integration database
         existing_responses = {
             r.question_id: r for r in 
-            QuestionnaireResponseSubmissions.objects.filter(assignment=assignment)
+            QuestionnaireResponseSubmissions.objects.using('tprm').filter(assignment=assignment)
         }
         
         responses_data = []
