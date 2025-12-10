@@ -4,7 +4,7 @@ from rest_framework.routers import DefaultRouter
 
 from django.http import HttpResponse
 
-from .authentication import jwt_login, jwt_refresh, jwt_logout, jwt_verify, accept_consent, test_consent_auth, test_consent_simple
+from .authentication import jwt_login, jwt_refresh, jwt_logout, jwt_verify, accept_consent, test_consent_auth, test_consent_simple, mfa_verify_otp, mfa_resend_otp, google_oauth_initiate, google_oauth_callback
 
 from .views import test_jwt_auth, list_users
 
@@ -414,6 +414,9 @@ from .routes.Global.notifications import (
 # Consent Management
 from .routes.Consent import consent_views
 
+# Cookie Management
+from .routes.Cookie import cookie_views
+
 from grc.rbac import views as rbac_views
 
 from .routes.Global import rbac_test_views
@@ -503,6 +506,14 @@ auth_urlpatterns = [
     path('jwt/test-consent-simple/', test_consent_simple, name='test-consent-simple'),
 
     path('test-jwt-auth/', test_jwt_auth, name='test-jwt-auth'),
+
+    # MFA endpoints
+    path('jwt/mfa/verify-otp/', mfa_verify_otp, name='mfa-verify-otp'),
+    path('jwt/mfa/resend-otp/', mfa_resend_otp, name='mfa-resend-otp'),
+
+    # Google OAuth SSO endpoints
+    path('google/oauth/', google_oauth_initiate, name='google-oauth-initiate'),
+    path('google/oauth-callback/', google_oauth_callback, name='google-oauth-callback'),
 
 ]
 
@@ -2532,6 +2543,41 @@ consent_urlpatterns = [
     path('consent/acceptances/', 
          consent_views.get_all_consent_acceptances, 
          name='get-all-consent-acceptances'),
+    
+    # Consent Withdrawal
+    path('consent/withdraw/', 
+         consent_views.withdraw_consent, 
+         name='withdraw-consent'),
+    
+    path('consent/withdraw-all/', 
+         consent_views.withdraw_all_consents, 
+         name='withdraw-all-consents'),
+    
+    path('consent/withdrawals/<int:user_id>/', 
+         consent_views.get_user_consent_withdrawals, 
+         name='get-user-consent-withdrawals'),
+    
+    path('consent/status/<int:user_id>/', 
+         consent_views.check_consent_status, 
+         name='check-consent-status'),
+]
+
+
+# ============================================================================
+
+# COOKIE MANAGEMENT URLs
+
+# ============================================================================
+
+cookie_urlpatterns = [
+    # Cookie Preferences Management
+    path('cookie/preferences/save/', 
+         cookie_views.save_cookie_preferences, 
+         name='save-cookie-preferences'),
+
+    path('cookie/preferences/', 
+         cookie_views.get_cookie_preferences, 
+         name='get-cookie-preferences'),
 ]
 
 
@@ -2697,6 +2743,14 @@ urlpatterns = [
     # ========================================================================
 
     *consent_urlpatterns,
+
+    # ========================================================================
+
+    # COOKIE MANAGEMENT
+
+    # ========================================================================
+
+    *cookie_urlpatterns,
 
     
 

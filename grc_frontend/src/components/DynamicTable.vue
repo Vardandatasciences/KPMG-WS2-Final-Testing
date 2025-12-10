@@ -28,14 +28,23 @@
             <th 
               v-for="column in visibleColumns" 
               :key="column.key"
+              :draggable="true"
               :class="[
                 column.headerClass, 
                 'dynamic-table-header-cell', 
                 { 'is-sorted': sortKey === column.key },
                 { 'pinned-left': columnPins[column.key] === 'left' },
-                { 'pinned-right': columnPins[column.key] === 'right' }
+                { 'pinned-right': columnPins[column.key] === 'right' },
+                { 'dragging': draggedColumn === column.key },
+                { 'drag-over': dragOverColumn === column.key }
               ]"
               :style="{ width: columnWidths[column.key] ? columnWidths[column.key] + 'px' : (column.width ? column.width : (column.headerStyle && column.headerStyle.width ? column.headerStyle.width : 'auto')) }"
+              @dragstart="handleDragStart(column, $event)"
+              @dragend="handleDragEnd"
+              @dragover.prevent="handleDragOver(column, $event)"
+              @dragenter.prevent="handleDragEnter(column, $event)"
+              @dragleave="handleDragLeave(column, $event)"
+              @drop.prevent="handleDrop(column, $event)"
             >
               <div class="header-content">
                 <span class="header-label" :title="formatHeaderLabel(column.label)">
@@ -44,12 +53,15 @@
                     <i :class="sortOrder === 'asc' ? 'fas fa-arrow-up' : 'fas fa-arrow-down'"></i>
                   </span>
                 </span>
-                <div class="header-icons">
+                <div class="header-icons" @mousedown.stop @click.stop @dragstart.stop>
                   <button
                     type="button"
                     class="header-icon-btn filter-icon"
                     title="Filter column"
+                    draggable="false"
                     @click.stop="openColumnFilter(column, $event)"
+                    @mousedown.stop
+                    @dragstart.stop
                   >
                     <svg class="header-icon-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                       <line x1="5" y1="7" x2="19" y2="7" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
@@ -61,7 +73,10 @@
                     type="button"
                     class="header-icon-btn menu-icon"
                     title="Column options"
+                    draggable="false"
                     @click.stop="openColumnMenu(column, $event)"
+                    @mousedown.stop
+                    @dragstart.stop
                   >
                     <i class="fas fa-ellipsis-v"></i>
                   </button>
@@ -417,19 +432,40 @@ export default {
       showPinSubmenu: false,
       columnPins: {},
       lastMenuTrigger: null,
-      shouldFlipSubmenu: false
+      shouldFlipSubmenu: false,
+      columnOrder: [],
+      draggedColumn: null,
+      dragOverColumn: null,
+      dragStartIndex: null
     }
   },
   computed: {
     visibleColumns() {
       const visible = this.columns.filter(column => !column.hidden);
       
-      // Sort columns by pin position
+      // If column order is set, use it; otherwise use default order
+      let orderedColumns = visible;
+      if (this.columnOrder.length > 0) {
+        // Create a map for quick lookup
+        const orderMap = new Map();
+        this.columnOrder.forEach((key, index) => {
+          orderMap.set(key, index);
+        });
+        
+        // Sort visible columns by their order, with unordered columns at the end
+        orderedColumns = [...visible].sort((a, b) => {
+          const aOrder = orderMap.has(a.key) ? orderMap.get(a.key) : Infinity;
+          const bOrder = orderMap.has(b.key) ? orderMap.get(b.key) : Infinity;
+          return aOrder - bOrder;
+        });
+      }
+      
+      // Sort columns by pin position while maintaining order within each group
       const pinnedLeft = [];
       const unpinned = [];
       const pinnedRight = [];
       
-      visible.forEach(column => {
+      orderedColumns.forEach(column => {
         const pin = this.columnPins[column.key];
         if (pin === 'left') {
           pinnedLeft.push(column);
@@ -631,6 +667,14 @@ export default {
     this.filters.forEach(filter => {
       this.filterValues[filter.name] = filter.defaultValue || '';
     });
+    
+    // Initialize column order from props if provided
+    if (this.columns && this.columns.length > 0) {
+      const visible = this.columns.filter(col => !col.hidden);
+      if (this.columnOrder.length === 0) {
+        this.columnOrder = visible.map(col => col.key);
+      }
+    }
     
     // Initialize column widths from width property
     this.visibleColumns.forEach(column => {
@@ -1058,13 +1102,97 @@ export default {
       
       this.columnWidths = {};
       this.columnPins = {};
+      this.columnOrder = [];
       this.sortKey = '';
       this.sortOrder = 'asc';
       
-      console.log('Columns reset - All widths, pins, and sorting cleared');
+      console.log('Columns reset - All widths, pins, order, and sorting cleared');
       
       this.$emit('reset-columns');
       this.closeColumnMenu();
+    },
+    handleDragStart(column, event) {
+      this.draggedColumn = column.key;
+      this.dragStartIndex = this.visibleColumns.findIndex(col => col.key === column.key);
+      
+      // Set drag image
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', column.key);
+      
+      // Add visual feedback
+      event.target.style.opacity = '0.5';
+      
+      // Initialize column order if not set
+      if (this.columnOrder.length === 0) {
+        this.columnOrder = this.visibleColumns.map(col => col.key);
+      }
+    },
+    handleDragEnd(event) {
+      event.target.style.opacity = '1';
+      this.draggedColumn = null;
+      this.dragOverColumn = null;
+      this.dragStartIndex = null;
+    },
+    handleDragOver(column, event) {
+      if (this.draggedColumn === column.key) return;
+      
+      event.dataTransfer.dropEffect = 'move';
+      this.dragOverColumn = column.key;
+    },
+    handleDragEnter(column) {
+      if (this.draggedColumn === column.key) return;
+      this.dragOverColumn = column.key;
+    },
+    handleDragLeave(column, event) {
+      // Only clear dragOver if we're actually leaving the column
+      const rect = event.currentTarget.getBoundingClientRect();
+      const x = event.clientX;
+      const y = event.clientY;
+      
+      if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+        this.dragOverColumn = null;
+      }
+    },
+    handleDrop(targetColumn, event) {
+      event.preventDefault();
+      
+      if (!this.draggedColumn || this.draggedColumn === targetColumn.key) {
+        this.dragOverColumn = null;
+        return;
+      }
+      
+      const draggedKey = this.draggedColumn;
+      const targetKey = targetColumn.key;
+      
+      // Get current visible columns order
+      const currentOrder = this.visibleColumns.map(col => col.key);
+      
+      // Find indices
+      const draggedIndex = currentOrder.indexOf(draggedKey);
+      const targetIndex = currentOrder.indexOf(targetKey);
+      
+      if (draggedIndex === -1 || targetIndex === -1) {
+        this.dragOverColumn = null;
+        return;
+      }
+      
+      // Reorder columns
+      const newOrder = [...currentOrder];
+      newOrder.splice(draggedIndex, 1);
+      newOrder.splice(targetIndex, 0, draggedKey);
+      
+      // Update column order
+      this.columnOrder = newOrder;
+      
+      // Emit event for parent component
+      this.$emit('column-reorder', {
+        draggedColumn: draggedKey,
+        targetColumn: targetKey,
+        newOrder: newOrder
+      });
+      
+      this.dragOverColumn = null;
+      this.draggedColumn = null;
     }
   }
 }
@@ -1263,6 +1391,58 @@ export default {
 
 .dynamic-table-header-cell.is-sorted {
   background: #f0f4ff !important;
+}
+
+.dynamic-table-header-cell {
+  cursor: move;
+  user-select: none;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.dynamic-table-header-cell.dragging {
+  opacity: 0.5;
+  background: #e0e7ff !important;
+  border: 2px dashed #4f8cff !important;
+}
+
+.dynamic-table-header-cell.drag-over {
+  background: #dbeafe !important;
+  border-left: 3px solid #3b82f6 !important;
+  position: relative;
+}
+
+.dynamic-table-header-cell.drag-over::before {
+  content: '';
+  position: absolute;
+  left: -2px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #3b82f6;
+  z-index: 10;
+}
+
+.dynamic-table-header-cell:hover {
+  background: #f9fafb !important;
+}
+
+.header-content {
+  cursor: move;
+}
+
+.header-label {
+  cursor: move;
+}
+
+.header-icon-btn,
+.header-icons {
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.header-icon-btn:active,
+.header-icon-btn:focus {
+  pointer-events: auto;
 }
 
 .header-icons {

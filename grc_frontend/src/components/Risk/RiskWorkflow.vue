@@ -226,11 +226,11 @@
             <span class="steps-count">{{ mitigationSteps.length }}</span>
             <span class="steps-label">Mitigation Steps</span>
           </div>
-          <div class="steps-numbers">
+          <div class="steps-list-navigation">
           <div 
             v-for="(step, index) in mitigationSteps" 
             :key="index" 
-              class="step-number-item"
+              class="step-list-item"
             :class="{
               'completed': step.status === 'Completed',
               'active': isStepActive(index),
@@ -241,26 +241,24 @@
             }"
             @click="selectStep(index)"
           >
-              <div class="step-number-circle">
-              <span v-if="step.status === 'Completed'"><i class="fas fa-check"></i></span>
-                <span v-else>{{ index + 1 }}</span>
-              </div>
-              <div class="step-number-label">{{ step.description }}</div>
-            </div>
+              <span class="step-list-number">{{ index + 1 }}.</span>
+              <span class="step-list-title">{{ step.description }}</span>
+              <span v-if="step.status === 'Completed' || step.approved === true" class="step-complete-mark">
+                <i class="fas fa-check-circle"></i>
+              </span>
           </div>
           
-          <!-- Questionnaire Card -->
+            <!-- Questionnaire Step -->
           <div 
-            class="step-number-item questionnaire-card"
+              class="step-list-item questionnaire-card"
             :class="{
               'selected': showQuestionnaireSection
             }"
             @click="selectQuestionnaire"
           >
-            <div class="step-number-circle">
-              <i class="fas fa-clipboard-list"></i>
+              <span class="step-list-number">{{ mitigationSteps.length + 1 }}.</span>
+              <span class="step-list-title">Questionnaire</span>
             </div>
-            <div class="step-number-label">Questionnaire</div>
           </div>
             </div>
             

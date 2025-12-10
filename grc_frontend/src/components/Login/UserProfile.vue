@@ -1,6 +1,6 @@
 <template>
   <div class="user-profile-container">
-    <div class="tabs">
+    <div v-if="!loading" class="tabs">
       <button
         v-for="tab in visibleTabs"
         :key="tab.key"
@@ -11,7 +11,11 @@
         <span class="tab-label">{{ tab.label }}</span>
       </button>
     </div>
-    <div class="tab-content">
+    <div v-if="loading" class="loading-container">
+      <div class="spinner"></div>
+      <p>Loading user profile...</p>
+    </div>
+    <div v-else class="tab-content">
       <div v-if="activeTab === 'account'" class="account-section">
           <!-- Error/Success Messages -->
           <div v-if="error" class="message error-message">
@@ -554,22 +558,45 @@
         </div>
       </div>
       
-      <!-- Consent Configuration Tab -->
+      <!-- Consent Management Tab -->
       <div v-else-if="activeTab === 'consent-config'">
         <div class="consent-config-section">
-          <div class="consent-config-header">
-            <div class="header-content">
-              <h2 class="section-title">
-                <!-- <i class="fas fa-check-circle"></i>  -->
-                Consent Management Configuration
-              </h2>
-              <p class="section-helper">
-                Configure which actions require user consent. Only GRC Administrators can access this section.
-              </p>
-            </div>
+          <!-- Tab Navigation within Consent Management -->
+          <div class="consent-sub-tabs">
+            <button 
+              :class="['consent-sub-tab', { active: consentSubTab === 'my-consents' }]"
+              @click="consentSubTab = 'my-consents'"
+            >
+              <i class="fas fa-shield-alt"></i> My Consents
+            </button>
+            <button 
+              v-if="isGRCAdministrator"
+              :class="['consent-sub-tab', { active: consentSubTab === 'configuration' }]"
+              @click="consentSubTab = 'configuration'"
+            >
+              <i class="fas fa-cog"></i> Configuration
+            </button>
           </div>
-          
-          <div v-if="isGRCAdministrator" class="consent-config-content">
+
+          <!-- My Consents Sub-tab (for all users) -->
+          <div v-if="consentSubTab === 'my-consents'" class="consent-sub-content">
+            <ConsentManagement />
+          </div>
+
+          <!-- Configuration Sub-tab (admin only) -->
+          <div v-else-if="consentSubTab === 'configuration' && isGRCAdministrator" class="consent-sub-content">
+            <div class="consent-config-header">
+              <div class="header-content">
+                <h2 class="section-title">
+                  Consent Management Configuration
+                </h2>
+                <p class="section-helper">
+                  Configure which actions require user consent. Only GRC Administrators can access this section.
+                </p>
+              </div>
+            </div>
+            
+            <div class="consent-config-content">
             <!-- Info Card -->
             <div class="consent-info-card">
               <i class="fas fa-info-circle"></i>
@@ -683,11 +710,7 @@
                 {{ consentMessage }}
               </div>
             </transition>
-          </div>
-          
-          <div v-else class="access-denied-message">
-            <i class="fas fa-lock"></i>
-            <p>Access Denied: Only GRC Administrators can configure consent settings.</p>
+            </div>
           </div>
         </div>
       </div>
@@ -701,20 +724,25 @@
 <script>
 // import { API_ENDPOINTS } from '@/config/api.js'
 import { api } from '../../data/api';
+import ConsentManagement from '../Consent/ConsentManagement.vue';
 
 export default {
   name: 'UserProfile',
+  components: {
+    ConsentManagement
+  },
   data() {
     return {
       activeTab: 'account',
       accountInfoType: 'personal', // New property to track which info type is displayed
+      consentSubTab: 'my-consents', // Sub-tab within Consent Management: 'my-consents' or 'configuration'
       tabs: [
         { key: 'account', label: 'Account', icon: 'fas fa-user' },
         { key: 'role', label: 'Role', icon: 'fas fa-exchange-alt' },
         { key: 'password', label: 'Password', icon: 'fas fa-key' },
         { key: 'notification', label: 'Notification', icon: 'fas fa-bell' },
         { key: 'user-management', label: 'User Management', icon: 'fas fa-users', adminOnly: true },
-        { key: 'consent-config', label: 'Consent Management', icon: 'fas fa-check-circle', adminOnly: true }
+        { key: 'consent-config', label: 'Consent Management', icon: 'fas fa-check-circle' }
       ],
       form: {
         firstName: '',
@@ -872,7 +900,14 @@ export default {
       }
     },
     activeTab(newTab) {
-      if (newTab === 'consent-config' && this.isGRCAdministrator) {
+      if (newTab === 'consent-config') {
+        // Reset to 'my-consents' sub-tab when switching to consent management
+        this.consentSubTab = 'my-consents';
+      }
+    },
+    consentSubTab(newSubTab) {
+      // When switching to configuration sub-tab, initialize if admin
+      if (newSubTab === 'configuration' && this.isGRCAdministrator) {
         this.initializeConsentConfiguration();
       }
     }
@@ -1508,8 +1543,13 @@ async updatePassword() {
           const { API_BASE_URL } = await import('../../config/api.js');
           const axios = (await import('axios')).default;
           
+          const userId = this.getCurrentUserId(); // Get current user ID for created_by
+          
           const response = await axios.get(`${API_BASE_URL}/api/consent/configurations/`, {
-            params: { framework_id: this.consentFrameworkId },
+            params: { 
+              framework_id: this.consentFrameworkId,
+              created_by: userId // Send user ID so backend can set created_by when creating defaults
+            },
             headers: this.getConsentAuthHeaders()
           });
 

@@ -762,7 +762,7 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
-    path: '/data-workflow',
+    path: '/policy/data-workflow',
     name: 'DataWorkflowTree',
     component: DataWorkflowTree,
     meta: { requiresAuth: true }

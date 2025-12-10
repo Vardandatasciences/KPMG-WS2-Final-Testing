@@ -12,12 +12,22 @@ from django.db import transaction
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
-from ...models import ConsentConfiguration, ConsentAcceptance, Users, Framework, RBAC
-from ...serializers import ConsentConfigurationSerializer, ConsentAcceptanceSerializer
+from ...models import ConsentConfiguration, ConsentAcceptance, ConsentWithdrawal, Users, Framework, RBAC
+from ...serializers import ConsentConfigurationSerializer, ConsentAcceptanceSerializer, ConsentWithdrawalSerializer
 import logging
 import json
 
 logger = logging.getLogger(__name__)
+
+# Helper function to get client IP address
+def get_client_ip(request):
+    """Get client IP address from request"""
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0].strip()
+    else:
+        ip = request.META.get('REMOTE_ADDR', 'unknown')
+    return ip
 
 # Helper function to check if user is administrator
 def is_user_administrator(user_id):
@@ -98,7 +108,7 @@ class CsrfExemptSessionAuthentication(SessionAuthentication):
 def get_consent_configurations(request):
     """
     Get all consent configurations for a framework
-    Query params: framework_id (required)
+    Query params: framework_id (required), created_by (optional - for setting creator when creating defaults)
     """
     try:
         framework_id = request.GET.get('framework_id')
@@ -129,13 +139,25 @@ def get_consent_configurations(request):
                 ('upload_event', 'Upload in Event'),
             ]
             
+            # Get created_by from request if available
+            created_by_id = request.GET.get('created_by')
+            created_by = None
+            if created_by_id:
+                try:
+                    created_by = Users.objects.get(UserId=created_by_id)
+                    logger.info(f"[Consent] Setting created_by to user {created_by_id} for default configurations")
+                except Users.DoesNotExist:
+                    logger.warning(f"[Consent] User {created_by_id} not found for created_by")
+                    pass
+            
             for action_type, action_label in default_actions:
                 ConsentConfiguration.objects.create(
                     action_type=action_type,
                     action_label=action_label,
                     is_enabled=False,
                     framework=framework,
-                    consent_text=f"I consent to {action_label.lower()}. I understand that this action will be recorded and tracked for compliance purposes."
+                    consent_text=f"I consent to {action_label.lower()}. I understand that this action will be recorded and tracked for compliance purposes.",
+                    created_by=created_by
                 )
             
             configs = ConsentConfiguration.objects.filter(framework_id=framework_id)
@@ -190,6 +212,9 @@ def update_consent_configuration(request, config_id):
             try:
                 user = Users.objects.get(UserId=updated_by_id)
                 config.updated_by = user
+                # Set created_by if not already set
+                if not config.created_by:
+                    config.created_by = user
             except Users.DoesNotExist:
                 pass
         
@@ -262,6 +287,9 @@ def bulk_update_consent_configurations(request):
                         try:
                             user = Users.objects.get(UserId=updated_by_id)
                             config.updated_by = user
+                            # Set created_by if not already set
+                            if not config.created_by:
+                                config.created_by = user
                         except Users.DoesNotExist:
                             pass
                     
@@ -297,13 +325,14 @@ def bulk_update_consent_configurations(request):
 def check_consent_required(request):
     """
     Check if consent is required for a specific action
-    Body: { "action_type": "create_policy", "framework_id": 1 }
-    Returns: { "required": true/false, "config": {...} }
+    Body: { "action_type": "create_policy", "framework_id": 1, "user_id": 1 (optional) }
+    Returns: { "required": true/false, "config": {...}, "has_active_consent": true/false }
     """
     try:
         data = request.data
         action_type = data.get('action_type')
         framework_id = data.get('framework_id')
+        user_id = data.get('user_id')  # Optional - if provided, check if user has active consent
         
         if not action_type or not framework_id:
             return Response({
@@ -336,12 +365,36 @@ def check_consent_required(request):
             if 'framework_id' not in config_data:
                 config_data['framework_id'] = config.framework.FrameworkId if config.framework else framework_id_int
             
-            logger.info(f"[Consent] Returning config data: {config_data}")
+            # Check if user has active consent (not withdrawn)
+            has_active_consent = None
+            if user_id and config.is_enabled:
+                # Check if user has an active consent (accepted and not withdrawn)
+                last_acceptance = ConsentAcceptance.objects.filter(
+                    user_id=user_id,
+                    action_type=action_type,
+                    framework_id=framework_id_int
+                ).order_by('-accepted_at').first()
+                
+                if last_acceptance:
+                    # Check if there's a withdrawal after this acceptance
+                    last_withdrawal = ConsentWithdrawal.objects.filter(
+                        user_id=user_id,
+                        action_type=action_type,
+                        framework_id=framework_id_int,
+                        withdrawn_at__gt=last_acceptance.accepted_at
+                    ).first()
+                    
+                    has_active_consent = last_withdrawal is None
+                else:
+                    has_active_consent = False
+            
+            logger.info(f"[Consent] Returning config data: {config_data}, has_active_consent: {has_active_consent}")
             
             return Response({
                 'status': 'success',
                 'required': config.is_enabled,
-                'config': config_data
+                'config': config_data,
+                'has_active_consent': has_active_consent
             }, status=status.HTTP_200_OK)
         
         except ConsentConfiguration.DoesNotExist:
@@ -349,7 +402,8 @@ def check_consent_required(request):
             return Response({
                 'status': 'success',
                 'required': False,
-                'config': None
+                'config': None,
+                'has_active_consent': None
             }, status=status.HTTP_200_OK)
     
     except Exception as e:
@@ -394,14 +448,24 @@ def record_consent_acceptance(request):
         config = ConsentConfiguration.objects.get(config_id=config_id)
         framework = Framework.objects.get(FrameworkId=framework_id)
         
+        # Get IP address from request if not provided in data
+        ip_address = data.get('ip_address')
+        if not ip_address:
+            ip_address = get_client_ip(request)
+        
+        # Get user agent from request if not provided in data
+        user_agent = data.get('user_agent')
+        if not user_agent:
+            user_agent = request.META.get('HTTP_USER_AGENT', '')[:500]
+        
         # Create consent acceptance record
         acceptance = ConsentAcceptance.objects.create(
             user=user,
             config=config,
             action_type=action_type,
             framework=framework,
-            ip_address=data.get('ip_address'),
-            user_agent=data.get('user_agent')
+            ip_address=ip_address,
+            user_agent=user_agent
         )
         
         serializer = ConsentAcceptanceSerializer(acceptance)
@@ -497,6 +561,308 @@ def get_all_consent_acceptances(request):
     
     except Exception as e:
         logger.error(f"Error fetching consent acceptances: {str(e)}")
+        return Response({
+            'status': 'error',
+            'message': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# =============================================================================
+# CONSENT WITHDRAWAL MANAGEMENT
+# =============================================================================
+
+@csrf_exempt
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def withdraw_consent(request):
+    """
+    Withdraw consent for a specific action
+    Body: {
+        "user_id": 1,
+        "action_type": "create_policy",
+        "framework_id": 1,
+        "ip_address": "192.168.1.1",
+        "user_agent": "Mozilla/5.0...",
+        "reason": "Optional reason for withdrawal"
+    }
+    """
+    try:
+        data = request.data
+        user_id = data.get('user_id')
+        action_type = data.get('action_type')
+        framework_id = data.get('framework_id')
+        
+        if not all([user_id, action_type, framework_id]):
+            return Response({
+                'status': 'error',
+                'message': 'user_id, action_type, and framework_id are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get user and framework
+        user = Users.objects.get(UserId=user_id)
+        framework = Framework.objects.get(FrameworkId=framework_id)
+        
+        # Try to get the config for this action (optional)
+        config = None
+        try:
+            config = ConsentConfiguration.objects.get(
+                action_type=action_type,
+                framework_id=framework_id
+            )
+        except ConsentConfiguration.DoesNotExist:
+            # Config might not exist, but we still allow withdrawal
+            logger.warning(f"Consent configuration not found for action_type={action_type}, framework_id={framework_id}")
+        
+        # Create consent withdrawal record
+        withdrawal = ConsentWithdrawal.objects.create(
+            user=user,
+            config=config,
+            action_type=action_type,
+            framework=framework,
+            ip_address=data.get('ip_address'),
+            user_agent=data.get('user_agent'),
+            reason=data.get('reason')
+        )
+        
+        serializer = ConsentWithdrawalSerializer(withdrawal)
+        return Response({
+            'status': 'success',
+            'message': 'Consent withdrawn successfully',
+            'data': serializer.data
+        }, status=status.HTTP_201_CREATED)
+    
+    except Users.DoesNotExist:
+        return Response({
+            'status': 'error',
+            'message': 'User not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Framework.DoesNotExist:
+        return Response({
+            'status': 'error',
+            'message': 'Framework not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        logger.error(f"Error withdrawing consent: {str(e)}")
+        return Response({
+            'status': 'error',
+            'message': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def withdraw_all_consents(request):
+    """
+    Withdraw all consents for a user (for a specific framework or all frameworks)
+    Body: {
+        "user_id": 1,
+        "framework_id": 1,  # Optional - if not provided, withdraws from all frameworks
+        "ip_address": "192.168.1.1",
+        "user_agent": "Mozilla/5.0...",
+        "reason": "Optional reason for withdrawal"
+    }
+    """
+    try:
+        data = request.data
+        user_id = data.get('user_id')
+        framework_id = data.get('framework_id')
+        
+        if not user_id:
+            return Response({
+                'status': 'error',
+                'message': 'user_id is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get user
+        user = Users.objects.get(UserId=user_id)
+        
+        # Get all active consents for this user
+        query = {'user_id': user_id}
+        if framework_id:
+            query['framework_id'] = framework_id
+        
+        acceptances = ConsentAcceptance.objects.filter(**query).select_related('config', 'framework')
+        
+        if not acceptances.exists():
+            return Response({
+                'status': 'success',
+                'message': 'No active consents found to withdraw',
+                'data': [],
+                'count': 0
+            }, status=status.HTTP_200_OK)
+        
+        # Create withdrawal records for each consent
+        withdrawals = []
+        with transaction.atomic():
+            for acceptance in acceptances:
+                # Check if already withdrawn
+                existing_withdrawal = ConsentWithdrawal.objects.filter(
+                    user_id=user_id,
+                    action_type=acceptance.action_type,
+                    framework_id=acceptance.framework_id,
+                    withdrawn_at__gt=acceptance.accepted_at
+                ).exists()
+                
+                if not existing_withdrawal:
+                    withdrawal = ConsentWithdrawal.objects.create(
+                        user=user,
+                        config=acceptance.config,
+                        action_type=acceptance.action_type,
+                        framework=acceptance.framework,
+                        ip_address=data.get('ip_address'),
+                        user_agent=data.get('user_agent'),
+                        reason=data.get('reason')
+                    )
+                    withdrawals.append(withdrawal)
+        
+        serializer = ConsentWithdrawalSerializer(withdrawals, many=True)
+        return Response({
+            'status': 'success',
+            'message': f'{len(withdrawals)} consent(s) withdrawn successfully',
+            'data': serializer.data,
+            'count': len(withdrawals)
+        }, status=status.HTTP_201_CREATED)
+    
+    except Users.DoesNotExist:
+        return Response({
+            'status': 'error',
+            'message': 'User not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        logger.error(f"Error withdrawing all consents: {str(e)}")
+        return Response({
+            'status': 'error',
+            'message': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_user_consent_withdrawals(request, user_id):
+    """
+    Get consent withdrawal history for a user
+    Query params: framework_id (optional), action_type (optional)
+    """
+    try:
+        framework_id = request.GET.get('framework_id')
+        action_type = request.GET.get('action_type')
+        
+        # Build query
+        query = {'user_id': user_id}
+        if framework_id:
+            query['framework_id'] = framework_id
+        if action_type:
+            query['action_type'] = action_type
+        
+        withdrawals = ConsentWithdrawal.objects.filter(**query).select_related('user', 'config', 'framework')
+        serializer = ConsentWithdrawalSerializer(withdrawals, many=True)
+        
+        return Response({
+            'status': 'success',
+            'data': serializer.data,
+            'count': withdrawals.count()
+        }, status=status.HTTP_200_OK)
+    
+    except Exception as e:
+        logger.error(f"Error fetching user consent withdrawals: {str(e)}")
+        return Response({
+            'status': 'error',
+            'message': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def check_consent_status(request, user_id):
+    """
+    Check the current consent status for a user (including withdrawals)
+    Query params: framework_id (required), action_type (optional)
+    Returns: {
+        "action_type": "create_policy",
+        "has_active_consent": true/false,
+        "last_accepted": {...},
+        "last_withdrawn": {...}
+    }
+    """
+    try:
+        framework_id = request.GET.get('framework_id')
+        action_type = request.GET.get('action_type')
+        
+        if not framework_id:
+            return Response({
+                'status': 'error',
+                'message': 'framework_id is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Build query
+        query = {'user_id': user_id, 'framework_id': framework_id}
+        if action_type:
+            query['action_type'] = action_type
+        
+        # Get all acceptances and withdrawals
+        acceptances = ConsentAcceptance.objects.filter(**query).order_by('-accepted_at')
+        withdrawals = ConsentWithdrawal.objects.filter(**query).order_by('-withdrawn_at')
+        
+        # If action_type is specified, return status for that action
+        if action_type:
+            last_acceptance = acceptances.filter(action_type=action_type).first()
+            last_withdrawal = withdrawals.filter(action_type=action_type).first()
+            
+            # Check if there's an active consent (accepted after last withdrawal)
+            has_active_consent = False
+            if last_acceptance:
+                if not last_withdrawal:
+                    has_active_consent = True
+                elif last_acceptance.accepted_at > last_withdrawal.withdrawn_at:
+                    has_active_consent = True
+            
+            acceptance_data = ConsentAcceptanceSerializer(last_acceptance).data if last_acceptance else None
+            withdrawal_data = ConsentWithdrawalSerializer(last_withdrawal).data if last_withdrawal else None
+            
+            return Response({
+                'status': 'success',
+                'action_type': action_type,
+                'has_active_consent': has_active_consent,
+                'last_accepted': acceptance_data,
+                'last_withdrawn': withdrawal_data
+            }, status=status.HTTP_200_OK)
+        
+        # If no action_type, return status for all actions
+        actions_status = []
+        all_action_types = set(
+            list(acceptances.values_list('action_type', flat=True)) +
+            list(withdrawals.values_list('action_type', flat=True))
+        )
+        
+        for act_type in all_action_types:
+            last_acceptance = acceptances.filter(action_type=act_type).first()
+            last_withdrawal = withdrawals.filter(action_type=act_type).first()
+            
+            has_active_consent = False
+            if last_acceptance:
+                if not last_withdrawal:
+                    has_active_consent = True
+                elif last_acceptance.accepted_at > last_withdrawal.withdrawn_at:
+                    has_active_consent = True
+            
+            actions_status.append({
+                'action_type': act_type,
+                'has_active_consent': has_active_consent,
+                'last_accepted': ConsentAcceptanceSerializer(last_acceptance).data if last_acceptance else None,
+                'last_withdrawn': ConsentWithdrawalSerializer(last_withdrawal).data if last_withdrawal else None
+            })
+        
+        return Response({
+            'status': 'success',
+            'data': actions_status,
+            'count': len(actions_status)
+        }, status=status.HTTP_200_OK)
+    
+    except Exception as e:
+        logger.error(f"Error checking consent status: {str(e)}")
         return Response({
             'status': 'error',
             'message': str(e)

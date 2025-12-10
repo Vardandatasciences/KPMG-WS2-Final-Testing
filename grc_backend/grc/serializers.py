@@ -848,7 +848,7 @@ class EntitySerializer(serializers.ModelSerializer):
 # CONSENT MANAGEMENT SERIALIZERS
 # =============================================================================
 
-from .models import ConsentConfiguration, ConsentAcceptance
+from .models import ConsentConfiguration, ConsentAcceptance, ConsentWithdrawal
 
 class ConsentConfigurationSerializer(serializers.ModelSerializer):
     created_by_name = serializers.CharField(source='created_by.UserName', read_only=True)
@@ -876,3 +876,17 @@ class ConsentAcceptanceSerializer(serializers.ModelSerializer):
             'action_label', 'accepted_at', 'ip_address', 'user_agent', 'framework'
         ]
         read_only_fields = ['acceptance_id', 'accepted_at', 'user_name', 'action_label']
+
+
+class ConsentWithdrawalSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source='user.UserName', read_only=True)
+    action_label = serializers.CharField(source='config.action_label', read_only=True, allow_null=True)
+    
+    class Meta:
+        model = ConsentWithdrawal
+        fields = [
+            'withdrawal_id', 'user', 'user_name', 'config', 'action_type', 
+            'action_label', 'withdrawn_at', 'ip_address', 'user_agent', 
+            'framework', 'reason'
+        ]
+        read_only_fields = ['withdrawal_id', 'withdrawn_at', 'user_name', 'action_label']

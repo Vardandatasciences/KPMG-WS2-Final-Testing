@@ -15,6 +15,8 @@
     <PopupModal />
     <!-- Global Consent Modal -->
     <ConsentModal ref="consentModal" />
+    <!-- Cookie Banner -->
+    <CookieBanner />
     <!-- Debug component - remove in production -->
     <!-- <AuthDebug /> -->
   </div>
@@ -25,6 +27,7 @@ import Sidebar from './components/Policy/Sidebar.vue'
 import GlobalNavbar from './components/GlobalNavbar.vue'
 import PopupModal from './modules/popup/PopupModal.vue'
 import ConsentModal from './components/Consent/ConsentModal.vue'
+import CookieBanner from './components/Cookie/CookieBanner.vue'
 import consentService from './services/consentService.js'
 // import AuthDebug from './components/AuthDebug.vue'
  
@@ -34,7 +37,8 @@ export default {
     Sidebar,
     GlobalNavbar,
     PopupModal,
-    ConsentModal
+    ConsentModal,
+    CookieBanner
     // AuthDebug
   },
   data() {

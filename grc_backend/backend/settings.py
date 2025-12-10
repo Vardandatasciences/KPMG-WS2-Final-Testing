@@ -250,7 +250,7 @@ TPRM_APPS = [
 # ===== SESSION CONFIGURATION - CRITICAL FOR AUTHENTICATION! =====
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'  # Use database sessions
 SESSION_SAVE_EVERY_REQUEST = True  # Save session on every request to keep it active
-SESSION_COOKIE_AGE = 86400  # Session expires after 1 day (86400 seconds)
+SESSION_COOKIE_AGE = 20  # Session expires after 20 seconds of inactivity for testing
 SESSION_COOKIE_NAME = 'grc_sessionid'  # Custom session cookie name
 SESSION_COOKIE_HTTPONLY = False  # Allow JavaScript access (needed for SPA)
 SESSION_COOKIE_SECURE = False  # Set to True in production with HTTPS
@@ -669,6 +669,22 @@ BAMBOOHR_SCOPES = clean_env_value(
     'email openid employee company:info employee:contact employee:job employee:name employee:photo employee_directory'
 )
  
+# Google OAuth Configuration for SSO
+GOOGLE_CLIENT_ID = clean_env_value(os.environ.get("GOOGLE_CLIENT_ID", ""))
+GOOGLE_CLIENT_SECRET = clean_env_value(os.environ.get("GOOGLE_CLIENT_SECRET", ""))
+# Only use env var if explicitly set, otherwise use conditional based on USE_LOCAL_DEVELOPMENT
+if 'GOOGLE_REDIRECT_URI' in os.environ:
+    GOOGLE_REDIRECT_URI = clean_env_value(os.environ.get('GOOGLE_REDIRECT_URI'))
+else:
+    GOOGLE_REDIRECT_URI = (
+        'http://localhost:8000/api/google/oauth-callback/' if USE_LOCAL_DEVELOPMENT
+        else 'https://grc-backend.vardaands.com/api/google/oauth-callback/'
+    )
+GOOGLE_SCOPES = clean_env_value(
+    os.environ.get('GOOGLE_SCOPES', 'openid email profile'),
+    'openid email profile'
+)
+ 
  
  
  
@@ -725,6 +741,11 @@ os.environ.setdefault('BAMBOOHR_SCOPES', BAMBOOHR_SCOPES)
 os.environ.setdefault('USE_LOCAL_DEVELOPMENT', str(USE_LOCAL_DEVELOPMENT))
 os.environ.setdefault('BAMBOOHR_FLASK_SERVER_URL', BAMBOOHR_FLASK_SERVER_URL)
 os.environ.setdefault('SKIP_OAUTH_STATE_VERIFICATION', SKIP_OAUTH_STATE_VERIFICATION)
+
+os.environ.setdefault('GOOGLE_CLIENT_ID', GOOGLE_CLIENT_ID)
+os.environ.setdefault('GOOGLE_CLIENT_SECRET', GOOGLE_CLIENT_SECRET)
+os.environ.setdefault('GOOGLE_REDIRECT_URI', GOOGLE_REDIRECT_URI)
+os.environ.setdefault('GOOGLE_SCOPES', GOOGLE_SCOPES)
  
 
 # Ollama configuration (fallback)

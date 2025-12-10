@@ -117,7 +117,102 @@
             <p>Sign in to your GRC dashboard</p>
           </div>
           
-          <form @submit.prevent="login" class="login-form">
+          <!-- MFA Step -->
+          <div v-if="showMfaStep" class="mfa-step">
+            <div class="mfa-header">
+              <h3>Verify Your Identity</h3>
+              <p>Enter the 6-digit code sent to your email</p>
+            </div>
+            
+            <!-- Email Display Box -->
+            <div class="mfa-email-box">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="email-icon">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" stroke="currentColor" stroke-width="2"/>
+                <polyline points="22,6 12,13 2,6" stroke="currentColor" stroke-width="2"/>
+              </svg>
+              <span>{{ emailMasked }}</span>
+            </div>
+            
+            <form @submit.prevent="verifyOtp" class="mfa-form">
+              <!-- 6 Individual OTP Input Boxes -->
+              <div class="otp-input-container">
+                <label class="otp-label">Verification Code</label>
+                <div class="otp-boxes">
+                  <input
+                    v-for="(digit, index) in otpDigits"
+                    :key="index"
+                    :ref="el => { if (el) otpInputRefs[index] = el }"
+                    type="text"
+                    v-model="otpDigits[index]"
+                    @input="handleOtpInput(index, $event)"
+                    @keydown="handleOtpKeydown(index, $event)"
+                    @paste="handleOtpPaste($event)"
+                    maxlength="1"
+                    pattern="[0-9]"
+                    inputmode="numeric"
+                    class="otp-box"
+                    :class="{ 'filled': otpDigits[index] }"
+                  >
+                </div>
+              </div>
+              
+              <!-- Timer Display -->
+              <div class="mfa-timer">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="timer-icon">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                  <polyline points="12 6 12 12 16 14" stroke="currentColor" stroke-width="2"/>
+                </svg>
+                <span>Code expires in {{ formattedTimer }}</span>
+              </div>
+              
+              <!-- Verify Button -->
+              <button type="submit" class="mfa-verify-button" :disabled="isLoading || !isOtpComplete">
+                <svg v-if="!isLoading" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="verify-icon">
+                  <path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                </svg>
+                <span v-if="!isLoading">Verify Code</span>
+                <span v-else class="loading-content">
+                  <div class="spinner-small"></div>
+                  <span>Verifying</span>
+                </span>
+              </button>
+              
+              <!-- Resend Button -->
+              <button type="button" @click="resendOtp" class="mfa-resend-button" :disabled="isResendingOtp || resendCooldown > 0">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="resend-icon">
+                  <line x1="22" y1="4" x2="22" y2="10" stroke="currentColor" stroke-width="2"/>
+                  <line x1="18" y1="6" x2="22" y2="2" stroke="currentColor" stroke-width="2"/>
+                  <path d="M19 11a8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8" stroke="currentColor" stroke-width="2"/>
+                </svg>
+                <span v-if="isResendingOtp">Sending...</span>
+                <span v-else-if="resendCooldown > 0">Resend Code ({{ resendCooldown }}s)</span>
+                <span v-else>Resend Code</span>
+              </button>
+              
+              <!-- Back to Login Link -->
+              <button type="button" @click="backToLogin" class="mfa-back-link">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="back-icon">
+                  <polyline points="15 18 9 12 15 6" stroke="currentColor" stroke-width="2"/>
+                </svg>
+                <span>Back to Login</span>
+              </button>
+              
+              <!-- Error Message -->
+              <div v-if="errorMessage" class="mfa-error-alert">
+                <button class="error-close" @click="errorMessage = ''" type="button">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2"/>
+                    <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2"/>
+                  </svg>
+                </button>
+                <span>{{ errorMessage }}</span>
+              </div>
+            </form>
+          </div>
+          
+          <!-- Login Form -->
+          <form v-else @submit.prevent="login" class="login-form">
             <!-- Login Type Selector -->
             <div class="login-type-selector">
               <!-- Username Option -->
@@ -264,6 +359,27 @@
               </span>
             </button>
             
+            <!-- Google SSO Button -->
+            <div class="google-sso-section">
+              <div class="divider">
+                <span>or</span>
+              </div>
+              <button 
+                type="button" 
+                @click="loginWithGoogle" 
+                class="google-sso-button" 
+                :disabled="isLoading"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                </svg>
+                <span>Sign in with Google</span>
+              </button>
+            </div>
+            
             <div v-if="errorMessage" class="error-alert">
               <button class="error-close" @click="errorMessage = ''" type="button">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -329,7 +445,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import authService from '../../services/authService.js'
 import ForgotPassword from './ForgotPassword.vue'
@@ -346,6 +462,34 @@ const loginType = ref('username') // 'username' or 'userid'
 const loginIdentifier = ref('') // username or user_id
 const showForgotPasswordModal = ref(false)
 const showConsentForm = ref(false)
+const showMfaStep = ref(false)
+const otp = ref('')
+const otpDigits = ref(['', '', '', '', '', ''])
+const otpInputRefs = ref([])
+const emailMasked = ref('')
+const isResendingOtp = ref(false)
+const timer = ref(600) // 10 minutes in seconds
+const timerInterval = ref(null)
+const resendCooldown = ref(0) // Cooldown for resend button (30 seconds)
+const resendCooldownInterval = ref(null)
+
+const loginWithGoogle = async () => {
+  try {
+    isLoading.value = true
+    errorMessage.value = ''
+    
+    // Initiate Google OAuth flow
+    await authService.initiateGoogleOAuth()
+  } catch (error) {
+    isLoading.value = false
+    if (error.response && error.response.data) {
+      errorMessage.value = error.response.data.message || 'Google SSO login failed. Please try again.'
+    } else {
+      errorMessage.value = error.message || 'Unable to connect to Google. Please check your connection.'
+    }
+    console.error('❌ Google SSO login error:', error)
+  }
+}
 
 const login = async () => {
   try {
@@ -357,8 +501,17 @@ const login = async () => {
       return
     }
     
-    // Clear any existing data
+    // Clear any existing data (but preserve cookie preferences)
+    const cookieSessionId = localStorage.getItem('cookie_session_id')
+    const cookiePreferencesSaved = localStorage.getItem('cookie_preferences_saved')
+    const cookiePreferences = localStorage.getItem('cookie_preferences')
+    
     localStorage.clear()
+    
+    // Restore cookie preferences after clearing
+    if (cookieSessionId) localStorage.setItem('cookie_session_id', cookieSessionId)
+    if (cookiePreferencesSaved) localStorage.setItem('cookie_preferences_saved', cookiePreferencesSaved)
+    if (cookiePreferences) localStorage.setItem('cookie_preferences', cookiePreferences)
     
     // Use JWT authentication
     const result = await authService.login(
@@ -366,6 +519,24 @@ const login = async () => {
       password.value, 
       loginType.value
     )
+    
+    // Handle MFA required
+    if (result.requiresMfa) {
+      showMfaStep.value = true
+      emailMasked.value = result.emailMasked || 'your email'
+      errorMessage.value = ''
+      otpDigits.value = ['', '', '', '', '', '']
+      otp.value = ''
+      startTimer()
+      startResendCooldown() // Start cooldown for resend button
+      // Focus first OTP input
+      nextTick(() => {
+        if (otpInputRefs.value[0]) {
+          otpInputRefs.value[0].focus()
+        }
+      })
+      return
+    }
     
     if (result.success) {
       if (rememberMe.value) {
@@ -425,6 +596,261 @@ const handleConsentDeclined = () => {
   authService.clearAuthData()
   errorMessage.value = 'You must accept the terms and conditions to use the system.'
 }
+
+const verifyOtp = async () => {
+  try {
+    isLoading.value = true
+    errorMessage.value = ''
+    
+    // Combine OTP digits
+    otp.value = otpDigits.value.join('')
+    
+    if (!isOtpComplete.value) {
+      errorMessage.value = 'Please enter a valid 6-digit verification code'
+      isLoading.value = false
+      return
+    }
+    
+    const result = await authService.verifyMfaOtp(
+      loginIdentifier.value,
+      password.value,
+      otp.value,
+      loginType.value
+    )
+    
+    if (result.success) {
+      if (rememberMe.value) {
+        localStorage.setItem('remember_me', 'true')
+      }
+      
+      console.log('🔐 MFA Login successful!', {
+        user_id: result.user.UserId,
+        email: result.user.Email,
+        username: result.user.UserName,
+        consent_required: result.user.consent_accepted !== '1'
+      })
+      
+      // Stop timer on successful verification
+      stopTimer()
+      
+      // Check if consent is required
+      if (result.user.consent_accepted !== '1') {
+        console.log('📋 Consent required - showing consent form')
+        showConsentForm.value = true
+        showMfaStep.value = false
+      } else {
+        console.log('✅ Consent already accepted - proceeding to home')
+        showMfaStep.value = false
+        if (window.onSuccessfulLogin) {
+          window.onSuccessfulLogin()
+        }
+        window.dispatchEvent(new Event('authChanged'))
+        router.push('/home')
+      }
+    } else {
+      errorMessage.value = 'Invalid verification code. Please try again.'
+    }
+  } catch (error) {
+    if (error.message) {
+      errorMessage.value = error.message
+    } else {
+      errorMessage.value = 'Verification failed. Please try again.'
+    }
+    console.error('❌ MFA OTP verification error:', error)
+  } finally {
+    isLoading.value = false
+  }
+}
+
+const resendOtp = async () => {
+  try {
+    isResendingOtp.value = true
+    errorMessage.value = ''
+    
+    const result = await authService.resendMfaOtp(
+      loginIdentifier.value,
+      password.value,
+      loginType.value
+    )
+    
+    if (result.success) {
+      emailMasked.value = result.emailMasked || emailMasked.value
+      // Reset OTP inputs
+      otpDigits.value = ['', '', '', '', '', '']
+      otp.value = ''
+      // Restart timer
+      startTimer()
+      // Restart resend cooldown
+      startResendCooldown()
+      // Focus first input
+      nextTick(() => {
+        if (otpInputRefs.value[0]) {
+          otpInputRefs.value[0].focus()
+        }
+      })
+      errorMessage.value = ''
+      // Show success message temporarily
+      const successMsg = 'New verification code sent!'
+      errorMessage.value = successMsg
+      setTimeout(() => {
+        if (errorMessage.value === successMsg) {
+          errorMessage.value = ''
+        }
+      }, 3000)
+    } else {
+      errorMessage.value = result.message || 'Failed to resend code. Please try again.'
+    }
+  } catch (error) {
+    if (error.message) {
+      errorMessage.value = error.message
+    } else {
+      errorMessage.value = 'Failed to resend code. Please try again.'
+    }
+    console.error('❌ Resend OTP error:', error)
+  } finally {
+    isResendingOtp.value = false
+  }
+}
+
+// Computed properties for MFA
+const isOtpComplete = computed(() => {
+  return otpDigits.value.every(digit => digit !== '') && otpDigits.value.join('').length === 6
+})
+
+const formattedTimer = computed(() => {
+  const minutes = Math.floor(timer.value / 60)
+  const seconds = timer.value % 60
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`
+})
+
+// OTP Input Handlers
+const handleOtpInput = (index, event) => {
+  const value = event.target.value.replace(/[^0-9]/g, '')
+  if (value) {
+    otpDigits.value[index] = value
+    otp.value = otpDigits.value.join('')
+    
+    // Auto-focus next input
+    if (index < 5 && value) {
+      nextTick(() => {
+        if (otpInputRefs.value[index + 1]) {
+          otpInputRefs.value[index + 1].focus()
+        }
+      })
+    }
+  } else {
+    otpDigits.value[index] = ''
+    otp.value = otpDigits.value.join('')
+  }
+}
+
+const handleOtpKeydown = (index, event) => {
+  // Handle backspace
+  if (event.key === 'Backspace' && !otpDigits.value[index] && index > 0) {
+    nextTick(() => {
+      if (otpInputRefs.value[index - 1]) {
+        otpInputRefs.value[index - 1].focus()
+      }
+    })
+  }
+  
+  // Handle arrow keys
+  if (event.key === 'ArrowLeft' && index > 0) {
+    event.preventDefault()
+    if (otpInputRefs.value[index - 1]) {
+      otpInputRefs.value[index - 1].focus()
+    }
+  }
+  if (event.key === 'ArrowRight' && index < 5) {
+    event.preventDefault()
+    if (otpInputRefs.value[index + 1]) {
+      otpInputRefs.value[index + 1].focus()
+    }
+  }
+}
+
+const handleOtpPaste = (event) => {
+  event.preventDefault()
+  const pastedData = event.clipboardData.getData('text').replace(/[^0-9]/g, '').slice(0, 6)
+  
+  if (pastedData.length > 0) {
+    for (let i = 0; i < 6; i++) {
+      otpDigits.value[i] = pastedData[i] || ''
+    }
+    otp.value = otpDigits.value.join('')
+    
+    // Focus the last filled input or the last input
+    const lastIndex = Math.min(pastedData.length - 1, 5)
+    nextTick(() => {
+      if (otpInputRefs.value[lastIndex]) {
+        otpInputRefs.value[lastIndex].focus()
+      }
+    })
+  }
+}
+
+// Timer functions
+const startTimer = () => {
+  timer.value = 600 // 10 minutes
+  if (timerInterval.value) {
+    clearInterval(timerInterval.value)
+  }
+  timerInterval.value = setInterval(() => {
+    if (timer.value > 0) {
+      timer.value--
+    } else {
+      clearInterval(timerInterval.value)
+    }
+  }, 1000)
+}
+
+const stopTimer = () => {
+  if (timerInterval.value) {
+    clearInterval(timerInterval.value)
+    timerInterval.value = null
+  }
+}
+
+// Resend cooldown functions
+const startResendCooldown = () => {
+  resendCooldown.value = 30 // 30 seconds cooldown
+  if (resendCooldownInterval.value) {
+    clearInterval(resendCooldownInterval.value)
+  }
+  resendCooldownInterval.value = setInterval(() => {
+    if (resendCooldown.value > 0) {
+      resendCooldown.value--
+    } else {
+      clearInterval(resendCooldownInterval.value)
+      resendCooldownInterval.value = null
+    }
+  }, 1000)
+}
+
+const stopResendCooldown = () => {
+  if (resendCooldownInterval.value) {
+    clearInterval(resendCooldownInterval.value)
+    resendCooldownInterval.value = null
+  }
+  resendCooldown.value = 0
+}
+
+const backToLogin = () => {
+  showMfaStep.value = false
+  otp.value = ''
+  otpDigits.value = ['', '', '', '', '', '']
+  errorMessage.value = ''
+  stopTimer()
+  stopResendCooldown()
+  timer.value = 600
+  resendCooldown.value = 0
+}
+
+// Cleanup on unmount
+onUnmounted(() => {
+  stopTimer()
+  stopResendCooldown()
+})
 
 const togglePasswordVisibility = () => {
   passwordFieldType.value = passwordFieldType.value === 'password' ? 'text' : 'password'

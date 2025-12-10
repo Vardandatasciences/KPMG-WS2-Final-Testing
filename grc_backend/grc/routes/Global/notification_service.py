@@ -180,7 +180,20 @@ class AzureEmailSender:
                 logger.warning("[WARN] No access token available for Azure Graph API")
                 return False
             
-            sender_email = from_email or self.from_email
+            # For Azure Graph API, always use the Azure AD registered email
+            # Don't use from_email parameter if it's a Gmail address
+            if from_email and '@vardaanglobal.com' in from_email.lower():
+                sender_email = from_email
+            else:
+                # Use the configured Azure AD email (praharshitha.d@vardaanglobal.com)
+                sender_email = self.from_email
+                
+            # Ensure sender_email is an Azure AD email
+            if not sender_email or '@vardaanglobal.com' not in sender_email.lower():
+                # Fallback to default Azure AD email
+                sender_email = 'praharshitha.d@vardaanglobal.com'
+                logger.warning(f"[AZURE] Invalid sender email, using default Azure AD email: {sender_email}")
+            
             if not sender_email:
                 logger.error("[ERROR] No sender email configured")
                 return False
@@ -204,7 +217,7 @@ class AzureEmailSender:
                 "saveToSentItems": True
             }
             
-            # Use the configured from email for Graph API
+            # Use the configured Azure AD email for Graph API
             graph_url = f"https://graph.microsoft.com/v1.0/users/{sender_email}/sendMail"
             headers = {
                 'Authorization': f'Bearer {access_token}',
@@ -535,6 +548,33 @@ class NotificationService:
                       <li>If you didn't request this, please ignore this email</li>
                     </ul>
                     <p style="color: #333333; font-size: 14px; margin-top: 20px;">Best regards,<br>{platform_name} Team</p>
+                  </div>
+                </div>
+                """
+            },
+            'mfaOTP': {
+                'subject': 'Login Verification Code - {platform_name}',
+                'template': lambda user_name, otp_code, expiry_time, platform_name: f"""
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+                  <div style="background-color: #10b981; padding: 20px; text-align: center;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 28px;">Login Verification Code</h1>
+                  </div>
+                  <div style="padding: 20px;">
+                    <p style="color: #333333; font-size: 16px;">Hello {user_name},</p>
+                    <p style="color: #333333; font-size: 16px;">We received a login attempt for your {platform_name} account. To complete your login, please enter the verification code below:</p>
+                    <p style="color: #333333; font-size: 16px;">Your verification code is:</p>
+                    <div style="text-align: center; margin: 30px 0;">
+                      <div style="background-color: #f8f9fa; border: 2px solid #10b981; border-radius: 10px; padding: 20px; display: inline-block;">
+                        <span style="font-size: 32px; font-weight: bold; color: #10b981; letter-spacing: 5px;">{otp_code}</span>
+                      </div>
+                    </div>
+                    <p style="color: #333333; font-size: 14px;"><strong>Important:</strong></p>
+                    <ul style="color: #333333; font-size: 14px;">
+                      <li>This code is valid for {expiry_time}</li>
+                      <li>Do not share this code with anyone</li>
+                      <li>If you didn't attempt to login, please secure your account immediately</li>
+                    </ul>
+                    <p style="color: #333333; font-size: 14px; margin-top: 20px;">Best regards,<br>{platform_name} Security Team</p>
                   </div>
                 </div>
                 """

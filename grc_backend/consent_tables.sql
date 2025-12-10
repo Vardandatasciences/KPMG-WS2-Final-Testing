@@ -59,6 +59,35 @@ CREATE TABLE consent_acceptance (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
+-- Table 3: Consent Withdrawal
+-- Tracks when users withdraw consent for specific actions
+-- GDPR Article 7(3): Users have the right to withdraw consent at any time
+-- ============================================================================
+
+CREATE TABLE consent_withdrawal (
+    WithdrawalId INT AUTO_INCREMENT PRIMARY KEY,
+    UserId INT NOT NULL,
+    ConfigId INT NULL,
+    ActionType VARCHAR(50) NOT NULL,
+    WithdrawnAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    IpAddress VARCHAR(50) NULL,
+    UserAgent TEXT NULL,
+    FrameworkId INT NOT NULL,
+    Reason TEXT NULL,
+    
+    -- Foreign Keys
+    FOREIGN KEY (UserId) REFERENCES users(UserId) ON DELETE CASCADE,
+    FOREIGN KEY (ConfigId) REFERENCES consent_configuration(ConfigId) ON DELETE SET NULL,
+    FOREIGN KEY (FrameworkId) REFERENCES frameworks(FrameworkId) ON DELETE CASCADE,
+    
+    -- Indexes for performance
+    INDEX idx_user_action_date (UserId, ActionType, WithdrawnAt),
+    INDEX idx_user_framework (UserId, FrameworkId),
+    INDEX idx_framework (FrameworkId),
+    INDEX idx_withdrawn_at (WithdrawnAt)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
 -- ============================================================================
 -- OPTIONAL: Insert default consent configurations for existing frameworks
 -- ============================================================================
@@ -92,11 +121,17 @@ DESCRIBE consent_configuration;
 -- Check consent_acceptance table structure
 DESCRIBE consent_acceptance;
 
+-- Check consent_withdrawal table structure
+DESCRIBE consent_withdrawal;
+
 -- Count configurations
 SELECT COUNT(*) as total_configurations FROM consent_configuration;
 
 -- Count acceptances
 SELECT COUNT(*) as total_acceptances FROM consent_acceptance;
+
+-- Count withdrawals
+SELECT COUNT(*) as total_withdrawals FROM consent_withdrawal;
 
 -- View all configurations
 SELECT * FROM consent_configuration ORDER BY ActionLabel;
@@ -112,5 +147,19 @@ FROM consent_acceptance ca
 JOIN users u ON ca.UserId = u.UserId
 JOIN consent_configuration cc ON ca.ConfigId = cc.ConfigId
 ORDER BY ca.AcceptedAt DESC
+LIMIT 20;
+
+-- View recent withdrawals
+SELECT 
+    cw.WithdrawalId,
+    u.UserName,
+    cw.ActionType,
+    cw.WithdrawnAt,
+    cw.IpAddress,
+    cw.Reason
+FROM consent_withdrawal cw
+JOIN users u ON cw.UserId = u.UserId
+LEFT JOIN consent_configuration cc ON cw.ConfigId = cc.ConfigId
+ORDER BY cw.WithdrawnAt DESC
 LIMIT 20;
 

@@ -142,12 +142,19 @@ import UserManual from '../components/Help/UserManual.vue'
 import PrivacySecurity from '../components/Help/PrivacySecurity.vue'
 import HelpUsImprove from '../components/Help/HelpUsImprove.vue'
 import Acknowledgement from '../components/Help/Acknowledgement.vue'
+import CookiePolicy from '../components/Cookie/CookiePolicy.vue'
  
 const routes = [
   {
     path: '/login',
     name: 'login',
     component: LoginView,
+    meta: { requiresAuth: false }
+  },
+  {
+    path: '/auth/google/callback',
+    name: 'google-oauth-callback',
+    component: () => import('../components/Login/GoogleOAuthCallback.vue'),
     meta: { requiresAuth: false }
   },
   {
@@ -570,8 +577,14 @@ const routes = [
     component: Acknowledgement,
     meta: { requiresAuth: true }
   },
+  {
+    path: '/cookie-policy',
+    name: 'CookiePolicy',
+    component: CookiePolicy,
+    meta: { requiresAuth: false }
+  },
  
- 
+
  
   {
     path: '/framework-explorer/policies/:frameworkId',
@@ -798,6 +811,12 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/consent-management',
+    name: 'ConsentManagement',
+    component: () => import('../components/Consent/ConsentManagement.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/access-denied',
     name: 'AccessDenied',
     component: AccessDenied,
@@ -849,7 +868,7 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
-    path: '/data-workflow',
+    path: '/policy/data-workflow',
     name: 'DataWorkflowTree',
     component: DataWorkflowTree,
     meta: { requiresAuth: true }

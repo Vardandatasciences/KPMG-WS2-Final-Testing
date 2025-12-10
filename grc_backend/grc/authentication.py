@@ -15,10 +15,185 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from django.contrib.auth.hashers import make_password, check_password
-from .models import Users, GRCLog
+from .models import Users, GRCLog, RBAC
 from .rbac.utils import RBACUtils
+from .mfa_service import MfaService
 
 logger = logging.getLogger(__name__)
+
+def assign_default_rbac_permissions_for_google_sso(user):
+    """
+    Assign default view permissions to Google SSO users in both GRC and TPRM RBAC tables.
+    This ensures users have basic view access to all modules.
+    """
+    try:
+        # Get user's default framework - use first available if user doesn't have one
+        framework = user.FrameworkId
+        if not framework:
+            from .models import Framework
+            framework = Framework.objects.first()
+            if framework:
+                logger.info(f"User {user.UserName} doesn't have FrameworkId, using default framework: {framework.FrameworkId}")
+            else:
+                logger.warning(f"No framework available for RBAC assignment for user {user.UserName}")
+                # Continue without framework - some RBAC entries might not require it
+        
+        # ========================================
+        # GRC RBAC Permissions
+        # ========================================
+        # Check if RBAC entry already exists for this user (any role)
+        # Since unique_together is ['user', 'role'], we check for any existing entry first
+        existing_rbac = RBAC.objects.filter(user=user).first()
+        
+        if existing_rbac:
+            # Update existing RBAC entry with view permissions if not already set
+            updated = False
+            if not existing_rbac.view_all_compliance:
+                existing_rbac.view_all_compliance = True
+                updated = True
+            if not existing_rbac.view_all_policy:
+                existing_rbac.view_all_policy = True
+                updated = True
+            if not existing_rbac.view_audit_reports:
+                existing_rbac.view_audit_reports = True
+                updated = True
+            if not existing_rbac.view_all_risk:
+                existing_rbac.view_all_risk = True
+                updated = True
+            if not existing_rbac.view_all_incident:
+                existing_rbac.view_all_incident = True
+                updated = True
+            if not existing_rbac.view_all_event:
+                existing_rbac.view_all_event = True
+                updated = True
+            
+            if updated:
+                existing_rbac.save()
+                logger.info(f"✅ Updated GRC RBAC permissions for Google SSO user: {user.UserName}")
+            else:
+                logger.info(f"✅ GRC RBAC permissions already set for Google SSO user: {user.UserName}")
+        else:
+            # Create new RBAC entry with view permissions
+            # Only create if we have a framework
+            if framework:
+                rbac_entry = RBAC.objects.create(
+                    user=user,
+                    username=user.UserName,
+                    role='End User',  # Default role for Google SSO users
+                    FrameworkId=framework,
+                    is_active='Y',
+                # Set all view permissions to True
+                view_all_compliance=True,
+                view_all_policy=True,
+                view_audit_reports=True,
+                view_all_risk=True,
+                view_all_incident=True,
+                view_all_event=True,
+                # All other permissions remain False (view only)
+                )
+                logger.info(f"✅ Created GRC RBAC entry with view permissions for Google SSO user: {user.UserName}")
+            else:
+                logger.warning(f"⚠️ Cannot create GRC RBAC entry for user {user.UserName}: No framework available")
+        
+        # ========================================
+        # TPRM RBAC Permissions
+        # ========================================
+        try:
+            from tprm_backend.rbac.models import RBACTPRM
+            
+            # Check if TPRM RBAC entry exists for this user
+            existing_tprm_rbac = RBACTPRM.objects.filter(user_id=user.UserId).first()
+            
+            if existing_tprm_rbac:
+                # Update existing TPRM RBAC entry with view permissions if not already set
+                tprm_updated = False
+                view_permissions = [
+                    'view_rfp', 'view_rfp_responses', 'view_rfp_approval_status',
+                    'view_rfp_versions', 'view_rfp_version', 'view_rfp_response_scores',
+                    'view_rfp_analytics', 'view_rfp_audit_trail', 'view_vendors',
+                    'view_contacts_documents', 'view_risk_profile', 'view_lifecycle_history',
+                    'view_questionnaires', 'view_risk_assessments', 'view_screening_results',
+                    'view_vendor_contracts', 'view_available_vendors', 'view_vendor_risk_scores',
+                    'view_identified_risks', 'view_risk_mitigation_status',
+                    'view_compliance_status_of_plans', 'view_document_access_logs',
+                    'view_audit_logs', 'view_compliance_audit_results',
+                    'view_incident_response_plans', 'view_sla', 'view_performance',
+                    'view_alerts', 'view_dashboard_trend', 'view_plans_and_documents',
+                    'view_bcp_drp_plan_status', 'view_vendor_submitted_documents',
+                    'view_document_status_history', 'list_contracts', 'list_contract_terms',
+                    'list_contract_renewals'
+                ]
+                
+                for perm in view_permissions:
+                    if hasattr(existing_tprm_rbac, perm) and not getattr(existing_tprm_rbac, perm):
+                        setattr(existing_tprm_rbac, perm, True)
+                        tprm_updated = True
+                
+                if tprm_updated:
+                    existing_tprm_rbac.save()
+                    logger.info(f"✅ Updated TPRM RBAC permissions for Google SSO user: {user.UserName}")
+                else:
+                    logger.info(f"✅ TPRM RBAC permissions already set for Google SSO user: {user.UserName}")
+            else:
+                # Create new TPRM RBAC entry with view permissions
+                tprm_rbac_entry = RBACTPRM.objects.create(
+                    user_id=user.UserId,
+                    username=user.UserName,
+                    role='End User',  # Default role for Google SSO users
+                    is_active='Y',
+                    # Set all view permissions to True
+                    view_rfp=True,
+                    view_rfp_responses=True,
+                    view_rfp_approval_status=True,
+                    view_rfp_versions=True,
+                    view_rfp_version=True,
+                    view_rfp_response_scores=True,
+                    view_rfp_analytics=True,
+                    view_rfp_audit_trail=True,
+                    view_vendors=True,
+                    view_contacts_documents=True,
+                    view_risk_profile=True,
+                    view_lifecycle_history=True,
+                    view_questionnaires=True,
+                    view_risk_assessments=True,
+                    view_screening_results=True,
+                    view_vendor_contracts=True,
+                    view_available_vendors=True,
+                    view_vendor_risk_scores=True,
+                    view_identified_risks=True,
+                    view_risk_mitigation_status=True,
+                    view_compliance_status_of_plans=True,
+                    view_document_access_logs=True,
+                    view_audit_logs=True,
+                    view_compliance_audit_results=True,
+                    view_incident_response_plans=True,
+                    view_sla=True,
+                    view_performance=True,
+                    view_alerts=True,
+                    view_dashboard_trend=True,
+                    view_plans_and_documents=True,
+                    view_bcp_drp_plan_status=True,
+                    view_vendor_submitted_documents=True,
+                    view_document_status_history=True,
+                    list_contracts=True,
+                    list_contract_terms=True,
+                    list_contract_renewals=True,
+                    # All other permissions remain False (view only)
+                )
+                logger.info(f"✅ Created TPRM RBAC entry with view permissions for Google SSO user: {user.UserName}")
+                
+        except ImportError:
+            logger.warning("TPRM RBAC model not available, skipping TPRM permissions assignment")
+        except Exception as tprm_error:
+            logger.error(f"Error assigning TPRM RBAC permissions for Google SSO user {user.UserName}: {str(tprm_error)}")
+            import traceback
+            logger.error(f"TPRM RBAC Traceback: {traceback.format_exc()}")
+        
+    except Exception as e:
+        logger.error(f"Error assigning default RBAC permissions for Google SSO user {user.UserName}: {str(e)}")
+        # Don't fail the login if RBAC assignment fails
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
 
 # JWT Settings
 JWT_SECRET_KEY = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
@@ -94,6 +269,7 @@ def jwt_login(request):
         username = data.get('username')
         password = data.get('password')
         login_type = data.get('login_type', 'username')  # Default to username if not specified
+        otp = data.get('otp')  # MFA OTP code
         
         if not username or not password:
             return Response({
@@ -254,6 +430,47 @@ def jwt_login(request):
                 }, status=status.HTTP_403_FORBIDDEN)
         
         # ========================================
+        # MFA VERIFICATION
+        # ========================================
+        # If OTP is provided, verify it
+        if otp:
+            mfa_result = MfaService.verify_otp(user, otp, request)
+            if not mfa_result.get('success'):
+                return Response({
+                    'status': 'error',
+                    'message': mfa_result.get('error', 'MFA verification failed'),
+                    'requires_mfa': True
+                }, status=status.HTTP_401_UNAUTHORIZED)
+        else:
+            # No OTP provided - check if user has email for MFA
+            if not user.Email:
+                return Response({
+                    'status': 'error',
+                    'message': 'Email address is required for MFA. Please contact your administrator.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Create MFA challenge and send OTP
+            try:
+                challenge = MfaService.create_mfa_challenge(user, request)
+                
+                # Mask email for privacy
+                email_parts = user.Email.split('@')
+                masked_email = f"{email_parts[0][:3]}***@{email_parts[1]}" if len(email_parts) == 2 else "***"
+                
+                return Response({
+                    'status': 'mfa_required',
+                    'message': f'Please enter the verification code sent to {masked_email}',
+                    'requires_mfa': True,
+                    'email_masked': masked_email
+                }, status=status.HTTP_200_OK)
+            except Exception as mfa_error:
+                logger.error(f"Error creating MFA challenge for user {user.UserName}: {str(mfa_error)}")
+                return Response({
+                    'status': 'error',
+                    'message': 'Failed to send verification code. Please try again.'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        # ========================================
         # SUCCESSFUL LOGIN - CLEAR FAILED ATTEMPT COUNTERS
         # ========================================
         cache.delete(user_cache_key)
@@ -350,16 +567,19 @@ def jwt_refresh(request):
             refresh = RefreshToken(refresh_token)
             user_id = refresh['user_id']
             user = Users.objects.get(UserId=user_id)
-
-            # IMPORTANT: Blacklist the old refresh token so it cannot be reused
+            
+            # Generate new tokens FIRST (before blacklisting old token)
+            # This ensures we have valid tokens even if blacklisting fails
+            tokens = generate_jwt_tokens(user)
+            
+            # IMPORTANT: Blacklist the old refresh token AFTER generating new tokens
+            # This prevents token reuse while ensuring we have new tokens ready
             try:
                 refresh.blacklist()
             except Exception:
                 # Silently handle blacklist errors - don't log to avoid terminal spam
+                # Continue even if blacklisting fails, as new tokens are already generated
                 pass
-            
-            # Generate new tokens (SimpleJWT will rotate refresh tokens as configured)
-            tokens = generate_jwt_tokens(user)
             
             # No logging for successful refresh to keep terminal clean
             
@@ -597,3 +817,664 @@ def test_consent_simple(request):
         'message': 'Test consent endpoint is working',
         'timestamp': datetime.now().isoformat()
     })
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def mfa_verify_otp(request):
+    """Verify MFA OTP and complete login"""
+    try:
+        data = request.data
+        username = data.get('username')
+        password = data.get('password')
+        otp = data.get('otp')
+        login_type = data.get('login_type', 'username')
+        
+        if not username or not password or not otp:
+            return Response({
+                'status': 'error',
+                'message': 'Username, password, and OTP are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Authenticate user first
+        user = None
+        try:
+            if login_type == 'userid':
+                user_id = int(username)
+                candidate = Users.objects.get(UserId=user_id)
+            else:
+                candidate = Users.objects.get(UserName=username)
+            
+            if check_password(password, candidate.Password):
+                user = candidate
+            elif candidate.Password == password:
+                candidate.Password = make_password(password)
+                candidate.save(update_fields=['Password'])
+                user = candidate
+        except Users.DoesNotExist:
+            return Response({
+                'status': 'error',
+                'message': 'Invalid username or password'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        except ValueError:
+            return Response({
+                'status': 'error',
+                'message': 'Invalid user ID format'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not user:
+            return Response({
+                'status': 'error',
+                'message': 'Invalid username or password'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        # Check if user is active
+        is_active = user.IsActive
+        if isinstance(is_active, str):
+            is_active = is_active.upper() == 'Y'
+        elif isinstance(is_active, bool):
+            is_active = is_active
+        else:
+            is_active = False
+            
+        if not is_active:
+            return Response({
+                'status': 'error',
+                'message': 'User account is inactive'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        # Verify OTP
+        mfa_result = MfaService.verify_otp(user, otp, request)
+        if not mfa_result.get('success'):
+            return Response({
+                'status': 'error',
+                'message': mfa_result.get('error', 'MFA verification failed'),
+                'requires_mfa': True
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        # License validation
+        if not getattr(settings, 'LICENSE_CHECK_ENABLED', True):
+            logger.warning("🔕 LICENSE CHECK DISABLED via settings.")
+        else:
+            if user.license_key:
+                try:
+                    from licensing_system import VardaanLicensingSystem
+                    licensing_system = VardaanLicensingSystem()
+                    license_verification_result = licensing_system.verify_license(user.license_key)
+                    if not license_verification_result.get("success"):
+                        return Response({
+                            'status': 'error',
+                            'message': 'License verification failed. Please contact your administrator.',
+                            'license_error': license_verification_result.get('error', 'Unknown license error')
+                        }, status=status.HTTP_403_FORBIDDEN)
+                except Exception as license_error:
+                    logger.error(f"License validation error: {str(license_error)}")
+                    return Response({
+                        'status': 'error',
+                        'message': 'License verification error. Please contact your administrator.',
+                        'license_error': str(license_error)
+                    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            else:
+                return Response({
+                    'status': 'error',
+                    'message': 'No license key assigned to this user. Please contact your administrator.'
+                }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Generate JWT tokens
+        tokens = generate_jwt_tokens(user)
+        
+        # Store user info in session
+        request.session['user_id'] = user.UserId
+        request.session['username'] = user.UserName
+        request.session['grc_user_id'] = user.UserId
+        request.session['grc_username'] = user.UserName
+        
+        if 'grc_framework_selected' not in request.session:
+            request.session['grc_framework_selected'] = None
+        if 'selected_framework_id' not in request.session:
+            request.session['selected_framework_id'] = None
+        
+        request.session.save()
+        
+        consent_accepted_value = str(user.consent_accepted) if user.consent_accepted is not None else '0'
+        consent_required = consent_accepted_value != '1'
+        
+        logger.info(f"✅ MFA LOGIN SUCCESS: User {user.UserName} (ID: {user.UserId}) logged in successfully")
+        
+        return Response({
+            'status': 'success',
+            'message': 'Login successful',
+            'license_verified': True,
+            'access_token': tokens['access'],
+            'refresh_token': tokens['refresh'],
+            'access_token_expires': tokens['access_token_expires'].isoformat(),
+            'refresh_token_expires': tokens['refresh_token_expires'].isoformat(),
+            'consent_required': consent_required,
+            'user': {
+                'UserId': user.UserId,
+                'UserName': user.UserName,
+                'Email': user.Email,
+                'FirstName': user.FirstName,
+                'LastName': user.LastName,
+                'IsActive': user.IsActive,
+                'consent_accepted': consent_accepted_value,
+                'license_key': user.license_key
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"MFA verify OTP error: {str(e)}")
+        return Response({
+            'status': 'error',
+            'message': 'MFA verification failed'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def mfa_resend_otp(request):
+    """Resend MFA OTP to user's email"""
+    try:
+        data = request.data
+        username = data.get('username')
+        password = data.get('password')
+        login_type = data.get('login_type', 'username')
+        
+        if not username or not password:
+            return Response({
+                'status': 'error',
+                'message': 'Username and password are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Authenticate user
+        user = None
+        try:
+            if login_type == 'userid':
+                user_id = int(username)
+                candidate = Users.objects.get(UserId=user_id)
+            else:
+                candidate = Users.objects.get(UserName=username)
+            
+            if check_password(password, candidate.Password):
+                user = candidate
+            elif candidate.Password == password:
+                candidate.Password = make_password(password)
+                candidate.save(update_fields=['Password'])
+                user = candidate
+        except Users.DoesNotExist:
+            return Response({
+                'status': 'error',
+                'message': 'Invalid username or password'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        except ValueError:
+            return Response({
+                'status': 'error',
+                'message': 'Invalid user ID format'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not user:
+            return Response({
+                'status': 'error',
+                'message': 'Invalid username or password'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        if not user.Email:
+            return Response({
+                'status': 'error',
+                'message': 'Email address is required for MFA. Please contact your administrator.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if user has recent pending challenge
+        from .models import MfaEmailChallenge
+        recent_challenge = MfaEmailChallenge.objects.filter(
+            UserId=user,
+            Status=MfaEmailChallenge.STATUS_PENDING
+        ).order_by('-CreatedAt').first()
+        
+        if recent_challenge and not recent_challenge.is_expired():
+            # Rate limiting: Don't allow resend if challenge is still valid
+            return Response({
+                'status': 'error',
+                'message': 'Please wait before requesting a new OTP. Check your email for the previous code.'
+            }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+        
+        # Create new challenge
+        try:
+            challenge = MfaService.create_mfa_challenge(user, request)
+            email_parts = user.Email.split('@')
+            masked_email = f"{email_parts[0][:3]}***@{email_parts[1]}" if len(email_parts) == 2 else "***"
+            
+            return Response({
+                'status': 'success',
+                'message': f'New verification code sent to {masked_email}',
+                'email_masked': masked_email
+            }, status=status.HTTP_200_OK)
+        except Exception as mfa_error:
+            logger.error(f"Error resending MFA OTP for user {user.UserName}: {str(mfa_error)}")
+            return Response({
+                'status': 'error',
+                'message': 'Failed to send verification code. Please try again.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+    except Exception as e:
+        logger.error(f"MFA resend OTP error: {str(e)}")
+        return Response({
+            'status': 'error',
+            'message': 'Failed to resend verification code'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def google_oauth_initiate(request):
+    """Initiate Google OAuth SSO flow"""
+    try:
+        from google_auth_oauthlib.flow import Flow
+        from google.oauth2.credentials import Credentials
+        import secrets
+        
+        # Get Google OAuth configuration from settings
+        client_id = getattr(settings, 'GOOGLE_CLIENT_ID', '')
+        client_secret = getattr(settings, 'GOOGLE_CLIENT_SECRET', '')
+        redirect_uri = getattr(settings, 'GOOGLE_REDIRECT_URI', '')
+        scopes = getattr(settings, 'GOOGLE_SCOPES', 'openid email profile').split()
+        
+        if not client_id or not client_secret:
+            return Response({
+                'status': 'error',
+                'message': 'Google OAuth is not configured. Please contact your administrator.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        # Use full scope URLs to match what Google returns
+        # Convert short names to full URLs if needed
+        full_scopes = []
+        for scope in scopes:
+            if scope == 'email':
+                full_scopes.append('https://www.googleapis.com/auth/userinfo.email')
+            elif scope == 'profile':
+                full_scopes.append('https://www.googleapis.com/auth/userinfo.profile')
+            elif scope == 'openid':
+                full_scopes.append('openid')
+            else:
+                full_scopes.append(scope)
+        
+        # Create OAuth flow with full scope URLs
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "redirect_uris": [redirect_uri]
+                }
+            },
+            scopes=full_scopes,
+            redirect_uri=redirect_uri
+        )
+        
+        # Generate state for CSRF protection
+        state = secrets.token_urlsafe(32)
+        request.session['google_oauth_state'] = state
+        # CRITICAL: Save session explicitly to persist state across redirect
+        request.session.save()
+        
+        logger.info(f"Google OAuth state saved to session: {state[:20]}...")
+        
+        # Get authorization URL
+        authorization_url, _ = flow.authorization_url(
+            access_type='offline',
+            include_granted_scopes='true',
+            state=state,
+            prompt='consent'  # Force consent screen to get refresh token
+        )
+        
+        logger.info(f"Google OAuth initiated - redirecting to: {authorization_url[:100]}...")
+        
+        return Response({
+            'status': 'success',
+            'authorization_url': authorization_url
+        })
+        
+    except Exception as e:
+        logger.error(f"Google OAuth initiate error: {str(e)}")
+        return Response({
+            'status': 'error',
+            'message': f'Failed to initiate Google OAuth: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def google_oauth_callback(request):
+    """Handle Google OAuth callback and authenticate user"""
+    try:
+        from google_auth_oauthlib.flow import Flow
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build
+        from django.contrib.auth.hashers import make_password
+        import secrets
+        
+        # Get parameters from callback
+        code = request.GET.get('code')
+        state = request.GET.get('state')
+        error = request.GET.get('error')
+        
+        if error:
+            logger.error(f"Google OAuth error: {error}")
+            return Response({
+                'status': 'error',
+                'message': f'Google OAuth error: {error}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not code:
+            return Response({
+                'status': 'error',
+                'message': 'Authorization code not provided'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Verify state to prevent CSRF attacks
+        # Allow skipping in development if configured
+        skip_state_verification = getattr(settings, 'SKIP_OAUTH_STATE_VERIFICATION', 'false').lower() == 'true'
+        
+        if not skip_state_verification:
+            stored_state = request.session.get('google_oauth_state')
+            logger.info(f"Google OAuth callback - received state: {state[:20] if state else 'None'}..., stored state: {stored_state[:20] if stored_state else 'None'}...")
+            
+            if not stored_state or stored_state != state:
+                logger.warning(f"Google OAuth state mismatch - received: {state}, stored: {stored_state}")
+                return Response({
+                    'status': 'error',
+                    'message': 'Invalid state parameter. Please try again.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Clear state from session after successful verification
+            del request.session['google_oauth_state']
+            request.session.save()
+        else:
+            logger.warning("⚠️ SKIPPING STATE VERIFICATION (development mode only)")
+        
+        # Get Google OAuth configuration
+        client_id = getattr(settings, 'GOOGLE_CLIENT_ID', '')
+        client_secret = getattr(settings, 'GOOGLE_CLIENT_SECRET', '')
+        redirect_uri = getattr(settings, 'GOOGLE_REDIRECT_URI', '')
+        scopes = getattr(settings, 'GOOGLE_SCOPES', 'openid email profile').split()
+        
+        # Use full scope URLs to match what Google returns
+        # Convert short names to full URLs if needed
+        full_scopes = []
+        for scope in scopes:
+            if scope == 'email':
+                full_scopes.append('https://www.googleapis.com/auth/userinfo.email')
+            elif scope == 'profile':
+                full_scopes.append('https://www.googleapis.com/auth/userinfo.profile')
+            elif scope == 'openid':
+                full_scopes.append('openid')
+            else:
+                full_scopes.append(scope)
+        
+        # Create OAuth flow with full scope URLs
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "redirect_uris": [redirect_uri]
+                }
+            },
+            scopes=full_scopes,
+            redirect_uri=redirect_uri
+        )
+        
+        # Exchange authorization code for tokens
+        # Handle scope format mismatch - Google returns full URLs, we may request short names
+        import warnings
+        
+        try:
+            # Suppress UserWarning about scope changes
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", UserWarning)
+                flow.fetch_token(code=code)
+        except (UserWarning, Warning) as e:
+            # If it's a scope mismatch warning, try with scopes from callback URL
+            error_str = str(e)
+            if "Scope" in error_str or "scope" in error_str.lower():
+                logger.warning(f"Scope format mismatch detected, using scopes from callback URL")
+                # Get the actual scopes from the callback URL
+                returned_scopes_str = request.GET.get('scope', '')
+                if returned_scopes_str:
+                    returned_scopes = returned_scopes_str.split()
+                    logger.info(f"Using returned scopes: {returned_scopes}")
+                    # Recreate flow with returned scopes
+                    flow = Flow.from_client_config(
+                        {
+                            "web": {
+                                "client_id": client_id,
+                                "client_secret": client_secret,
+                                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                                "token_uri": "https://oauth2.googleapis.com/token",
+                                "redirect_uris": [redirect_uri]
+                            }
+                        },
+                        scopes=returned_scopes,
+                        redirect_uri=redirect_uri
+                    )
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", UserWarning)
+                        flow.fetch_token(code=code)
+                else:
+                    logger.error("No scopes returned in callback URL")
+                    raise Exception("Unable to retrieve scopes from Google OAuth callback")
+            else:
+                # Re-raise if it's not a scope-related warning
+                raise
+        except Exception as e:
+            # Handle any other exceptions
+            error_str = str(e)
+            if "Scope" in error_str or "scope" in error_str.lower():
+                # Try one more time with callback scopes
+                returned_scopes_str = request.GET.get('scope', '')
+                if returned_scopes_str:
+                    returned_scopes = returned_scopes_str.split()
+                    logger.info(f"Retrying with returned scopes: {returned_scopes}")
+                    flow = Flow.from_client_config(
+                        {
+                            "web": {
+                                "client_id": client_id,
+                                "client_secret": client_secret,
+                                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                                "token_uri": "https://oauth2.googleapis.com/token",
+                                "redirect_uris": [redirect_uri]
+                            }
+                        },
+                        scopes=returned_scopes,
+                        redirect_uri=redirect_uri
+                    )
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", UserWarning)
+                        flow.fetch_token(code=code)
+                else:
+                    raise
+            else:
+                raise
+        credentials = flow.credentials
+        
+        # Get user info from Google
+        user_info_service = build('oauth2', 'v2', credentials=credentials)
+        user_info = user_info_service.userinfo().get().execute()
+        
+        email = user_info.get('email')
+        first_name = user_info.get('given_name', '')
+        last_name = user_info.get('family_name', '')
+        google_id = user_info.get('id')
+        picture = user_info.get('picture', '')
+        
+        if not email:
+            return Response({
+                'status': 'error',
+                'message': 'Unable to retrieve email from Google account'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        logger.info(f"Google OAuth callback - email: {email}, google_id: {google_id}")
+        
+        # Check if user exists by email
+        try:
+            user = Users.objects.get(Email=email)
+            logger.info(f"Existing user found: {user.UserName} (ID: {user.UserId})")
+        except Users.DoesNotExist:
+            # Create new user
+            # Generate username from email
+            username = email.split('@')[0]
+            # Ensure username is unique
+            base_username = username
+            counter = 1
+            while Users.objects.filter(UserName=username).exists():
+                username = f"{base_username}{counter}"
+                counter += 1
+            
+            # Get default framework (or handle if none exists)
+            try:
+                from .models import Framework
+                default_framework = Framework.objects.first()
+                if not default_framework:
+                    return Response({
+                        'status': 'error',
+                        'message': 'No framework configured. Please contact your administrator.'
+                    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            except Exception as e:
+                logger.error(f"Error getting default framework: {str(e)}")
+                return Response({
+                    'status': 'error',
+                    'message': 'Error configuring user. Please contact your administrator.'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            # Create user with a random password (they'll use Google SSO)
+            random_password = secrets.token_urlsafe(32)
+            user = Users.objects.create(
+                UserName=username,
+                Email=email,
+                FirstName=first_name,
+                LastName=last_name,
+                Password=make_password(random_password),
+                IsActive='Y',
+                DepartmentId='0',  # Default department
+                FrameworkId=default_framework,
+                consent_accepted='0'  # User will need to accept consent
+            )
+            logger.info(f"✅ New user created via Google SSO: {user.UserName} (ID: {user.UserId})")
+            logger.info(f"   Email: {email}, Name: {first_name} {last_name}, Google ID: {google_id}")
+        else:
+            # Update existing user info if needed (in case Google profile changed)
+            updated = False
+            if user.FirstName != first_name:
+                user.FirstName = first_name
+                updated = True
+            if user.LastName != last_name:
+                user.LastName = last_name
+                updated = True
+            if updated:
+                user.save()
+                logger.info(f"✅ Updated user info via Google SSO: {user.UserName} (ID: {user.UserId})")
+        
+        # Check if user is active
+        is_active = user.IsActive
+        if isinstance(is_active, str):
+            is_active = is_active.upper() == 'Y'
+        elif isinstance(is_active, bool):
+            is_active = is_active
+        else:
+            is_active = False
+            
+        if not is_active:
+            return Response({
+                'status': 'error',
+                'message': 'User account is inactive. Please contact your administrator.'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # License validation (same as regular login)
+        if not getattr(settings, 'LICENSE_CHECK_ENABLED', True):
+            logger.warning("🔕 LICENSE CHECK DISABLED via settings. Proceeding without external verification.")
+        else:
+            if user.license_key:
+                try:
+                    from licensing_system import VardaanLicensingSystem
+                    licensing_system = VardaanLicensingSystem()
+                    license_verification_result = licensing_system.verify_license(user.license_key)
+                    if not license_verification_result.get("success"):
+                        logger.warning(f"❌ LICENSE VALIDATION FAILED: User {user.UserName} - {license_verification_result.get('error')}")
+                        return Response({
+                            'status': 'error',
+                            'message': 'License verification failed. Please contact your administrator.',
+                            'license_error': license_verification_result.get('error', 'Unknown license error')
+                        }, status=status.HTTP_403_FORBIDDEN)
+                    else:
+                        logger.info(f"✅ LICENSE VALIDATION SUCCESS: User {user.UserName} license verified successfully")
+                except Exception as license_error:
+                    logger.error(f"❌ LICENSE VALIDATION ERROR: User {user.UserName} - {str(license_error)}")
+                    return Response({
+                        'status': 'error',
+                        'message': 'License verification error. Please contact your administrator.',
+                        'license_error': str(license_error)
+                    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            else:
+                logger.warning(f"❌ LICENSE VALIDATION: User {user.UserName} has no license key assigned")
+                return Response({
+                    'status': 'error',
+                    'message': 'No license key assigned to this user. Please contact your administrator.'
+                }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Generate JWT tokens
+        tokens = generate_jwt_tokens(user)
+        
+        # Store user info in session
+        request.session['user_id'] = user.UserId
+        request.session['username'] = user.UserName
+        request.session['grc_user_id'] = user.UserId
+        request.session['grc_username'] = user.UserName
+        
+        if 'grc_framework_selected' not in request.session:
+            request.session['grc_framework_selected'] = None
+        if 'selected_framework_id' not in request.session:
+            request.session['selected_framework_id'] = None
+        
+        request.session.save()
+        
+        consent_accepted_value = str(user.consent_accepted) if user.consent_accepted is not None else '0'
+        consent_required = consent_accepted_value != '1'
+        
+        logger.info(f"✅ GOOGLE SSO LOGIN SUCCESS: User {user.UserName} (ID: {user.UserId}) logged in successfully")
+        
+        # Assign default RBAC permissions for Google SSO users (view permissions for all modules)
+        try:
+            assign_default_rbac_permissions_for_google_sso(user)
+        except Exception as rbac_error:
+            logger.error(f"Error assigning RBAC permissions for Google SSO user {user.UserName}: {str(rbac_error)}")
+            # Continue with login even if RBAC assignment fails
+        
+        # Redirect to frontend with tokens as query parameters
+        from django.shortcuts import redirect
+        from urllib.parse import urlencode
+        frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:8080')
+        
+        # Build redirect URL with all necessary parameters
+        params = {
+            'access_token': tokens['access'],
+            'refresh_token': tokens['refresh'],
+            'user_id': user.UserId,
+            'consent_required': 'true' if consent_required else 'false',
+            'access_token_expires': tokens['access_token_expires'].isoformat(),
+            'refresh_token_expires': tokens['refresh_token_expires'].isoformat()
+        }
+        redirect_url = f"{frontend_url}/auth/google/callback?{urlencode(params)}"
+        
+        logger.info(f"Redirecting to frontend: {redirect_url[:100]}...")
+        
+        # Perform actual redirect
+        return redirect(redirect_url)
+        
+    except Exception as e:
+        logger.error(f"Google OAuth callback error: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return Response({
+            'status': 'error',
+            'message': f'Google OAuth callback failed: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

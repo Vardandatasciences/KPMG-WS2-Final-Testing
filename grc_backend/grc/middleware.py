@@ -58,6 +58,10 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
             '/api/jwt/verify/',
             '/api/jwt/accept-consent/',
             '/api/jwt/test-consent-simple/',
+            '/api/jwt/mfa/verify-otp/',
+            '/api/jwt/mfa/resend-otp/',
+            '/api/google/oauth/',  # Allow Google OAuth initiation without authentication
+            '/api/google/oauth-callback/',  # Allow Google OAuth callback without authentication
             '/media/',  # Allow access to media files without authentication
             '/api/risks-for-dropdown/',  # Allow access to risks dropdown without authentication
             '/api/risks/',  # Temporarily allow access to risks creation without authentication for testing
@@ -114,7 +118,9 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
             '/api/documents/',
             '/api/events/archived/',  # Skip authentication for archived events endpoints
             '/api/events/archived-queue-items/',  # Skip authentication for archived queue items endpoints
-            '/api/events/', 
+            '/api/events/',
+            # Cookie preferences endpoints - must be accessible without authentication
+            '/api/cookie/preferences/',  # Skip authentication for cookie preferences endpoints (save and get)
             '/api/upload-evidence-file/',  # Skip authentication for evidence file uploads (matches existing file upload pattern)
             '/api/incident-categories/',
             '/api/upload-risk-evidence-file/',  # Skip authentication for incident categories endpoints
@@ -166,6 +172,11 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
         # Check if path should be skipped
         path = request.path_info
         
+        # Explicitly skip MFA endpoints (they don't require authentication during login)
+        if path.startswith('/api/jwt/mfa/'):
+            logger.debug(f"[JWT Middleware] Skipping authentication for MFA endpoint: {path}")
+            return None
+        
         # Skip all TPRM API paths - let DRF authentication handle them
         if path.startswith('/api/tprm/') or path.startswith('/api/v1/vendor-'):
             return None
@@ -203,10 +214,14 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
             logger.info(f"[JWT Middleware] Skipping authentication for vendor portal path: {path}")
             return None
         
-        # Check other skip paths
-        if any(skip_path in path for skip_path in skip_paths):
-            #logger.debug(f"[JWT Middleware] Skipping authentication for path: {path}")
-            return None
+        # Check other skip paths - use startswith for more reliable matching
+        # Also handle paths with or without trailing slashes
+        path_normalized = path.rstrip('/')
+        for skip_path in skip_paths:
+            skip_path_normalized = skip_path.rstrip('/')
+            if path.startswith(skip_path) or path_normalized == skip_path_normalized:
+                logger.debug(f"[JWT Middleware] Skipping authentication for path: {path}")
+                return None
         
         # Try JWT authentication first
         auth_header = request.headers.get('Authorization')

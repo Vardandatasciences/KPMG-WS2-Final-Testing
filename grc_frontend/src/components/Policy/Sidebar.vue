@@ -80,6 +80,10 @@
           <i class="fas fa-exchange-alt icon"></i>
           <span>Status Change Requests</span>
         </div>
+        <div class="menu-item" @click="navigate('/policy/data-workflow')" :class="{'active': isActive('/policy/data-workflow')}">
+          <i class="fas fa-project-diagram icon"></i>
+          <span>Data Workflow</span>
+        </div>
 
         <!-- 4. Performance Analysis -->
         <div @click="toggleSubmenu('performanceAnalysis')" class="menu-item has-submenu" :class="{'expanded': openMenus.performanceAnalysis}">
@@ -97,6 +101,9 @@
             <span>User Dashboard</span>
           </div>
         </div>
+
+        <!-- 5. Data Workflow -->
+        
       </div>
 
       
@@ -375,12 +382,6 @@
       <div @click="navigate('/document-handling')" class="menu-item" :class="{'active': isActive('/document-handling')}">
         <i class="fas fa-folder-open icon"></i>
         <span v-if="!isCollapsed" class="bold-text">Document Handling</span>
-      </div>
-
-      <!-- Data Workflow Section -->
-      <div @click="navigate('/data-workflow')" class="menu-item" :class="{'active': isActive('/data-workflow')}">
-        <i class="fas fa-project-diagram icon"></i>
-        <span v-if="!isCollapsed" class="bold-text">Data Workflow</span>
       </div>
       <!-- KPI Dashboard Section -->
       <div @click="navigate('/kpis')" class="menu-item" :class="{'active': isActive('/kpis')}">

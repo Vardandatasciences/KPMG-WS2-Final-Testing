@@ -2379,3 +2379,216 @@ class ConsentAcceptance(models.Model):
     
     def __str__(self):
         return f"{self.user.UserName} accepted {self.action_type} at {self.accepted_at}"
+
+
+class ConsentWithdrawal(models.Model):
+    """
+    Tracks when users withdraw consent for specific actions
+    GDPR Article 7(3): Users have the right to withdraw consent at any time
+    """
+    withdrawal_id = models.AutoField(primary_key=True, db_column='WithdrawalId')
+    user = models.ForeignKey('Users', on_delete=models.CASCADE, db_column='UserId', related_name='consent_withdrawals')
+    config = models.ForeignKey('ConsentConfiguration', on_delete=models.CASCADE, db_column='ConfigId', null=True, blank=True)
+    action_type = models.CharField(max_length=50, db_column='ActionType')
+    withdrawn_at = models.DateTimeField(auto_now_add=True, db_column='WithdrawnAt')
+    ip_address = models.CharField(max_length=50, null=True, blank=True, db_column='IpAddress')
+    user_agent = models.TextField(null=True, blank=True, db_column='UserAgent')
+    framework = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    reason = models.TextField(null=True, blank=True, db_column='Reason', help_text='Optional reason for withdrawal')
+    
+    class Meta:
+        db_table = 'consent_withdrawal'
+        ordering = ['-withdrawn_at']
+        indexes = [
+            models.Index(fields=['user', 'action_type', 'withdrawn_at']),
+            models.Index(fields=['user', 'framework']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.UserName} withdrew {self.action_type} at {self.withdrawn_at}"
+
+
+# =====================================================
+# COOKIE PREFERENCES MODEL
+# =====================================================
+
+class CookiePreferences(models.Model):
+    """
+    Stores user cookie preferences for GDPR compliance
+    """
+    PreferenceId = models.AutoField(primary_key=True, db_column='PreferenceId')
+    UserId = models.ForeignKey(
+        'Users',
+        on_delete=models.CASCADE,
+        db_column='UserId',
+        null=True,
+        blank=True,
+        related_name='cookie_preferences'
+    )
+    SessionId = models.CharField(max_length=255, db_column='SessionId', null=True, blank=True)
+    EssentialCookies = models.BooleanField(default=True, db_column='EssentialCookies')
+    FunctionalCookies = models.BooleanField(default=False, db_column='FunctionalCookies')
+    AnalyticsCookies = models.BooleanField(default=False, db_column='AnalyticsCookies')
+    MarketingCookies = models.BooleanField(default=False, db_column='MarketingCookies')
+    PreferencesSaved = models.BooleanField(default=False, db_column='PreferencesSaved')
+    IpAddress = models.CharField(max_length=50, db_column='IpAddress', null=True, blank=True)
+    UserAgent = models.TextField(db_column='UserAgent', null=True, blank=True)
+    CreatedAt = models.DateTimeField(auto_now_add=True, db_column='CreatedAt')
+    UpdatedAt = models.DateTimeField(auto_now=True, db_column='UpdatedAt')
+    
+    class Meta:
+        db_table = 'cookie_preferences'
+        ordering = ['-CreatedAt']
+        indexes = [
+            models.Index(fields=['UserId', 'SessionId'], name='idx_cookie_user_session'),
+            models.Index(fields=['SessionId'], name='idx_cookie_session'),
+        ]
+    
+    def __str__(self):
+        user_info = f"User {self.UserId.UserId}" if self.UserId else f"Session {self.SessionId[:20]}"
+        return f"Cookie Preferences for {user_info} - Saved: {self.PreferencesSaved}"
+
+
+# MFA Models
+class MfaEmailChallenge(models.Model):
+    """MFA Email OTP Challenge table"""
+    STATUS_PENDING = "pending"
+    STATUS_SATISFIED = "satisfied"
+    STATUS_EXPIRED = "expired"
+    STATUS_FAILED = "failed"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "pending"),
+        (STATUS_SATISFIED, "satisfied"),
+        (STATUS_EXPIRED, "expired"),
+        (STATUS_FAILED, "failed"),
+    ]
+
+    ChallengeId = models.BigAutoField(db_column="ChallengeId", primary_key=True)
+    UserId = models.ForeignKey(
+        Users,
+        db_column="UserId",
+        related_name="mfa_challenges",
+        on_delete=models.CASCADE,
+    )
+    OtpHash = models.BinaryField(db_column="OtpHash", max_length=64)  # SHA-256 bytes
+    ExpiresAt = models.DateTimeField(db_column="ExpiresAt")
+    Attempts = models.IntegerField(db_column="Attempts", default=0)
+    Status = models.CharField(
+        db_column="Status", max_length=16, choices=STATUS_CHOICES, default=STATUS_PENDING
+    )
+    IpAddress = models.CharField(db_column="IpAddress", max_length=45, null=True, blank=True)
+    UserAgent = models.CharField(db_column="UserAgent", max_length=400, null=True, blank=True)
+    CreatedAt = models.DateTimeField(db_column="CreatedAt", auto_now_add=True)
+    UsedAt = models.DateTimeField(db_column="UsedAt", null=True, blank=True)
+
+    class Meta:
+        db_table = "mfa_email_challenges"
+        indexes = [
+            models.Index(fields=["UserId", "Status"], name="idx_grc_mfaec_user_status"),
+            models.Index(fields=["ExpiresAt"], name="idx_grc_mfaec_expires"),
+        ]
+
+    def __str__(self):
+        return f"Challenge#{self.ChallengeId} for User {self.UserId.UserId} ({self.Status})"
+
+    @classmethod
+    def generate_otp(cls):
+        """Generate a 6-digit OTP"""
+        import secrets
+        import string
+        return ''.join(secrets.choice(string.digits) for _ in range(6))
+
+    @classmethod
+    def hash_otp(cls, otp):
+        """Hash OTP using SHA-256"""
+        import hashlib
+        return hashlib.sha256(otp.encode()).digest()
+
+    def verify_otp(self, otp):
+        """Verify the provided OTP against the stored hash"""
+        import hashlib
+        return hashlib.sha256(otp.encode()).digest() == self.OtpHash
+
+    def is_expired(self):
+        """Check if the challenge has expired"""
+        from django.utils import timezone
+        return timezone.now() > self.ExpiresAt
+
+    def mark_satisfied(self):
+        """Mark the challenge as satisfied"""
+        from django.utils import timezone
+        self.Status = self.STATUS_SATISFIED
+        self.UsedAt = timezone.now()
+        self.save(update_fields=['Status', 'UsedAt'])
+
+    def mark_failed(self):
+        """Mark the challenge as failed"""
+        self.Status = self.STATUS_FAILED
+        self.save(update_fields=['Status'])
+
+    def increment_attempts(self):
+        """Increment the attempt counter"""
+        self.Attempts += 1
+        self.save(update_fields=['Attempts'])
+
+
+class MfaAuditLog(models.Model):
+    """MFA Audit Log table"""
+    EVT_ISSUED = "challenge_issued"
+    EVT_OK = "challenge_ok"
+    EVT_FAIL = "challenge_fail"
+    EVENT_CHOICES = [
+        (EVT_ISSUED, "challenge_issued"),
+        (EVT_OK, "challenge_ok"),
+        (EVT_FAIL, "challenge_fail"),
+    ]
+
+    MfaEventId = models.BigAutoField(db_column="MfaEventId", primary_key=True)
+    UserId = models.ForeignKey(
+        Users,
+        db_column="UserId",
+        related_name="mfa_audit_events",
+        on_delete=models.CASCADE,
+    )
+    EventType = models.CharField(db_column="EventType", max_length=32, choices=EVENT_CHOICES)
+    DetailJson = models.JSONField(db_column="DetailJson", null=True, blank=True)
+    IpAddress = models.CharField(db_column="IpAddress", max_length=45, null=True, blank=True)
+    UserAgent = models.CharField(db_column="UserAgent", max_length=400, null=True, blank=True)
+    CreatedAt = models.DateTimeField(db_column="CreatedAt", auto_now_add=True)
+
+    class Meta:
+        db_table = "mfa_audit_log"
+        indexes = [
+            models.Index(fields=["UserId", "CreatedAt"], name="idx_grc_mfaal_user_time"),
+        ]
+
+    def __str__(self):
+        return f"MFA {self.EventType} for User {self.UserId.UserId} @ {self.CreatedAt}"
+
+    @classmethod
+    def log_event(cls, user, event_type, detail_json=None, request=None):
+        """Log an MFA event"""
+        ip_address = None
+        user_agent = None
+        
+        if request:
+            ip_address = cls.get_client_ip(request)
+            user_agent = request.META.get('HTTP_USER_AGENT', '')[:400]
+        
+        return cls.objects.create(
+            UserId=user,
+            EventType=event_type,
+            DetailJson=detail_json,
+            IpAddress=ip_address,
+            UserAgent=user_agent
+        )
+
+    @staticmethod
+    def get_client_ip(request):
+        """Get client IP address from request"""
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0]
+        else:
+            ip = request.META.get('REMOTE_ADDR', 'unknown')
+        return ip

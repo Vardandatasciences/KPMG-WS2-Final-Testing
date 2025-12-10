@@ -119,12 +119,12 @@
 
         <!-- Workflow Steps -->
         <div v-else class="workflow-steps">
-          <!-- Enhanced Horizontal Steps Navigation -->
-          <div class="audit-tabs steps-navigation">
-            <button 
+          <!-- Steps List Navigation -->
+          <div class="steps-list-navigation">
+            <div 
               v-for="(step, index) in mitigationSteps" 
               :key="index"
-              :class="['tab-button step-button', { 
+              :class="['step-list-item', { 
                 active: currentStep === index,
                 completed: step.status === 'Completed',
                 approved: step.approved === true,
@@ -132,32 +132,22 @@
               }]"
               @click="currentStep = index"
             >
-              <div class="tab-number step-number">{{ index + 1 }}</div>
-              <div class="step-content">
-                <span class="step-title">{{ step.description }}</span>
-                <span v-if="step.status === 'Completed'" class="step-status-indicator">
-                  <i class="fas fa-check-circle"></i>
-                </span>
-                <span v-else-if="step.approved === true" class="step-status-indicator approved">
-                  <i class="fas fa-check-circle"></i>
-                </span>
-                <span v-else-if="step.approved === false" class="step-status-indicator rejected">
-                  <i class="fas fa-times-circle"></i>
-                </span>
-              </div>
-            </button>
+              <span class="step-list-number">{{ index + 1 }}.</span>
+              <span class="step-list-title">{{ step.description }}</span>
+              <span v-if="step.status === 'Completed' || step.approved === true" class="step-complete-mark">
+                <i class="fas fa-check-circle"></i>
+              </span>
+            </div>
             
             <!-- Questionnaire Step -->
-            <button 
+            <div 
               v-if="allStepsCompleted"
-              :class="['tab-button step-button', { active: currentStep === mitigationSteps.length }]"
+              :class="['step-list-item', { active: currentStep === mitigationSteps.length }]"
               @click="currentStep = mitigationSteps.length"
             >
-              <div class="tab-number step-number">{{ mitigationSteps.length + 1 }}</div>
-              <div class="step-content">
-                <span class="step-title">Assessment Questionnaire</span>
-              </div>
-            </button>
+              <span class="step-list-number">{{ mitigationSteps.length + 1 }}.</span>
+              <span class="step-list-title">Assessment Questionnaire</span>
+            </div>
           </div>
 
           <!-- Step Content -->

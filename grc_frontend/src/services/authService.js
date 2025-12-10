@@ -25,12 +25,15 @@ class AuthService {
                     return Promise.reject(new Error('Logging out'))
                 }
                
-                // Skip auth check for login/refresh endpoints
+                // Skip auth check for login/refresh/MFA/Google OAuth endpoints
                 const isAuthEndpoint = config.url && (
                     config.url.includes('/api/jwt/login/') ||
                     config.url.includes('/api/jwt/refresh/') ||
+                    config.url.includes('/api/jwt/mfa/') ||
                     config.url.includes('/api/login/') ||
-                    config.url.includes('/api/logout/')
+                    config.url.includes('/api/logout/') ||
+                    config.url.includes('/api/google/oauth/') ||
+                    config.url.includes('/api/google/oauth-callback/')
                 )
                
                 if (!isAuthEndpoint) {
@@ -64,6 +67,12 @@ class AuthService {
             },
             async (error) => {
                 const originalRequest = error.config
+               
+                // Handle network errors or missing config
+                if (!originalRequest) {
+                    console.error('❌ Request error: originalRequest is undefined')
+                    return Promise.reject(error)
+                }
                
                 // CRITICAL: Don't try to refresh if the refresh endpoint itself failed
                 // This prevents infinite loops when refresh token is invalid
@@ -130,6 +139,16 @@ class AuthService {
                 password,
                 login_type: loginType
             })
+ 
+            // Handle MFA required response
+            if (response.data.status === 'mfa_required') {
+                return {
+                    success: false,
+                    requiresMfa: true,
+                    message: response.data.message || 'Please enter the verification code',
+                    emailMasked: response.data.email_masked
+                }
+            }
  
             if (response.data.status === 'success') {
                 const { access_token, refresh_token, access_token_expires, refresh_token_expires, user, license_verified } = response.data
@@ -323,6 +342,110 @@ class AuthService {
             throw error
         }
     }
+
+    async verifyMfaOtp(username, password, otp, loginType = 'username') {
+        // Verify MFA OTP and complete login
+        try {
+            console.log('🔐 [AuthService] Verifying MFA OTP...')
+            const response = await axios.post(`${this.baseURL}/api/jwt/mfa/verify-otp/`, {
+                username,
+                password,
+                otp,
+                login_type: loginType
+            })
+
+            if (response.data.status === 'success') {
+                const { access_token, refresh_token, access_token_expires, refresh_token_expires, user, license_verified } = response.data
+                
+                // Store tokens
+                localStorage.setItem('access_token', access_token)
+                localStorage.setItem('refresh_token', refresh_token)
+                localStorage.setItem('access_token_expires', access_token_expires)
+                localStorage.setItem('refresh_token_expires', refresh_token_expires)
+                
+                // Store user info
+                localStorage.setItem('user', JSON.stringify(user))
+                localStorage.setItem('user_id', user.UserId.toString())
+                localStorage.setItem('user_email', user.Email)
+                localStorage.setItem('user_name', user.UserName)
+                localStorage.setItem('user_full_name', `${user.FirstName} ${user.LastName}`)
+                localStorage.setItem('isAuthenticated', 'true')
+                localStorage.setItem('is_logged_in', 'true')
+                
+                // Update axios default headers
+                axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`
+                
+                // Initialize RBAC service
+                try {
+                    const { default: rbacService } = await import('./rbacService.js')
+                    await rbacService.initialize()
+                    console.log('🔐 RBAC service initialized after MFA login')
+                } catch (error) {
+                    console.error('❌ Error initializing RBAC service:', error)
+                }
+                
+                // Start periodic token refresh
+                this.startPeriodicTokenRefresh()
+                
+                // Emit login event
+                eventBus.emit(LOGIN_EVENT, { user })
+                
+                console.log('🔐 MFA Login successful!', {
+                    user_id: user.UserId,
+                    email: user.Email,
+                    username: user.UserName
+                })
+                
+                return {
+                    success: true,
+                    user,
+                    license_verified: license_verified,
+                    tokens: {
+                        access: access_token,
+                        refresh: refresh_token,
+                        access_token_expires: access_token_expires,
+                        refresh_token_expires: refresh_token_expires
+                    }
+                }
+            } else {
+                throw new Error(response.data.message || 'MFA verification failed')
+            }
+        } catch (error) {
+            console.error('❌ MFA OTP verification error:', error)
+            if (error.response && error.response.data) {
+                throw new Error(error.response.data.message || 'MFA verification failed')
+            }
+            throw error
+        }
+    }
+
+    async resendMfaOtp(username, password, loginType = 'username') {
+        // Resend MFA OTP to user's email
+        try {
+            console.log('🔐 [AuthService] Resending MFA OTP...')
+            const response = await axios.post(`${this.baseURL}/api/jwt/mfa/resend-otp/`, {
+                username,
+                password,
+                login_type: loginType
+            })
+
+            if (response.data.status === 'success') {
+                return {
+                    success: true,
+                    message: response.data.message || 'New verification code sent',
+                    emailMasked: response.data.email_masked
+                }
+            } else {
+                throw new Error(response.data.message || 'Failed to resend OTP')
+            }
+        } catch (error) {
+            console.error('❌ MFA resend OTP error:', error)
+            if (error.response && error.response.data) {
+                throw new Error(error.response.data.message || 'Failed to resend OTP')
+            }
+            throw error
+        }
+    }
  
     async checkAndRefreshToken() {
         try {
@@ -378,12 +501,20 @@ class AuthService {
             if (!refreshToken) {
                 console.error('❌ No refresh token available')
                 this.failedRefreshAttempts++
+                this.isRefreshing = false
                 throw new Error('No refresh token available')
             }
  
-            const response = await axios.post(`${this.baseURL}/api/jwt/refresh/`, {
+            // Use a timeout to prevent hanging requests
+            const refreshPromise = axios.post(`${this.baseURL}/api/jwt/refresh/`, {
                 refresh_token: refreshToken
             })
+            
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Refresh token request timeout')), 10000)
+            })
+            
+            const response = await Promise.race([refreshPromise, timeoutPromise])
  
             if (response.data.status === 'success') {
                 const { access_token, refresh_token, access_token_expires, refresh_token_expires } = response.data
@@ -416,17 +547,42 @@ class AuthService {
             }
         } catch (error) {
             console.error('❌ JWT token refresh error:', error)
-            this.failedRefreshAttempts++
             
-            // If we've failed too many times, clear auth data to force re-login
+            // Only increment failed attempts for actual errors, not if we're already refreshing
+            if (!this.isRefreshing) {
+                this.failedRefreshAttempts++
+            }
+            
+            // Check if access token is still valid before logging out
+            const accessToken = localStorage.getItem('access_token')
+            const accessTokenExpires = localStorage.getItem('access_token_expires')
+            
+            if (accessToken && accessTokenExpires) {
+                const expirationTime = new Date(accessTokenExpires)
+                const currentTime = new Date()
+                const timeUntilExpiration = expirationTime.getTime() - currentTime.getTime()
+                
+                // If access token is still valid for more than 1 minute, don't log out
+                if (timeUntilExpiration > 60 * 1000) {
+                    console.log('⚠️ Refresh failed but access token still valid, continuing...')
+                    this.isRefreshing = false
+                    return false
+                }
+            }
+            
+            // If we've failed too many times or token is expired, clear auth data to force re-login
             if (this.failedRefreshAttempts >= this.maxRefreshAttempts) {
                 console.error('❌ Too many failed refresh attempts. User needs to re-login.')
                 this.clearAuthData(true) // Redirect to login
             }
             
+            this.isRefreshing = false
             return false
         } finally {
-            this.isRefreshing = false
+            // Ensure isRefreshing is always reset
+            if (this.isRefreshing) {
+                this.isRefreshing = false
+            }
         }
     }
  
@@ -698,6 +854,110 @@ class AuthService {
             console.warn('Session logout API call failed, but continuing with local cleanup:', error)
         } finally {
             this.clearAuthData(false) // Don't auto-redirect for explicit logout
+        }
+    }
+
+    /**
+     * Initiate Google OAuth SSO login
+     */
+    async initiateGoogleOAuth() {
+        try {
+            console.log('🔐 [AuthService] Initiating Google OAuth SSO...')
+            const response = await axios.get(`${this.baseURL}/api/google/oauth/`)
+            
+            if (response.data.status === 'success' && response.data.authorization_url) {
+                // Redirect to Google OAuth page
+                window.location.href = response.data.authorization_url
+            } else {
+                throw new Error(response.data.message || 'Failed to initiate Google OAuth')
+            }
+        } catch (error) {
+            console.error('❌ Google OAuth initiate error:', error)
+            if (error.response && error.response.data) {
+                throw new Error(error.response.data.message || 'Failed to initiate Google OAuth')
+            }
+            throw error
+        }
+    }
+
+    /**
+     * Handle Google OAuth callback and complete login
+     * This is called when the user is redirected back from Google
+     */
+    async handleGoogleOAuthCallback(accessToken, refreshToken, userId, consentRequired, accessTokenExpires, refreshTokenExpires) {
+        try {
+            console.log('🔐 [AuthService] Handling Google OAuth callback...')
+            
+            // Store tokens with expiration times
+            localStorage.setItem('access_token', accessToken)
+            localStorage.setItem('refresh_token', refreshToken)
+            if (accessTokenExpires) {
+                localStorage.setItem('access_token_expires', accessTokenExpires)
+            }
+            if (refreshTokenExpires) {
+                localStorage.setItem('refresh_token_expires', refreshTokenExpires)
+            }
+            
+            // Fetch user info to complete login
+            const userResponse = await axios.get(`${this.baseURL}/api/jwt/verify/`, {
+                headers: { Authorization: `Bearer ${accessToken}` }
+            })
+            
+            if (userResponse.data.status === 'success' && userResponse.data.user) {
+                const user = userResponse.data.user
+                
+                // Store user info (same as regular login)
+                localStorage.setItem('user', JSON.stringify(user))
+                localStorage.setItem('user_id', user.UserId.toString())
+                localStorage.setItem('user_email', user.Email)
+                localStorage.setItem('user_name', user.UserName)
+                localStorage.setItem('user_full_name', `${user.FirstName} ${user.LastName}`)
+                localStorage.setItem('isAuthenticated', 'true')
+                localStorage.setItem('is_logged_in', 'true')
+                
+                // Update axios default headers
+                axios.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`
+                
+                // Initialize RBAC service
+                try {
+                    const { default: rbacService } = await import('./rbacService.js')
+                    await rbacService.initialize()
+                    console.log('🔐 RBAC service initialized after Google SSO login')
+                } catch (error) {
+                    console.error('❌ Error initializing RBAC service:', error)
+                }
+                
+                // Start periodic token refresh
+                this.startPeriodicTokenRefresh()
+                
+                // Emit login event (this triggers navbar/sidebar updates)
+                eventBus.emit(LOGIN_EVENT, { user })
+                
+                // Dispatch auth changed event (for components listening to auth state)
+                window.dispatchEvent(new Event('authChanged'))
+                
+                // Call global login success handler if it exists
+                if (window.onSuccessfulLogin) {
+                    window.onSuccessfulLogin()
+                }
+                
+                console.log('🔐 Google SSO Login successful!', {
+                    user_id: user.UserId,
+                    email: user.Email,
+                    username: user.UserName
+                })
+                
+                return {
+                    success: true,
+                    user,
+                    consent_required: consentRequired === 'true' || consentRequired === true
+                }
+            } else {
+                throw new Error('Failed to verify user after Google OAuth')
+            }
+        } catch (error) {
+            console.error('❌ Google OAuth callback error:', error)
+            throw error
         }
     }
 }
