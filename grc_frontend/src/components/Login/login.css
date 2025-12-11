@@ -1023,14 +1023,22 @@
   100% { transform: rotate(360deg); }
 }
 
-/* Loading state for button */
-.login-button:disabled {
+/* Loading state for button - only when actually loading */
+.login-button:disabled.loading {
   opacity: 1 !important;
   background: linear-gradient(135deg, #3b82f6 0%, #1e40af 50%, #1e3a8a 100%);
   background-size: 200% 100%;
   cursor: wait;
   animation: shimmer 2.5s ease-in-out infinite;
   box-shadow: 0 8px 30px rgba(30, 64, 175, 0.5);
+}
+
+/* Disabled state without loading (e.g., CAPTCHA not verified) */
+.login-button:disabled:not(.loading) {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 @keyframes shimmer {
@@ -2065,6 +2073,22 @@
     padding: 14px 20px;
     font-size: 15px;
   }
+}
+
+/* CAPTCHA Container */
+.captcha-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 1rem 0;
+  padding: 0.5rem 0;
+  animation: fadeInUp 0.5s ease-out 1s both;
+  min-height: 78px;
+}
+
+.captcha-container > div {
+  display: flex;
+  justify-content: center;
 }
 
 /* Google SSO Section */

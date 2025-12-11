@@ -309,6 +309,14 @@
               <i class="fas fa-user-plus"></i>
               {{ showCreateUserForm ? 'Cancel' : 'Create New User' }}
             </button>
+            <button 
+              @click="toggleManageUsersForm" 
+              class="manage-users-btn"
+              :disabled="!isGRCAdministrator"
+            >
+              <i class="fas fa-user-cog"></i>
+              {{ showManageUsersForm ? 'Cancel' : 'Manage Users' }}
+            </button>
           </div>
           
           <!-- Create User Form - Integrated directly below button -->
@@ -547,6 +555,141 @@
             </div>
           </transition>
           
+          <!-- Manage Users Form -->
+          <transition name="slide-down">
+            <div v-if="showManageUsersForm && isGRCAdministrator" class="manage-users-form-container">
+              <div class="form-header">
+                <h3 class="form-title">
+                  <i class="fas fa-user-cog"></i>
+                  Manage User Permissions
+                </h3>
+                <p class="form-description">
+                  Select a user to view and edit their permissions.
+                </p>
+              </div>
+              
+              <div class="manage-users-content">
+                <!-- User Selection Dropdown -->
+                <div class="form-group">
+                  <label for="selectedUser">Select User *</label>
+                  <select 
+                    id="selectedUser" 
+                    v-model="selectedUserId" 
+                    @change="onUserSelected"
+                    :disabled="manageUsersLoading"
+                    class="user-select-dropdown"
+                  >
+                    <option value="">-- Select a user --</option>
+                    <option v-for="user in usersList" :key="user.UserId" :value="user.UserId">
+                      {{ user.UserName }} ({{ user.FirstName }} {{ user.LastName }})
+                    </option>
+                  </select>
+                </div>
+                
+                <!-- Loading State -->
+                <div v-if="manageUsersLoading && selectedUserId" class="loading-permissions">
+                  <div class="spinner"></div>
+                  <p>Loading user permissions...</p>
+                </div>
+                
+                <!-- Permissions Display -->
+                <div v-if="selectedUserId && !manageUsersLoading && selectedUserPermissions" class="permissions-edit-section">
+                  <h3 class="section-subtitle">
+                    <i class="fas fa-user-shield"></i> 
+                    Permissions for {{ selectedUserName }}
+                  </h3>
+                  
+                  <!-- Global Select All -->
+                  <div class="global-select-all">
+                    <label class="select-all-item">
+                      <input 
+                        type="checkbox" 
+                        v-model="selectAllManagePermissions"
+                        @change="toggleAllManagePermissions"
+                        :disabled="savingPermissions"
+                      />
+                      <span class="select-all-label">
+                        <i class="fas fa-check-circle"></i>
+                        Select All Permissions
+                      </span>
+                    </label>
+                  </div>
+                  
+                  <div class="permissions-grid">
+                    <div v-for="module in rbacModules" :key="module.name" class="permission-module">
+                      <div class="module-header" @click="toggleModulePermissions(module.name)">
+                        <span class="module-name">
+                          <i :class="getModuleIcon(module.name)"></i>
+                          {{ module.displayName }}
+                        </span>
+                        <div class="module-controls">
+                          <label class="module-select-all">
+                            <input 
+                              type="checkbox" 
+                              v-model="moduleSelectAllManage[module.name]"
+                              @change="toggleModuleManagePermissions(module.name)"
+                              :disabled="savingPermissions"
+                              @click.stop
+                            />
+                            <span class="module-select-all-label">Select All</span>
+                          </label>
+                          <i :class="expandedModules.includes(module.name) ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
+                        </div>
+                      </div>
+                      <transition name="fade">
+                        <div v-if="expandedModules.includes(module.name)" class="module-permissions">
+                          <div v-for="permission in module.permissions" :key="permission.field" class="permission-item">
+                            <label class="permission-checkbox">
+                              <input 
+                                type="checkbox" 
+                                v-model="selectedUserPermissions[permission.field]"
+                                @change="updateModuleSelectAllManage(module.name)"
+                                :disabled="savingPermissions"
+                              />
+                              <span class="permission-name">{{ permission.label }}</span>
+                            </label>
+                          </div>
+                        </div>
+                      </transition>
+                    </div>
+                  </div>
+                  
+                  <!-- Save Button -->
+                  <div class="form-actions">
+                    <button 
+                      type="button" 
+                      class="submit-btn" 
+                      @click="saveUserPermissions"
+                      :disabled="savingPermissions || !selectedUserId"
+                    >
+                      <i v-if="savingPermissions" class="fas fa-spinner fa-spin"></i>
+                      <i v-else class="fas fa-save"></i>
+                      {{ savingPermissions ? 'Saving...' : 'Save Permissions' }}
+                    </button>
+                    
+                    <button 
+                      type="button" 
+                      class="cancel-btn" 
+                      @click="cancelManageUsers"
+                      :disabled="savingPermissions"
+                    >
+                      <i class="fas fa-times"></i>
+                      Cancel
+                    </button>
+                  </div>
+                  
+                  <!-- Messages -->
+                  <div v-if="manageUsersError" class="message error-message">
+                    <i class="fas fa-exclamation-circle"></i> {{ manageUsersError }}
+                  </div>
+                  <div v-if="manageUsersSuccess" class="message success-message">
+                    <i class="fas fa-check-circle"></i> {{ manageUsersSuccess }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </transition>
+          
           <div v-if="!isGRCAdministrator" class="access-denied-message">
             <i class="fas fa-lock"></i>
             <p>Access Denied: Only GRC Administrators can manage users.</p>
@@ -779,8 +922,20 @@ export default {
       showCreateUserModal: false,
       isGRCAdministrator: false,
              showCreateUserForm: false, // New state for the integrated form
-       passwordFieldType: 'password', // For password visibility toggle
-       createUserForm: {
+      showManageUsersForm: false, // State for manage users form
+      passwordFieldType: 'password', // For password visibility toggle
+      usersList: [], // List of users for dropdown
+      selectedUserId: '', // Selected user ID for editing
+      selectedUserName: '', // Selected user name for display
+      selectedUserRole: '', // Selected user role
+      selectedUserPermissions: null, // Permissions for selected user
+      manageUsersLoading: false, // Loading state for manage users
+      savingPermissions: false, // Saving state for permissions
+      manageUsersError: null, // Error message for manage users
+      manageUsersSuccess: null, // Success message for manage users
+      selectAllManagePermissions: false, // Select all for manage users
+      moduleSelectAllManage: {}, // Module select all for manage users
+      createUserForm: {
          username: '',
          password: '',
          email: '',
@@ -815,52 +970,61 @@ export default {
           name: 'compliance',
           displayName: 'Compliance',
           permissions: [
-            { field: 'view_compliance_reports', label: 'View Compliance Reports' },
-            { field: 'manage_policies', label: 'Manage Policies' },
-            { field: 'audit_compliance', label: 'Audit Compliance' },
-            { field: 'manage_incidents', label: 'Manage Incidents' },
-            { field: 'view_risk_assessments', label: 'View Risk Assessments' }
+            { field: 'view_all_compliance', label: 'View All Compliance' },
+            { field: 'create_compliance', label: 'Create Compliance' },
+            { field: 'edit_compliance', label: 'Edit Compliance' },
+            { field: 'approve_compliance', label: 'Approve Compliance' },
+            { field: 'compliance_performance_analytics', label: 'Compliance Performance Analytics' }
           ]
         },
         {
           name: 'policy',
           displayName: 'Policy',
           permissions: [
-            { field: 'create_policies', label: 'Create Policies' },
-            { field: 'edit_policies', label: 'Edit Policies' },
-            { field: 'delete_policies', label: 'Delete Policies' },
-            { field: 'approve_policies', label: 'Approve Policies' },
-            { field: 'review_policies', label: 'Review Policies' }
+            { field: 'create_policy', label: 'Create Policy' },
+            { field: 'edit_policy', label: 'Edit Policy' },
+            { field: 'approve_policy', label: 'Approve Policy' },
+            { field: 'create_framework', label: 'Create Framework' },
+            { field: 'approve_framework', label: 'Approve Framework' },
+            { field: 'view_all_policy', label: 'View All Policy' },
+            { field: 'policy_performance_analytics', label: 'Policy Performance Analytics' }
           ]
         },
         {
           name: 'audit',
           displayName: 'Audit',
           permissions: [
-            { field: 'conduct_audits', label: 'Conduct Audits' },
-            { field: 'review_audit_reports', label: 'Review Audit Reports' },
-            { field: 'manage_audit_plans', label: 'Manage Audit Plans' },
-            { field: 'generate_audit_reports', label: 'Generate Audit Reports' }
+            { field: 'assign_audit', label: 'Assign Audit' },
+            { field: 'conduct_audit', label: 'Conduct Audit' },
+            { field: 'review_audit', label: 'Review Audit' },
+            { field: 'view_audit_reports', label: 'View Audit Reports' },
+            { field: 'audit_performance_analytics', label: 'Audit Performance Analytics' }
           ]
         },
         {
           name: 'risk',
           displayName: 'Risk',
           permissions: [
-            { field: 'manage_risks', label: 'Manage Risks' },
-            { field: 'assess_risk_levels', label: 'Assess Risk Levels' },
-            { field: 'report_risks', label: 'Report Risks' },
-            { field: 'monitor_risk_trends', label: 'Monitor Risk Trends' }
+            { field: 'create_risk', label: 'Create Risk' },
+            { field: 'edit_risk', label: 'Edit Risk' },
+            { field: 'approve_risk', label: 'Approve Risk' },
+            { field: 'assign_risk', label: 'Assign Risk' },
+            { field: 'evaluate_assigned_risk', label: 'Evaluate Assigned Risk' },
+            { field: 'view_all_risk', label: 'View All Risk' },
+            { field: 'risk_performance_analytics', label: 'Risk Performance Analytics' }
           ]
         },
         {
           name: 'incident',
           displayName: 'Incident',
           permissions: [
-            { field: 'log_incidents', label: 'Log Incidents' },
-            { field: 'investigate_incidents', label: 'Investigate Incidents' },
-            { field: 'manage_incident_status', label: 'Manage Incident Status' },
-            { field: 'generate_incident_reports', label: 'Generate Incident Reports' }
+            { field: 'create_incident', label: 'Create Incident' },
+            { field: 'edit_incident', label: 'Edit Incident' },
+            { field: 'assign_incident', label: 'Assign Incident' },
+            { field: 'evaluate_assigned_incident', label: 'Evaluate Assigned Incident' },
+            { field: 'escalate_to_risk', label: 'Escalate to Risk' },
+            { field: 'view_all_incident', label: 'View All Incident' },
+            { field: 'incident_performance_analytics', label: 'Incident Performance Analytics' }
           ]
         }
       ]
@@ -1310,6 +1474,227 @@ async updatePassword() {
          this.createUserError = null;
          this.createUserSuccess = null;
        }
+     },
+
+     toggleManageUsersForm() {
+       this.showManageUsersForm = !this.showManageUsersForm;
+       if (this.showManageUsersForm) {
+         this.loadUsersList();
+       } else {
+         this.resetManageUsersForm();
+       }
+     },
+
+     resetManageUsersForm() {
+       this.selectedUserId = '';
+       this.selectedUserName = '';
+       this.selectedUserRole = '';
+       this.selectedUserPermissions = null;
+       this.manageUsersError = null;
+       this.manageUsersSuccess = null;
+       this.selectAllManagePermissions = false;
+       this.moduleSelectAllManage = {};
+     },
+
+     async loadUsersList() {
+       this.manageUsersLoading = true;
+       this.manageUsersError = null;
+       
+       try {
+         const response = await api.getUsers();
+         if (response.data && response.data.success && response.data.users) {
+           this.usersList = response.data.users;
+         } else if (Array.isArray(response.data)) {
+           this.usersList = response.data;
+         } else {
+           throw new Error('Invalid response format');
+         }
+       } catch (error) {
+         console.error('Error loading users list:', error);
+         this.manageUsersError = 'Failed to load users list. Please try again.';
+         this.usersList = [];
+       } finally {
+         this.manageUsersLoading = false;
+       }
+     },
+
+     async onUserSelected() {
+       if (!this.selectedUserId) {
+         this.selectedUserPermissions = null;
+         this.selectedUserName = '';
+         return;
+       }
+
+       this.manageUsersLoading = true;
+       this.manageUsersError = null;
+       this.manageUsersSuccess = null;
+
+       try {
+         // Find user name
+         const selectedUser = this.usersList.find(u => u.UserId == this.selectedUserId);
+         this.selectedUserName = selectedUser ? `${selectedUser.FirstName} ${selectedUser.LastName}` : '';
+
+         // Fetch user permissions
+         const response = await api.getUserPermissions(this.selectedUserId);
+         
+         if (response.data && response.data.status === 'success' && response.data.data) {
+           const permissionsData = response.data.data;
+           
+           // Store the role
+           this.selectedUserRole = permissionsData.role || '';
+           
+           // Convert permissions from module structure to flat structure
+           this.selectedUserPermissions = {};
+           
+           // Compliance permissions
+           if (permissionsData.modules && permissionsData.modules.compliance) {
+             Object.assign(this.selectedUserPermissions, permissionsData.modules.compliance);
+           }
+           
+           // Policy permissions
+           if (permissionsData.modules && permissionsData.modules.policy) {
+             Object.assign(this.selectedUserPermissions, permissionsData.modules.policy);
+           }
+           
+           // Audit permissions
+           if (permissionsData.modules && permissionsData.modules.audit) {
+             Object.assign(this.selectedUserPermissions, permissionsData.modules.audit);
+           }
+           
+           // Risk permissions
+           if (permissionsData.modules && permissionsData.modules.risk) {
+             Object.assign(this.selectedUserPermissions, permissionsData.modules.risk);
+           }
+           
+           // Incident permissions
+           if (permissionsData.modules && permissionsData.modules.incident) {
+             Object.assign(this.selectedUserPermissions, permissionsData.modules.incident);
+           }
+
+           // Initialize module select all states
+           this.updateModuleSelectAllStates();
+         } else {
+           // If no permissions found, initialize with all false
+           this.initializeEmptyPermissions();
+         }
+       } catch (error) {
+         console.error('Error loading user permissions:', error);
+         this.manageUsersError = 'Failed to load user permissions. Please try again.';
+         this.selectedUserPermissions = null;
+       } finally {
+         this.manageUsersLoading = false;
+       }
+     },
+
+     initializeEmptyPermissions() {
+       this.selectedUserPermissions = {};
+       this.rbacModules.forEach(module => {
+         module.permissions.forEach(permission => {
+           this.selectedUserPermissions[permission.field] = false;
+         });
+       });
+       this.updateModuleSelectAllStates();
+     },
+
+     updateModuleSelectAllStates() {
+       this.moduleSelectAllManage = {};
+       this.rbacModules.forEach(module => {
+         const allChecked = module.permissions.every(permission => 
+           this.selectedUserPermissions[permission.field]
+         );
+         this.moduleSelectAllManage[module.name] = allChecked;
+       });
+       
+       // Update global select all
+       const allPermissions = Object.values(this.selectedUserPermissions);
+       this.selectAllManagePermissions = allPermissions.length > 0 && allPermissions.every(p => p);
+     },
+
+     toggleAllManagePermissions() {
+       this.rbacModules.forEach(module => {
+         module.permissions.forEach(permission => {
+           if (this.selectedUserPermissions) {
+             this.selectedUserPermissions[permission.field] = this.selectAllManagePermissions;
+           }
+         });
+         this.moduleSelectAllManage[module.name] = this.selectAllManagePermissions;
+       });
+     },
+
+     toggleModuleManagePermissions(moduleName) {
+       const module = this.rbacModules.find(m => m.name === moduleName);
+       if (module && this.selectedUserPermissions) {
+         const isChecked = this.moduleSelectAllManage[moduleName];
+         module.permissions.forEach(permission => {
+           this.selectedUserPermissions[permission.field] = isChecked;
+         });
+         this.updateModuleSelectAllStates();
+       }
+     },
+
+     updateModuleSelectAllManage(moduleName) {
+       const module = this.rbacModules.find(m => m.name === moduleName);
+       if (module && this.selectedUserPermissions) {
+         const allChecked = module.permissions.every(permission => 
+           this.selectedUserPermissions[permission.field]
+         );
+         this.moduleSelectAllManage[moduleName] = allChecked;
+         
+         // Update global select all
+         const allPermissions = Object.values(this.selectedUserPermissions);
+         this.selectAllManagePermissions = allPermissions.length > 0 && allPermissions.every(p => p);
+       }
+     },
+
+     async saveUserPermissions() {
+       if (!this.selectedUserId || !this.selectedUserPermissions) {
+         this.manageUsersError = 'Please select a user first.';
+         return;
+       }
+
+       this.savingPermissions = true;
+       this.manageUsersError = null;
+       this.manageUsersSuccess = null;
+
+       try {
+         const { API_BASE_URL } = await import('../../config/api.js');
+         const axios = (await import('axios')).default;
+         const accessToken = localStorage.getItem('access_token');
+
+         const response = await axios.put(
+           `${API_BASE_URL}/api/user-permissions/${this.selectedUserId}/update/`,
+           {
+             permissions: this.selectedUserPermissions,
+             role: this.selectedUserRole
+           },
+           {
+             headers: {
+               'Authorization': `Bearer ${accessToken}`,
+               'Content-Type': 'application/json'
+             }
+           }
+         );
+
+         if (response.data && response.data.status === 'success') {
+           this.manageUsersSuccess = 'User permissions updated successfully!';
+           setTimeout(() => {
+             this.manageUsersSuccess = null;
+           }, 3000);
+         } else {
+           throw new Error(response.data.message || 'Failed to update permissions');
+         }
+       } catch (error) {
+         console.error('Error saving user permissions:', error);
+         this.manageUsersError = error.response?.data?.message || 
+                                error.response?.data?.error || 
+                                'Failed to save permissions. Please try again.';
+       } finally {
+         this.savingPermissions = false;
+       }
+     },
+
+     cancelManageUsers() {
+       this.toggleManageUsersForm();
      },
 
            async createUser() {

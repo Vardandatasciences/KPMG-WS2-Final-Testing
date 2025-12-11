@@ -250,7 +250,7 @@ TPRM_APPS = [
 # ===== SESSION CONFIGURATION - CRITICAL FOR AUTHENTICATION! =====
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'  # Use database sessions
 SESSION_SAVE_EVERY_REQUEST = True  # Save session on every request to keep it active
-SESSION_COOKIE_AGE = 20  # Session expires after 20 seconds of inactivity for testing
+SESSION_COOKIE_AGE = 604800  # Session expires after 7 days (604800 seconds) of inactivity - matches JWT refresh token lifetime
 SESSION_COOKIE_NAME = 'grc_sessionid'  # Custom session cookie name
 SESSION_COOKIE_HTTPONLY = False  # Allow JavaScript access (needed for SPA)
 SESSION_COOKIE_SECURE = False  # Set to True in production with HTTPS
@@ -477,7 +477,10 @@ SECURE_HSTS_PRELOAD = False  # Set to True in production
 JWT_SECRET_KEY = SECRET_KEY
 JWT_ACCESS_TOKEN_LIFETIME = 3600  # 1 hour in seconds
 JWT_REFRESH_TOKEN_LIFETIME = 604800  # 7 days in seconds
-
+# reCAPTCHA Configuration
+RECAPTCHA_SECRET_KEY = os.environ.get('RECAPTCHA_SECRET_KEY', '6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe')  # Default is Google's test key
+RECAPTCHA_SITE_KEY = os.environ.get('RECAPTCHA_SITE_KEY', '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI')  # Default is Google's test key
+RECAPTCHA_ENABLED = os.environ.get('RECAPTCHA_ENABLED', 'true').lower() == 'true'
 # SimpleJWT configuration with refresh token rotation & blacklist
 from datetime import timedelta
 

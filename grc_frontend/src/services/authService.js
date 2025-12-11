@@ -10,10 +10,17 @@ class AuthService {
         this.isLoggingOut = false // Flag to prevent refresh during logout
         this.isRefreshing = false // Flag to prevent multiple simultaneous refresh attempts
         this.failedRefreshAttempts = 0 // Track failed refresh attempts
-        this.maxRefreshAttempts = 3 // Maximum number of refresh attempts
+        this.maxRefreshAttempts = 5 // Increased max attempts to be more lenient
         this.refreshInterval = null // Periodic refresh interval
         this.setupAxiosInterceptors()
-        this.startPeriodicTokenRefresh()
+        
+        // Start periodic refresh if tokens exist (handles page reloads)
+        // This ensures both Google SSO and normal login work the same
+        const hasTokens = !!(localStorage.getItem('access_token') || localStorage.getItem('refresh_token'))
+        if (hasTokens) {
+            console.log('🔄 [AuthService] Tokens found on initialization - starting periodic refresh')
+            this.startPeriodicTokenRefresh()
+        }
     }
  
     setupAxiosInterceptors() {
@@ -121,7 +128,7 @@ class AuthService {
         )
     }
  
-    async login(username, password, loginType = 'username') {
+    async login(username, password, loginType = 'username', captchaToken = null) {
         console.log('🔥🔥🔥 [AuthService] LOGIN FUNCTION CALLED - NEW VERSION WITH INCIDENT FETCH 🔥🔥🔥');
         try {
             // Reset flags on login
@@ -134,10 +141,20 @@ class AuthService {
             // ========================================
             // Step 1: Send login request to backend which will validate license
             console.log('🔐 LICENSE VALIDATION: Sending login request to backend for license validation...')
-            const response = await axios.post(`${this.baseURL}/api/jwt/login/`, {
+            const requestData = {
                 username,
                 password,
                 login_type: loginType
+            }
+           
+            // Include CAPTCHA token if provided (for username/userid login)
+            if (captchaToken) {
+                requestData.captcha_token = captchaToken
+            }
+           
+            // Add timeout to prevent hanging requests (axios handles timeout internally)
+            const response = await axios.post(`${this.baseURL}/api/jwt/login/`, requestData, {
+                timeout: 30000 // 30 seconds timeout
             })
  
             // Handle MFA required response
@@ -339,7 +356,19 @@ class AuthService {
             }
         } catch (error) {
             console.error('❌ JWT Login error:', error)
-            throw error
+           
+            // Handle specific error types
+            if (error.code === 'ECONNREFUSED' || error.message?.includes('CONNECTION_REFUSED') || error.message?.includes('Network Error')) {
+                throw new Error('Unable to connect to the server. Please ensure the backend server is running on port 8000.')
+            } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout') || error.message?.includes('Timeout')) {
+                throw new Error('Request timed out. The server may be slow or unavailable. Please try again.')
+            } else if (error.response) {
+                // Server responded with error
+                throw new Error(error.response.data?.message || error.message || 'Login failed')
+            } else {
+                // Network or other error
+                throw new Error(error.message || 'Unable to connect to server. Please check your connection.')
+            }
         }
     }
 
@@ -347,22 +376,26 @@ class AuthService {
         // Verify MFA OTP and complete login
         try {
             console.log('🔐 [AuthService] Verifying MFA OTP...')
+           
+            // Add timeout to prevent hanging requests (axios handles timeout internally)
             const response = await axios.post(`${this.baseURL}/api/jwt/mfa/verify-otp/`, {
                 username,
                 password,
                 otp,
                 login_type: loginType
+            }, {
+                timeout: 30000 // 30 seconds timeout
             })
-
+ 
             if (response.data.status === 'success') {
                 const { access_token, refresh_token, access_token_expires, refresh_token_expires, user, license_verified } = response.data
-                
+               
                 // Store tokens
                 localStorage.setItem('access_token', access_token)
                 localStorage.setItem('refresh_token', refresh_token)
                 localStorage.setItem('access_token_expires', access_token_expires)
                 localStorage.setItem('refresh_token_expires', refresh_token_expires)
-                
+               
                 // Store user info
                 localStorage.setItem('user', JSON.stringify(user))
                 localStorage.setItem('user_id', user.UserId.toString())
@@ -371,10 +404,10 @@ class AuthService {
                 localStorage.setItem('user_full_name', `${user.FirstName} ${user.LastName}`)
                 localStorage.setItem('isAuthenticated', 'true')
                 localStorage.setItem('is_logged_in', 'true')
-                
+               
                 // Update axios default headers
                 axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`
-                
+               
                 // Initialize RBAC service
                 try {
                     const { default: rbacService } = await import('./rbacService.js')
@@ -383,19 +416,19 @@ class AuthService {
                 } catch (error) {
                     console.error('❌ Error initializing RBAC service:', error)
                 }
-                
+               
                 // Start periodic token refresh
                 this.startPeriodicTokenRefresh()
-                
+               
                 // Emit login event
                 eventBus.emit(LOGIN_EVENT, { user })
-                
+               
                 console.log('🔐 MFA Login successful!', {
                     user_id: user.UserId,
                     email: user.Email,
                     username: user.UserName
                 })
-                
+               
                 return {
                     success: true,
                     user,
@@ -412,23 +445,34 @@ class AuthService {
             }
         } catch (error) {
             console.error('❌ MFA OTP verification error:', error)
-            if (error.response && error.response.data) {
+           
+            // Handle specific error types
+            if (error.code === 'ECONNREFUSED' || error.message?.includes('CONNECTION_REFUSED') || error.message?.includes('Network Error')) {
+                throw new Error('Unable to connect to the server. Please ensure the backend server is running.')
+            } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout') || error.message?.includes('Timeout')) {
+                throw new Error('Request timed out. Please try again.')
+            } else if (error.response && error.response.data) {
                 throw new Error(error.response.data.message || 'MFA verification failed')
+            } else {
+                throw new Error(error.message || 'MFA verification failed. Please try again.')
             }
-            throw error
         }
     }
-
+ 
     async resendMfaOtp(username, password, loginType = 'username') {
         // Resend MFA OTP to user's email
         try {
             console.log('🔐 [AuthService] Resending MFA OTP...')
+           
+            // Add timeout to prevent hanging requests (axios handles timeout internally)
             const response = await axios.post(`${this.baseURL}/api/jwt/mfa/resend-otp/`, {
                 username,
                 password,
                 login_type: loginType
+            }, {
+                timeout: 30000 // 30 seconds timeout
             })
-
+ 
             if (response.data.status === 'success') {
                 return {
                     success: true,
@@ -440,34 +484,70 @@ class AuthService {
             }
         } catch (error) {
             console.error('❌ MFA resend OTP error:', error)
-            if (error.response && error.response.data) {
+           
+            // Handle specific error types
+            if (error.code === 'ECONNREFUSED' || error.message?.includes('CONNECTION_REFUSED') || error.message?.includes('Network Error')) {
+                throw new Error('Unable to connect to the server. Please ensure the backend server is running.')
+            } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout') || error.message?.includes('Timeout')) {
+                throw new Error('Request timed out. Please try again.')
+            } else if (error.response && error.response.data) {
                 throw new Error(error.response.data.message || 'Failed to resend OTP')
+            } else {
+                throw new Error(error.message || 'Failed to resend OTP. Please try again.')
             }
-            throw error
         }
     }
+ 
  
     async checkAndRefreshToken() {
         try {
             // First check if we have an access token at all
             const accessToken = localStorage.getItem('access_token')
+            const refreshToken = localStorage.getItem('refresh_token')
+            
             if (!accessToken) {
                 // No token available, can't refresh
                 return false
             }
             
+            // If we have a refresh token but no access token expiration, try to refresh
+            // This handles cases where expiration info might be missing
             const accessTokenExpires = localStorage.getItem('access_token_expires')
             if (!accessTokenExpires) {
-                // Token exists but no expiration info - try to refresh anyway
-                console.warn('⚠️ No access token expiration found, attempting refresh...')
-                return await this.refreshAccessToken()
+                // Token exists but no expiration info - check if we have refresh token
+                if (refreshToken) {
+                    console.warn('⚠️ No access token expiration found, but refresh token exists - attempting refresh...')
+                    return await this.refreshAccessToken()
+                } else {
+                    console.warn('⚠️ No access token expiration found and no refresh token - cannot refresh')
+                    return false
+                }
             }
 
-            const expirationTime = new Date(accessTokenExpires)
+            // Parse expiration time - handle both ISO strings and timestamps
+            let expirationTime
+            try {
+                expirationTime = new Date(accessTokenExpires)
+                if (isNaN(expirationTime.getTime())) {
+                    // Invalid date, try to refresh if we have refresh token
+                    console.warn('⚠️ Invalid access token expiration date, attempting refresh...')
+                    if (refreshToken) {
+                        return await this.refreshAccessToken()
+                    }
+                    return false
+                }
+            } catch (e) {
+                console.warn('⚠️ Error parsing access token expiration, attempting refresh...')
+                if (refreshToken) {
+                    return await this.refreshAccessToken()
+                }
+                return false
+            }
+
             const currentTime = new Date()
             const timeUntilExpiration = expirationTime.getTime() - currentTime.getTime()
            
-            // Refresh token if it expires in less than 10 minutes (more aggressive)
+            // Refresh token if it expires in less than 10 minutes (same as normal login)
             if (timeUntilExpiration < 10 * 60 * 1000) {
                 console.log('🔄 Access token expires soon, refreshing...')
                 return await this.refreshAccessToken()
@@ -476,6 +556,7 @@ class AuthService {
             return false
         } catch (error) {
             console.error('❌ Error checking token expiration:', error)
+            // Don't throw - return false so periodic refresh continues
             return false
         }
     }
@@ -489,9 +570,59 @@ class AuthService {
             }
 
             // Check if we've exceeded max refresh attempts
+            // But don't immediately clear - check if tokens are actually expired first
             if (this.failedRefreshAttempts >= this.maxRefreshAttempts) {
-                console.error('❌ Max refresh attempts exceeded. Clearing tokens to force re-login.')
-                this.clearAuthData(true) // Redirect to login
+                // Check if tokens are still valid before forcing logout
+                const accessToken = localStorage.getItem('access_token')
+                const accessTokenExpires = localStorage.getItem('access_token_expires')
+                const refreshToken = localStorage.getItem('refresh_token')
+                const refreshTokenExpires = localStorage.getItem('refresh_token_expires')
+                
+                let tokensExpired = true
+                
+                // Check refresh token
+                if (refreshToken && refreshTokenExpires) {
+                    try {
+                        const refreshExpirationTime = new Date(refreshTokenExpires)
+                        if (!isNaN(refreshExpirationTime.getTime())) {
+                            if (refreshExpirationTime.getTime() > Date.now()) {
+                                tokensExpired = false
+                            }
+                        }
+                    } catch (e) {
+                        // Can't parse - assume still valid
+                        tokensExpired = false
+                    }
+                } else if (refreshToken) {
+                    // Have token but no expiration - assume valid
+                    tokensExpired = false
+                }
+                
+                // Check access token
+                if (tokensExpired && accessToken && accessTokenExpires) {
+                    try {
+                        const accessExpirationTime = new Date(accessTokenExpires)
+                        if (!isNaN(accessExpirationTime.getTime())) {
+                            if (accessExpirationTime.getTime() > Date.now()) {
+                                tokensExpired = false
+                            }
+                        }
+                    } catch (e) {
+                        // Can't parse - assume still valid
+                        tokensExpired = false
+                    }
+                }
+                
+                if (tokensExpired) {
+                    console.error('❌ Max refresh attempts exceeded AND tokens expired - logging out')
+                    this.clearAuthData(true) // Redirect to login
+                } else {
+                    console.warn('⚠️ Max refresh attempts exceeded but tokens still valid - will retry later')
+                    // Reset counter after delay
+                    setTimeout(() => {
+                        this.failedRefreshAttempts = Math.max(0, this.failedRefreshAttempts - 1)
+                    }, 30 * 60 * 1000) // Reset after 30 minutes
+                }
                 return false
             }
 
@@ -553,27 +684,101 @@ class AuthService {
                 this.failedRefreshAttempts++
             }
             
-            // Check if access token is still valid before logging out
+            // Check if access token is still valid before logging out (same for Google SSO and normal login)
             const accessToken = localStorage.getItem('access_token')
             const accessTokenExpires = localStorage.getItem('access_token_expires')
+            const refreshToken = localStorage.getItem('refresh_token')
+            
+            // If we still have a refresh token, don't log out - try again later
+            if (refreshToken) {
+                console.log('⚠️ Refresh failed but refresh token exists - will retry on next check...')
+                this.isRefreshing = false
+                // Reset failed attempts after some time to allow retry
+                setTimeout(() => {
+                    if (this.failedRefreshAttempts > 0) {
+                        this.failedRefreshAttempts = Math.max(0, this.failedRefreshAttempts - 1)
+                    }
+                }, 5 * 60 * 1000) // Reset after 5 minutes
+                return false
+            }
             
             if (accessToken && accessTokenExpires) {
-                const expirationTime = new Date(accessTokenExpires)
-                const currentTime = new Date()
-                const timeUntilExpiration = expirationTime.getTime() - currentTime.getTime()
-                
-                // If access token is still valid for more than 1 minute, don't log out
-                if (timeUntilExpiration > 60 * 1000) {
-                    console.log('⚠️ Refresh failed but access token still valid, continuing...')
-                    this.isRefreshing = false
-                    return false
+                try {
+                    const expirationTime = new Date(accessTokenExpires)
+                    if (!isNaN(expirationTime.getTime())) {
+                        const currentTime = new Date()
+                        const timeUntilExpiration = expirationTime.getTime() - currentTime.getTime()
+                        
+                        // If access token is still valid for more than 1 minute, don't log out
+                        if (timeUntilExpiration > 60 * 1000) {
+                            console.log('⚠️ Refresh failed but access token still valid, continuing...')
+                            this.isRefreshing = false
+                            return false
+                        }
+                    }
+                } catch (e) {
+                    // Invalid expiration date, but don't log out if we have refresh token
+                    if (refreshToken) {
+                        console.log('⚠️ Refresh failed but refresh token exists - will retry...')
+                        this.isRefreshing = false
+                        return false
+                    }
                 }
             }
             
-            // If we've failed too many times or token is expired, clear auth data to force re-login
+            // IMPORTANT: Same behavior for Google SSO and normal login
+            // Only log out if refresh token is actually expired, not just because refresh failed
+            // Network issues or temporary server problems shouldn't log out users
+            
             if (this.failedRefreshAttempts >= this.maxRefreshAttempts) {
-                console.error('❌ Too many failed refresh attempts. User needs to re-login.')
-                this.clearAuthData(true) // Redirect to login
+                // Check if refresh token is actually expired before logging out
+                const refreshTokenExpires = localStorage.getItem('refresh_token_expires')
+                let refreshTokenExpired = true
+                
+                if (refreshToken && refreshTokenExpires) {
+                    try {
+                        const refreshExpirationTime = new Date(refreshTokenExpires)
+                        if (!isNaN(refreshExpirationTime.getTime())) {
+                            refreshTokenExpired = refreshExpirationTime.getTime() <= Date.now()
+                        } else {
+                            // Can't parse expiration - assume still valid if token exists
+                            refreshTokenExpired = false
+                        }
+                    } catch (e) {
+                        // Can't parse - assume still valid
+                        refreshTokenExpired = false
+                    }
+                } else if (refreshToken) {
+                    // Have refresh token but no expiration - assume still valid
+                    refreshTokenExpired = false
+                }
+                
+                // Also check if access token is expired
+                let accessTokenExpired = true
+                if (accessToken && accessTokenExpires) {
+                    try {
+                        const accessExpirationTime = new Date(accessTokenExpires)
+                        if (!isNaN(accessExpirationTime.getTime())) {
+                            accessTokenExpired = accessExpirationTime.getTime() <= Date.now()
+                        } else {
+                            accessTokenExpired = false
+                        }
+                    } catch (e) {
+                        accessTokenExpired = false
+                    }
+                }
+                
+                // Only log out if BOTH tokens are expired/invalid
+                if (refreshTokenExpired && accessTokenExpired) {
+                    console.error('❌ Both access and refresh tokens expired - logging out')
+                    this.clearAuthData(true) // Redirect to login
+                } else {
+                    console.warn('⚠️ Max refresh attempts reached but tokens still valid - keeping user logged in (same as normal login)')
+                    // Reset counter after delay to allow retry
+                    setTimeout(() => {
+                        this.failedRefreshAttempts = 0
+                    }, 30 * 60 * 1000) // Reset after 30 minutes
+                }
             }
             
             this.isRefreshing = false
@@ -706,8 +911,12 @@ class AuthService {
     }
    
     startPeriodicTokenRefresh() {
-        // Only start if user is authenticated
-        if (!this.isAuthenticated()) {
+        // Check if we have tokens (access or refresh) - start refresh even if user object is missing
+        const accessToken = localStorage.getItem('access_token')
+        const refreshToken = localStorage.getItem('refresh_token')
+        
+        if (!accessToken && !refreshToken) {
+            console.log('⚠️ No tokens found, skipping periodic token refresh')
             return
         }
        
@@ -717,6 +926,16 @@ class AuthService {
         // Check token every 5 minutes (300 seconds) - less aggressive refresh
         this.refreshInterval = setInterval(async () => {
             try {
+                // Check if we still have tokens before attempting refresh
+                const currentAccessToken = localStorage.getItem('access_token')
+                const currentRefreshToken = localStorage.getItem('refresh_token')
+                
+                if (!currentAccessToken && !currentRefreshToken) {
+                    console.log('⚠️ Tokens cleared, stopping periodic refresh')
+                    this.stopPeriodicTokenRefresh()
+                    return
+                }
+                
                 // Reduced logging - only log when actually refreshing
                 await this.checkAndRefreshToken()
             } catch (error) {
@@ -888,14 +1107,47 @@ class AuthService {
         try {
             console.log('🔐 [AuthService] Handling Google OAuth callback...')
             
-            // Store tokens with expiration times
+            // Store tokens with expiration times (same as normal login)
             localStorage.setItem('access_token', accessToken)
             localStorage.setItem('refresh_token', refreshToken)
+            
+            // Store expiration times - ensure they're in ISO format (same as normal login)
             if (accessTokenExpires) {
-                localStorage.setItem('access_token_expires', accessTokenExpires)
+                // Convert to ISO string if it's not already
+                const expiresDate = new Date(accessTokenExpires)
+                if (!isNaN(expiresDate.getTime())) {
+                    localStorage.setItem('access_token_expires', expiresDate.toISOString())
+                } else {
+                    localStorage.setItem('access_token_expires', accessTokenExpires)
+                }
             }
             if (refreshTokenExpires) {
-                localStorage.setItem('refresh_token_expires', refreshTokenExpires)
+                // Convert to ISO string if it's not already
+                const expiresDate = new Date(refreshTokenExpires)
+                if (!isNaN(expiresDate.getTime())) {
+                    localStorage.setItem('refresh_token_expires', expiresDate.toISOString())
+                } else {
+                    localStorage.setItem('refresh_token_expires', refreshTokenExpires)
+                }
+            }
+            
+            console.log('✅ [AuthService] Google SSO tokens stored:', {
+                hasAccessToken: !!accessToken,
+                hasRefreshToken: !!refreshToken,
+                accessTokenExpires: accessTokenExpires,
+                refreshTokenExpires: refreshTokenExpires,
+                accessTokenExpiresParsed: accessTokenExpires ? new Date(accessTokenExpires).toISOString() : null,
+                refreshTokenExpiresParsed: refreshTokenExpires ? new Date(refreshTokenExpires).toISOString() : null
+            })
+            
+            // Verify tokens are actually stored
+            const storedAccessToken = localStorage.getItem('access_token')
+            const storedRefreshToken = localStorage.getItem('refresh_token')
+            if (!storedAccessToken || !storedRefreshToken) {
+                console.error('❌ [AuthService] CRITICAL: Tokens not properly stored!', {
+                    storedAccessToken: !!storedAccessToken,
+                    storedRefreshToken: !!storedRefreshToken
+                })
             }
             
             // Fetch user info to complete login
@@ -927,8 +1179,20 @@ class AuthService {
                     console.error('❌ Error initializing RBAC service:', error)
                 }
                 
-                // Start periodic token refresh
+                // Start periodic token refresh (same as normal login)
+                console.log('🔄 [AuthService] Starting periodic token refresh for Google SSO user')
                 this.startPeriodicTokenRefresh()
+                
+                // Verify periodic refresh started
+                setTimeout(() => {
+                    if (!this.refreshInterval) {
+                        console.error('❌ [AuthService] CRITICAL: Periodic refresh did not start!')
+                        // Try again
+                        this.startPeriodicTokenRefresh()
+                    } else {
+                        console.log('✅ [AuthService] Periodic token refresh confirmed running')
+                    }
+                }, 1000)
                 
                 // Emit login event (this triggers navbar/sidebar updates)
                 eventBus.emit(LOGIN_EVENT, { user })

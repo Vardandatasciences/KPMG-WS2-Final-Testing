@@ -337,7 +337,12 @@
               </div>
             </div>
             
-            <button type="submit" class="login-button" :disabled="isLoading" :class="{ active: !isLoading }">
+            <!-- reCAPTCHA -->
+            <div class="captcha-container">
+              <div ref="captchaRef" id="recaptcha-container"></div>
+            </div>
+            
+            <button type="submit" class="login-button" :disabled="isLoading || !isCaptchaVerified" :class="{ active: !isLoading && isCaptchaVerified, loading: isLoading }">
               <span v-if="!isLoading" class="button-text">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3" stroke="currentColor" stroke-width="2"/>
@@ -445,12 +450,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onUnmounted, onMounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import authService from '../../services/authService.js'
 import ForgotPassword from './ForgotPassword.vue'
 import ConsentForm from './ConsentForm.vue'
 import logo from '../../assets/RiskaVaire.png'
+import { RECAPTCHA_SITE_KEY } from '../../config/api.js'
 
 const password = ref('')
 const rememberMe = ref(false)
@@ -472,6 +478,10 @@ const timer = ref(600) // 10 minutes in seconds
 const timerInterval = ref(null)
 const resendCooldown = ref(0) // Cooldown for resend button (30 seconds)
 const resendCooldownInterval = ref(null)
+const captchaRef = ref(null)
+const isCaptchaVerified = ref(false)
+const captchaToken = ref('')
+let captchaWidgetId = null
 
 const loginWithGoogle = async () => {
   try {
@@ -498,6 +508,14 @@ const login = async () => {
     
     if (!loginIdentifier.value || !password.value) {
       errorMessage.value = 'Please fill in all required fields'
+      isLoading.value = false
+      return
+    }
+    
+    // Verify CAPTCHA before proceeding
+    if (!isCaptchaVerified.value || !captchaToken.value) {
+      errorMessage.value = 'Please complete the CAPTCHA verification'
+      isLoading.value = false
       return
     }
     
@@ -513,11 +531,12 @@ const login = async () => {
     if (cookiePreferencesSaved) localStorage.setItem('cookie_preferences_saved', cookiePreferencesSaved)
     if (cookiePreferences) localStorage.setItem('cookie_preferences', cookiePreferences)
     
-    // Use JWT authentication
+    // Use JWT authentication with CAPTCHA token
     const result = await authService.login(
       loginIdentifier.value, 
       password.value, 
-      loginType.value
+      loginType.value,
+      captchaToken.value
     )
     
     // Handle MFA required
@@ -543,6 +562,9 @@ const login = async () => {
         localStorage.setItem('remember_me', 'true')
       }
       
+      // Reset CAPTCHA after successful login
+      resetCaptcha()
+      
       console.log('🔐 JWT Login successful!', {
         user_id: result.user.UserId,
         email: result.user.Email,
@@ -565,14 +587,31 @@ const login = async () => {
       }
     } else {
       errorMessage.value = 'Login failed. Please try again.'
+      // Reset CAPTCHA on login failure
+      resetCaptcha()
     }
   } catch (error) {
-    if (error.response && error.response.data) {
-      errorMessage.value = error.response.data.message || 'Invalid credentials. Please try again.'
-    } else {
-      errorMessage.value = 'Unable to connect to server. Please check your connection.'
-    }
     console.error('❌ JWT Login error:', error)
+    
+    // Handle different error types with specific messages
+    if (error.message) {
+      if (error.message.includes('connect to the server') || error.message.includes('CONNECTION_REFUSED') || error.code === 'ECONNREFUSED') {
+        errorMessage.value = 'Unable to connect to the server. Please ensure the backend server is running on port 8000.'
+      } else if (error.message.includes('timeout') || error.message.includes('Timeout') || error.code === 'ECONNABORTED') {
+        errorMessage.value = 'Request timed out. The server may be slow or unavailable. Please try again.'
+      } else if (error.message.includes('CAPTCHA')) {
+        errorMessage.value = error.message
+      } else if (error.response && error.response.data) {
+        errorMessage.value = error.response.data.message || 'Invalid credentials. Please try again.'
+      } else {
+        errorMessage.value = error.message || 'Unable to connect to server. Please check your connection.'
+      }
+    } else {
+      errorMessage.value = 'An unexpected error occurred. Please try again.'
+    }
+    
+    // Reset CAPTCHA on error
+    resetCaptcha()
   } finally {
     isLoading.value = false
   }
@@ -651,12 +690,20 @@ const verifyOtp = async () => {
       errorMessage.value = 'Invalid verification code. Please try again.'
     }
   } catch (error) {
+    console.error('❌ MFA OTP verification error:', error)
+    
+    // Handle different error types with specific messages
     if (error.message) {
-      errorMessage.value = error.message
+      if (error.message.includes('connect to the server') || error.message.includes('CONNECTION_REFUSED') || error.code === 'ECONNREFUSED') {
+        errorMessage.value = 'Unable to connect to the server. Please ensure the backend server is running.'
+      } else if (error.message.includes('timeout') || error.message.includes('Timeout') || error.code === 'ECONNABORTED') {
+        errorMessage.value = 'Request timed out. Please try again.'
+      } else {
+        errorMessage.value = error.message
+      }
     } else {
       errorMessage.value = 'Verification failed. Please try again.'
     }
-    console.error('❌ MFA OTP verification error:', error)
   } finally {
     isLoading.value = false
   }
@@ -855,6 +902,176 @@ onUnmounted(() => {
 const togglePasswordVisibility = () => {
   passwordFieldType.value = passwordFieldType.value === 'password' ? 'text' : 'password'
 }
+
+// CAPTCHA Functions
+const loadRecaptcha = () => {
+  // Don't load CAPTCHA if we're on MFA step
+  if (showMfaStep.value) {
+    return
+  }
+  
+  // Check if container exists
+  if (!captchaRef.value) {
+    return
+  }
+  
+  // Check if script is already loaded
+  if (window.grecaptcha && window.grecaptcha.render) {
+    nextTick(() => {
+      renderCaptcha()
+    })
+    return
+  }
+  
+  // Check if script is already being loaded
+  if (document.querySelector('script[src*="recaptcha/api.js"]')) {
+    // Script is loading, wait for it
+    const checkInterval = setInterval(() => {
+      if (window.grecaptcha && window.grecaptcha.render) {
+        clearInterval(checkInterval)
+        nextTick(() => {
+          renderCaptcha()
+        })
+      }
+    }, 100)
+    
+    // Timeout after 10 seconds
+    setTimeout(() => {
+      clearInterval(checkInterval)
+    }, 10000)
+    return
+  }
+  
+  // Load reCAPTCHA script with error handling
+  const script = document.createElement('script')
+  script.src = 'https://www.google.com/recaptcha/api.js?render=explicit&onload=onRecaptchaLoad'
+  script.async = true
+  script.defer = true
+  
+  // Handle script load errors
+  script.onerror = () => {
+    console.warn('Failed to load reCAPTCHA script. This may be due to network issues or ad blockers.')
+    // Don't block login if CAPTCHA fails to load in development
+    if (process.env.NODE_ENV === 'development') {
+      isCaptchaVerified.value = true // Allow bypass in development
+    }
+  }
+  
+  // Set global callback
+  window.onRecaptchaLoad = () => {
+    nextTick(() => {
+      renderCaptcha()
+    })
+  }
+  
+  document.head.appendChild(script)
+}
+
+const renderCaptcha = () => {
+  // Don't render if on MFA step
+  if (showMfaStep.value) {
+    return
+  }
+  
+  // Check if container exists
+  if (!captchaRef.value || !document.getElementById('recaptcha-container')) {
+    return
+  }
+  
+  if (!window.grecaptcha || !window.grecaptcha.render) {
+    return
+  }
+  
+  try {
+    // Clear any existing widget
+    if (captchaWidgetId !== null) {
+      try {
+        window.grecaptcha.reset(captchaWidgetId)
+      } catch (e) {
+        console.warn('Error resetting CAPTCHA:', e)
+      }
+    }
+    
+    // Render new CAPTCHA widget
+    captchaWidgetId = window.grecaptcha.render('recaptcha-container', {
+      sitekey: RECAPTCHA_SITE_KEY,
+      callback: (token) => {
+        isCaptchaVerified.value = true
+        captchaToken.value = token
+        errorMessage.value = ''
+      },
+      'expired-callback': () => {
+        isCaptchaVerified.value = false
+        captchaToken.value = ''
+      },
+      'error-callback': () => {
+        isCaptchaVerified.value = false
+        captchaToken.value = ''
+        errorMessage.value = 'CAPTCHA verification failed. Please try again.'
+      }
+    })
+  } catch (e) {
+    console.error('Error rendering CAPTCHA:', e)
+    // Don't block login if CAPTCHA fails in development
+    if (process.env.NODE_ENV === 'development') {
+      isCaptchaVerified.value = true
+    }
+  }
+}
+
+// Watch for login type changes and reset CAPTCHA (only if not on MFA step)
+watch(loginType, () => {
+  if (!showMfaStep.value) {
+    resetCaptcha()
+  }
+})
+
+const resetCaptcha = () => {
+  if (captchaWidgetId !== null && window.grecaptcha) {
+    try {
+      window.grecaptcha.reset(captchaWidgetId)
+      isCaptchaVerified.value = false
+      captchaToken.value = ''
+    } catch (e) {
+      console.warn('Error resetting CAPTCHA:', e)
+    }
+  }
+}
+
+// Initialize CAPTCHA on mount (only if not on MFA step)
+onMounted(() => {
+  nextTick(() => {
+    if (!showMfaStep.value) {
+      loadRecaptcha()
+    }
+  })
+})
+
+// Watch for MFA step changes to load/unload CAPTCHA
+watch(showMfaStep, (newValue) => {
+  if (!newValue) {
+    // MFA step closed, load CAPTCHA for login form
+    nextTick(() => {
+      loadRecaptcha()
+    })
+  } else {
+    // MFA step opened, reset CAPTCHA
+    resetCaptcha()
+  }
+})
+
+// Cleanup on unmount
+onUnmounted(() => {
+  if (captchaWidgetId !== null && window.grecaptcha) {
+    try {
+      window.grecaptcha.reset(captchaWidgetId)
+    } catch (e) {
+      // Ignore errors during cleanup
+    }
+  }
+  stopTimer()
+  stopResendCooldown()
+})
 </script>
 
 <style scoped>

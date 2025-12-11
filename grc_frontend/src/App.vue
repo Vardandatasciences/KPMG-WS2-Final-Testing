@@ -155,11 +155,16 @@ export default {
       const hasAuthData = !!(accessToken && userId && isLoggedIn)
       this.isAuthenticated = hasAuthData && (isTokenValid || tokenExpired)
      
+      // Start periodic token refresh if we have tokens (even if user data is missing)
+      const hasTokens = !!(accessToken || localStorage.getItem('refresh_token'))
+      if (hasTokens && !this.hasExplicitlyLoggedIn) {
+        // Start periodic refresh to keep tokens alive
+        this.startPeriodicTokenRefresh()
+      }
+      
       // If user is authenticated on page refresh, set hasExplicitlyLoggedIn to true
       if (this.isAuthenticated && !this.hasExplicitlyLoggedIn) {
         this.hasExplicitlyLoggedIn = true
-        // Start periodic token refresh for restored authentication
-        this.startPeriodicTokenRefresh()
       }
      
       console.log('🔐 Authentication check:', {

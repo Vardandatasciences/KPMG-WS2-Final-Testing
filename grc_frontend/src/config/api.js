@@ -15,6 +15,10 @@ const API_URLS = {
  
 // Get the current API base URL based on environment
 export const API_BASE_URL = API_URLS[ENVIRONMENT] || API_URLS.aws;
+
+// Replace with your actual reCAPTCHA site key from Google
+// Get your keys from: https://www.google.com/recaptcha/admin
+export const RECAPTCHA_SITE_KEY = process.env.VUE_APP_RECAPTCHA_SITE_KEY || '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI'; // Default is Google's test key
  
 // API endpoints with base URL
 export const API_ENDPOINTS = {

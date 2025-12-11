@@ -95,14 +95,61 @@ apiClient.interceptors.response.use(
       } catch (refreshError) {
         console.error('❌ [API Service] Token refresh failed:', refreshError);
         
-        // Clear tokens and redirect to login
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        localStorage.removeItem('user_id');
-        localStorage.removeItem('user_name');
+        // IMPORTANT: Same behavior as authService - don't log out immediately
+        // Check if tokens are still valid before clearing and redirecting
         
-        // Redirect to login
-        window.location.href = '/login';
+        const accessToken = localStorage.getItem('access_token');
+        const accessTokenExpires = localStorage.getItem('access_token_expires');
+        const refreshToken = localStorage.getItem('refresh_token');
+        const refreshTokenExpires = localStorage.getItem('refresh_token_expires');
+        
+        // Check if refresh token is still valid
+        let refreshTokenValid = false;
+        if (refreshToken && refreshTokenExpires) {
+          try {
+            const refreshExpirationTime = new Date(refreshTokenExpires);
+            if (!isNaN(refreshExpirationTime.getTime())) {
+              refreshTokenValid = refreshExpirationTime.getTime() > Date.now();
+            }
+          } catch (e) {
+            // Can't parse - assume valid if token exists
+            refreshTokenValid = !!refreshToken;
+          }
+        } else if (refreshToken) {
+          // Have refresh token but no expiration - assume valid
+          refreshTokenValid = true;
+        }
+        
+        // Check if access token is still valid
+        let accessTokenValid = false;
+        if (accessToken && accessTokenExpires) {
+          try {
+            const accessExpirationTime = new Date(accessTokenExpires);
+            if (!isNaN(accessExpirationTime.getTime())) {
+              accessTokenValid = accessExpirationTime.getTime() > Date.now();
+            }
+          } catch (e) {
+            // Can't parse - assume valid if token exists
+            accessTokenValid = !!accessToken;
+          }
+        }
+        
+        // Only log out if BOTH tokens are expired/invalid
+        if (!refreshTokenValid && !accessTokenValid) {
+          console.error('❌ [API Service] Both tokens expired - logging out');
+          // Clear tokens and redirect to login
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+          localStorage.removeItem('user_id');
+          localStorage.removeItem('user_name');
+          
+          // Redirect to login
+          window.location.href = '/login';
+        } else {
+          console.warn('⚠️ [API Service] Refresh failed but tokens still valid - keeping user logged in (same as normal login)');
+          // Don't redirect - let user continue with current token
+        }
+        
         return Promise.reject(refreshError);
       }
     }

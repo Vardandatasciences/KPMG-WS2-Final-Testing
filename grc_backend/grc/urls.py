@@ -2761,6 +2761,8 @@ urlpatterns = [
     path('user-business-info/<int:user_id>/', views.get_user_business_info, name='user_business_info'),
 
     path('user-permissions/<int:user_id>/', views.get_user_permissions, name='user_permissions'),
+    path('user-permissions/<int:user_id>/update/', views.update_user_permissions, name='update_user_permissions'),
+    path('api/user-permissions/<int:user_id>/update/', views.update_user_permissions, name='api_update_user_permissions'),
 
     path('current-user/', user_profile.get_current_user, name='current-user'),
 

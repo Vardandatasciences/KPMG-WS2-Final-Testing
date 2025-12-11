@@ -18,7 +18,7 @@ from django.db.models import Count, Avg, Case, When, Value, FloatField, F
 from django.db.models.functions import Coalesce, Cast
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
@@ -5285,6 +5285,234 @@ def get_user_permissions(request, user_id):
         }, status=404)
     except Exception as e:
         logger.error(f"Error fetching user permissions: {str(e)}")
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
+
+@csrf_exempt
+@api_view(['PUT'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def update_user_permissions(request, user_id):
+    """
+    Update RBAC permissions for a user
+    """
+    try:
+        logger.debug(f"Updating permissions for user_id: {user_id}")
+        
+        # Get user from Users table
+        user = Users.objects.get(UserId=user_id)
+        
+        # Get permissions from request body
+        permissions = request.data.get('permissions', {})
+        
+        logger.debug(f"Received permissions data: {permissions}")
+        logger.debug(f"Request data: {request.data}")
+        
+        if not permissions:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No permissions provided'
+            }, status=400)
+        
+        # Get RBAC entry for the user
+        from .models import RBAC, Framework
+        from django.db import transaction
+        
+        # Get or create framework - use user's framework or first available
+        framework = getattr(user, 'FrameworkId', None)
+        if not framework:
+            framework = Framework.objects.filter(Status='Approved', ActiveInactive='Active').first()
+            if not framework:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'No active framework found. Please create a framework first.'
+                }, status=400)
+        
+        # Use transaction to ensure atomicity
+        with transaction.atomic():
+            # Get existing RBAC entry - check by user and role if role is provided
+            role = request.data.get('role')
+            if role:
+                rbac_entry = RBAC.objects.filter(user=user, role=role, is_active='Y').first()
+            else:
+                rbac_entry = RBAC.objects.filter(user=user, is_active='Y').first()
+            
+            if not rbac_entry:
+                # Create new RBAC entry if it doesn't exist
+                rbac_entry = RBAC.objects.create(
+                    user=user,
+                    username=user.UserName,
+                    role=role or 'End User',
+                    is_active='Y',
+                    FrameworkId=framework
+                )
+                logger.info(f"Created new RBAC entry for user_id: {user_id}, role: {role or 'End User'}")
+            else:
+                logger.info(f"Found existing RBAC entry (ID: {rbac_entry.rbac_id}) for user_id: {user_id}, role: {rbac_entry.role}")
+            
+            # Update permissions
+            # Map frontend permission field names to model field names
+            permission_mapping = {
+                # Compliance
+                'create_compliance': 'create_compliance',
+                'edit_compliance': 'edit_compliance',
+                'approve_compliance': 'approve_compliance',
+                'view_all_compliance': 'view_all_compliance',
+                'compliance_performance_analytics': 'compliance_performance_analytics',
+                # Policy
+                'create_policy': 'create_policy',
+                'edit_policy': 'edit_policy',
+                'approve_policy': 'approve_policy',
+                'create_framework': 'create_framework',
+                'approve_framework': 'approve_framework',
+                'view_all_policy': 'view_all_policy',
+                'policy_performance_analytics': 'policy_performance_analytics',
+                # Audit
+                'assign_audit': 'assign_audit',
+                'conduct_audit': 'conduct_audit',
+                'review_audit': 'review_audit',
+                'view_audit_reports': 'view_audit_reports',
+                'audit_performance_analytics': 'audit_performance_analytics',
+                # Risk
+                'create_risk': 'create_risk',
+                'edit_risk': 'edit_risk',
+                'approve_risk': 'approve_risk',
+                'assign_risk': 'assign_risk',
+                'evaluate_assigned_risk': 'evaluate_assigned_risk',
+                'view_all_risk': 'view_all_risk',
+                'risk_performance_analytics': 'risk_performance_analytics',
+                # Incident
+                'create_incident': 'create_incident',
+                'edit_incident': 'edit_incident',
+                'assign_incident': 'assign_incident',
+                'evaluate_assigned_incident': 'evaluate_assigned_incident',
+                'escalate_to_risk': 'escalate_to_risk',
+                'view_all_incident': 'view_all_incident',
+                'incident_performance_analytics': 'incident_performance_analytics'
+            }
+            
+            # Track updated fields for logging
+            updated_fields = []
+            
+            # Update each permission field
+            for field_name, value in permissions.items():
+                if field_name in permission_mapping:
+                    model_field = permission_mapping[field_name]
+                    if hasattr(rbac_entry, model_field):
+                        old_value = getattr(rbac_entry, model_field)
+                        new_value = bool(value)
+                        setattr(rbac_entry, model_field, new_value)
+                        if old_value != new_value:
+                            updated_fields.append(f"{model_field}: {old_value} -> {new_value}")
+                else:
+                    logger.warning(f"Unknown permission field: {field_name}")
+            
+            # Update role if provided
+            if role and rbac_entry.role != role:
+                rbac_entry.role = role
+                updated_fields.append(f"role: {rbac_entry.role} -> {role}")
+            
+            # Log what will be updated
+            if updated_fields:
+                logger.info(f"Updating fields for user_id {user_id}: {', '.join(updated_fields)}")
+            else:
+                logger.warning(f"No fields to update for user_id {user_id}")
+            
+            # Save the RBAC entry - use direct save without update_fields to ensure all changes are saved
+            try:
+                # Force save all fields
+                rbac_entry.save()
+                
+                logger.info(f"Saved RBAC entry (ID: {rbac_entry.rbac_id}) for user_id: {user_id}")
+                
+                # Use raw SQL to ensure database is updated directly
+                from django.db import connection
+                with connection.cursor() as cursor:
+                    # Build UPDATE query with all permission fields
+                    set_clauses = []
+                    params = []
+                    
+                    for field_name, value in permissions.items():
+                        if field_name in permission_mapping:
+                            model_field = permission_mapping[field_name]
+                            try:
+                                # Get database column name from model
+                                field_obj = RBAC._meta.get_field(model_field)
+                                db_column = field_obj.db_column or model_field
+                                set_clauses.append(f"`{db_column}` = %s")
+                                params.append(1 if bool(value) else 0)
+                                logger.debug(f"Adding field {model_field} -> {db_column} = {1 if bool(value) else 0}")
+                            except Exception as field_error:
+                                logger.warning(f"Could not get db_column for {model_field}: {field_error}")
+                    
+                    if set_clauses:
+                        # Add updated_at
+                        set_clauses.append("`UpdatedAt` = NOW()")
+                        
+                        # Build full UPDATE query
+                        update_query = f"""
+                            UPDATE `rbac` 
+                            SET {', '.join(set_clauses)}
+                            WHERE `RBACId` = %s
+                        """
+                        params.append(rbac_entry.rbac_id)
+                        
+                        logger.info(f"Executing raw SQL update for RBAC ID {rbac_entry.rbac_id}")
+                        logger.info(f"SQL: {update_query}")
+                        logger.info(f"Params count: {len(params)}")
+                        
+                        cursor.execute(update_query, params)
+                        rows_affected = cursor.rowcount
+                        
+                        logger.info(f"Raw SQL update affected {rows_affected} row(s)")
+                        
+                        if rows_affected == 0:
+                            logger.error(f"WARNING: No rows were updated! RBAC ID {rbac_entry.rbac_id} may not exist in database.")
+                        else:
+                            logger.info(f"SUCCESS: {rows_affected} row(s) updated in rbac table")
+                        
+                        # Note: No need to commit manually - transaction.atomic() handles it automatically
+                
+                # Refresh from database to verify the save
+                rbac_entry.refresh_from_db()
+                
+                # Log some key permissions to verify they were saved
+                logger.info(f"Verification - RBAC ID {rbac_entry.rbac_id} permissions after save:")
+                logger.info(f"  create_compliance: {rbac_entry.create_compliance}")
+                logger.info(f"  create_policy: {rbac_entry.create_policy}")
+                logger.info(f"  create_risk: {rbac_entry.create_risk}")
+                logger.info(f"  create_incident: {rbac_entry.create_incident}")
+                logger.info(f"  role: {rbac_entry.role}")
+                
+            except Exception as save_error:
+                logger.error(f"Error saving RBAC entry: {str(save_error)}")
+                import traceback
+                traceback.print_exc()
+                raise save_error
+        
+        logger.info(f"Successfully updated permissions for user_id: {user_id}")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'User permissions updated successfully',
+            'data': {
+                'user_id': user_id,
+                'username': user.UserName
+            }
+        })
+        
+    except Users.DoesNotExist:
+        logger.error(f"User not found with id: {user_id}")
+        return JsonResponse({
+            'status': 'error',
+            'message': 'User not found'
+        }, status=404)
+    except Exception as e:
+        logger.error(f"Error updating user permissions: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return JsonResponse({
             'status': 'error',
             'message': str(e)

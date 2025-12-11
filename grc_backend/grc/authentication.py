@@ -2,12 +2,13 @@ import jwt
 import json
 import logging
 import time
+import requests
 from datetime import datetime, timedelta
 from django.conf import settings
 from django.http import JsonResponse
 from django.contrib.auth import authenticate
 from django.core.cache import cache
-
+from django.core.mail import send_mail
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
@@ -15,11 +16,230 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from django.contrib.auth.hashers import make_password, check_password
-from .models import Users, GRCLog, RBAC
+from .models import Users, GRCLog, RBAC, Framework
 from .rbac.utils import RBACUtils
 from .mfa_service import MfaService
 
 logger = logging.getLogger(__name__)
+
+def _get_default_framework():
+    """Get a default framework for logging purposes"""
+    try:
+        # Try to get the first active framework
+        framework = Framework.objects.filter(ActiveInactive='Active').first()
+        if framework:
+            return framework
+        # If no active framework, get any framework
+        framework = Framework.objects.first()
+        if framework:
+            return framework
+    except Exception as e:
+        logger.warning(f"Error getting default framework for logging: {str(e)}")
+    return None
+
+def _log_failed_login(username, login_type, client_ip, reason, failed_attempts=None, additional_info=None):
+    """Log failed login attempt to grc_logs table"""
+    try:
+        # Get default framework
+        framework = _get_default_framework()
+        if not framework:
+            logger.warning("Cannot log failed login attempt: No framework available")
+            return
+        
+        # Try to resolve actual username if login_type is 'userid'
+        actual_username = username
+        user_id_for_log = None
+        if login_type == 'userid':
+            try:
+                user_id = int(username)
+                user_obj = Users.objects.get(UserId=user_id)
+                actual_username = user_obj.UserName
+                user_id_for_log = str(user_id)
+            except (ValueError, Users.DoesNotExist):
+                # If user doesn't exist or invalid ID, keep the original value
+                actual_username = username
+                user_id_for_log = username
+        
+        # Prepare log data
+        log_data = {
+            'Module': 'Authentication',
+            'ActionType': 'LOGIN_FAILED',
+            'Description': f'Failed login attempt for {login_type}: {username}. Reason: {reason}',
+            'UserName': actual_username,  # Use actual username, not user ID
+            'LogLevel': 'WARNING',
+            'IPAddress': client_ip,
+            'FrameworkId': framework,
+            'AdditionalInfo': additional_info or {}
+        }
+        
+        # Add user ID to additional info if we have it
+        if user_id_for_log:
+            log_data['AdditionalInfo']['attempted_user_id'] = user_id_for_log
+        
+        # Add UserId field if we have it
+        if user_id_for_log:
+            log_data['UserId'] = user_id_for_log
+        
+        # Add failed attempts count if provided
+        if failed_attempts is not None:
+            log_data['AdditionalInfo']['failed_attempts'] = failed_attempts
+        
+        # Create and save log entry
+        log_entry = GRCLog(**log_data)
+        log_entry.save()
+        logger.debug(f"Logged failed login attempt for {actual_username} (login_type: {login_type}, identifier: {username}) to grc_logs")
+    except Exception as e:
+        logger.error(f"Error logging failed login attempt: {str(e)}")
+        # Don't raise - logging failure shouldn't break login flow
+ 
+def _send_account_lockout_email(user_email, username, client_ip):
+    """
+    Send email notification when user account is locked due to multiple failed login attempts.
+    Uses SMTP configuration from .env file (SMTP_SERVER, SMTP_PORT, SMTP_EMAIL, SMTP_PASSWORD).
+    """
+    try:
+        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@example.com')
+        from_name = getattr(settings, 'DEFAULT_FROM_NAME', 'GRC System')
+       
+        subject = 'Account Locked - Multiple Failed Login Attempts'
+       
+        # Create HTML email content
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Account Locked</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
+            <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <h1 style="color: #dc3545; margin: 0; font-size: 28px;">⚠️ Account Locked</h1>
+                </div>
+               
+                <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+                    <p style="margin: 0; color: #856404; font-weight: bold;">
+                        Security Alert: Your account has been temporarily locked due to multiple failed login attempts.
+                    </p>
+                </div>
+               
+                <p style="font-size: 16px; margin-bottom: 15px;">Dear {username},</p>
+               
+                <p style="font-size: 16px; margin-bottom: 15px;">
+                    We detected <strong>5 consecutive failed login attempts</strong> on your account.
+                    As a security measure, your account has been temporarily locked for <strong>15 minutes</strong>.
+                </p>
+               
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 4px; margin: 20px 0;">
+                    <p style="margin: 0; font-size: 14px; color: #6c757d;">
+                        <strong>Login Details:</strong><br>
+                        Username/User ID: {username}<br>
+                        IP Address: {client_ip}<br>
+                        Lockout Duration: 15 minutes<br>
+                        Lockout Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}
+                    </p>
+                </div>
+               
+                <h3 style="color: #333; margin-top: 30px; margin-bottom: 15px;">What should you do?</h3>
+                <ul style="font-size: 16px; line-height: 1.8; margin-bottom: 20px;">
+                    <li>Wait 15 minutes before attempting to login again</li>
+                    <li>Make sure you are using the correct username/User ID and password</li>
+                    <li>If you forgot your password, use the "Forgot Password" feature</li>
+                    <li>If this was not you, please contact your administrator immediately</li>
+                </ul>
+               
+                <div style="background-color: #e7f3ff; border-left: 4px solid #2196F3; padding: 15px; margin: 20px 0; border-radius: 4px;">
+                    <p style="margin: 0; color: #0d47a1; font-size: 14px;">
+                        <strong>Security Tip:</strong> If you continue to experience login issues,
+                        please verify your credentials or contact the system administrator for assistance.
+                    </p>
+                </div>
+               
+                <p style="font-size: 14px; color: #6c757d; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+                    This is an automated security notification. Please do not reply to this email.<br>
+                    If you have any concerns about your account security, contact your administrator immediately.
+                </p>
+               
+                <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+                    <p style="margin: 0; font-size: 12px; color: #999;">
+                        © {datetime.now().year} GRC System - {from_name}<br>
+                        This email was sent for security purposes only.
+                    </p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+       
+        # Plain text version
+        text_content = f"""
+Account Locked - Multiple Failed Login Attempts
+ 
+Dear {username},
+ 
+We detected 5 consecutive failed login attempts on your account.
+As a security measure, your account has been temporarily locked for 15 minutes.
+ 
+Login Details:
+- Username/User ID: {username}
+- IP Address: {client_ip}
+- Lockout Duration: 15 minutes
+- Lockout Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}
+ 
+What should you do?
+- Wait 15 minutes before attempting to login again
+- Make sure you are using the correct username/User ID and password
+- If you forgot your password, use the "Forgot Password" feature
+- If this was not you, please contact your administrator immediately
+ 
+This is an automated security notification. Please do not reply to this email.
+If you have any concerns about your account security, contact your administrator immediately.
+ 
+© {datetime.now().year} GRC System - {from_name}
+        """
+       
+        # Send email using Django's email backend (configured to use Azure/SMTP from .env)
+        try:
+            # First try using NotificationService if available (uses Azure/SMTP with fallback)
+            from grc.routes.Global.notification_service import NotificationService
+            notification_service = NotificationService()
+           
+            # Use a simple notification or create a custom email
+            # Since there's no template for account lockout, we'll use Django's send_mail directly
+            # But try NotificationService's Azure sender first
+            if hasattr(notification_service, 'azure_email_sender'):
+                if notification_service.azure_email_sender.is_configured():
+                    success = notification_service.azure_email_sender.send_email_via_graph(
+                        to_email=user_email,
+                        subject=subject,
+                        html_body=html_content,
+                        from_email=from_email,
+                        from_name=from_name
+                    )
+                    if success:
+                        logger.info(f"Account lockout email sent successfully via Azure to {user_email}")
+                        return
+        except Exception as notification_error:
+            logger.debug(f"NotificationService unavailable, using Django send_mail: {str(notification_error)}")
+       
+        # Fallback to Django's send_mail (uses EMAIL_BACKEND from settings, which is configured for Azure/SMTP)
+        send_mail(
+            subject=subject,
+            message=text_content,
+            from_email=f"{from_name} <{from_email}>",
+            recipient_list=[user_email],
+            html_message=html_content,
+            fail_silently=False,
+        )
+       
+        logger.info(f"Account lockout email sent successfully to {user_email} for user {username}")
+       
+    except Exception as e:
+        logger.error(f"Failed to send account lockout email to {user_email}: {str(e)}")
+        # Don't raise exception - email failure shouldn't affect lockout process
+ 
+ 
 
 def assign_default_rbac_permissions_for_google_sso(user):
     """
@@ -260,6 +480,42 @@ def get_user_from_token(token):
         logger.error(f"Error getting user from token: {str(e)}")
         return None
 
+def verify_recaptcha(captcha_token):
+    """Verify reCAPTCHA token with Google's API"""
+    if not getattr(settings, 'RECAPTCHA_ENABLED', True):
+        logger.debug("reCAPTCHA verification disabled in settings")
+        return True
+    
+    if not captcha_token:
+        logger.warning("reCAPTCHA token is missing")
+        return False
+    
+    secret_key = getattr(settings, 'RECAPTCHA_SECRET_KEY', '')
+    if not secret_key:
+        logger.warning("reCAPTCHA secret key not configured")
+        return False
+    
+    try:
+        # Verify with Google's reCAPTCHA API
+        verify_url = 'https://www.google.com/recaptcha/api/siteverify'
+        response = requests.post(verify_url, data={
+            'secret': secret_key,
+            'response': captcha_token
+        }, timeout=5)
+        
+        result = response.json()
+        
+        if result.get('success'):
+            logger.debug("reCAPTCHA verification successful")
+            return True
+        else:
+            error_codes = result.get('error-codes', [])
+            logger.warning(f"reCAPTCHA verification failed: {error_codes}")
+            return False
+    except Exception as e:
+        logger.error(f"Error verifying reCAPTCHA: {str(e)}")
+        return False
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def jwt_login(request):
@@ -270,11 +526,21 @@ def jwt_login(request):
         password = data.get('password')
         login_type = data.get('login_type', 'username')  # Default to username if not specified
         otp = data.get('otp')  # MFA OTP code
+        captcha_token = data.get('captcha_token')  # reCAPTCHA token
         
         if not username or not password:
             return Response({
                 'status': 'error',
                 'message': 'Username and password are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # ========================================
+        # CAPTCHA VERIFICATION (only for username/userid login, not Google SSO)
+        # ========================================
+        if not verify_recaptcha(captcha_token):
+            return Response({
+                'status': 'error',
+                'message': 'CAPTCHA verification failed. Please try again.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # ========================================
@@ -343,6 +609,14 @@ def jwt_login(request):
             user = None
         except ValueError:
             logger.warning(f"Login failed - invalid user ID format: {username}")
+            # Log failed login attempt
+            _log_failed_login(
+                username=username,
+                login_type=login_type,
+                client_ip=client_ip,
+                reason='Invalid user ID format',
+                additional_info={'error': 'Invalid user ID format'}
+            )
             return Response({
                 'status': 'error',
                 'message': 'Invalid user ID format. Please enter a valid number.'
@@ -355,11 +629,55 @@ def jwt_login(request):
             failed_attempts = cache.get(user_cache_key, 0) + 1
             cache.set(user_cache_key, failed_attempts, 900)  # Keep counter for 15 minutes
             
+            # Log failed login attempt
+            _log_failed_login(
+                username=username,
+                login_type=login_type,
+                client_ip=client_ip,
+                reason='Invalid credentials',
+                failed_attempts=failed_attempts,
+                additional_info={'login_type': login_type, 'attempt_number': failed_attempts}
+            )
+            
             if failed_attempts >= 5:
                 # Lock account for 15 minutes
                 lockout_time = time.time() + 900  # 15 minutes from now
                 cache.set(lockout_cache_key, lockout_time, 900)
                 cache.delete(user_cache_key)  # Clear attempt counter
+                
+                # Log account lockout
+                _log_failed_login(
+                    username=username,
+                    login_type=login_type,
+                    client_ip=client_ip,
+                    reason='Account locked - too many failed attempts',
+                    failed_attempts=failed_attempts,
+                    additional_info={'login_type': login_type, 'lockout_duration_minutes': 15, 'account_locked': True}
+                )
+                
+                # Send email notification about account lockout
+                # Try to find user by username/userid to get email address
+                try:
+                    user_for_email = None
+                    if login_type == 'userid':
+                        try:
+                            user_id = int(username)
+                            user_for_email = Users.objects.get(UserId=user_id)
+                        except (ValueError, Users.DoesNotExist):
+                            pass
+                    else:
+                        try:
+                            user_for_email = Users.objects.get(UserName=username)
+                        except Users.DoesNotExist:
+                            pass
+                   
+                    # Send email if user exists and has email
+                    if user_for_email and user_for_email.Email:
+                        _send_account_lockout_email(user_for_email.Email, user_for_email.UserName or username, client_ip)
+                except Exception as email_error:
+                    # Log error but don't fail the lockout process
+                    logger.warning(f"Failed to send account lockout email: {str(email_error)}")
+               
                 
                 return Response({
                     'status': 'error',
@@ -381,6 +699,14 @@ def jwt_login(request):
             is_active = False
             
         if not is_active:
+            # Log failed login attempt due to inactive account
+            _log_failed_login(
+                username=user.UserName if user else username,
+                login_type=login_type,
+                client_ip=client_ip,
+                reason='User account is inactive',
+                additional_info={'user_id': user.UserId if user else None, 'login_type': login_type}
+            )
             return Response({
                 'status': 'error',
                 'message': 'User account is inactive'
@@ -407,6 +733,18 @@ def jwt_login(request):
                     # Step 4: Check if license verification was successful
                     if not license_verification_result.get("success"):
                         logger.warning(f"❌ LICENSE VALIDATION FAILED: User {user.UserName} - {license_verification_result.get('error')}")
+                        # Log failed login attempt due to license verification failure
+                        _log_failed_login(
+                            username=user.UserName,
+                            login_type=login_type,
+                            client_ip=client_ip,
+                            reason='License verification failed',
+                            additional_info={
+                                'user_id': user.UserId,
+                                'login_type': login_type,
+                                'license_error': license_verification_result.get('error', 'Unknown license error')
+                            }
+                        )
                         return Response({
                             'status': 'error',
                             'message': 'License verification failed. Please contact your administrator.',
@@ -424,6 +762,18 @@ def jwt_login(request):
             else:
                 # Step 5: Handle case where user has no license key
                 logger.warning(f"❌ LICENSE VALIDATION: User {user.UserName} has no license key assigned")
+                # Log failed login attempt due to missing license key
+                _log_failed_login(
+                    username=user.UserName,
+                    login_type=login_type,
+                    client_ip=client_ip,
+                    reason='No license key assigned',
+                    additional_info={
+                        'user_id': user.UserId,
+                        'login_type': login_type,
+                        'license_error': 'No license key assigned to user'
+                    }
+                )
                 return Response({
                     'status': 'error',
                     'message': 'No license key assigned to this user. Please contact your administrator.'
@@ -862,6 +1212,16 @@ def mfa_verify_otp(request):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         if not user:
+            # Get client IP for logging
+            client_ip = request.META.get('REMOTE_ADDR', 'unknown')
+            # Log failed login attempt in MFA verification
+            _log_failed_login(
+                username=username,
+                login_type=login_type,
+                client_ip=client_ip,
+                reason='Invalid credentials during MFA verification',
+                additional_info={'login_type': login_type, 'mfa_verification': True}
+            )
             return Response({
                 'status': 'error',
                 'message': 'Invalid username or password'
@@ -877,14 +1237,40 @@ def mfa_verify_otp(request):
             is_active = False
             
         if not is_active:
+            # Get client IP for logging
+            client_ip = request.META.get('REMOTE_ADDR', 'unknown')
+            # Log failed login attempt due to inactive account in MFA
+            _log_failed_login(
+                username=user.UserName,
+                login_type=login_type,
+                client_ip=client_ip,
+                reason='User account is inactive during MFA verification',
+                additional_info={'user_id': user.UserId, 'login_type': login_type, 'mfa_verification': True}
+            )
             return Response({
                 'status': 'error',
                 'message': 'User account is inactive'
             }, status=status.HTTP_401_UNAUTHORIZED)
         
+        # Get client IP for logging
+        client_ip = request.META.get('REMOTE_ADDR', 'unknown')
+        
         # Verify OTP
         mfa_result = MfaService.verify_otp(user, otp, request)
         if not mfa_result.get('success'):
+            # Log failed MFA verification
+            _log_failed_login(
+                username=user.UserName,
+                login_type=login_type,
+                client_ip=client_ip,
+                reason='MFA OTP verification failed',
+                additional_info={
+                    'user_id': user.UserId,
+                    'login_type': login_type,
+                    'mfa_verification': True,
+                    'mfa_error': mfa_result.get('error', 'Unknown MFA error')
+                }
+            )
             return Response({
                 'status': 'error',
                 'message': mfa_result.get('error', 'MFA verification failed'),
@@ -901,6 +1287,19 @@ def mfa_verify_otp(request):
                     licensing_system = VardaanLicensingSystem()
                     license_verification_result = licensing_system.verify_license(user.license_key)
                     if not license_verification_result.get("success"):
+                        # Log failed login attempt due to license verification failure in MFA
+                        _log_failed_login(
+                            username=user.UserName,
+                            login_type=login_type,
+                            client_ip=client_ip,
+                            reason='License verification failed during MFA',
+                            additional_info={
+                                'user_id': user.UserId,
+                                'login_type': login_type,
+                                'mfa_verification': True,
+                                'license_error': license_verification_result.get('error', 'Unknown license error')
+                            }
+                        )
                         return Response({
                             'status': 'error',
                             'message': 'License verification failed. Please contact your administrator.',
@@ -914,6 +1313,19 @@ def mfa_verify_otp(request):
                         'license_error': str(license_error)
                     }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             else:
+                # Log failed login attempt due to missing license key in MFA
+                _log_failed_login(
+                    username=user.UserName,
+                    login_type=login_type,
+                    client_ip=client_ip,
+                    reason='No license key assigned during MFA',
+                    additional_info={
+                        'user_id': user.UserId,
+                        'login_type': login_type,
+                        'mfa_verification': True,
+                        'license_error': 'No license key assigned to user'
+                    }
+                )
                 return Response({
                     'status': 'error',
                     'message': 'No license key assigned to this user. Please contact your administrator.'
