@@ -353,9 +353,12 @@
                         :type="passwordFieldType" 
                         id="password" 
                         v-model="createUserForm.password" 
+                        @input="validatePassword"
+                        @focus="showPasswordRequirements = true"
                         placeholder="Enter password"
                         required
                         :disabled="createUserLoading"
+                        :class="{ 'invalid': passwordErrors.length > 0 && createUserForm.password.length > 0 }"
                       />
                       <button 
                         type="button"
@@ -365,6 +368,60 @@
                       >
                         <i :class="passwordFieldType === 'password' ? 'fas fa-eye' : 'fas fa-eye-slash'"></i>
                       </button>
+                    </div>
+                    <!-- Password Requirements -->
+                    <div v-show="showPasswordRequirements || createUserForm.password.length > 0" class="password-requirements" :class="{ 'has-errors': passwordErrors.length > 0 && createUserForm.password.length > 0 }">
+                      <div style="font-weight: 600; margin-bottom: 8px; color: #374151; font-size: 14px;">Password Requirements:</div>
+                      <div class="requirement-item" :class="{ 'valid': createUserForm.password.length >= 8 }">
+                        <svg v-if="createUserForm.password.length >= 8" width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                        <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                        <span>At least 8 characters</span>
+                      </div>
+                      <div class="requirement-item" :class="{ 'valid': passwordChecks.hasUppercase }">
+                        <svg v-if="passwordChecks.hasUppercase" width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                        <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                        <span>One uppercase letter</span>
+                      </div>
+                      <div class="requirement-item" :class="{ 'valid': passwordChecks.hasLowercase }">
+                        <svg v-if="passwordChecks.hasLowercase" width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                        <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                        <span>One lowercase letter</span>
+                      </div>
+                      <div class="requirement-item" :class="{ 'valid': passwordChecks.hasNumber }">
+                        <svg v-if="passwordChecks.hasNumber" width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                        <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                        <span>One number</span>
+                      </div>
+                      <div class="requirement-item" :class="{ 'valid': passwordChecks.hasSpecialChar }">
+                        <svg v-if="passwordChecks.hasSpecialChar" width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                        <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                        <span>One special character</span>
+                      </div>
                     </div>
                   </div>
                   
@@ -945,6 +1002,14 @@ export default {
          role: '',
          isActive: 'Y'
        },
+       showPasswordRequirements: false, // Show password requirements
+       passwordErrors: [], // Password validation errors
+       passwordChecks: { // Password validation checks
+         hasUppercase: false,
+         hasLowercase: false,
+         hasNumber: false,
+         hasSpecialChar: false
+       },
       createUserLoading: false,
       createUserError: null,
       createUserSuccess: null,
@@ -1040,9 +1105,15 @@ export default {
       });
     },
     isCreateUserFormValid() {
-      return this.createUserForm.username && this.createUserForm.password && this.createUserForm.email && this.createUserForm.firstName && this.createUserForm.lastName && this.createUserForm.departmentId && this.createUserForm.role;
-    },
-    
+      return this.createUserForm.username && 
+             this.createUserForm.password && 
+             this.passwordErrors.length === 0 &&
+             this.createUserForm.email && 
+             this.createUserForm.firstName && 
+             this.createUserForm.lastName && 
+             this.createUserForm.departmentId && 
+             this.createUserForm.role;
+    }
   },
   mounted() {
     this.loadUserData();
@@ -1083,6 +1154,41 @@ export default {
   },
 
   methods: {
+    // Password validation function
+    validatePassword() {
+      const password = this.createUserForm.password || ''
+      this.passwordErrors = []
+      
+      // Check minimum length
+      if (password.length < 8) {
+        this.passwordErrors.push('Password must be at least 8 characters long')
+      }
+      
+      // Check for uppercase
+      this.passwordChecks.hasUppercase = /[A-Z]/.test(password)
+      if (!this.passwordChecks.hasUppercase && password.length > 0) {
+        this.passwordErrors.push('Password must contain at least one uppercase letter')
+      }
+      
+      // Check for lowercase
+      this.passwordChecks.hasLowercase = /[a-z]/.test(password)
+      if (!this.passwordChecks.hasLowercase && password.length > 0) {
+        this.passwordErrors.push('Password must contain at least one lowercase letter')
+      }
+      
+      // Check for number
+      this.passwordChecks.hasNumber = /[0-9]/.test(password)
+      if (!this.passwordChecks.hasNumber && password.length > 0) {
+        this.passwordErrors.push('Password must contain at least one number')
+      }
+      
+      // Check for special character (fixed regex - removed unnecessary escapes)
+      this.passwordChecks.hasSpecialChar = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password)
+      if (!this.passwordChecks.hasSpecialChar && password.length > 0) {
+        this.passwordErrors.push('Password must contain at least one special character')
+      }
+    },
+    
     // Handle login event
     handleUserLogin(event) {
       if (event.detail && event.detail.user) {
@@ -1473,6 +1579,14 @@ async updatePassword() {
          this.selectedPermissions = {};
          this.createUserError = null;
          this.createUserSuccess = null;
+         this.showPasswordRequirements = false;
+         this.passwordErrors = [];
+         this.passwordChecks = {
+           hasUppercase: false,
+           hasLowercase: false,
+           hasNumber: false,
+           hasSpecialChar: false
+         };
        }
      },
 
@@ -1703,8 +1817,10 @@ async updatePassword() {
         this.createUserSuccess = null;
 
         try {
-          if (this.createUserForm.password.length < 6) {
-            this.createUserError = 'Password must be at least 6 characters long.';
+          // Validate password before submitting
+          this.validatePassword()
+          if (this.passwordErrors.length > 0) {
+            this.createUserError = 'Password does not meet requirements. Please check the requirements below.';
             return;
           }
 
@@ -2060,4 +2176,50 @@ async updatePassword() {
 
 <style scoped>
 @import './UserProfile.css';
+
+.password-requirements {
+  margin-top: 8px;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  transition: all 0.3s ease;
+}
+
+.password-requirements.has-errors {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.requirement-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 6px;
+}
+
+.requirement-item:last-child {
+  margin-bottom: 0;
+}
+
+.requirement-item svg {
+  flex-shrink: 0;
+  color: #9ca3af;
+}
+
+.requirement-item.valid {
+  color: #10b981;
+  font-weight: 500;
+}
+
+.requirement-item.valid svg {
+  color: #10b981;
+  stroke: #10b981;
+}
+
+.password-input-wrapper input.invalid {
+  border-color: #ef4444;
+}
 </style>

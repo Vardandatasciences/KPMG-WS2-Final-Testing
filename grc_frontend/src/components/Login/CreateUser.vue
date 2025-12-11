@@ -62,9 +62,13 @@
                     :type="passwordFieldType" 
                     id="password" 
                     v-model="formData.password" 
+                    @input="validatePassword"
+                    @focus="showPasswordRequirements = true; validatePassword()"
+                    @blur="showPasswordRequirements = formData.password.length > 0"
                     placeholder="Enter password"
                     required
                     :disabled="isLoading"
+                    :class="{ 'invalid': passwordErrors.length > 0 && formData.password.length > 0 }"
                   >
                   <button 
                     type="button"
@@ -82,6 +86,75 @@
                       <line x1="1" y1="1" x2="23" y2="23" stroke="currentColor" stroke-width="2"/>
                     </svg>
                   </button>
+                </div>
+                <!-- Password Requirements - Always show when password field is present -->
+                <div class="password-requirements" style="display: block !important; visibility: visible !important;">
+                  <div style="font-weight: 600; margin-bottom: 8px; color: #374151; font-size: 14px;">Password Requirements:</div>
+                  <div class="requirement-item" :class="{ 'valid': formData.password.length >= 8 }">
+                    <svg v-if="formData.password.length >= 8" width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                    </svg>
+                    <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                    </svg>
+                    <span>At least 8 characters</span>
+                  </div>
+                  <div class="requirement-item" :class="{ 'valid': passwordChecks.hasUppercase }">
+                    <svg v-if="passwordChecks.hasUppercase" width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                    </svg>
+                    <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                    </svg>
+                    <span>One uppercase letter</span>
+                  </div>
+                  <div class="requirement-item" :class="{ 'valid': passwordChecks.hasLowercase }">
+                    <svg v-if="passwordChecks.hasLowercase" width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                    </svg>
+                    <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                    </svg>
+                    <span>One lowercase letter</span>
+                  </div>
+                  <div class="requirement-item" :class="{ 'valid': passwordChecks.hasNumber }">
+                    <svg v-if="passwordChecks.hasNumber" width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                    </svg>
+                    <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                    </svg>
+                    <span>One number</span>
+                  </div>
+                  <div class="requirement-item" :class="{ 'valid': passwordChecks.hasSpecialChar }">
+                    <svg v-if="passwordChecks.hasSpecialChar" width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                    </svg>
+                    <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                    </svg>
+                    <span>One special character</span>
+                  </div>
+                </div>
+                <!-- Password Validation Errors -->
+                <div v-if="passwordErrors.length > 0 && formData.password.length > 0" class="password-errors">
+                  <div class="error-icon">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                      <line x1="12" y1="8" x2="12" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                      <line x1="12" y1="16" x2="12" y2="16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                  </div>
+                  <div class="error-messages">
+                    <div v-for="(error, index) in passwordErrors" :key="index" class="error-message">
+                      {{ error }}
+                    </div>
+                  </div>
                 </div>
               </div>
               
@@ -369,6 +442,14 @@ const successMessage = ref('')
 const passwordFieldType = ref('password')
 const showCustomRoleInput = ref(false)
 const customRole = ref('')
+const showPasswordRequirements = ref(false)
+const passwordErrors = ref([])
+const passwordChecks = ref({
+  hasUppercase: false,
+  hasLowercase: false,
+  hasNumber: false,
+  hasSpecialChar: false
+})
 
 // RBAC permissions structure
 const rbacModules = ref([
@@ -439,10 +520,50 @@ const selectedPermissions = ref({})
 const selectAllPermissions = ref(false)
 const moduleSelectAll = ref({})
 
+// Password validation function
+const validatePassword = () => {
+  const password = formData.value.password || ''
+  passwordErrors.value = []
+  
+  console.log('🔍 Validating password:', password.length > 0 ? '***' : '(empty)')
+  
+  // Check minimum length
+  if (password.length < 8) {
+    passwordErrors.value.push('Password must be at least 8 characters long')
+  }
+  
+  // Check for uppercase
+  passwordChecks.value.hasUppercase = /[A-Z]/.test(password)
+  if (!passwordChecks.value.hasUppercase && password.length > 0) {
+    passwordErrors.value.push('Password must contain at least one uppercase letter')
+  }
+  
+  // Check for lowercase
+  passwordChecks.value.hasLowercase = /[a-z]/.test(password)
+  if (!passwordChecks.value.hasLowercase && password.length > 0) {
+    passwordErrors.value.push('Password must contain at least one lowercase letter')
+  }
+  
+  // Check for number
+  passwordChecks.value.hasNumber = /[0-9]/.test(password)
+  if (!passwordChecks.value.hasNumber && password.length > 0) {
+    passwordErrors.value.push('Password must contain at least one number')
+  }
+  
+  // Check for special character
+  passwordChecks.value.hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)
+  if (!passwordChecks.value.hasSpecialChar && password.length > 0) {
+    passwordErrors.value.push('Password must contain at least one special character')
+  }
+  
+  console.log('✅ Password checks:', passwordChecks.value)
+}
+
 // Computed properties
 const isFormValid = computed(() => {
   return formData.value.username && 
          formData.value.password && 
+         passwordErrors.value.length === 0 &&
          formData.value.email && 
          formData.value.firstName && 
          formData.value.lastName && 
@@ -474,6 +595,14 @@ const resetForm = () => {
   selectedPermissions.value = {}
   selectAllPermissions.value = false
   moduleSelectAll.value = {}
+  passwordErrors.value = []
+  passwordChecks.value = {
+    hasUppercase: false,
+    hasLowercase: false,
+    hasNumber: false,
+    hasSpecialChar: false
+  }
+  showPasswordRequirements.value = false
 }
 
 const togglePasswordVisibility = () => {
@@ -724,7 +853,18 @@ const createUser = async () => {
     })
     
     if (!isFormValid.value) {
-      errorMessage.value = 'Please fill in all required fields'
+      if (formData.value.password && passwordErrors.value.length > 0) {
+        errorMessage.value = 'Please fix password validation errors'
+      } else {
+        errorMessage.value = 'Please fill in all required fields'
+      }
+      return
+    }
+    
+    // Validate password before submitting
+    validatePassword()
+    if (passwordErrors.value.length > 0) {
+      errorMessage.value = 'Password does not meet requirements'
       return
     }
     
@@ -765,7 +905,35 @@ const createUser = async () => {
     }
   } catch (error) {
     if (error.response && error.response.data) {
-      errorMessage.value = error.response.data.message || 'An error occurred while creating the user'
+      // Handle password validation errors from backend
+      if (error.response.data.errors && Array.isArray(error.response.data.errors)) {
+        // Check if these are password validation errors
+        const passwordValidationErrors = error.response.data.errors.filter(err => 
+          err.toLowerCase().includes('password') || 
+          err.toLowerCase().includes('uppercase') ||
+          err.toLowerCase().includes('lowercase') ||
+          err.toLowerCase().includes('number') ||
+          err.toLowerCase().includes('special character') ||
+          err.toLowerCase().includes('characters long')
+        )
+        
+        if (passwordValidationErrors.length > 0) {
+          // Add backend password errors to passwordErrors array
+          passwordErrors.value = [...passwordErrors.value, ...passwordValidationErrors]
+          errorMessage.value = 'Password validation failed. Please check the requirements below.'
+        } else {
+          errorMessage.value = error.response.data.errors.join('. ')
+        }
+      } else {
+        // Check if the message is about password validation
+        const message = error.response.data.message || 'An error occurred while creating the user'
+        if (message.toLowerCase().includes('password')) {
+          passwordErrors.value.push(message)
+          errorMessage.value = 'Password validation failed. Please check the requirements below.'
+        } else {
+          errorMessage.value = message
+        }
+      }
     } else {
       errorMessage.value = 'Unable to connect to server. Please check your connection.'
     }
@@ -775,12 +943,23 @@ const createUser = async () => {
   }
 }
 
+// Watch password changes to validate in real-time
+watch(() => formData.value.password, (newPassword) => {
+  console.log('👀 Password changed:', newPassword ? '***' : '(empty)')
+  validatePassword()
+}, { immediate: true })
+
 // Lifecycle - only fetch data when modal is shown
 watch(() => props.showModal, (newValue) => {
   if (newValue) {
     // Only fetch data when modal is opened
     fetchDepartments()
     fetchRoles()
+    // Validate password if it already has a value
+    if (formData.value.password && formData.value.password.length > 0) {
+      showPasswordRequirements.value = true
+      validatePassword()
+    }
   }
 })
 </script>
@@ -963,8 +1142,78 @@ watch(() => props.showModal, (newValue) => {
   color: #9ca3af;
 }
 
+.input-wrapper input.invalid {
+  border-color: #ef4444;
+}
+
 .input-wrapper select {
   cursor: pointer;
+}
+
+.password-requirements {
+  margin-top: 8px;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.requirement-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 6px;
+}
+
+.requirement-item:last-child {
+  margin-bottom: 0;
+}
+
+.requirement-item svg {
+  flex-shrink: 0;
+  color: #9ca3af;
+}
+
+.requirement-item.valid {
+  color: #10b981;
+  font-weight: 500;
+}
+
+.requirement-item.valid svg {
+  color: #10b981;
+  stroke: #10b981;
+}
+
+.password-errors {
+  margin-top: 12px;
+  padding: 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.error-icon {
+  flex-shrink: 0;
+  color: #ef4444;
+  margin-top: 2px;
+}
+
+.error-messages {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.error-message {
+  font-size: 13px;
+  color: #dc2626;
+  line-height: 1.4;
 }
 
 .role-select-container {

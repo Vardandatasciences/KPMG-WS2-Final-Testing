@@ -4832,6 +4832,36 @@ def register_user(request):
                 'message': 'Username, password, and Email are required'
             }, status=status.HTTP_400_BAD_REQUEST)
         
+        # Validate password strength
+        password_errors = []
+        
+        # Check minimum length (8+ characters)
+        if len(password) < 8:
+            password_errors.append('Password must be at least 8 characters long')
+        
+        # Check for uppercase letter
+        if not re.search(r'[A-Z]', password):
+            password_errors.append('Password must contain at least one uppercase letter')
+        
+        # Check for lowercase letter
+        if not re.search(r'[a-z]', password):
+            password_errors.append('Password must contain at least one lowercase letter')
+        
+        # Check for number
+        if not re.search(r'[0-9]', password):
+            password_errors.append('Password must contain at least one number')
+        
+        # Check for special character
+        if not re.search(r'[!@#$%^&*()_+\-=\[\]{};\':"\\|,.<>\/?]', password):
+            password_errors.append('Password must contain at least one special character (!@#$%^&*()_+-=[]{}|;:,.<>?)')
+        
+        if password_errors:
+            return Response({
+                'success': False,
+                'message': 'Password validation failed',
+                'errors': password_errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         # Check if user already exists
         if Users.objects.filter(UserName=username).exists():
             return Response({
