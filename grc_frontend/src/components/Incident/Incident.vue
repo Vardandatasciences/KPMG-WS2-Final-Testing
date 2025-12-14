@@ -2055,7 +2055,14 @@ export default {
         
         // Fallback to API call
         console.log('🔄 Fetching users from API (cache empty or invalid)');
-        const response = await axiosInstance.get(API_ENDPOINTS.INCIDENTS_USERS, {
+        // Get current user ID to exclude from reviewer list
+        const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || ''
+        // Fetch reviewers filtered by RBAC permissions (EvaluateAssignedIncident) for incident module
+        const response = await axiosInstance.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+          params: {
+            module: 'incident',
+            current_user_id: currentUserId
+          },
           withCredentials: true,
           headers: {
             'Content-Type': 'application/json'
@@ -2065,17 +2072,11 @@ export default {
         console.log('✅ Users API response:', response.data);
         console.log('✅ Response status:', response.status);
         
-        // Handle multiple response formats
+        // Handle response format: should be an array
         let users = [];
-        if (response.data && response.data.success && response.data.users) {
-          users = response.data.users;
-          console.log('✅ Parsed users from success.users format:', users.length);
-        } else if (Array.isArray(response.data)) {
+        if (Array.isArray(response.data)) {
           users = response.data;
           console.log('✅ Parsed users from direct array format:', users.length);
-        } else if (response.data && Array.isArray(response.data.data)) {
-          users = response.data.data;
-          console.log('✅ Parsed users from data.data format:', users.length);
         } else {
           console.warn('⚠️ Unexpected response format:', response.data);
         }
@@ -2084,7 +2085,7 @@ export default {
         this.availableUsers = users.map(user => ({
           id: user.UserId || user.id || user.userId,
           name: user.UserName || user.name || user.username || 'Unknown',
-          role: user.role || user.Role || ''
+          role: user.Role || user.role || ''
         })).filter(user => user.id); // Filter out invalid users
         
         console.log('✅ Mapped availableUsers:', this.availableUsers.length, 'users');

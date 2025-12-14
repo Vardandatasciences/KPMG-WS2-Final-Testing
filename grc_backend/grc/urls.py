@@ -2113,6 +2113,7 @@ risk_urlpatterns = [
     # User Management
 
     path('users/', views.list_users, name='get-users'),
+    path('users/<int:user_id>/status/', views.update_user_status, name='update-user-status'),
 
     path('api/users/', views.list_users, name='api-get-users'),
 
@@ -2239,6 +2240,10 @@ risk_urlpatterns = [
     path('logs/', risk_views.GRCLogList.as_view(), name='log-list'),
 
     path('logs/<int:pk>/', risk_views.GRCLogDetail.as_view(), name='log-detail'),
+    
+    path('system-logs/', risk_views.get_system_logs, name='system-logs'),
+    
+    path('api/system-logs/', risk_views.get_system_logs, name='api-system-logs'),
 
     
 
@@ -2759,7 +2764,16 @@ urlpatterns = [
     path('user-profile/<int:user_id>/', views.get_user_profile, name='user_profile'),
 
     path('user-business-info/<int:user_id>/', views.get_user_business_info, name='user_business_info'),
-
+    path('data-subject-requests/<int:user_id>/', user_profile.get_data_subject_requests, name='data_subject_requests'),
+    path('data-subject-requests/create/', user_profile.create_data_subject_request, name='create_data_subject_request'),
+    path('data-subject-requests/<int:request_id>/update-status/', user_profile.update_data_subject_request_status, name='update_data_subject_request_status'),
+    
+    # Access Requests
+    path('access-requests/<int:user_id>/', user_profile.get_access_requests, name='access_requests'),
+    path('access-requests/create/', user_profile.create_access_request, name='create_access_request'),
+    path('access-requests/<int:request_id>/update-status/', user_profile.update_access_request_status, name='update_access_request_status'),
+ 
+    path('user-permissions/<int:user_id>/', views.get_user_permissions, name='user_permissions'),
     path('user-permissions/<int:user_id>/', views.get_user_permissions, name='user_permissions'),
     path('user-permissions/<int:user_id>/update/', views.update_user_permissions, name='update_user_permissions'),
     path('api/user-permissions/<int:user_id>/update/', views.update_user_permissions, name='api_update_user_permissions'),

@@ -29,6 +29,8 @@ from django.views.decorators.http import require_http_methods
 from django.db import connection
 from django.contrib.auth.hashers import make_password, check_password
 from django.core.cache import cache
+from django.core.mail import send_mail
+from django.conf import settings
 import time
 
 logger = logging.getLogger(__name__)
@@ -2740,6 +2742,9 @@ def list_users(request):
         if serializer.data:
             print(f"DEBUG: First user data: {serializer.data[0]}")
             print(f"DEBUG: Sample user keys: {list(serializer.data[0].keys()) if serializer.data else 'No users'}")
+            # Debug IsActive values
+            for idx, user_data in enumerate(serializer.data[:5]):  # Check first 5 users
+                print(f"DEBUG: User {idx+1} - UserId: {user_data.get('UserId')}, IsActive: {user_data.get('IsActive')}, DepartmentId: {user_data.get('DepartmentId')}, DepartmentName: {user_data.get('DepartmentName')}")
         
         response_data = {
             'success': True,
@@ -2754,6 +2759,81 @@ def list_users(request):
         return Response({
             'success': False,
             'error': 'Error fetching users',
+            'details': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['PATCH', 'PUT'])
+@permission_classes([AllowAny])
+def update_user_status(request, user_id):
+    """
+    Update user IsActive status (activate/deactivate user)
+    Only GRC Administrators can update user status
+    """
+    try:
+        # Check if the requesting user is a GRC Administrator
+        from .rbac.utils import RBACUtils
+        admin_user_id = RBACUtils.get_user_id_from_request(request)
+        
+        if not admin_user_id:
+            return Response({
+                'success': False,
+                'message': 'Authentication required to update user status'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        # Check if user is GRC Administrator
+        if not RBACUtils.is_system_admin(admin_user_id):
+            return Response({
+                'success': False,
+                'message': 'Only GRC Administrators can update user status'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Get the user to update
+        try:
+            user = Users.objects.get(UserId=user_id)
+        except Users.DoesNotExist:
+            return Response({
+                'success': False,
+                'message': 'User not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Get the new status from request
+        data = request.data
+        new_status = data.get('isActive', data.get('IsActive'))
+        
+        if new_status not in ['Y', 'N', 'y', 'n']:
+            return Response({
+                'success': False,
+                'message': 'Invalid status. Must be Y or N'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Normalize to uppercase
+        new_status = new_status.upper()
+        old_status = user.IsActive
+        
+        # Update user status
+        user.IsActive = new_status
+        user.save(update_fields=['IsActive'])
+        
+        logger.info(f"User {user.UserName} (ID: {user.UserId}) status updated from {old_status} to {new_status} by admin {admin_user_id}")
+        print(f"[DEBUG] User {user.UserName} (ID: {user.UserId}) status updated from {old_status} to {new_status}")
+        
+        return Response({
+            'success': True,
+            'message': f'User status updated to {"Active" if new_status == "Y" else "Inactive"}',
+            'user': {
+                'UserId': user.UserId,
+                'UserName': user.UserName,
+                'IsActive': user.IsActive
+            }
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        logger.error(f"Error updating user status: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return Response({
+            'success': False,
+            'error': 'Error updating user status',
             'details': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -4633,6 +4713,7 @@ def login_user(request):
                 raise Users.DoesNotExist
             
             # Check if user is active (handle both boolean and string values)
+            # NOTE: New users are created with IsActive='N' and must reset password and login to activate
             is_active = user.IsActive
             if isinstance(is_active, str):
                 is_active = is_active.upper() == 'Y'
@@ -4640,13 +4721,12 @@ def login_user(request):
                 is_active = is_active
             else:
                 is_active = False  # Default to inactive if unknown type
-                
-            if not is_active:
-                logger.warning(f"Login failed - inactive user: {user.UserName} (ID: {user.UserId})")
-                return Response({
-                    'status': 'error',
-                    'message': 'Your account has been deactivated. Please contact your administrator.'
-                }, status=status.HTTP_403_FORBIDDEN)
+            
+            # Store whether user was inactive before login (for activation after password verification)
+            user_was_inactive = not is_active
+            
+            # Allow inactive users to proceed - they will be activated after successful password verification
+            # This allows new users to login after resetting their password
             
             # ========================================
             # LICENSE KEY VALIDATION PROCESS
@@ -4693,10 +4773,56 @@ def login_user(request):
                     }, status=status.HTTP_403_FORBIDDEN)
             
             # ========================================
+            # PASSWORD EXPIRY CHECK
+            # ========================================
+            from .routes.Global.password_expiry_utils import (
+                is_password_expired,
+                is_password_expiring_soon,
+                send_password_expiry_email,
+                log_password_action
+            )
+            
+            password_expired, days_until_expiry, days_since_change = is_password_expired(user)
+            password_expiring_soon, _ = is_password_expiring_soon(user)
+            
+            # If password is expired, block login and force password reset
+            if password_expired:
+                # Send email notification about expired password
+                send_password_expiry_email(user, is_expired=True, days_until_expiry=days_until_expiry)
+                
+                return Response({
+                    'status': 'error',
+                    'message': 'Your password has expired. Please reset your password using the "Forgot Password" option on the login page.',
+                    'password_expired': True,
+                    'days_since_expiry': abs(days_until_expiry)
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            # If password is expiring soon, send warning email (but allow login)
+            if password_expiring_soon:
+                # Send warning email (only once per day to avoid spam)
+                warning_cache_key = f"password_expiry_warning_sent_{user.UserId}_{timezone.now().date()}"
+                if not cache.get(warning_cache_key):
+                    send_password_expiry_email(user, is_expired=False, days_until_expiry=days_until_expiry)
+                    cache.set(warning_cache_key, True, 86400)  # Cache for 24 hours
+            
+            # Log password usage (login)
+            log_password_action(user, 'login', request=request)
+            
+            # ========================================
             # SUCCESSFUL LOGIN - CLEAR FAILED ATTEMPT COUNTERS
             # ========================================
             cache.delete(user_cache_key)
             cache.delete(lockout_cache_key)
+            
+            # Activate user on successful login (set IsActive to 'Y')
+            # This happens after password verification, so new users can login after resetting password
+            if user.IsActive != 'Y':
+                user.IsActive = 'Y'
+                user.save(update_fields=['IsActive'])
+                logger.info(f"✅ User {user.UserName} (ID: {user.UserId}) activated on successful login (was inactive)")
+                print(f"[DEBUG] ✅ User {user.UserName} (ID: {user.UserId}) activated on successful login")
+            
+            # Password logging is now handled in the password expiry check above
             
             # Set session data
             request.session['user_id'] = user.UserId
@@ -4819,110 +4945,337 @@ def register_user(request):
         data = request.data
         logger.info(f"Registration request data: {data}")
         username = data.get('username')
-        password = data.get('password')
+        # Password is always auto-generated - ignore any password provided in request
         # Handle both 'email' and 'Email' field names
         Email = data.get('Email') or data.get('email')
+        firstName = data.get('firstName', '')
+        lastName = data.get('lastName', '')
         
-        logger.info(f"Extracted fields - username: {username}, password: {'*' * len(password) if password else None}, email: {Email}")
+        logger.info(f"Extracted fields - username: {username}, email: {Email}, firstName: {firstName}")
         
-        if not username or not password or not Email:
-            logger.error(f"Missing required fields - username: {bool(username)}, password: {bool(password)}, email: {bool(Email)}")
+        if not username or not Email:
+            logger.error(f"Missing required fields - username: {bool(username)}, email: {bool(Email)}")
             return Response({
                 'success': False,
-                'message': 'Username, password, and Email are required'
+                'message': 'Username and Email are required'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Validate password strength
-        password_errors = []
+        # Always auto-generate password in format: Riskavaire@<FirstName><number>
+        # Get the user's first name (or username if first name is not available)
+        name_part = firstName.strip() if firstName else username
+        if not name_part:
+            name_part = username
         
-        # Check minimum length (8+ characters)
-        if len(password) < 8:
-            password_errors.append('Password must be at least 8 characters long')
+        # Find the next available number by counting existing users with the same first name
+        # This ensures incrementing numbers for users with the same name
+        if firstName:
+            # Count existing users with the same first name
+            similar_users_count = Users.objects.filter(FirstName=firstName).count()
+            password_number = similar_users_count + 1
+        else:
+            # If no first name, use username-based counting
+            similar_users_count = Users.objects.filter(UserName__startswith=username[:5]).count()
+            password_number = similar_users_count + 1
         
-        # Check for uppercase letter
-        if not re.search(r'[A-Z]', password):
-            password_errors.append('Password must contain at least one uppercase letter')
-        
-        # Check for lowercase letter
-        if not re.search(r'[a-z]', password):
-            password_errors.append('Password must contain at least one lowercase letter')
-        
-        # Check for number
-        if not re.search(r'[0-9]', password):
-            password_errors.append('Password must contain at least one number')
-        
-        # Check for special character
-        if not re.search(r'[!@#$%^&*()_+\-=\[\]{};\':"\\|,.<>\/?]', password):
-            password_errors.append('Password must contain at least one special character (!@#$%^&*()_+-=[]{}|;:,.<>?)')
-        
-        if password_errors:
-            return Response({
-                'success': False,
-                'message': 'Password validation failed',
-                'errors': password_errors
-            }, status=status.HTTP_400_BAD_REQUEST)
+        # Generate password in format: Riskavaire@<name><number>
+        password = f"Riskavaire@{name_part}{password_number}"
+        logger.info(f"Auto-generated password for user {username}: Riskavaire@{name_part}{password_number}")
+        print(f"[DEBUG] Auto-generated password for user {username}: Riskavaire@{name_part}{password_number}")
         
         # Check if user already exists
+        logger.info(f"Checking if username '{username}' already exists...")
+        print(f"[DEBUG] Checking if username '{username}' already exists...")
         if Users.objects.filter(UserName=username).exists():
+            logger.error(f"Username '{username}' already exists")
+            print(f"[DEBUG] ❌ Username '{username}' already exists")
             return Response({
                 'success': False,
                 'message': 'Username already exists'
             }, status=status.HTTP_400_BAD_REQUEST)
-            
+        
+        logger.info(f"Checking if email '{Email}' already exists...")
+        print(f"[DEBUG] Checking if email '{Email}' already exists...")
         if Users.objects.filter(Email=Email).exists():
+            logger.error(f"Email '{Email}' already exists")
+            print(f"[DEBUG] ❌ Email '{Email}' already exists")
             return Response({
                 'success': False,
                 'message': 'Email already exists'
             }, status=status.HTTP_400_BAD_REQUEST)
         
+        logger.info(f"User checks passed, proceeding to license generation...")
+        print(f"[DEBUG] ✅ User checks passed, proceeding to license generation...")
+        
         # Generate license key using the licensing system (skip external API if disabled)
-        from django.conf import settings as _dj_settings
-        if not getattr(_dj_settings, 'LICENSE_CHECK_ENABLED', True):
-            logger.warning("🔕 LICENSE CHECK DISABLED during registration. Generating license key locally without API creation.")
-            try:
-                from licensing_system import VardaanLicensingSystem
-                licensing_system = VardaanLicensingSystem()
-                license_key = licensing_system.generate_secure_license_code()
-                license_message = "License key generated locally (API disabled)."
-            except Exception as license_error:
-                logger.error(f"License generation error (disabled mode): {str(license_error)}")
-                license_key = None
-                license_message = f"License generation failed (disabled mode): {str(license_error)}"
-        else:
-            try:
-                from licensing_system import VardaanLicensingSystem
-                licensing_system = VardaanLicensingSystem()
-                license_key = licensing_system.generate_secure_license_code()
-                # Create license via API
-                api_result = licensing_system.create_license(license_key)
-                if api_result.get("success"):
-                    logger.info(f"License key generated and created via API: {license_key}")
-                    license_message = f"License key generated and created via API successfully"
-                else:
-                    logger.warning(f"License key generated but API creation failed: {api_result.get('error')}")
-                    license_message = f"License key generated but API creation failed: {api_result.get('error')}"
-            except Exception as license_error:
-                logger.error(f"License generation error: {str(license_error)}")
-                license_key = None
-                license_message = f"License generation failed: {str(license_error)}"
+        logger.info("Starting license key generation...")
+        print(f"[DEBUG] Starting license key generation...")
+        license_key = None
+        license_message = "License key generation skipped"
+        
+        try:
+            from django.conf import settings as _dj_settings
+            if not getattr(_dj_settings, 'LICENSE_CHECK_ENABLED', True):
+                logger.warning("🔕 LICENSE CHECK DISABLED during registration. Generating license key locally without API creation.")
+                print(f"[DEBUG] LICENSE CHECK DISABLED - generating locally")
+                try:
+                    from licensing_system import VardaanLicensingSystem
+                    licensing_system = VardaanLicensingSystem()
+                    license_key = licensing_system.generate_secure_license_code()
+                    license_message = "License key generated locally (API disabled)."
+                    logger.info(f"License key generated locally: {license_key}")
+                    print(f"[DEBUG] ✅ License key generated locally: {license_key}")
+                except Exception as license_error:
+                    logger.error(f"License generation error (disabled mode): {str(license_error)}")
+                    print(f"[DEBUG] ❌ License generation error (disabled mode): {str(license_error)}")
+                    license_key = None
+                    license_message = f"License generation failed (disabled mode): {str(license_error)}"
+            else:
+                print(f"[DEBUG] LICENSE CHECK ENABLED - generating via API")
+                try:
+                    from licensing_system import VardaanLicensingSystem
+                    licensing_system = VardaanLicensingSystem()
+                    license_key = licensing_system.generate_secure_license_code()
+                    # Create license via API
+                    api_result = licensing_system.create_license(license_key)
+                    if api_result.get("success"):
+                        logger.info(f"License key generated and created via API: {license_key}")
+                        print(f"[DEBUG] ✅ License key generated and created via API: {license_key}")
+                        license_message = f"License key generated and created via API successfully"
+                    else:
+                        logger.warning(f"License key generated but API creation failed: {api_result.get('error')}")
+                        print(f"[DEBUG] ⚠️ License key generated but API creation failed: {api_result.get('error')}")
+                        license_message = f"License key generated but API creation failed: {api_result.get('error')}"
+                except Exception as license_error:
+                    logger.error(f"License generation error: {str(license_error)}")
+                    print(f"[DEBUG] ❌ License generation error: {str(license_error)}")
+                    license_key = None
+                    license_message = f"License generation failed: {str(license_error)}"
+        except Exception as license_import_error:
+            logger.warning(f"Could not import licensing system, skipping license generation: {str(license_import_error)}")
+            print(f"[DEBUG] ⚠️ Could not import licensing system, skipping: {str(license_import_error)}")
+            license_key = None
+            license_message = "License generation skipped (module not available)"
+        
+        logger.info(f"License generation completed. Key: {license_key}, Message: {license_message}")
+        print(f"[DEBUG] License generation completed. Key: {license_key}, Message: {license_message}")
         
         # Create new user with all available fields including license key
         # IMPORTANT: Store password as a secure hash, not plain text
+        # Store the plain password temporarily for email (before hashing)
+        plain_password = password
+        
+        # Convert departmentId to string if it's an integer (model expects CharField)
+        department_id = data.get('departmentId', '')
+        if department_id and not isinstance(department_id, str):
+            department_id = str(department_id)
+        
         user_data = {
             'UserName': username,
             'Password': make_password(password),
             'Email': Email,
             'FirstName': data.get('firstName', ''),
             'LastName': data.get('lastName', ''),
-            'DepartmentId': data.get('departmentId', ''),
-            'IsActive': data.get('isActive', 'Y')
+            'DepartmentId': department_id,
+            'IsActive': 'N'  # ALWAYS set to 'N' for new users - they must reset password and login to activate
         }
+        # Log that we're forcing IsActive to 'N' regardless of frontend input
+        logger.info(f"Setting IsActive='N' for new user {username} (frontend sent: {data.get('isActive', 'not provided')})")
+        print(f"[DEBUG] Setting IsActive='N' for new user {username} (frontend sent: {data.get('isActive', 'not provided')})")
         
-        # Add license key if generated successfully
-        if license_key:
+        # Add license key if generated successfully (only if not None and not empty)
+        if license_key and license_key.strip():
             user_data['license_key'] = license_key
+            logger.info(f"Adding license key to user data: {license_key}")
+            print(f"[DEBUG] Adding license key to user data: {license_key}")
+        else:
+            logger.info("No license key to add (will be None in database)")
+            print(f"[DEBUG] No license key to add (will be None in database)")
         
-        user = Users.objects.create(**user_data)
+        # Log user data before creation
+        logger.info(f"Attempting to create user with data: {user_data}")
+        logger.info(f"DepartmentId type: {type(user_data.get('DepartmentId'))}, value: {user_data.get('DepartmentId')}")
+        print(f"[DEBUG] Attempting to create user with data: {user_data}")
+        print(f"[DEBUG] DepartmentId type: {type(user_data.get('DepartmentId'))}, value: {user_data.get('DepartmentId')}")
+        
+        # Create user with error handling
+        try:
+            user = Users.objects.create(**user_data)
+            logger.info(f"✅ User created successfully: {user.UserId} - {user.UserName}")
+            print(f"[DEBUG] ✅ User created successfully: {user.UserId} - {user.UserName}")
+            
+            # Log password creation
+            try:
+                from .models import PasswordLog
+                PasswordLog.objects.create(
+                    UserId=user.UserId,
+                    UserName=user.UserName,
+                    OldPassword=None,  # No old password for new user
+                    NewPassword=user.Password,  # Hashed password
+                    ActionType='created',
+                    IPAddress=request.META.get('REMOTE_ADDR', ''),
+                    UserAgent=request.META.get('HTTP_USER_AGENT', ''),
+                    AdditionalInfo={'created_by': 'admin', 'email': user.Email}
+                )
+                logger.info(f"✅ Password log created for new user: {user.UserName}")
+                print(f"[DEBUG] ✅ Password log created for new user: {user.UserName}")
+            except Exception as log_error:
+                logger.error(f"❌ Failed to create password log: {str(log_error)}")
+                print(f"[DEBUG] ❌ Failed to create password log: {str(log_error)}")
+                # Don't fail user creation if logging fails
+        except Exception as create_error:
+            import traceback
+            error_traceback = traceback.format_exc()
+            error_msg = f"❌ Error creating user in database: {str(create_error)}"
+            logger.error(error_msg)
+            logger.error(f"❌ Error type: {type(create_error).__name__}")
+            logger.error(f"❌ User data that failed: {user_data}")
+            logger.error(f"❌ Full error traceback:\n{error_traceback}")
+            print(f"[DEBUG] {error_msg}")
+            print(f"[DEBUG] Error type: {type(create_error).__name__}")
+            print(f"[DEBUG] User data that failed: {user_data}")
+            print(f"[DEBUG] Full error traceback:\n{error_traceback}")
+            return Response({
+                'success': False,
+                'message': f'Failed to create user: {str(create_error)}',
+                'error_details': str(create_error),
+                'error_type': type(create_error).__name__
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Send email with credentials to the user using Azure email backend directly
+        try:
+            # Prepare email content with HTML formatting
+            user_full_name = f"{user.FirstName} {user.LastName}".strip() or user.UserName
+            email_subject = "Your GRC Account Credentials"
+            
+            # Get frontend URL from settings for reset password link
+            frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:8080')
+            reset_password_url = f"{frontend_url}/login?resetPassword=true&email={user.Email}"
+            
+            # Plain text version
+            email_body_text = f"""
+Dear {user_full_name},
+
+Your account has been created successfully by the administrator.
+
+Here are your login credentials:
+
+Username: {user.UserName}
+Password: {plain_password}
+
+IMPORTANT: For security reasons, please reset your password immediately after your first login.
+
+To reset your password, click on the following link:
+{reset_password_url}
+
+Or manually:
+1. Go to the login page
+2. Click on "Forgot Password"
+3. Enter your email address: {user.Email}
+4. Follow the instructions to reset your password
+
+If you have any questions, please contact the administrator.
+
+Best regards,
+GRC System Administrator
+            """.strip()
+            
+            # HTML version for better formatting
+            email_body_html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0; }}
+        .content {{ background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }}
+        .credentials {{ background: white; padding: 20px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #3b82f6; }}
+        .credential-item {{ margin: 10px 0; }}
+        .label {{ font-weight: 600; color: #1f2937; }}
+        .value {{ color: #374151; font-family: monospace; background: #f3f4f6; padding: 4px 8px; border-radius: 4px; }}
+        .warning {{ background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; border-radius: 4px; }}
+        .footer {{ text-align: center; color: #6b7280; font-size: 12px; margin-top: 30px; }}
+        .button {{ display: inline-block; background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 10px 0; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>Welcome to GRC System</h2>
+        </div>
+        <div class="content">
+            <p>Dear <strong>{user_full_name}</strong>,</p>
+            
+            <p>Your account has been created successfully by the administrator.</p>
+            
+            <div class="credentials">
+                <h3 style="margin-top: 0; color: #1f2937;">Your Login Credentials:</h3>
+                <div class="credential-item">
+                    <span class="label">Username:</span>
+                    <span class="value">{user.UserName}</span>
+                </div>
+                <div class="credential-item">
+                    <span class="label">Password:</span>
+                    <span class="value">{plain_password}</span>
+                </div>
+            </div>
+            
+            <div class="warning">
+                <strong>⚠️ IMPORTANT:</strong> For security reasons, please reset your password immediately after your first login.
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{reset_password_url}" class="button" style="display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); transition: transform 0.2s;">
+                    🔐 Reset Password
+                </a>
+            </div>
+            
+            <p style="text-align: center; color: #6b7280; font-size: 14px; margin-top: 20px;">
+                Click the button above to reset your password, or manually go to the login page and click "Forgot Password"
+            </p>
+            
+            <p>If you have any questions, please contact the administrator.</p>
+            
+            <div class="footer">
+                <p>Best regards,<br>GRC System Administrator</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+            """.strip()
+            
+            # Use Azure email backend directly to ensure it uses Azure (not SMTP fallback)
+            from .routes.Global.azure_email_backend import AzureADEmailBackend
+            from django.core.mail import EmailMessage
+            
+            # Create EmailMessage with HTML content
+            email_message = EmailMessage(
+                subject=email_subject,
+                body=email_body_html,  # Use HTML as body
+                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@grc.com'),
+                to=[user.Email],
+            )
+            email_message.content_subtype = "html"  # Set content type to HTML
+            
+            # Use Azure backend directly (this will use Azure Graph API, not SMTP)
+            azure_backend = AzureADEmailBackend(fail_silently=False)
+            result = azure_backend.send_messages([email_message])
+            
+            if result > 0:
+                logger.info(f"✅ User creation email sent via Azure Graph API to {user.Email}")
+                print(f"[DEBUG] ✅ User creation email sent via Azure Graph API to {user.Email}")
+            else:
+                logger.warning(f"⚠️ Email sending returned 0 sent messages for {user.Email}")
+                print(f"[DEBUG] ⚠️ Email sending returned 0 sent messages for {user.Email}")
+        except Exception as email_error:
+            import traceback
+            error_traceback = traceback.format_exc()
+            logger.error(f"❌ Failed to send user creation email to {user.Email}: {str(email_error)}")
+            logger.error(f"❌ Email error traceback:\n{error_traceback}")
+            print(f"[DEBUG] ❌ Failed to send user creation email to {user.Email}: {str(email_error)}")
+            print(f"[DEBUG] ❌ Email error traceback:\n{error_traceback}")
+            # Don't fail user creation if email fails, just log the error
         
         # Create RBAC entry if role is provided
         if data.get('role'):
@@ -4964,11 +5317,17 @@ def register_user(request):
         }, status=status.HTTP_201_CREATED)
         
     except Exception as e:
-        logger.error(f"Registration error: {str(e)}")
+        import traceback
+        error_traceback = traceback.format_exc()
+        logger.error(f"❌❌❌ Registration error at top level: {str(e)}")
+        logger.error(f"❌❌❌ Error type: {type(e).__name__}")
+        logger.error(f"❌❌❌ Registration error traceback:\n{error_traceback}")
         return Response({
             'success': False,
-            'message': 'An error occurred during registration'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            'message': f'An error occurred during registration: {str(e)}',
+            'error_details': str(e),
+            'error_type': type(e).__name__
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
@@ -5880,9 +6239,26 @@ def reset_password(request):
         # Find and update user password
         try:
             user = Users.objects.get(Email=Email)
+            # Store old password hash for logging
+            old_password_hash = user.Password
             # Always store password as a secure hash
             user.Password = make_password(new_password)
             user.save(update_fields=['Password'])
+            
+            # Log password reset using utility function
+            try:
+                from .routes.Global.password_expiry_utils import log_password_action
+                log_password_action(
+                    user, 
+                    'reset', 
+                    old_password_hash=old_password_hash,
+                    new_password_hash=user.Password,
+                    request=request
+                )
+                logger.info(f"✅ Password log created for reset: {user.UserName}")
+            except Exception as log_error:
+                logger.error(f"❌ Failed to create password log on reset: {str(log_error)}")
+                # Don't fail password reset if logging fails
             
             # Clear session data (only if they exist)
             session_keys_to_clear = ['reset_otp', 'reset_Email', 'otp_expiry', 'otp_verified']

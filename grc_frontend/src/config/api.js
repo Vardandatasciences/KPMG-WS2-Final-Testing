@@ -38,6 +38,11 @@ export const API_ENDPOINTS = {
   USER_ROLE: `${API_BASE_URL}/api/user-role/`,
   USERS_FOR_DROPDOWN: `${API_BASE_URL}/api/rbac/users-for-dropdown/`,
   USERS_FOR_REVIEWER_SELECTION: `${API_BASE_URL}/api/users-for-reviewer-selection/`,
+  
+  // Data Subject Requests (includes ACCESS type requests)
+  DATA_SUBJECT_REQUESTS: (userId) => `${API_BASE_URL}/api/data-subject-requests/${userId}/`,
+  CREATE_DATA_SUBJECT_REQUEST: `${API_BASE_URL}/api/data-subject-requests/create/`,
+  UPDATE_DATA_SUBJECT_REQUEST_STATUS: (requestId) => `${API_BASE_URL}/api/data-subject-requests/${requestId}/update-status/`,
  
   // Notifications - FIXED: Proper function implementation
   GET_NOTIFICATIONS: (userId = null) => {
@@ -47,6 +52,9 @@ export const API_ENDPOINTS = {
   MARK_AS_READ: `${API_BASE_URL}/api/mark-as-read/`,
   MARK_ALL_AS_READ: `${API_BASE_URL}/api/mark-all-as-read/`,
   PUSH_NOTIFICATION: `${API_BASE_URL}/api/push-notification/`,
+  
+  // System Logs
+  SYSTEM_LOGS: `${API_BASE_URL}/api/system-logs/`,
  
   // Policy Management
   POLICIES: `${API_BASE_URL}/api/policies/`,

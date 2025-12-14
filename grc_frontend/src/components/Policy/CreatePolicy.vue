@@ -1587,12 +1587,19 @@ export default {
       }
     }
 
-    // Add this function to fetch users
+    // Add this function to fetch users with RBAC filtering
     async function fetchUsers() {
       try {
         loading.value = true
-        const response = await axios.get(`${API_ENDPOINTS.USERS_FOR_DROPDOWN}`)        
-        users.value = response.data
+        // Fetch reviewers filtered by RBAC permissions (ApprovePolicy) and exclude current user
+        const currentUserId = currentUser.value?.UserId || ''
+        const response = await axios.get(`${API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION}`, {
+          params: {
+            module: 'policy',
+            current_user_id: currentUserId
+          }
+        })        
+        users.value = response.data || []
       } catch (err) {
         console.error('Error fetching users:', err)
         PopupService.error('Failed to fetch users', 'Loading Error')

@@ -1038,8 +1038,15 @@ const resetCaptcha = () => {
   }
 }
 
-// Initialize CAPTCHA on mount (only if not on MFA step)
+// Check for reset password query parameter on mount
 onMounted(() => {
+  // Check if we should open forgot password modal from URL query params
+  const route = router.currentRoute.value
+  if (route.query.resetPassword === 'true' && route.query.email) {
+    showForgotPasswordModal.value = true
+    // The email will be pre-filled by the ForgotPassword component
+  }
+  
   nextTick(() => {
     if (!showMfaStep.value) {
       loadRecaptcha()

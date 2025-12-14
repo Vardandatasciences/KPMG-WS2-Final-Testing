@@ -3157,6 +3157,132 @@ class GRCLogDetail(generics.RetrieveAPIView):
     permission_classes = [RiskViewPermission]
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
+def get_system_logs(request):
+    """
+    Get system logs from grc2.grc_logs table
+    - For administrators: returns all logs
+    - For other users: returns only their own logs
+    """
+    try:
+        from ...rbac.utils import RBACUtils
+        from ...authentication import verify_jwt_token
+        
+        logger.info(f"User accessing GET /api/system-logs/")
+        
+        # Get user_id from JWT token
+        user_id = None
+        auth_header = request.headers.get('Authorization')
+        
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ')[1]
+            try:
+                payload = verify_jwt_token(token)
+                if payload and 'user_id' in payload:
+                    user_id = payload['user_id']
+                    logger.info(f"User ID from JWT: {user_id}")
+            except Exception as e:
+                logger.warning(f"JWT token verification failed: {str(e)}")
+        
+        # Fallback to session if JWT not available
+        if not user_id:
+            user_id = request.session.get('user_id') or request.session.get('grc_user_id')
+            if user_id:
+                logger.info(f"User ID from session: {user_id}")
+        
+        if not user_id:
+            logger.warning("No user ID found in JWT token or session")
+            return Response({
+                'success': False,
+                'error': 'No user ID found in JWT token or session'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        # Check if user is administrator
+        is_admin = RBACUtils.is_system_admin(user_id)
+        logger.info(f"User {user_id} is_admin: {is_admin}")
+        
+        # Get queryset
+        queryset = GRCLog.objects.all().order_by('-Timestamp')
+        
+        # Filter by user if not admin
+        if not is_admin:
+            queryset = queryset.filter(UserId=str(user_id))
+            logger.info(f"Filtering logs for user_id: {user_id}")
+        
+        # Apply optional filters
+        module = request.query_params.get('module')
+        if module:
+            queryset = queryset.filter(Module__icontains=module)
+            
+        action_type = request.query_params.get('action_type')
+        if action_type:
+            queryset = queryset.filter(ActionType__icontains=action_type)
+            
+        entity_type = request.query_params.get('entity_type')
+        if entity_type:
+            queryset = queryset.filter(EntityType__icontains=entity_type)
+            
+        log_level = request.query_params.get('log_level')
+        if log_level:
+            queryset = queryset.filter(LogLevel__iexact=log_level)
+            
+        # Filter by date range if provided
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        
+        if start_date or end_date:
+            from datetime import datetime
+            
+            if start_date:
+                try:
+                    # Parse start date and set to beginning of day (naive datetime for MySQL)
+                    start_datetime = datetime.strptime(start_date, '%Y-%m-%d').replace(hour=0, minute=0, second=0, microsecond=0)
+                    queryset = queryset.filter(Timestamp__gte=start_datetime)
+                    logger.info(f"Filtering logs from start_date: {start_datetime}")
+                except ValueError as e:
+                    logger.warning(f"Invalid start_date format: {start_date}, error: {str(e)}")
+            
+            if end_date:
+                try:
+                    # Parse end date and set to end of day (naive datetime for MySQL)
+                    end_datetime = datetime.strptime(end_date, '%Y-%m-%d').replace(hour=23, minute=59, second=59, microsecond=999999)
+                    queryset = queryset.filter(Timestamp__lte=end_datetime)
+                    logger.info(f"Filtering logs until end_date: {end_datetime}")
+                except ValueError as e:
+                    logger.warning(f"Invalid end_date format: {end_date}, error: {str(e)}")
+        
+        # Pagination
+        page_size = int(request.query_params.get('page_size', 50))
+        page = int(request.query_params.get('page', 1))
+        
+        total_count = queryset.count()
+        logger.info(f"Total logs found: {total_count}")
+        
+        start = (page - 1) * page_size
+        end = start + page_size
+        
+        logs = queryset[start:end]
+        serializer = GRCLogSerializer(logs, many=True)
+        
+        logger.info(f"Returning {len(logs)} logs for page {page}")
+        
+        return Response({
+            'success': True,
+            'data': serializer.data,
+            'total_count': total_count,
+            'page': page,
+            'page_size': page_size,
+            'is_admin': is_admin
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        logger.error(f"Error fetching system logs: {str(e)}", exc_info=True)
+        return Response({
+            'success': False,
+            'error': f'Failed to fetch system logs: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
 def generate_test_notification(request, user_id):
     """Generate a test notification for development purposes"""

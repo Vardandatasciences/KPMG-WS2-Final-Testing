@@ -75,7 +75,7 @@ export const AccessUtils = {
    * @param {Function} onContactAdmin - Callback for contact admin action
    */
   // eslint-disable-next-line no-unused-vars
-  showAccessDenied(feature = 'this feature', customMessage = null, onContactAdmin = null) {
+  showAccessDenied(feature = 'this feature', customMessage = null, onContactAdmin = null, requiredPermission = null) {
     console.log('[ACCESS_UTILS] Redirecting to access denied page for:', feature);
     
     // Store the access denied information in sessionStorage for the AccessDenied page
@@ -83,7 +83,8 @@ export const AccessUtils = {
       feature: feature,
       message: customMessage || `You don't have permission to access ${feature}. Please contact your administrator if you believe this is an error.`,
       timestamp: new Date().toISOString(),
-      url: window.location.href
+      url: window.location.pathname, // Use pathname instead of full href to avoid query params
+      requiredPermission: requiredPermission || '' // Store permission if provided
     };
     
     sessionStorage.setItem('accessDeniedInfo', JSON.stringify(accessDeniedInfo));

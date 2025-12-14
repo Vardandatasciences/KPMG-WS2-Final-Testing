@@ -420,17 +420,35 @@ class ForgotPasswordService:
                 }
             
             # Update password in database
-            conn = self.get_db_connection()
-            cursor = conn.cursor()
+            from django.contrib.auth.hashers import make_password
+            from grc.models import Users, PasswordLog
             
-            # Hash the password (you should use proper password hashing)
-            # For now, we'll use a simple approach - in production, use bcrypt or similar
-            query = "UPDATE users SET Password = %s WHERE UserId = %s"
-            cursor.execute(query, (new_password, otp_validation['user_id']))
-            conn.commit()
-            
-            cursor.close()
-            conn.close()
+            try:
+                user = Users.objects.get(UserId=otp_validation['user_id'])
+                # Store old password hash for logging
+                old_password_hash = user.Password
+                # Hash the new password properly
+                user.Password = make_password(new_password)
+                user.save(update_fields=['Password'])
+                
+                # Log password reset
+                try:
+                    PasswordLog.objects.create(
+                        UserId=user.UserId,
+                        UserName=user.UserName,
+                        OldPassword=old_password_hash,  # Previous hashed password
+                        NewPassword=user.Password,  # New hashed password
+                        ActionType='reset',
+                        IPAddress=ip_address or '',
+                        UserAgent=user_agent or '',
+                        AdditionalInfo={'email': email, 'reset_method': 'forgot_password_service'}
+                    )
+                    logger.info(f"✅ Password log created for reset: {user.UserName}")
+                except Exception as log_error:
+                    logger.error(f"❌ Failed to create password log on reset: {str(log_error)}")
+                    # Don't fail password reset if logging fails
+            except Users.DoesNotExist:
+                raise Exception(f"User with ID {otp_validation['user_id']} not found")
             
             # Mark token as used
             self.mark_token_as_used(otp_validation['token'])

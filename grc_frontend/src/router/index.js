@@ -95,6 +95,7 @@ import PopupDemo from '../components/Compliance/PopupDemo.vue'
 import ComplianceDebug from '../components/Compliance/ComplianceDebug.vue'
  
 import Notifications from '../views/Notifications.vue'
+import SystemLogs from '../views/SystemLogs.vue'
 import PublicPolicyAcknowledgement from '../views/PublicPolicyAcknowledgement.vue'
  
  
@@ -802,6 +803,12 @@ const routes = [
     path: '/notifications',
     name: 'Notifications',
     component: Notifications,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/system-logs',
+    name: 'SystemLogs',
+    component: SystemLogs,
     meta: { requiresAuth: true }
   },
   {

@@ -1227,17 +1227,27 @@ export default {
       loadingUsers.value = true;
       try {
         console.log('🔍 Fetching users for assignment...');
-        console.log('Using API endpoint:', API_ENDPOINTS.USERS);
-        
-        const response = await axiosInstance.get(API_ENDPOINTS.USERS);
+        // Get current user ID to exclude from reviewer list
+        const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || ''
+        // Fetch reviewers filtered by RBAC permissions (EvaluateAssignedIncident) for incident module
+        const response = await axiosInstance.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+          params: {
+            module: 'incident',
+            current_user_id: currentUserId
+          }
+        });
         console.log('✅ Users API response:', response.data);
         
         // Map the API response to match the expected frontend structure
-        availableUsers.value = response.data.map(user => ({
-          id: user.UserId,
-          name: user.UserName,
-          role: user.role || 'User'
-        }));
+        if (Array.isArray(response.data)) {
+          availableUsers.value = response.data.map(user => ({
+            id: user.UserId,
+            name: user.UserName,
+            role: user.Role || user.role || 'User'
+          }));
+        } else {
+          availableUsers.value = [];
+        }
         
         console.log('✅ Mapped users:', availableUsers.value);
         console.log('✅ Total users loaded:', availableUsers.value.length);
@@ -1246,25 +1256,8 @@ export default {
         console.error('❌ Failed to fetch users:', err);
         console.error('❌ Error details:', err.response?.data || err.message);
         console.error('❌ Error status:', err.response?.status);
-        
-        // Try fallback endpoint
-        try {
-          console.log('🔄 Trying fallback endpoint: CUSTOM_USERS');
-          const fallbackResponse = await axiosInstance.get(API_ENDPOINTS.CUSTOM_USERS);
-          console.log('✅ Fallback users API response:', fallbackResponse.data);
-          
-          availableUsers.value = fallbackResponse.data.map(user => ({
-            id: user.UserId,
-            name: user.UserName,
-            role: user.role || 'User'
-          }));
-          
-          console.log('✅ Fallback users loaded:', availableUsers.value.length);
-        } catch (fallbackErr) {
-          console.error('❌ Fallback also failed:', fallbackErr);
-          availableUsers.value = [];
-          PopupService.error('Failed to load reviewers list. Please refresh and try again.');
-        }
+        availableUsers.value = [];
+        PopupService.error('Failed to load reviewers list. Please refresh and try again.');
       } finally {
         loadingUsers.value = false;
       }

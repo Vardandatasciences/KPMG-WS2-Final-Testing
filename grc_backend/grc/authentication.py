@@ -690,6 +690,8 @@ def jwt_login(request):
             }, status=status.HTTP_401_UNAUTHORIZED)
         
         # Check if user is active
+        # NOTE: New users are created with IsActive='N' and must reset password and login to activate
+        # We allow inactive users to login - they will be activated after successful password verification
         is_active = user.IsActive
         if isinstance(is_active, str):
             is_active = is_active.upper() == 'Y'
@@ -698,19 +700,9 @@ def jwt_login(request):
         else:
             is_active = False
             
-        if not is_active:
-            # Log failed login attempt due to inactive account
-            _log_failed_login(
-                username=user.UserName if user else username,
-                login_type=login_type,
-                client_ip=client_ip,
-                reason='User account is inactive',
-                additional_info={'user_id': user.UserId if user else None, 'login_type': login_type}
-            )
-            return Response({
-                'status': 'error',
-                'message': 'User account is inactive'
-            }, status=status.HTTP_401_UNAUTHORIZED)
+        # Store whether user was inactive (for activation after password verification)
+        # Don't block login for inactive users - they need to login to be activated
+        user_was_inactive = not is_active
         
         # ========================================
         # LICENSE KEY VALIDATION PROCESS - JWT LOGIN
@@ -821,10 +813,53 @@ def jwt_login(request):
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # ========================================
+        # PASSWORD EXPIRY CHECK
+        # ========================================
+        from ..routes.Global.password_expiry_utils import (
+            is_password_expired,
+            is_password_expiring_soon,
+            send_password_expiry_email,
+            log_password_action
+        )
+        from django.utils import timezone
+        
+        password_expired, days_until_expiry, days_since_change = is_password_expired(user)
+        password_expiring_soon, _ = is_password_expiring_soon(user)
+        
+        # If password is expired, block login and force password reset
+        if password_expired:
+            # Send email notification about expired password
+            send_password_expiry_email(user, is_expired=True, days_until_expiry=days_until_expiry)
+            
+            return Response({
+                'status': 'error',
+                'message': 'Your password has expired. Please reset your password using the "Forgot Password" option on the login page.',
+                'password_expired': True,
+                'days_since_expiry': abs(days_until_expiry)
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # If password is expiring soon, send warning email (but allow login)
+        if password_expiring_soon:
+            # Send warning email (only once per day to avoid spam)
+            warning_cache_key = f"password_expiry_warning_sent_{user.UserId}_{timezone.now().date()}"
+            if not cache.get(warning_cache_key):
+                send_password_expiry_email(user, is_expired=False, days_until_expiry=days_until_expiry)
+                cache.set(warning_cache_key, True, 86400)  # Cache for 24 hours
+        
+        # ========================================
         # SUCCESSFUL LOGIN - CLEAR FAILED ATTEMPT COUNTERS
         # ========================================
         cache.delete(user_cache_key)
         cache.delete(lockout_cache_key)
+        
+        # Activate user on successful login (set IsActive to 'Y')
+        if user.IsActive != 'Y':
+            user.IsActive = 'Y'
+            user.save(update_fields=['IsActive'])
+            logger.info(f"✅ User {user.UserName} (ID: {user.UserId}) activated on first login")
+        
+        # Log password usage on login
+        log_password_action(user, 'login', request=request)
         
         # Generate JWT tokens
         tokens = generate_jwt_tokens(user)
@@ -1228,6 +1263,8 @@ def mfa_verify_otp(request):
             }, status=status.HTTP_401_UNAUTHORIZED)
         
         # Check if user is active
+        # NOTE: New users are created with IsActive='N' and must reset password and login to activate
+        # We allow inactive users to complete MFA - they will be activated after successful OTP verification
         is_active = user.IsActive
         if isinstance(is_active, str):
             is_active = is_active.upper() == 'Y'
@@ -1235,22 +1272,9 @@ def mfa_verify_otp(request):
             is_active = is_active
         else:
             is_active = False
-            
-        if not is_active:
-            # Get client IP for logging
-            client_ip = request.META.get('REMOTE_ADDR', 'unknown')
-            # Log failed login attempt due to inactive account in MFA
-            _log_failed_login(
-                username=user.UserName,
-                login_type=login_type,
-                client_ip=client_ip,
-                reason='User account is inactive during MFA verification',
-                additional_info={'user_id': user.UserId, 'login_type': login_type, 'mfa_verification': True}
-            )
-            return Response({
-                'status': 'error',
-                'message': 'User account is inactive'
-            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        # Store whether user was inactive (for activation after successful OTP verification)
+        user_was_inactive = not is_active
         
         # Get client IP for logging
         client_ip = request.META.get('REMOTE_ADDR', 'unknown')
@@ -1331,6 +1355,32 @@ def mfa_verify_otp(request):
                     'message': 'No license key assigned to this user. Please contact your administrator.'
                 }, status=status.HTTP_403_FORBIDDEN)
         
+        # Activate user on successful MFA verification (set IsActive to 'Y')
+        # This happens after OTP verification, so new users can login after resetting password
+        if user.IsActive != 'Y':
+            user.IsActive = 'Y'
+            user.save(update_fields=['IsActive'])
+            logger.info(f"✅ User {user.UserName} (ID: {user.UserId}) activated on successful MFA verification (was inactive)")
+            print(f"[DEBUG] ✅ User {user.UserName} (ID: {user.UserId}) activated on successful MFA verification")
+        
+        # Log password usage on MFA login
+        try:
+            from ..models import PasswordLog
+            PasswordLog.objects.create(
+                UserId=user.UserId,
+                UserName=user.UserName,
+                OldPassword=None,  # No old password for login
+                NewPassword=user.Password,  # Current hashed password
+                ActionType='login',
+                IPAddress=client_ip,
+                UserAgent=request.META.get('HTTP_USER_AGENT', ''),
+                AdditionalInfo={'login_type': login_type, 'mfa_verification': True, 'activated': user.IsActive == 'Y'}
+            )
+            logger.info(f"✅ Password log created for MFA login: {user.UserName}")
+        except Exception as log_error:
+            logger.error(f"❌ Failed to create password log on MFA login: {str(log_error)}")
+            # Don't fail login if logging fails
+        
         # Generate JWT tokens
         tokens = generate_jwt_tokens(user)
         
@@ -1350,7 +1400,7 @@ def mfa_verify_otp(request):
         consent_accepted_value = str(user.consent_accepted) if user.consent_accepted is not None else '0'
         consent_required = consent_accepted_value != '1'
         
-        logger.info(f"✅ MFA LOGIN SUCCESS: User {user.UserName} (ID: {user.UserId}) logged in successfully")
+        logger.info(f"✅ MFA LOGIN SUCCESS: User {user.UserName} (ID: {user.UserId}) logged in successfully and activated")
         
         return Response({
             'status': 'success',

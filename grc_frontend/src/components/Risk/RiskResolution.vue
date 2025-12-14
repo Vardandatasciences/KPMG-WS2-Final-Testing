@@ -509,12 +509,23 @@ export default {
       this.initializeExpandedSections();
     },
     fetchUsers() {
-      // Based on the logs, the /api/users/ endpoint returns 401 Unauthorized
-      // So we'll directly use the custom-users endpoint which is working
-      axios.get(API_ENDPOINTS.CUSTOM_USERS)
+      // Get current user ID to exclude from reviewer list
+      const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || ''
+      // Fetch reviewers filtered by RBAC permissions (ApproveRisk) for risk module
+      axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+        params: {
+          module: 'risk',
+          current_user_id: currentUserId
+        }
+      })
         .then(response => {
           console.log('User data received:', response.data);
-          this.users = response.data;
+          // Handle response format: should be an array
+          if (Array.isArray(response.data)) {
+            this.users = response.data;
+          } else {
+            this.users = [];
+          }
           
           // Check if users were loaded correctly
           if (this.users && this.users.length > 0) {
@@ -533,6 +544,7 @@ export default {
         .catch(error => {
           console.error('Error fetching users:', error);
           this.error = 'Failed to load user data. Please refresh the page or contact support.';
+          this.users = [];
         });
     },
     filterRisks() {

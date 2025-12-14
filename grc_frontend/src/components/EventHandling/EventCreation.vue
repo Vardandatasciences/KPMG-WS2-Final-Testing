@@ -1588,6 +1588,7 @@ import { PopupService } from '../../modules/popus/popupService'
 import PopupModal from '../../modules/popus/PopupModal.vue'
 import { checkConsentRequired, CONSENT_ACTIONS } from '@/utils/consentManager.js'
 import axios from 'axios'
+import { API_ENDPOINTS } from '../../config/api.js'
 
 export default {
   name: 'EventCreation',
@@ -1965,24 +1966,31 @@ export default {
       loadingReviewers.value = true
       
       try {
-        const userId = localStorage.getItem('user_id')
+        const userId = localStorage.getItem('user_id') || sessionStorage.getItem('user_id') || ''
         if (!userId) {
           console.error('No user ID found in localStorage')
           return
         }
         
-        const response = await eventService.getUsersForReviewer(userId)
-        if (response.data.success) {
-          reviewers.value = response.data.users
+        // Fetch reviewers filtered by RBAC permissions (ApproveEvent) for event module
+        const response = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+          params: {
+            module: 'event',
+            current_user_id: userId
+          }
+        })
+        
+        if (Array.isArray(response.data)) {
+          reviewers.value = response.data.map(user => ({
+            id: user.UserId || user.id,
+            name: user.UserName || user.name
+          }))
+        } else {
+          reviewers.value = []
         }
       } catch (error) {
         console.error('Error fetching reviewers:', error)
-        // Fallback to hardcoded reviewers
-        reviewers.value = [
-          { id: 1, name: 'Priya Sinha' },
-          { id: 2, name: 'CISO' },
-          { id: 3, name: 'IT Head' }
-        ]
+        reviewers.value = []
       } finally {
         loadingReviewers.value = false
       }

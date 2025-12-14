@@ -1083,6 +1083,24 @@ const API_BASE_URL_FULL = `${API_BASE_URL}/api`
     }
   },
   watch: {
+    async selectedTab(newVal) {
+      // Refetch users when tab changes to get correct reviewers for the module
+      if (newVal && this.currentUser?.UserId) {
+        await this.fetchUsers()
+      }
+      
+      if (newVal === 'framework') {
+        this.selectedPolicy = ''
+        this.fetchFrameworks()
+        if (this.selectedFramework) {
+          this.handleFrameworkSelection(this.selectedFramework)
+        }
+      } else if (newVal === 'policy') {
+        this.selectedPolicy = ''
+        this.policyTabs = []
+        this.fetchFrameworks()
+      }
+    },
     async selectedFramework(newVal) {
       if (newVal && newVal !== '' && newVal !== '__new__') {
         // Save the selected framework to session
@@ -1117,19 +1135,6 @@ const API_BASE_URL_FULL = `${API_BASE_URL}/api`
       if (this.selectedTab === 'policy' && this.selectedFramework && newVal) {
         console.log('Policy selected:', newVal)
         this.fetchPolicyDetails(newVal)
-      }
-    },
-    selectedTab(newVal) {
-      if (newVal === 'framework') {
-        this.selectedPolicy = ''
-        this.fetchFrameworks()
-        if (this.selectedFramework) {
-          this.handleFrameworkSelection(this.selectedFramework)
-        }
-      } else if (newVal === 'policy') {
-        this.selectedPolicy = ''
-        this.policyTabs = []
-        this.fetchFrameworks()
       }
     },
     'policyTabs[activePolicyTab].type': {
@@ -2669,7 +2674,16 @@ const API_BASE_URL_FULL = `${API_BASE_URL}/api`
     },
     async fetchUsers() {
       try {
-        const response = await axios.get(API_ENDPOINTS.USERS_FOR_DROPDOWN)
+        // Fetch reviewers filtered by RBAC permissions based on current tab
+        // For framework tab: use 'framework', for policy tab: use 'policy'
+        const module = this.selectedTab === 'framework' ? 'framework' : 'policy'
+        const currentUserId = this.currentUser?.UserId || ''
+        const response = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+          params: {
+            module: module,
+            current_user_id: currentUserId
+          }
+        })
         console.log('Raw users response:', response.data)
         this.users = response.data.map(user => ({
           id: user.UserId,

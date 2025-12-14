@@ -552,6 +552,60 @@ class NotificationService:
                 </div>
                 """
             },
+            'passwordExpired': {
+                'subject': '⚠️ URGENT: Your Password Has Expired - {platform_name}',
+                'template': lambda user_name, days_since_expiry, platform_name: f"""
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+                  <div style="background-color: #e74c3c; padding: 20px; text-align: center;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 28px;">⚠️ Password Expired</h1>
+                  </div>
+                  <div style="padding: 20px;">
+                    <p style="color: #333333; font-size: 16px;">Hello {user_name},</p>
+                    <p style="color: #e74c3c; font-size: 18px; font-weight: bold;">Your password has expired and must be reset immediately.</p>
+                    <p style="color: #333333; font-size: 16px;">Your password expired {days_since_expiry} day(s) ago. For security reasons, you must reset your password before you can access your {platform_name} account.</p>
+                    <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
+                      <p style="color: #856404; font-size: 14px; margin: 0;"><strong>Action Required:</strong> Please reset your password using the "Forgot Password" option on the login page.</p>
+                    </div>
+                    <p style="color: #333333; font-size: 16px;">To reset your password:</p>
+                    <ol style="color: #333333; font-size: 14px;">
+                      <li>Go to the login page</li>
+                      <li>Click "Forgot Password"</li>
+                      <li>Enter your email address</li>
+                      <li>Follow the instructions to reset your password</li>
+                    </ol>
+                    <p style="color: #333333; font-size: 14px; margin-top: 20px;">If you have any questions, please contact your administrator.</p>
+                    <p style="color: #333333; font-size: 14px; margin-top: 20px;">Best regards,<br>{platform_name} Security Team</p>
+                  </div>
+                </div>
+                """
+            },
+            'passwordExpiringSoon': {
+                'subject': 'Password Expiring Soon - {platform_name}',
+                'template': lambda user_name, days_until_expiry, platform_name: f"""
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+                  <div style="background-color: #f39c12; padding: 20px; text-align: center;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 28px;">Password Expiring Soon</h1>
+                  </div>
+                  <div style="padding: 20px;">
+                    <p style="color: #333333; font-size: 16px;">Hello {user_name},</p>
+                    <p style="color: #333333; font-size: 16px;">This is a reminder that your {platform_name} account password will expire in <strong>{days_until_expiry} day(s)</strong>.</p>
+                    <p style="color: #333333; font-size: 16px;">To avoid being locked out of your account, please reset your password before it expires.</p>
+                    <div style="background-color: #d1ecf1; border-left: 4px solid #17a2b8; padding: 15px; margin: 20px 0;">
+                      <p style="color: #0c5460; font-size: 14px; margin: 0;"><strong>Recommended:</strong> Reset your password now to ensure uninterrupted access to your account.</p>
+                    </div>
+                    <p style="color: #333333; font-size: 16px;">To reset your password:</p>
+                    <ol style="color: #333333; font-size: 14px;">
+                      <li>Log in to your account</li>
+                      <li>Go to your profile settings</li>
+                      <li>Click "Change Password"</li>
+                      <li>Or use the "Forgot Password" option on the login page</li>
+                    </ol>
+                    <p style="color: #333333; font-size: 14px; margin-top: 20px;">If you have any questions, please contact your administrator.</p>
+                    <p style="color: #333333; font-size: 14px; margin-top: 20px;">Best regards,<br>{platform_name} Security Team</p>
+                  </div>
+                </div>
+                """
+            },
             'mfaOTP': {
                 'subject': 'Login Verification Code - {platform_name}',
                 'template': lambda user_name, otp_code, expiry_time, platform_name: f"""
@@ -1661,8 +1715,13 @@ class NotificationService:
                 subject = subject.replace('{event_title}', str(template_data[title_index]))
             if '{file_name}' in subject and len(template_data) > 1:
                 subject = subject.replace('{file_name}', str(template_data[1]))
-            if '{platform_name}' in subject and len(template_data) > 3:
-                subject = subject.replace('{platform_name}', str(template_data[3]))
+            if '{platform_name}' in subject:
+                # Platform name can be at different indices depending on notification type
+                # Most templates have it at index 3, but password expiry templates have it at index 2
+                if len(template_data) > 3:
+                    subject = subject.replace('{platform_name}', str(template_data[3]))
+                elif len(template_data) > 2:
+                    subject = subject.replace('{platform_name}', str(template_data[2]))
             if '{date}' in subject and len(template_data) > 0:
                 subject = subject.replace('{date}', str(template_data[0]))
             

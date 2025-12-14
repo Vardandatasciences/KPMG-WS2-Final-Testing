@@ -1695,28 +1695,32 @@ export default {
     async loadUsers() {
       try {
         this.loading = true;
-        const response = await complianceService.getUsers();
+        // Resolve current logged-in user id from storage (fallbacks included)
+        const storedUserId =
+          localStorage.getItem('user_id') ||
+          sessionStorage.getItem('userId') ||
+          (localStorage.getItem('user') ? (() => { try { return JSON.parse(localStorage.getItem('user')).UserId; } catch(e) { return null; } })() : null) ||
+          (sessionStorage.getItem('user') ? (() => { try { return JSON.parse(sessionStorage.getItem('user')).UserId; } catch(e) { return null; } })() : null);
+        const currentUserId = storedUserId ? Number(storedUserId) : null;
+
+        // Fetch reviewers filtered by RBAC permissions (ApproveCompliance) and exclude current user
+        const response = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+          params: {
+            module: 'compliance',
+            current_user_id: currentUserId || ''
+          }
+        });
         console.log('Users API response:', response); // Debug log
         
-        if (response.data.success && Array.isArray(response.data.users)) {
-          // Resolve current logged-in user id from storage (fallbacks included)
-          const storedUserId =
-            localStorage.getItem('user_id') ||
-            sessionStorage.getItem('userId') ||
-            (localStorage.getItem('user') ? (() => { try { return JSON.parse(localStorage.getItem('user')).UserId; } catch(e) { return null; } })() : null) ||
-            (sessionStorage.getItem('user') ? (() => { try { return JSON.parse(sessionStorage.getItem('user')).UserId; } catch(e) { return null; } })() : null);
-          const currentUserId = storedUserId ? Number(storedUserId) : null;
-
-          // Normalize and filter: exclude the currently logged-in user from reviewer list
-          const allUsers = response.data.users.map(user => ({
+        if (Array.isArray(response.data)) {
+          // Normalize user data
+          const allUsers = response.data.map(user => ({
             UserId: user.UserId,
             UserName: user.UserName || `User ${user.UserId}`,
-            email: user.email || user.Email || ''
+            email: user.Email || user.email || ''
           }));
 
-          this.users = currentUserId
-            ? allUsers.filter(u => Number(u.UserId) !== Number(currentUserId))
-            : allUsers;
+          this.users = allUsers;
 
           // Update reviewer config with filtered user values
           this.reviewerConfig.values = this.users.map(user => ({

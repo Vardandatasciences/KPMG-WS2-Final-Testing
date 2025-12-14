@@ -898,7 +898,11 @@
         <audio ref="notifAudio" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" preload="auto"></audio>
       </div>
       
-
+      <!-- System Logs Tab -->
+      <div @click="navigate('/system-logs')" class="system-logs-menu-item" :class="{'active': isActive('/system-logs')}">
+        <i class="fas fa-file-alt icon"></i>
+        <span v-if="!isCollapsed">System Logs</span>
+      </div>
 
 <!-- Help Section -->
        <div @click="toggleSubmenu('help')" class="help-menu-item">
@@ -1310,6 +1314,32 @@ export default {
 }
 .bell-theme {
   color:  #646464 !important;
+}
+/* System Logs menu item style */
+.system-logs-menu-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 20px;
+  cursor: pointer;
+  transition: background 0.2s;
+  position: relative;
+}
+.system-logs-menu-item:hover {
+  background: #f0f4ff;
+}
+.system-logs-menu-item .icon {
+  margin-right: 12px;
+  font-size: 1.2rem;
+  color: #575757 !important;
+}
+.system-logs-menu-item.active {
+  background-color: rgba(0, 51, 153, 0.1);
+  color: #003399 !important;
+  font-weight: 600;
+  border-left: 3px solid #003399;
+}
+.system-logs-menu-item.active .icon {
+  color: #003399 !important;
 }
 /* Help menu item style */
 .help-menu-item {

@@ -16,7 +16,7 @@
         <div class="cookie-banner-actions">
           <button 
             class="cookie-btn cookie-btn-customize" 
-            @click="showCustomizeModal = true"
+            @click="openCustomizeModal"
           >
             Customize
           </button>
@@ -253,6 +253,19 @@ export default {
       await savePreferences()
     }
 
+    // Open customize modal with all cookies enabled by default
+    const openCustomizeModal = () => {
+      // Enable all cookies by default when opening customize modal
+      preferences.value = {
+        essential_cookies: true,
+        functional_cookies: true,
+        analytics_cookies: true,
+        marketing_cookies: true,
+        preferences_saved: false
+      }
+      showCustomizeModal.value = true
+    }
+
     // Save custom preferences
     const saveCustomPreferences = async () => {
       preferences.value.preferences_saved = true
@@ -412,6 +425,14 @@ export default {
         // Clear saved preferences flag to show banner
         localStorage.removeItem('cookie_preferences_saved')
         showBanner.value = true
+        // Enable all cookies by default when opening from external link
+        preferences.value = {
+          essential_cookies: true,
+          functional_cookies: true,
+          analytics_cookies: true,
+          marketing_cookies: true,
+          preferences_saved: false
+        }
         showCustomizeModal.value = true
       })
       
@@ -465,7 +486,8 @@ export default {
       preferences,
       acceptAll,
       rejectAll,
-      saveCustomPreferences
+      saveCustomPreferences,
+      openCustomizeModal
     }
   }
 }

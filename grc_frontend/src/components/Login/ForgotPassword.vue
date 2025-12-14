@@ -311,7 +311,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onUnmounted, watch } from 'vue'
+import { ref, computed, onUnmounted, watch, nextTick } from 'vue'
 import { axiosInstance } from '@/config/api.js'
 import { API_ENDPOINTS } from '@/config/api.js'
 
@@ -343,8 +343,23 @@ let cooldownTimer = null
 
 // Watch for modal opening and username changes
 watch(() => props.showModal, (newVal) => {
-  if (newVal && props.username) {
-    fetchUserEmail()
+  if (newVal) {
+    // Check URL query parameters for email
+    const urlParams = new URLSearchParams(window.location.search)
+    const emailParam = urlParams.get('email')
+    
+    if (emailParam) {
+      // Pre-fill email from URL parameter
+      email.value = emailParam
+      // Auto-send OTP if email is provided via URL (after a small delay to ensure email is set)
+      nextTick(() => {
+        if (email.value) {
+          sendOTP()
+        }
+      })
+    } else if (props.username) {
+      fetchUserEmail()
+    }
   }
 })
 

@@ -22,7 +22,7 @@ class Users(models.Model):
     session_token=models.CharField(max_length=1045, null=True, blank=True)
     consent_accepted=models.CharField(max_length=1, default='0', choices=[('0', 'Not Accepted'), ('1', 'Accepted')])
     license_key=models.CharField(max_length=100, null=True, blank=True, unique=True)
-    FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    
     class Meta:
         db_table = 'users'
     
@@ -928,7 +928,122 @@ class GRCLog(models.Model):
         return f"Log {self.LogId}: {self.ActionType} on {self.Module}"
 
 
+class PasswordLog(models.Model):
+    """Model to track password history and changes"""
+    LogId = models.AutoField(primary_key=True)
+    UserId = models.IntegerField()  # Foreign key to Users.UserId
+    UserName = models.CharField(max_length=255)
+    OldPassword = models.CharField(max_length=255, null=True, blank=True)  # Hashed old password
+    NewPassword = models.CharField(max_length=255)  # Hashed new password
+    ActionType = models.CharField(max_length=50, choices=[
+        ('created', 'Password Created'),
+        ('changed', 'Password Changed'),
+        ('reset', 'Password Reset'),
+        ('login', 'Password Used (Login)')
+    ])
+    IPAddress = models.CharField(max_length=45, null=True, blank=True)
+    UserAgent = models.TextField(null=True, blank=True)
+    Timestamp = models.DateTimeField(auto_now_add=True)
+    AdditionalInfo = models.JSONField(null=True, blank=True)
+    
+    class Meta:
+        db_table = 'password_logs'
+        ordering = ['-Timestamp']
+        indexes = [
+            models.Index(fields=['UserId', '-Timestamp']),
+            models.Index(fields=['ActionType', '-Timestamp']),
+        ]
+    
+    def __str__(self):
+        return f"PasswordLog {self.LogId}: {self.UserName} - {self.ActionType} at {self.Timestamp}"
 
+
+class DataSubjectRequest(models.Model):
+    """
+    Data Subject Request model for GDPR/Data Privacy compliance
+    Tracks user requests for data access, rectification, erasure, and portability
+    """
+    REQUEST_TYPE_CHOICES = [
+        ('ACCESS', 'Access'),
+        ('RECTIFICATION', 'Rectification'),
+        ('ERASURE', 'Erasure'),
+        ('PORTABILITY', 'Portability'),
+    ]
+   
+    STATUS_CHOICES = [
+        ('REQUESTED', 'Requested'),
+        ('APPROVED', 'Approved'),
+        ('REJECTED', 'Rejected'),
+    ]
+   
+    VERIFICATION_STATUS_CHOICES = [
+        ('NOT VERIFIED', 'Not Verified'),
+        ('VERIFIED', 'Verified'),
+    ]
+   
+    id = models.AutoField(primary_key=True)
+    request_type = models.CharField(max_length=20, choices=REQUEST_TYPE_CHOICES, db_column='request_type')
+    user_id = models.ForeignKey(Users, on_delete=models.CASCADE, db_column='user_id', related_name='data_subject_requests')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='REQUESTED', db_column='status')
+    created_at = models.DateTimeField(auto_now_add=True, db_column='created_at')
+    updated_at = models.DateTimeField(auto_now=True, db_column='updated_at')
+    verification_status = models.CharField(max_length=20, choices=VERIFICATION_STATUS_CHOICES, default='NOT VERIFIED', db_column='verification_status')
+    approved_by = models.ForeignKey(Users, on_delete=models.SET_NULL, null=True, blank=True, db_column='approved_by', related_name='approved_requests')
+    audit_trail = models.JSONField(null=True, blank=True, db_column='audit_trail', default=dict)
+    expiration_date = models.DateTimeField(null=True, blank=True, db_column='expiration_date')
+    FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+   
+    class Meta:
+        db_table = 'DataSubjectRequest'
+        ordering = ['-created_at']
+        verbose_name = 'Data Subject Request'
+        verbose_name_plural = 'Data Subject Requests'
+        indexes = [
+            models.Index(fields=['user_id', 'created_at']),
+            models.Index(fields=['status', 'request_type']),
+        ]
+   
+    def __str__(self):
+        return f"Request {self.id} - {self.get_request_type_display()} by User {self.user_id.UserId}"
+
+
+class AccessRequest(models.Model):
+    """
+    Access Request model for requesting access to pages/features
+    Tracks user requests for access permissions that require admin approval
+    """
+    STATUS_CHOICES = [
+        ('REQUESTED', 'Requested'),
+        ('APPROVED', 'Approved'),
+        ('REJECTED', 'Rejected'),
+    ]
+   
+    id = models.AutoField(primary_key=True)
+    user_id = models.ForeignKey(Users, on_delete=models.CASCADE, db_column='user_id', related_name='access_requests')
+    requested_url = models.CharField(max_length=500, db_column='requested_url', null=True, blank=True)
+    requested_feature = models.CharField(max_length=255, db_column='requested_feature', null=True, blank=True)
+    required_permission = models.CharField(max_length=255, db_column='required_permission', null=True, blank=True)
+    requested_role = models.CharField(max_length=100, db_column='requested_role', null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='REQUESTED', db_column='status')
+    created_at = models.DateTimeField(auto_now_add=True, db_column='created_at')
+    updated_at = models.DateTimeField(auto_now=True, db_column='updated_at')
+    approved_by = models.ForeignKey(Users, on_delete=models.SET_NULL, null=True, blank=True, db_column='approved_by', related_name='approved_access_requests')
+    audit_trail = models.JSONField(null=True, blank=True, db_column='audit_trail', default=dict)
+    message = models.TextField(null=True, blank=True, db_column='message')
+   
+    class Meta:
+        db_table = 'AccessRequest'
+        ordering = ['-created_at']
+        verbose_name = 'Access Request'
+        verbose_name_plural = 'Access Requests'
+        indexes = [
+            models.Index(fields=['user_id', 'created_at']),
+            models.Index(fields=['status']),
+        ]
+   
+    def __str__(self):
+        return f"Access Request {self.id} by User {self.user_id.UserId} - {self.status}"
+ 
 
 
 class Entity(models.Model):

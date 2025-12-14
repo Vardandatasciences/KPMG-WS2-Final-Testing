@@ -19,14 +19,25 @@ class AzureADEmailBackend(BaseEmailBackend):
         self.client_id = getattr(settings, 'AZURE_AD_CLIENT_ID', '127107b0-7144-4246-b2f4-160263ceb3c9')
         self.client_secret = getattr(settings, 'AZURE_AD_CLIENT_SECRET', 'sVr8Q~3b0OS~L5NFIaWGomhiGwSwFuNMnW7RPamR')
         self.scope = getattr(settings, 'AZURE_AD_SCOPE', 'https://graph.microsoft.com/.default')
-        self.from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'praharshitha.d@vardaanglobal.com')
+        
+        # Get configured from email
+        configured_from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'praharshitha.d@vardaanglobal.com')
+        
+        # CRITICAL: Azure Graph API requires the email to be registered in Azure AD
+        # If the configured email is Gmail or not an Azure AD email, use the default Azure AD email
+        if not configured_from_email or '@gmail.com' in configured_from_email.lower() or '@vardaanglobal.com' not in configured_from_email.lower():
+            # Use the Azure AD registered email
+            self.from_email = 'praharshitha.d@vardaanglobal.com'
+            logger.warning(f"[AZURE] Configured email ({configured_from_email}) is not an Azure AD email. Using Azure AD registered email: {self.from_email}")
+        else:
+            self.from_email = configured_from_email
         
         # Log configuration status (without exposing secrets)
         logger.info("AzureADEmailBackend initialized successfully")
         logger.info(f"Azure AD Tenant ID: {self.tenant_id[:8]}..." if self.tenant_id else "Azure AD Tenant ID: Not set")
         logger.info(f"Azure AD Client ID: {self.client_id[:8]}..." if self.client_id else "Azure AD Client ID: Not set")
         logger.info(f"Client Secret: {'✓ Set' if self.client_secret else '✗ Not set'}")
-        logger.info(f"From Email: {self.from_email}")
+        logger.info(f"From Email (Azure AD): {self.from_email}")
         
     def _get_access_token(self):
         """Get access token from Azure AD"""
@@ -109,10 +120,18 @@ class AzureADEmailBackend(BaseEmailBackend):
             
         except requests.exceptions.RequestException as e:
             logger.error(f"[ERROR] Network error sending email via Graph API: {str(e)}")
-            return self._send_email_fallback(email_message)
+            logger.error(f"[ERROR] Full error details: {str(e)}")
+            # Only fallback if explicitly allowed
+            if self.fail_silently:
+                return self._send_email_fallback(email_message)
+            raise
         except Exception as e:
             logger.error(f"[ERROR] Failed to send email via Graph API: {str(e)}")
-            return self._send_email_fallback(email_message)
+            logger.error(f"[ERROR] Full error details: {str(e)}")
+            # Only fallback if explicitly allowed
+            if self.fail_silently:
+                return self._send_email_fallback(email_message)
+            raise
     
     def _send_email_fallback(self, email_message):
         """Smart fallback - try SMTP first, then log for manual sending"""

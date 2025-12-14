@@ -1116,7 +1116,15 @@ const togglePolicyStatus = async (policy, versionId, frameworkId) => {
     const currentlyActive = isPolicyActive(policy)
     if (currentlyActive) {
       try {
-        const response = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION)
+        // Get current user ID to exclude from reviewer list
+        const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || ''
+        // Fetch reviewers filtered by RBAC permissions (ApprovePolicy) for policy module
+        const response = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+          params: {
+            module: 'policy',
+            current_user_id: currentUserId
+          }
+        })
         const reviewers = response.data
         
         if (reviewers.length === 0) {
@@ -1276,7 +1284,15 @@ const toggleStatus = async (fw) => {
     if (fw.status === 'Active') {
       // First fetch the list of available reviewers
       try {
-        const reviewersResponse = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION);
+        // Get current user ID to exclude from reviewer list
+        const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || ''
+        // Fetch reviewers filtered by RBAC permissions (ApproveFramework) for framework module
+        const reviewersResponse = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+          params: {
+            module: 'framework',
+            current_user_id: currentUserId
+          }
+        });
         const reviewers = reviewersResponse.data;
         
         if (reviewers.length === 0) {

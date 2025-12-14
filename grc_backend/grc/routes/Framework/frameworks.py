@@ -3077,52 +3077,80 @@ def update_existing_activeinactive_by_date(request):
 @permission_classes([PolicyViewPermission])
 def get_users_for_reviewer_selection(request):
     """
-    Get all users that can be selected as reviewers for framework status change requests
+    Get users that can be selected as reviewers based on RBAC permissions
+    Filters by module (policy, compliance, framework) and excludes current user
     """
     try:
-        print("DEBUG: Fetching users for reviewer selection...")
-        users = Users.objects.all().values('UserId', 'UserName', 'Email')
-        users_list = list(users)
-        print(f"DEBUG: Found {len(users_list)} users: {users_list}")
+        from ...models import RBAC
         
-        # If no users found, create test users automatically
-        if len(users_list) == 0:
-            print("DEBUG: No users found, creating test users...")
-            from datetime import datetime
-            
-            test_users = [
-                {
-                    'UserName': 'John Reviewer',
-                    'Email': 'john.reviewer@company.com',
-                    'Password': 'password123'
-                },
-                {
-                    'UserName': 'Jane Approver', 
-                    'Email': 'jane.approver@company.com',
-                    'Password': 'password123'
-                },
-                {
-                    'UserName': 'Bob Manager',
-                    'Email': 'bob.manager@company.com', 
-                    'Password': 'password123'
-                }
-            ]
-            
-            for user_data in test_users:
-                user = Users.objects.create(
-                    UserName=user_data['UserName'],
-                    Email=user_data['Email'],
-                    Password=user_data['Password'],
-                    CreatedAt=datetime.now(),
-                    UpdatedAt=datetime.now()
-                )
+        # Get query parameters
+        module = request.GET.get('module', '').lower()  # policy, compliance, framework, audit, risk, incident, event
+        permission_type = request.GET.get('permission_type', '').lower()  # For audit: 'auditor' or 'reviewer'
+        current_user_id = request.GET.get('current_user_id', '')
+        
+        print(f"DEBUG: Fetching users for reviewer selection - module: {module}, permission_type: {permission_type}, current_user_id: {current_user_id}")
+        
+        # Start with all active RBAC entries
+        rbac_query = RBAC.objects.filter(is_active='Y')
+        
+        # Filter by module-specific approval permission
+        if module == 'policy':
+            rbac_query = rbac_query.filter(approve_policy=True)
+            print("DEBUG: Filtering for users with ApprovePolicy permission")
+        elif module == 'compliance':
+            rbac_query = rbac_query.filter(approve_compliance=True)
+            print("DEBUG: Filtering for users with ApproveCompliance permission")
+        elif module == 'framework':
+            rbac_query = rbac_query.filter(approve_framework=True)
+            print("DEBUG: Filtering for users with ApproveFramework permission")
+        elif module == 'audit':
+            # For audit module, check permission_type to distinguish between auditor and reviewer
+            if permission_type == 'auditor':
+                rbac_query = rbac_query.filter(conduct_audit=True)
+                print("DEBUG: Filtering for users with ConductAudit permission (for auditors)")
+            else:
+                # Default to reviewer (ReviewAudit permission)
+                rbac_query = rbac_query.filter(review_audit=True)
+                print("DEBUG: Filtering for users with ReviewAudit permission (for reviewers)")
+        elif module == 'risk':
+            rbac_query = rbac_query.filter(approve_risk=True)
+            print("DEBUG: Filtering for users with ApproveRisk permission")
+        elif module == 'incident':
+            # For incidents, use evaluate_assigned_incident as the reviewer permission
+            rbac_query = rbac_query.filter(evaluate_assigned_incident=True)
+            print("DEBUG: Filtering for users with EvaluateAssignedIncident permission")
+        elif module == 'event':
+            rbac_query = rbac_query.filter(approve_event=True)
+            print("DEBUG: Filtering for users with ApproveEvent permission")
+        else:
+            # If no module specified, return empty list
+            print("DEBUG: No module specified, returning empty list")
+            return Response([], status=status.HTTP_200_OK)
+        
+        # Exclude current user if provided
+        if current_user_id:
+            try:
+                current_user_id_int = int(current_user_id)
+                rbac_query = rbac_query.exclude(user__UserId=current_user_id_int)
+                print(f"DEBUG: Excluding current user ID: {current_user_id_int}")
+            except (ValueError, TypeError):
+                print(f"DEBUG: Invalid current_user_id format: {current_user_id}")
+        
+        # Get RBAC entries with approval permission
+        rbac_entries = rbac_query.select_related('user').order_by('username')
+        
+        # Build users list from RBAC entries
+        users_list = []
+        for rbac_entry in rbac_entries:
+            if rbac_entry.user:
                 users_list.append({
-                    'UserId': user.UserId,
-                    'UserName': user.UserName,
-                    'Email': user.Email
+                    'UserId': rbac_entry.user.UserId,
+                    'UserName': rbac_entry.user.UserName,
+                    'Email': getattr(rbac_entry.user, 'Email', ''),
+                    'Role': rbac_entry.role
                 })
-            
-            print(f"DEBUG: Created {len(test_users)} test users. Total users now: {len(users_list)}")
+        
+        print(f"DEBUG: Found {len(users_list)} eligible reviewers: {[u['UserName'] for u in users_list]}")
         
         return Response(users_list, status=status.HTTP_200_OK)
         

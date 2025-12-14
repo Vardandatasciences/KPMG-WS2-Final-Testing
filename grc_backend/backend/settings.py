@@ -547,6 +547,12 @@ OLLAMA_TIMEOUT = int(os.environ.get('OLLAMA_TIMEOUT', '600'))
 # Default Ollama model to use (must exist on server per /api/tags)
 OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'llama3.2:3b')
 
+# ===== PASSWORD EXPIRY CONFIGURATION =====
+# Password expiry in days (90 days)
+PASSWORD_EXPIRY_DAYS = int(os.environ.get('PASSWORD_EXPIRY_DAYS', '90'))
+# Days before expiry to send warning email (7 days before expiry)
+PASSWORD_EXPIRY_WARNING_DAYS = int(os.environ.get('PASSWORD_EXPIRY_WARNING_DAYS', '7'))
+
 # ===== EMAIL AND NOTIFICATION CONFIGURATION =====
 
 # SMTP Configuration for Email
@@ -561,10 +567,14 @@ GMAIL_APP_PASSWORD = os.environ.get('GMAIL_APP_PASSWORD', '')
 
 # Email Configuration
 # For Azure AD: Use the Azure AD registered email (praharshitha.d@vardaanglobal.com)
-# For SMTP: Can use SMTP_EMAIL if different
-# Priority: Environment variable > Azure AD default > SMTP_EMAIL
+# IMPORTANT: For Azure Graph API, DEFAULT_FROM_EMAIL must be an Azure AD registered email (e.g., @vardaanglobal.com)
+# The AzureADEmailBackend will automatically use 'praharshitha.d@vardaanglobal.com' if a Gmail or non-Azure email is configured
+# Priority: Environment variable > Azure AD default
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'praharshitha.d@vardaanglobal.com')
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', SMTP_EMAIL or 'no-reply@example.com')
+# Ensure we never use a Gmail address for Azure AD emails
+if '@gmail.com' in DEFAULT_FROM_EMAIL.lower():
+    DEFAULT_FROM_EMAIL = 'praharshitha.d@vardaanglobal.com'
+    print(f"[SETTINGS] DEFAULT_FROM_EMAIL was Gmail, changed to Azure AD email: {DEFAULT_FROM_EMAIL}")
 DEFAULT_FROM_NAME = os.environ.get('DEFAULT_FROM_NAME', 'GRC System')
 
 # Django Email Backend Configuration

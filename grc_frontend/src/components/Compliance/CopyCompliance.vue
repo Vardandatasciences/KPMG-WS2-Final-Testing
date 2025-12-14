@@ -640,6 +640,8 @@
 import { complianceService } from '@/services/api';
 import complianceDataService from '@/services/complianceService'; // NEW: Use cached compliance data
 import { CompliancePopups } from './utils/popupUtils';
+import axios from 'axios';
+import { API_ENDPOINTS } from '../../config/api.js';
 
 export default {
   name: 'CopyCompliance',
@@ -1160,18 +1162,28 @@ export default {
     async loadUsers() {
       try {
         this.loading = true;
-        const response = await complianceService.getUsers();
+        // Get current user ID to exclude from reviewer list
+        const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || ''
+        // Fetch reviewers filtered by RBAC permissions (ApproveCompliance) for compliance module
+        const response = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+          params: {
+            module: 'compliance',
+            current_user_id: currentUserId
+          }
+        });
         
-        if (response.data.success && Array.isArray(response.data.users)) {
-          this.users = response.data.users;
+        if (Array.isArray(response.data)) {
+          this.users = response.data;
           console.log('✅ Loaded users for reviewer selection:', this.users.map(u => ({ id: u.UserId, name: u.UserName })));
         } else {
           console.error('Invalid users data received:', response.data);
           this.error = 'Failed to load approvers';
+          this.users = [];
         }
       } catch (error) {
         console.error('Failed to load users:', error);
         this.error = 'Failed to load approvers. Please try again.';
+        this.users = [];
       } finally {
         this.loading = false;
       }

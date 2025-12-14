@@ -1129,7 +1129,12 @@ name: 'VV',
         this.fetchPolicyDetails(newVal)
       }
     },
-    selectedTab(newVal) {
+    async selectedTab(newVal) {
+      // Refetch users when tab changes to get correct reviewers for the module
+      if (newVal && this.currentUser?.UserId) {
+        await this.fetchUsers()
+      }
+      
       if (newVal === 'framework') {
         this.selectedPolicy = ''
         this.fetchFrameworks()
@@ -2696,25 +2701,21 @@ name: 'VV',
       try {
         console.log('Fetching users from API...')
         
-        // Try the primary endpoint first
-        let response
-        try {
-          response = await axiosInstance.get('/api/users/')
-          console.log('Raw users response:', response.data)
-        } catch (primaryError) {
-          console.error('Primary endpoint failed:', primaryError)
-          
-          // Try alternative endpoint
-          console.log('Trying alternative endpoint...')
-          response = await axiosInstance.get('/api/custom-users/')
-          console.log('Alternative endpoint response:', response.data)
-        }
+        // Fetch reviewers filtered by RBAC permissions based on current tab
+        // For framework tab: use 'framework', for policy tab: use 'policy'
+        const module = this.selectedTab === 'framework' ? 'framework' : 'policy'
+        const currentUserId = this.currentUser?.UserId || ''
+        const response = await axiosInstance.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+          params: {
+            module: module,
+            current_user_id: currentUserId
+          }
+        })
+        console.log('Raw users response:', response.data)
         
-        // Handle both response formats: direct array or success wrapper
+        // Handle response format: should be an array
         let usersData = []
-        if (response.data.success && response.data.users) {
-          usersData = response.data.users
-        } else if (Array.isArray(response.data)) {
+        if (Array.isArray(response.data)) {
           usersData = response.data
         } else {
           console.error('Unexpected response format:', response.data)

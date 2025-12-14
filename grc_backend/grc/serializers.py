@@ -779,10 +779,22 @@ class RiskWorkflowSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField()
     Role = serializers.SerializerMethodField()  # Add Role field for frontend compatibility
+    DepartmentName = serializers.SerializerMethodField()  # Add department name field
+    IsActive = serializers.SerializerMethodField()  # Ensure IsActive is properly serialized
     
     class Meta:
         model = Users  # Use your custom Users model
-        fields = ['UserId', 'UserName', 'FirstName', 'LastName', 'Email', 'CreatedAt', 'UpdatedAt', 'role', 'Role']
+        fields = ['UserId', 'UserName', 'FirstName', 'LastName', 'Email', 'DepartmentId', 'DepartmentName', 'IsActive', 'CreatedAt', 'UpdatedAt', 'role', 'Role']
+    
+    def get_IsActive(self, obj):
+        """Ensure IsActive is returned as 'Y' or 'N' string"""
+        if obj.IsActive is None:
+            return 'N'
+        if isinstance(obj.IsActive, bool):
+            return 'Y' if obj.IsActive else 'N'
+        if isinstance(obj.IsActive, str):
+            return obj.IsActive.upper()
+        return str(obj.IsActive)
     
     def get_role(self, obj):
         return self.get_Role(obj)  # Use same logic for both fields
@@ -811,6 +823,24 @@ class UserSerializer(serializers.ModelSerializer):
             # Default roles for other users
             roles = ['Security Analyst', 'Risk Analyst', 'Compliance Officer', 'IT Security Specialist']
             return roles[user_id % len(roles)]
+    
+    def get_DepartmentName(self, obj):
+        """Get department name from DepartmentId"""
+        try:
+            if obj.DepartmentId:
+                # DepartmentId is a CharField, so we need to convert it to int if possible
+                try:
+                    dept_id = int(obj.DepartmentId)
+                    from .models import Department
+                    department = Department.objects.filter(DepartmentId=dept_id).first()
+                    if department:
+                        return department.DepartmentName
+                except (ValueError, TypeError):
+                    # If DepartmentId is not a number, return it as is
+                    return str(obj.DepartmentId) if obj.DepartmentId else ''
+            return ''
+        except Exception:
+            return str(obj.DepartmentId) if obj.DepartmentId else ''
 
 
 

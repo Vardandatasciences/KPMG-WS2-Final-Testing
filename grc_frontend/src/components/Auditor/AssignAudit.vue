@@ -260,7 +260,7 @@
                         :config="{
                           name: 'Reviewer',
                           label: 'Reviewer',
-                          values: filteredUsers.map(user => ({ value: user.UserId, label: user.UserName })),
+                          values: users.map(user => ({ value: user.UserId, label: user.UserName })),
                           defaultValue: 'Select Reviewer'
                         }"
                         :showSearchBar="true"
@@ -1283,7 +1283,8 @@ export default {
       frameworks: [],
       policies: [],
       subpolicies: [],
-      users: [],
+      users: [], // Users with ReviewAudit permission (for reviewers)
+      auditors: [], // Users with ConductAudit permission (for auditors)
       roles: [
         'Chief Audit Executive (CAE) / Audit Director',
         'Audit Manager',
@@ -1498,56 +1499,9 @@ export default {
     },
     
     filteredUsers() {
-      // Filter users based on audit type
-      const type = this.auditData.type;
-      console.log('🔍 Filtering users for audit type:', type);
-      console.log('🔍 Total users available:', this.users.length);
-      console.log('🔍 Sample user data:', this.users.slice(0, 2));
-      
-      if (!type) return this.users;
-      
-      let filtered = [];
-      
-      if (type === 'I') {
-        // Internal: Internal Auditors + GRC Administrators + All users (for now)
-        filtered = this.users.filter(u =>
-          !u.Role || // Include users without role
-          (u.Role && u.Role.toLowerCase().includes('internal')) ||
-          (u.Role && u.Role.toLowerCase().includes('grc administrator')) ||
-          (u.Role && u.Role.toLowerCase().includes('auditor')) ||
-          (u.Role && u.Role.toLowerCase().includes('admin'))
-        );
-      } else if (type === 'E') {
-        // External: External Auditors + GRC Administrators + All users (for now)
-        filtered = this.users.filter(u =>
-          !u.Role || // Include users without role
-          (u.Role && u.Role.toLowerCase().includes('external')) ||
-          (u.Role && u.Role.toLowerCase().includes('grc administrator')) ||
-          (u.Role && u.Role.toLowerCase().includes('auditor')) ||
-          (u.Role && u.Role.toLowerCase().includes('admin'))
-        );
-      } else if (type === 'S') {
-        // Self-Audit: GRC Administrators + All users (for now)
-        filtered = this.users.filter(u =>
-          !u.Role || // Include users without role
-          (u.Role && u.Role.toLowerCase().includes('grc administrator')) ||
-          (u.Role && u.Role.toLowerCase().includes('admin')) ||
-          (u.Role && u.Role.toLowerCase().includes('auditor'))
-        );
-      } else {
-        filtered = this.users;
-      }
-      
-      console.log('🔍 Filtered users count:', filtered.length);
-      console.log('🔍 Filtered users sample:', filtered.slice(0, 2));
-      
-      // If no users match the filter, return all users to avoid empty dropdown
-      if (filtered.length === 0) {
-        console.log('⚠️ No users matched filter, returning all users');
-        return this.users;
-      }
-      
-      return filtered;
+      // Return auditors (users with ConductAudit permission)
+      // These are already filtered by RBAC, so no need for additional filtering
+      return this.auditors || [];
     },
     getFieldError() {
       return (fieldName, memberIndex = null) => {
@@ -1709,48 +1663,72 @@ export default {
     async fetchUsers() {
       try {
         console.log('🔄 Fetching users...');
-        const res = await axios.get('/api/users/', {
+        // Get current user ID to exclude from lists
+        const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || ''
+        
+        // Fetch reviewers (users with ReviewAudit permission)
+        const reviewersRes = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+          params: {
+            module: 'audit',
+            permission_type: 'reviewer',
+            current_user_id: currentUserId
+          },
           withCredentials: true,
           headers: {
             'Content-Type': 'application/json'
           }
         });
-        console.log('✅ Users API response:', res.data);
-        console.log('✅ Response status:', res.status);
-        console.log('✅ Response data type:', typeof res.data);
-        console.log('✅ Response data keys:', Object.keys(res.data || {}));
         
-        // Handle the response format: { success: true, users: [...] }
-        let users = [];
-        if (res.data && res.data.success && res.data.users) {
-          users = res.data.users;
-          console.log('✅ Parsed users from success.users format:', users.length);
-        } else if (Array.isArray(res.data)) {
-          // Fallback for direct array response
-          users = res.data;
-          console.log('✅ Parsed users from direct array format:', users.length);
-        } else if (res.data && Array.isArray(res.data.data)) {
-          // Another fallback format
-          users = res.data.data;
-          console.log('✅ Parsed users from data.data format:', users.length);
-        } else {
-          console.warn('⚠️ Unexpected response format:', res.data);
+        // Fetch auditors (users with ConductAudit permission)
+        const auditorsRes = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+          params: {
+            module: 'audit',
+            permission_type: 'auditor',
+            current_user_id: currentUserId
+          },
+          withCredentials: true,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        console.log('✅ Reviewers API response:', reviewersRes.data);
+        console.log('✅ Auditors API response:', auditorsRes.data);
+        
+        // Process reviewers
+        let reviewers = [];
+        if (Array.isArray(reviewersRes.data)) {
+          reviewers = reviewersRes.data;
         }
-        
-        // Ensure users have required fields
-        users = users.map(user => ({
+        reviewers = reviewers.map(user => ({
           UserId: user.UserId || user.id || user.userId,
           UserName: user.UserName || user.name || user.username || 'Unknown',
           Role: user.Role || user.role || '',
           Email: user.Email || user.email || '',
           ...user
-        })).filter(user => user.UserId); // Filter out invalid users
+        })).filter(user => user.UserId);
+        this.users = reviewers;
         
-        console.log('✅ Users processed successfully:', users.length, 'users');
-        console.log('🔍 Sample users:', users.slice(0, 3));
-        this.users = users;
+        // Process auditors
+        let auditors = [];
+        if (Array.isArray(auditorsRes.data)) {
+          auditors = auditorsRes.data;
+        }
+        auditors = auditors.map(user => ({
+          UserId: user.UserId || user.id || user.userId,
+          UserName: user.UserName || user.name || user.username || 'Unknown',
+          Role: user.Role || user.role || '',
+          Email: user.Email || user.email || '',
+          ...user
+        })).filter(user => user.UserId);
+        this.auditors = auditors;
         
-        if (users.length === 0) {
+        console.log('✅ Reviewers processed successfully:', reviewers.length, 'users');
+        console.log('✅ Auditors processed successfully:', auditors.length, 'users');
+        console.log('🔍 Sample reviewers:', reviewers.slice(0, 3));
+        console.log('🔍 Sample auditors:', auditors.slice(0, 3));
+        
+        if (reviewers.length === 0 && auditors.length === 0) {
           console.warn('⚠️ No users found. This might indicate an API issue or empty database.');
         }
       } catch (e) {

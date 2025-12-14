@@ -45,88 +45,146 @@
           <!-- Personal Information Section -->
           <div v-if="accountInfoType === 'personal'" class="account-section-content">
             <form class="profile-form" @submit.prevent="savePersonalInfo">
-              <h2 class="section-title"><i class="fas fa-user"></i> Personal Information</h2>
-              <p class="section-helper">Update your personal details and contact information.</p>
-              
+              <div class="section-header-with-edit">
+                <div>
+                  <h2 class="section-title"><i class="fas fa-user"></i> Personal Information</h2>
+                  <p class="section-helper">Update your personal details and contact information.</p>
+                </div>
+                <button
+                  v-if="!editModePersonal"
+                  type="button"
+                  class="edit-btn"
+                  @click="enableEditMode('personal')"
+                >
+                  <i class="fas fa-edit"></i> Edit
+                </button>
+                <div v-else class="edit-actions">
+                  <button
+                    type="button"
+                    class="cancel-edit-btn"
+                    @click="cancelEditMode('personal')"
+                  >
+                    <i class="fas fa-times"></i> Cancel
+                  </button>
+                  <button
+                    type="button"
+                    class="save-edits-btn"
+                    @click="openRectificationModal('personal')"
+                    :disabled="!hasPersonalChanges"
+                  >
+                    <i class="fas fa-save"></i> Save Edits
+                  </button>
+                </div>
+              </div>
+             
               <div class="form-row">
                 <div class="form-group">
                   <label>First Name:</label>
-                  <input type="text" v-model="form.firstName" :disabled="loading" />
+                  <input type="text" v-model="form.firstName" :disabled="!editModePersonal || loading" />
                 </div>
                 <div class="form-group">
                   <label>Last Name:</label>
-                  <input type="text" v-model="form.lastName" :disabled="loading" />
+                  <input type="text" v-model="form.lastName" :disabled="!editModePersonal || loading" />
                 </div>
               </div>
-              
+             
               <div class="form-row">
                 <div class="form-group">
                   <label>Email:</label>
-                  <input type="email" v-model="form.email" :disabled="loading" />
+                  <input type="email" v-model="form.email" :disabled="!editModePersonal || loading" />
                 </div>
                 <div class="form-group">
                   <label>Phone Number:</label>
-                  <input type="text" v-model="form.phone" :disabled="loading" />
+                  <input type="text" v-model="form.phone" :disabled="!editModePersonal || loading" />
                 </div>
               </div>
-              
-              <div class="form-row center">
+             
+              <div v-if="!editModePersonal" class="form-row center">
                 <button class="submit-btn" type="submit" :disabled="loading">
                   <i v-if="loading" class="fas fa-spinner fa-spin"></i>
-                  <i v-else class="fas fa-save"></i> 
+                  <i v-else class="fas fa-save"></i>
                   {{ loading ? 'Saving...' : 'Save Personal Info' }}
                 </button>
               </div>
             </form>
           </div>
-
+ 
           <!-- Business Information Section -->
           <div v-if="accountInfoType === 'business'" class="account-section-content">
             <form class="profile-form" @submit.prevent="saveBusinessInfo">
-              <h2 class="section-title"><i class="fas fa-building"></i> Business Information</h2>
-              <p class="section-helper">View your organizational details and business unit information.</p>
-              
+              <div class="section-header-with-edit">
+                <div>
+                  <h2 class="section-title"><i class="fas fa-building"></i> Business Information</h2>
+                  <p class="section-helper">View your organizational details and business unit information.</p>
+                </div>
+                <button
+                  v-if="!editModeBusiness"
+                  type="button"
+                  class="edit-btn"
+                  @click="enableEditMode('business')"
+                >
+                  <i class="fas fa-edit"></i> Edit
+                </button>
+                <div v-else class="edit-actions">
+                  <button
+                    type="button"
+                    class="cancel-edit-btn"
+                    @click="cancelEditMode('business')"
+                  >
+                    <i class="fas fa-times"></i> Cancel
+                  </button>
+                  <button
+                    type="button"
+                    class="save-edits-btn"
+                    @click="openRectificationModal('business')"
+                    :disabled="!hasBusinessChanges"
+                  >
+                    <i class="fas fa-save"></i> Save Edits
+                  </button>
+                </div>
+              </div>
+             
               <div class="form-row">
                 <div class="form-group">
                   <label>Department:</label>
-                  <input type="text" v-model="businessInfo.departmentName" disabled />
+                  <input type="text" v-model="businessInfo.departmentName" :disabled="!editModeBusiness || loading" />
                 </div>
                 <div class="form-group">
                   <label>Business Unit:</label>
-                  <input type="text" :value="businessInfo.businessUnitName + ' (' + businessInfo.businessUnitCode + ')'" disabled />
+                  <input type="text" v-model="businessInfo.businessUnitDisplay" :disabled="!editModeBusiness || loading" />
                 </div>
               </div>
-              
+             
               <div class="form-row">
                 <div class="form-group">
                   <label>Entity:</label>
-                  <input type="text" :value="businessInfo.entityName + ' - ' + businessInfo.entityType" disabled />
+                  <input type="text" v-model="businessInfo.entityDisplay" :disabled="!editModeBusiness || loading" />
                 </div>
                 <div class="form-group">
                   <label>Location:</label>
-                  <input type="text" v-model="businessInfo.location" disabled />
+                  <input type="text" v-model="businessInfo.location" :disabled="!editModeBusiness || loading" />
                 </div>
               </div>
-              
+             
               <div class="form-group">
                 <label>Department Head:</label>
-                <input type="text" v-model="businessInfo.departmentHead" disabled />
+                <input type="text" v-model="businessInfo.departmentHead" :disabled="!editModeBusiness || loading" />
               </div>
-              
+             
               <!-- User Role and Permissions Section -->
               <div class="permissions-section">
                 <h3 class="section-subtitle"><i class="fas fa-user-shield"></i> Role & Permissions</h3>
                 <div v-if="userPermissions.role" class="user-role">
                   <span class="role-badge">{{ userPermissions.role }}</span>
                 </div>
-                
+               
                 <div v-if="!userPermissions.modules || Object.keys(userPermissions.modules).length === 0" class="no-permissions">
                   <p>No permissions assigned.</p>
                 </div>
-                
+               
                 <div v-else class="permissions-container">
-                  <div 
-                    v-for="(module, moduleName) in userPermissions.modules" 
+                  <div
+                    v-for="(module, moduleName) in userPermissions.modules"
                     :key="moduleName"
                     class="permission-module"
                   >
@@ -154,6 +212,7 @@
           </div>
         </div>
       </div>
+ 
       <div v-else-if="activeTab === 'role'">
         <form class="profile-form">
           <h2 class="section-title"><i class="fas fa-exchange-alt"></i> Role Management</h2>
@@ -172,51 +231,85 @@
         </form>
       </div>
       <div v-else-if="activeTab === 'password'">
-        <form class="profile-form password-form" @submit.prevent="updatePassword">
-          <h2 class="section-title"><i class="fas fa-key"></i>Update Password</h2>
-          <p class="section-helper">For your security, please enter your email and a new password. You will need to verify with an OTP sent to your registered email or phone.</p>
+        <div class="password-section">
+          <h2 class="section-title"><i class="fas fa-key"></i>Password Management</h2>
+          <p class="section-helper">Manage your password settings. You can update your password or reset it using the forgot password flow.</p>
           
-          <!-- Error/Success Messages -->
-          <div v-if="error" class="message error-message">
-            <i class="fas fa-exclamation-circle"></i> {{ error }}
-          </div>
-          <div v-if="success" class="message success-message">
-            <i class="fas fa-check-circle"></i> {{ success }}
+          <!-- Reset Password Button -->
+          <div class="reset-password-section">
+            <div class="reset-password-card">
+              <div class="reset-password-content">
+                <div class="reset-password-icon">
+                  <i class="fas fa-lock"></i>
+                </div>
+                <div class="reset-password-info">
+                  <h3>Reset Password</h3>
+                  <p>Use the forgot password flow to reset your password. You'll receive an OTP via email to verify your identity.</p>
+                </div>
+                <button 
+                  class="reset-password-btn" 
+                  @click="showForgotPasswordModal = true"
+                  type="button"
+                >
+                  <i class="fas fa-key"></i>
+                  Reset Password
+                </button>
+              </div>
+            </div>
           </div>
           
-          <div class="form-group email-with-verify">
-            <label>Email</label>
-            <div class="email-verify-wrapper">
-              <input type="email" v-model="form.email" placeholder="Enter your email address" :disabled="loading" class="email-input" />
-              <button class="verify-btn" type="button" :disabled="loading">
-                <i class="fas fa-shield-alt"></i> Verify
+          <!-- Divider -->
+          <div class="password-divider">
+            <span>OR</span>
+          </div>
+          
+          <!-- Update Password Form -->
+          <form class="profile-form password-form" @submit.prevent="updatePassword">
+            <h3 class="section-subtitle"><i class="fas fa-edit"></i>Update Password</h3>
+            <p class="section-helper">For your security, please enter your email and a new password. You will need to verify with an OTP sent to your registered email or phone.</p>
+            
+            <!-- Error/Success Messages -->
+            <div v-if="error" class="message error-message">
+              <i class="fas fa-exclamation-circle"></i> {{ error }}
+            </div>
+            <div v-if="success" class="message success-message">
+              <i class="fas fa-check-circle"></i> {{ success }}
+            </div>
+            
+            <div class="form-group email-with-verify">
+              <label>Email</label>
+              <div class="email-verify-wrapper">
+                <input type="email" v-model="form.email" placeholder="Enter your email address" :disabled="loading" class="email-input" />
+                <button class="verify-btn" type="button" :disabled="loading">
+                  <i class="fas fa-shield-alt"></i> Verify
+                </button>
+              </div>
+            </div>
+            
+            <div class="form-row">
+              <div class="form-group">
+                <label>Enter OTP</label>
+                <input type="text" v-model="form.otp" placeholder="Enter OTP" :disabled="loading" />
+              </div>
+              <div class="form-group">
+                <label>New Password</label>
+                <input type="password" v-model="form.newPassword" placeholder="Enter new password" :disabled="loading" />
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label>Confirm Password</label>
+              <input type="password" v-model="form.confirmPassword" placeholder="Re-enter new password" :disabled="loading" />
+            </div>
+            <div class="form-row password-submit-row">
+              <button class="submit-btn" type="submit" style="width: 100%; max-width: 320px;" :disabled="loading">
+                <i v-if="loading" class="fas fa-spinner fa-spin"></i>
+                <i v-else class="fas fa-paper-plane"></i> 
+                {{ loading ? 'Updating...' : 'Update Password' }}
               </button>
             </div>
-          </div>
-          
-          <div class="form-row">
-            <div class="form-group">
-              <label>Enter OTP</label>
-              <input type="text" v-model="form.otp" placeholder="Enter OTP" :disabled="loading" />
-            </div>
-            <div class="form-group">
-              <label>New Password</label>
-              <input type="password" v-model="form.newPassword" placeholder="Enter new password" :disabled="loading" />
-            </div>
-          </div>
-          
-          <div class="form-group">
-            <label>Confirm Password</label>
-            <input type="password" v-model="form.confirmPassword" placeholder="Re-enter new password" :disabled="loading" />
-          </div>
-          <div class="form-row password-submit-row">
-            <button class="submit-btn" type="submit" style="width: 100%; max-width: 320px;" :disabled="loading">
-              <i v-if="loading" class="fas fa-spinner fa-spin"></i>
-              <i v-else class="fas fa-paper-plane"></i> 
-              {{ loading ? 'Updating...' : 'Update Password' }}
-            </button>
-          </div>
-        </form>
+          </form>
+        </div>
       </div>
       <div v-else-if="activeTab === 'notification'">
         <div class="notification-settings">
@@ -317,6 +410,14 @@
               <i class="fas fa-user-cog"></i>
               {{ showManageUsersForm ? 'Cancel' : 'Manage Users' }}
             </button>
+            <button 
+              @click="toggleAllUsersList" 
+              class="all-users-btn"
+              :disabled="!isGRCAdministrator"
+            >
+              <i class="fas fa-list"></i>
+              {{ showAllUsersList ? 'Hide Users' : 'View All Users' }}
+            </button>
           </div>
           
           <!-- Create User Form - Integrated directly below button -->
@@ -328,7 +429,7 @@
                   Create New User Account
                 </h3>
                 <p class="form-description">
-                  Fill in the required information to create a new user account.
+                  Fill in the required information to create a new user account. Password will be auto-generated in the format: Riskavaire@&lt;FirstName&gt;&lt;number&gt; and sent via email.
                 </p>
               </div>
               
@@ -346,84 +447,7 @@
                     />
                   </div>
                   
-                  <div class="form-group">
-                    <label for="password">Password *</label>
-                    <div class="password-input-wrapper">
-                      <input 
-                        :type="passwordFieldType" 
-                        id="password" 
-                        v-model="createUserForm.password" 
-                        @input="validatePassword"
-                        @focus="showPasswordRequirements = true"
-                        placeholder="Enter password"
-                        required
-                        :disabled="createUserLoading"
-                        :class="{ 'invalid': passwordErrors.length > 0 && createUserForm.password.length > 0 }"
-                      />
-                      <button 
-                        type="button"
-                        @click="togglePasswordVisibility" 
-                        class="password-toggle-btn"
-                        :disabled="createUserLoading"
-                      >
-                        <i :class="passwordFieldType === 'password' ? 'fas fa-eye' : 'fas fa-eye-slash'"></i>
-                      </button>
-                    </div>
-                    <!-- Password Requirements -->
-                    <div v-show="showPasswordRequirements || createUserForm.password.length > 0" class="password-requirements" :class="{ 'has-errors': passwordErrors.length > 0 && createUserForm.password.length > 0 }">
-                      <div style="font-weight: 600; margin-bottom: 8px; color: #374151; font-size: 14px;">Password Requirements:</div>
-                      <div class="requirement-item" :class="{ 'valid': createUserForm.password.length >= 8 }">
-                        <svg v-if="createUserForm.password.length >= 8" width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
-                        </svg>
-                        <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
-                        </svg>
-                        <span>At least 8 characters</span>
-                      </div>
-                      <div class="requirement-item" :class="{ 'valid': passwordChecks.hasUppercase }">
-                        <svg v-if="passwordChecks.hasUppercase" width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
-                        </svg>
-                        <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
-                        </svg>
-                        <span>One uppercase letter</span>
-                      </div>
-                      <div class="requirement-item" :class="{ 'valid': passwordChecks.hasLowercase }">
-                        <svg v-if="passwordChecks.hasLowercase" width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
-                        </svg>
-                        <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
-                        </svg>
-                        <span>One lowercase letter</span>
-                      </div>
-                      <div class="requirement-item" :class="{ 'valid': passwordChecks.hasNumber }">
-                        <svg v-if="passwordChecks.hasNumber" width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
-                        </svg>
-                        <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
-                        </svg>
-                        <span>One number</span>
-                      </div>
-                      <div class="requirement-item" :class="{ 'valid': passwordChecks.hasSpecialChar }">
-                        <svg v-if="passwordChecks.hasSpecialChar" width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
-                        </svg>
-                        <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
-                        </svg>
-                        <span>One special character</span>
-                      </div>
-                    </div>
-                  </div>
+                  <!-- Password is auto-generated, no field needed -->
                   
                   <div class="form-group">
                     <label for="email">Email *</label>
@@ -502,7 +526,7 @@
                     />
                   </div>
                   
-                  <div class="form-group">
+                  <!-- <div class="form-group">
                     <label for="isActive">Status</label>
                     <select 
                       id="isActive" 
@@ -512,7 +536,7 @@
                       <option value="Y">Active</option>
                       <option value="N">Inactive</option>
                     </select>
-                  </div>
+                  </div> -->
                 </div>
                 
                 <!-- Permissions Section -->
@@ -747,6 +771,88 @@
             </div>
           </transition>
           
+          <!-- All Users List with Toggle -->
+          <transition name="slide-down">
+            <div v-if="showAllUsersList && isGRCAdministrator" class="all-users-list-container">
+              <div class="form-header">
+                <h3 class="form-title">
+                  <i class="fas fa-users"></i>
+                  All Users - Active/Inactive Status
+                </h3>
+                <p class="form-description">
+                  View and manage user active/inactive status. Toggle the switch to activate or deactivate users.
+                </p>
+              </div>
+              
+              <div class="all-users-content">
+                <!-- Loading State -->
+                <div v-if="loadingAllUsers" class="loading-users">
+                  <div class="spinner"></div>
+                  <p>Loading users...</p>
+                </div>
+                
+                <!-- Users Table -->
+                <div v-else-if="allUsersList.length > 0" class="users-table-container">
+                  <table class="users-table">
+                    <thead>
+                      <tr>
+                        <th>User ID</th>
+                        <th>Username</th>
+                        <th>Full Name</th>
+                        <th>Email</th>
+                        <th>Department</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="user in allUsersList" :key="user.UserId" :class="{ 'inactive-user': user.IsActive === 'N' || user.IsActive === false }">
+                        <td>{{ user.UserId }}</td>
+                        <td>{{ user.UserName }}</td>
+                        <td>{{ user.FirstName }} {{ user.LastName }}</td>
+                        <td>{{ user.Email }}</td>
+                        <td>{{ user.DepartmentName || user.DepartmentId || 'N/A' }}</td>
+                        <td>
+                          <span :class="['status-badge', (user.IsActive === 'Y' || user.IsActive === true) ? 'active' : 'inactive']">
+                            {{ (user.IsActive === 'Y' || user.IsActive === true) ? 'Active' : 'Inactive' }}
+                          </span>
+                        </td>
+                        <td>
+                          <label class="status-toggle-switch">
+                            <input 
+                              type="checkbox" 
+                              :checked="user.IsActive === 'Y' || user.IsActive === true"
+                              @change="toggleUserStatus(user)"
+                              :disabled="updatingUserStatus === user.UserId"
+                            />
+                            <span class="slider"></span>
+                          </label>
+                          <span v-if="updatingUserStatus === user.UserId" class="updating-indicator">
+                            <i class="fas fa-spinner fa-spin"></i>
+                          </span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                
+                <!-- No Users Message -->
+                <div v-else class="no-users-message">
+                  <i class="fas fa-users"></i>
+                  <p>No users found.</p>
+                </div>
+                
+                <!-- Messages -->
+                <div v-if="allUsersError" class="message error-message">
+                  <i class="fas fa-exclamation-circle"></i> {{ allUsersError }}
+                </div>
+                <div v-if="allUsersSuccess" class="message success-message">
+                  <i class="fas fa-check-circle"></i> {{ allUsersSuccess }}
+                </div>
+              </div>
+            </div>
+          </transition>
+          
           <div v-if="!isGRCAdministrator" class="access-denied-message">
             <i class="fas fa-lock"></i>
             <p>Access Denied: Only GRC Administrators can manage users.</p>
@@ -914,7 +1020,285 @@
           </div>
         </div>
       </div>
+      
+      <!-- Requests Tab -->
+      <div v-else-if="activeTab === 'requests'" class="requests-section">
+        <!-- Data Subject Requests -->
+        <div class="requests-container">
+          <h2 class="section-title">
+            <i class="fas fa-file-alt"></i> Data Subject Requests
+          </h2>
+          <p class="section-helper">
+            View all your data subject requests including access, rectification, erasure, and portability requests.
+          </p>
+         
+          <!-- Loading State -->
+          <div v-if="loadingRequests" class="loading-container">
+            <div class="spinner"></div>
+            <p>Loading requests...</p>
+          </div>
+         
+          <!-- Error State -->
+          <div v-else-if="requestsError" class="message error-message">
+            <i class="fas fa-exclamation-circle"></i> {{ requestsError }}
+          </div>
+         
+          <!-- Requests Table -->
+          <div v-else class="requests-table-container">
+            <table class="requests-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>User ID</th>
+                  <th>User Name</th>
+                  <th>Request Type</th>
+                  <th>Status</th>
+                  <th>Verification Status</th>
+                  <th>Created At</th>
+                  <th>Updated At</th>
+                  <th>Approved By</th>
+                  <th v-if="isAdminUser">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="dataSubjectRequests.length === 0">
+                  <td :colspan="isAdminUser ? 10 : 9" class="no-requests">
+                    <i class="fas fa-inbox"></i>
+                    <p>No data subject requests found.</p>
+                  </td>
+                </tr>
+                <tr v-for="request in dataSubjectRequests" :key="request.id">
+                  <td>{{ request.id }}</td>
+                  <td>{{ request.user_id }}</td>
+                  <td>{{ request.user_name }}</td>
+                  <td>
+                    <span class="request-type-badge" :class="'type-' + request.request_type.toLowerCase()">
+                      {{ request.request_type_display }}
+                    </span>
+                  </td>
+                  <td>
+                    <span class="status-badge" :class="'status-' + request.status.toLowerCase().replace(' ', '-')">
+                      {{ request.status_display }}
+                    </span>
+                  </td>
+                  <td>
+                    <span class="verification-badge" :class="'verification-' + request.verification_status.toLowerCase().replace(' ', '-')">
+                      {{ request.verification_status_display }}
+                    </span>
+                  </td>
+                  <td>{{ formatDate(request.created_at) }}</td>
+                  <td>{{ formatDate(request.updated_at) }}</td>
+                  <td>
+                    <span v-if="request.approved_by_name">{{ request.approved_by_name }}</span>
+                    <span v-else class="text-muted">N/A</span>
+                  </td>
+                  <td v-if="isAdminUser">
+                    <div class="action-buttons">
+                      <button
+                        @click="viewRequestDetails(request)"
+                        class="action-btn view-btn"
+                        title="View Request Details"
+                      >
+                        <i class="fas fa-eye"></i> View Request
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
     </div>
+   
+    <!-- Request Details Modal -->
+    <div v-if="showRequestDetailsModal" class="modal-overlay" @click="closeRequestDetailsModal">
+      <div class="modal-content request-details-modal" @click.stop>
+        <div class="modal-header">
+          <h3>
+            <i class="fas fa-file-alt"></i>
+            Request Details - {{ selectedRequest?.request_type_display || 'Rectification' }}
+          </h3>
+          <button class="modal-close-btn" @click="closeRequestDetailsModal">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div v-if="selectedRequest" class="request-details-content">
+            <!-- Request Information -->
+            <div class="request-info-section">
+              <h4><i class="fas fa-info-circle"></i> Request Information</h4>
+              <div class="info-grid">
+                <div class="info-item">
+                  <label>Request ID:</label>
+                  <span>{{ selectedRequest.id }}</span>
+                </div>
+                <div class="info-item">
+                  <label>User ID:</label>
+                  <span>{{ selectedRequest.user_id }}</span>
+                </div>
+                <div class="info-item">
+                  <label>User Name:</label>
+                  <span>{{ selectedRequest.user_name }}</span>
+                </div>
+                <div class="info-item">
+                  <label>Request Type:</label>
+                  <span class="request-type-badge" :class="'type-' + selectedRequest.request_type.toLowerCase()">
+                    {{ selectedRequest.request_type_display }}
+                  </span>
+                </div>
+                <!-- Show ACCESS request specific fields -->
+                <div v-if="selectedRequest.request_type === 'ACCESS'" class="info-item">
+                  <label>Requested URL:</label>
+                  <span class="url-text">{{ selectedRequest.audit_trail?.requested_url || 'N/A' }}</span>
+                </div>
+                <div v-if="selectedRequest.request_type === 'ACCESS'" class="info-item">
+                  <label>Feature:</label>
+                  <span>{{ selectedRequest.audit_trail?.requested_feature || 'N/A' }}</span>
+                </div>
+                <div v-if="selectedRequest.request_type === 'ACCESS'" class="info-item">
+                  <label>Required Permission:</label>
+                  <span class="permission-badge" v-if="selectedRequest.audit_trail?.required_permission">
+                    {{ selectedRequest.audit_trail.required_permission }}
+                  </span>
+                  <span v-else class="text-muted">N/A</span>
+                </div>
+                <div v-if="selectedRequest.request_type === 'ACCESS' && selectedRequest.audit_trail?.message" class="info-item">
+                  <label>Message:</label>
+                  <span>{{ selectedRequest.audit_trail.message }}</span>
+                </div>
+                <!-- Show info_type for non-ACCESS requests -->
+                <div v-if="selectedRequest.request_type !== 'ACCESS'" class="info-item">
+                  <label>Requested From:</label>
+                  <span class="info-type-badge" :class="selectedRequest.audit_trail?.info_type === 'personal' ? 'info-type-personal' : 'info-type-business'">
+                    <i :class="selectedRequest.audit_trail?.info_type === 'personal' ? 'fas fa-user' : 'fas fa-building'"></i>
+                    {{ selectedRequest.audit_trail?.info_type === 'personal' ? 'Personal Information' : 'Business Information' }}
+                  </span>
+                </div>
+                <div class="info-item">
+                  <label>Status:</label>
+                  <span class="status-badge" :class="'status-' + selectedRequest.status.toLowerCase().replace(' ', '-')">
+                    {{ selectedRequest.status_display }}
+                  </span>
+                </div>
+                <div class="info-item">
+                  <label>Created At:</label>
+                  <span>{{ formatDate(selectedRequest.created_at) }}</span>
+                </div>
+              </div>
+            </div>
+ 
+            <!-- Changes Section (only for non-ACCESS requests) -->
+            <div v-if="selectedRequest.request_type !== 'ACCESS' && selectedRequest.audit_trail && selectedRequest.audit_trail.changes" class="changes-section">
+              <h4><i class="fas fa-edit"></i> Requested Changes</h4>
+              <div class="changes-list-container">
+                <div
+                  v-for="(change, field) in selectedRequest.audit_trail.changes"
+                  :key="field"
+                  class="change-item"
+                >
+                  <div class="change-field-name">
+                    <i class="fas fa-tag"></i>
+                    <strong>{{ formatFieldName(field) }}</strong>
+                  </div>
+                  <div class="change-values">
+                    <div class="change-old">
+                      <label>Current Value:</label>
+                      <span>{{ change.old || 'N/A' }}</span>
+                    </div>
+                    <div class="change-arrow">
+                      <i class="fas fa-arrow-right"></i>
+                    </div>
+                    <div class="change-new">
+                      <label>New Value:</label>
+                      <span>{{ change.new || 'N/A' }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div v-else-if="selectedRequest.request_type !== 'ACCESS'" class="no-changes">
+              <p><i class="fas fa-info-circle"></i> No changes found in this request.</p>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="modal-cancel-btn" @click="closeRequestDetailsModal">
+            Close
+          </button>
+          <div v-if="selectedRequest && selectedRequest.status !== 'APPROVED' && selectedRequest.status !== 'REJECTED'" class="modal-action-buttons">
+            <button
+              class="modal-reject-btn"
+              @click="handleRejectRequest(selectedRequest.id)"
+              :disabled="processingRequestId === selectedRequest.id"
+            >
+              <i v-if="processingRequestId === selectedRequest.id" class="fas fa-spinner fa-spin"></i>
+              <i v-else class="fas fa-times"></i>
+              {{ processingRequestId === selectedRequest.id ? 'Rejecting...' : 'Reject' }}
+            </button>
+            <button
+              class="modal-approve-btn"
+              @click="handleApproveRequest(selectedRequest.id)"
+              :disabled="processingRequestId === selectedRequest.id"
+            >
+              <i v-if="processingRequestId === selectedRequest.id" class="fas fa-spinner fa-spin"></i>
+              <i v-else class="fas fa-check"></i>
+              {{ processingRequestId === selectedRequest.id ? 'Approving...' : 'Approve & Apply Changes' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+ 
+    <!-- Rectification Request Modal -->
+    <div v-if="showRectificationModal" class="modal-overlay" @click="closeRectificationModal">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3>
+            <i class="fas fa-file-alt"></i>
+            Request Rectification of {{ currentEditType === 'personal' ? 'Personal' : 'Business' }} Information
+          </h3>
+          <button class="modal-close-btn" @click="closeRectificationModal">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-message">
+            You are requesting to update your {{ currentEditType === 'personal' ? 'personal' : 'business' }} information.
+            The changes will be reviewed and approved by an administrator.
+          </p>
+          <div class="changes-summary" v-if="Object.keys(getChanges()).length > 0">
+            <h4>Changes Summary:</h4>
+            <ul class="changes-list">
+              <li v-for="(change, field) in getChanges()" :key="field">
+                <strong>{{ formatFieldName(field) }}:</strong>
+                <span class="old-value">{{ change.old }}</span> →
+                <span class="new-value">{{ change.new }}</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="modal-cancel-btn" @click="closeRectificationModal">
+            Cancel
+          </button>
+          <button class="modal-request-btn" @click="submitRectificationRequest" :disabled="submittingRectification">
+            <i v-if="submittingRectification" class="fas fa-spinner fa-spin"></i>
+            <i v-else class="fas fa-paper-plane"></i>
+            {{ submittingRectification ? 'Submitting...' : 'Request' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  
+ 
+    <!-- Forgot Password Modal -->
+    <ForgotPassword 
+      :showModal="showForgotPasswordModal" 
+      :username="''"
+      @close="showForgotPasswordModal = false" 
+    />
   </div>
   
 
@@ -925,11 +1309,13 @@
 // import { API_ENDPOINTS } from '@/config/api.js'
 import { api } from '../../data/api';
 import ConsentManagement from '../Consent/ConsentManagement.vue';
+import ForgotPassword from './ForgotPassword.vue';
 
 export default {
   name: 'UserProfile',
   components: {
-    ConsentManagement
+    ConsentManagement,
+    ForgotPassword
   },
   data() {
     return {
@@ -942,7 +1328,8 @@ export default {
         { key: 'password', label: 'Password', icon: 'fas fa-key' },
         { key: 'notification', label: 'Notification', icon: 'fas fa-bell' },
         { key: 'user-management', label: 'User Management', icon: 'fas fa-users', adminOnly: true },
-        { key: 'consent-config', label: 'Consent Management', icon: 'fas fa-check-circle' }
+        { key: 'consent-config', label: 'Consent Management', icon: 'fas fa-check-circle' },
+        { key: 'requests', label: 'Requests', icon: 'fas fa-file-alt'}
       ],
       form: {
         firstName: '',
@@ -971,6 +1358,7 @@ export default {
       loading: false,
       error: null,
       success: null,
+      showForgotPasswordModal: false,
       userPermissions: {
         role: '',
         modules: {}
@@ -980,6 +1368,12 @@ export default {
       isGRCAdministrator: false,
              showCreateUserForm: false, // New state for the integrated form
       showManageUsersForm: false, // State for manage users form
+      showAllUsersList: false, // State for all users list
+      allUsersList: [], // List of all users
+      loadingAllUsers: false, // Loading state for fetching users
+      updatingUserStatus: null, // User ID being updated
+      allUsersError: null, // Error message for all users operations
+      allUsersSuccess: null, // Success message for all users operations
       passwordFieldType: 'password', // For password visibility toggle
       usersList: [], // List of users for dropdown
       selectedUserId: '', // Selected user ID for editing
@@ -994,7 +1388,6 @@ export default {
       moduleSelectAllManage: {}, // Module select all for manage users
       createUserForm: {
          username: '',
-         password: '',
          email: '',
          firstName: '',
          lastName: '',
@@ -1030,6 +1423,21 @@ export default {
       consentMessage: '',
       consentMessageType: 'success',
       showConsentFrameworkSelector: false,
+      // Data Subject Requests
+      dataSubjectRequests: [],
+      loadingRequests: false,
+      requestsError: null,
+      processingRequestId: null,
+      // Edit mode states
+      editModePersonal: false,
+      editModeBusiness: false,
+      originalPersonalData: {},
+      originalBusinessData: {},
+      showRectificationModal: false,
+      currentEditType: 'personal', // 'personal' or 'business'
+      submittingRectification: false,
+      showRequestDetailsModal: false,
+      selectedRequest: null,
       rbacModules: [
         {
           name: 'compliance',
@@ -1106,13 +1514,19 @@ export default {
     },
     isCreateUserFormValid() {
       return this.createUserForm.username && 
-             this.createUserForm.password && 
-             this.passwordErrors.length === 0 &&
              this.createUserForm.email && 
              this.createUserForm.firstName && 
              this.createUserForm.lastName && 
              this.createUserForm.departmentId && 
              this.createUserForm.role;
+            },
+    isAdminUser() {
+      const userId = parseInt(this.getCurrentUserId());
+      return [1, 2, 3, 4].includes(userId);
+    },
+    hasAccessRequests() {
+      // Check if any data subject requests are of type ACCESS
+      return this.dataSubjectRequests.some(req => req.request_type === 'ACCESS');
     }
   },
   mounted() {
@@ -1138,6 +1552,9 @@ export default {
       if (newTab === 'consent-config') {
         // Reset to 'my-consents' sub-tab when switching to consent management
         this.consentSubTab = 'my-consents';
+      } else if (newTab === 'requests') {
+        // Load requests when switching to requests tab
+        this.loadDataSubjectRequests();
       }
     },
     consentSubTab(newSubTab) {
@@ -1310,13 +1727,15 @@ export default {
                 const data = businessResponse.data.data;
                 this.businessInfo = {
                   departmentId: data.DepartmentId,
-                  departmentName: data.DepartmentName,
+                  departmentName: data.DepartmentName || 'N/A',
                   businessUnitName: data.BusinessUnitName || 'N/A',
-                  businessUnitCode: data.BusinessUnitCode || 'N/A',
+                  businessUnitCode: data.BusinessUnitCode || '',
                   entityName: data.EntityName || 'N/A',
-                  entityType: data.EntityType || 'N/A',
+                  entityType: data.EntityType || '',
                   location: data.Location || 'N/A',
-                  departmentHead: data.DepartmentHead || 'N/A'
+                  departmentHead: data.DepartmentHead || 'N/A',
+                  businessUnitDisplay: (data.BusinessUnitName || 'N/A') + ' (' + (data.BusinessUnitCode || '') + ')',
+                  entityDisplay: (data.EntityName || 'N/A') + ' - ' + (data.EntityType || '')
                 };
               }
             } catch (businessError) {
@@ -1810,6 +2229,113 @@ async updatePassword() {
      cancelManageUsers() {
        this.toggleManageUsersForm();
      },
+     
+     toggleAllUsersList() {
+       this.showAllUsersList = !this.showAllUsersList;
+       if (this.showAllUsersList) {
+         this.fetchAllUsers();
+       } else {
+         this.allUsersList = [];
+         this.allUsersError = null;
+         this.allUsersSuccess = null;
+       }
+     },
+     
+     async fetchAllUsers() {
+       this.loadingAllUsers = true;
+       this.allUsersError = null;
+       this.allUsersSuccess = null;
+       
+       try {
+         const accessToken = localStorage.getItem('access_token');
+         const headers = {
+           'Content-Type': 'application/json',
+           'X-Requested-With': 'XMLHttpRequest'
+         };
+         
+         if (accessToken) {
+           headers['Authorization'] = `Bearer ${accessToken}`;
+         }
+         
+         const response = await fetch('/api/users/', {
+           method: 'GET',
+           headers: headers,
+           credentials: 'include'
+         });
+         
+         const result = await response.json();
+         
+         if (response.ok && result.success) {
+           this.allUsersList = result.users || [];
+           this.allUsersSuccess = `Loaded ${this.allUsersList.length} users`;
+           setTimeout(() => {
+             this.allUsersSuccess = null;
+           }, 3000);
+         } else {
+           this.allUsersError = result.error || result.message || 'Failed to fetch users';
+         }
+       } catch (error) {
+         console.error('Error fetching users:', error);
+         this.allUsersError = 'Network error. Please try again.';
+       } finally {
+         this.loadingAllUsers = false;
+       }
+     },
+     
+     async toggleUserStatus(user) {
+       this.updatingUserStatus = user.UserId;
+       this.allUsersError = null;
+       this.allUsersSuccess = null;
+       
+       // Handle both string ('Y'/'N') and boolean (true/false) values
+       const isCurrentlyActive = user.IsActive === 'Y' || user.IsActive === true;
+       const newStatus = isCurrentlyActive ? 'N' : 'Y';
+       const oldStatus = user.IsActive;
+       
+       // Optimistically update UI
+       user.IsActive = newStatus;
+       
+       try {
+         const accessToken = localStorage.getItem('access_token');
+         const headers = {
+           'Content-Type': 'application/json',
+           'X-Requested-With': 'XMLHttpRequest'
+         };
+         
+         if (accessToken) {
+           headers['Authorization'] = `Bearer ${accessToken}`;
+         }
+         
+         const response = await fetch(`/api/users/${user.UserId}/status/`, {
+           method: 'PATCH',
+           headers: headers,
+           credentials: 'include',
+           body: JSON.stringify({
+             isActive: newStatus
+           })
+         });
+         
+         const result = await response.json();
+         
+         if (response.ok && result.success) {
+           this.allUsersSuccess = `User ${user.UserName} is now ${newStatus === 'Y' ? 'Active' : 'Inactive'}`;
+           setTimeout(() => {
+             this.allUsersSuccess = null;
+           }, 3000);
+         } else {
+           this.allUsersError = result.message || result.error || 'Failed to update user status';
+           // Revert the toggle
+           user.IsActive = oldStatus;
+         }
+       } catch (error) {
+         console.error('Error updating user status:', error);
+         this.allUsersError = 'Network error. Please try again.';
+         // Revert the toggle
+         user.IsActive = oldStatus;
+       } finally {
+         this.updatingUserStatus = null;
+       }
+     },
 
            async createUser() {
         this.createUserLoading = true;
@@ -1817,13 +2343,6 @@ async updatePassword() {
         this.createUserSuccess = null;
 
         try {
-          // Validate password before submitting
-          this.validatePassword()
-          if (this.passwordErrors.length > 0) {
-            this.createUserError = 'Password does not meet requirements. Please check the requirements below.';
-            return;
-          }
-
           const userId = this.getCurrentUserId();
           if (!userId) {
             this.createUserError = 'User ID not found. Please log in again.';
@@ -1838,7 +2357,7 @@ async updatePassword() {
 
           const newUser = {
             username: this.createUserForm.username,
-            password: this.createUserForm.password,
+            // Password will be auto-generated by backend
             email: this.createUserForm.email,
             firstName: this.createUserForm.firstName,
             lastName: this.createUserForm.lastName,
@@ -2161,21 +2680,534 @@ async updatePassword() {
           this.consentMessage = '';
         }, 5000);
       },
-
+      async loadDataSubjectRequests() {
+        this.loadingRequests = true;
+        this.requestsError = null;
+       
+        try {
+          const userId = this.getCurrentUserId();
+          if (!userId) {
+            throw new Error('User ID not found');
+          }
+         
+          const { API_BASE_URL } = await import('../../config/api.js');
+          const axios = (await import('axios')).default;
+         
+          const response = await axios.get(
+            `${API_BASE_URL}/api/data-subject-requests/${userId}/`,
+            { headers: this.getConsentAuthHeaders() }
+          );
+         
+          if (response.data.status === 'success') {
+            this.dataSubjectRequests = response.data.data || [];
+          } else {
+            throw new Error(response.data.message || 'Failed to load requests');
+          }
+        } catch (error) {
+          console.error('Error loading data subject requests:', error);
+          this.requestsError = error.response?.data?.message ||
+                             error.response?.data?.error ||
+                             error.message ||
+                             'Failed to load data subject requests. Please try again.';
+        } finally {
+          this.loadingRequests = false;
+        }
+      },
+     
+      formatDate(dateString) {
+        if (!dateString) return 'N/A';
+        try {
+          const date = new Date(dateString);
+          return date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+        } catch (e) {
+          return 'Invalid Date';
+        }
+      },
+     
+      viewRequestDetails(request) {
+        this.selectedRequest = request;
+        this.showRequestDetailsModal = true;
+      },
+     
+      closeRequestDetailsModal() {
+        this.showRequestDetailsModal = false;
+        this.selectedRequest = null;
+      },
+     
+      async handleApproveRequest(requestId) {
+        await this.updateRequestStatus(requestId, 'APPROVED', true);
+      },
+     
+      async handleRejectRequest(requestId) {
+        await this.updateRequestStatus(requestId, 'REJECTED', false);
+      },
+     
+      async updateRequestStatus(requestId, status, applyChanges = false) {
+        this.processingRequestId = requestId;
+        try {
+          const userId = this.getCurrentUserId();
+          if (!userId) {
+            throw new Error('User ID not found');
+          }
+         
+          const { API_BASE_URL } = await import('../../config/api.js');
+          const axios = (await import('axios')).default;
+         
+          const response = await axios.put(
+            `${API_BASE_URL}/api/data-subject-requests/${requestId}/update-status/`,
+            {
+              status: status,
+              user_id: userId,
+              apply_changes: applyChanges
+            },
+            { headers: this.getConsentAuthHeaders() }
+          );
+         
+          if (response.data.status === 'success') {
+            // Update the request in the local array
+            const requestIndex = this.dataSubjectRequests.findIndex(r => r.id === requestId);
+            if (requestIndex !== -1) {
+              this.dataSubjectRequests[requestIndex].status = status;
+              this.dataSubjectRequests[requestIndex].status_display = status === 'APPROVED' ? 'Approved' : (status === 'REJECTED' ? 'Rejected' : 'Requested');
+              this.dataSubjectRequests[requestIndex].updated_at = new Date().toISOString();
+            }
+           
+            // Close the modal if open
+            if (this.showRequestDetailsModal) {
+              this.closeRequestDetailsModal();
+            }
+           
+            // Reload requests to get updated data
+            await this.loadDataSubjectRequests();
+           
+            // Show success message
+            const statusDisplay = status === 'APPROVED' ? 'approved and changes applied' : (status === 'REJECTED' ? 'rejected' : 'updated');
+            this.success = `Request ${statusDisplay} successfully`;
+            setTimeout(() => {
+              this.success = null;
+            }, 3000);
+          } else {
+            throw new Error(response.data.message || 'Failed to update request');
+          }
+        } catch (error) {
+          console.error(`Error ${status.toLowerCase()}ing request:`, error);
+          this.error = error.response?.data?.message ||
+                      error.response?.data?.error ||
+                      error.message ||
+                      `Failed to ${status.toLowerCase()} request. Please try again.`;
+          setTimeout(() => {
+            this.error = null;
+          }, 5000);
+        } finally {
+          this.processingRequestId = null;
+        }
+      },
+ 
       getConsentAuthHeaders() {
         const token = localStorage.getItem('access_token');
         return {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         };
-      }
-  }
+      },
+
+      // Access Requests Methods
+     
+     // Edit mode methods
+     enableEditMode(type) {
+       if (type === 'personal') {
+         // Store original values
+         this.originalPersonalData = {
+           firstName: this.form.firstName,
+           lastName: this.form.lastName,
+           email: this.form.email,
+           phone: this.form.phone || ''
+         };
+         this.editModePersonal = true;
+       } else if (type === 'business') {
+         // Store original values
+         this.originalBusinessData = {
+           departmentName: this.businessInfo.departmentName || '',
+           businessUnitName: this.businessInfo.businessUnitName || '',
+           businessUnitCode: this.businessInfo.businessUnitCode || '',
+           entityName: this.businessInfo.entityName || '',
+           entityType: this.businessInfo.entityType || '',
+           location: this.businessInfo.location || '',
+           departmentHead: this.businessInfo.departmentHead || ''
+         };
+         // Ensure display fields are initialized
+         if (!this.businessInfo.businessUnitDisplay) {
+           this.businessInfo.businessUnitDisplay = (this.businessInfo.businessUnitName || 'N/A') + ' (' + (this.businessInfo.businessUnitCode || '') + ')';
+         }
+         if (!this.businessInfo.entityDisplay) {
+           this.businessInfo.entityDisplay = (this.businessInfo.entityName || 'N/A') + ' - ' + (this.businessInfo.entityType || '');
+         }
+         this.editModeBusiness = true;
+       }
+     },
+    
+     cancelEditMode(type) {
+       if (type === 'personal') {
+         // Restore original values
+         this.form.firstName = this.originalPersonalData.firstName;
+         this.form.lastName = this.originalPersonalData.lastName;
+         this.form.email = this.originalPersonalData.email;
+         this.form.phone = this.originalPersonalData.phone;
+         this.editModePersonal = false;
+         this.originalPersonalData = {};
+       } else if (type === 'business') {
+         // Restore original values
+         this.businessInfo.departmentName = this.originalBusinessData.departmentName;
+         this.businessInfo.businessUnitName = this.originalBusinessData.businessUnitName;
+         this.businessInfo.businessUnitCode = this.originalBusinessData.businessUnitCode;
+         this.businessInfo.entityName = this.originalBusinessData.entityName;
+         this.businessInfo.entityType = this.originalBusinessData.entityType;
+         this.businessInfo.location = this.originalBusinessData.location;
+         this.businessInfo.departmentHead = this.originalBusinessData.departmentHead;
+         this.businessInfo.businessUnitDisplay = this.originalBusinessData.businessUnitName + ' (' + this.originalBusinessData.businessUnitCode + ')';
+         this.businessInfo.entityDisplay = this.originalBusinessData.entityName + ' - ' + this.originalBusinessData.entityType;
+         this.editModeBusiness = false;
+         this.originalBusinessData = {};
+       }
+     },
+    
+     hasPersonalChanges() {
+       if (!this.editModePersonal) return false;
+       return (
+         this.form.firstName !== this.originalPersonalData.firstName ||
+         this.form.lastName !== this.originalPersonalData.lastName ||
+         this.form.email !== this.originalPersonalData.email ||
+         (this.form.phone || '') !== (this.originalPersonalData.phone || '')
+       );
+     },
+    
+     hasBusinessChanges() {
+       if (!this.editModeBusiness) return false;
+       // Check if display fields have changed (they contain the editable values)
+       const currentDisplay = {
+         departmentName: this.businessInfo.departmentName || '',
+         businessUnitDisplay: this.businessInfo.businessUnitDisplay || '',
+         entityDisplay: this.businessInfo.entityDisplay || '',
+         location: this.businessInfo.location || '',
+         departmentHead: this.businessInfo.departmentHead || ''
+       };
+       const originalDisplay = {
+         departmentName: this.originalBusinessData.departmentName || '',
+         businessUnitDisplay: (this.originalBusinessData.businessUnitName || 'N/A') + ' (' + (this.originalBusinessData.businessUnitCode || '') + ')',
+         entityDisplay: (this.originalBusinessData.entityName || 'N/A') + ' - ' + (this.originalBusinessData.entityType || ''),
+         location: this.originalBusinessData.location || '',
+         departmentHead: this.originalBusinessData.departmentHead || ''
+       };
+       return (
+         currentDisplay.departmentName !== originalDisplay.departmentName ||
+         currentDisplay.businessUnitDisplay !== originalDisplay.businessUnitDisplay ||
+         currentDisplay.entityDisplay !== originalDisplay.entityDisplay ||
+         currentDisplay.location !== originalDisplay.location ||
+         currentDisplay.departmentHead !== originalDisplay.departmentHead
+       );
+     },
+    
+     getChanges() {
+       const changes = {};
+       if (this.currentEditType === 'personal' && this.editModePersonal) {
+         if (this.form.firstName !== this.originalPersonalData.firstName) {
+           changes.firstName = {
+             old: this.originalPersonalData.firstName,
+             new: this.form.firstName
+           };
+         }
+         if (this.form.lastName !== this.originalPersonalData.lastName) {
+           changes.lastName = {
+             old: this.originalPersonalData.lastName,
+             new: this.form.lastName
+           };
+         }
+         if (this.form.email !== this.originalPersonalData.email) {
+           changes.email = {
+             old: this.originalPersonalData.email,
+             new: this.form.email
+           };
+         }
+         if ((this.form.phone || '') !== (this.originalPersonalData.phone || '')) {
+           changes.phone = {
+             old: this.originalPersonalData.phone || '',
+             new: this.form.phone || ''
+           };
+         }
+       } else if (this.currentEditType === 'business' && this.editModeBusiness) {
+         const current = {
+           departmentName: this.businessInfo.departmentName || '',
+           businessUnitDisplay: this.businessInfo.businessUnitDisplay || '',
+           entityDisplay: this.businessInfo.entityDisplay || '',
+           location: this.businessInfo.location || '',
+           departmentHead: this.businessInfo.departmentHead || ''
+         };
+         const original = {
+           departmentName: this.originalBusinessData.departmentName || '',
+           businessUnitDisplay: (this.originalBusinessData.businessUnitName || 'N/A') + ' (' + (this.originalBusinessData.businessUnitCode || '') + ')',
+           entityDisplay: (this.originalBusinessData.entityName || 'N/A') + ' - ' + (this.originalBusinessData.entityType || ''),
+           location: this.originalBusinessData.location || '',
+           departmentHead: this.originalBusinessData.departmentHead || ''
+         };
+        
+         if (current.departmentName !== original.departmentName) {
+           changes.departmentName = {
+             old: original.departmentName,
+             new: current.departmentName
+           };
+         }
+         if (current.businessUnitDisplay !== original.businessUnitDisplay) {
+           changes.businessUnit = {
+             old: original.businessUnitDisplay,
+             new: current.businessUnitDisplay
+           };
+         }
+         if (current.entityDisplay !== original.entityDisplay) {
+           changes.entity = {
+             old: original.entityDisplay,
+             new: current.entityDisplay
+           };
+         }
+         if (current.location !== original.location) {
+           changes.location = {
+             old: original.location,
+             new: current.location
+           };
+         }
+         if (current.departmentHead !== original.departmentHead) {
+           changes.departmentHead = {
+             old: original.departmentHead,
+             new: current.departmentHead
+           };
+         }
+       }
+       return changes;
+     },
+    
+     formatFieldName(field) {
+       const fieldNames = {
+         firstName: 'First Name',
+         lastName: 'Last Name',
+         email: 'Email',
+         phone: 'Phone Number',
+         departmentName: 'Department',
+         businessUnit: 'Business Unit',
+         businessUnitName: 'Business Unit Name',
+         businessUnitCode: 'Business Unit Code',
+         entity: 'Entity',
+         entityName: 'Entity Name',
+         entityType: 'Entity Type',
+         location: 'Location',
+         departmentHead: 'Department Head'
+       };
+       return fieldNames[field] || field;
+     },
+    
+     openRectificationModal(type) {
+       this.currentEditType = type;
+       this.showRectificationModal = true;
+     },
+    
+     closeRectificationModal() {
+       this.showRectificationModal = false;
+     },
+    
+     async submitRectificationRequest() {
+       this.submittingRectification = true;
+       try {
+         const userId = this.getCurrentUserId();
+         if (!userId) {
+           this.error = 'User ID not found. Please log in again.';
+           return;
+         }
+        
+         const changes = this.getChanges();
+         if (Object.keys(changes).length === 0) {
+           this.error = 'No changes detected.';
+           this.submittingRectification = false;
+           return;
+         }
+        
+         const { API_BASE_URL } = await import('../../config/api.js');
+         const axios = (await import('axios')).default;
+        
+         const response = await axios.post(
+           `${API_BASE_URL}/api/data-subject-requests/create/`,
+           {
+             request_type: 'RECTIFICATION',
+             info_type: this.currentEditType,
+             changes: changes
+           },
+           { headers: this.getConsentAuthHeaders() }
+         );
+        
+         if (response.data.status === 'success') {
+           this.success = 'Rectification request submitted successfully!';
+           this.closeRectificationModal();
+          
+           // Exit edit mode
+           if (this.currentEditType === 'personal') {
+             this.editModePersonal = false;
+             this.originalPersonalData = {};
+           } else {
+             this.editModeBusiness = false;
+             this.originalBusinessData = {};
+           }
+          
+           // Reload requests if on requests tab
+           if (this.activeTab === 'requests') {
+             this.loadDataSubjectRequests();
+           }
+          
+           setTimeout(() => {
+             this.success = null;
+           }, 5000);
+         } else {
+           throw new Error(response.data.message || 'Failed to submit request');
+         }
+       } catch (error) {
+         console.error('Error submitting rectification request:', error);
+         this.error = error.response?.data?.message ||
+                     error.response?.data?.error ||
+                     error.message ||
+                     'Failed to submit rectification request. Please try again.';
+         setTimeout(() => {
+           this.error = null;
+         }, 5000);
+       } finally {
+         this.submittingRectification = false;
+       }
+     }
+ }
 }
 </script>
 
 
+
 <style scoped>
 @import './UserProfile.css';
+
+.password-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.reset-password-section {
+  margin-bottom: 1rem;
+}
+
+.reset-password-card {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+}
+
+.reset-password-card:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+}
+
+.reset-password-content {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.reset-password-icon {
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.reset-password-info {
+  flex: 1;
+}
+
+.reset-password-info h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.reset-password-info p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.reset-password-btn {
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+
+.reset-password-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.reset-password-btn:active {
+  transform: translateY(0);
+}
+
+.password-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 2rem 0;
+  color: #9ca3af;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.password-divider::before,
+.password-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.password-divider span {
+  padding: 0 1rem;
+}
+
+.section-subtitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 0.5rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
 
 .password-requirements {
   margin-top: 8px;
@@ -2222,4 +3254,192 @@ async updatePassword() {
 .password-input-wrapper input.invalid {
   border-color: #ef4444;
 }
+/* All Users List Styles */
+.all-users-list-container {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  margin-top: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.all-users-btn {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.all-users-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.all-users-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.users-table-container {
+  overflow-x: auto;
+  margin-top: 1.5rem;
+}
+
+.users-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.users-table thead {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: white;
+}
+
+.users-table th {
+  padding: 1rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.users-table td {
+  padding: 1rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.users-table tbody tr:hover {
+  background: #f9fafb;
+}
+
+.users-table tbody tr.inactive-user {
+  opacity: 0.7;
+  background: #fef2f2;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.status-badge.active {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-badge.inactive {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.status-toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 24px;
+  margin-right: 8px;
+}
+
+.status-toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.status-toggle-switch .slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #cbd5e1;
+  transition: 0.3s;
+  border-radius: 24px;
+}
+
+.status-toggle-switch .slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+}
+
+.status-toggle-switch input:checked + .slider {
+  background-color: #10b981;
+}
+
+.status-toggle-switch input:checked + .slider:before {
+  transform: translateX(26px);
+}
+
+.status-toggle-switch input:disabled + .slider {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.updating-indicator {
+  display: inline-block;
+  margin-left: 8px;
+  color: #6366f1;
+}
+
+.loading-users {
+  text-align: center;
+  padding: 3rem;
+}
+
+.loading-users .spinner {
+  border: 3px solid #f3f4f6;
+  border-top: 3px solid #6366f1;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 1rem;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.no-users-message {
+  text-align: center;
+  padding: 3rem;
+  color: #6b7280;
+}
+
+.no-users-message i {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  color: #d1d5db;
+}
+
+.user-management-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  flex-wrap: wrap;
+}
+
 </style>
