@@ -117,8 +117,8 @@
             <p>Sign in to your GRC dashboard</p>
           </div>
           
-          <!-- MFA Step -->
-          <div v-if="showMfaStep" class="mfa-step">
+          <!-- MFA Step (only shown if MFA is enabled) -->
+          <div v-if="MFA_ENABLED && showMfaStep" class="mfa-step">
             <div class="mfa-header">
               <h3>Verify Your Identity</h3>
               <p>Enter the 6-digit code sent to your email</p>
@@ -456,7 +456,7 @@ import authService from '../../services/authService.js'
 import ForgotPassword from './ForgotPassword.vue'
 import ConsentForm from './ConsentForm.vue'
 import logo from '../../assets/RiskaVaire.png'
-import { RECAPTCHA_SITE_KEY } from '../../config/api.js'
+import { RECAPTCHA_SITE_KEY, MFA_ENABLED } from '../../config/api.js'
 
 const password = ref('')
 const rememberMe = ref(false)
@@ -539,8 +539,8 @@ const login = async () => {
       captchaToken.value
     )
     
-    // Handle MFA required
-    if (result.requiresMfa) {
+    // Handle MFA required (only if MFA is enabled)
+    if (MFA_ENABLED && result.requiresMfa) {
       showMfaStep.value = true
       emailMasked.value = result.emailMasked || 'your email'
       errorMessage.value = ''

@@ -186,6 +186,7 @@ class AmendmentProcessor:
             from django.conf import settings
             
             # Get API key from settings if not provided
+            # settings.OPENAI_API_KEY reads from environment variable OPENAI_API_KEY via settings.py
             if not api_key:
                 api_key = getattr(settings, 'OPENAI_API_KEY', None)
             
@@ -238,6 +239,7 @@ class AmendmentProcessor:
             from django.conf import settings
             
             # Get API key from settings if not provided
+            # settings.OPENAI_API_KEY reads from environment variable OPENAI_API_KEY via settings.py
             if not api_key:
                 api_key = getattr(settings, 'OPENAI_API_KEY', None)
             
@@ -487,6 +489,7 @@ def process_downloaded_amendment(
         # Step 2: Extract policies and subpolicies
         logger.info("Step 2/4: Extracting policies and subpolicies...")
         from django.conf import settings
+        # Get OpenAI API key from settings (which reads from environment variable OPENAI_API_KEY)
         api_key = getattr(settings, 'OPENAI_API_KEY', None)
         policies_data = processor.extract_policies_and_subpolicies(sections_dir, api_key=api_key)
         if not policies_data:

@@ -135,7 +135,7 @@ import DynamicTable from '../DynamicTable.vue'
 // import Dynamicalsearch from '../Dynamicalsearch.vue'
 import { PopupModal } from '@/modules/popup'
 import AccessUtils from '@/utils/accessUtils'
-import { API_ENDPOINTS } from '../../config/api.js'
+import { API_ENDPOINTS, axiosInstance } from '../../config/api.js'
 import riskDataService from '@/services/riskService'
 
 export default {
@@ -186,6 +186,8 @@ export default {
         ReviewerId: null
       },
       selectedExportFormat: '',
+      riskInstanceRetentionEnabled: true,
+      riskInstanceRetentionWarningShown: false,
       columnDefinitions: [
         {
           key: 'RiskInstanceId',
@@ -428,6 +430,7 @@ export default {
     this.visibleColumnKeys = [...defaultVisibleKeys];
     
     this.fetchInstances()
+    this.checkRetentionForPage('risk_instance_update')
   },
   methods: {
     applyFilters() {
@@ -475,12 +478,12 @@ export default {
         if (riskDataService.hasRiskInstancesCache()) {
           console.log('✅ [RiskInstances] Using cached risk instances')
           this.instances = riskDataService.getData('riskInstances') || []
-          this.dataSourceMessage = ``
+          this.dataSourceMessage = ''
         } else {
           console.log('⚠️ [RiskInstances] No cached data found, fetching from API...')
           const response = await axios.get(API_ENDPOINTS.RISK_INSTANCES)
           this.instances = response.data
-          this.dataSourceMessage = ``
+          this.dataSourceMessage = ''
 
           // Update cache so subsequent pages benefit
           riskDataService.setData('riskInstances', this.instances)
@@ -499,6 +502,46 @@ export default {
           await this.tryAlternativeEndpoint()
       } finally {
         this.loading = false
+      }
+    },
+
+    normalizeRetentionConfigs(raw) {
+      if (!raw) return {}
+      if (Array.isArray(raw)) {
+        return raw.reduce((acc, item) => {
+          const key = item.page_key || item.sub_page || item.SubPage
+          if (key) acc[key] = item
+          return acc
+        }, {})
+      }
+      return raw
+    },
+
+    async checkRetentionForPage(pageKey) {
+      try {
+        const params = { module_key: 'risk' }
+        const frameworkId = localStorage.getItem('framework_id') || localStorage.getItem('frameworkId')
+        if (frameworkId) params.framework_id = frameworkId
+
+        const response = await axiosInstance.get('/api/retention/page-configs/', { params })
+        const configs = this.normalizeRetentionConfigs(response.data?.data || response.data || {})
+        const cfg = configs[pageKey] || {}
+        const enabled = cfg.checklist_status ?? cfg.enabled ?? cfg.ChecklistStatus ?? true
+        this.riskInstanceRetentionEnabled = !!enabled
+
+        if (!this.riskInstanceRetentionEnabled && !this.riskInstanceRetentionWarningShown) {
+          const msg = 'Retention is OFF for Risk Instance updates. Data from updates will not be retained.'
+          if (this.$popup?.warning) {
+            this.$popup.warning(msg, 'Retention Disabled')
+          } else if (window?.PopupService?.warning) {
+            window.PopupService.warning(msg, 'Retention Disabled')
+          } else {
+            alert(msg)
+          }
+          this.riskInstanceRetentionWarningShown = true
+        }
+      } catch (error) {
+        console.warn('Retention check for risk_instance_update failed:', error?.message || error)
       }
     },
     

@@ -15,6 +15,7 @@ xmltodict
 reportlab
 requests>=2.31.0
 celery>=5.3.4
+redis>=5
 python-docx
 langchain_openai
 langchain

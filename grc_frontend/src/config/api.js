@@ -19,6 +19,13 @@ export const API_BASE_URL = API_URLS[ENVIRONMENT] || API_URLS.aws;
 // Replace with your actual reCAPTCHA site key from Google
 // Get your keys from: https://www.google.com/recaptcha/admin
 export const RECAPTCHA_SITE_KEY = process.env.VUE_APP_RECAPTCHA_SITE_KEY || '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI'; // Default is Google's test key
+
+// MFA Configuration
+// Set VUE_APP_MFA_ENABLED=true to enable Multi-Factor Authentication, false to disable
+// Default: true (enabled)
+export const MFA_ENABLED = process.env.VUE_APP_MFA_ENABLED !== undefined 
+  ? process.env.VUE_APP_MFA_ENABLED === 'true' 
+  : true; // Default to enabled if not specified
  
 // API endpoints with base URL
 export const API_ENDPOINTS = {
@@ -30,6 +37,7 @@ export const API_ENDPOINTS = {
   RESET_PASSWORD: `${API_BASE_URL}/api/reset-password/`,
   GET_USER_EMAIL: `${API_BASE_URL}/api/get-user-email/`,
   TEST_SESSION_AUTH: `${API_BASE_URL}/api/test-session-auth/`,
+   PRODUCT_VERSION: `${API_BASE_URL}/api/product-version/`,
  
   // User Management
   USER_PROFILE: (userId) => `${API_BASE_URL}/api/user-profile/${userId}/`,
@@ -665,8 +673,10 @@ export const API_ENDPOINTS = {
   CHANGE_MGMT_MATCH_COMPLIANCES: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/match-compliances/`,
   CHANGE_MGMT_ADD_COMPLIANCE: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/add-compliance/`,
   CHANGE_MGMT_CHECK_UPDATES: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/check-updates/`,
+  CHANGE_MGMT_UPDATE_NOTIFICATIONS: `${API_BASE_URL}/api/change-management/frameworks/update-notifications/`,
   CHANGE_MGMT_SCAN_DOWNLOADS: `${API_BASE_URL}/api/change-management/scan-downloads/`,
   CHANGE_MGMT_DOCUMENT_INFO: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/document-info/`,
+  CHANGE_MGMT_AUTO_CHECK_ALL: `${API_BASE_URL}/api/change-management/auto-check-frameworks/`,
   CHANGE_MGMT_START_ANALYSIS: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/start-analysis/`
 };
  
@@ -709,11 +719,13 @@ export const axiosInstance = createAxiosInstance();
 // Console log for debugging
 console.log(`🔧 API Configuration: Using ${ENVIRONMENT} environment`);
 console.log(`🌐 Base URL: ${API_BASE_URL}`);
+console.log(`🔐 MFA Status: ${MFA_ENABLED ? 'ENABLED' : 'DISABLED'}`);
  
 export default {
   API_BASE_URL,
   API_ENDPOINTS,
   ENVIRONMENT,
+  MFA_ENABLED,
   createAxiosInstance,
   axiosInstance
 };

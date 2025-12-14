@@ -236,14 +236,33 @@ const frameworkComparisonService = {
   },
 
   /**
+   * Get summary of frameworks that currently have amendments
+   */
+  async getFrameworkUpdateNotifications() {
+    try {
+      const response = await axios.get(API_ENDPOINTS.CHANGE_MGMT_UPDATE_NOTIFICATIONS, {
+        withCredentials: true
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching framework update notifications:', error);
+      throw error;
+    }
+  },
+
+  /**
    * Get amendment document info for a framework
    */
   async getAmendmentDocumentInfo(frameworkId) {
     try {
+      // Add cache-busting parameter to ensure fresh data
       const response = await axios.get(
         API_ENDPOINTS.CHANGE_MGMT_DOCUMENT_INFO(frameworkId),
         {
-          withCredentials: true
+          withCredentials: true,
+          params: {
+            _t: Date.now() // Cache buster
+          }
         }
       );
       return response.data;

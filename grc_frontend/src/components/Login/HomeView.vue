@@ -1271,9 +1271,52 @@ const handleResize = () => {
   }
 };
 
+/**
+ * Fire-and-forget call to auto-check all frameworks for updates.
+ * Backend strictly enforces a 7-day throttle using latestComparisionCheckDate,
+ * so this runs quickly and skips work if less than 7 days have passed since last check.
+ * Same-day checks are also skipped to prevent unnecessary background processing.
+ * 
+ * Frontend also enforces same-day check using localStorage to prevent multiple calls.
+ */
+ const triggerAutoFrameworkChecks = async () => {
+  // Check if already triggered in this session
+  if (hasTriggeredAutoCheck.value) {
+    console.log('⏭️ [HomeView] Auto framework check already triggered in this session.');
+    return;
+  }
+  
+  // Check localStorage to prevent multiple calls on the same day
+  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  const lastCheckDate = localStorage.getItem('framework_auto_check_date');
+  
+  if (lastCheckDate === today) {
+    console.log(`⏭️ [HomeView] Auto framework check already ran today (${today}). Skipping.`);
+    return;
+  }
+  
+  hasTriggeredAutoCheck.value = true;
+  localStorage.setItem('framework_auto_check_date', today);
+
+  try {
+    await axios.post(API_ENDPOINTS.CHANGE_MGMT_AUTO_CHECK_ALL, {
+      force_run: false,
+      process_amendment: false,
+    });
+    console.log('✅ [HomeView] Auto framework check kicked off.');
+  } catch (error) {
+    console.error('❌ [HomeView] Auto framework check failed:', error);
+    // On error, don't update localStorage so it can retry
+    hasTriggeredAutoCheck.value = false;
+  }
+};
+
+
 // Approved Frameworks
 const approvedFrameworks = ref([]);
 const selectedFrameworkId = ref(null);
+
+const hasTriggeredAutoCheck = ref(false);
 
 // Homepage data from API
 const homepageData = ref(null);
@@ -3212,6 +3255,8 @@ onMounted(() => {
   if (typeof window !== 'undefined') {
     window.addEventListener('resize', handleResize);
   }
+
+  triggerAutoFrameworkChecks();
 
   // Initialize AOS
   AOS.init({

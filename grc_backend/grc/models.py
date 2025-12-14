@@ -2707,3 +2707,82 @@ class MfaAuditLog(models.Model):
         else:
             ip = request.META.get('REMOTE_ADDR', 'unknown')
         return ip
+
+# Product versioning for patch enforcement
+class ProductVersion(models.Model):
+    STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('deprecated', 'Deprecated'),
+        ('blocked', 'Blocked'),
+    ]
+
+    id = models.AutoField(primary_key=True)
+    version = models.CharField(max_length=50, unique=True)
+    description = models.TextField(null=True, blank=True)
+    release_date = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    min_supported = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.CharField(max_length=150, null=True, blank=True)
+
+    class Meta:
+        db_table = 'product_versions'
+        ordering = ['-release_date', '-created_at']
+
+    def __str__(self):
+        return f"{self.version} ({self.status})"
+
+    @classmethod
+    def get_latest(cls):
+        return cls.objects.filter(status='active').order_by('-release_date', '-created_at').first()
+
+    @classmethod
+    def get_min_supported(cls):
+        return cls.objects.filter(min_supported=True).order_by('-release_date', '-created_at').first()
+
+
+
+class RetentionModulePageConfig(models.Model):
+    """
+    Stores module/page level retention selections coming from the UI tree.
+    No framework link is stored by request.
+    """
+    id = models.AutoField(primary_key=True, db_column='Id')
+    module = models.CharField(max_length=100, db_column='Module')
+    sub_page = models.CharField(max_length=150, db_column='SubPage')
+    checklist_status = models.BooleanField(default=False, db_column='ChecklistStatus')
+    retention_days = models.PositiveIntegerField(default=210, db_column='RetentionDays')
+    created_at = models.DateTimeField(auto_now_add=True, db_column='CreatedAt')
+    updated_at = models.DateTimeField(auto_now=True, db_column='UpdatedAt')
+
+    class Meta:
+        db_table = 'retention_module_page_config'
+        indexes = [
+            models.Index(fields=['module', 'sub_page']),
+            models.Index(fields=['module', 'checklist_status']),
+        ]
+        unique_together = ('module', 'sub_page')
+
+    def __str__(self):
+        return f"{self.module} - {self.sub_page} ({'checked' if self.checklist_status else 'unchecked'})"
+
+
+# -----------------------------------------------------
+# Retention helper: compute expiry date from config
+# -----------------------------------------------------
+def compute_retention_expiry(module_key: str, page_key: str, default_days: int = 210):
+    """
+    Look up retention_days for a module/page and return current_date + days.
+    Returns None if lookup fails.
+    """
+    try:
+        cfg = RetentionModulePageConfig.objects.filter(
+            module=module_key,
+            sub_page=page_key
+        ).first()
+        days = cfg.retention_days if cfg else default_days
+        return timezone.now().date() + timedelta(days=days)
+    except Exception:
+        return None
+

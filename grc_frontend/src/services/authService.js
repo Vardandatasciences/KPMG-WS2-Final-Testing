@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { API_BASE_URL } from '../config/api.js'
+import { API_BASE_URL, MFA_ENABLED } from '../config/api.js'
 import eventBus, { LOGOUT_EVENT, LOGIN_EVENT } from '../utils/eventBus.js'
  
 class AuthService {
@@ -49,6 +49,23 @@ class AuthService {
                    
                     const token = localStorage.getItem('access_token')
                     if (token) {
+                        // Only check and refresh token if it's close to expiring (not on every request)
+                        // This prevents unnecessary refresh attempts that could cause logout loops
+                        const accessTokenExpires = localStorage.getItem('access_token_expires')
+                        if (accessTokenExpires) {
+                            const expirationTime = new Date(accessTokenExpires)
+                            const currentTime = new Date()
+                            const timeUntilExpiration = expirationTime.getTime() - currentTime.getTime()
+                            
+                            // Only refresh if token expires in less than 10 minutes
+                            if (timeUntilExpiration < 10 * 60 * 1000 && timeUntilExpiration > 0) {
+                                // Token is close to expiring, try to refresh (but don't block the request if it fails)
+                                this.checkAndRefreshToken().catch(err => {
+                                    console.warn('⚠️ Token refresh check failed (non-blocking):', err.message)
+                                })
+                            }
+                        }
+                        
                         config.headers.Authorization = `Bearer ${token}`
                         // Reduced logging - only log for important requests
                         if (config.url.includes('/jwt/') || config.url.includes('/api/risk/')) {
@@ -91,6 +108,12 @@ class AuthService {
                
                 // Handle 401 errors (token expired)
                 if (error.response && error.response.status === 401 && !originalRequest._retry) {
+                    // Don't try to refresh if we're already refreshing or logging out
+                    if (this.isRefreshing || this.isLoggingOut) {
+                        console.warn('⚠️ Refresh already in progress or logging out - skipping refresh attempt')
+                        return Promise.reject(error)
+                    }
+                    
                     console.log('🔄 401 error detected - attempting token refresh...')
                    
                     // Mark this request as retried to prevent infinite loops
@@ -157,8 +180,8 @@ class AuthService {
                 timeout: 30000 // 30 seconds timeout
             })
  
-            // Handle MFA required response
-            if (response.data.status === 'mfa_required') {
+            // Handle MFA required response (only if MFA is enabled)
+            if (MFA_ENABLED && response.data.status === 'mfa_required') {
                 return {
                     success: false,
                     requiresMfa: true,
@@ -1075,6 +1098,10 @@ class AuthService {
             this.clearAuthData(false) // Don't auto-redirect for explicit logout
         }
     }
+
+
+
+    
 
     /**
      * Initiate Google OAuth SSO login

@@ -4,7 +4,7 @@ from rest_framework.routers import DefaultRouter
 
 from django.http import HttpResponse
 
-from .authentication import jwt_login, jwt_refresh, jwt_logout, jwt_verify, accept_consent, test_consent_auth, test_consent_simple, mfa_verify_otp, mfa_resend_otp, google_oauth_initiate, google_oauth_callback
+from .authentication import jwt_login, jwt_refresh, jwt_logout, jwt_verify, accept_consent, test_consent_auth, test_consent_simple, mfa_verify_otp, mfa_resend_otp, google_oauth_initiate, google_oauth_callback,product_version_info, test_token_version
 
 from .views import test_jwt_auth, list_users
 
@@ -20,7 +20,7 @@ from .routes.EventHandling import event_views, riskavaire_integration
 
 from .routes.DocumentHandling import document
 
-from .routes.changemanagement import framework_comparison
+from .routes.changemanagement import framework_comparison,login_framework_checking
 
 from .routes.Tree import tree
 from .routes.Integrations.Bamboohr.bamboohr import (
@@ -428,10 +428,10 @@ from .routes.Global import user_profile
 from .routes.Global.user_profile import *
 
 from .routes.Global import kpi
+from .routes.Global.export_status import get_export_status, list_user_exports
 
 
-
-
+from .routes.Retention import retention_views
 
 
 
@@ -500,6 +500,8 @@ auth_urlpatterns = [
     path('jwt/verify/', jwt_verify, name='jwt-verify'),
 
     path('jwt/accept-consent/', accept_consent, name='accept-consent'),
+    path('product-version/', product_version_info, name='product-version-info'),
+    path('jwt/test-token-version/', test_token_version, name='test-token-version'),
 
     path('jwt/test-consent-auth/', test_consent_auth, name='test-consent-auth'),
 
@@ -2568,6 +2570,89 @@ consent_urlpatterns = [
 ]
 
 
+# RETENTION MANAGEMENT URLs
+
+# ============================================================================
+
+retention_urlpatterns = [
+    # Retention Policy Management
+    path('retention/policies/', 
+         retention_views.list_retention_policies, 
+         name='list-retention-policies'),
+    
+    path('retention/policies/<int:policy_id>/', 
+         retention_views.get_retention_policy, 
+         name='get-retention-policy'),
+    
+    path('retention/policies/create/', 
+         retention_views.create_retention_policy, 
+         name='create-retention-policy'),
+    
+    path('retention/policies/<int:policy_id>/update/', 
+         retention_views.update_retention_policy, 
+         name='update-retention-policy'),
+    
+    path('retention/policies/<int:policy_id>/delete/', 
+         retention_views.delete_retention_policy, 
+         name='delete-retention-policy'),
+    
+    # Retention Timeline Management
+    path('retention/timelines/', 
+         retention_views.list_retention_timelines, 
+         name='list-retention-timelines'),
+    
+    path('retention/timelines/create/', 
+         retention_views.create_retention_timeline, 
+         name='create-retention-timeline'),
+    
+    path('retention/timelines/<int:timeline_id>/update/', 
+         retention_views.update_retention_timeline, 
+         name='update-retention-timeline'),
+    
+    # Data Processing Agreement Management
+    path('retention/dpa/', 
+         retention_views.list_data_processing_agreements, 
+         name='list-data-processing-agreements'),
+    
+    path('retention/dpa/<int:dpa_id>/', 
+         retention_views.get_data_processing_agreement, 
+         name='get-data-processing-agreement'),
+    
+    path('retention/dpa/create/', 
+         retention_views.create_data_processing_agreement, 
+         name='create-data-processing-agreement'),
+    
+    path('retention/dpa/<int:dpa_id>/update/', 
+         retention_views.update_data_processing_agreement, 
+         name='update-data-processing-agreement'),
+    
+    path('retention/dpa/<int:dpa_id>/delete/', 
+         retention_views.delete_data_processing_agreement, 
+         name='delete-data-processing-agreement'),
+    
+    # Data Retention Module & Page Configuration
+    path('retention/module-configs/', 
+         retention_views.get_module_configs, 
+         name='get-module-configs'),
+    
+    path('retention/module-configs/bulk-update/', 
+         retention_views.bulk_update_module_configs, 
+         name='bulk-update-module-configs'),
+    
+    path('retention/page-configs/', 
+         retention_views.get_page_configs, 
+         name='get-page-configs'),
+    
+    path('retention/page-configs/bulk-update/', 
+         retention_views.bulk_update_page_configs, 
+         name='bulk-update-page-configs'),
+]
+
+
+# ============================================================================
+
+
+
 # ============================================================================
 
 # COOKIE MANAGEMENT URLs
@@ -2751,6 +2836,9 @@ urlpatterns = [
 
     # ========================================================================
 
+    # RETENTION MANAGEMENT
+    *retention_urlpatterns,
+
     # COOKIE MANAGEMENT
 
     # ========================================================================
@@ -2789,6 +2877,11 @@ urlpatterns = [
     path('kpis/module/<str:module>/', kpi.get_kpis_by_module, name='get-kpis-by-module'),
     path('kpis/frameworks/', kpi.get_frameworks_for_kpi, name='get-frameworks-for-kpi'),
     path('kpis/modules/', kpi.get_kpi_modules, name='get-kpi-modules'),
+    # Export Status endpoints
+    path('export-status/<int:task_id>/', get_export_status, name='get-export-status'),
+    path('api/export-status/<int:task_id>/', get_export_status, name='api-get-export-status'),
+    path('exports/user/<str:user_id>/', list_user_exports, name='list-user-exports'),
+    path('api/exports/user/<str:user_id>/', list_user_exports, name='api-list-user-exports'),
 
 
 
@@ -2852,6 +2945,8 @@ urlpatterns = [
     path('change-management/scan-downloads/', framework_comparison.scan_downloads_for_processing, name='scan-downloads-for-processing'),
     path('change-management/framework/<int:framework_id>/start-analysis/', framework_comparison.start_amendment_analysis, name='start-amendment-analysis'),
     path('change-management/framework/<int:framework_id>/document-info/', framework_comparison.get_amendment_document_info, name='get-amendment-document-info'),
+    path('change-management/frameworks/update-notifications/', login_framework_checking.get_framework_update_notifications, name='get-framework-update-notifications'),
+    path('change-management/auto-check-frameworks/', login_framework_checking.auto_check_all_frameworks, name='auto-check-frameworks'),
 
 path('bamboohr/oauth/', bamboohr_oauth, name='bamboohr-oauth'),
     path('bamboohr/oauth-callback/', bamboohr_oauth_callback, name='bamboohr-oauth-callback'),

@@ -30,10 +30,12 @@ def _call_openai_for_compliance_matching(amendment_compliance: dict, db_complian
         import requests
         import json
         
+        # Get OpenAI API key from settings (which reads from environment variable OPENAI_API_KEY)
         api_key = getattr(settings, 'OPENAI_API_KEY', '')
         if not api_key or api_key == 'your-openai-api-key-here':
-            raise Exception("OpenAI API key not configured")
+            raise Exception("OpenAI API key not configured. Please set OPENAI_API_KEY in your .env file.")
         
+        # Get OpenAI model from settings (which reads from environment variable OPENAI_MODEL)
         model = getattr(settings, 'OPENAI_MODEL', 'gpt-4o-mini')
         
         # Build prompt
@@ -414,6 +416,13 @@ def check_framework_updates(request, framework_id):
     """
     try:
         framework = Framework.objects.get(FrameworkId=framework_id)
+        
+        # Clear Amendment column for this framework when checking for updates
+        logger.info(f"Clearing Amendment column for framework {framework_id} before checking updates")
+        framework.Amendment = []
+        framework.save(update_fields=['Amendment'])
+        logger.info(f"Cleared Amendment column for framework {framework_id}")
+        
         api_key = getattr(settings, 'PERPLEXITY_API_KEY', '')
 
         if not api_key:
@@ -560,8 +569,51 @@ def check_framework_updates(request, framework_id):
                         except Exception as e:
                             logger.warning(f"Could not save metadata file: {str(e)}")
                         
-                        message = f'New amendment detected and PDF downloaded. Please review the document and click "Start Analysis" to process and save it to the database.'
-                        logger.info(f"Downloaded amendment document to: {downloaded_path}. Waiting for user to click 'Start Analysis' before saving to database.")
+                        # IMPORTANT: Save S3 URL and document info to Amendment column immediately after S3 upload
+                        # This ensures the document is available even before "Start Analysis" is clicked
+                        if s3_url:
+                            try:
+                                # Get existing amendments or create new list
+                                existing_amendments = framework.Amendment if framework.Amendment else []
+                                if not isinstance(existing_amendments, list):
+                                    existing_amendments = []
+                                
+                                # Check if this amendment already exists (by date or name)
+                                amendment_exists = False
+                                for idx, existing_amendment in enumerate(existing_amendments):
+                                    if (existing_amendment.get('amendment_date') == str(latest_date) or
+                                        existing_amendment.get('amendment_name') == downloaded_document_info['amendment_name']):
+                                        # Update existing amendment with S3 info
+                                        existing_amendments[idx].update({
+                                            's3_url': s3_url,
+                                            's3_key': s3_key,
+                                            's3_stored_name': s3_stored_name,
+                                            'document_path': downloaded_path,
+                                            'document_relative_path': relative_path,
+                                            'document_name': document_name,
+                                            'document_url': document_url,
+                                            'downloaded_date': downloaded_document_info['downloaded_date']
+                                        })
+                                        amendment_exists = True
+                                        break
+                                
+                                # If amendment doesn't exist, add it
+                                if not amendment_exists:
+                                    existing_amendments.append(downloaded_document_info)
+                                
+                                # Save to Amendment column
+                                framework.Amendment = existing_amendments
+                                framework.save(update_fields=['Amendment'])
+                                
+                                logger.info(f"✅ Saved S3 URL and document info to Amendment column for framework {framework_id}. S3 URL: {s3_url}")
+                            except Exception as e:
+                                logger.error(f"❌ Failed to save S3 URL to Amendment column: {str(e)}")
+                                import traceback
+                                logger.error(traceback.format_exc())
+                                # Continue even if save fails - metadata file still has the info
+                        
+                        message = f'New amendment detected and PDF downloaded. Document uploaded to S3. Please review the document and click "Start Analysis" to process it.'
+                        logger.info(f"Downloaded amendment document to: {downloaded_path}. S3 URL saved to Amendment column. Waiting for user to click 'Start Analysis' to process.")
                     else:
                         # Not a valid PDF file
                         message = f'New amendment detected but PDF document is not available for download. Document URL: {document_url}. Please visit the URL to download manually.'
@@ -573,13 +625,15 @@ def check_framework_updates(request, framework_id):
             except ValueError:
                 message = 'Update detected but the provided date was invalid.'
 
-        # Only update latestComparisionCheckDate (not latestAmmendmentDate or Amendment)
-        # Amendment and latestAmmendmentDate will be updated only when Start Analysis is clicked
+        # Update latestComparisionCheckDate
+        # Note: Amendment column is now updated immediately when S3 upload succeeds (with S3 URL)
+        # latestAmmendmentDate will be updated when Start Analysis is clicked
         framework.latestComparisionCheckDate = now
         framework.save(update_fields=['latestComparisionCheckDate'])
         
-        # Return downloaded document info in response (NOT saved to DB yet)
-        # Frontend will display it, and when user clicks "Start Analysis", we'll save to DB
+        # Return downloaded document info in response
+        # Note: S3 URL and document info are now saved to Amendment column immediately after S3 upload
+        # When user clicks "Start Analysis", the amendment will be processed and updated with AI analysis
         response_data = {
             'success': True,
             'message': message,
@@ -1319,6 +1373,38 @@ def match_amendments_compliances(request, framework_id):
         # Get latest amendment
         latest_amendment = amendments[-1]
         ai_analysis = latest_amendment.get('ai_analysis', {})
+
+        # ------------------------------------------------------------------
+        # Use cached compliance matching result if it exists for this amendment
+        # ------------------------------------------------------------------
+        cached_matching = latest_amendment.get('compliance_matching_result')
+        if cached_matching and cached_matching.get('results'):
+            logger.info(
+                "[ComplianceMatch] Using cached matching result for framework_id=%s",
+                framework_id
+            )
+            return Response({
+                'success': True,
+                'framework_id': framework.FrameworkId,
+                'framework_name': framework.FrameworkName,
+                'amendment_id': latest_amendment.get('amendment_id'),
+                'amendment_name': latest_amendment.get('amendment_name'),
+                'use_ai': use_ai,
+                'threshold': threshold,
+                'results': cached_matching.get('results', {}),
+                'summary': {
+                    'total_target_compliances': cached_matching.get('results', {}).get('total_target', 0),
+                    'total_origin_compliances': cached_matching.get('results', {}).get('total_origin', 0),
+                    'matched_count': cached_matching.get('results', {}).get('matched_count', 0),
+                    'unmatched_count': cached_matching.get('results', {}).get('unmatched_count', 0),
+                    'match_percentage': (
+                        cached_matching.get('results', {}).get('matched_count', 0) /
+                        cached_matching.get('results', {}).get('total_target', 1) * 100
+                    ) if cached_matching.get('results', {}).get('total_target') else 0
+                },
+                'reused_cached': True,
+                'message': 'Using saved compliance matching results for this amendment.'
+            }, status=status.HTTP_200_OK)
         
         # Prepare amendments data
         amendments_data = {
@@ -1431,6 +1517,14 @@ def match_amendments_compliances(request, framework_id):
                 use_ai=use_ai,
                 threshold=threshold
             )
+
+        # Cache the results back into the amendment JSON so subsequent runs reuse it
+        latest_amendment['compliance_matching_result'] = {
+            'results': results,
+            'cached_at': timezone.now().isoformat()
+        }
+        framework.Amendment[-1] = latest_amendment
+        framework.save(update_fields=['Amendment'])
         print(
             "[ComplianceMatch] Completed | total_amendment="
             f"{results['total_target']} | matched={results['matched_count']} | unmatched={results['unmatched_count']}"
@@ -1451,7 +1545,8 @@ def match_amendments_compliances(request, framework_id):
                 'matched_count': results['matched_count'],
                 'unmatched_count': results['unmatched_count'],
                 'match_percentage': (results['matched_count'] / results['total_target'] * 100) if results['total_target'] > 0 else 0
-            }
+            },
+            'reused_cached': False
         }, status=status.HTTP_200_OK)
         
     except Framework.DoesNotExist:
@@ -1681,29 +1776,76 @@ def start_amendment_analysis(request, framework_id):
             # Get relative path
             relative_path = os.path.relpath(document_path, settings.MEDIA_ROOT)
             
-            # Create amendment entry with processed data (S3 info from metadata file)
-            new_amendment = {
-                'amendment_id': 1,
-                'amendment_name': f"{framework.FrameworkName} Amendment - {amendment_date_str}",
-                'amendment_date': amendment_date_str,
-                'document_path': document_path,
-                'document_relative_path': relative_path,
-                'document_name': document_name,
-                'document_url': document_url,
-                's3_url': s3_url,  # From metadata file
-                's3_key': s3_key,  # From metadata file
-                's3_stored_name': s3_stored_name,  # From metadata file
-                'downloaded_date': datetime.now().isoformat(),
-                'processed': True,
-                'processed_date': datetime.now().isoformat(),
-                'extraction_summary': amendment_data.get('extraction_summary', {}),
-                'sections': amendment_data.get('sections', []),
-                'framework_info': amendment_data.get('amendment_metadata', {}).get('framework_info', {}),
-                'ai_analysis': amendment_data.get('ai_analysis', {})
-            }
+            # Get existing amendments to preserve S3 URL if it was already saved
+            existing_amendments = framework.Amendment if framework.Amendment else []
+            if not isinstance(existing_amendments, list):
+                existing_amendments = []
+            
+            # Check if this amendment already exists (by date or name) - it should exist if S3 was uploaded
+            amendment_index = None
+            for idx, existing_amendment in enumerate(existing_amendments):
+                if (existing_amendment.get('amendment_date') == amendment_date_str or
+                    existing_amendment.get('amendment_name') == f"{framework.FrameworkName} Amendment - {amendment_date_str}"):
+                    amendment_index = idx
+                    break
+            
+            # Use existing S3 info if available, otherwise use from metadata file
+            if amendment_index is not None:
+                existing_s3_url = existing_amendments[amendment_index].get('s3_url')
+                existing_s3_key = existing_amendments[amendment_index].get('s3_key')
+                existing_s3_stored_name = existing_amendments[amendment_index].get('s3_stored_name')
+                
+                # Prefer existing S3 info, fallback to metadata file
+                final_s3_url = existing_s3_url or s3_url
+                final_s3_key = existing_s3_key or s3_key
+                final_s3_stored_name = existing_s3_stored_name or s3_stored_name
+                
+                # Update existing amendment with processed data
+                existing_amendments[amendment_index].update({
+                    'amendment_id': 1,
+                    'amendment_name': f"{framework.FrameworkName} Amendment - {amendment_date_str}",
+                    'amendment_date': amendment_date_str,
+                    'document_path': document_path,
+                    'document_relative_path': relative_path,
+                    'document_name': document_name,
+                    'document_url': document_url,
+                    's3_url': final_s3_url,  # Preserve existing or use from metadata
+                    's3_key': final_s3_key,
+                    's3_stored_name': final_s3_stored_name,
+                    'downloaded_date': existing_amendments[amendment_index].get('downloaded_date', datetime.now().isoformat()),
+                    'processed': True,
+                    'processed_date': datetime.now().isoformat(),
+                    'extraction_summary': amendment_data.get('extraction_summary', {}),
+                    'sections': amendment_data.get('sections', []),
+                    'framework_info': amendment_data.get('amendment_metadata', {}).get('framework_info', {}),
+                    'ai_analysis': amendment_data.get('ai_analysis', {})
+                })
+                new_amendment = existing_amendments[amendment_index]
+            else:
+                # Create new amendment entry with processed data (S3 info from metadata file)
+                new_amendment = {
+                    'amendment_id': 1,
+                    'amendment_name': f"{framework.FrameworkName} Amendment - {amendment_date_str}",
+                    'amendment_date': amendment_date_str,
+                    'document_path': document_path,
+                    'document_relative_path': relative_path,
+                    'document_name': document_name,
+                    'document_url': document_url,
+                    's3_url': s3_url,  # From metadata file
+                    's3_key': s3_key,  # From metadata file
+                    's3_stored_name': s3_stored_name,  # From metadata file
+                    'downloaded_date': datetime.now().isoformat(),
+                    'processed': True,
+                    'processed_date': datetime.now().isoformat(),
+                    'extraction_summary': amendment_data.get('extraction_summary', {}),
+                    'sections': amendment_data.get('sections', []),
+                    'framework_info': amendment_data.get('amendment_metadata', {}).get('framework_info', {}),
+                    'ai_analysis': amendment_data.get('ai_analysis', {})
+                }
+                existing_amendments.append(new_amendment)
             
             # NOW update Framework table with Amendment and dates
-            framework.Amendment = [new_amendment]
+            framework.Amendment = existing_amendments
             framework.latestAmmendmentDate = latest_date
             framework.latestComparisionCheckDate = timezone.now().date()
             framework.save(update_fields=['Amendment', 'latestAmmendmentDate', 'latestComparisionCheckDate'])
@@ -1747,7 +1889,11 @@ def get_amendment_document_info(request, framework_id):
     """
     Get information about the downloaded amendment document.
     Returns document name, path, and processing status.
-    PRIORITIZES latest downloaded file from change_management folder over database.
+
+    Priority (scoped to the requested framework):
+    1) Latest entry in Framework.Amendment that has a document (s3_url or document_path).
+    2) Files in MEDIA_ROOT/change_management whose metadata matches this framework_id
+       (fallback: filename contains the framework name).
     """
     try:
         framework = Framework.objects.get(FrameworkId=framework_id)
@@ -1755,76 +1901,74 @@ def get_amendment_document_info(request, framework_id):
         document_path = None
         s3_url = None
         
-        # PRIORITY 1: Check change_management folder for latest downloaded files FIRST
-        # This ensures we always show the most recently downloaded document
-        change_management_dir = os.path.join(settings.MEDIA_ROOT, 'change_management')
-        
-        if os.path.exists(change_management_dir):
-            # Find the most recent PDF file
-            pdf_files = []
-            for filename in os.listdir(change_management_dir):
-                if filename.lower().endswith('.pdf'):
-                    file_path = os.path.join(change_management_dir, filename)
-                    if os.path.isfile(file_path):
-                        pdf_files.append((file_path, os.path.getmtime(file_path)))
-            
-            if pdf_files:
-                # Get the most recent PDF (sorted by modification time, newest first)
-                pdf_files.sort(key=lambda x: x[1], reverse=True)
-                document_path = pdf_files[0][0]
-                document_name = os.path.basename(document_path)
-                
-                # Try to load metadata from JSON file if it exists
-                # First, try exact match: {pdf_filename}_metadata.json
-                metadata_file = os.path.join(os.path.dirname(document_path), f"{os.path.splitext(document_name)[0]}_metadata.json")
-                if not os.path.exists(metadata_file):
-                    # Fallback: search for any JSON files that might be metadata
-                    pdf_base = os.path.splitext(document_name)[0]
-                    for filename in os.listdir(change_management_dir):
-                        if filename.lower().endswith('.json') and pdf_base in filename:
-                            metadata_file = os.path.join(change_management_dir, filename)
-                            logger.info(f"Found alternative metadata file: {metadata_file}")
-                            break
-                
-                if os.path.exists(metadata_file):
-                    try:
-                        with open(metadata_file, 'r', encoding='utf-8') as f:
-                            document_info = json.load(f)
-                        logger.info(f"Loaded latest document metadata from: {metadata_file}")
-                    except Exception as e:
-                        logger.warning(f"Could not load metadata file: {str(e)}")
-                        document_info = None
-                
-                # If no metadata file, create basic document info
-                if not document_info:
-                    relative_path = os.path.relpath(document_path, settings.MEDIA_ROOT)
-                    document_info = {
-                        'document_name': document_name,
-                        'document_path': document_path,
-                        'document_relative_path': relative_path,
-                        'downloaded_date': datetime.fromtimestamp(pdf_files[0][1]).isoformat(),
-                        'processed': False,
-                        's3_url': None
-                    }
-        
-        # PRIORITY 2: Fall back to database (Amendment field) only if no file in change_management folder
+        # === PRIORITY 1: use Amendment data for this framework ===
+        amendments = framework.Amendment if framework.Amendment else []
+        if amendments and isinstance(amendments, list):
+            latest_amendment = amendments[-1]
+            document_path_db = latest_amendment.get('document_path')
+            s3_url_db = latest_amendment.get('s3_url')
+
+            has_document = (
+                (document_path_db and os.path.exists(document_path_db) and document_path_db.lower().endswith('.pdf'))
+                or (s3_url_db is not None)
+            )
+
+            if has_document:
+                document_info = dict(latest_amendment)
+                document_path = document_path_db
+                s3_url = s3_url_db
+                logger.info("Using amendment document from DB for framework %s", framework_id)
+
+        # === PRIORITY 2: check change_management folder for this framework only ===
         if not document_info:
-            amendments = framework.Amendment if framework.Amendment else []
-            
-            if amendments:
-                latest_amendment = amendments[-1]
-                document_path = latest_amendment.get('document_path')
-                s3_url = latest_amendment.get('s3_url')
-                
-                # Check if document exists
-                has_document = (
-                    (document_path and os.path.exists(document_path) and document_path.lower().endswith('.pdf')) or
-                    (s3_url is not None)
-                )
-                
-                if has_document:
-                    document_info = latest_amendment
-                    logger.info(f"Using document from database (Amendment field): {document_path or s3_url}")
+            change_management_dir = os.path.join(settings.MEDIA_ROOT, 'change_management')
+            if os.path.exists(change_management_dir):
+                framework_name_safe = framework.FrameworkName.replace(' ', '_').lower()
+
+                def _matches_framework(pdf_filename: str, metadata: dict) -> bool:
+                    if metadata:
+                        if metadata.get('framework_id') == framework_id:
+                            return True
+                        if str(metadata.get('framework_name', '')).lower() == framework.FrameworkName.lower():
+                            return True
+                    return framework_name_safe in pdf_filename.lower()
+
+                candidate_files = []
+                for filename in os.listdir(change_management_dir):
+                    if not filename.lower().endswith('.pdf'):
+                        continue
+                    file_path = os.path.join(change_management_dir, filename)
+                    if not os.path.isfile(file_path):
+                        continue
+
+                    metadata = None
+                    meta_guess = os.path.join(
+                        change_management_dir,
+                        f"{os.path.splitext(filename)[0]}_metadata.json",
+                    )
+                    if os.path.exists(meta_guess):
+                        try:
+                            with open(meta_guess, 'r', encoding='utf-8') as f:
+                                metadata = json.load(f)
+                        except Exception:
+                            metadata = None
+
+                    if _matches_framework(filename, metadata):
+                        candidate_files.append((file_path, os.path.getmtime(file_path), metadata))
+
+                if candidate_files:
+                    candidate_files.sort(key=lambda x: x[1], reverse=True)
+                    document_path, mtime, metadata = candidate_files[0]
+                    document_name = os.path.basename(document_path)
+                    relative_path = os.path.relpath(document_path, settings.MEDIA_ROOT)
+
+                    document_info = metadata or {}
+                    document_info.setdefault('document_name', document_name)
+                    document_info.setdefault('document_path', document_path)
+                    document_info.setdefault('document_relative_path', relative_path)
+                    document_info.setdefault('downloaded_date', datetime.fromtimestamp(mtime).isoformat())
+                    document_info.setdefault('processed', False)
+                    logger.info("Using filesystem document for framework %s: %s", framework_id, document_name)
         
         # If we have document info, return it
         if document_info:

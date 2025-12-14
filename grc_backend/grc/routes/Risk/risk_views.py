@@ -71,100 +71,165 @@ def export_risk_register_v2(request):
         risk_data = data.get('risk_data', [])
         user_id = data.get('user_id', 'default_user')
         file_name = data.get('file_name', 'risk_register_export')
+        use_async = data.get('use_async', True)  # Default to async for large exports
         
         # Log the request for debugging
         import datetime
         request_start = datetime.datetime.now()
+        record_count = len(risk_data) if isinstance(risk_data, list) else 1
+        data_size = len(str(risk_data))
+        data_size_mb = data_size / (1024 * 1024)
+        
         print(f"\n{'='*80}")
         print(f"📥 [ROUTE] Export request received at {request_start.strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"{'='*80}")
         print(f"   ├─ Format: {export_format}")
         print(f"   ├─ User ID: {user_id}")
         print(f"   ├─ File name: {file_name}")
-        print(f"   ├─ Data size: {len(str(risk_data)):,} characters ({len(str(risk_data)) / (1024*1024):.2f} MB)")
-        print(f"   └─ Records count: {len(risk_data) if isinstance(risk_data, list) else 1:,}")
+        print(f"   ├─ Data size: {data_size:,} characters ({data_size_mb:.2f} MB)")
+        print(f"   ├─ Records count: {record_count:,}")
+        print(f"   └─ Use async: {use_async}")
         
-        # Simple export logic without external service dependency
-        if export_format == 'json':
-            response = JsonResponse({
-                'success': True,
-                'data': risk_data,
-                'format': 'json',
-                'file_name': f"{file_name}.json"
-            })
-            # Add CORS headers
-            response['Access-Control-Allow-Origin'] = '*'
-            response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
-            response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-            return response
-        elif export_format == 'csv':
-            import csv
-            from io import StringIO
-            
-            output = StringIO()
-            if risk_data and len(risk_data) > 0:
-                writer = csv.DictWriter(output, fieldnames=risk_data[0].keys())
-                writer.writeheader()
-                writer.writerows(risk_data)
-            
-            response = HttpResponse(output.getvalue(), content_type='text/csv')
-            response['Content-Disposition'] = f'attachment; filename="{file_name}.csv"'
-            # Add CORS headers
-            response['Access-Control-Allow-Origin'] = '*'
-            response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
-            response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-            return response
-        else:
-            # Try to use export_data from s3_fucntions.py
-            try:
-                print(f"\n🔄 [ROUTE] Calling s3_fucntions.export_data() for format: {export_format}")
-                route_call_start = datetime.datetime.now()
-                
-                result = export_data(
-                    data=risk_data,
-                    file_format=export_format,
-                    user_id=user_id,
-                    options={
-                        'file_name': file_name
-                    }
-                )
-                
-                route_call_time = (datetime.datetime.now() - route_call_start).total_seconds()
-                total_route_time = (datetime.datetime.now() - request_start).total_seconds()
-                
-                print(f"\n📤 [ROUTE] Export function completed in {route_call_time:.2f} seconds")
-                print(f"   ├─ Success: {result.get('success', False)}")
-                if result.get('success'):
-                    print(f"   ├─ File URL: {result.get('file_url', 'N/A')}")
-                    print(f"   ├─ File name: {result.get('file_name', 'N/A')}")
-                else:
-                    print(f"   ├─ Error: {result.get('error', 'Unknown error')}")
-                print(f"   └─ Total route time: {total_route_time:.2f} seconds")
-                
-                print(f"\n{'='*80}")
-                print(f"✅ [ROUTE] Response sent - Total time: {total_route_time:.2f} seconds")
-                print(f"{'='*80}\n")
-                
-                response = JsonResponse(result)
-                # Add CORS headers
+        # Determine if we should use async processing
+        # Use async for large datasets or any heavier formats to avoid timeouts
+        should_use_async = (
+            use_async and (
+                record_count > 500 or
+                data_size_mb > 1.0 or
+                export_format.lower() in ['pdf', 'xlsx', 'xml', 'json', 'txt', 'csv']
+            )
+        )
+        
+        # For small JSON/CSV exports, process synchronously
+        if not should_use_async and export_format in ['json', 'csv']:
+            if export_format == 'json':
+                response = JsonResponse({
+                    'success': True,
+                    'data': risk_data,
+                    'format': 'json',
+                    'file_name': f"{file_name}.json"
+                })
                 response['Access-Control-Allow-Origin'] = '*'
                 response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
                 response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
                 return response
-            except Exception as export_error:
-                route_call_time = (datetime.datetime.now() - route_call_start).total_seconds()
-                total_route_time = (datetime.datetime.now() - request_start).total_seconds()
-                print(f"\n❌ [ROUTE] Export service error after {route_call_time:.2f} seconds: {str(export_error)}")
-                print(f"   └─ Total route time: {total_route_time:.2f} seconds")
-                import traceback
-                traceback.print_exc()
-                print(f"\n{'='*80}")
-                print(f"❌ [ROUTE] ERROR - Total time: {total_route_time:.2f} seconds")
-                print(f"{'='*80}\n")
-                return JsonResponse({
-                    "success": False, 
-                    "error": f"Export format '{export_format}' not supported. Error: {str(export_error)}"
-                }, status=400)
+            elif export_format == 'csv':
+                import csv
+                from io import StringIO
+                
+                output = StringIO()
+                if risk_data and len(risk_data) > 0:
+                    writer = csv.DictWriter(output, fieldnames=risk_data[0].keys())
+                    writer.writeheader()
+                    writer.writerows(risk_data)
+                
+                response = HttpResponse(output.getvalue(), content_type='text/csv')
+                response['Content-Disposition'] = f'attachment; filename="{file_name}.csv"'
+                response['Access-Control-Allow-Origin'] = '*'
+                response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+                response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+                return response
+        
+        # Use async processing for large exports
+        if should_use_async:
+            try:
+                from ...routes.Global.async_export_tasks import create_export_task, process_export_async
+                
+                print(f"\n🔄 [ROUTE] Creating async export task...")
+                
+                # Create export task
+                export_task = create_export_task(
+                    user_id=user_id,
+                    file_format=export_format,
+                    module='risk',
+                    export_data_dict={
+                        'file_name': file_name,
+                        'record_count': record_count
+                    }
+                )
+                
+                # Start async task
+                process_export_async.delay(
+                    export_task_id=export_task.id,
+                    data=risk_data,
+                    file_format=export_format,
+                    user_id=user_id,
+                    options={'file_name': file_name},
+                    module='risk'
+                )
+                
+                print(f"✅ [ROUTE] Async export task created: {export_task.id}")
+                
+                response = JsonResponse({
+                    'success': True,
+                    'async': True,
+                    'task_id': export_task.id,
+                    'message': 'Export started in background. Use /api/export-status/<task_id>/ to check progress.',
+                    'status_url': f'/api/export-status/{export_task.id}/'
+                })
+                response['Access-Control-Allow-Origin'] = '*'
+                response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+                response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+                return response
+                
+            except ImportError:
+                print(f"⚠️  [ROUTE] Celery not available, falling back to sync export")
+                # Fall through to sync export
+            except Exception as async_error:
+                print(f"⚠️  [ROUTE] Async export failed: {str(async_error)}, falling back to sync")
+                # Fall through to sync export
+        
+        # Synchronous export (fallback or for small exports)
+        print(f"\n🔄 [ROUTE] Processing export synchronously...")
+        try:
+            from ...routes.Global.s3_fucntions import export_data
+            
+            route_call_start = datetime.datetime.now()
+            
+            result = export_data(
+                data=risk_data,
+                file_format=export_format,
+                user_id=user_id,
+                options={
+                    'file_name': file_name
+                }
+            )
+            
+            route_call_time = (datetime.datetime.now() - route_call_start).total_seconds()
+            total_route_time = (datetime.datetime.now() - request_start).total_seconds()
+            
+            print(f"\n📤 [ROUTE] Export completed in {route_call_time:.2f} seconds")
+            print(f"   ├─ Success: {result.get('success', False)}")
+            if result.get('success'):
+                print(f"   ├─ File URL: {result.get('file_url', 'N/A')}")
+                print(f"   ├─ File name: {result.get('file_name', 'N/A')}")
+            else:
+                print(f"   ├─ Error: {result.get('error', 'Unknown error')}")
+            print(f"   └─ Total route time: {total_route_time:.2f} seconds")
+            
+            print(f"\n{'='*80}")
+            print(f"✅ [ROUTE] Response sent - Total time: {total_route_time:.2f} seconds")
+            print(f"{'='*80}\n")
+            
+            response = JsonResponse(result)
+            response['Access-Control-Allow-Origin'] = '*'
+            response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+            response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+            return response
+            
+        except Exception as export_error:
+            route_call_time = (datetime.datetime.now() - route_call_start).total_seconds() if 'route_call_start' in locals() else 0
+            total_route_time = (datetime.datetime.now() - request_start).total_seconds()
+            print(f"\n❌ [ROUTE] Export error after {route_call_time:.2f} seconds: {str(export_error)}")
+            import traceback
+            traceback.print_exc()
+            print(f"\n{'='*80}")
+            print(f"❌ [ROUTE] ERROR - Total time: {total_route_time:.2f} seconds")
+            print(f"{'='*80}\n")
+            return JsonResponse({
+                "success": False, 
+                "error": f"Export failed: {str(export_error)}"
+            }, status=500)
                 
     except Exception as e:
         print(f"❌ Export endpoint error: {str(e)}")
@@ -3157,106 +3222,46 @@ class GRCLogDetail(generics.RetrieveAPIView):
     permission_classes = [RiskViewPermission]
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([RiskViewPermission])
 def get_system_logs(request):
-    """
-    Get system logs from grc2.grc_logs table
-    - For administrators: returns all logs
-    - For other users: returns only their own logs
-    """
+    """Get system logs with optional filtering"""
     try:
-        from ...rbac.utils import RBACUtils
-        from ...authentication import verify_jwt_token
-        
-        logger.info(f"User accessing GET /api/system-logs/")
-        
-        # Get user_id from JWT token
-        user_id = None
-        auth_header = request.headers.get('Authorization')
-        
-        if auth_header and auth_header.startswith('Bearer '):
-            token = auth_header.split(' ')[1]
-            try:
-                payload = verify_jwt_token(token)
-                if payload and 'user_id' in payload:
-                    user_id = payload['user_id']
-                    logger.info(f"User ID from JWT: {user_id}")
-            except Exception as e:
-                logger.warning(f"JWT token verification failed: {str(e)}")
-        
-        # Fallback to session if JWT not available
-        if not user_id:
-            user_id = request.session.get('user_id') or request.session.get('grc_user_id')
-            if user_id:
-                logger.info(f"User ID from session: {user_id}")
-        
-        if not user_id:
-            logger.warning("No user ID found in JWT token or session")
-            return Response({
-                'success': False,
-                'error': 'No user ID found in JWT token or session'
-            }, status=status.HTTP_401_UNAUTHORIZED)
-        
-        # Check if user is administrator
-        is_admin = RBACUtils.is_system_admin(user_id)
-        logger.info(f"User {user_id} is_admin: {is_admin}")
-        
-        # Get queryset
         queryset = GRCLog.objects.all().order_by('-Timestamp')
         
-        # Filter by user if not admin
-        if not is_admin:
-            queryset = queryset.filter(UserId=str(user_id))
-            logger.info(f"Filtering logs for user_id: {user_id}")
-        
-        # Apply optional filters
+        # Filter by module if provided
         module = request.query_params.get('module')
         if module:
             queryset = queryset.filter(Module__icontains=module)
             
+        # Filter by action type if provided
         action_type = request.query_params.get('action_type')
         if action_type:
             queryset = queryset.filter(ActionType__icontains=action_type)
             
+        # Filter by entity type if provided
         entity_type = request.query_params.get('entity_type')
         if entity_type:
             queryset = queryset.filter(EntityType__icontains=entity_type)
             
+        # Filter by log level if provided
         log_level = request.query_params.get('log_level')
         if log_level:
             queryset = queryset.filter(LogLevel__iexact=log_level)
             
+        # Filter by user if provided
+        user_id = request.query_params.get('user_id')
+        if user_id:
+            queryset = queryset.filter(UserId=user_id)
+            
         # Filter by date range if provided
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date')
-        
-        if start_date or end_date:
-            from datetime import datetime
-            
-            if start_date:
-                try:
-                    # Parse start date and set to beginning of day (naive datetime for MySQL)
-                    start_datetime = datetime.strptime(start_date, '%Y-%m-%d').replace(hour=0, minute=0, second=0, microsecond=0)
-                    queryset = queryset.filter(Timestamp__gte=start_datetime)
-                    logger.info(f"Filtering logs from start_date: {start_datetime}")
-                except ValueError as e:
-                    logger.warning(f"Invalid start_date format: {start_date}, error: {str(e)}")
-            
-            if end_date:
-                try:
-                    # Parse end date and set to end of day (naive datetime for MySQL)
-                    end_datetime = datetime.strptime(end_date, '%Y-%m-%d').replace(hour=23, minute=59, second=59, microsecond=999999)
-                    queryset = queryset.filter(Timestamp__lte=end_datetime)
-                    logger.info(f"Filtering logs until end_date: {end_datetime}")
-                except ValueError as e:
-                    logger.warning(f"Invalid end_date format: {end_date}, error: {str(e)}")
+        if start_date and end_date:
+            queryset = queryset.filter(Timestamp__range=[start_date, end_date])
         
         # Pagination
-        page_size = int(request.query_params.get('page_size', 50))
+        page_size = int(request.query_params.get('page_size', 100))
         page = int(request.query_params.get('page', 1))
-        
-        total_count = queryset.count()
-        logger.info(f"Total logs found: {total_count}")
         
         start = (page - 1) * page_size
         end = start + page_size
@@ -3264,23 +3269,15 @@ def get_system_logs(request):
         logs = queryset[start:end]
         serializer = GRCLogSerializer(logs, many=True)
         
-        logger.info(f"Returning {len(logs)} logs for page {page}")
-        
         return Response({
-            'success': True,
-            'data': serializer.data,
-            'total_count': total_count,
+            'count': queryset.count(),
+            'results': serializer.data,
             'page': page,
-            'page_size': page_size,
-            'is_admin': is_admin
-        }, status=status.HTTP_200_OK)
-        
+            'page_size': page_size
+        })
     except Exception as e:
-        logger.error(f"Error fetching system logs: {str(e)}", exc_info=True)
-        return Response({
-            'success': False,
-            'error': f'Failed to fetch system logs: {str(e)}'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        logger.error(f"Error fetching system logs: {str(e)}")
+        return Response({"error": str(e)}, status=500)
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')

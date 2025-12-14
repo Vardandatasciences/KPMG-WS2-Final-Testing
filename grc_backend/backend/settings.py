@@ -706,6 +706,10 @@ GOOGLE_SCOPES = clean_env_value(
 # OAuth State Verification (set to 'true' to skip in development)
 # WARNING: Only use this in local development! Always verify state in production
 SKIP_OAUTH_STATE_VERIFICATION = os.environ.get('SKIP_OAUTH_STATE_VERIFICATION', 'true' if DEBUG else 'false')
+
+# MFA Configuration
+# Set MFA_ENABLED=true to enable Multi-Factor Authentication, false to disable
+MFA_ENABLED = os.environ.get('MFA_ENABLED', 'true').lower() == 'true'
  
 
 

@@ -232,6 +232,8 @@ export default {
       searchQuery: '',
       loading: false,
       selectedExportFormat: '',
+      riskRetentionEnabled: true,
+      riskRetentionWarningShown: false,
       columnDefinitions,
       visibleColumnKeys: [...defaultVisibleKeys],
       showColumnEditor: false,
@@ -329,6 +331,7 @@ export default {
   },
   mounted() {
     this.fetchRisks()
+    this.checkRetentionForPage('risk_update')
   },
   activated() {
     // Refresh data when component becomes active (useful when coming back from other pages)
@@ -420,6 +423,46 @@ export default {
           priority: 'high',
           user_id: 'default_user'
         })
+      }
+    },
+
+    normalizeRetentionConfigs(raw) {
+      if (!raw) return {}
+      if (Array.isArray(raw)) {
+        return raw.reduce((acc, item) => {
+          const key = item.page_key || item.sub_page || item.SubPage
+          if (key) acc[key] = item
+          return acc
+        }, {})
+      }
+      return raw
+    },
+
+    async checkRetentionForPage(pageKey) {
+      try {
+        const params = { module_key: 'risk' }
+        const frameworkId = localStorage.getItem('framework_id') || localStorage.getItem('frameworkId')
+        if (frameworkId) params.framework_id = frameworkId
+
+        const response = await axiosInstance.get('/api/retention/page-configs/', { params })
+        const configs = this.normalizeRetentionConfigs(response.data?.data || response.data || {})
+        const cfg = configs[pageKey] || {}
+        const enabled = cfg.checklist_status ?? cfg.enabled ?? cfg.ChecklistStatus ?? true
+        this.riskRetentionEnabled = !!enabled
+
+        if (!this.riskRetentionEnabled && !this.riskRetentionWarningShown) {
+          const msg = 'Retention is OFF for Risk Register updates. Data from updates will not be retained.'
+          if (this.$popup?.warning) {
+            this.$popup.warning(msg, 'Retention Disabled')
+          } else if (window?.PopupService?.warning) {
+            window.PopupService.warning(msg, 'Retention Disabled')
+          } else {
+            alert(msg)
+          }
+          this.riskRetentionWarningShown = true
+        }
+      } catch (error) {
+        console.warn('Retention check for risk_update failed:', error?.message || error)
       }
     },
     async exportRiskRegister() {

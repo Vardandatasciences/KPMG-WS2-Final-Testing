@@ -17,10 +17,57 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from django.contrib.auth.hashers import make_password, check_password
 from .models import Users, GRCLog, RBAC, Framework
+from .models import Users, GRCLog, ProductVersion
 from .rbac.utils import RBACUtils
+from django.views.decorators.csrf import csrf_exempt
 from .mfa_service import MfaService
 
 logger = logging.getLogger(__name__)
+
+# JWT Settings
+JWT_SECRET_KEY = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+JWT_ALGORITHM = 'HS256'
+JWT_ACCESS_TOKEN_LIFETIME = timedelta(hours=1)  # 1 hour
+JWT_REFRESH_TOKEN_LIFETIME = timedelta(days=7)  # 7 days
+
+
+def _safe_parse_version(ver: str):
+    """Parse semantic-ish version to a tuple for comparison."""
+    if not ver:
+        return (0,)
+    parts = []
+    for part in str(ver).split('.'):
+        try:
+            parts.append(int(part))
+        except ValueError:
+            # Fall back to string for non-numeric segments
+            parts.append(part)
+    return tuple(parts)
+
+
+def _compare_versions(left: str, right: str) -> int:
+    """Return -1 if left<right, 0 if equal, 1 if left>right."""
+    l_parts = _safe_parse_version(left)
+    r_parts = _safe_parse_version(right)
+    # Normalize length
+    max_len = max(len(l_parts), len(r_parts))
+    l_parts += (0,) * (max_len - len(l_parts))
+    r_parts += (0,) * (max_len - len(r_parts))
+    if l_parts < r_parts:
+        return -1
+    if l_parts > r_parts:
+        return 1
+    return 0
+
+
+def _get_active_versions():
+    """Fetch latest and minimum supported product versions."""
+    latest = ProductVersion.get_latest()
+    min_supported = ProductVersion.get_min_supported()
+    return {
+        'latest_version': latest.version if latest else None,
+        'min_supported_version': min_supported.version if min_supported else None,
+    }
 
 def _get_default_framework():
     """Get a default framework for logging purposes"""
@@ -424,6 +471,9 @@ JWT_REFRESH_TOKEN_LIFETIME = timedelta(days=7)  # 7 days
 def generate_jwt_tokens(user):
     """Generate JWT access and refresh tokens for a user"""
     try:
+        versions = _get_active_versions()
+        latest_version = versions.get('latest_version') or '0.0.0'
+        min_supported = versions.get('min_supported_version') or latest_version
         # Create refresh token
         refresh = RefreshToken()
         refresh['user_id'] = user.UserId
@@ -431,6 +481,8 @@ def generate_jwt_tokens(user):
         refresh['email'] = user.Email
         refresh['first_name'] = user.FirstName
         refresh['last_name'] = user.LastName
+        refresh['ver'] = latest_version
+        refresh['min_ver'] = min_supported
         
         # Create access token
         access_token = refresh.access_token
@@ -439,6 +491,8 @@ def generate_jwt_tokens(user):
         access_token['email'] = user.Email
         access_token['first_name'] = user.FirstName
         access_token['last_name'] = user.LastName
+        access_token['ver'] = latest_version
+        access_token['min_ver'] = min_supported
         
         return {
             'access': str(access_token),
@@ -772,50 +826,56 @@ def jwt_login(request):
                 }, status=status.HTTP_403_FORBIDDEN)
         
         # ========================================
-        # MFA VERIFICATION
+        # MFA VERIFICATION (only if MFA is enabled)
         # ========================================
-        # If OTP is provided, verify it
-        if otp:
-            mfa_result = MfaService.verify_otp(user, otp, request)
-            if not mfa_result.get('success'):
-                return Response({
-                    'status': 'error',
-                    'message': mfa_result.get('error', 'MFA verification failed'),
-                    'requires_mfa': True
-                }, status=status.HTTP_401_UNAUTHORIZED)
+        mfa_enabled = getattr(settings, 'MFA_ENABLED', True)
+        
+        if mfa_enabled:
+            # If OTP is provided, verify it
+            if otp:
+                mfa_result = MfaService.verify_otp(user, otp, request)
+                if not mfa_result.get('success'):
+                    return Response({
+                        'status': 'error',
+                        'message': mfa_result.get('error', 'MFA verification failed'),
+                        'requires_mfa': True
+                    }, status=status.HTTP_401_UNAUTHORIZED)
+            else:
+                # No OTP provided - check if user has email for MFA
+                if not user.Email:
+                    return Response({
+                        'status': 'error',
+                        'message': 'Email address is required for MFA. Please contact your administrator.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Create MFA challenge and send OTP
+                try:
+                    challenge = MfaService.create_mfa_challenge(user, request)
+                    
+                    # Mask email for privacy
+                    email_parts = user.Email.split('@')
+                    masked_email = f"{email_parts[0][:3]}***@{email_parts[1]}" if len(email_parts) == 2 else "***"
+                    
+                    return Response({
+                        'status': 'mfa_required',
+                        'message': f'Please enter the verification code sent to {masked_email}',
+                        'requires_mfa': True,
+                        'email_masked': masked_email
+                    }, status=status.HTTP_200_OK)
+                except Exception as mfa_error:
+                    logger.error(f"Error creating MFA challenge for user {user.UserName}: {str(mfa_error)}")
+                    return Response({
+                        'status': 'error',
+                        'message': 'Failed to send verification code. Please try again.'
+                    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         else:
-            # No OTP provided - check if user has email for MFA
-            if not user.Email:
-                return Response({
-                    'status': 'error',
-                    'message': 'Email address is required for MFA. Please contact your administrator.'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Create MFA challenge and send OTP
-            try:
-                challenge = MfaService.create_mfa_challenge(user, request)
-                
-                # Mask email for privacy
-                email_parts = user.Email.split('@')
-                masked_email = f"{email_parts[0][:3]}***@{email_parts[1]}" if len(email_parts) == 2 else "***"
-                
-                return Response({
-                    'status': 'mfa_required',
-                    'message': f'Please enter the verification code sent to {masked_email}',
-                    'requires_mfa': True,
-                    'email_masked': masked_email
-                }, status=status.HTTP_200_OK)
-            except Exception as mfa_error:
-                logger.error(f"Error creating MFA challenge for user {user.UserName}: {str(mfa_error)}")
-                return Response({
-                    'status': 'error',
-                    'message': 'Failed to send verification code. Please try again.'
-                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            # MFA is disabled - skip MFA verification and proceed with login
+            logger.info(f"MFA is disabled - skipping MFA verification for user {user.UserName}")
         
         # ========================================
         # PASSWORD EXPIRY CHECK
         # ========================================
-        from ..routes.Global.password_expiry_utils import (
+        from .routes.Global.password_expiry_utils import (
             is_password_expired,
             is_password_expiring_soon,
             send_password_expiry_email,
@@ -897,6 +957,10 @@ def jwt_login(request):
             'access_token_expires': tokens['access_token_expires'].isoformat(),
             'refresh_token_expires': tokens['refresh_token_expires'].isoformat(),
              'consent_required': consent_required,
+             'product_version': {
+                'version': tokens['access'].payload.get('ver') if hasattr(tokens['access'], 'payload') else None,
+                'min_supported': tokens['access'].payload.get('min_ver') if hasattr(tokens['access'], 'payload') else None
+            },
             'user': {
                 'UserId': user.UserId,
                 'UserName': user.UserName,
@@ -965,6 +1029,9 @@ def jwt_refresh(request):
                 # Silently handle blacklist errors - don't log to avoid terminal spam
                 # Continue even if blacklisting fails, as new tokens are already generated
                 pass
+
+            # Generate new tokens (SimpleJWT will rotate refresh tokens as configured)
+            tokens = generate_jwt_tokens(user)
             
             # No logging for successful refresh to keep terminal clean
             
@@ -974,7 +1041,11 @@ def jwt_refresh(request):
                 'access_token': tokens['access'],
                 'refresh_token': tokens['refresh'],
                 'access_token_expires': tokens['access_token_expires'].isoformat(),
-                'refresh_token_expires': tokens['refresh_token_expires'].isoformat()
+                'refresh_token_expires': tokens['refresh_token_expires'].isoformat(),
+                'product_version': {
+                    'version': tokens['access'].payload.get('ver') if hasattr(tokens['access'], 'payload') else None,
+                    'min_supported': tokens['access'].payload.get('min_ver') if hasattr(tokens['access'], 'payload') else None
+                },
             })
             
         except (InvalidToken, TokenError):
@@ -1159,6 +1230,72 @@ def jwt_verify(request):
             'message': 'Token verification failed'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def product_version_info(request):
+    """Return latest and minimum supported product versions."""
+    try:
+        versions = _get_active_versions()
+        latest = versions.get('latest_version')
+        min_supported = versions.get('min_supported_version') or latest
+        return Response({
+            'status': 'success',
+            'latest_version': latest,
+            'min_supported_version': min_supported,
+        })
+    except Exception as e:
+        logger.error(f"Product version info error: {str(e)}")
+        return Response({
+            'status': 'error',
+            'message': 'Unable to fetch product version info'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@csrf_exempt
+def test_token_version(request):
+    """
+    Helper endpoint for verifying token version handling:
+    - Accepts Authorization: Bearer <access_token>
+    - Decodes and returns token payload ver/min_ver
+    - Compares against current DB min_supported/latest
+    """
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return Response({'status': 'error', 'message': 'Bearer token required'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        token = auth_header.split(' ')[1]
+        payload = verify_jwt_token(token)
+        if not payload:
+            return Response({'status': 'error', 'message': 'Invalid or expired token'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        token_ver = payload.get('ver')
+        token_min_ver = payload.get('min_ver')
+
+        versions = _get_active_versions()
+        latest = versions.get('latest_version')
+        min_supported = versions.get('min_supported_version') or latest
+
+        comparison = None
+        if token_ver and min_supported:
+            comparison = _compare_versions(token_ver, min_supported)
+
+        return Response({
+            'status': 'success',
+            'token_version': token_ver,
+            'token_min_ver': token_min_ver,
+            'current_latest': latest,
+            'current_min_supported': min_supported,
+            'is_supported': comparison is None or comparison >= 0
+        })
+    except Exception as e:
+        logger.error(f"test_token_version error: {str(e)}")
+        return Response({'status': 'error', 'message': 'Failed to verify token version'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def test_consent_auth(request):
@@ -1207,6 +1344,14 @@ def test_consent_simple(request):
 @permission_classes([AllowAny])
 def mfa_verify_otp(request):
     """Verify MFA OTP and complete login"""
+    # Check if MFA is enabled
+    mfa_enabled = getattr(settings, 'MFA_ENABLED', True)
+    if not mfa_enabled:
+        return Response({
+            'status': 'error',
+            'message': 'MFA is currently disabled. Please use the regular login endpoint.'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
     try:
         data = request.data
         username = data.get('username')
@@ -1434,6 +1579,14 @@ def mfa_verify_otp(request):
 @permission_classes([AllowAny])
 def mfa_resend_otp(request):
     """Resend MFA OTP to user's email"""
+    # Check if MFA is enabled
+    mfa_enabled = getattr(settings, 'MFA_ENABLED', True)
+    if not mfa_enabled:
+        return Response({
+            'status': 'error',
+            'message': 'MFA is currently disabled. Please use the regular login endpoint.'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
     try:
         data = request.data
         username = data.get('username')

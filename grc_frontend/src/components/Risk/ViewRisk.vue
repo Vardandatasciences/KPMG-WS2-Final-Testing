@@ -86,13 +86,19 @@
           <div class="risk-view-content-column">
             <h4 class="risk-view-section-title">Risk Likelihood:</h4>
             <div v-if="!isEditMode" class="risk-view-section-content">{{ risk.RiskLikelihood || 'N/A' }}</div>
-            <select v-if="isEditMode" v-model="editRisk.RiskLikelihood" class="risk-view-select">
+            <select
+              v-if="isEditMode"
+              v-model.number="editRisk.RiskLikelihood"
+              class="risk-view-select"
+            >
               <option value="">Select Likelihood</option>
-              <option value="Very Low">Very Low</option>
-              <option value="Low">Low</option>
-              <option value="Medium">Medium</option>
-              <option value="High">High</option>
-              <option value="Very High">Very High</option>
+              <option
+                v-for="option in riskScoreOptions"
+                :key="`likelihood-${option.value}`"
+                :value="option.value"
+              >
+                {{ option.label }}
+              </option>
             </select>
           </div>
         </div>
@@ -101,13 +107,19 @@
           <div class="risk-view-content-column">
             <h4 class="risk-view-section-title">Risk Impact:</h4>
             <div v-if="!isEditMode" class="risk-view-section-content">{{ risk.RiskImpact || 'N/A' }}</div>
-            <select v-if="isEditMode" v-model="editRisk.RiskImpact" class="risk-view-select">
+            <select
+              v-if="isEditMode"
+              v-model.number="editRisk.RiskImpact"
+              class="risk-view-select"
+            >
               <option value="">Select Impact</option>
-              <option value="Very Low">Very Low</option>
-              <option value="Low">Low</option>
-              <option value="Medium">Medium</option>
-              <option value="High">High</option>
-              <option value="Very High">Very High</option>
+              <option
+                v-for="option in riskScoreOptions"
+                :key="`impact-${option.value}`"
+                :value="option.value"
+              >
+                {{ option.label }}
+              </option>
             </select>
           </div>
           <div class="risk-view-content-column">
@@ -189,7 +201,19 @@ export default {
       isSaving: false,
       originalRisk: {},
       successMessage: '',
-      errorMessage: ''
+      errorMessage: '',
+      riskScoreOptions: [
+        { value: 1, label: '1 - Very Low' },
+        { value: 2, label: '2 - Low' },
+        { value: 3, label: '3 - Low / Medium' },
+        { value: 4, label: '4 - Medium' },
+        { value: 5, label: '5 - Medium / High' },
+        { value: 6, label: '6 - Medium / High+' },
+        { value: 7, label: '7 - High' },
+        { value: 8, label: '8 - Very High' },
+        { value: 9, label: '9 - Severe' },
+        { value: 10, label: '10 - Critical' }
+      ]
     }
   },
   created() {
@@ -243,7 +267,8 @@ export default {
       this.clearMessages()
 
       try {
-        const response = await axios.put(API_ENDPOINTS.RISK(this.risk.RiskId), this.editRisk)
+        const payload = this.buildRiskPayload()
+        const response = await axios.put(API_ENDPOINTS.RISK(this.risk.RiskId), payload)
         
         this.risk = response.data
         this.originalRisk = { ...response.data }
@@ -274,6 +299,43 @@ export default {
         })
       } finally {
         this.isSaving = false
+      }
+    },
+
+    buildRiskPayload() {
+      const normalizeInteger = (value) => {
+        if (value === '' || value === null || value === undefined) return null
+        const parsed = parseInt(value, 10)
+        return isNaN(parsed) ? null : parsed
+      }
+
+      const normalizeFloat = (value) => {
+        if (value === '' || value === null || value === undefined) return null
+        const parsed = parseFloat(value)
+        return isNaN(parsed) ? null : parsed
+      }
+
+      const labelToNumberMap = {
+        'Very Low': 1,
+        'Low': 3,
+        'Medium': 5,
+        'High': 7,
+        'Very High': 9
+      }
+
+      const normalizeScore = (value) => {
+        if (typeof value === 'string' && labelToNumberMap[value]) {
+          return labelToNumberMap[value]
+        }
+        return normalizeInteger(value)
+      }
+
+      return {
+        ...this.editRisk,
+        RiskLikelihood: normalizeScore(this.editRisk.RiskLikelihood),
+        RiskImpact: normalizeScore(this.editRisk.RiskImpact),
+        RiskExposureRating: normalizeFloat(this.editRisk.RiskExposureRating),
+        ComplianceId: normalizeInteger(this.editRisk.ComplianceId)
       }
     },
 

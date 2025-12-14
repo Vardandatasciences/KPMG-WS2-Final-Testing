@@ -5,8 +5,8 @@ from datetime import datetime
 from django.conf import settings
 from django.http import JsonResponse
 from django.utils.deprecation import MiddlewareMixin
-from .models import Users
-from .authentication import verify_jwt_token
+from .models import Users, ProductVersion
+from .authentication import verify_jwt_token, _compare_versions
 from rest_framework_simplejwt.tokens import AccessToken
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 
@@ -57,6 +57,7 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
             '/api/jwt/refresh/',
             '/api/jwt/verify/',
             '/api/jwt/accept-consent/',
+            '/api/jwt/test-token-version/',
             '/api/jwt/test-consent-simple/',
             '/api/jwt/mfa/verify-otp/',
             '/api/jwt/mfa/resend-otp/',
@@ -250,6 +251,22 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
                 if payload and user_id:
                     # Get user from database
                     user = Users.objects.get(UserId=user_id)
+
+                    # Version enforcement: block outdated tokens if min_ver is set
+                    token_version = payload.get('ver')
+                    min_supported_obj = ProductVersion.get_min_supported()
+                    min_supported_version = min_supported_obj.version if min_supported_obj else None
+                    if min_supported_version and token_version:
+                        if _compare_versions(token_version, min_supported_version) < 0:
+                            logger.warning(f"[JWT Middleware] Token version {token_version} below min supported {min_supported_version}")
+                            return JsonResponse(
+                                {
+                                    'error': 'Client version not supported. Please update your application.',
+                                    'required_version': min_supported_version,
+                                    'current_version': token_version,
+                                },
+                                status=426  # Upgrade Required
+                            )
                     
                     # Check if user is active
                     is_active = user.IsActive

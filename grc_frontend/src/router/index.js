@@ -863,6 +863,12 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/framework-migration/checklisted-compliances',
+    name: 'ChecklistedCompliances',
+    component: () => import('../../vue/checklistedCompliances.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/framework-migration/migration',
     name: 'FrameworkMigrationProcess',
     component: () => import('../../vue/Migration.vue'),
