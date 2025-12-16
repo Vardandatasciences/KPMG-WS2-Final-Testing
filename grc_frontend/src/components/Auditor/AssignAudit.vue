@@ -1,7 +1,28 @@
 <template>
   <div class="assign-audit-page">
     <div class="audit-content">
+      <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 28px;">
       <h1 class="audit-title">Audit Assignment</h1>
+        <!-- Data Type Legend (Display Only) -->
+        <div class="audit-data-type-legend">
+        <div class="audit-data-type-legend-container">
+          <div class="audit-data-type-options">
+            <div class="audit-data-type-legend-item personal-option">
+              <i class="fas fa-user"></i>
+              <span>Personal</span>
+            </div>
+            <div class="audit-data-type-legend-item confidential-option">
+              <i class="fas fa-shield-alt"></i>
+              <span>Confidential</span>
+            </div>
+            <div class="audit-data-type-legend-item regular-option">
+              <i class="fas fa-file-alt"></i>
+              <span>Regular</span>
+            </div>
+          </div>
+        </div>
+        </div>
+      </div>
 
       <!-- Tab Navigation -->
       <div class="audit-tabs">
@@ -22,7 +43,38 @@
         <h2>Framework Selection</h2>
         <div class="dynamic-fields-row">
           <div class="dynamic-field-col">
-            <label class="dynamic-label">Framework</label>
+            <label class="dynamic-label">
+              Framework
+              <!-- Data Type Circle Toggle -->
+              <div class="audit-data-type-circle-toggle-wrapper">
+                <div class="audit-data-type-circle-toggle">
+                  <div 
+                    class="audit-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes?.framework === 'personal' }"
+                    @click="setDataType('framework', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="audit-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="audit-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes?.framework === 'confidential' }"
+                    @click="setDataType('framework', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="audit-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="audit-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes?.framework === 'regular' }"
+                    @click="setDataType('framework', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="audit-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <div class="dynamic-desc">Select the framework under which this audit is being conducted.</div>
             <div class="narrow-dropdown">
               <CustomDropdown
@@ -41,7 +93,38 @@
             </div>
           </div>
           <div class="dynamic-field-col">
-            <label class="dynamic-label">Audit Type</label>
+            <label class="dynamic-label">
+              Audit Type
+              <!-- Data Type Circle Toggle -->
+              <div class="audit-data-type-circle-toggle-wrapper">
+                <div class="audit-data-type-circle-toggle">
+                  <div 
+                    class="audit-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes?.auditType === 'personal' }"
+                    @click="setDataType('auditType', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="audit-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="audit-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes?.auditType === 'confidential' }"
+                    @click="setDataType('auditType', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="audit-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="audit-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes?.auditType === 'regular' }"
+                    @click="setDataType('auditType', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="audit-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <div class="dynamic-desc">Select whether the audit is Internal, External, Self-Audit, or AI-powered Audit.</div>
             <SelectInput
               v-model="auditData.type"
@@ -75,7 +158,38 @@
         <div v-for="(member, index) in teamMembers" :key="index" class="team-member-card">
           <div class="dynamic-fields-row">
             <div class="dynamic-field-col">
-              <label class="dynamic-label">Auditor</label>
+              <label class="dynamic-label">
+                Auditor
+                <!-- Data Type Circle Toggle -->
+                <div class="audit-data-type-circle-toggle-wrapper">
+                  <div class="audit-data-type-circle-toggle">
+                    <div 
+                      class="audit-circle-option personal-circle" 
+                      :class="{ active: fieldDataTypes?.auditor === 'personal' }"
+                      @click="setDataType('auditor', 'personal')"
+                      title="Personal Data"
+                    >
+                      <div class="audit-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="audit-circle-option confidential-circle" 
+                      :class="{ active: fieldDataTypes?.auditor === 'confidential' }"
+                      @click="setDataType('auditor', 'confidential')"
+                      title="Confidential Data"
+                    >
+                      <div class="audit-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="audit-circle-option regular-circle" 
+                      :class="{ active: fieldDataTypes?.auditor === 'regular' }"
+                      @click="setDataType('auditor', 'regular')"
+                      title="Regular Data"
+                    >
+                      <div class="audit-circle-inner"></div>
+                    </div>
+                  </div>
+                </div>
+              </label>
               <div class="dynamic-desc">Select the auditor responsible for this audit.</div>
               <div class="field-with-ai">
                 <CustomDropdown
@@ -107,7 +221,38 @@
               </div>
             </div>
             <div class="dynamic-field-col">
-              <label class="dynamic-label">Role</label>
+              <label class="dynamic-label">
+                Role
+                <!-- Data Type Circle Toggle -->
+                <div class="audit-data-type-circle-toggle-wrapper">
+                  <div class="audit-data-type-circle-toggle">
+                    <div 
+                      class="audit-circle-option personal-circle" 
+                      :class="{ active: fieldDataTypes?.role === 'personal' }"
+                      @click="setDataType('role', 'personal')"
+                      title="Personal Data"
+                    >
+                      <div class="audit-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="audit-circle-option confidential-circle" 
+                      :class="{ active: fieldDataTypes?.role === 'confidential' }"
+                      @click="setDataType('role', 'confidential')"
+                      title="Confidential Data"
+                    >
+                      <div class="audit-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="audit-circle-option regular-circle" 
+                      :class="{ active: fieldDataTypes?.role === 'regular' }"
+                      @click="setDataType('role', 'regular')"
+                      title="Regular Data"
+                    >
+                      <div class="audit-circle-inner"></div>
+                    </div>
+                  </div>
+                </div>
+              </label>
               <div class="dynamic-desc">Select the role of the auditor in this audit.</div>
               <CustomDropdown
                 v-model="member.role"
@@ -122,7 +267,38 @@
               />
             </div>
             <div class="dynamic-field-col">
-              <label class="dynamic-label">Primary Responsibilities</label>
+              <label class="dynamic-label">
+                Primary Responsibilities
+                <!-- Data Type Circle Toggle -->
+                <div class="audit-data-type-circle-toggle-wrapper">
+                  <div class="audit-data-type-circle-toggle">
+                    <div 
+                      class="audit-circle-option personal-circle" 
+                      :class="{ active: fieldDataTypes?.responsibilities === 'personal' }"
+                      @click="setDataType('responsibilities', 'personal')"
+                      title="Personal Data"
+                    >
+                      <div class="audit-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="audit-circle-option confidential-circle" 
+                      :class="{ active: fieldDataTypes?.responsibilities === 'confidential' }"
+                      @click="setDataType('responsibilities', 'confidential')"
+                      title="Confidential Data"
+                    >
+                      <div class="audit-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="audit-circle-option regular-circle" 
+                      :class="{ active: fieldDataTypes?.responsibilities === 'regular' }"
+                      @click="setDataType('responsibilities', 'regular')"
+                      title="Regular Data"
+                    >
+                      <div class="audit-circle-inner"></div>
+                    </div>
+                  </div>
+                </div>
+              </label>
               <div class="dynamic-desc">Describe the main responsibilities for this team member.</div>
               <TextareaInput
                 v-model="member.responsibilities"
@@ -149,7 +325,38 @@
         <div class="policy-selection-section">
           <div class="dynamic-fields-row">
             <div class="dynamic-field-col">
-              <label class="dynamic-label">Select Policy</label>
+              <label class="dynamic-label">
+                Select Policy
+                <!-- Data Type Circle Toggle -->
+                <div class="audit-data-type-circle-toggle-wrapper">
+                  <div class="audit-data-type-circle-toggle">
+                    <div 
+                      class="audit-circle-option personal-circle" 
+                      :class="{ active: fieldDataTypes?.policy === 'personal' }"
+                      @click="setDataType('policy', 'personal')"
+                      title="Personal Data"
+                    >
+                      <div class="audit-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="audit-circle-option confidential-circle" 
+                      :class="{ active: fieldDataTypes?.policy === 'confidential' }"
+                      @click="setDataType('policy', 'confidential')"
+                      title="Confidential Data"
+                    >
+                      <div class="audit-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="audit-circle-option regular-circle" 
+                      :class="{ active: fieldDataTypes?.policy === 'regular' }"
+                      @click="setDataType('policy', 'regular')"
+                      title="Regular Data"
+                    >
+                      <div class="audit-circle-inner"></div>
+                    </div>
+                  </div>
+                </div>
+              </label>
               <div class="dynamic-desc">Choose the policy to be audited. This will determine the compliance requirements.</div>
               <CustomDropdown
                 v-model="auditData.policy"
@@ -164,7 +371,38 @@
               />
             </div>
             <div class="dynamic-field-col">
-              <label class="dynamic-label">Sub Policy <span v-if="auditData.type === 'AI'" class="required-asterisk">*</span></label>
+              <label class="dynamic-label">
+                Sub Policy <span v-if="auditData.type === 'AI'" class="required-asterisk">*</span>
+                <!-- Data Type Circle Toggle -->
+                <div class="audit-data-type-circle-toggle-wrapper">
+                  <div class="audit-data-type-circle-toggle">
+                    <div 
+                      class="audit-circle-option personal-circle" 
+                      :class="{ active: fieldDataTypes?.subPolicy === 'personal' }"
+                      @click="setDataType('subPolicy', 'personal')"
+                      title="Personal Data"
+                    >
+                      <div class="audit-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="audit-circle-option confidential-circle" 
+                      :class="{ active: fieldDataTypes?.subPolicy === 'confidential' }"
+                      @click="setDataType('subPolicy', 'confidential')"
+                      title="Confidential Data"
+                    >
+                      <div class="audit-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="audit-circle-option regular-circle" 
+                      :class="{ active: fieldDataTypes?.subPolicy === 'regular' }"
+                      @click="setDataType('subPolicy', 'regular')"
+                      title="Regular Data"
+                    >
+                      <div class="audit-circle-inner"></div>
+                    </div>
+                  </div>
+                </div>
+              </label>
               <div class="dynamic-desc">
                 <span v-if="auditData.type === 'AI'">Select a specific sub-policy for AI compliance analysis.</span>
                 <span v-else>Select specific sub-policy if applicable.</span>
@@ -221,7 +459,38 @@
               <div class="section-content" :class="{ 'collapsed': !member.isPolicyAssignmentExpanded }">
                 <div class="dynamic-fields-row">
                   <div class="dynamic-field-col">
-                    <label class="dynamic-label">Assigned Policy</label>
+                    <label class="dynamic-label">
+                      Assigned Policy
+                      <!-- Data Type Circle Toggle -->
+                      <div class="audit-data-type-circle-toggle-wrapper">
+                        <div class="audit-data-type-circle-toggle">
+                          <div 
+                            class="audit-circle-option personal-circle" 
+                            :class="{ active: fieldDataTypes?.policy === 'personal' }"
+                            @click="setDataType('policy', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option confidential-circle" 
+                            :class="{ active: fieldDataTypes?.policy === 'confidential' }"
+                            @click="setDataType('policy', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option regular-circle" 
+                            :class="{ active: fieldDataTypes?.policy === 'regular' }"
+                            @click="setDataType('policy', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
                     <div class="dynamic-desc">Select the policy to be audited by this team member.</div>
                     <CustomDropdown
                       v-model="member.assignedPolicy"
@@ -237,7 +506,38 @@
                     />
                   </div>
                   <div class="dynamic-field-col">
-                    <label class="dynamic-label">Sub Policy</label>
+                    <label class="dynamic-label">
+                      Sub Policy
+                      <!-- Data Type Circle Toggle -->
+                      <div class="audit-data-type-circle-toggle-wrapper">
+                        <div class="audit-data-type-circle-toggle">
+                          <div 
+                            class="audit-circle-option personal-circle" 
+                            :class="{ active: fieldDataTypes?.subPolicy === 'personal' }"
+                            @click="setDataType('subPolicy', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option confidential-circle" 
+                            :class="{ active: fieldDataTypes?.subPolicy === 'confidential' }"
+                            @click="setDataType('subPolicy', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option regular-circle" 
+                            :class="{ active: fieldDataTypes?.subPolicy === 'regular' }"
+                            @click="setDataType('subPolicy', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
                     <div class="dynamic-desc">Select specific sub policy if applicable.</div>
                     <CustomDropdown
                       v-model="member.assignedSubPolicy"
@@ -252,7 +552,38 @@
                     />
                   </div>
                   <div class="dynamic-field-col">
-                    <label class="dynamic-label">Reviewer</label>
+                    <label class="dynamic-label">
+                      Reviewer
+                      <!-- Data Type Circle Toggle -->
+                      <div class="audit-data-type-circle-toggle-wrapper">
+                        <div class="audit-data-type-circle-toggle">
+                          <div 
+                            class="audit-circle-option personal-circle" 
+                            :class="{ active: fieldDataTypes?.reviewer === 'personal' }"
+                            @click="setDataType('reviewer', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option confidential-circle" 
+                            :class="{ active: fieldDataTypes?.reviewer === 'confidential' }"
+                            @click="setDataType('reviewer', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option regular-circle" 
+                            :class="{ active: fieldDataTypes?.reviewer === 'regular' }"
+                            @click="setDataType('reviewer', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
                     <div class="dynamic-desc">Choose the reviewer who will review this audit.</div>
                     <div class="field-with-ai">
                       <CustomDropdown
@@ -326,12 +657,74 @@
               <div class="section-content" :class="{ 'collapsed': !member.isAuditDetailsExpanded }">
                 <div class="dynamic-fields-row">
                   <div class="dynamic-field-col">
-                    <label class="dynamic-label">Audit Title</label>
+                    <label class="dynamic-label">
+                      Audit Title
+                      <!-- Data Type Circle Toggle -->
+                      <div class="audit-data-type-circle-toggle-wrapper">
+                        <div class="audit-data-type-circle-toggle">
+                          <div 
+                            class="audit-circle-option personal-circle" 
+                            :class="{ active: fieldDataTypes?.auditTitle === 'personal' }"
+                            @click="setDataType('auditTitle', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option confidential-circle" 
+                            :class="{ active: fieldDataTypes?.auditTitle === 'confidential' }"
+                            @click="setDataType('auditTitle', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option regular-circle" 
+                            :class="{ active: fieldDataTypes?.auditTitle === 'regular' }"
+                            @click="setDataType('auditTitle', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
                     <div class="dynamic-desc">Enter a concise title for this audit assignment.</div>
                     <input type="text" v-model="member.auditTitle" class="dynamic-input" placeholder="Enter audit title..." />
                   </div>
                   <div class="dynamic-field-col">
-                    <label class="dynamic-label">Business Unit</label>
+                    <label class="dynamic-label">
+                      Business Unit
+                      <!-- Data Type Circle Toggle -->
+                      <div class="audit-data-type-circle-toggle-wrapper">
+                        <div class="audit-data-type-circle-toggle">
+                          <div 
+                            class="audit-circle-option personal-circle" 
+                            :class="{ active: fieldDataTypes?.businessUnit === 'personal' }"
+                            @click="setDataType('businessUnit', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option confidential-circle" 
+                            :class="{ active: fieldDataTypes?.businessUnit === 'confidential' }"
+                            @click="setDataType('businessUnit', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option regular-circle" 
+                            :class="{ active: fieldDataTypes?.businessUnit === 'regular' }"
+                            @click="setDataType('businessUnit', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
                     <div class="dynamic-desc">Select one or more business units for this audit.</div>
                     <div class="multi-select-dropdown">
                       <div class="multi-select-input" @click="toggleBusinessUnitDropdown(member)">
@@ -372,7 +765,38 @@
 
                 <div class="dynamic-fields-row">
                   <div class="dynamic-field-col">
-                    <label class="dynamic-label">Scope</label>
+                    <label class="dynamic-label">
+                      Scope
+                      <!-- Data Type Circle Toggle -->
+                      <div class="audit-data-type-circle-toggle-wrapper">
+                        <div class="audit-data-type-circle-toggle">
+                          <div 
+                            class="audit-circle-option personal-circle" 
+                            :class="{ active: fieldDataTypes?.scope === 'personal' }"
+                            @click="setDataType('scope', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option confidential-circle" 
+                            :class="{ active: fieldDataTypes?.scope === 'confidential' }"
+                            @click="setDataType('scope', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option regular-circle" 
+                            :class="{ active: fieldDataTypes?.scope === 'regular' }"
+                            @click="setDataType('scope', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
                     <div class="dynamic-desc">Specify the boundaries and extent of the audit.</div>
                     <TextareaInput
                       v-model="member.scope"
@@ -383,7 +807,38 @@
                     />
                   </div>
                   <div class="dynamic-field-col">
-                    <label class="dynamic-label">Objective</label>
+                    <label class="dynamic-label">
+                      Objective
+                      <!-- Data Type Circle Toggle -->
+                      <div class="audit-data-type-circle-toggle-wrapper">
+                        <div class="audit-data-type-circle-toggle">
+                          <div 
+                            class="audit-circle-option personal-circle" 
+                            :class="{ active: fieldDataTypes?.objective === 'personal' }"
+                            @click="setDataType('objective', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option confidential-circle" 
+                            :class="{ active: fieldDataTypes?.objective === 'confidential' }"
+                            @click="setDataType('objective', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option regular-circle" 
+                            :class="{ active: fieldDataTypes?.objective === 'regular' }"
+                            @click="setDataType('objective', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
                     <div class="dynamic-desc">State the main goals or objectives of the audit.</div>
                     <TextareaInput
                       v-model="member.objective"
@@ -396,7 +851,38 @@
                 </div>
                 <div class="dynamic-fields-row">
                   <div class="dynamic-field-col">
-                    <label class="dynamic-label">Frequency</label>
+                    <label class="dynamic-label">
+                      Frequency
+                      <!-- Data Type Circle Toggle -->
+                      <div class="audit-data-type-circle-toggle-wrapper">
+                        <div class="audit-data-type-circle-toggle">
+                          <div 
+                            class="audit-circle-option personal-circle" 
+                            :class="{ active: fieldDataTypes?.frequency === 'personal' }"
+                            @click="setDataType('frequency', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option confidential-circle" 
+                            :class="{ active: fieldDataTypes?.frequency === 'confidential' }"
+                            @click="setDataType('frequency', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option regular-circle" 
+                            :class="{ active: fieldDataTypes?.frequency === 'regular' }"
+                            @click="setDataType('frequency', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
                     <div class="dynamic-desc">How often should this audit occur?</div>
                     <SelectInput
                       v-model="member.frequency"
@@ -415,7 +901,38 @@
                     />
                   </div>
                   <div class="dynamic-field-col">
-                    <label class="dynamic-label">Due Date</label>
+                    <label class="dynamic-label">
+                      Due Date
+                      <!-- Data Type Circle Toggle -->
+                      <div class="audit-data-type-circle-toggle-wrapper">
+                        <div class="audit-data-type-circle-toggle">
+                          <div 
+                            class="audit-circle-option personal-circle" 
+                            :class="{ active: fieldDataTypes?.dueDate === 'personal' }"
+                            @click="setDataType('dueDate', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option confidential-circle" 
+                            :class="{ active: fieldDataTypes?.dueDate === 'confidential' }"
+                            @click="setDataType('dueDate', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option regular-circle" 
+                            :class="{ active: fieldDataTypes?.dueDate === 'regular' }"
+                            @click="setDataType('dueDate', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
                     <div class="dynamic-desc">Select the due date for this audit.</div>
                     <DateInput
                       v-model="member.dueDate"
@@ -492,7 +1009,38 @@
               <div class="section-content" :class="{ 'collapsed': !member.isAuditDetailsExpanded }">
                 <div class="dynamic-fields-row">
                   <div class="dynamic-field-col">
-                    <label class="dynamic-label">Audit Title</label>
+                    <label class="dynamic-label">
+                      Audit Title
+                      <!-- Data Type Circle Toggle -->
+                      <div class="audit-data-type-circle-toggle-wrapper">
+                        <div class="audit-data-type-circle-toggle">
+                          <div 
+                            class="audit-circle-option personal-circle" 
+                            :class="{ active: fieldDataTypes?.auditTitle === 'personal' }"
+                            @click="setDataType('auditTitle', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option confidential-circle" 
+                            :class="{ active: fieldDataTypes?.auditTitle === 'confidential' }"
+                            @click="setDataType('auditTitle', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option regular-circle" 
+                            :class="{ active: fieldDataTypes?.auditTitle === 'regular' }"
+                            @click="setDataType('auditTitle', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
                     <div class="dynamic-desc">Enter a concise title for this audit assignment.</div>
                     <!-- <TextInput
                       v-model="member.auditTitle"
@@ -503,7 +1051,38 @@
                     <input type="text" v-model="member.auditTitle" class="dynamic-input" placeholder="Enter audit title..." />
                   </div>
                   <div class="dynamic-field-col">
-                    <label class="dynamic-label">Business Unit</label>
+                    <label class="dynamic-label">
+                      Business Unit
+                      <!-- Data Type Circle Toggle -->
+                      <div class="audit-data-type-circle-toggle-wrapper">
+                        <div class="audit-data-type-circle-toggle">
+                          <div 
+                            class="audit-circle-option personal-circle" 
+                            :class="{ active: fieldDataTypes?.businessUnit === 'personal' }"
+                            @click="setDataType('businessUnit', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option confidential-circle" 
+                            :class="{ active: fieldDataTypes?.businessUnit === 'confidential' }"
+                            @click="setDataType('businessUnit', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option regular-circle" 
+                            :class="{ active: fieldDataTypes?.businessUnit === 'regular' }"
+                            @click="setDataType('businessUnit', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
                     <div class="dynamic-desc">Select one or more business units for this audit.</div>
                     <div class="multi-select-dropdown">
                       <div class="multi-select-input" @click="toggleBusinessUnitDropdown(member)">
@@ -544,7 +1123,38 @@
 
                 <div class="dynamic-fields-row">
                   <div class="dynamic-field-col">
-                    <label class="dynamic-label">Scope</label>
+                    <label class="dynamic-label">
+                      Scope
+                      <!-- Data Type Circle Toggle -->
+                      <div class="audit-data-type-circle-toggle-wrapper">
+                        <div class="audit-data-type-circle-toggle">
+                          <div 
+                            class="audit-circle-option personal-circle" 
+                            :class="{ active: fieldDataTypes?.scope === 'personal' }"
+                            @click="setDataType('scope', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option confidential-circle" 
+                            :class="{ active: fieldDataTypes?.scope === 'confidential' }"
+                            @click="setDataType('scope', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option regular-circle" 
+                            :class="{ active: fieldDataTypes?.scope === 'regular' }"
+                            @click="setDataType('scope', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
                     <div class="dynamic-desc">Specify the boundaries and extent of the audit.</div>
                     <TextareaInput
                       v-model="member.scope"
@@ -555,7 +1165,38 @@
                     />
                   </div>
                   <div class="dynamic-field-col">
-                    <label class="dynamic-label">Objective</label>
+                    <label class="dynamic-label">
+                      Objective
+                      <!-- Data Type Circle Toggle -->
+                      <div class="audit-data-type-circle-toggle-wrapper">
+                        <div class="audit-data-type-circle-toggle">
+                          <div 
+                            class="audit-circle-option personal-circle" 
+                            :class="{ active: fieldDataTypes?.objective === 'personal' }"
+                            @click="setDataType('objective', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option confidential-circle" 
+                            :class="{ active: fieldDataTypes?.objective === 'confidential' }"
+                            @click="setDataType('objective', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option regular-circle" 
+                            :class="{ active: fieldDataTypes?.objective === 'regular' }"
+                            @click="setDataType('objective', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
                     <div class="dynamic-desc">State the main goals or objectives of the audit.</div>
                     <TextareaInput
                       v-model="member.objective"
@@ -584,7 +1225,38 @@
                     />
                   </div>
                   <div class="dynamic-field-col">
-                    <label class="dynamic-label">Frequency</label>
+                    <label class="dynamic-label">
+                      Frequency
+                      <!-- Data Type Circle Toggle -->
+                      <div class="audit-data-type-circle-toggle-wrapper">
+                        <div class="audit-data-type-circle-toggle">
+                          <div 
+                            class="audit-circle-option personal-circle" 
+                            :class="{ active: fieldDataTypes?.frequency === 'personal' }"
+                            @click="setDataType('frequency', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option confidential-circle" 
+                            :class="{ active: fieldDataTypes?.frequency === 'confidential' }"
+                            @click="setDataType('frequency', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option regular-circle" 
+                            :class="{ active: fieldDataTypes?.frequency === 'regular' }"
+                            @click="setDataType('frequency', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
                     <div class="dynamic-desc">How often should this audit occur?</div>
                     <SelectInput
                       v-model="member.frequency"
@@ -603,7 +1275,38 @@
                     />
                   </div>
                   <div class="dynamic-field-col">
-                    <label class="dynamic-label">Due Date</label>
+                    <label class="dynamic-label">
+                      Due Date
+                      <!-- Data Type Circle Toggle -->
+                      <div class="audit-data-type-circle-toggle-wrapper">
+                        <div class="audit-data-type-circle-toggle">
+                          <div 
+                            class="audit-circle-option personal-circle" 
+                            :class="{ active: fieldDataTypes?.dueDate === 'personal' }"
+                            @click="setDataType('dueDate', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option confidential-circle" 
+                            :class="{ active: fieldDataTypes?.dueDate === 'confidential' }"
+                            @click="setDataType('dueDate', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="audit-circle-option regular-circle" 
+                            :class="{ active: fieldDataTypes?.dueDate === 'regular' }"
+                            @click="setDataType('dueDate', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="audit-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
                     <div class="dynamic-desc">Select the due date for this audit.</div>
                     <DateInput
                       v-model="member.dueDate"
@@ -1280,6 +1983,23 @@ export default {
         dueDate: '',
         responsibilities: ''
       },
+      // Store data type per field
+      fieldDataTypes: {
+        framework: 'regular',
+        auditType: 'regular',
+        auditTitle: 'regular',
+        scope: 'regular',
+        objective: 'regular',
+        reviewer: 'regular',
+        auditor: 'regular',
+        role: 'regular',
+        responsibilities: 'regular',
+        businessUnit: 'regular',
+        frequency: 'regular',
+        dueDate: 'regular',
+        policy: 'regular',
+        subPolicy: 'regular'
+      },
       frameworks: [],
       policies: [],
       subpolicies: [],
@@ -1513,6 +2233,12 @@ export default {
     }
   },
   methods: {
+    setDataType(fieldName, type) {
+      if (Object.prototype.hasOwnProperty.call(this.fieldDataTypes, fieldName)) {
+        this.fieldDataTypes[fieldName] = type;
+        console.log(`Data type selected for ${fieldName}:`, type);
+      }
+    },
     handleAssignClick() {
       // Ensure any overlays are closed before submission
       if (this.showAIRecommendations) {
@@ -2070,6 +2796,30 @@ export default {
           reviewer: m.reviewer
         })));
 
+        // Build data_inventory object from fieldDataTypes
+        const fieldLabelMap = {
+          framework: 'Framework',
+          auditType: 'Audit Type',
+          auditTitle: 'Audit Title',
+          scope: 'Scope',
+          objective: 'Objective',
+          reviewer: 'Reviewer',
+          auditor: 'Auditor',
+          role: 'Role',
+          responsibilities: 'Responsibilities',
+          businessUnit: 'Business Unit',
+          frequency: 'Frequency',
+          dueDate: 'Due Date',
+          policy: 'Policy',
+          subPolicy: 'Sub Policy'
+        };
+        
+        const dataInventory = {};
+        for (const [fieldName, dataType] of Object.entries(this.fieldDataTypes)) {
+          const fieldLabel = fieldLabelMap[fieldName] || fieldName;
+          dataInventory[fieldLabel] = dataType;
+        }
+
         const payload = {
           // DB limits: Title 255, Responsibility 255, BusinessUnit 255. Scope/Objective are Text but backend DB may be limited in practice.
           title: this.sanitizeField(templateMember.auditTitle, 255),
@@ -2086,7 +2836,8 @@ export default {
           due_date: templateMember.dueDate,
           frequency: templateMember.frequency,
           audit_type: templateMember.type,
-          reports: templateMember.reports || ''
+          reports: templateMember.reports || '',
+          data_inventory: dataInventory
         };
 
         console.log('🚀 Submitting audit with payload:', payload);

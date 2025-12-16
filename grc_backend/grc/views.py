@@ -3,7 +3,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from .models import Framework, Policy, SubPolicy, FrameworkVersion, PolicyVersion, PolicyApproval, Users, Department, BusinessUnit, Entity, Location, RBAC
+from .models import Framework, Policy, SubPolicy, FrameworkVersion, PolicyVersion, PolicyApproval, Users, Department, BusinessUnit, Entity, Location, RBAC, GRCLog
 from .serializers import FrameworkSerializer, PolicySerializer, SubPolicySerializer, PolicyApprovalSerializer, UserSerializer   
 from django.db import transaction
 import traceback
@@ -1438,7 +1438,9 @@ def copy_framework(request, pk):
                             'PermanentTemporary': sub_custom_data.get('PermanentTemporary', subpolicy.PermanentTemporary),
                             'Control': sub_custom_data.get('Control', subpolicy.Control)
                         }
-                        SubPolicy.objects.create(**new_subpolicy_data)
+                        print(f"DEBUG: Creating subpolicy with data_inventory: {new_subpolicy_data.get('data_inventory')}")
+                        new_subpolicy = SubPolicy.objects.create(**new_subpolicy_data)
+                        print(f"DEBUG: SubPolicy created with ID: {new_subpolicy.SubPolicyId}, data_inventory saved: {new_subpolicy.data_inventory}")
                         print(f"Created subpolicy: {new_subpolicy_data['SubPolicyName']} for policy {new_policy.PolicyName}")
 
             if 'new_policies' in request.data:
@@ -1696,7 +1698,9 @@ def copy_policy(request, pk):
                             'PermanentTemporary': subpolicy_data.get('PermanentTemporary', 'Permanent'),
                             'Control': subpolicy_data.get('Control')
                         }
-                        SubPolicy.objects.create(**new_subpolicy_data)
+                        print(f"DEBUG: Creating subpolicy with data_inventory: {new_subpolicy_data.get('data_inventory')}")
+                    new_subpolicy = SubPolicy.objects.create(**new_subpolicy_data)
+                    print(f"DEBUG: SubPolicy created with ID: {new_subpolicy.SubPolicyId}, data_inventory saved: {new_subpolicy.data_inventory}")
             # --- End new subpolicy block ---
             
             return Response({
@@ -1926,6 +1930,43 @@ def create_framework_version(request, pk):
             new_version = current_version + 1
             new_version_str = f"{new_version}.0"
             
+            # Get data_inventory from request.data (extract BEFORE any processing, like TT does)
+            framework_data_inventory_raw = request.data.get('data_inventory')
+            print(f"DEBUG: Framework data_inventory RAW from request: {framework_data_inventory_raw}")
+            print(f"DEBUG: Framework data_inventory RAW type: {type(framework_data_inventory_raw)}")
+            
+            framework_data_inventory = None
+            if framework_data_inventory_raw is not None:
+                if isinstance(framework_data_inventory_raw, str):
+                    try:
+                        import json
+                        framework_data_inventory = json.loads(framework_data_inventory_raw)
+                        print(f"DEBUG: Parsed JSON string to dict: {framework_data_inventory}")
+                    except json.JSONDecodeError:
+                        print(f"Warning: Invalid JSON in framework data_inventory, setting to None")
+                        framework_data_inventory = None
+                elif isinstance(framework_data_inventory_raw, dict):
+                    # If it's already a dict, use it as-is (even if empty)
+                    framework_data_inventory = framework_data_inventory_raw
+                    print(f"DEBUG: Using dict as-is: {framework_data_inventory}")
+                else:
+                    print(f"DEBUG: framework_data_inventory_raw is not str or dict, type: {type(framework_data_inventory_raw)}")
+            else:
+                print(f"DEBUG: framework_data_inventory_raw is None, falling back to original")
+                # Fall back to original framework's data_inventory if not provided
+                framework_data_inventory = original_framework.data_inventory if hasattr(original_framework, 'data_inventory') else None
+            
+            print(f"DEBUG: Framework data_inventory FINAL: {framework_data_inventory}")
+            print(f"DEBUG: Framework data_inventory FINAL type: {type(framework_data_inventory)}")
+            
+            # Get InternalExternal from request or use original
+            internal_external = request.data.get('InternalExternal', original_framework.InternalExternal if hasattr(original_framework, 'InternalExternal') else 'Internal')
+            
+            # Ensure data_inventory is explicitly set (even if None or empty dict)
+            # This is important for JSONField to save correctly
+            if framework_data_inventory is None:
+                framework_data_inventory = original_framework.data_inventory if hasattr(original_framework, 'data_inventory') else None
+            
             new_framework_data = {
                 'FrameworkName': framework_name,
                 'CurrentVersion': new_version_str,
@@ -1941,9 +1982,22 @@ def create_framework_version(request, pk):
                 'Status': 'Under Review',
                 'ActiveInactive': 'Inactive',
                 'Reviewer': reviewer_name,
+                'InternalExternal': internal_external,
+                'data_inventory': framework_data_inventory,  # Explicitly include data_inventory
             }
             
+            print(f"DEBUG: new_framework_data keys: {list(new_framework_data.keys())}")
+            print(f"DEBUG: data_inventory in new_framework_data: {'data_inventory' in new_framework_data}")
+            print(f"DEBUG: Creating framework with data_inventory: {new_framework_data.get('data_inventory')}")
+            print(f"DEBUG: data_inventory value type before create: {type(new_framework_data.get('data_inventory'))}")
+            
             new_framework = Framework.objects.create(**new_framework_data)
+            
+            # Refresh from database to get the actual saved value
+            new_framework.refresh_from_db()
+            print(f"DEBUG: Framework created with ID: {new_framework.FrameworkId}")
+            print(f"DEBUG: Framework data_inventory after save: {new_framework.data_inventory}")
+            print(f"DEBUG: Framework data_inventory type after save: {type(new_framework.data_inventory)}")
 
             original_framework_version = FrameworkVersion.objects.filter(
                 FrameworkId=original_framework,
@@ -2011,6 +2065,24 @@ def create_framework_version(request, pk):
                     if user_obj:
                         reviewer_username = user_obj.UserName
 
+                # Get data_inventory for policy
+                policy_data_inventory = custom_data.get('data_inventory')
+                if policy_data_inventory is not None:
+                    if isinstance(policy_data_inventory, str):
+                        try:
+                            import json
+                            policy_data_inventory = json.loads(policy_data_inventory)
+                        except json.JSONDecodeError:
+                            policy_data_inventory = None
+                    # If it's already a dict, use it as-is (even if empty)
+                    elif not isinstance(policy_data_inventory, dict):
+                        policy_data_inventory = None
+                else:
+                    # Fall back to original policy's data_inventory if not provided
+                    policy_data_inventory = original_policy.data_inventory if hasattr(original_policy, 'data_inventory') else None
+                
+                print(f"DEBUG: Policy {original_policy.PolicyName} (ID: {original_policy.PolicyId}) data_inventory from custom_data: {custom_data.get('data_inventory')}, final: {policy_data_inventory}")
+                
                 new_policy_data = {
                     'FrameworkId': new_framework,
                     'CurrentVersion': new_version_str,
@@ -2030,9 +2102,12 @@ def create_framework_version(request, pk):
                     'PermanentTemporary': custom_data.get('PermanentTemporary', original_policy.PermanentTemporary),
                     'ActiveInactive': 'Inactive',
                     'Reviewer': reviewer_username,
+                    'data_inventory': policy_data_inventory,
                 }
                 
+                print(f"DEBUG: Creating policy with data_inventory: {new_policy_data.get('data_inventory')}")
                 new_policy = Policy.objects.create(**new_policy_data)
+                print(f"DEBUG: Policy created with ID: {new_policy.PolicyId}, data_inventory saved: {new_policy.data_inventory}")
                 created_policies.append(new_policy)
 
                 original_policy_version = PolicyVersion.objects.filter(
@@ -2080,6 +2155,24 @@ def create_framework_version(request, pk):
                     
                     custom_subpolicy_data = subpolicy_customizations.get(original_subpolicy.SubPolicyId, {})
 
+                    # Get data_inventory for subpolicy
+                    subpolicy_data_inventory = custom_subpolicy_data.get('data_inventory')
+                    if subpolicy_data_inventory is not None:
+                        if isinstance(subpolicy_data_inventory, str):
+                            try:
+                                import json
+                                subpolicy_data_inventory = json.loads(subpolicy_data_inventory)
+                            except json.JSONDecodeError:
+                                subpolicy_data_inventory = None
+                        # If it's already a dict, use it as-is (even if empty)
+                        elif not isinstance(subpolicy_data_inventory, dict):
+                            subpolicy_data_inventory = None
+                    else:
+                        # Fall back to original subpolicy's data_inventory if not provided
+                        subpolicy_data_inventory = original_subpolicy.data_inventory if hasattr(original_subpolicy, 'data_inventory') else None
+                    
+                    print(f"DEBUG: SubPolicy {original_subpolicy.SubPolicyName} (ID: {original_subpolicy.SubPolicyId}) data_inventory from custom_subpolicy_data: {custom_subpolicy_data.get('data_inventory')}, final: {subpolicy_data_inventory}")
+                    
                     new_subpolicy_data = {
                         'PolicyId': new_policy,
                         'SubPolicyName': custom_subpolicy_data.get('SubPolicyName', original_subpolicy.SubPolicyName),
@@ -2089,11 +2182,15 @@ def create_framework_version(request, pk):
                         'Description': custom_subpolicy_data.get('Description', original_subpolicy.Description),
                         'Status': 'Under Review',
                         'PermanentTemporary': custom_subpolicy_data.get('PermanentTemporary', original_subpolicy.PermanentTemporary),
-                        'Control': custom_subpolicy_data.get('Control', original_subpolicy.Control)
+                        'Control': custom_subpolicy_data.get('Control', original_subpolicy.Control),
+                        'data_inventory': subpolicy_data_inventory
                     }
 
-                    SubPolicy.objects.create(**new_subpolicy_data)
+                    print(f"DEBUG: Creating subpolicy with data_inventory: {new_subpolicy_data.get('data_inventory')}")
+                    new_subpolicy = SubPolicy.objects.create(**new_subpolicy_data)
+                    print(f"DEBUG: SubPolicy created with ID: {new_subpolicy.SubPolicyId}, data_inventory saved: {new_subpolicy.data_inventory}")
 
+                # Handle new subpolicies from subpolicies array (for backward compatibility)
                 for sp_data in custom_data.get('subpolicies', []):
                     if sp_data.get('exclude', False):
                         continue
@@ -2107,6 +2204,19 @@ def create_framework_version(request, pk):
                             'error': f'Missing required fields for new subpolicy in existing policy {new_policy.PolicyName}: {", ".join(missing_fields)}'
                         }, status=status.HTTP_400_BAD_REQUEST)
 
+                    # Extract data_inventory for new subpolicy
+                    new_subpolicy_data_inventory = sp_data.get('data_inventory')
+                    if new_subpolicy_data_inventory is not None:
+                        if isinstance(new_subpolicy_data_inventory, str):
+                            try:
+                                import json
+                                new_subpolicy_data_inventory = json.loads(new_subpolicy_data_inventory)
+                            except json.JSONDecodeError:
+                                new_subpolicy_data_inventory = None
+                        # If it's already a dict, use it as-is (even if empty)
+                        elif not isinstance(new_subpolicy_data_inventory, dict):
+                            new_subpolicy_data_inventory = None
+
                     new_subpolicy_data = {
                         'PolicyId': new_policy,
                         'SubPolicyName': sp_data.get('SubPolicyName'),
@@ -2116,10 +2226,55 @@ def create_framework_version(request, pk):
                         'CreatedByDate': new_policy.CreatedByDate,
                         'Status': 'Under Review',
                         'PermanentTemporary': sp_data.get('PermanentTemporary', 'Permanent'),
-                        'Control': sp_data.get('Control', '')
+                        'Control': sp_data.get('Control', ''),
+                        'data_inventory': new_subpolicy_data_inventory
                     }
 
-                    SubPolicy.objects.create(**new_subpolicy_data)
+                    print(f"DEBUG: Creating subpolicy with data_inventory: {new_subpolicy_data.get('data_inventory')}")
+                    new_subpolicy = SubPolicy.objects.create(**new_subpolicy_data)
+                    print(f"DEBUG: SubPolicy created with ID: {new_subpolicy.SubPolicyId}, data_inventory saved: {new_subpolicy.data_inventory}")
+                
+                # Handle new subpolicies from new_subpolicies array
+                for sp_data in custom_data.get('new_subpolicies', []):
+                    if sp_data.get('exclude', False):
+                        continue
+
+                    required_fields = ['SubPolicyName', 'Description', 'Identifier']
+                    missing_fields = [field for field in required_fields if field not in sp_data]
+                    if missing_fields:
+                        return Response({
+                            'error': f'Missing required fields for new subpolicy in existing policy {new_policy.PolicyName}: {", ".join(missing_fields)}'
+                        }, status=status.HTTP_400_BAD_REQUEST)
+
+                    # Extract data_inventory for new subpolicy
+                    new_subpolicy_data_inventory = sp_data.get('data_inventory')
+                    if new_subpolicy_data_inventory is not None:
+                        if isinstance(new_subpolicy_data_inventory, str):
+                            try:
+                                import json
+                                new_subpolicy_data_inventory = json.loads(new_subpolicy_data_inventory)
+                            except json.JSONDecodeError:
+                                new_subpolicy_data_inventory = None
+                        # If it's already a dict, use it as-is (even if empty)
+                        elif not isinstance(new_subpolicy_data_inventory, dict):
+                            new_subpolicy_data_inventory = None
+
+                    new_subpolicy_data = {
+                        'PolicyId': new_policy,
+                        'SubPolicyName': sp_data.get('SubPolicyName'),
+                        'Description': sp_data.get('Description'),
+                        'Identifier': sp_data.get('Identifier'),
+                        'CreatedByName': new_policy.CreatedByName,
+                        'CreatedByDate': new_policy.CreatedByDate,
+                        'Status': 'Under Review',
+                        'PermanentTemporary': sp_data.get('PermanentTemporary', 'Permanent'),
+                        'Control': sp_data.get('Control', ''),
+                        'data_inventory': new_subpolicy_data_inventory
+                    }
+
+                    print(f"DEBUG: Creating subpolicy with data_inventory: {new_subpolicy_data.get('data_inventory')}")
+                    new_subpolicy = SubPolicy.objects.create(**new_subpolicy_data)
+                    print(f"DEBUG: SubPolicy created with ID: {new_subpolicy.SubPolicyId}, data_inventory saved: {new_subpolicy.data_inventory}")
 
             # Handle new policies
             if 'new_policies' in request.data:
@@ -2132,7 +2287,23 @@ def create_framework_version(request, pk):
                             'error': f'Missing required fields for new policy: {", ".join(missing_fields)}'
                         }, status=status.HTTP_400_BAD_REQUEST)
                     
+                    # Extract data_inventory for new policy
+                    new_policy_data_inventory = new_policy_data.get('data_inventory')
+                    if new_policy_data_inventory is not None:
+                        if isinstance(new_policy_data_inventory, str):
+                            try:
+                                import json
+                                new_policy_data_inventory = json.loads(new_policy_data_inventory)
+                            except json.JSONDecodeError:
+                                new_policy_data_inventory = None
+                        # If it's already a dict, use it as-is (even if empty)
+                        elif not isinstance(new_policy_data_inventory, dict):
+                            new_policy_data_inventory = None
+                    
+                    print(f"DEBUG: New Policy {new_policy_data.get('PolicyName')} data_inventory: {new_policy_data_inventory}")
+                    
                     subpolicies_data = new_policy_data.pop('subpolicies', [])
+                    new_subpolicies_data = new_policy_data.pop('new_subpolicies', [])
                     
                     policy_data = new_policy_data.copy()
                     policy_data['FrameworkId'] = new_framework
@@ -2150,6 +2321,7 @@ def create_framework_version(request, pk):
                             reviewer_username_new_policy = user_obj.UserName
 
                     policy_data['Reviewer'] = reviewer_username_new_policy
+                    policy_data['data_inventory'] = new_policy_data_inventory
                     
                     created_policy = Policy.objects.create(**policy_data)
                     created_policies.append(created_policy)
@@ -2175,12 +2347,64 @@ def create_framework_version(request, pk):
                                 'error': f'Missing required fields for subpolicy in new policy {created_policy.PolicyName}: {", ".join(missing_fields)}'
                             }, status=status.HTTP_400_BAD_REQUEST)
                         
+                        # Extract data_inventory for new subpolicy
+                        new_subpolicy_data_inventory = subpolicy_data.get('data_inventory')
+                        if new_subpolicy_data_inventory is not None:
+                            if isinstance(new_subpolicy_data_inventory, str):
+                                try:
+                                    import json
+                                    new_subpolicy_data_inventory = json.loads(new_subpolicy_data_inventory)
+                                except json.JSONDecodeError:
+                                    new_subpolicy_data_inventory = None
+                            # If it's already a dict, use it as-is (even if empty)
+                            elif not isinstance(new_subpolicy_data_inventory, dict):
+                                new_subpolicy_data_inventory = None
+                        
                         subpolicy = subpolicy_data.copy()
                         subpolicy['PolicyId'] = created_policy
                         subpolicy.setdefault('CreatedByName', created_policy.CreatedByName)
                         subpolicy.setdefault('CreatedByDate', created_policy.CreatedByDate)
                         subpolicy.setdefault('Status', 'Under Review')
+                        subpolicy['data_inventory'] = new_subpolicy_data_inventory
                         
+                        SubPolicy.objects.create(**subpolicy)
+                    
+                    # Handle new_subpolicies array for new policies
+                    for subpolicy_data in new_subpolicies_data:
+                        if subpolicy_data.get('exclude', False):
+                            continue
+                        
+                        required_fields = ['SubPolicyName', 'Description', 'Identifier']
+                        missing_fields = [field for field in required_fields if field not in subpolicy_data]
+                        
+                        if missing_fields:
+                            return Response({
+                                'error': f'Missing required fields for subpolicy in new policy {created_policy.PolicyName}: {", ".join(missing_fields)}'
+                            }, status=status.HTTP_400_BAD_REQUEST)
+                        
+                        # Extract data_inventory for new subpolicy (extract BEFORE any processing, like TT does)
+                        new_subpolicy_data_inventory_raw = subpolicy_data.get('data_inventory')
+                        new_subpolicy_data_inventory = None
+                        if new_subpolicy_data_inventory_raw:
+                            if isinstance(new_subpolicy_data_inventory_raw, str):
+                                try:
+                                    import json
+                                    new_subpolicy_data_inventory = json.loads(new_subpolicy_data_inventory_raw)
+                                except json.JSONDecodeError:
+                                    print(f"Warning: Invalid JSON in new subpolicy data_inventory, setting to None")
+                                    new_subpolicy_data_inventory = None
+                            elif isinstance(new_subpolicy_data_inventory_raw, dict):
+                                # If it's already a dict, use it as-is (even if empty)
+                                new_subpolicy_data_inventory = new_subpolicy_data_inventory_raw
+                        
+                        subpolicy = subpolicy_data.copy()
+                        subpolicy['PolicyId'] = created_policy
+                        subpolicy.setdefault('CreatedByName', created_policy.CreatedByName)
+                        subpolicy.setdefault('CreatedByDate', created_policy.CreatedByDate)
+                        subpolicy.setdefault('Status', 'Under Review')
+                        subpolicy['data_inventory'] = new_subpolicy_data_inventory
+                        
+                        print(f"DEBUG: Creating new subpolicy with data_inventory: {subpolicy.get('data_inventory')}")
                         SubPolicy.objects.create(**subpolicy)
             
             print(f"Created policies count: {len(created_policies)}")
@@ -2281,6 +2505,27 @@ def create_policy_version(request, pk):
             if not reviewer_name:
                 reviewer_name = original_policy.Reviewer  # fallback to existing username
 
+            # Get data_inventory for policy (extract BEFORE any processing, like TT does)
+            policy_data_inventory_raw = request.data.get('data_inventory')
+            policy_data_inventory = None
+            if policy_data_inventory_raw:
+                if isinstance(policy_data_inventory_raw, str):
+                    try:
+                        import json
+                        policy_data_inventory = json.loads(policy_data_inventory_raw)
+                    except json.JSONDecodeError:
+                        print(f"Warning: Invalid JSON in policy data_inventory, setting to None")
+                        policy_data_inventory = None
+                elif isinstance(policy_data_inventory_raw, dict):
+                    # If it's already a dict, use it as-is (even if empty)
+                    policy_data_inventory = policy_data_inventory_raw
+            # If policy_data_inventory is still None, fall back to original policy's data_inventory
+            if policy_data_inventory is None:
+                policy_data_inventory = original_policy.data_inventory if hasattr(original_policy, 'data_inventory') else None
+            
+            print(f"DEBUG: Policy data_inventory received: {policy_data_inventory_raw}")
+            print(f"DEBUG: Policy data_inventory processed: {policy_data_inventory}")
+            
             # Prepare new policy data with Reviewer as UserName
             new_policy_data = {
                 'FrameworkId': original_policy.FrameworkId,
@@ -2301,7 +2546,10 @@ def create_policy_version(request, pk):
                 'PermanentTemporary': request.data.get('PermanentTemporary', original_policy.PermanentTemporary),
                 'ActiveInactive': 'Inactive',
                 'Reviewer': reviewer_name,  # Save UserName here
+                'data_inventory': policy_data_inventory,
             }
+            
+            print(f"DEBUG: Creating policy with data_inventory: {new_policy_data.get('data_inventory')}")
 
             # Create new policy record
             new_policy = Policy.objects.create(**new_policy_data)
@@ -2406,6 +2654,24 @@ def create_policy_version(request, pk):
                     continue
                 custom_data = subpolicy_customizations.get(original_subpolicy.SubPolicyId, {})
 
+                # Get data_inventory for subpolicy (extract BEFORE any processing, like TT does)
+                subpolicy_data_inventory_raw = custom_data.get('data_inventory')
+                subpolicy_data_inventory = None
+                if subpolicy_data_inventory_raw:
+                    if isinstance(subpolicy_data_inventory_raw, str):
+                        try:
+                            import json
+                            subpolicy_data_inventory = json.loads(subpolicy_data_inventory_raw)
+                        except json.JSONDecodeError:
+                            print(f"Warning: Invalid JSON in subpolicy data_inventory, setting to None")
+                            subpolicy_data_inventory = None
+                    elif isinstance(subpolicy_data_inventory_raw, dict):
+                        # If it's already a dict, use it as-is (even if empty)
+                        subpolicy_data_inventory = subpolicy_data_inventory_raw
+                # If subpolicy_data_inventory is still None, fall back to original subpolicy's data_inventory
+                if subpolicy_data_inventory is None:
+                    subpolicy_data_inventory = original_subpolicy.data_inventory if hasattr(original_subpolicy, 'data_inventory') else None
+
                 new_subpolicy_data = {
                     'PolicyId': new_policy,
                     'SubPolicyName': custom_data.get('SubPolicyName', original_subpolicy.SubPolicyName),
@@ -2415,9 +2681,11 @@ def create_policy_version(request, pk):
                     'Description': custom_data.get('Description', original_subpolicy.Description),
                     'Status': 'Under Review',
                     'PermanentTemporary': custom_data.get('PermanentTemporary', original_subpolicy.PermanentTemporary),
-                    'Control': custom_data.get('Control', original_subpolicy.Control)
+                    'Control': custom_data.get('Control', original_subpolicy.Control),
+                    'data_inventory': subpolicy_data_inventory
                 }
 
+                print(f"DEBUG: Creating subpolicy with data_inventory: {new_subpolicy_data.get('data_inventory')}")
                 SubPolicy.objects.create(**new_subpolicy_data)
 
             # Add new subpolicies if any
@@ -2430,6 +2698,21 @@ def create_policy_version(request, pk):
                             'error': f'Missing required fields for new subpolicy: {", ".join(missing_fields)}'
                         }, status=status.HTTP_400_BAD_REQUEST)
 
+                    # Extract data_inventory for new subpolicy (extract BEFORE any processing, like TT does)
+                    new_subpolicy_data_inventory_raw = new_subpolicy_data.get('data_inventory')
+                    new_subpolicy_data_inventory = None
+                    if new_subpolicy_data_inventory_raw:
+                        if isinstance(new_subpolicy_data_inventory_raw, str):
+                            try:
+                                import json
+                                new_subpolicy_data_inventory = json.loads(new_subpolicy_data_inventory_raw)
+                            except json.JSONDecodeError:
+                                print(f"Warning: Invalid JSON in new subpolicy data_inventory, setting to None")
+                                new_subpolicy_data_inventory = None
+                        elif isinstance(new_subpolicy_data_inventory_raw, dict):
+                            # If it's already a dict, use it as-is (even if empty)
+                            new_subpolicy_data_inventory = new_subpolicy_data_inventory_raw
+
                     subpolicy = new_subpolicy_data.copy()
                     subpolicy['PolicyId'] = new_policy
                     if 'CreatedByName' not in subpolicy:
@@ -2438,7 +2721,9 @@ def create_policy_version(request, pk):
                         subpolicy['CreatedByDate'] = new_policy.CreatedByDate
                     if 'Status' not in subpolicy:
                         subpolicy['Status'] = 'Under Review'
+                    subpolicy['data_inventory'] = new_subpolicy_data_inventory
 
+                    print(f"DEBUG: Creating new subpolicy with data_inventory: {subpolicy.get('data_inventory')}")
                     SubPolicy.objects.create(**subpolicy)
 
             # Handle any new policies if specified
@@ -2452,7 +2737,23 @@ def create_policy_version(request, pk):
                             'error': f'Missing required fields for new policy: {", ".join(missing_fields)}'
                         }, status=status.HTTP_400_BAD_REQUEST)
 
+                    # Extract data_inventory for new policy (extract BEFORE any processing, like TT does)
+                    new_policy_data_inventory_raw = new_policy_data.get('data_inventory')
+                    new_policy_data_inventory = None
+                    if new_policy_data_inventory_raw:
+                        if isinstance(new_policy_data_inventory_raw, str):
+                            try:
+                                import json
+                                new_policy_data_inventory = json.loads(new_policy_data_inventory_raw)
+                            except json.JSONDecodeError:
+                                print(f"Warning: Invalid JSON in new policy data_inventory, setting to None")
+                                new_policy_data_inventory = None
+                        elif isinstance(new_policy_data_inventory_raw, dict):
+                            # If it's already a dict, use it as-is (even if empty)
+                            new_policy_data_inventory = new_policy_data_inventory_raw
+
                     subpolicies_data = new_policy_data.pop('subpolicies', [])
+                    new_subpolicies_data = new_policy_data.pop('new_subpolicies', [])
                     policy_data = new_policy_data.copy()
                     policy_data['FrameworkId'] = original_policy.FrameworkId
                     policy_data['CurrentVersion'] = new_version
@@ -2462,8 +2763,11 @@ def create_policy_version(request, pk):
                         policy_data['CreatedByName'] = original_policy.CreatedByName
                     if 'CreatedByDate' not in policy_data:
                         policy_data['CreatedByDate'] = datetime.date.today()
+                    policy_data['data_inventory'] = new_policy_data_inventory
 
+                    print(f"DEBUG: Creating new policy with data_inventory: {policy_data.get('data_inventory')}")
                     created_policy = Policy.objects.create(**policy_data)
+                    print(f"DEBUG: New policy created with ID: {created_policy.PolicyId}, data_inventory saved: {created_policy.data_inventory}")
                     created_policies.append(created_policy)
 
                     PolicyVersion.objects.create(
@@ -2483,6 +2787,21 @@ def create_policy_version(request, pk):
                                 'error': f'Missing required fields for subpolicy in new policy {created_policy.PolicyName}: {", ".join(missing_fields)}'
                             }, status=status.HTTP_400_BAD_REQUEST)
 
+                        # Extract data_inventory for new subpolicy (extract BEFORE any processing, like TT does)
+                        new_subpolicy_data_inventory_raw = subpolicy_data.get('data_inventory')
+                        new_subpolicy_data_inventory = None
+                        if new_subpolicy_data_inventory_raw:
+                            if isinstance(new_subpolicy_data_inventory_raw, str):
+                                try:
+                                    import json
+                                    new_subpolicy_data_inventory = json.loads(new_subpolicy_data_inventory_raw)
+                                except json.JSONDecodeError:
+                                    print(f"Warning: Invalid JSON in new subpolicy data_inventory, setting to None")
+                                    new_subpolicy_data_inventory = None
+                            elif isinstance(new_subpolicy_data_inventory_raw, dict):
+                                # If it's already a dict, use it as-is (even if empty)
+                                new_subpolicy_data_inventory = new_subpolicy_data_inventory_raw
+
                         subpolicy = subpolicy_data.copy()
                         subpolicy['PolicyId'] = created_policy
                         if 'CreatedByName' not in subpolicy:
@@ -2491,7 +2810,9 @@ def create_policy_version(request, pk):
                             subpolicy['CreatedByDate'] = created_policy.CreatedByDate
                         if 'Status' not in subpolicy:
                             subpolicy['Status'] = 'Under Review'
+                        subpolicy['data_inventory'] = new_subpolicy_data_inventory
 
+                        print(f"DEBUG: Creating new subpolicy with data_inventory: {subpolicy.get('data_inventory')}")
                         SubPolicy.objects.create(**subpolicy)
 
             # Prepare response
@@ -4950,6 +5271,8 @@ def register_user(request):
         Email = data.get('Email') or data.get('email')
         firstName = data.get('firstName', '')
         lastName = data.get('lastName', '')
+        phoneNumber = data.get('phoneNumber') or data.get('phone') or ''
+        address = data.get('address') or data.get('Address') or ''
         
         logger.info(f"Extracted fields - username: {username}, email: {Email}, firstName: {firstName}")
         
@@ -5075,6 +5398,8 @@ def register_user(request):
             'Email': Email,
             'FirstName': data.get('firstName', ''),
             'LastName': data.get('lastName', ''),
+            'PhoneNumber': phoneNumber if phoneNumber else None,
+            'Address': address if address else None,
             'DepartmentId': department_id,
             'IsActive': 'N'  # ALWAYS set to 'N' for new users - they must reset password and login to activate
         }
@@ -5310,11 +5635,83 @@ GRC System Administrator
                 'Email': user.Email,
                 'firstName': user.FirstName,
                 'lastName': user.LastName,
+                'phoneNumber': user.PhoneNumber,
+                'address': user.Address,
                 'departmentId': user.DepartmentId,
                 'isActive': user.IsActive,
                 'license_key': user.license_key
             }
         }, status=status.HTTP_201_CREATED)
+        
+        # Log user creation with masked sensitive data
+        try:
+            from .routes.Global.data_masking import mask_log_data, get_masking_service
+            from .routes.Global.logging_service import send_log
+            
+            # Get client IP helper function
+            def get_client_ip(request):
+                x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+                if x_forwarded_for:
+                    ip = x_forwarded_for.split(',')[0]
+                else:
+                    ip = request.META.get('REMOTE_ADDR')
+                return ip
+            
+            # Prepare log data with sensitive information
+            log_additional_info = {
+                'username': username,
+                'email': Email,
+                'firstName': firstName,
+                'lastName': lastName,
+                'phoneNumber': phoneNumber,
+                'address': address,
+                'departmentId': department_id,
+                'action': 'user_created'
+            }
+            
+            # Mask the log data before saving
+            masked_additional_info = get_masking_service().mask_dict(log_additional_info)
+            
+            # Get client IP
+            client_ip = get_client_ip(request)
+            
+            # Get framework for log entry (required field)
+            framework = Framework.objects.filter(Status='Approved', ActiveInactive='Active').first()
+            if not framework:
+                framework = Framework.objects.first()
+            
+            # Create log entry with masked data
+            if framework:
+                # Mask the username for the log
+                masked_username = get_masking_service().mask_name(username)
+                masked_description = f'User account created: {masked_username}'
+                
+                log_entry = GRCLog(
+                    UserId=str(user_id),
+                    UserName=masked_username,  # Masked username
+                    Module='User Management',
+                    ActionType='CREATE_USER',
+                    EntityType='User',
+                    EntityId=str(user.UserId),
+                    LogLevel='INFO',
+                    Description=masked_description,
+                    IPAddress=client_ip,
+                    AdditionalInfo=masked_additional_info,
+                    FrameworkId=framework
+                )
+                log_entry.save()
+                logger.info(f"✅ User creation logged with masked data: {user.UserId}, LogId: {log_entry.LogId}")
+                print(f"[DEBUG] ✅ User creation logged with masked data: {user.UserId}, LogId: {log_entry.LogId}")
+            else:
+                logger.warning("No framework found for logging user creation")
+                print(f"[DEBUG] ⚠️ No framework found for logging user creation")
+        except Exception as log_error:
+            logger.error(f"❌ Failed to log user creation: {str(log_error)}")
+            import traceback
+            error_trace = traceback.format_exc()
+            logger.error(error_trace)
+            print(f"[DEBUG] ❌ Failed to log user creation: {str(log_error)}")
+            print(f"[DEBUG] Error traceback:\n{error_trace}")
         
     except Exception as e:
         import traceback
@@ -5483,19 +5880,35 @@ def get_user_profile(request, user_id):
         logger.debug(f"Fetching user profile for user_id: {user_id}")
         user = Users.objects.get(UserId=user_id)
         
-        user_data = {
-            'firstName': user.FirstName,
-            'lastName': user.LastName,
-            'Email': user.Email,
-            'username': user.UserName,
+        # Import masking service
+        from .routes.Global.data_masking import get_masking_service
+        masking_service = get_masking_service()
+        
+        # Mask sensitive data for display
+        masked_data = {
+            'firstName': masking_service.mask_name(user.FirstName) if user.FirstName else None,
+            'lastName': masking_service.mask_name(user.LastName) if user.LastName else None,
+            'email': masking_service.mask_email(user.Email) if user.Email else None,
+            'phoneNumber': masking_service.mask_phone(user.PhoneNumber) if user.PhoneNumber else None,
+            'address': masking_service.mask_address(user.Address) if user.Address else None,
+            'username': masking_service.mask_name(user.UserName) if user.UserName else None,
             'isActive': user.IsActive,
-            'departmentId': user.DepartmentId
+            'departmentId': user.DepartmentId,
+            # Include original values for editing (only if user is viewing their own profile or is admin)
+            'original': {
+                'firstName': user.FirstName,
+                'lastName': user.LastName,
+                'email': user.Email,
+                'phoneNumber': user.PhoneNumber,
+                'address': user.Address,
+                'username': user.UserName
+            }
         }
         
-        logger.debug(f"User data fetched: {user_data}")
+        logger.debug(f"User data fetched with masking")
         return JsonResponse({
             'status': 'success',
-            'data': user_data
+            'data': masked_data
         })
 
     except Users.DoesNotExist:
@@ -5506,6 +5919,8 @@ def get_user_profile(request, user_id):
         }, status=404)
     except Exception as e:
         logger.error(f"Error fetching user profile: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return JsonResponse({
             'status': 'error',
             'message': str(e)

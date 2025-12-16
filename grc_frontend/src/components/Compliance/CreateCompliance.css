@@ -992,3 +992,177 @@ textarea.compliance-input {
     font-size: 0.8rem !important;
   }
 }
+
+/* Data Type Legend Styles (Display Only) */
+.compliance-data-type-legend {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: auto; /* Pushes it to the right */
+  margin-bottom: 20px;
+}
+
+.compliance-data-type-legend-container {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e9ecef;
+  padding: 6px 10px;
+  min-width: 200px;
+  max-width: 240px;
+}
+
+.compliance-data-type-options {
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+}
+
+.compliance-data-type-legend-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 4px;
+  border-radius: 6px;
+  background-color: #f8f9fa;
+}
+
+.compliance-data-type-legend-item i {
+  font-size: 0.9rem;
+  margin-bottom: 2px;
+}
+
+.compliance-data-type-legend-item span {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+/* Personal Data Type - Blue */
+.compliance-data-type-legend-item.personal-option i {
+  color: #4f7cff;
+}
+
+.compliance-data-type-legend-item.personal-option span {
+  color: #4f7cff;
+}
+
+/* Confidential Data Type - Red */
+.compliance-data-type-legend-item.confidential-option i {
+  color: #e63946;
+}
+
+.compliance-data-type-legend-item.confidential-option span {
+  color: #e63946;
+}
+
+/* Regular Data Type - Gray */
+.compliance-data-type-legend-item.regular-option i {
+  color: #6c757d;
+}
+
+.compliance-data-type-legend-item.regular-option span {
+  color: #6c757d;
+}
+
+/* Data Type Circle Toggle Styles */
+.compliance-data-type-circle-toggle-wrapper {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 12px;
+  padding: 4px 8px;
+  background-color: white;
+  border: 1px solid #dee2e6;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.compliance-data-type-circle-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.compliance-circle-option {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid #dee2e6;
+  background-color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.compliance-circle-option:hover {
+  transform: scale(1.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12);
+}
+
+.compliance-circle-inner {
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  background-color: transparent;
+}
+
+.compliance-circle-option.active .compliance-circle-inner {
+  width: 9px;
+  height: 9px;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Personal Circle - Blue */
+.compliance-circle-option.personal-circle {
+  border-color: #4f7cff;
+}
+
+.compliance-circle-option.personal-circle.active {
+  border-color: #4f7cff;
+  background-color: rgba(79, 124, 255, 0.1);
+  box-shadow: 0 0 6px rgba(79, 124, 255, 0.2);
+}
+
+.compliance-circle-option.personal-circle.active .compliance-circle-inner {
+  background-color: #4f7cff;
+  box-shadow: 0 0 4px rgba(79, 124, 255, 0.35);
+}
+
+/* Confidential Circle - Red */
+.compliance-circle-option.confidential-circle {
+  border-color: #e63946;
+}
+
+.compliance-circle-option.confidential-circle.active {
+  border-color: #e63946;
+  background-color: rgba(230, 57, 70, 0.1);
+  box-shadow: 0 0 6px rgba(230, 57, 70, 0.2);
+}
+
+.compliance-circle-option.confidential-circle.active .compliance-circle-inner {
+  background-color: #e63946;
+  box-shadow: 0 0 4px rgba(230, 57, 70, 0.35);
+}
+
+/* Regular Circle - Grey */
+.compliance-circle-option.regular-circle {
+  border-color: #6c757d;
+}
+
+.compliance-circle-option.regular-circle.active {
+  border-color: #6c757d;
+  background-color: rgba(108, 117, 125, 0.1);
+  box-shadow: 0 0 6px rgba(108, 117, 125, 0.2);
+}
+
+.compliance-circle-option.regular-circle.active .compliance-circle-inner {
+  background-color: #6c757d;
+  box-shadow: 0 0 4px rgba(108, 117, 125, 0.35);
+}

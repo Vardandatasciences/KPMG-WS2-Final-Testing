@@ -51,6 +51,17 @@ export const API_ENDPOINTS = {
   DATA_SUBJECT_REQUESTS: (userId) => `${API_BASE_URL}/api/data-subject-requests/${userId}/`,
   CREATE_DATA_SUBJECT_REQUEST: `${API_BASE_URL}/api/data-subject-requests/create/`,
   UPDATE_DATA_SUBJECT_REQUEST_STATUS: (requestId) => `${API_BASE_URL}/api/data-subject-requests/${requestId}/update-status/`,
+  
+  // Profile Edit OTP
+  PROFILE_EDIT_OTP_SEND: `${API_BASE_URL}/api/profile-edit-otp/send/`,
+  PROFILE_EDIT_OTP_VERIFY: `${API_BASE_URL}/api/profile-edit-otp/verify/`,
+  PROFILE_EDIT_OTP_CHECK: `${API_BASE_URL}/api/profile-edit-otp/check/`,
+  
+  // Portability OTP
+  PORTABILITY_OTP_SEND: `${API_BASE_URL}/api/portability-otp/send/`,
+  PORTABILITY_OTP_VERIFY: `${API_BASE_URL}/api/portability-otp/verify/`,
+  PORTABILITY_OTP_CHECK: `${API_BASE_URL}/api/portability-otp/check/`,
+  EXPORT_USER_DATA_PORTABILITY: `${API_BASE_URL}/api/export-user-data-portability/`,
  
   // Notifications - FIXED: Proper function implementation
   GET_NOTIFICATIONS: (userId = null) => {

@@ -4,8 +4,30 @@
     <PopupModal />
     
     <div class="risk-instance-card">
-      <div class="risk-instance-title">
-        Create Risk Instance
+      <div class="risk-instance-header-row">
+        <div class="risk-instance-title">
+          Create Risk Instance
+        </div>
+        
+        <!-- Data Type Legend (Display Only) -->
+        <div class="risk-data-type-legend">
+          <div class="risk-data-type-legend-container">
+            <div class="risk-data-type-options">
+              <div class="risk-data-type-legend-item personal-option">
+                <i class="fas fa-user"></i>
+                <span>Personal</span>
+              </div>
+              <div class="risk-data-type-legend-item confidential-option">
+                <i class="fas fa-shield-alt"></i>
+                <span>Confidential</span>
+              </div>
+              <div class="risk-data-type-legend-item regular-option">
+                <i class="fas fa-file-alt"></i>
+                <span>Regular</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
       
       <!-- Updated validation error summary with encoding -->
@@ -20,7 +42,38 @@
       
       <form @submit.prevent="submitInstance" class="risk-instance-form">
         <div class="form-group field-full" :class="{ 'has-error': validationErrors.RiskId }">
-          <label for="riskId"><i class="fas fa-id-badge"></i> Risk ID</label>
+          <label for="riskId">
+            <span><i class="fas fa-id-badge"></i> Risk ID</span>
+            <!-- Data Type Circle Toggle -->
+            <div class="risk-data-type-circle-toggle-wrapper">
+              <div class="risk-data-type-circle-toggle">
+                <div 
+                  class="risk-circle-option personal-circle" 
+                  :class="{ active: fieldDataTypes.RiskId === 'personal' }"
+                  @click="setDataType('RiskId', 'personal')"
+                  title="Personal Data"
+                >
+                  <div class="risk-circle-inner"></div>
+                </div>
+                <div 
+                  class="risk-circle-option confidential-circle" 
+                  :class="{ active: fieldDataTypes.RiskId === 'confidential' }"
+                  @click="setDataType('RiskId', 'confidential')"
+                  title="Confidential Data"
+                >
+                  <div class="risk-circle-inner"></div>
+                </div>
+                <div 
+                  class="risk-circle-option regular-circle" 
+                  :class="{ active: fieldDataTypes.RiskId === 'regular' }"
+                  @click="setDataType('RiskId', 'regular')"
+                  title="Regular Data"
+                >
+                  <div class="risk-circle-inner"></div>
+                </div>
+              </div>
+            </div>
+          </label>
           <div class="risk-instance-dropdown-container">
             <input 
               type="text" 
@@ -98,7 +151,38 @@
         
         <div class="form-section">
           <div class="form-group" :class="{ 'has-error': validationErrors.Criticality }">
-            <label for="criticality"><i class="fas fa-exclamation-triangle"></i> Criticality</label>
+            <label for="criticality">
+              <span><i class="fas fa-exclamation-triangle"></i> Criticality</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.Criticality === 'personal' }"
+                    @click="setDataType('Criticality', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.Criticality === 'confidential' }"
+                    @click="setDataType('Criticality', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.Criticality === 'regular' }"
+                    @click="setDataType('Criticality', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <select 
               id="criticality" 
               class="priority-select" 
@@ -119,7 +203,38 @@
           </div>
           
           <div class="form-group">
-            <label for="category"><i class="fas fa-tag"></i> Category</label>
+            <label for="category">
+              <span><i class="fas fa-tag"></i> Category</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.Category === 'personal' }"
+                    @click="setDataType('Category', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.Category === 'confidential' }"
+                    @click="setDataType('Category', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.Category === 'regular' }"
+                    @click="setDataType('Category', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <div class="risk-instance-category-container">
               <div class="risk-instance-category-dropdown">
                 <div class="risk-instance-selected-category" @click="toggleCategoryDropdown">
@@ -161,7 +276,38 @@
           </div>
           
           <div class="form-group" :class="{ 'has-error': validationErrors.Appetite }">
-            <label for="appetite"><i class="fas fa-balance-scale"></i> Appetite</label>
+            <label for="appetite">
+              <span><i class="fas fa-balance-scale"></i> Appetite</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.Appetite === 'personal' }"
+                    @click="setDataType('Appetite', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.Appetite === 'confidential' }"
+                    @click="setDataType('Appetite', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.Appetite === 'regular' }"
+                    @click="setDataType('Appetite', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <select 
               id="appetite" 
               v-model="newInstance.Appetite"
@@ -181,7 +327,38 @@
           </div>
           
           <div class="form-group" :class="{ 'has-error': validationErrors.RiskLikelihood }">
-            <label for="riskLikelihood"><i class="fas fa-chart-line"></i> Risk Likelihood</label>
+            <label for="riskLikelihood">
+              <span><i class="fas fa-chart-line"></i> Risk Likelihood</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.RiskLikelihood === 'personal' }"
+                    @click="setDataType('RiskLikelihood', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.RiskLikelihood === 'confidential' }"
+                    @click="setDataType('RiskLikelihood', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.RiskLikelihood === 'regular' }"
+                    @click="setDataType('RiskLikelihood', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <input 
               type="number" 
               step="1" 
@@ -202,7 +379,38 @@
           </div>
           
           <div class="form-group" :class="{ 'has-error': validationErrors.RiskImpact }">
-            <label for="riskImpact"><i class="fas fa-bolt"></i> Risk Impact</label>
+            <label for="riskImpact">
+              <span><i class="fas fa-bolt"></i> Risk Impact</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.RiskImpact === 'personal' }"
+                    @click="setDataType('RiskImpact', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.RiskImpact === 'confidential' }"
+                    @click="setDataType('RiskImpact', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.RiskImpact === 'regular' }"
+                    @click="setDataType('RiskImpact', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <input 
               type="number" 
               step="1" 
@@ -224,7 +432,38 @@
           
           <!-- Multiplier Fields -->
           <div class="form-group" :class="{ 'has-error': validationErrors.RiskMultiplierX }">
-            <label for="riskMultiplierX"><i class="fas fa-times"></i> Impact Multiplier (X) (1-10)</label>
+            <label for="riskMultiplierX">
+              <span><i class="fas fa-times"></i> Impact Multiplier (X) (1-10)</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.RiskMultiplierX === 'personal' }"
+                    @click="setDataType('RiskMultiplierX', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.RiskMultiplierX === 'confidential' }"
+                    @click="setDataType('RiskMultiplierX', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.RiskMultiplierX === 'regular' }"
+                    @click="setDataType('RiskMultiplierX', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <input 
               type="number" 
               step="1" 
@@ -245,7 +484,38 @@
           </div>
           
           <div class="form-group" :class="{ 'has-error': validationErrors.RiskMultiplierY }">
-            <label for="riskMultiplierY"><i class="fas fa-times"></i> Likelihood Multiplier (Y) (1-10)</label>
+            <label for="riskMultiplierY">
+              <span><i class="fas fa-times"></i> Likelihood Multiplier (Y) (1-10)</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.RiskMultiplierY === 'personal' }"
+                    @click="setDataType('RiskMultiplierY', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.RiskMultiplierY === 'confidential' }"
+                    @click="setDataType('RiskMultiplierY', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.RiskMultiplierY === 'regular' }"
+                    @click="setDataType('RiskMultiplierY', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <input 
               type="number" 
               step="1" 
@@ -266,7 +536,38 @@
           </div>
           
           <div class="form-group">
-            <label for="riskExposureRating"><i class="fas fa-thermometer-half"></i> Risk Exposure Rating</label>
+            <label for="riskExposureRating">
+              <span><i class="fas fa-thermometer-half"></i> Risk Exposure Rating</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.RiskExposureRating === 'personal' }"
+                    @click="setDataType('RiskExposureRating', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.RiskExposureRating === 'confidential' }"
+                    @click="setDataType('RiskExposureRating', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.RiskExposureRating === 'regular' }"
+                    @click="setDataType('RiskExposureRating', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <input type="number" readonly id="riskExposureRating" v-model.number="newInstance.RiskExposureRating" class="readonly-input"
               @focus="handleFocus('riskExposureRating')"
               @blur="handleBlur('riskExposureRating')"
@@ -275,7 +576,38 @@
           </div>
           
           <div class="form-group" :class="{ 'has-error': validationErrors.RiskPriority }">
-            <label for="riskPriority"><i class="fas fa-flag"></i> Risk Priority</label>
+            <label for="riskPriority">
+              <span><i class="fas fa-flag"></i> Risk Priority</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.RiskPriority === 'personal' }"
+                    @click="setDataType('RiskPriority', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.RiskPriority === 'confidential' }"
+                    @click="setDataType('RiskPriority', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.RiskPriority === 'regular' }"
+                    @click="setDataType('RiskPriority', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <select 
               id="riskPriority" 
               class="priority-select" 
@@ -296,7 +628,38 @@
           </div>
           
           <div class="form-group" :class="{ 'has-error': validationErrors.RiskResponseType }">
-            <label for="riskResponseType"><i class="fas fa-shield-alt"></i> Response Type</label>
+            <label for="riskResponseType">
+              <span><i class="fas fa-shield-alt"></i> Response Type</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.RiskResponseType === 'personal' }"
+                    @click="setDataType('RiskResponseType', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.RiskResponseType === 'confidential' }"
+                    @click="setDataType('RiskResponseType', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.RiskResponseType === 'regular' }"
+                    @click="setDataType('RiskResponseType', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <select 
               id="riskResponseType" 
               v-model="newInstance.RiskResponseType"
@@ -316,7 +679,38 @@
           </div>
           
           <div class="form-group">
-            <label for="riskOwner"><i class="fas fa-user"></i> Risk Owner</label>
+            <label for="riskOwner">
+              <span><i class="fas fa-user"></i> Risk Owner</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.RiskOwner === 'personal' }"
+                    @click="setDataType('RiskOwner', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.RiskOwner === 'confidential' }"
+                    @click="setDataType('RiskOwner', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.RiskOwner === 'regular' }"
+                    @click="setDataType('RiskOwner', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <div class="risk-instance-user-dropdown-container">
               <input 
                 type="text" 
@@ -372,7 +766,38 @@
           </div>
           
           <div class="form-group">
-            <label for="riskStatus"><i class="fas fa-info-circle"></i> Risk Status</label>
+            <label for="riskStatus">
+              <span><i class="fas fa-info-circle"></i> Risk Status</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.RiskStatus === 'personal' }"
+                    @click="setDataType('RiskStatus', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.RiskStatus === 'confidential' }"
+                    @click="setDataType('RiskStatus', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.RiskStatus === 'regular' }"
+                    @click="setDataType('RiskStatus', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <select id="riskStatus" v-model="newInstance.RiskStatus"
               @focus="handleFocus('riskStatus')"
               @blur="handleBlur('riskStatus')"
@@ -386,7 +811,38 @@
           </div>
           
           <div class="form-group" :class="{ 'has-error': validationErrors.RiskTitle }">
-            <label for="riskTitle"><i class="fas fa-heading"></i> Risk Title</label>
+            <label for="riskTitle">
+              <span><i class="fas fa-heading"></i> Risk Title</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.RiskTitle === 'personal' }"
+                    @click="setDataType('RiskTitle', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.RiskTitle === 'confidential' }"
+                    @click="setDataType('RiskTitle', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.RiskTitle === 'regular' }"
+                    @click="setDataType('RiskTitle', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <input 
               type="text" 
               id="riskTitle" 
@@ -403,7 +859,38 @@
           </div>
           
           <div class="form-group">
-            <label for="businessImpact"><i class="fas fa-briefcase"></i> Business Impact</label>
+            <label for="businessImpact">
+              <span><i class="fas fa-briefcase"></i> Business Impact</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.BusinessImpact === 'personal' }"
+                    @click="setDataType('BusinessImpact', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.BusinessImpact === 'confidential' }"
+                    @click="setDataType('BusinessImpact', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.BusinessImpact === 'regular' }"
+                    @click="setDataType('BusinessImpact', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <div class="risk-instance-business-impact-container">
               <div class="risk-instance-business-impact-dropdown">
                 <div class="risk-instance-selected-impacts" @click="toggleBusinessImpactDropdown">
@@ -507,7 +994,38 @@
           </div>
           
           <div class="form-group" :class="{ 'has-error': validationErrors.Origin }">
-            <label for="origin"><i class="fas fa-globe"></i> Origin</label>
+            <label for="origin">
+              <span><i class="fas fa-globe"></i> Origin</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.Origin === 'personal' }"
+                    @click="setDataType('Origin', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.Origin === 'confidential' }"
+                    @click="setDataType('Origin', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.Origin === 'regular' }"
+                    @click="setDataType('Origin', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <select 
               id="origin" 
               v-model="newInstance.Origin" 
@@ -528,7 +1046,38 @@
           </div>
           
           <div class="form-group">
-            <label for="complianceId"><i class="fas fa-hashtag"></i> Compliance ID</label>
+            <label for="complianceId">
+              <span><i class="fas fa-hashtag"></i> Compliance ID</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.ComplianceId === 'personal' }"
+                    @click="setDataType('ComplianceId', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.ComplianceId === 'confidential' }"
+                    @click="setDataType('ComplianceId', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.ComplianceId === 'regular' }"
+                    @click="setDataType('ComplianceId', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <div class="risk-instance-compliance-dropdown-container">
               <input 
                 type="text" 
@@ -595,7 +1144,38 @@
           </div>
           
           <div class="form-group" :class="{ 'has-error': validationErrors.RiskType }">
-            <label for="riskType"><i class="fas fa-cubes"></i> Risk Type</label>
+            <label for="riskType">
+              <span><i class="fas fa-cubes"></i> Risk Type</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.RiskType === 'personal' }"
+                    @click="setDataType('RiskType', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.RiskType === 'confidential' }"
+                    @click="setDataType('RiskType', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.RiskType === 'regular' }"
+                    @click="setDataType('RiskType', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <select 
               id="riskType" 
               v-model="newInstance.RiskType"
@@ -616,7 +1196,38 @@
         
         <div class="form-section text-areas-section">
           <div class="form-group field-full" :class="{ 'has-error': validationErrors.RiskDescription }">
-            <label for="riskDescription"><i class="fas fa-align-left"></i> Risk Description</label>
+            <label for="riskDescription">
+              <span><i class="fas fa-align-left"></i> Risk Description</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.RiskDescription === 'personal' }"
+                    @click="setDataType('RiskDescription', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.RiskDescription === 'confidential' }"
+                    @click="setDataType('RiskDescription', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.RiskDescription === 'regular' }"
+                    @click="setDataType('RiskDescription', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <textarea 
               id="riskDescription" 
               v-model="newInstance.RiskDescription" 
@@ -633,7 +1244,38 @@
           </div>
           
           <div class="form-group field-full" :class="{ 'has-error': validationErrors.PossibleDamage }">
-            <label for="possibleDamage"><i class="fas fa-exclamation-circle"></i> Possible Damage</label>
+            <label for="possibleDamage">
+              <span><i class="fas fa-exclamation-circle"></i> Possible Damage</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.PossibleDamage === 'personal' }"
+                    @click="setDataType('PossibleDamage', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.PossibleDamage === 'confidential' }"
+                    @click="setDataType('PossibleDamage', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.PossibleDamage === 'regular' }"
+                    @click="setDataType('PossibleDamage', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <textarea 
               id="possibleDamage" 
               v-model="newInstance.PossibleDamage" 
@@ -650,7 +1292,38 @@
           </div>
           
           <div class="form-group field-full" :class="{ 'has-error': validationErrors.RiskResponseDescription }">
-            <label for="riskResponseDescription"><i class="fas fa-reply"></i> Response Description</label>
+            <label for="riskResponseDescription">
+              <span><i class="fas fa-reply"></i> Response Description</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.RiskResponseDescription === 'personal' }"
+                    @click="setDataType('RiskResponseDescription', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.RiskResponseDescription === 'confidential' }"
+                    @click="setDataType('RiskResponseDescription', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.RiskResponseDescription === 'regular' }"
+                    @click="setDataType('RiskResponseDescription', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <textarea 
               id="riskResponseDescription" 
               v-model="newInstance.RiskResponseDescription" 
@@ -667,7 +1340,38 @@
           </div>
           
           <div class="form-group field-full" :class="{ 'has-error': validationErrors.RiskMitigation }">
-            <label for="riskMitigation"><i class="fas fa-shield-virus"></i> Risk Mitigation</label>
+            <label for="riskMitigation">
+              <span><i class="fas fa-shield-virus"></i> Risk Mitigation</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.RiskMitigation === 'personal' }"
+                    @click="setDataType('RiskMitigation', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.RiskMitigation === 'confidential' }"
+                    @click="setDataType('RiskMitigation', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.RiskMitigation === 'regular' }"
+                    @click="setDataType('RiskMitigation', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <textarea 
               id="riskMitigation" 
               v-model="newInstance.RiskMitigation" 
@@ -814,7 +1518,33 @@ export default {
       loadingCompliances: false,
       complianceSearchQuery: '',
       filteredCompliances: [],
-      compliances: []
+      compliances: [],
+      
+      // Store data type per field
+      fieldDataTypes: {
+        RiskId: 'regular',
+        Criticality: 'regular',
+        Category: 'regular',
+        Appetite: 'regular',
+        RiskLikelihood: 'regular',
+        RiskImpact: 'regular',
+        RiskMultiplierX: 'regular',
+        RiskMultiplierY: 'regular',
+        RiskExposureRating: 'regular',
+        RiskPriority: 'regular',
+        RiskResponseType: 'regular',
+        RiskOwner: 'regular',
+        RiskStatus: 'regular',
+        RiskTitle: 'regular',
+        BusinessImpact: 'regular',
+        Origin: 'regular',
+        ComplianceId: 'regular',
+        RiskType: 'regular',
+        RiskDescription: 'regular',
+        PossibleDamage: 'regular',
+        RiskResponseDescription: 'regular',
+        RiskMitigation: 'regular'
+      }
     }
   },
   computed: {
@@ -901,6 +1631,12 @@ export default {
     document.removeEventListener('click', this.closeBusinessImpactDropdown);
   },
   methods: {
+    setDataType(fieldName, type) {
+      if (Object.prototype.hasOwnProperty.call(this.fieldDataTypes, fieldName)) {
+        this.fieldDataTypes[fieldName] = type;
+        console.log(`Data type selected for ${fieldName}:`, type);
+      }
+    },
     fetchRisks() {
       this.loadingRisks = true;
       
@@ -1261,6 +1997,42 @@ export default {
       if (!submissionData.UserId) {
         submissionData.UserId = 1; // Default user ID
       }
+
+      // Create data inventory JSON mapping field labels to data types
+      const fieldLabelMap = {
+        RiskId: 'Risk ID',
+        Criticality: 'Criticality',
+        Category: 'Category',
+        Appetite: 'Appetite',
+        RiskLikelihood: 'Risk Likelihood',
+        RiskImpact: 'Risk Impact',
+        RiskMultiplierX: 'Risk Multiplier X',
+        RiskMultiplierY: 'Risk Multiplier Y',
+        RiskExposureRating: 'Risk Exposure Rating',
+        RiskPriority: 'Risk Priority',
+        RiskResponseType: 'Risk Response Type',
+        RiskOwner: 'Risk Owner',
+        RiskStatus: 'Risk Status',
+        RiskTitle: 'Risk Title',
+        BusinessImpact: 'Business Impact',
+        Origin: 'Origin',
+        ComplianceId: 'Compliance ID',
+        RiskType: 'Risk Type',
+        RiskDescription: 'Risk Description',
+        PossibleDamage: 'Possible Damage',
+        RiskResponseDescription: 'Risk Response Description',
+        RiskMitigation: 'Risk Mitigation'
+      };
+
+      // Transform fieldDataTypes into data_inventory JSON with labels
+      const dataInventory = {};
+      for (const [fieldName, dataType] of Object.entries(this.fieldDataTypes)) {
+        const fieldLabel = fieldLabelMap[fieldName] || fieldName;
+        dataInventory[fieldLabel] = dataType;
+      }
+
+      // Add data_inventory to submission data
+      submissionData.data_inventory = dataInventory;
 
       axios.post(API_ENDPOINTS.CREATE_RISK_INSTANCE, submissionData, { 
         headers

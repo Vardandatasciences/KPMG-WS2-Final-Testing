@@ -13,8 +13,31 @@
       <div v-if="!showApprovalForm">
         <div class="policy-creation-header">
           <div class="policy-intro">
-            <h2>Create New Policy</h2>
-            <p>Establish comprehensive policies to ensure compliance and governance across your organization.</p>
+            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 10px;">
+              <div>
+                <h2>Create New Policy</h2>
+                <p>Establish comprehensive policies to ensure compliance and governance across your organization.</p>
+              </div>
+              <!-- Data Type Legend (Display Only) -->
+              <div class="policy-data-type-legend">
+                <div class="policy-data-type-legend-container">
+                  <div class="policy-data-type-options">
+                    <div class="policy-data-type-legend-item personal-option">
+                      <i class="fas fa-user"></i>
+                      <span>Personal</span>
+                    </div>
+                    <div class="policy-data-type-legend-item confidential-option">
+                      <i class="fas fa-shield-alt"></i>
+                      <span>Confidential</span>
+                    </div>
+                    <div class="policy-data-type-legend-item regular-option">
+                      <i class="fas fa-file-alt"></i>
+                      <span>Regular</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
             
             <!-- Framework Selection - Moved up to reduce white space -->
             <div class="framework-container-top">
@@ -38,7 +61,38 @@
                 </div>
                 
                 <div class="form-group policy-name">
-                  <label>Framework Name <span class="required-star">*</span></label>
+                  <label>
+                    Framework Name <span class="required-star">*</span>
+                    <!-- Data Type Circle Toggle -->
+                    <div class="policy-data-type-circle-toggle-wrapper">
+                      <div class="policy-data-type-circle-toggle">
+                        <div 
+                          class="policy-circle-option personal-circle" 
+                          :class="{ active: fieldDataTypes.frameworkName === 'personal' }"
+                          @click.stop.prevent="setDataType('frameworkName', 'personal')"
+                          title="Personal Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="policy-circle-option confidential-circle" 
+                          :class="{ active: fieldDataTypes.frameworkName === 'confidential' }"
+                          @click.stop.prevent="setDataType('frameworkName', 'confidential')"
+                          title="Confidential Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="policy-circle-option regular-circle" 
+                          :class="{ active: fieldDataTypes.frameworkName === 'regular' }"
+                          @click.stop.prevent="setDataType('frameworkName', 'regular')"
+                          title="Regular Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </label>
                   <input
                     type="text"
                     placeholder="Enter Framework name"
@@ -54,7 +108,38 @@
                 
                 <div class="form-row single-column">
                   <div class="form-group description">
-                    <label>Description <span class="required-star">*</span></label>
+                    <label>
+                      Description <span class="required-star">*</span>
+                      <!-- Data Type Circle Toggle -->
+                      <div class="policy-data-type-circle-toggle-wrapper">
+                        <div class="policy-data-type-circle-toggle">
+                        <div 
+                          class="policy-circle-option personal-circle" 
+                          :class="{ active: fieldDataTypes.frameworkDescription === 'personal' }"
+                          @click.stop="setDataType('frameworkDescription', 'personal')"
+                          title="Personal Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="policy-circle-option confidential-circle" 
+                          :class="{ active: fieldDataTypes.frameworkDescription === 'confidential' }"
+                          @click.stop="setDataType('frameworkDescription', 'confidential')"
+                          title="Confidential Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="policy-circle-option regular-circle" 
+                          :class="{ active: fieldDataTypes.frameworkDescription === 'regular' }"
+                          @click.stop="setDataType('frameworkDescription', 'regular')"
+                          title="Regular Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        </div>
+                      </div>
+                    </label>
                     <div class="textarea-container">
                       <textarea
                         placeholder="Enter framework description"
@@ -72,7 +157,38 @@
                 </div>
                 <div class="form-row">
                   <div class="form-group internal-external">
-                    <label>Internal/External <span class="required-star">*</span></label>
+                    <label>
+                      Internal/External <span class="required-star">*</span>
+                      <!-- Data Type Circle Toggle -->
+                      <div class="policy-data-type-circle-toggle-wrapper">
+                        <div class="policy-data-type-circle-toggle">
+                        <div 
+                          class="policy-circle-option personal-circle" 
+                          :class="{ active: fieldDataTypes.frameworkInternalExternal === 'personal' }"
+                          @click.stop="setDataType('frameworkInternalExternal', 'personal')"
+                          title="Personal Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="policy-circle-option confidential-circle" 
+                          :class="{ active: fieldDataTypes.frameworkInternalExternal === 'confidential' }"
+                          @click.stop="setDataType('frameworkInternalExternal', 'confidential')"
+                          title="Confidential Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="policy-circle-option regular-circle" 
+                          :class="{ active: fieldDataTypes.frameworkInternalExternal === 'regular' }"
+                          @click.stop="setDataType('frameworkInternalExternal', 'regular')"
+                          title="Regular Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        </div>
+                      </div>
+                    </label>
                     <select
                       v-model="newFramework.InternalExternal"
                       @change="handleInternalExternalChange"
@@ -85,13 +201,43 @@
                     <div class="helper-text">Select whether this framework is for internal or external use</div>
                   </div>
                   <div class="form-group version">
-                    <label>Identifier <span class="required-star">*</span>
+                    <label>
+                      Identifier <span class="required-star">*</span>
                       <span v-if="newFramework.InternalExternal === 'Internal'" class="auto-generated-label">
                         (Auto-generated)
                       </span>
                       <span v-else-if="newFramework.InternalExternal === 'External'" class="manual-entry-label">
                         (Manual entry)
                       </span>
+                      <!-- Data Type Circle Toggle -->
+                      <div class="policy-data-type-circle-toggle-wrapper">
+                        <div class="policy-data-type-circle-toggle">
+                        <div 
+                          class="policy-circle-option personal-circle" 
+                          :class="{ active: fieldDataTypes.frameworkIdentifier === 'personal' }"
+                          @click.stop="setDataType('frameworkIdentifier', 'personal')"
+                          title="Personal Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="policy-circle-option confidential-circle" 
+                          :class="{ active: fieldDataTypes.frameworkIdentifier === 'confidential' }"
+                          @click.stop="setDataType('frameworkIdentifier', 'confidential')"
+                          title="Confidential Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="policy-circle-option regular-circle" 
+                          :class="{ active: fieldDataTypes.frameworkIdentifier === 'regular' }"
+                          @click.stop="setDataType('frameworkIdentifier', 'regular')"
+                          title="Regular Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        </div>
+                      </div>
                     </label>
                     <input
                       type="text"
@@ -110,7 +256,38 @@
                 </div>
                 <div class="form-row">
                   <div class="form-group category">
-                    <label>Category <span class="required-star">*</span></label>
+                    <label>
+                      Category <span class="required-star">*</span>
+                      <!-- Data Type Circle Toggle -->
+                      <div class="policy-data-type-circle-toggle-wrapper">
+                        <div class="policy-data-type-circle-toggle">
+                        <div 
+                          class="policy-circle-option personal-circle" 
+                          :class="{ active: fieldDataTypes.frameworkCategory === 'personal' }"
+                          @click.stop="setDataType('frameworkCategory', 'personal')"
+                          title="Personal Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="policy-circle-option confidential-circle" 
+                          :class="{ active: fieldDataTypes.frameworkCategory === 'confidential' }"
+                          @click.stop="setDataType('frameworkCategory', 'confidential')"
+                          title="Confidential Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="policy-circle-option regular-circle" 
+                          :class="{ active: fieldDataTypes.frameworkCategory === 'regular' }"
+                          @click.stop="setDataType('frameworkCategory', 'regular')"
+                          title="Regular Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        </div>
+                      </div>
+                    </label>
                     <input
                       type="text"
                       placeholder="Enter category"
@@ -122,7 +299,38 @@
                 </div>
                 <div class="form-row">
                   <div class="form-group upload">
-                    <label>Upload Document</label>
+                    <label>
+                      Upload Document
+                      <!-- Data Type Circle Toggle -->
+                      <div class="policy-data-type-circle-toggle-wrapper">
+                        <div class="policy-data-type-circle-toggle">
+                          <div 
+                            class="policy-circle-option personal-circle" 
+                            :class="{ active: fieldDataTypes.frameworkDocument === 'personal' }"
+                            @click.stop="setDataType('frameworkDocument', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="policy-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="policy-circle-option confidential-circle" 
+                            :class="{ active: fieldDataTypes.frameworkDocument === 'confidential' }"
+                            @click.stop="setDataType('frameworkDocument', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="policy-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="policy-circle-option regular-circle" 
+                            :class="{ active: fieldDataTypes.frameworkDocument === 'regular' }"
+                            @click.stop="setDataType('frameworkDocument', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="policy-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
                     <div class="upload-controls">
                       <span>{{ newFramework.DocURL ? newFramework.DocURL.name : 'Choose File' }}</span>
                       <button class="browse-btn" type="button" @click="() => handleFrameworkFileUpload()" title="Browse and select a document file">Browse</button>
@@ -133,7 +341,38 @@
                 </div>
                 <div class="form-row">
                   <div class="form-group date">
-                    <label>Effective Start Date <span class="required-star">*</span></label>
+                    <label>
+                      Effective Start Date <span class="required-star">*</span>
+                      <!-- Data Type Circle Toggle -->
+                      <div class="policy-data-type-circle-toggle-wrapper">
+                        <div class="policy-data-type-circle-toggle">
+                        <div 
+                          class="policy-circle-option personal-circle" 
+                          :class="{ active: fieldDataTypes.frameworkStartDate === 'personal' }"
+                          @click.stop="setDataType('frameworkStartDate', 'personal')"
+                          title="Personal Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="policy-circle-option confidential-circle" 
+                          :class="{ active: fieldDataTypes.frameworkStartDate === 'confidential' }"
+                          @click.stop="setDataType('frameworkStartDate', 'confidential')"
+                          title="Confidential Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="policy-circle-option regular-circle" 
+                          :class="{ active: fieldDataTypes.frameworkStartDate === 'regular' }"
+                          @click.stop="setDataType('frameworkStartDate', 'regular')"
+                          title="Regular Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        </div>
+                      </div>
+                    </label>
                     <input
                       type="date"
                       v-model="newFramework.StartDate"
@@ -142,7 +381,38 @@
                     <div class="helper-text">Date when the framework implementation begins</div>
                   </div>
                   <div class="form-group date">
-                    <label>Effective End Date</label>
+                    <label>
+                      Effective End Date
+                      <!-- Data Type Circle Toggle -->
+                      <div class="policy-data-type-circle-toggle-wrapper">
+                        <div class="policy-data-type-circle-toggle">
+                        <div 
+                          class="policy-circle-option personal-circle" 
+                          :class="{ active: fieldDataTypes.frameworkEndDate === 'personal' }"
+                          @click.stop="setDataType('frameworkEndDate', 'personal')"
+                          title="Personal Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="policy-circle-option confidential-circle" 
+                          :class="{ active: fieldDataTypes.frameworkEndDate === 'confidential' }"
+                          @click.stop="setDataType('frameworkEndDate', 'confidential')"
+                          title="Confidential Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="policy-circle-option regular-circle" 
+                          :class="{ active: fieldDataTypes.frameworkEndDate === 'regular' }"
+                          @click.stop="setDataType('frameworkEndDate', 'regular')"
+                          title="Regular Data"
+                        >
+                          <div class="policy-circle-inner"></div>
+                        </div>
+                        </div>
+                      </div>
+                    </label>
                     <input
                       type="date"
                       v-model="newFramework.EndDate"
@@ -322,7 +592,38 @@
           </div>
           <div class="form-row">
             <div class="form-group upload">
-              <label>Upload Document</label>
+              <label>
+                Upload Document
+                <!-- Data Type Circle Toggle -->
+                <div class="policy-data-type-circle-toggle-wrapper">
+                  <div class="policy-data-type-circle-toggle">
+                    <div 
+                      class="policy-circle-option personal-circle" 
+                      :class="{ active: fieldDataTypes.frameworkDocument === 'personal' }"
+                      @click.stop="setDataType('frameworkDocument', 'personal')"
+                      title="Personal Data"
+                    >
+                      <div class="policy-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="policy-circle-option confidential-circle" 
+                      :class="{ active: fieldDataTypes.frameworkDocument === 'confidential' }"
+                      @click.stop="setDataType('frameworkDocument', 'confidential')"
+                      title="Confidential Data"
+                    >
+                      <div class="policy-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="policy-circle-option regular-circle" 
+                      :class="{ active: fieldDataTypes.frameworkDocument === 'regular' }"
+                      @click.stop="setDataType('frameworkDocument', 'regular')"
+                      title="Regular Data"
+                    >
+                      <div class="policy-circle-inner"></div>
+                    </div>
+                  </div>
+                </div>
+              </label>
               <div class="upload-controls">
                 <span>{{ newFramework.DocURL ? newFramework.DocURL.name : 'Choose File' }}</span>
                 <button class="browse-btn" type="button" @click="() => handleFrameworkFileUpload()" title="Browse and select a document file">Browse</button>
@@ -406,7 +707,38 @@
               <!-- Policy Card Fields (now using policiesForm[selectedPolicyIdx]) -->
             <div class="policy-form-row">
               <div class="form-group">
-                <label>Policy Name <span class="required-star">*</span></label>
+                <label>
+                  Policy Name <span class="required-star">*</span>
+                  <!-- Data Type Circle Toggle -->
+                  <div class="policy-data-type-circle-toggle-wrapper">
+                    <div class="policy-data-type-circle-toggle">
+                      <div 
+                        class="policy-circle-option personal-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyName || 'regular') === 'personal' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyName', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option confidential-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyName || 'regular') === 'confidential' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyName', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option regular-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyName || 'regular') === 'regular' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyName', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <div class="input-with-icon">
                   <input
                     type="text"
@@ -419,13 +751,43 @@
                 <div class="helper-text">Use a clear, descriptive name that identifies the policy's purpose</div>
               </div>
               <div class="form-group">
-                <label>Policy Identifier <span class="required-star">*</span>
+                <label>
+                  Policy Identifier <span class="required-star">*</span>
                   <span v-if="isInternalFramework()" class="auto-generated-label">
                     (Auto-generated)
                   </span>
                   <span v-else class="manual-entry-label">
                     (Manual entry)
                   </span>
+                  <!-- Data Type Circle Toggle -->
+                  <div class="policy-data-type-circle-toggle-wrapper">
+                    <div class="policy-data-type-circle-toggle">
+                      <div 
+                        class="policy-circle-option personal-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyIdentifier || 'regular') === 'personal' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyIdentifier', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option confidential-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyIdentifier || 'regular') === 'confidential' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyIdentifier', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option regular-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyIdentifier || 'regular') === 'regular' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyIdentifier', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
                 </label>
                 <div class="input-with-icon">
                   <input
@@ -441,7 +803,38 @@
               </div>
             </div>
             <div class="form-group description">
-              <label>Description <span class="required-star">*</span></label>
+              <label>
+                Description <span class="required-star">*</span>
+                <!-- Data Type Circle Toggle -->
+                <div class="policy-data-type-circle-toggle-wrapper">
+                  <div class="policy-data-type-circle-toggle">
+                    <div 
+                      class="policy-circle-option personal-circle" 
+                      :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyDescription || 'regular') === 'personal' }"
+                      @click="setPolicyDataType(selectedPolicyIdx, 'policyDescription', 'personal')"
+                      title="Personal Data"
+                    >
+                      <div class="policy-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="policy-circle-option confidential-circle" 
+                      :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyDescription || 'regular') === 'confidential' }"
+                      @click="setPolicyDataType(selectedPolicyIdx, 'policyDescription', 'confidential')"
+                      title="Confidential Data"
+                    >
+                      <div class="policy-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="policy-circle-option regular-circle" 
+                      :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyDescription || 'regular') === 'regular' }"
+                      @click="setPolicyDataType(selectedPolicyIdx, 'policyDescription', 'regular')"
+                      title="Regular Data"
+                    >
+                      <div class="policy-circle-inner"></div>
+                    </div>
+                  </div>
+                </div>
+              </label>
               <div class="textarea-container">
                 <textarea
                   placeholder="Enter policy description"
@@ -459,7 +852,38 @@
             </div>
             <div class="policy-form-row">
               <div class="form-group">
-                <label>Scope <span class="required-star">*</span></label>
+                <label>
+                  Scope <span class="required-star">*</span>
+                  <!-- Data Type Circle Toggle -->
+                  <div class="policy-data-type-circle-toggle-wrapper">
+                    <div class="policy-data-type-circle-toggle">
+                      <div 
+                        class="policy-circle-option personal-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyScope || 'regular') === 'personal' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyScope', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option confidential-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyScope || 'regular') === 'confidential' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyScope', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option regular-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyScope || 'regular') === 'regular' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyScope', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <div class="input-with-icon">
                   <input
                     type="text"
@@ -472,7 +896,38 @@
                 <div class="helper-text">Specify what areas, processes, or systems this policy applies to</div>
               </div>
               <div class="form-group">
-                <label>Department <span class="required-star">*</span></label>
+                <label>
+                  Department <span class="required-star">*</span>
+                  <!-- Data Type Circle Toggle -->
+                  <div class="policy-data-type-circle-toggle-wrapper">
+                    <div class="policy-data-type-circle-toggle">
+                      <div 
+                        class="policy-circle-option personal-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyDepartment || 'regular') === 'personal' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyDepartment', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option confidential-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyDepartment || 'regular') === 'confidential' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyDepartment', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option regular-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyDepartment || 'regular') === 'regular' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyDepartment', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <div class="department-multi-select" @click.stop>
                   <div class="department-dropdown">
                     <div   
@@ -516,7 +971,38 @@
             </div>
             <div class="policy-form-row objective-applicability-row">
               <div class="form-group description">
-                <label>Objective <span class="required-star">*</span></label>
+                <label>
+                  Objective <span class="required-star">*</span>
+                  <!-- Data Type Circle Toggle -->
+                  <div class="policy-data-type-circle-toggle-wrapper">
+                    <div class="policy-data-type-circle-toggle">
+                      <div 
+                        class="policy-circle-option personal-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyObjective || 'regular') === 'personal' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyObjective', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option confidential-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyObjective || 'regular') === 'confidential' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyObjective', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option regular-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyObjective || 'regular') === 'regular' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyObjective', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <div class="textarea-container">
                   <textarea
                     placeholder="Enter policy objective"
@@ -536,7 +1022,38 @@
             </div>
             <div class="policy-form-row date-row">
               <div class="form-group">
-                <label>Coverage Rate (%) <span class="required-star">*</span></label>
+                <label>
+                  Coverage Rate (%) <span class="required-star">*</span>
+                  <!-- Data Type Circle Toggle -->
+                  <div class="policy-data-type-circle-toggle-wrapper">
+                    <div class="policy-data-type-circle-toggle">
+                      <div 
+                        class="policy-circle-option personal-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyCoverageRate || 'regular') === 'personal' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyCoverageRate', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option confidential-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyCoverageRate || 'regular') === 'confidential' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyCoverageRate', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option regular-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyCoverageRate || 'regular') === 'regular' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyCoverageRate', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <div class="input-with-icon">
                   <input
                     type="number"
@@ -552,7 +1069,38 @@
                 <div class="helper-text">Specify how much of the target area this policy covers (0-100%)</div>
               </div>
               <div class="form-group">
-                <label>Applicability <span class="required-star">*</span></label>
+                <label>
+                  Applicability <span class="required-star">*</span>
+                  <!-- Data Type Circle Toggle -->
+                  <div class="policy-data-type-circle-toggle-wrapper">
+                    <div class="policy-data-type-circle-toggle">
+                      <div 
+                        class="policy-circle-option personal-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyApplicability || 'regular') === 'personal' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyApplicability', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option confidential-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyApplicability || 'regular') === 'confidential' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyApplicability', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option regular-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyApplicability || 'regular') === 'regular' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyApplicability', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <div class="input-with-icon">
                   <input
                     type="text"
@@ -567,7 +1115,38 @@
             </div>
             <div class="policy-form-row">
               <div class="form-group">
-                <label>Policy Type <span class="required-star">*</span></label>
+                <label>
+                  Policy Type <span class="required-star">*</span>
+                  <!-- Data Type Circle Toggle -->
+                  <div class="policy-data-type-circle-toggle-wrapper">
+                    <div class="policy-data-type-circle-toggle">
+                      <div 
+                        class="policy-circle-option personal-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyType || 'regular') === 'personal' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyType', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option confidential-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyType || 'regular') === 'confidential' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyType', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option regular-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyType || 'regular') === 'regular' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyType', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <div class="policy-type-multi-select" @click.stop>
                   <div class="policy-type-dropdown">
                     <div   
@@ -621,7 +1200,38 @@
                 <div class="helper-text">e.g., Security Policy, HR Policy, Financial Policy, etc.</div>
               </div>
               <div class="form-group">
-                <label>Policy Category <span class="required-star">*</span></label>
+                <label>
+                  Policy Category <span class="required-star">*</span>
+                  <!-- Data Type Circle Toggle -->
+                  <div class="policy-data-type-circle-toggle-wrapper">
+                    <div class="policy-data-type-circle-toggle">
+                      <div 
+                        class="policy-circle-option personal-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyCategory || 'regular') === 'personal' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyCategory', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option confidential-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyCategory || 'regular') === 'confidential' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyCategory', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option regular-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyCategory || 'regular') === 'regular' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyCategory', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <div class="policy-category-multi-select" @click.stop>
                   <div class="policy-category-dropdown">
                     <div   
@@ -677,7 +1287,38 @@
             </div>
             <div class="policy-form-row date-row">
               <div class="form-group">
-                <label>Policy Sub Category <span class="required-star">*</span></label>
+                <label>
+                  Policy Sub Category <span class="required-star">*</span>
+                  <!-- Data Type Circle Toggle -->
+                  <div class="policy-data-type-circle-toggle-wrapper">
+                    <div class="policy-data-type-circle-toggle">
+                      <div 
+                        class="policy-circle-option personal-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policySubCategory || 'regular') === 'personal' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policySubCategory', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option confidential-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policySubCategory || 'regular') === 'confidential' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policySubCategory', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option regular-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policySubCategory || 'regular') === 'regular' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policySubCategory', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <div class="policy-subcategory-multi-select" @click.stop>
                   <div class="policy-subcategory-dropdown">
                     <div   
@@ -731,7 +1372,38 @@
                 <div class="helper-text">Provide more specific classification within the selected category</div>
               </div>
               <div class="form-group entities-group">
-                <label>Applicable Entities <span class="required-star">*</span></label>
+                <label>
+                  Applicable Entities <span class="required-star">*</span>
+                  <!-- Data Type Circle Toggle -->
+                  <div class="policy-data-type-circle-toggle-wrapper">
+                    <div class="policy-data-type-circle-toggle">
+                      <div 
+                        class="policy-circle-option personal-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyEntities || 'regular') === 'personal' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyEntities', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option confidential-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyEntities || 'regular') === 'confidential' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyEntities', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option regular-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyEntities || 'regular') === 'regular' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyEntities', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <div class="entities-multi-select" @click.stop>
                   <div class="entities-dropdown">
                     <div   
@@ -775,7 +1447,38 @@
             </div>
             <div class="policy-form-row date-row">
               <div class="form-group">
-                <label>Start Date <span class="required-star">*</span></label>
+                <label>
+                  Start Date <span class="required-star">*</span>
+                  <!-- Data Type Circle Toggle -->
+                  <div class="policy-data-type-circle-toggle-wrapper">
+                    <div class="policy-data-type-circle-toggle">
+                      <div 
+                        class="policy-circle-option personal-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyStartDate || 'regular') === 'personal' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyStartDate', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option confidential-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyStartDate || 'regular') === 'confidential' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyStartDate', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option regular-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyStartDate || 'regular') === 'regular' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyStartDate', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <div class="input-with-icon">
                   <input
                     type="date"
@@ -787,7 +1490,38 @@
                 <div class="helper-text">Date when this policy takes effect and becomes enforceable</div>
               </div>
               <div class="form-group">
-                <label>End Date</label>
+                <label>
+                  End Date
+                  <!-- Data Type Circle Toggle -->
+                  <div class="policy-data-type-circle-toggle-wrapper">
+                    <div class="policy-data-type-circle-toggle">
+                      <div 
+                        class="policy-circle-option personal-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyEndDate || 'regular') === 'personal' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyEndDate', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option confidential-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyEndDate || 'regular') === 'confidential' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyEndDate', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option regular-circle" 
+                        :class="{ active: (policyFieldDataTypes[selectedPolicyIdx]?.policyEndDate || 'regular') === 'regular' }"
+                        @click="setPolicyDataType(selectedPolicyIdx, 'policyEndDate', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <div class="input-with-icon">
                   <input
                     type="date"
@@ -837,7 +1571,38 @@
             <button class="remove-btn" @click="handleRemoveSubPolicy(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx])" title="Remove Sub Policy">✕</button>
               </div>
               <div class="form-group">
-                <label>Sub Policy Name <span class="required-star">*</span></label>
+                <label>
+                  Sub Policy Name <span class="required-star">*</span>
+                  <!-- Data Type Circle Toggle -->
+                  <div class="policy-data-type-circle-toggle-wrapper">
+                    <div class="policy-data-type-circle-toggle">
+                      <div 
+                        class="policy-circle-option personal-circle" 
+                        :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyName || 'regular') === 'personal' }"
+                        @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyName', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option confidential-circle" 
+                        :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyName || 'regular') === 'confidential' }"
+                        @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyName', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option regular-circle" 
+                        :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyName || 'regular') === 'regular' }"
+                        @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyName', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <div class="input-with-icon">
                   <input
                     type="text"
@@ -850,13 +1615,43 @@
                 <div class="helper-text">Use a clear name that describes this sub-policy's specific focus</div>
               </div>
               <div class="form-group">
-                <label>Identifier <span class="required-star">*</span>
+                <label>
+                  Identifier <span class="required-star">*</span>
                   <span v-if="isInternalFramework()" class="auto-generated-label">
                     (Auto-generated)
                   </span>
                   <span v-else class="manual-entry-label">
                     (Manual entry)
                   </span>
+                  <!-- Data Type Circle Toggle -->
+                  <div class="policy-data-type-circle-toggle-wrapper">
+                    <div class="policy-data-type-circle-toggle">
+                      <div 
+                        class="policy-circle-option personal-circle" 
+                        :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyIdentifier || 'regular') === 'personal' }"
+                        @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyIdentifier', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option confidential-circle" 
+                        :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyIdentifier || 'regular') === 'confidential' }"
+                        @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyIdentifier', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option regular-circle" 
+                        :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyIdentifier || 'regular') === 'regular' }"
+                        @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyIdentifier', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
                 </label>
                 <div class="input-with-icon">
                   <input
@@ -871,7 +1666,38 @@
                 <div class="helper-text">Use a unique code like 'SUB-001' or append to parent policy ID</div>
               </div>
               <div class="form-group">
-                <label>Control <span class="required-star">*</span></label>
+                <label>
+                  Control <span class="required-star">*</span>
+                  <!-- Data Type Circle Toggle -->
+                  <div class="policy-data-type-circle-toggle-wrapper">
+                    <div class="policy-data-type-circle-toggle">
+                      <div 
+                        class="policy-circle-option personal-circle" 
+                        :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyControl || 'regular') === 'personal' }"
+                        @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyControl', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option confidential-circle" 
+                        :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyControl || 'regular') === 'confidential' }"
+                        @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyControl', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option regular-circle" 
+                        :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyControl || 'regular') === 'regular' }"
+                        @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyControl', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <div class="textarea-container">
                   <textarea
                     type="text"
@@ -889,7 +1715,38 @@
                 <div class="helper-text">Specify the control mechanisms, procedures, or safeguards to be implemented</div>
               </div>
               <div class="form-group">
-                <label>Description <span class="required-star">*</span></label>
+                <label>
+                  Description <span class="required-star">*</span>
+                  <!-- Data Type Circle Toggle -->
+                  <div class="policy-data-type-circle-toggle-wrapper">
+                    <div class="policy-data-type-circle-toggle">
+                      <div 
+                        class="policy-circle-option personal-circle" 
+                        :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyDescription || 'regular') === 'personal' }"
+                        @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyDescription', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option confidential-circle" 
+                        :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyDescription || 'regular') === 'confidential' }"
+                        @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyDescription', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="policy-circle-option regular-circle" 
+                        :class="{ active: (subPolicyFieldDataTypes[selectedPolicyIdx]?.[selectedSubPolicyIdx[selectedPolicyIdx]]?.subPolicyDescription || 'regular') === 'regular' }"
+                        @click="setSubPolicyDataType(selectedPolicyIdx, selectedSubPolicyIdx[selectedPolicyIdx], 'subPolicyDescription', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="policy-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <div class="textarea-container">
                   <textarea
                     placeholder="Enter description"
@@ -951,7 +1808,38 @@
             <div class="helper-text">This policy will be created under your username.</div>
           </div>
           <div class="form-group">
-            <label>Reviewer <span class="required-star">*</span></label>
+            <label>
+              Reviewer <span class="required-star">*</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="policy-data-type-circle-toggle-wrapper">
+                <div class="policy-data-type-circle-toggle">
+                  <div 
+                    class="policy-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.reviewer === 'personal' }"
+                    @click.stop.prevent="setDataType('reviewer', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="policy-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="policy-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.reviewer === 'confidential' }"
+                    @click.stop.prevent="setDataType('reviewer', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="policy-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="policy-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.reviewer === 'regular' }"
+                    @click.stop.prevent="setDataType('reviewer', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="policy-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <select
               v-model="approvalForm.reviewer"
               :disabled="loading"
@@ -998,7 +1886,7 @@
  
 <script>
 
-import { ref, watch, onMounted, onActivated, nextTick, computed } from 'vue'
+import { ref, watch, onMounted, onActivated, nextTick, computed, reactive } from 'vue'
 import axios from 'axios'
 import { useRouter, useRoute } from 'vue-router'
 import { PopupService, PopupModal } from '@/modules/popus'
@@ -1045,6 +1933,76 @@ export default {
     
     // Flag to prevent auto-save during programmatic framework updates
     const isLoadingFramework = ref(false)
+
+    // Field data types for toggling (personal, confidential, regular)
+    // Using reactive instead of ref for better nested reactivity
+    const fieldDataTypes = reactive({
+      // Framework fields
+      frameworkName: 'regular',
+      frameworkDescription: 'regular',
+      frameworkIdentifier: 'regular',
+      frameworkCategory: 'regular',
+      frameworkInternalExternal: 'regular',
+      frameworkDocument: 'regular',
+      frameworkStartDate: 'regular',
+      frameworkEndDate: 'regular',
+      reviewer: 'regular',
+      // Policy fields (will be per-policy)
+      policyName: 'regular',
+      policyIdentifier: 'regular',
+      policyDescription: 'regular',
+      policyScope: 'regular',
+      policyObjective: 'regular',
+      policyDepartment: 'regular',
+      policyApplicability: 'regular',
+      policyCoverageRate: 'regular',
+      policyType: 'regular',
+      policyCategory: 'regular',
+      policySubCategory: 'regular',
+      policyEntities: 'regular',
+      policyStartDate: 'regular',
+      policyEndDate: 'regular',
+      // Subpolicy fields (will be per-subpolicy)
+      subPolicyName: 'regular',
+      subPolicyIdentifier: 'regular',
+      subPolicyControl: 'regular',
+      subPolicyDescription: 'regular'
+    })
+
+    // Per-policy and per-subpolicy field data types
+    const policyFieldDataTypes = ref([])
+    const subPolicyFieldDataTypes = ref([])
+
+    // Set data type for a field
+    const setDataType = (fieldName, type) => {
+      if (Object.prototype.hasOwnProperty.call(fieldDataTypes, fieldName)) {
+        fieldDataTypes[fieldName] = type
+        console.log(`Data type selected for ${fieldName}:`, type, 'Current value:', fieldDataTypes[fieldName])
+      } else {
+        console.warn(`Field ${fieldName} not found in fieldDataTypes. Available fields:`, Object.keys(fieldDataTypes))
+      }
+    }
+
+    // Set data type for a policy field
+    const setPolicyDataType = (policyIdx, fieldName, type) => {
+      if (!policyFieldDataTypes.value[policyIdx]) {
+        policyFieldDataTypes.value[policyIdx] = {}
+      }
+      policyFieldDataTypes.value[policyIdx][fieldName] = type
+      console.log(`Data type selected for policy ${policyIdx} field ${fieldName}:`, type)
+    }
+
+    // Set data type for a subpolicy field
+    const setSubPolicyDataType = (policyIdx, subPolicyIdx, fieldName, type) => {
+      if (!subPolicyFieldDataTypes.value[policyIdx]) {
+        subPolicyFieldDataTypes.value[policyIdx] = []
+      }
+      if (!subPolicyFieldDataTypes.value[policyIdx][subPolicyIdx]) {
+        subPolicyFieldDataTypes.value[policyIdx][subPolicyIdx] = {}
+      }
+      subPolicyFieldDataTypes.value[policyIdx][subPolicyIdx][fieldName] = type
+      console.log(`Data type selected for policy ${policyIdx} subpolicy ${subPolicyIdx} field ${fieldName}:`, type)
+    }
 
     // Add new reactive ref for tracking existing framework identifiers
     const existingFrameworkIdentifiers = ref([])
@@ -1447,6 +2405,28 @@ export default {
       policiesForm.value.push(newPolicy)
       selectedPolicyIdx.value = policiesForm.value.length - 1
       selectedSubPolicyIdx.value.push(null) // No subpolicy selected initially
+      
+      // Initialize field data types for the new policy
+      policyFieldDataTypes.value.push({
+        policyName: 'regular',
+        policyIdentifier: 'regular',
+        policyDescription: 'regular',
+        policyScope: 'regular',
+        policyObjective: 'regular',
+        policyDepartment: 'regular',
+        policyApplicability: 'regular',
+        policyCoverageRate: 'regular',
+        policyType: 'regular',
+        policyCategory: 'regular',
+        policySubCategory: 'regular',
+        policyEntities: 'regular',
+        policyStartDate: 'regular',
+        policyEndDate: 'regular'
+      })
+      
+      // Initialize subpolicy field data types array for this policy
+      subPolicyFieldDataTypes.value.push([])
+      
       // Only auto-generate identifiers for internal frameworks
       if (isInternalFramework()) {
         setTimeout(() => {
@@ -1497,6 +2477,8 @@ export default {
     const handleRemovePolicy = (idx) => {
       policiesForm.value = policiesForm.value.filter((_, i) => i !== idx);
       selectedSubPolicyIdx.value = selectedSubPolicyIdx.value.filter((_, i) => i !== idx);
+      policyFieldDataTypes.value = policyFieldDataTypes.value.filter((_, i) => i !== idx);
+      subPolicyFieldDataTypes.value = subPolicyFieldDataTypes.value.filter((_, i) => i !== idx);
       if (policiesForm.value.length > 0) {
         if (selectedPolicyIdx.value > idx) {
           selectedPolicyIdx.value = selectedPolicyIdx.value - 1;
@@ -1527,6 +2509,18 @@ export default {
         PermanentTemporary: ''
       })
       const newSubPolicyIndex = policiesForm.value[policyIdx].subpolicies.length - 1
+      
+      // Initialize field data types for the new subpolicy
+      if (!subPolicyFieldDataTypes.value[policyIdx]) {
+        subPolicyFieldDataTypes.value[policyIdx] = []
+      }
+      subPolicyFieldDataTypes.value[policyIdx].push({
+        subPolicyName: 'regular',
+        subPolicyIdentifier: 'regular',
+        subPolicyControl: 'regular',
+        subPolicyDescription: 'regular'
+      })
+      
       // Only auto-generate identifier for internal frameworks
       if (isInternalFramework()) {
         autoGenerateSubPolicyIdentifier(policyIdx, newSubPolicyIndex)
@@ -1537,6 +2531,10 @@ export default {
     const handleRemoveSubPolicy = (policyIdx, subIdx) => {
       policiesForm.value[policyIdx].subpolicies =
         policiesForm.value[policyIdx].subpolicies.filter((_, j) => j !== subIdx)
+      // Remove field data types for the removed subpolicy
+      if (subPolicyFieldDataTypes.value[policyIdx]) {
+        subPolicyFieldDataTypes.value[policyIdx] = subPolicyFieldDataTypes.value[policyIdx].filter((_, j) => j !== subIdx)
+      }
       // Adjust selected subpolicy index
       if (selectedSubPolicyIdx.value[policyIdx] === subIdx) {
         selectedSubPolicyIdx.value[policyIdx] = Math.max(0, subIdx - 1)
@@ -2548,14 +3546,61 @@ export default {
           // Debug: Log policies form data before creating payload
           console.log('Policies form data before payload creation:', JSON.stringify(policiesForm.value, null, 2))
           
+          // Build data inventory for framework
+          const frameworkFieldLabelMap = {
+            frameworkName: 'Framework Name',
+            frameworkDescription: 'Framework Description',
+            frameworkIdentifier: 'Framework Identifier',
+            frameworkCategory: 'Framework Category',
+            frameworkInternalExternal: 'Internal/External',
+            frameworkDocument: 'Upload Document',
+            frameworkStartDate: 'Effective Start Date',
+            frameworkEndDate: 'Effective End Date',
+            reviewer: 'Reviewer'
+          }
+          
+          const frameworkDataInventory = {}
+          for (const [fieldName, dataType] of Object.entries(fieldDataTypes)) {
+            if (frameworkFieldLabelMap[fieldName]) {
+              frameworkDataInventory[frameworkFieldLabelMap[fieldName]] = dataType
+            }
+          }
+          
           // Prepare the full payload for new framework
           const payload = {
             ...frameworkFormData.value,
             CreatedByName: creatorUser.UserName,
             CreatedById: creatorUser.UserId,
             Reviewer: reviewerUser ? reviewerUser.UserId : null,
+            data_inventory: frameworkDataInventory,
             policies: policiesForm.value.map((policy, index) => {
               console.log(`DEBUG: Processing policy ${index}, Entities before mapping:`, policy.Entities)
+              
+              // Build data inventory for this policy
+              const policyFieldLabelMap = {
+                policyName: 'Policy Name',
+                policyIdentifier: 'Policy Identifier',
+                policyDescription: 'Policy Description',
+                policyScope: 'Scope',
+                policyObjective: 'Objective',
+                policyDepartment: 'Department',
+                policyApplicability: 'Applicability',
+                policyCoverageRate: 'Coverage Rate (%)',
+                policyType: 'Policy Type',
+                policyCategory: 'Policy Category',
+                policySubCategory: 'Policy Sub Category',
+                policyEntities: 'Applicable Entities',
+                policyStartDate: 'Start Date',
+                policyEndDate: 'End Date'
+              }
+              
+              const policyDataInventory = {}
+              const policyFieldTypes = policyFieldDataTypes.value[index] || {}
+              for (const [fieldName, dataType] of Object.entries(policyFieldTypes)) {
+                if (policyFieldLabelMap[fieldName]) {
+                  policyDataInventory[policyFieldLabelMap[fieldName]] = dataType
+                }
+              }
               
               const mappedPolicy = {
                 ...policy,
@@ -2564,13 +3609,33 @@ export default {
                 CreatedById: creatorUser.UserId,
                 Reviewer: reviewerUser ? reviewerUser.UserId : null,
                 Entities: policy.Entities, // Explicitly set Entities
-                subpolicies: policy.subpolicies.map(sub => ({
+                data_inventory: policyDataInventory,
+                subpolicies: policy.subpolicies.map((sub, subIndex) => {
+                  // Build data inventory for this subpolicy
+                  const subPolicyFieldLabelMap = {
+                    subPolicyName: 'Sub Policy Name',
+                    subPolicyIdentifier: 'Identifier',
+                    subPolicyControl: 'Control',
+                    subPolicyDescription: 'Description'
+                  }
+                  
+                  const subPolicyDataInventory = {}
+                  const subPolicyFieldTypes = subPolicyFieldDataTypes.value[index]?.[subIndex] || {}
+                  for (const [fieldName, dataType] of Object.entries(subPolicyFieldTypes)) {
+                    if (subPolicyFieldLabelMap[fieldName]) {
+                      subPolicyDataInventory[subPolicyFieldLabelMap[fieldName]] = dataType
+                    }
+                  }
+                  
+                  return {
                   ...sub,
                   CreatedByName: creatorUser.UserName,
                   CreatedByDate: new Date().toISOString().split('T')[0],
                   Status: 'Under Review',
-                  PermanentTemporary: ''
-                }))
+                    PermanentTemporary: '',
+                    data_inventory: subPolicyDataInventory
+                  }
+                })
               }
               
               console.log(`DEBUG: Policy ${index} after mapping, Entities:`, mappedPolicy.Entities)
@@ -2640,20 +3705,68 @@ export default {
           }
 
           // Build the batch payload
-          const policiesPayload = policiesForm.value.map(policy => ({
+          const policyFieldLabelMap = {
+            policyName: 'Policy Name',
+            policyIdentifier: 'Policy Identifier',
+            policyDescription: 'Policy Description',
+            policyScope: 'Scope',
+            policyObjective: 'Objective',
+            policyDepartment: 'Department',
+            policyApplicability: 'Applicability',
+            policyCoverageRate: 'Coverage Rate (%)',
+            policyType: 'Policy Type',
+            policyCategory: 'Policy Category',
+            policySubCategory: 'Policy Sub Category',
+            policyEntities: 'Applicable Entities',
+            policyStartDate: 'Start Date',
+            policyEndDate: 'End Date'
+          }
+          
+          const subPolicyFieldLabelMap = {
+            subPolicyName: 'Sub Policy Name',
+            subPolicyIdentifier: 'Identifier',
+            subPolicyControl: 'Control',
+            subPolicyDescription: 'Description'
+          }
+          
+          const policiesPayload = policiesForm.value.map((policy, index) => {
+            // Build data inventory for this policy
+            const policyDataInventory = {}
+            const policyFieldTypes = policyFieldDataTypes.value[index] || {}
+            for (const [fieldName, dataType] of Object.entries(policyFieldTypes)) {
+              if (policyFieldLabelMap[fieldName]) {
+                policyDataInventory[policyFieldLabelMap[fieldName]] = dataType
+              }
+            }
+            
+            return {
             ...policy,
             CoverageRate: policy.CoverageRate !== '' && policy.CoverageRate !== null && policy.CoverageRate !== undefined ? Number(policy.CoverageRate) : null,
             CreatedByName: creatorUser.UserName,
             CreatedById: creatorUser.UserId,
             Reviewer: reviewerUser ? reviewerUser.UserId : null,
-            subpolicies: policy.subpolicies.map(sub => ({
+              data_inventory: policyDataInventory,
+              subpolicies: policy.subpolicies.map((sub, subIndex) => {
+                // Build data inventory for this subpolicy
+                const subPolicyDataInventory = {}
+                const subPolicyFieldTypes = subPolicyFieldDataTypes.value[index]?.[subIndex] || {}
+                for (const [fieldName, dataType] of Object.entries(subPolicyFieldTypes)) {
+                  if (subPolicyFieldLabelMap[fieldName]) {
+                    subPolicyDataInventory[subPolicyFieldLabelMap[fieldName]] = dataType
+                  }
+                }
+                
+                return {
               ...sub,
               CreatedByName: creatorUser.UserName,
               CreatedByDate: new Date().toISOString().split('T')[0],
               Status: 'Under Review',
-              PermanentTemporary: ''
-            }))
-          }));
+                  PermanentTemporary: '',
+                  data_inventory: subPolicyDataInventory
+                }
+              })
+            }
+          });
 
           try {
             const response = await axios.post(API_ENDPOINTS.FRAMEWORK_ADD_POLICIES(frameworkId), { policies: policiesPayload });
@@ -3008,6 +4121,12 @@ export default {
       frameworkDropdownConfig,
       sendPushNotification,
       getCharacterCounterClass,
+      fieldDataTypes,
+      policyFieldDataTypes,
+      subPolicyFieldDataTypes,
+      setDataType,
+      setPolicyDataType,
+      setSubPolicyDataType,
     }
   }
 }
@@ -3195,11 +4314,13 @@ input:focus, select:focus, textarea:focus {
 }
 
 .form-group label {
-  display: block;
+  display: flex;
+  align-items: center;
   font-size: 14px;
   font-weight: 500;
   color: #4a5568;
   margin-bottom: 8px;
+  position: relative;
 }
 
 .input-with-icon {
@@ -4949,5 +6070,190 @@ textarea[title]:hover::before {
 :deep(.framework-container-top .dropdown-container .dropdown-item:hover),
 :deep(.policy-form-container .dropdown-container .dropdown-item:hover) {
   background: #f8f9fa !important;
+}
+
+/* Data Type Circle Toggle Styles */
+.policy-data-type-circle-toggle-wrapper {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 12px;
+  padding: 4px 8px;
+  background-color: white;
+  border: 1px solid #dee2e6;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  position: relative;
+  z-index: 10;
+  pointer-events: auto;
+}
+
+.policy-data-type-circle-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  pointer-events: auto;
+}
+
+.policy-circle-option {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid #dee2e6;
+  background-color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  position: relative;
+  pointer-events: auto;
+  z-index: 11;
+}
+
+.policy-circle-option:hover {
+  transform: scale(1.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12);
+}
+
+.policy-circle-inner {
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  background-color: transparent;
+}
+
+.policy-circle-option.active .policy-circle-inner {
+  width: 9px;
+  height: 9px;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Personal Circle - Blue */
+.policy-circle-option.personal-circle {
+  border-color: #4f7cff;
+}
+
+.policy-circle-option.personal-circle.active {
+  border-color: #4f7cff !important;
+  background-color: rgba(79, 124, 255, 0.1) !important;
+  box-shadow: 0 0 6px rgba(79, 124, 255, 0.2) !important;
+}
+
+.policy-circle-option.personal-circle.active .policy-circle-inner {
+  background-color: #4f7cff !important;
+  box-shadow: 0 0 4px rgba(79, 124, 255, 0.35) !important;
+  width: 9px !important;
+  height: 9px !important;
+}
+
+/* Confidential Circle - Red */
+.policy-circle-option.confidential-circle {
+  border-color: #e63946;
+}
+
+.policy-circle-option.confidential-circle.active {
+  border-color: #e63946 !important;
+  background-color: rgba(230, 57, 70, 0.1) !important;
+  box-shadow: 0 0 6px rgba(230, 57, 70, 0.2) !important;
+}
+
+.policy-circle-option.confidential-circle.active .policy-circle-inner {
+  background-color: #e63946 !important;
+  box-shadow: 0 0 4px rgba(230, 57, 70, 0.35) !important;
+  width: 9px !important;
+  height: 9px !important;
+}
+
+/* Regular Circle - Grey */
+.policy-circle-option.regular-circle {
+  border-color: #6c757d;
+}
+
+.policy-circle-option.regular-circle.active {
+  border-color: #6c757d !important;
+  background-color: rgba(108, 117, 125, 0.1) !important;
+  box-shadow: 0 0 6px rgba(108, 117, 125, 0.2) !important;
+}
+
+.policy-circle-option.regular-circle.active .policy-circle-inner {
+  background-color: #6c757d !important;
+  box-shadow: 0 0 4px rgba(108, 117, 125, 0.35) !important;
+  width: 9px !important;
+  height: 9px !important;
+}
+
+/* Data Type Legend Styles (Display Only) */
+.policy-data-type-legend {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: auto; /* Pushes it to the right */
+}
+
+.policy-data-type-legend-container {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e9ecef;
+  padding: 6px 10px;
+  min-width: 200px;
+  max-width: 240px;
+}
+
+.policy-data-type-options {
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+}
+
+.policy-data-type-legend-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 4px;
+  border-radius: 6px;
+  background-color: #f8f9fa;
+}
+
+.policy-data-type-legend-item i {
+  font-size: 0.9rem;
+  margin-bottom: 2px;
+}
+
+.policy-data-type-legend-item span {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+/* Personal Data Type - Blue */
+.policy-data-type-legend-item.personal-option i {
+  color: #4f7cff;
+}
+
+.policy-data-type-legend-item.personal-option span {
+  color: #4f7cff;
+}
+
+/* Confidential Data Type - Red */
+.policy-data-type-legend-item.confidential-option i {
+  color: #e63946;
+}
+
+.policy-data-type-legend-item.confidential-option span {
+  color: #e63946;
+}
+
+/* Regular Data Type - Gray */
+.policy-data-type-legend-item.regular-option i {
+  color: #6c757d;
+}
+
+.policy-data-type-legend-item.regular-option span {
+  color: #6c757d;
 }
 </style>

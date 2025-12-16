@@ -243,6 +243,35 @@ def create_policy_version(request, policy_id):
                 orig_user_obj = Users.objects.filter(UserName=original_policy.Reviewer).first()
                 reviewer_id = orig_user_obj.UserId if orig_user_obj else None
             
+            # Get data_inventory for policy (extract BEFORE any processing, like TT does)
+            policy_data_inventory_raw = request.data.get('data_inventory')
+            print(f"DEBUG: Policy data_inventory RAW from request: {policy_data_inventory_raw}")
+            print(f"DEBUG: Policy data_inventory RAW type: {type(policy_data_inventory_raw)}")
+            
+            policy_data_inventory = None
+            if policy_data_inventory_raw is not None:
+                if isinstance(policy_data_inventory_raw, str):
+                    try:
+                        import json
+                        policy_data_inventory = json.loads(policy_data_inventory_raw)
+                        print(f"DEBUG: Parsed JSON string to dict: {policy_data_inventory}")
+                    except json.JSONDecodeError:
+                        print(f"Warning: Invalid JSON in policy data_inventory, setting to None")
+                        policy_data_inventory = None
+                elif isinstance(policy_data_inventory_raw, dict):
+                    # If it's already a dict, use it as-is (even if empty)
+                    policy_data_inventory = policy_data_inventory_raw
+                    print(f"DEBUG: Using dict as-is: {policy_data_inventory}")
+                else:
+                    print(f"DEBUG: policy_data_inventory_raw is not str or dict, type: {type(policy_data_inventory_raw)}")
+            else:
+                print(f"DEBUG: policy_data_inventory_raw is None, falling back to original")
+                # Fall back to original policy's data_inventory if not provided
+                policy_data_inventory = original_policy.data_inventory if hasattr(original_policy, 'data_inventory') else None
+            
+            print(f"DEBUG: Policy data_inventory FINAL: {policy_data_inventory}")
+            print(f"DEBUG: Policy data_inventory FINAL type: {type(policy_data_inventory)}")
+            
             # Security: Sanitize policy data before database storage (Django ORM provides SQL injection protection)
             new_policy = Policy.objects.create(
                 FrameworkId=original_policy.FrameworkId,
@@ -267,8 +296,13 @@ def create_policy_version(request, policy_id):
                 PolicyType=escape_html(policy_data.get('PolicyType', original_policy.PolicyType)),
                 PolicyCategory=escape_html(policy_data.get('PolicyCategory', original_policy.PolicyCategory)),
                 PolicySubCategory=escape_html(policy_data.get('PolicySubCategory', original_policy.PolicySubCategory)),
-                Entities=policy_data.get('Entities', original_policy.Entities)
+                Entities=policy_data.get('Entities', original_policy.Entities),
+                data_inventory=policy_data_inventory  # Include data_inventory
             )
+            
+            # Refresh from database to verify what was saved
+            new_policy.refresh_from_db()
+            print(f"DEBUG: Policy created with ID: {new_policy.PolicyId}, data_inventory saved: {new_policy.data_inventory}")
             
             print(f"DEBUG: Created new policy with ID: {new_policy.PolicyId}")
             
@@ -355,6 +389,26 @@ def create_policy_version(request, policy_id):
                         continue
                 custom_data = subpolicy_customizations.get(original_subpolicy.SubPolicyId, {})
                 
+                # Get data_inventory for subpolicy (extract BEFORE any processing, like TT does)
+                subpolicy_data_inventory_raw = custom_data.get('data_inventory')
+                subpolicy_data_inventory = None
+                if subpolicy_data_inventory_raw is not None:
+                    if isinstance(subpolicy_data_inventory_raw, str):
+                        try:
+                            import json
+                            subpolicy_data_inventory = json.loads(subpolicy_data_inventory_raw)
+                        except json.JSONDecodeError:
+                            print(f"Warning: Invalid JSON in subpolicy data_inventory, setting to None")
+                            subpolicy_data_inventory = None
+                    elif isinstance(subpolicy_data_inventory_raw, dict):
+                        # If it's already a dict, use it as-is (even if empty)
+                        subpolicy_data_inventory = subpolicy_data_inventory_raw
+                # If subpolicy_data_inventory is still None, fall back to original subpolicy's data_inventory
+                if subpolicy_data_inventory is None:
+                    subpolicy_data_inventory = original_subpolicy.data_inventory if hasattr(original_subpolicy, 'data_inventory') else None
+                
+                print(f"DEBUG: SubPolicy {original_subpolicy.SubPolicyName} (ID: {original_subpolicy.SubPolicyId}) data_inventory: {subpolicy_data_inventory}")
+                
                 # Security: Sanitize subpolicy data before database storage
                 new_subpolicy_data = {
                     'PolicyId': new_policy,
@@ -365,10 +419,12 @@ def create_policy_version(request, policy_id):
                     'Description': escape_html(custom_data.get('Description', original_subpolicy.Description)),
                     'Status': 'Under Review',
                     'PermanentTemporary': custom_data.get('PermanentTemporary', original_subpolicy.PermanentTemporary),
-                    'Control': escape_html(custom_data.get('Control', original_subpolicy.Control))
+                    'Control': escape_html(custom_data.get('Control', original_subpolicy.Control)),
+                    'data_inventory': subpolicy_data_inventory  # Include data_inventory
                 }
                 
-                SubPolicy.objects.create(**new_subpolicy_data)
+                new_subpolicy = SubPolicy.objects.create(**new_subpolicy_data)
+                print(f"DEBUG: SubPolicy created with ID: {new_subpolicy.SubPolicyId}, data_inventory saved: {new_subpolicy.data_inventory}")
             
             # Add new subpolicies if any
             if 'new_subpolicies' in policy_data:
@@ -408,7 +464,27 @@ def create_policy_version(request, policy_id):
                     if 'Control' in subpolicy:
                         subpolicy['Control'] = escape_html(subpolicy['Control'])
                     
-                    SubPolicy.objects.create(**subpolicy)
+                    # Get data_inventory for new subpolicy (extract BEFORE any processing, like TT does)
+                    new_subpolicy_data_inventory_raw = new_subpolicy_data.get('data_inventory')
+                    new_subpolicy_data_inventory = None
+                    if new_subpolicy_data_inventory_raw is not None:
+                        if isinstance(new_subpolicy_data_inventory_raw, str):
+                            try:
+                                import json
+                                new_subpolicy_data_inventory = json.loads(new_subpolicy_data_inventory_raw)
+                            except json.JSONDecodeError:
+                                print(f"Warning: Invalid JSON in new subpolicy data_inventory, setting to None")
+                                new_subpolicy_data_inventory = None
+                        elif isinstance(new_subpolicy_data_inventory_raw, dict):
+                            # If it's already a dict, use it as-is (even if empty)
+                            new_subpolicy_data_inventory = new_subpolicy_data_inventory_raw
+                    
+                    subpolicy['data_inventory'] = new_subpolicy_data_inventory  # Include data_inventory
+                    
+                    print(f"DEBUG: New subpolicy data_inventory: {new_subpolicy_data_inventory}")
+                    
+                    new_subpolicy = SubPolicy.objects.create(**subpolicy)
+                    print(f"DEBUG: New SubPolicy created with ID: {new_subpolicy.SubPolicyId}, data_inventory saved: {new_subpolicy.data_inventory}")
             
             # Handle any new policies if specified (from policy.py functionality)
             created_policies = []

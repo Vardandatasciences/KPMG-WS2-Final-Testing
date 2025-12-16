@@ -1023,6 +1023,10 @@ def create_compliance(request):
             user_id = None
     print(f"Resolved creator user_id: {user_id}")
     
+    # Get data_inventory from request.data BEFORE validation (validator might filter it out)
+    data_inventory_raw = request.data.get('data_inventory')
+    print(f"DEBUG: data_inventory from request.data (before validation): {data_inventory_raw}, type: {type(data_inventory_raw)}")
+    
     try:
         # Validate input data using centralized validator
         validated_data = ComplianceInputValidator.validate_compliance_data(request.data)
@@ -1079,6 +1083,36 @@ def create_compliance(request):
         framework_id = subpolicy.PolicyId.FrameworkId_id
         #print(f"DEBUG: Using FrameworkId_id: {framework_id} for compliance creation")
         
+        # Handle data_inventory - optional JSON field mapping field labels to data types
+        # Use the data_inventory_raw we captured before validation
+        data_inventory = None
+        if data_inventory_raw:
+            print(f"DEBUG: Processing data_inventory_raw: {data_inventory_raw}, type: {type(data_inventory_raw)}")
+            if data_inventory_raw is None or data_inventory_raw == '':
+                data_inventory = None
+            elif isinstance(data_inventory_raw, str):
+                try:
+                    import json
+                    data_inventory = json.loads(data_inventory_raw)
+                    print(f"DEBUG: Parsed data_inventory from string: {data_inventory}")
+                except json.JSONDecodeError:
+                    print(f"Warning: Invalid JSON in data_inventory, setting to None: {data_inventory_raw}")
+                    data_inventory = None
+            elif isinstance(data_inventory_raw, dict):
+                # Clean the data_inventory to ensure all values are valid
+                cleaned_inventory = {}
+                valid_types = ['personal', 'confidential', 'regular']
+                for key, value in data_inventory_raw.items():
+                    if value in valid_types:
+                        cleaned_inventory[key] = value
+                data_inventory = cleaned_inventory if cleaned_inventory else None
+                print(f"DEBUG: Cleaned data_inventory: {data_inventory}")
+            else:
+                print(f"Warning: Invalid type for data_inventory, setting to None: {type(data_inventory_raw)}")
+                data_inventory = None
+        else:
+            print(f"DEBUG: data_inventory not found or is empty")
+        
         new_compliance = Compliance.objects.create(
             SubPolicy=subpolicy,
             ComplianceTitle=validated_data['ComplianceTitle'],
@@ -1108,8 +1142,10 @@ def create_compliance(request):
             Status='Under Review',
             Identifier=identifier,
             Applicability=validated_data['Applicability'],
-            FrameworkId_id=framework_id  # Use _id suffix to assign foreign key directly by ID
+            FrameworkId_id=framework_id,  # Use _id suffix to assign foreign key directly by ID
+            data_inventory=data_inventory  # Store data inventory mapping
         )
+        print(f"DEBUG: Created compliance with data_inventory: {new_compliance.data_inventory}")
         
         # Prepare extracted data for policy approval
         extracted_data = {
@@ -6627,6 +6663,31 @@ def edit_compliance(request, compliance_id):
         
         #print(f"DEBUG: Using FrameworkId_id: {framework_id} for compliance editing")
         
+        # Handle data_inventory - optional JSON field mapping field labels to data types
+        data_inventory = None
+        if 'data_inventory' in request.data and request.data.get('data_inventory'):
+            data_inventory_raw = request.data.get('data_inventory')
+            if data_inventory_raw is None or data_inventory_raw == '':
+                data_inventory = None
+            elif isinstance(data_inventory_raw, str):
+                try:
+                    import json
+                    data_inventory = json.loads(data_inventory_raw)
+                except json.JSONDecodeError:
+                    print(f"Warning: Invalid JSON in data_inventory, setting to None: {data_inventory_raw}")
+                    data_inventory = None
+            elif isinstance(data_inventory_raw, dict):
+                # Clean the data_inventory to ensure all values are valid
+                cleaned_inventory = {}
+                valid_types = ['personal', 'confidential', 'regular']
+                for key, value in data_inventory_raw.items():
+                    if value in valid_types:
+                        cleaned_inventory[key] = value
+                data_inventory = cleaned_inventory if cleaned_inventory else None
+            else:
+                print(f"Warning: Invalid type for data_inventory, setting to None: {type(data_inventory_raw)}")
+                data_inventory = None
+        
         # Create a new compliance instance with updated data
         new_compliance = Compliance.objects.create(
             SubPolicy=compliance.SubPolicy,  # Use the ForeignKey field directly
@@ -6658,7 +6719,8 @@ def edit_compliance(request, compliance_id):
             CreatedByName=current_user_name,  # Use the current user (latest creator) who is editing
             CreatedByDate=datetime.date.today(),
             Identifier=compliance.Identifier,  # Preserve the original identifier
-            FrameworkId_id=framework_id  # Use _id suffix to assign foreign key directly by ID
+            FrameworkId_id=framework_id,  # Use _id suffix to assign foreign key directly by ID
+            data_inventory=data_inventory  # Store data inventory mapping
         )
 
         # Create extracted data for PolicyApproval
@@ -6885,6 +6947,33 @@ def clone_compliance(request, compliance_id):
         # Store mitigation as JSON object (not string) for proper database storage
         print(f"Final mitigation object: {formatted_mitigation}")
         
+        # Handle data_inventory - optional JSON field mapping field labels to data types
+        data_inventory = None
+        if 'data_inventory' in data and data.get('data_inventory'):
+            data_inventory_raw = data.get('data_inventory')
+            if data_inventory_raw is None or data_inventory_raw == '':
+                data_inventory = None
+            elif isinstance(data_inventory_raw, str):
+                try:
+                    data_inventory = json.loads(data_inventory_raw)
+                except json.JSONDecodeError:
+                    print(f"Warning: Invalid JSON in data_inventory, setting to None: {data_inventory_raw}")
+                    data_inventory = None
+            elif isinstance(data_inventory_raw, dict):
+                # Clean the data_inventory to ensure all values are valid
+                cleaned_inventory = {}
+                valid_types = ['personal', 'confidential', 'regular']
+                for key, value in data_inventory_raw.items():
+                    if value in valid_types:
+                        cleaned_inventory[key] = value
+                data_inventory = cleaned_inventory if cleaned_inventory else None
+            else:
+                print(f"Warning: Invalid type for data_inventory, setting to None: {type(data_inventory_raw)}")
+                data_inventory = None
+        # If no data_inventory in request, try to copy from source compliance
+        if data_inventory is None and hasattr(source_compliance, 'data_inventory') and source_compliance.data_inventory:
+            data_inventory = source_compliance.data_inventory
+        
         # Create new compliance instance
         new_compliance = Compliance.objects.create(
             SubPolicy_id=target_subpolicy_id,  # Use target subpolicy ID from request
@@ -6913,7 +7002,8 @@ def clone_compliance(request, compliance_id):
             ComplianceVersion='1.0',
             MaturityLevel=data.get('MaturityLevel', source_compliance.MaturityLevel),
             CreatedByName=data.get('CreatedByName', source_compliance.CreatedByName),
-            Applicability=data.get('Applicability', source_compliance.Applicability)
+            Applicability=data.get('Applicability', source_compliance.Applicability),
+            data_inventory=data_inventory  # Store data inventory mapping
         )
         
         print(f"Created new compliance with ID: {new_compliance.ComplianceId}")

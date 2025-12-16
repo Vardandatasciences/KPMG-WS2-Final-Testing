@@ -123,6 +123,7 @@
                   <i v-else class="fas fa-sort-down"></i>
                 </span>
               </th>
+              <th>Additional Info</th>
             </tr>
           </thead>
           <tbody>
@@ -141,6 +142,12 @@
                 {{ truncateText(log.Description, 100) }}
               </td>
               <td>{{ log.IPAddress || 'N/A' }}</td>
+              <td class="additional-info-cell" :title="formatAdditionalInfo(log.AdditionalInfo)">
+                <span v-if="log.AdditionalInfo" class="info-badge" @click="showAdditionalInfo(log)">
+                  <i class="fas fa-info-circle"></i> View
+                </span>
+                <span v-else>N/A</span>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -420,6 +427,28 @@ const truncateText = (text, maxLength) => {
 const getLogLevelClass = (logLevel) => {
   if (!logLevel) return '';
   return `log-level-${logLevel.toLowerCase()}`;
+};
+
+const formatAdditionalInfo = (additionalInfo) => {
+  if (!additionalInfo) return 'N/A';
+  if (typeof additionalInfo === 'string') {
+    try {
+      additionalInfo = JSON.parse(additionalInfo);
+    } catch (e) {
+      return additionalInfo;
+    }
+  }
+  if (typeof additionalInfo === 'object') {
+    return JSON.stringify(additionalInfo, null, 2);
+  }
+  return String(additionalInfo);
+};
+
+const showAdditionalInfo = (log) => {
+  const info = formatAdditionalInfo(log.AdditionalInfo);
+  if (info && info !== 'N/A') {
+    alert(`Additional Info for Log ${log.LogId}:\n\n${info}`);
+  }
 };
 
 // Sort by column

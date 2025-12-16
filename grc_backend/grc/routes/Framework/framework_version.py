@@ -256,6 +256,35 @@ def create_framework_version(request, framework_id):
                     print(f"WARNING: Falling back to original framework reviewer: {reviewer_name}")
             
             print(f"DEBUG: Final reviewer_name that will be used: '{reviewer_name}'")
+            
+            # Get data_inventory from request.data (extract BEFORE any processing, like TT does)
+            framework_data_inventory_raw = request.data.get('data_inventory')
+            print(f"DEBUG: Framework data_inventory RAW from request: {framework_data_inventory_raw}")
+            print(f"DEBUG: Framework data_inventory RAW type: {type(framework_data_inventory_raw)}")
+            
+            framework_data_inventory = None
+            if framework_data_inventory_raw is not None:
+                if isinstance(framework_data_inventory_raw, str):
+                    try:
+                        import json
+                        framework_data_inventory = json.loads(framework_data_inventory_raw)
+                        print(f"DEBUG: Parsed JSON string to dict: {framework_data_inventory}")
+                    except json.JSONDecodeError:
+                        print(f"Warning: Invalid JSON in framework data_inventory, setting to None")
+                        framework_data_inventory = None
+                elif isinstance(framework_data_inventory_raw, dict):
+                    # If it's already a dict, use it as-is (even if empty)
+                    framework_data_inventory = framework_data_inventory_raw
+                    print(f"DEBUG: Using dict as-is: {framework_data_inventory}")
+                else:
+                    print(f"DEBUG: framework_data_inventory_raw is not str or dict, type: {type(framework_data_inventory_raw)}")
+            else:
+                print(f"DEBUG: framework_data_inventory_raw is None, falling back to original")
+                # Fall back to original framework's data_inventory if not provided
+                framework_data_inventory = original_framework.data_inventory if hasattr(original_framework, 'data_inventory') else None
+            
+            print(f"DEBUG: Framework data_inventory FINAL: {framework_data_inventory}")
+            print(f"DEBUG: Framework data_inventory FINAL type: {type(framework_data_inventory)}")
                     
             # Security: Sanitize framework data before database storage (Django ORM provides SQL injection protection)
             framework_reviewer_final = reviewer_name or framework_data.get('Reviewer', original_framework.Reviewer)
@@ -275,8 +304,13 @@ def create_framework_version(request, framework_id):
                 Status='Under Review',  # Always start as Under Review
                 ActiveInactive='Inactive',  # Default to Inactive for new versions
                 CurrentVersion=new_version_float,  # Set the CurrentVersion to the new version number
-                InternalExternal=framework_data.get('InternalExternal', original_framework.InternalExternal)
+                InternalExternal=framework_data.get('InternalExternal', original_framework.InternalExternal),
+                data_inventory=framework_data_inventory  # Include data_inventory
             )
+            
+            # Refresh from database to verify what was saved
+            new_framework.refresh_from_db()
+            print(f"DEBUG: Framework created with ID: {new_framework.FrameworkId}, data_inventory saved: {new_framework.data_inventory}")
             
             print(f"DEBUG: Framework created successfully with ID: {new_framework.FrameworkId}, Reviewer: '{new_framework.Reviewer}'")
             
@@ -363,6 +397,26 @@ def create_framework_version(request, framework_id):
                             policy_reviewer = policy_data.get('ReviewerName') or reviewer_name or policy_data.get('Reviewer', original_policy.Reviewer)
                             print(f"DEBUG: Final policy_reviewer selected: '{policy_reviewer}'")
                             
+                            # Get data_inventory for policy (extract BEFORE any processing, like TT does)
+                            policy_data_inventory_raw = policy_data.get('data_inventory')
+                            policy_data_inventory = None
+                            if policy_data_inventory_raw is not None:
+                                if isinstance(policy_data_inventory_raw, str):
+                                    try:
+                                        import json
+                                        policy_data_inventory = json.loads(policy_data_inventory_raw)
+                                    except json.JSONDecodeError:
+                                        print(f"Warning: Invalid JSON in policy data_inventory, setting to None")
+                                        policy_data_inventory = None
+                                elif isinstance(policy_data_inventory_raw, dict):
+                                    # If it's already a dict, use it as-is (even if empty)
+                                    policy_data_inventory = policy_data_inventory_raw
+                            # If policy_data_inventory is still None, fall back to original policy's data_inventory
+                            if policy_data_inventory is None:
+                                policy_data_inventory = original_policy.data_inventory if hasattr(original_policy, 'data_inventory') else None
+                            
+                            print(f"DEBUG: Policy {original_policy.PolicyName} (ID: {original_policy.PolicyId}) data_inventory: {policy_data_inventory}")
+                            
                             new_policy = Policy.objects.create(
                                 FrameworkId=new_framework,
                                 PolicyName=escape_html(policy_data.get('PolicyName', original_policy.PolicyName)),
@@ -386,8 +440,11 @@ def create_framework_version(request, framework_id):
                                 PolicyType=escape_html(policy_data.get('PolicyType', original_policy.PolicyType)),
                                 PolicyCategory=escape_html(policy_data.get('PolicyCategory', original_policy.PolicyCategory)),
                                 PolicySubCategory=escape_html(policy_data.get('PolicySubCategory', original_policy.PolicySubCategory)),
-                                Entities=policy_data.get('Entities', original_policy.Entities)
+                                Entities=policy_data.get('Entities', original_policy.Entities),
+                                data_inventory=policy_data_inventory  # Include data_inventory
                             )
+                            
+                            print(f"DEBUG: Policy created with ID: {new_policy.PolicyId}, data_inventory saved: {new_policy.data_inventory}")
                             
                             # Store mapping for approval data update
                             policy_id_mapping[original_policy_id] = new_policy.PolicyId
@@ -418,6 +475,27 @@ def create_framework_version(request, framework_id):
                                             # Security: Sanitize subpolicy data before database storage
                                             safe_subpolicy_name = escape_html(subpolicy_data.get('SubPolicyName', original_subpolicy.SubPolicyName))
                                             print(f"Creating existing subpolicy {safe_subpolicy_name} for policy {new_policy.PolicyName}")
+                                            
+                                            # Get data_inventory for subpolicy (extract BEFORE any processing, like TT does)
+                                            subpolicy_data_inventory_raw = subpolicy_data.get('data_inventory')
+                                            subpolicy_data_inventory = None
+                                            if subpolicy_data_inventory_raw is not None:
+                                                if isinstance(subpolicy_data_inventory_raw, str):
+                                                    try:
+                                                        import json
+                                                        subpolicy_data_inventory = json.loads(subpolicy_data_inventory_raw)
+                                                    except json.JSONDecodeError:
+                                                        print(f"Warning: Invalid JSON in subpolicy data_inventory, setting to None")
+                                                        subpolicy_data_inventory = None
+                                                elif isinstance(subpolicy_data_inventory_raw, dict):
+                                                    # If it's already a dict, use it as-is (even if empty)
+                                                    subpolicy_data_inventory = subpolicy_data_inventory_raw
+                                            # If subpolicy_data_inventory is still None, fall back to original subpolicy's data_inventory
+                                            if subpolicy_data_inventory is None:
+                                                subpolicy_data_inventory = original_subpolicy.data_inventory if hasattr(original_subpolicy, 'data_inventory') else None
+                                            
+                                            print(f"DEBUG: SubPolicy {original_subpolicy.SubPolicyName} (ID: {original_subpolicy.SubPolicyId}) data_inventory: {subpolicy_data_inventory}")
+                                            
                                             new_subpolicy = SubPolicy.objects.create(
                                                 PolicyId=new_policy,
                                                 SubPolicyName=escape_html(subpolicy_data.get('SubPolicyName', original_subpolicy.SubPolicyName)),
@@ -427,8 +505,11 @@ def create_framework_version(request, framework_id):
                                                 Description=escape_html(subpolicy_data.get('Description', original_subpolicy.Description)),
                                                 Status='Under Review',
                                                 PermanentTemporary=subpolicy_data.get('PermanentTemporary', ''),
-                                                Control=escape_html(subpolicy_data.get('Control', original_subpolicy.Control))
+                                                Control=escape_html(subpolicy_data.get('Control', original_subpolicy.Control)),
+                                                data_inventory=subpolicy_data_inventory  # Include data_inventory
                                             )
+                                            
+                                            print(f"DEBUG: SubPolicy created with ID: {new_subpolicy.SubPolicyId}, data_inventory saved: {new_subpolicy.data_inventory}")
                                             
                                             # Store subpolicy mapping for approval data update
                                             subpolicy_id_mapping[original_subpolicy_id] = new_subpolicy.SubPolicyId
@@ -438,6 +519,24 @@ def create_framework_version(request, framework_id):
                                     else:
                                         # Security: Sanitize new subpolicy data before database storage
                                         print(f"Creating new subpolicy (old format) for existing policy {new_policy.PolicyName}")
+                                        
+                                        # Get data_inventory for new subpolicy (extract BEFORE any processing, like TT does)
+                                        new_subpolicy_data_inventory_raw = subpolicy_data.get('data_inventory')
+                                        new_subpolicy_data_inventory = None
+                                        if new_subpolicy_data_inventory_raw is not None:
+                                            if isinstance(new_subpolicy_data_inventory_raw, str):
+                                                try:
+                                                    import json
+                                                    new_subpolicy_data_inventory = json.loads(new_subpolicy_data_inventory_raw)
+                                                except json.JSONDecodeError:
+                                                    print(f"Warning: Invalid JSON in new subpolicy data_inventory, setting to None")
+                                                    new_subpolicy_data_inventory = None
+                                            elif isinstance(new_subpolicy_data_inventory_raw, dict):
+                                                # If it's already a dict, use it as-is (even if empty)
+                                                new_subpolicy_data_inventory = new_subpolicy_data_inventory_raw
+                                        
+                                        print(f"DEBUG: New subpolicy (old format) data_inventory: {new_subpolicy_data_inventory}")
+                                        
                                         SubPolicy.objects.create(
                                             PolicyId=new_policy,
                                             SubPolicyName=escape_html(subpolicy_data.get('SubPolicyName', '')),
@@ -447,7 +546,8 @@ def create_framework_version(request, framework_id):
                                             Description=escape_html(subpolicy_data.get('Description', '')),
                                             Status='Under Review',
                                             PermanentTemporary=subpolicy_data.get('PermanentTemporary', ''),
-                                            Control=escape_html(subpolicy_data.get('Control', ''))
+                                            Control=escape_html(subpolicy_data.get('Control', '')),
+                                            data_inventory=new_subpolicy_data_inventory  # Include data_inventory
                                         )
                             
                             # Process new subpolicies for existing policies
@@ -456,6 +556,24 @@ def create_framework_version(request, framework_id):
                                     # Security: Escape subpolicy name for safe logging and sanitize data
                                     safe_subpolicy_name = escape_html(new_subpolicy_data.get('SubPolicyName', ''))
                                     print(f"Creating new subpolicy {safe_subpolicy_name} for existing policy {new_policy.PolicyName}")
+                                    
+                                    # Get data_inventory for new subpolicy (extract BEFORE any processing, like TT does)
+                                    new_subpolicy_data_inventory_raw = new_subpolicy_data.get('data_inventory')
+                                    new_subpolicy_data_inventory = None
+                                    if new_subpolicy_data_inventory_raw is not None:
+                                        if isinstance(new_subpolicy_data_inventory_raw, str):
+                                            try:
+                                                import json
+                                                new_subpolicy_data_inventory = json.loads(new_subpolicy_data_inventory_raw)
+                                            except json.JSONDecodeError:
+                                                print(f"Warning: Invalid JSON in new subpolicy data_inventory, setting to None")
+                                                new_subpolicy_data_inventory = None
+                                        elif isinstance(new_subpolicy_data_inventory_raw, dict):
+                                            # If it's already a dict, use it as-is (even if empty)
+                                            new_subpolicy_data_inventory = new_subpolicy_data_inventory_raw
+                                    
+                                    print(f"DEBUG: New subpolicy data_inventory: {new_subpolicy_data_inventory}")
+                                    
                                     SubPolicy.objects.create(
                                         PolicyId=new_policy,
                                         SubPolicyName=escape_html(new_subpolicy_data.get('SubPolicyName', '')),
@@ -465,7 +583,8 @@ def create_framework_version(request, framework_id):
                                         Description=escape_html(new_subpolicy_data.get('Description', '')),
                                         Status='Under Review',
                                         PermanentTemporary=new_subpolicy_data.get('PermanentTemporary', ''),
-                                        Control=escape_html(new_subpolicy_data.get('Control', ''))
+                                        Control=escape_html(new_subpolicy_data.get('Control', '')),
+                                        data_inventory=new_subpolicy_data_inventory  # Include data_inventory
                                         )
                                 
                         except Policy.DoesNotExist:
@@ -503,6 +622,23 @@ def create_framework_version(request, framework_id):
                     new_policy_reviewer = new_policy_data.get('ReviewerName') or reviewer_name or ''
                     print(f"DEBUG: Final new_policy_reviewer selected: '{new_policy_reviewer}'")
                     
+                    # Get data_inventory for new policy (extract BEFORE any processing, like TT does)
+                    new_policy_data_inventory_raw = new_policy_data.get('data_inventory')
+                    new_policy_data_inventory = None
+                    if new_policy_data_inventory_raw is not None:
+                        if isinstance(new_policy_data_inventory_raw, str):
+                            try:
+                                import json
+                                new_policy_data_inventory = json.loads(new_policy_data_inventory_raw)
+                            except json.JSONDecodeError:
+                                print(f"Warning: Invalid JSON in new policy data_inventory, setting to None")
+                                new_policy_data_inventory = None
+                        elif isinstance(new_policy_data_inventory_raw, dict):
+                            # If it's already a dict, use it as-is (even if empty)
+                            new_policy_data_inventory = new_policy_data_inventory_raw
+                    
+                    print(f"DEBUG: New policy data_inventory: {new_policy_data_inventory}")
+                    
                     new_policy = Policy.objects.create(
                         FrameworkId=new_framework,
                         PolicyName=escape_html(new_policy_data.get('PolicyName', '')),
@@ -526,8 +662,11 @@ def create_framework_version(request, framework_id):
                         PolicyType=escape_html(new_policy_data.get('PolicyType', '')),
                         PolicyCategory=escape_html(new_policy_data.get('PolicyCategory', '')),
                         PolicySubCategory=escape_html(new_policy_data.get('PolicySubCategory', '')),
-                        Entities=new_policy_data.get('Entities', [])
+                        Entities=new_policy_data.get('Entities', []),
+                        data_inventory=new_policy_data_inventory  # Include data_inventory
                     )
+                    
+                    print(f"DEBUG: New policy created with ID: {new_policy.PolicyId}, data_inventory saved: {new_policy.data_inventory}")
                     
                     # Create a policy version entry for new policy
                     PolicyVersion.objects.create(
@@ -547,6 +686,24 @@ def create_framework_version(request, framework_id):
                             # Security: Escape subpolicy name for safe logging and sanitize data
                             safe_new_subpolicy_name = escape_html(new_subpolicy_data.get('SubPolicyName', 'Unknown'))
                             print(f"DEBUG: Creating subpolicy {safe_new_subpolicy_name} for new policy")
+                            
+                            # Get data_inventory for new subpolicy (extract BEFORE any processing, like TT does)
+                            new_subpolicy_data_inventory_raw = new_subpolicy_data.get('data_inventory')
+                            new_subpolicy_data_inventory = None
+                            if new_subpolicy_data_inventory_raw is not None:
+                                if isinstance(new_subpolicy_data_inventory_raw, str):
+                                    try:
+                                        import json
+                                        new_subpolicy_data_inventory = json.loads(new_subpolicy_data_inventory_raw)
+                                    except json.JSONDecodeError:
+                                        print(f"Warning: Invalid JSON in new subpolicy data_inventory, setting to None")
+                                        new_subpolicy_data_inventory = None
+                                elif isinstance(new_subpolicy_data_inventory_raw, dict):
+                                    # If it's already a dict, use it as-is (even if empty)
+                                    new_subpolicy_data_inventory = new_subpolicy_data_inventory_raw
+                            
+                            print(f"DEBUG: New subpolicy data_inventory: {new_subpolicy_data_inventory}")
+                            
                             SubPolicy.objects.create(
                                 PolicyId=new_policy,
                                 SubPolicyName=escape_html(new_subpolicy_data.get('SubPolicyName', '')),
@@ -556,7 +713,8 @@ def create_framework_version(request, framework_id):
                                 Description=escape_html(new_subpolicy_data.get('Description', '')),
                                 Status='Under Review',
                                 PermanentTemporary=new_subpolicy_data.get('PermanentTemporary', ''),
-                                Control=escape_html(new_subpolicy_data.get('Control', ''))
+                                Control=escape_html(new_subpolicy_data.get('Control', '')),
+                                data_inventory=new_subpolicy_data_inventory  # Include data_inventory
                             )
             
             # Create framework approval entry with updated policy IDs

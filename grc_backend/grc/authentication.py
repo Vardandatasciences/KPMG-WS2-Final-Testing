@@ -1931,11 +1931,36 @@ def google_oauth_callback(request):
         logger.info(f"Google OAuth callback - email: {email}, google_id: {google_id}")
         
         # Check if user exists by email
+        # Use filter().first() to handle cases where multiple users have the same email
         try:
-            user = Users.objects.get(Email=email)
-            logger.info(f"Existing user found: {user.UserName} (ID: {user.UserId})")
-        except Users.DoesNotExist:
-            # Create new user
+            users_with_email = Users.objects.filter(Email=email)
+            user_count = users_with_email.count()
+            
+            if user_count > 1:
+                logger.warning(f"⚠️ Multiple users found with email {email} (count: {user_count}). Using the first active user.")
+                # Try to get an active user first
+                user = users_with_email.filter(IsActive='Y').first()
+                if not user:
+                    # If no active user, get the first one
+                    user = users_with_email.first()
+            elif user_count == 1:
+                user = users_with_email.first()
+            else:
+                user = None
+            
+            if user:
+                logger.info(f"Existing user found: {user.UserName} (ID: {user.UserId})")
+            else:
+                # No user found, will create new one
+                logger.info(f"No existing user found with email {email}. Creating new user.")
+        except Exception as e:
+            logger.error(f"Error checking for existing user: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            user = None
+        
+        if not user:
+            # User doesn't exist, create new user
             # Generate username from email
             username = email.split('@')[0]
             # Ensure username is unique

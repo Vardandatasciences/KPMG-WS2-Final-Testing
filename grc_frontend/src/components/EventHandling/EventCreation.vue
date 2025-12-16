@@ -42,6 +42,26 @@
       </div>
     </div>
 
+    <!-- Data Type Legend (Display Only) -->
+    <div class="event-data-type-legend">
+      <div class="event-data-type-legend-container">
+        <div class="event-data-type-options">
+          <div class="event-data-type-legend-item personal-option">
+            <i class="fas fa-user"></i>
+            <span>Personal</span>
+          </div>
+          <div class="event-data-type-legend-item confidential-option">
+            <i class="fas fa-shield-alt"></i>
+            <span>Confidential</span>
+          </div>
+          <div class="event-data-type-legend-item regular-option">
+            <i class="fas fa-file-alt"></i>
+            <span>Regular</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Form Content -->
         <!-- Integration Source Banner -->
         <div v-if="formData.source" class="event-creation-integration-banner">
@@ -75,6 +95,35 @@
               <label class="event-creation-form-label">
                 Framework *
                 <span class="event-creation-form-hint">(Select compliance framework)</span>
+                <!-- Data Type Circle Toggle -->
+                <div class="event-data-type-circle-toggle-wrapper">
+                  <div class="event-data-type-circle-toggle">
+                    <div 
+                      class="event-circle-option personal-circle" 
+                      :class="{ active: fieldDataTypes?.framework === 'personal' }"
+                      @click="setDataType('framework', 'personal')"
+                      title="Personal Data"
+                    >
+                      <div class="event-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="event-circle-option confidential-circle" 
+                      :class="{ active: fieldDataTypes?.framework === 'confidential' }"
+                      @click="setDataType('framework', 'confidential')"
+                      title="Confidential Data"
+                    >
+                      <div class="event-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="event-circle-option regular-circle" 
+                      :class="{ active: fieldDataTypes?.framework === 'regular' }"
+                      @click="setDataType('framework', 'regular')"
+                      title="Regular Data"
+                    >
+                      <div class="event-circle-inner"></div>
+                    </div>
+                  </div>
+                </div>
               </label>
               <select
                 v-model="formData.framework"
@@ -102,6 +151,35 @@
               <label class="event-creation-form-label">
                 Module
                 <span class="event-creation-form-hint">(Select relevant module)</span>
+                <!-- Data Type Circle Toggle -->
+                <div class="event-data-type-circle-toggle-wrapper">
+                  <div class="event-data-type-circle-toggle">
+                    <div 
+                      class="event-circle-option personal-circle" 
+                      :class="{ active: fieldDataTypes?.module === 'personal' }"
+                      @click="setDataType('module', 'personal')"
+                      title="Personal Data"
+                    >
+                      <div class="event-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="event-circle-option confidential-circle" 
+                      :class="{ active: fieldDataTypes?.module === 'confidential' }"
+                      @click="setDataType('module', 'confidential')"
+                      title="Confidential Data"
+                    >
+                      <div class="event-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="event-circle-option regular-circle" 
+                      :class="{ active: fieldDataTypes?.module === 'regular' }"
+                      @click="setDataType('module', 'regular')"
+                      title="Regular Data"
+                    >
+                      <div class="event-circle-inner"></div>
+                    </div>
+                  </div>
+                </div>
               </label>
               <select
                 v-model="formData.module"
@@ -157,6 +235,35 @@
             <label class="event-creation-form-label">
               Event Type *
               <span class="event-creation-form-hint">(Event classification)</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="event-data-type-circle-toggle-wrapper">
+                <div class="event-data-type-circle-toggle">
+                  <div 
+                    class="event-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes?.eventType === 'personal' }"
+                    @click="setDataType('eventType', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="event-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="event-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes?.eventType === 'confidential' }"
+                    @click="setDataType('eventType', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="event-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="event-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes?.eventType === 'regular' }"
+                    @click="setDataType('eventType', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="event-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
             </label>
             <select
               v-model="formData.eventTypeId"
@@ -311,6 +418,35 @@
                 Event Title
                 <span class="event-creation-form-required">*</span>
                 <span class="event-creation-form-hint">(Descriptive title for the event)</span>
+                <!-- Data Type Circle Toggle -->
+                <div class="event-data-type-circle-toggle-wrapper">
+                  <div class="event-data-type-circle-toggle">
+                    <div 
+                      class="event-circle-option personal-circle" 
+                      :class="{ active: fieldDataTypes?.title === 'personal' }"
+                      @click="setDataType('title', 'personal')"
+                      title="Personal Data"
+                    >
+                      <div class="event-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="event-circle-option confidential-circle" 
+                      :class="{ active: fieldDataTypes?.title === 'confidential' }"
+                      @click="setDataType('title', 'confidential')"
+                      title="Confidential Data"
+                    >
+                      <div class="event-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="event-circle-option regular-circle" 
+                      :class="{ active: fieldDataTypes?.title === 'regular' }"
+                      @click="setDataType('title', 'regular')"
+                      title="Regular Data"
+                    >
+                      <div class="event-circle-inner"></div>
+                    </div>
+                  </div>
+                </div>
               </label>
               <input
                 type="text"
@@ -366,6 +502,35 @@
                 Reviewer
                 <span class="event-creation-form-required">*</span>
                 <span class="event-creation-form-hint">(Approval reviewer)</span>
+                <!-- Data Type Circle Toggle -->
+                <div class="event-data-type-circle-toggle-wrapper">
+                  <div class="event-data-type-circle-toggle">
+                    <div 
+                      class="event-circle-option personal-circle" 
+                      :class="{ active: fieldDataTypes?.reviewer === 'personal' }"
+                      @click="setDataType('reviewer', 'personal')"
+                      title="Personal Data"
+                    >
+                      <div class="event-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="event-circle-option confidential-circle" 
+                      :class="{ active: fieldDataTypes?.reviewer === 'confidential' }"
+                      @click="setDataType('reviewer', 'confidential')"
+                      title="Confidential Data"
+                    >
+                      <div class="event-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="event-circle-option regular-circle" 
+                      :class="{ active: fieldDataTypes?.reviewer === 'regular' }"
+                      @click="setDataType('reviewer', 'regular')"
+                      title="Regular Data"
+                    >
+                      <div class="event-circle-inner"></div>
+                    </div>
+                  </div>
+                </div>
               </label>
               <select
                 v-model="formData.reviewer"
@@ -397,6 +562,35 @@
               <label class="event-creation-form-label">
                 Description
                 <span class="event-creation-form-hint">(Detailed event description)</span>
+                <!-- Data Type Circle Toggle -->
+                <div class="event-data-type-circle-toggle-wrapper">
+                  <div class="event-data-type-circle-toggle">
+                    <div 
+                      class="event-circle-option personal-circle" 
+                      :class="{ active: fieldDataTypes?.description === 'personal' }"
+                      @click="setDataType('description', 'personal')"
+                      title="Personal Data"
+                    >
+                      <div class="event-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="event-circle-option confidential-circle" 
+                      :class="{ active: fieldDataTypes?.description === 'confidential' }"
+                      @click="setDataType('description', 'confidential')"
+                      title="Confidential Data"
+                    >
+                      <div class="event-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="event-circle-option regular-circle" 
+                      :class="{ active: fieldDataTypes?.description === 'regular' }"
+                      @click="setDataType('description', 'regular')"
+                      title="Regular Data"
+                    >
+                      <div class="event-circle-inner"></div>
+                    </div>
+                  </div>
+                </div>
               </label>
               <textarea
                 v-model="formData.description"
@@ -1689,6 +1883,22 @@ export default {
       dynamicFields: {}
     })
     
+    // Store data type per field
+    const fieldDataTypes = ref({
+      framework: 'regular',
+      module: 'regular',
+      linkedRecord: 'regular',
+      eventType: 'regular',
+      title: 'regular',
+      description: 'regular',
+      owner: 'regular',
+      reviewer: 'regular',
+      recurrence: 'regular',
+      frequency: 'regular',
+      startDate: 'regular',
+      endDate: 'regular'
+    })
+    
     // Computed property for filtered events
     const filteredEvents = computed(() => {
       let events = []
@@ -2142,6 +2352,29 @@ export default {
         const evidenceJsonString = JSON.stringify(evidenceData)
         console.log('DEBUG: Evidence JSON string:', evidenceJsonString)
 
+        // Create data inventory JSON mapping field labels to data types
+        const fieldLabelMap = {
+          framework: 'Framework',
+          module: 'Module',
+          linkedRecord: 'Specific Record',
+          eventType: 'Event Type',
+          title: 'Event Title',
+          description: 'Description',
+          owner: 'Owner',
+          reviewer: 'Reviewer',
+          recurrence: 'Recurrence Type',
+          frequency: 'Frequency',
+          startDate: 'Start Date',
+          endDate: 'End Date'
+        }
+
+        // Transform fieldDataTypes into data_inventory JSON with labels
+        const dataInventory = {}
+        for (const [fieldName, dataType] of Object.entries(fieldDataTypes.value)) {
+          const fieldLabel = fieldLabelMap[fieldName] || fieldName
+          dataInventory[fieldLabel] = dataType
+        }
+
         const eventData = {
           title: formData.value.title,
           description: formData.value.description,
@@ -2167,6 +2400,7 @@ export default {
           is_template: formData.value.isTemplate,  // Add template selection
           evidence: evidenceJsonString,  // Include evidence files as JSON string
           dynamic_fields: formData.value.dynamicFields,  // Include dynamic fields
+          data_inventory: dataInventory,  // Include data inventory JSON with field labels
           additional_records: formData.value.additionalRecords.map(record => ({
             framework_id: record.frameworkId,
             framework_name: record.framework,
@@ -2317,6 +2551,14 @@ export default {
 
     const generateEventId = () => {
       return `EVT-${new Date().getFullYear()}-${Math.floor(Math.random() * 9999).toString().padStart(4, '0')}`
+    }
+
+    // Set data type for a field
+    const setDataType = (fieldName, type) => {
+      if (Object.prototype.hasOwnProperty.call(fieldDataTypes.value, fieldName)) {
+        fieldDataTypes.value[fieldName] = type
+        console.log(`Data type selected for ${fieldName}:`, type)
+      }
     }
 
     const getEventTypeName = () => {
@@ -3574,6 +3816,8 @@ export default {
       generateEventId,
       getEventTypeName,
       getSubEventTypeName,
+      setDataType,
+      fieldDataTypes,
       fetchFrameworks,
       fetchModules,
       fetchEventTypes,
@@ -7141,5 +7385,180 @@ export default {
   .event-summary-title {
     font-size: 1.25rem;
   }
+}
+
+/* Data Type Legend Styles (Display Only) */
+.event-data-type-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-bottom: 20px;
+  margin-top: -10px;
+  padding: 0 16px;
+}
+
+.event-data-type-legend-container {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e5e7eb;
+  padding: 6px 10px;
+  min-width: 200px;
+  max-width: 240px;
+}
+
+.event-data-type-options {
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+}
+
+.event-data-type-legend-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 4px;
+  border-radius: 6px;
+  background-color: #f9fafb;
+}
+
+.event-data-type-legend-item i {
+  font-size: 0.9rem;
+  margin-bottom: 2px;
+}
+
+.event-data-type-legend-item span {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+/* Personal Data Type - Blue */
+.event-data-type-legend-item.personal-option i {
+  color: #4f7cff;
+}
+
+.event-data-type-legend-item.personal-option span {
+  color: #4f7cff;
+}
+
+/* Confidential Data Type - Red */
+.event-data-type-legend-item.confidential-option i {
+  color: #e63946;
+}
+
+.event-data-type-legend-item.confidential-option span {
+  color: #e63946;
+}
+
+/* Regular Data Type - Gray */
+.event-data-type-legend-item.regular-option i {
+  color: #6c757d;
+}
+
+.event-data-type-legend-item.regular-option span {
+  color: #6c757d;
+}
+
+/* Data Type Circle Toggle Styles */
+.event-data-type-circle-toggle-wrapper {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 12px;
+  padding: 4px 8px;
+  background-color: white;
+  border: 1px solid #d1d5db;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.event-data-type-circle-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.event-circle-option {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid #d1d5db;
+  background-color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.event-circle-option:hover {
+  transform: scale(1.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12);
+}
+
+.event-circle-inner {
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  background-color: transparent;
+}
+
+.event-circle-option.active .event-circle-inner {
+  width: 9px;
+  height: 9px;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Personal Circle - Blue */
+.event-circle-option.personal-circle {
+  border-color: #4f7cff;
+}
+
+.event-circle-option.personal-circle.active {
+  border-color: #4f7cff;
+  background-color: rgba(79, 124, 255, 0.1);
+  box-shadow: 0 0 6px rgba(79, 124, 255, 0.2);
+}
+
+.event-circle-option.personal-circle.active .event-circle-inner {
+  background-color: #4f7cff;
+  box-shadow: 0 0 4px rgba(79, 124, 255, 0.35);
+}
+
+/* Confidential Circle - Red */
+.event-circle-option.confidential-circle {
+  border-color: #e63946;
+}
+
+.event-circle-option.confidential-circle.active {
+  border-color: #e63946;
+  background-color: rgba(230, 57, 70, 0.1);
+  box-shadow: 0 0 6px rgba(230, 57, 70, 0.2);
+}
+
+.event-circle-option.confidential-circle.active .event-circle-inner {
+  background-color: #e63946;
+  box-shadow: 0 0 4px rgba(230, 57, 70, 0.35);
+}
+
+/* Regular Circle - Grey */
+.event-circle-option.regular-circle {
+  border-color: #6c757d;
+}
+
+.event-circle-option.regular-circle.active {
+  border-color: #6c757d;
+  background-color: rgba(108, 117, 125, 0.1);
+  box-shadow: 0 0 6px rgba(108, 117, 125, 0.2);
+}
+
+.event-circle-option.regular-circle.active .event-circle-inner {
+  background-color: #6c757d;
+  box-shadow: 0 0 4px rgba(108, 117, 125, 0.35);
 }
 </style>

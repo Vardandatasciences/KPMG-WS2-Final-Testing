@@ -718,9 +718,16 @@ class RiskViewSet(viewsets.ModelViewSet):
             entityType="Risk"
         )
         
+        # Log data_inventory if present
+        if 'data_inventory' in request.data:
+            print(f"📊 [RISK CREATE] Data inventory received: {request.data.get('data_inventory')}")
+        
         try:
             result = super().create(request)
             print(f"Risk created successfully: {result.data}")
+            # Log if data_inventory was saved
+            if hasattr(result.data, 'data_inventory') or 'data_inventory' in result.data:
+                print(f"✅ [RISK CREATE] Data inventory saved successfully")
             return result
         except Exception as e:
             print(f"Error creating risk: {e}")
@@ -1007,6 +1014,10 @@ class RiskInstanceViewSet(viewsets.ModelViewSet):
         )
        
         print("Original request data:", request.data)
+        
+        # Log data_inventory if present
+        if 'data_inventory' in request.data:
+            print(f"📊 [RISK INSTANCE CREATE] Data inventory received: {request.data.get('data_inventory')}")
        
         try:
             # Create a mutable copy of the data
@@ -1061,6 +1072,11 @@ class RiskInstanceViewSet(viewsets.ModelViewSet):
             serializer.is_valid(raise_exception=True)
             self.perform_create(serializer)
             headers = self.get_success_headers(serializer.data)
+            
+            # Log if data_inventory was saved
+            if 'data_inventory' in serializer.data or hasattr(serializer.instance, 'data_inventory'):
+                print(f"✅ [RISK INSTANCE CREATE] Data inventory saved successfully")
+            
             return Response(serializer.data, status=201, headers=headers)
        
         except Exception as e:
@@ -3226,7 +3242,15 @@ class GRCLogDetail(generics.RetrieveAPIView):
 def get_system_logs(request):
     """Get system logs with optional filtering"""
     try:
+        from ...rbac.utils import RBACUtils
+        user_id = RBACUtils.get_user_id_from_request(request)
+        is_admin = False
+        if user_id:
+            is_admin = RBACUtils.is_system_admin(user_id)
         queryset = GRCLog.objects.all().order_by('-Timestamp')
+         # If not admin, filter by user_id
+        if not is_admin and user_id:
+            queryset = queryset.filter(UserId=str(user_id))
         
         # Filter by module if provided
         module = request.query_params.get('module')
@@ -3248,10 +3272,10 @@ def get_system_logs(request):
         if log_level:
             queryset = queryset.filter(LogLevel__iexact=log_level)
             
-        # Filter by user if provided
-        user_id = request.query_params.get('user_id')
-        if user_id:
-            queryset = queryset.filter(UserId=user_id)
+        # Filter by user if provided (admin only)
+        filter_user_id = request.query_params.get('user_id')
+        if filter_user_id and is_admin:
+            queryset = queryset.filter(UserId=filter_user_id)
             
         # Filter by date range if provided
         start_date = request.query_params.get('start_date')
@@ -3265,19 +3289,29 @@ def get_system_logs(request):
         
         start = (page - 1) * page_size
         end = start + page_size
+        total_count = queryset.count()
         
         logs = queryset[start:end]
         serializer = GRCLogSerializer(logs, many=True)
         
         return Response({
-            'count': queryset.count(),
-            'results': serializer.data,
+            'success': True,
+            'data': serializer.data,
+            'total_count': total_count,
+            'is_admin': is_admin,
             'page': page,
             'page_size': page_size
         })
     except Exception as e:
         logger.error(f"Error fetching system logs: {str(e)}")
-        return Response({"error": str(e)}, status=500)
+        import traceback
+        logger.error(traceback.format_exc())
+        return Response({
+            'success': False,
+            'error': str(e),
+            'data': [],
+            'total_count': 0
+        }, status=500)
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')

@@ -424,6 +424,8 @@ from .routes.Global import rbac_test_views
 
 
 from .routes.Global import user_profile
+from .routes.Global import anonymization_views
+from .routes.Global import profile_otp_views
 
 from .routes.Global.user_profile import *
 
@@ -2867,6 +2869,24 @@ urlpatterns = [
     path('api/user-permissions/<int:user_id>/update/', views.update_user_permissions, name='api_update_user_permissions'),
 
     path('current-user/', user_profile.get_current_user, name='current-user'),
+    
+    # Profile Edit OTP Verification endpoints
+    path('profile-edit-otp/send/', profile_otp_views.send_profile_edit_otp, name='send_profile_edit_otp'),
+    path('profile-edit-otp/verify/', profile_otp_views.verify_profile_edit_otp, name='verify_profile_edit_otp'),
+    path('profile-edit-otp/check/', profile_otp_views.check_profile_edit_verification, name='check_profile_edit_verification'),
+    
+    # Portability OTP endpoints
+    path('portability-otp/send/', profile_otp_views.send_portability_otp, name='send_portability_otp'),
+    path('portability-otp/verify/', profile_otp_views.verify_portability_otp, name='verify_portability_otp'),
+    path('portability-otp/check/', profile_otp_views.check_portability_verification, name='check_portability_verification'),
+    
+    # Portability export endpoint
+    path('export-user-data-portability/', user_profile.export_user_data_portability, name='export_user_data_portability'),
+    
+    # Data Anonymization endpoints
+    path('api/anonymize/logs/', anonymization_views.anonymize_logs, name='anonymize_logs'),
+    path('api/anonymize/data/', anonymization_views.anonymize_data, name='anonymize_data'),
+    path('api/anonymize/config/', anonymization_views.get_anonymization_config, name='anonymization_config'),
 
     # ========================================================================
     # KPI MODULE

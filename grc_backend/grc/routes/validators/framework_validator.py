@@ -423,6 +423,10 @@ def validate_policy_data(data: Dict[str, Any], index: int) -> Dict[str, Any]:
         
         validated['subpolicies'] = validated_subpolicies
     
+    # Preserve data_inventory field if present (not validated, just passed through)
+    if 'data_inventory' in data:
+        validated['data_inventory'] = data['data_inventory']
+    
     return validated
 
 def validate_subpolicy_data(data: Dict[str, Any], policy_index: int, subpolicy_index: int) -> Dict[str, Any]:
@@ -489,6 +493,10 @@ def validate_subpolicy_data(data: Dict[str, Any], policy_index: int, subpolicy_i
     
     # Set creation date to today
     validated['CreatedByDate'] = date.today()
+    
+    # Preserve data_inventory field if present (not validated, just passed through)
+    if 'data_inventory' in data:
+        validated['data_inventory'] = data['data_inventory']
     
     return validated
 
@@ -697,6 +705,10 @@ def validate_policy_for_add(data: Dict[str, Any], index: int) -> Dict[str, Any]:
         
         validated['subpolicies'] = validated_subpolicies
     
+    # Preserve data_inventory field if present (not validated, just passed through)
+    if 'data_inventory' in data:
+        validated['data_inventory'] = data['data_inventory']
+    
     return validated
 
 def validate_subpolicy_for_add(data: Dict[str, Any], policy_index: int, subpolicy_index: int) -> Dict[str, Any]:
@@ -759,6 +771,10 @@ def validate_subpolicy_for_add(data: Dict[str, Any], policy_index: int, subpolic
         max_length=65535, 
         allow_empty=False
     )
+    
+    # Preserve data_inventory field if present (not validated, just passed through)
+    if 'data_inventory' in data:
+        validated['data_inventory'] = data['data_inventory']
     
     return validated
 
@@ -1041,6 +1057,10 @@ def validate_tailored_policy_data(data: Dict[str, Any], index: int) -> Dict[str,
     else:
         validated['subPolicies'] = []
     
+    # Preserve data_inventory field if present (not validated, just passed through)
+    if 'data_inventory' in data:
+        validated['data_inventory'] = data['data_inventory']
+    
     return validated
 
 def validate_tailored_subpolicy_data(data: Dict[str, Any], policy_index: int, subpolicy_index: int) -> Dict[str, Any]:
@@ -1095,6 +1115,10 @@ def validate_tailored_subpolicy_data(data: Dict[str, Any], policy_index: int, su
         max_length=65535, 
         allow_empty=False
     )
+    
+    # Preserve data_inventory field if present (not validated, just passed through)
+    if 'data_inventory' in data:
+        validated['data_inventory'] = data['data_inventory']
     
     return validated
 
@@ -1274,6 +1298,10 @@ def validate_tailored_policy_request_data(data: Dict[str, Any]) -> Dict[str, Any
     except (ValueError, TypeError):
         raise ValidationError("CoverageRate must be a valid number")
     
+    # Preserve data_inventory if present
+    if 'data_inventory' in data:
+        validated['data_inventory'] = data['data_inventory']
+    
     # Validate subpolicies if present
     if 'subpolicies' in data:
         if not isinstance(data['subpolicies'], list):
@@ -1347,6 +1375,10 @@ def validate_tailored_policy_subpolicy_data(data: Dict[str, Any], index: int) ->
     
     # Exclude flag
     validated['exclude'] = bool(data.get('exclude', False))
+    
+    # Preserve data_inventory if present
+    if 'data_inventory' in data:
+        validated['data_inventory'] = data['data_inventory']
     
     return validated
 

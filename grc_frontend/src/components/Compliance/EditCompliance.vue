@@ -2,19 +2,40 @@
   <div class="create-compliance-container">
     <!-- Header section -->
     <div class="compliance-header">
-      <div class="header-content">
-        <div class="header-actions">
-          <button 
-            class="back-button" 
-            @click="goBack"
-            title="Go back to previous page"
-          >
-            <i class="fas fa-arrow-left"></i>
-          </button>
+      <div class="header-content" style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+        <div style="display: flex; align-items: center; gap: 20px;">
+          <div class="header-actions">
+            <button 
+              class="back-button" 
+              @click="goBack"
+              title="Go back to previous page"
+            >
+              <i class="fas fa-arrow-left"></i>
+            </button>
+          </div>
+          <div class="header-text">
+            <h2>Edit Compliance Record</h2>
+            <p>Update compliance item details</p>
+          </div>
         </div>
-        <div class="header-text">
-          <h2>Edit Compliance Record</h2>
-          <p>Update compliance item details</p>
+        <!-- Data Type Legend (Display Only) -->
+        <div class="compliance-data-type-legend">
+          <div class="compliance-data-type-legend-container">
+            <div class="compliance-data-type-options">
+              <div class="compliance-data-type-legend-item personal-option">
+                <i class="fas fa-user"></i>
+                <span>Personal</span>
+              </div>
+              <div class="compliance-data-type-legend-item confidential-option">
+                <i class="fas fa-shield-alt"></i>
+                <span>Confidential</span>
+              </div>
+              <div class="compliance-data-type-legend-item regular-option">
+                <i class="fas fa-file-alt"></i>
+                <span>Regular</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -46,6 +67,35 @@
               Compliance Title 
               <span class="required">*</span>
               <span class="field-requirements">({{ validationRules.minLengths.ComplianceTitle }}-{{ validationRules.maxLengths.ComplianceTitle }} characters)</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="compliance-data-type-circle-toggle-wrapper">
+                <div class="compliance-data-type-circle-toggle">
+                  <div 
+                    class="compliance-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes?.complianceTitle === 'personal' }"
+                    @click="setDataType('complianceTitle', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes?.complianceTitle === 'confidential' }"
+                    @click="setDataType('complianceTitle', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes?.complianceTitle === 'regular' }"
+                    @click="setDataType('complianceTitle', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
             </label>
             <div class="input-wrapper">
               <input 
@@ -78,6 +128,35 @@
               Compliance Type 
               <span class="required">*</span>
               <span class="field-requirements">({{ validationRules.minLengths.ComplianceType }}-{{ validationRules.maxLengths.ComplianceType }} characters)</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="compliance-data-type-circle-toggle-wrapper">
+                <div class="compliance-data-type-circle-toggle">
+                  <div 
+                    class="compliance-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes?.complianceType === 'personal' }"
+                    @click="setDataType('complianceType', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes?.complianceType === 'confidential' }"
+                    @click="setDataType('complianceType', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes?.complianceType === 'regular' }"
+                    @click="setDataType('complianceType', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
             </label>
             <div class="input-wrapper">
               <input 
@@ -109,6 +188,35 @@
             Compliance Description 
             <span class="required">*</span>
             <span class="field-requirements">(Minimum {{ validationRules.minLengths.ComplianceItemDescription }} characters)</span>
+            <!-- Data Type Circle Toggle -->
+            <div class="compliance-data-type-circle-toggle-wrapper">
+              <div class="compliance-data-type-circle-toggle">
+                <div 
+                  class="compliance-circle-option personal-circle" 
+                  :class="{ active: fieldDataTypes?.complianceDescription === 'personal' }"
+                  @click="setDataType('complianceDescription', 'personal')"
+                  title="Personal Data"
+                >
+                  <div class="compliance-circle-inner"></div>
+                </div>
+                <div 
+                  class="compliance-circle-option confidential-circle" 
+                  :class="{ active: fieldDataTypes?.complianceDescription === 'confidential' }"
+                  @click="setDataType('complianceDescription', 'confidential')"
+                  title="Confidential Data"
+                >
+                  <div class="compliance-circle-inner"></div>
+                </div>
+                <div 
+                  class="compliance-circle-option regular-circle" 
+                  :class="{ active: fieldDataTypes?.complianceDescription === 'regular' }"
+                  @click="setDataType('complianceDescription', 'regular')"
+                  title="Regular Data"
+                >
+                  <div class="compliance-circle-inner"></div>
+                </div>
+              </div>
+            </div>
           </label>
           <div class="input-wrapper">
             <textarea 
@@ -165,6 +273,35 @@
             Scope
             <span class="required">*</span>
             <span class="field-requirements">(Minimum {{ validationRules.minLengths.Scope }} characters)</span>
+            <!-- Data Type Circle Toggle -->
+            <div class="compliance-data-type-circle-toggle-wrapper">
+              <div class="compliance-data-type-circle-toggle">
+                <div 
+                  class="compliance-circle-option personal-circle" 
+                  :class="{ active: fieldDataTypes?.scope === 'personal' }"
+                  @click="setDataType('scope', 'personal')"
+                  title="Personal Data"
+                >
+                  <div class="compliance-circle-inner"></div>
+                </div>
+                <div 
+                  class="compliance-circle-option confidential-circle" 
+                  :class="{ active: fieldDataTypes?.scope === 'confidential' }"
+                  @click="setDataType('scope', 'confidential')"
+                  title="Confidential Data"
+                >
+                  <div class="compliance-circle-inner"></div>
+                </div>
+                <div 
+                  class="compliance-circle-option regular-circle" 
+                  :class="{ active: fieldDataTypes?.scope === 'regular' }"
+                  @click="setDataType('scope', 'regular')"
+                  title="Regular Data"
+                >
+                  <div class="compliance-circle-inner"></div>
+                </div>
+              </div>
+            </div>
           </label>
           <div class="input-wrapper">
             <textarea 
@@ -224,6 +361,35 @@
             Objective
             <span class="required">*</span>
             <span class="field-requirements">(Minimum {{ validationRules.minLengths.Objective }} characters)</span>
+            <!-- Data Type Circle Toggle -->
+            <div class="compliance-data-type-circle-toggle-wrapper">
+              <div class="compliance-data-type-circle-toggle">
+                <div 
+                  class="compliance-circle-option personal-circle" 
+                  :class="{ active: fieldDataTypes?.objective === 'personal' }"
+                  @click="setDataType('objective', 'personal')"
+                  title="Personal Data"
+                >
+                  <div class="compliance-circle-inner"></div>
+                </div>
+                <div 
+                  class="compliance-circle-option confidential-circle" 
+                  :class="{ active: fieldDataTypes?.objective === 'confidential' }"
+                  @click="setDataType('objective', 'confidential')"
+                  title="Confidential Data"
+                >
+                  <div class="compliance-circle-inner"></div>
+                </div>
+                <div 
+                  class="compliance-circle-option regular-circle" 
+                  :class="{ active: fieldDataTypes?.objective === 'regular' }"
+                  @click="setDataType('objective', 'regular')"
+                  title="Regular Data"
+                >
+                  <div class="compliance-circle-inner"></div>
+                </div>
+              </div>
+            </div>
           </label>
           <div class="input-wrapper">
             <textarea 
@@ -281,7 +447,38 @@
         <!-- Business Units, Identifier and IsRisk in one row -->
         <div class="row-fields">
           <div class="compliance-field">
-            <label>Business Units Covered</label>
+            <label>
+              Business Units Covered
+              <!-- Data Type Circle Toggle -->
+              <div class="compliance-data-type-circle-toggle-wrapper">
+                <div class="compliance-data-type-circle-toggle">
+                  <div 
+                    class="compliance-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes?.businessUnitsCovered === 'personal' }"
+                    @click="setDataType('businessUnitsCovered', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes?.businessUnitsCovered === 'confidential' }"
+                    @click="setDataType('businessUnitsCovered', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes?.businessUnitsCovered === 'regular' }"
+                    @click="setDataType('businessUnitsCovered', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <div class="searchable-dropdown">
               <input 
                 v-model="displayBusinessUnits" 
@@ -356,6 +553,35 @@
             Possible Impact
             <span class="required">*</span>
             <span class="field-requirements">(Minimum {{ validationRules.minLengths.PossibleDamage }} characters)</span>
+            <!-- Data Type Circle Toggle -->
+            <div class="compliance-data-type-circle-toggle-wrapper">
+              <div class="compliance-data-type-circle-toggle">
+                <div 
+                  class="compliance-circle-option personal-circle" 
+                  :class="{ active: fieldDataTypes?.possibleImpact === 'personal' }"
+                  @click="setDataType('possibleImpact', 'personal')"
+                  title="Personal Data"
+                >
+                  <div class="compliance-circle-inner"></div>
+                </div>
+                <div 
+                  class="compliance-circle-option confidential-circle" 
+                  :class="{ active: fieldDataTypes?.possibleImpact === 'confidential' }"
+                  @click="setDataType('possibleImpact', 'confidential')"
+                  title="Confidential Data"
+                >
+                  <div class="compliance-circle-inner"></div>
+                </div>
+                <div 
+                  class="compliance-circle-option regular-circle" 
+                  :class="{ active: fieldDataTypes?.possibleImpact === 'regular' }"
+                  @click="setDataType('possibleImpact', 'regular')"
+                  title="Regular Data"
+                >
+                  <div class="compliance-circle-inner"></div>
+                </div>
+              </div>
+            </div>
           </label>
           <div class="input-wrapper">
             <textarea 
@@ -387,6 +613,35 @@
           <label>
             Mitigation Steps
             <span v-if="compliance.IsRisk" class="required">*</span>
+            <!-- Data Type Circle Toggle -->
+            <div class="compliance-data-type-circle-toggle-wrapper">
+              <div class="compliance-data-type-circle-toggle">
+                <div 
+                  class="compliance-circle-option personal-circle" 
+                  :class="{ active: fieldDataTypes?.mitigationSteps === 'personal' }"
+                  @click="setDataType('mitigationSteps', 'personal')"
+                  title="Personal Data"
+                >
+                  <div class="compliance-circle-inner"></div>
+                </div>
+                <div 
+                  class="compliance-circle-option confidential-circle" 
+                  :class="{ active: fieldDataTypes?.mitigationSteps === 'confidential' }"
+                  @click="setDataType('mitigationSteps', 'confidential')"
+                  title="Confidential Data"
+                >
+                  <div class="compliance-circle-inner"></div>
+                </div>
+                <div 
+                  class="compliance-circle-option regular-circle" 
+                  :class="{ active: fieldDataTypes?.mitigationSteps === 'regular' }"
+                  @click="setDataType('mitigationSteps', 'regular')"
+                  title="Regular Data"
+                >
+                  <div class="compliance-circle-inner"></div>
+                </div>
+              </div>
+            </div>
           </label>
           <div class="mitigation-steps">
             <div v-for="(step, stepIndex) in mitigationSteps" :key="stepIndex" class="mitigation-step">
@@ -424,6 +679,35 @@
           <label>
             Potential Risk Scenarios
             <span class="field-requirements">(Recommended: {{ validationRules.minLengths.PotentialRiskScenarios }}+ characters)</span>
+            <!-- Data Type Circle Toggle -->
+            <div class="compliance-data-type-circle-toggle-wrapper">
+              <div class="compliance-data-type-circle-toggle">
+                <div 
+                  class="compliance-circle-option personal-circle" 
+                  :class="{ active: fieldDataTypes?.potentialRiskScenarios === 'personal' }"
+                  @click="setDataType('potentialRiskScenarios', 'personal')"
+                  title="Personal Data"
+                >
+                  <div class="compliance-circle-inner"></div>
+                </div>
+                <div 
+                  class="compliance-circle-option confidential-circle" 
+                  :class="{ active: fieldDataTypes?.potentialRiskScenarios === 'confidential' }"
+                  @click="setDataType('potentialRiskScenarios', 'confidential')"
+                  title="Confidential Data"
+                >
+                  <div class="compliance-circle-inner"></div>
+                </div>
+                <div 
+                  class="compliance-circle-option regular-circle" 
+                  :class="{ active: fieldDataTypes?.potentialRiskScenarios === 'regular' }"
+                  @click="setDataType('potentialRiskScenarios', 'regular')"
+                  title="Regular Data"
+                >
+                  <div class="compliance-circle-inner"></div>
+                </div>
+              </div>
+            </div>
           </label>
           <div class="input-wrapper">
             <textarea 
@@ -454,6 +738,35 @@
             <label>
               Risk Type
               <span class="required">*</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="compliance-data-type-circle-toggle-wrapper">
+                <div class="compliance-data-type-circle-toggle">
+                  <div 
+                    class="compliance-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes?.riskType === 'personal' }"
+                    @click="setDataType('riskType', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes?.riskType === 'confidential' }"
+                    @click="setDataType('riskType', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes?.riskType === 'regular' }"
+                    @click="setDataType('riskType', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
             </label>
             <div class="input-wrapper">
               <select 
@@ -487,6 +800,35 @@
             <label>
               Risk Category
               <span class="required">*</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="compliance-data-type-circle-toggle-wrapper">
+                <div class="compliance-data-type-circle-toggle">
+                  <div 
+                    class="compliance-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes?.riskCategory === 'personal' }"
+                    @click="setDataType('riskCategory', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes?.riskCategory === 'confidential' }"
+                    @click="setDataType('riskCategory', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes?.riskCategory === 'regular' }"
+                    @click="setDataType('riskCategory', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
             </label>
             <div class="searchable-dropdown">
               <input 
@@ -540,6 +882,35 @@
             <label>
               Risk Business Impact
               <span class="required">*</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="compliance-data-type-circle-toggle-wrapper">
+                <div class="compliance-data-type-circle-toggle">
+                  <div 
+                    class="compliance-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes?.riskBusinessImpact === 'personal' }"
+                    @click="setDataType('riskBusinessImpact', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes?.riskBusinessImpact === 'confidential' }"
+                    @click="setDataType('riskBusinessImpact', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes?.riskBusinessImpact === 'regular' }"
+                    @click="setDataType('riskBusinessImpact', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
             </label>
             <div class="searchable-dropdown">
               <input 
@@ -599,6 +970,35 @@
             <label>
               Criticality
               <span class="required">*</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="compliance-data-type-circle-toggle-wrapper">
+                <div class="compliance-data-type-circle-toggle">
+                  <div 
+                    class="compliance-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes?.criticality === 'personal' }"
+                    @click="setDataType('criticality', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes?.criticality === 'confidential' }"
+                    @click="setDataType('criticality', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes?.criticality === 'regular' }"
+                    @click="setDataType('criticality', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
             </label>
             <div class="input-wrapper">
               <select 
@@ -630,6 +1030,35 @@
           <div class="compliance-field">
             <label>
               Mandatory/Optional
+              <!-- Data Type Circle Toggle -->
+              <div class="compliance-data-type-circle-toggle-wrapper">
+                <div class="compliance-data-type-circle-toggle">
+                  <div 
+                    class="compliance-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes?.mandatoryOptional === 'personal' }"
+                    @click="setDataType('mandatoryOptional', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes?.mandatoryOptional === 'confidential' }"
+                    @click="setDataType('mandatoryOptional', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes?.mandatoryOptional === 'regular' }"
+                    @click="setDataType('mandatoryOptional', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
             </label>
             <select 
               v-model="compliance.MandatoryOptional" 
@@ -651,6 +1080,35 @@
           <div class="compliance-field">
             <label>
               Manual/Automatic
+              <!-- Data Type Circle Toggle -->
+              <div class="compliance-data-type-circle-toggle-wrapper">
+                <div class="compliance-data-type-circle-toggle">
+                  <div 
+                    class="compliance-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes?.manualAutomatic === 'personal' }"
+                    @click="setDataType('manualAutomatic', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes?.manualAutomatic === 'confidential' }"
+                    @click="setDataType('manualAutomatic', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes?.manualAutomatic === 'regular' }"
+                    @click="setDataType('manualAutomatic', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
             </label>
             <select 
               v-model="compliance.ManualAutomatic" 
@@ -670,6 +1128,35 @@
           <div class="compliance-field">
             <label>
               Applicability
+              <!-- Data Type Circle Toggle -->
+              <div class="compliance-data-type-circle-toggle-wrapper">
+                <div class="compliance-data-type-circle-toggle">
+                  <div 
+                    class="compliance-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes?.applicability === 'personal' }"
+                    @click="setDataType('applicability', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes?.applicability === 'confidential' }"
+                    @click="setDataType('applicability', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes?.applicability === 'regular' }"
+                    @click="setDataType('applicability', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
             </label>
             <input 
               v-model="compliance.Applicability" 
@@ -690,6 +1177,35 @@
               Impact
               <span class="required">*</span>
               <span class="field-requirements">({{ validationRules.numericRanges.Impact.min }}-{{ validationRules.numericRanges.Impact.max }})</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="compliance-data-type-circle-toggle-wrapper">
+                <div class="compliance-data-type-circle-toggle">
+                  <div 
+                    class="compliance-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes?.impact === 'personal' }"
+                    @click="setDataType('impact', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes?.impact === 'confidential' }"
+                    @click="setDataType('impact', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes?.impact === 'regular' }"
+                    @click="setDataType('impact', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
             </label>
             <input 
               type="number" 
@@ -715,6 +1231,35 @@
               Probability
               <span class="required">*</span>
               <span class="field-requirements">({{ validationRules.numericRanges.Probability.min }}-{{ validationRules.numericRanges.Probability.max }})</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="compliance-data-type-circle-toggle-wrapper">
+                <div class="compliance-data-type-circle-toggle">
+                  <div 
+                    class="compliance-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes?.probability === 'personal' }"
+                    @click="setDataType('probability', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes?.probability === 'confidential' }"
+                    @click="setDataType('probability', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes?.probability === 'regular' }"
+                    @click="setDataType('probability', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
             </label>
             <input 
               type="number" 
@@ -740,6 +1285,35 @@
           <div class="compliance-field">
             <label>
               Maturity Level
+              <!-- Data Type Circle Toggle -->
+              <div class="compliance-data-type-circle-toggle-wrapper">
+                <div class="compliance-data-type-circle-toggle">
+                  <div 
+                    class="compliance-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes?.maturityLevel === 'personal' }"
+                    @click="setDataType('maturityLevel', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes?.maturityLevel === 'confidential' }"
+                    @click="setDataType('maturityLevel', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes?.maturityLevel === 'regular' }"
+                    @click="setDataType('maturityLevel', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
             </label>
             <select 
               v-model="compliance.MaturityLevel" 
@@ -760,6 +1334,35 @@
           <div class="compliance-field">
             <label>
               Version Type
+              <!-- Data Type Circle Toggle -->
+              <div class="compliance-data-type-circle-toggle-wrapper">
+                <div class="compliance-data-type-circle-toggle">
+                  <div 
+                    class="compliance-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes?.versionType === 'personal' }"
+                    @click="setDataType('versionType', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes?.versionType === 'confidential' }"
+                    @click="setDataType('versionType', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes?.versionType === 'regular' }"
+                    @click="setDataType('versionType', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
             </label>
             <select 
               v-model="compliance.versionType" 
@@ -789,7 +1392,39 @@
         <div class="row-fields">
           <!-- Assign Reviewer -->
           <div class="compliance-field">
-            <label>Assign Reviewer <span class="required">*</span></label>
+            <label>
+              Assign Reviewer
+              <span class="required">*</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="compliance-data-type-circle-toggle-wrapper">
+                <div class="compliance-data-type-circle-toggle">
+                  <div 
+                    class="compliance-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes?.reviewer === 'personal' }"
+                    @click="setDataType('reviewer', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes?.reviewer === 'confidential' }"
+                    @click="setDataType('reviewer', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="compliance-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes?.reviewer === 'regular' }"
+                    @click="setDataType('reviewer', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="compliance-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <select 
               v-model="compliance.reviewer_id" 
               class="compliance-select" 
@@ -933,6 +1568,30 @@ export default {
       displayRiskCategory: '',
       displayRiskBusinessImpact: '',
       displayBusinessUnits: '',
+      // Store data type per field
+      fieldDataTypes: {
+        complianceTitle: 'regular',
+        complianceType: 'regular',
+        complianceDescription: 'regular',
+        scope: 'regular',
+        objective: 'regular',
+        businessUnitsCovered: 'regular',
+        possibleImpact: 'regular',
+        mitigationSteps: 'regular',
+        potentialRiskScenarios: 'regular',
+        riskType: 'regular',
+        riskCategory: 'regular',
+        riskBusinessImpact: 'regular',
+        criticality: 'regular',
+        mandatoryOptional: 'regular',
+        manualAutomatic: 'regular',
+        applicability: 'regular',
+        impact: 'regular',
+        probability: 'regular',
+        maturityLevel: 'regular',
+        versionType: 'regular',
+        reviewer: 'regular'
+      },
     }
   },
   watch: {
@@ -989,6 +1648,12 @@ export default {
     document.removeEventListener('click', this.handleClickOutside);
   },
   methods: {
+    setDataType(fieldName, type) {
+      if (Object.prototype.hasOwnProperty.call(this.fieldDataTypes, fieldName)) {
+        this.fieldDataTypes[fieldName] = type;
+        console.log(`Data type selected for ${fieldName}:`, type);
+      }
+    },
     handleVersionTypeChange(event) {
       const selectedType = event.target.value;
       console.log('Version type changed to:', selectedType);
@@ -1118,6 +1783,43 @@ export default {
           this.mitigationSteps = this.parseMitigationSteps(this.compliance.mitigation);
           console.log('[loadComplianceData] Loaded mitigation:', this.compliance.mitigation);
           console.log('[loadComplianceData] Parsed steps:', this.mitigationSteps);
+          
+          // Load data_inventory from database and populate fieldDataTypes
+          if (this.compliance.data_inventory && typeof this.compliance.data_inventory === 'object') {
+            const reverseFieldLabelMap = {
+              'Compliance Title': 'complianceTitle',
+              'Compliance Type': 'complianceType',
+              'Compliance Description': 'complianceDescription',
+              'Scope': 'scope',
+              'Objective': 'objective',
+              'Business Units Covered': 'businessUnitsCovered',
+              'Possible Impact': 'possibleImpact',
+              'Mitigation Steps': 'mitigationSteps',
+              'Potential Risk Scenarios': 'potentialRiskScenarios',
+              'Risk Type': 'riskType',
+              'Risk Category': 'riskCategory',
+              'Risk Business Impact': 'riskBusinessImpact',
+              'Criticality': 'criticality',
+              'Mandatory/Optional': 'mandatoryOptional',
+              'Manual/Automatic': 'manualAutomatic',
+              'Applicability': 'applicability',
+              'Impact': 'impact',
+              'Probability': 'probability',
+              'Maturity Level': 'maturityLevel',
+              'Version Type': 'versionType',
+              'Assign Reviewer': 'reviewer'
+            };
+            
+            // Populate fieldDataTypes from data_inventory
+            for (const [fieldLabel, dataType] of Object.entries(this.compliance.data_inventory)) {
+              const fieldName = reverseFieldLabelMap[fieldLabel];
+              if (fieldName && (dataType === 'personal' || dataType === 'confidential' || dataType === 'regular')) {
+                this.fieldDataTypes[fieldName] = dataType;
+              }
+            }
+            console.log('[loadComplianceData] Loaded data_inventory:', this.compliance.data_inventory);
+            console.log('[loadComplianceData] Populated fieldDataTypes:', this.fieldDataTypes);
+          }
           
           // Clear version preview initially
           this.versionPreview = '';
@@ -1725,6 +2427,37 @@ export default {
         const userId = this.getCurrentUserId();
         const reviewerId = this.users.find(u => u.UserId === this.compliance.reviewer_id)?.UserId || this.compliance.reviewer_id;
         // Prepare submission data
+        // Build data_inventory object from fieldDataTypes
+        const fieldLabelMap = {
+          complianceTitle: 'Compliance Title',
+          complianceType: 'Compliance Type',
+          complianceDescription: 'Compliance Description',
+          scope: 'Scope',
+          objective: 'Objective',
+          businessUnitsCovered: 'Business Units Covered',
+          possibleImpact: 'Possible Impact',
+          mitigationSteps: 'Mitigation Steps',
+          potentialRiskScenarios: 'Potential Risk Scenarios',
+          riskType: 'Risk Type',
+          riskCategory: 'Risk Category',
+          riskBusinessImpact: 'Risk Business Impact',
+          criticality: 'Criticality',
+          mandatoryOptional: 'Mandatory/Optional',
+          manualAutomatic: 'Manual/Automatic',
+          applicability: 'Applicability',
+          impact: 'Impact',
+          probability: 'Probability',
+          maturityLevel: 'Maturity Level',
+          versionType: 'Version Type',
+          reviewer: 'Assign Reviewer'
+        };
+        
+        const dataInventory = {};
+        for (const [fieldName, dataType] of Object.entries(this.fieldDataTypes)) {
+          const fieldLabel = fieldLabelMap[fieldName] || fieldName;
+          dataInventory[fieldLabel] = dataType;
+        }
+        
         const editData = {
           ...this.compliance,
           ComplianceVersion: newVersion,
@@ -1734,7 +2467,8 @@ export default {
           mitigation: mitigationData,
           UserId: userId, // Set correct user id
           ReviewerId: reviewerId, // Set correct reviewer id
-          versionType: this.compliance.versionType
+          versionType: this.compliance.versionType,
+          data_inventory: dataInventory
         };
         // Remove any old/hardcoded user_id/reviewer_id fields
         delete editData.user_id;
@@ -3143,5 +3877,179 @@ input[type="number"] {
   .header-text h2 {
     font-size: 1.5rem;
   }
+}
+
+/* Data Type Legend Styles (Display Only) */
+.compliance-data-type-legend {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: auto; /* Pushes it to the right */
+  margin-bottom: 20px;
+}
+
+.compliance-data-type-legend-container {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e9ecef;
+  padding: 6px 10px;
+  min-width: 200px;
+  max-width: 240px;
+}
+
+.compliance-data-type-options {
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+}
+
+.compliance-data-type-legend-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 4px;
+  border-radius: 6px;
+  background-color: #f8f9fa;
+}
+
+.compliance-data-type-legend-item i {
+  font-size: 0.9rem;
+  margin-bottom: 2px;
+}
+
+.compliance-data-type-legend-item span {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+/* Personal Data Type - Blue */
+.compliance-data-type-legend-item.personal-option i {
+  color: #4f7cff;
+}
+
+.compliance-data-type-legend-item.personal-option span {
+  color: #4f7cff;
+}
+
+/* Confidential Data Type - Red */
+.compliance-data-type-legend-item.confidential-option i {
+  color: #e63946;
+}
+
+.compliance-data-type-legend-item.confidential-option span {
+  color: #e63946;
+}
+
+/* Regular Data Type - Gray */
+.compliance-data-type-legend-item.regular-option i {
+  color: #6c757d;
+}
+
+.compliance-data-type-legend-item.regular-option span {
+  color: #6c757d;
+}
+
+/* Data Type Circle Toggle Styles */
+.compliance-data-type-circle-toggle-wrapper {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 12px;
+  padding: 4px 8px;
+  background-color: white;
+  border: 1px solid #dee2e6;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.compliance-data-type-circle-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.compliance-circle-option {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid #dee2e6;
+  background-color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.compliance-circle-option:hover {
+  transform: scale(1.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12);
+}
+
+.compliance-circle-inner {
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  background-color: transparent;
+}
+
+.compliance-circle-option.active .compliance-circle-inner {
+  width: 9px;
+  height: 9px;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Personal Circle - Blue */
+.compliance-circle-option.personal-circle {
+  border-color: #4f7cff;
+}
+
+.compliance-circle-option.personal-circle.active {
+  border-color: #4f7cff;
+  background-color: rgba(79, 124, 255, 0.1);
+  box-shadow: 0 0 6px rgba(79, 124, 255, 0.2);
+}
+
+.compliance-circle-option.personal-circle.active .compliance-circle-inner {
+  background-color: #4f7cff;
+  box-shadow: 0 0 4px rgba(79, 124, 255, 0.35);
+}
+
+/* Confidential Circle - Red */
+.compliance-circle-option.confidential-circle {
+  border-color: #e63946;
+}
+
+.compliance-circle-option.confidential-circle.active {
+  border-color: #e63946;
+  background-color: rgba(230, 57, 70, 0.1);
+  box-shadow: 0 0 6px rgba(230, 57, 70, 0.2);
+}
+
+.compliance-circle-option.confidential-circle.active .compliance-circle-inner {
+  background-color: #e63946;
+  box-shadow: 0 0 4px rgba(230, 57, 70, 0.35);
+}
+
+/* Regular Circle - Grey */
+.compliance-circle-option.regular-circle {
+  border-color: #6c757d;
+}
+
+.compliance-circle-option.regular-circle.active {
+  border-color: #6c757d;
+  background-color: rgba(108, 117, 125, 0.1);
+  box-shadow: 0 0 6px rgba(108, 117, 125, 0.2);
+}
+
+.compliance-circle-option.regular-circle.active .compliance-circle-inner {
+  background-color: #6c757d;
+  box-shadow: 0 0 4px rgba(108, 117, 125, 0.35);
 }
 </style> 

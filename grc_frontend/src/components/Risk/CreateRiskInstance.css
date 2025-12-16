@@ -36,18 +36,207 @@
   z-index: 1;
 }
 
+.risk-instance-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 40px;
+  margin-top: 40px;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
 .risk-instance-title {
   font-size: 1.7rem;
   font-weight: 700;
   color: var(--form-header-text, var(--card-view-title-color, var(--text-primary)));
-  margin-bottom: 40px;
-  margin-top: 40px;
+  margin-bottom: 0;
+  margin-top: 0;
   letter-spacing: 0.01em;
   position: relative;
   display: inline-block;
   padding-bottom: 6px;
   background: transparent;
   font-family: var(--font-family-primary);
+}
+
+/* Data Type Legend Styles (Display Only) */
+.risk-data-type-legend {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.risk-data-type-legend-container {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--form-gray-200);
+  padding: 6px 10px;
+  min-width: 200px;
+  max-width: 240px;
+}
+
+.risk-data-type-options {
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+}
+
+.risk-data-type-legend-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 4px;
+  border-radius: 6px;
+  background-color: var(--form-gray-100);
+}
+
+.risk-data-type-legend-item i {
+  font-size: 0.9rem;
+  margin-bottom: 2px;
+  display: inline-block;
+  visibility: visible;
+  opacity: 1;
+}
+
+.risk-data-type-legend-item span {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+/* Personal Data Type - Blue */
+.risk-data-type-legend-item.personal-option i {
+  color: #4f7cff !important;
+  display: inline-block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  font-size: 0.9rem !important;
+}
+
+.risk-data-type-legend-item.personal-option span {
+  color: #4f7cff;
+}
+
+/* Confidential Data Type - Red */
+.risk-data-type-legend-item.confidential-option i {
+  color: #e63946;
+}
+
+.risk-data-type-legend-item.confidential-option span {
+  color: #e63946;
+}
+
+/* Regular Data Type - Gray */
+.risk-data-type-legend-item.regular-option i {
+  color: #6c757d;
+}
+
+.risk-data-type-legend-item.regular-option span {
+  color: #6c757d;
+}
+
+/* Data Type Circle Toggle Styles */
+.risk-data-type-circle-toggle-wrapper {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 12px;
+  padding: 4px 8px;
+  background-color: white;
+  border: 1px solid var(--form-gray-300);
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.risk-data-type-circle-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.risk-circle-option {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid var(--form-gray-300);
+  background-color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.risk-circle-option:hover {
+  transform: scale(1.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12);
+}
+
+.risk-circle-inner {
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  background-color: transparent;
+}
+
+.risk-circle-option.active .risk-circle-inner {
+  width: 9px;
+  height: 9px;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Personal Circle - Blue */
+.risk-circle-option.personal-circle {
+  border-color: #4f7cff;
+}
+
+.risk-circle-option.personal-circle.active {
+  border-color: #4f7cff;
+  background-color: rgba(79, 124, 255, 0.1);
+  box-shadow: 0 0 6px rgba(79, 124, 255, 0.2);
+}
+
+.risk-circle-option.personal-circle.active .risk-circle-inner {
+  background-color: #4f7cff;
+  box-shadow: 0 0 4px rgba(79, 124, 255, 0.35);
+}
+
+/* Confidential Circle - Red */
+.risk-circle-option.confidential-circle {
+  border-color: #e63946;
+}
+
+.risk-circle-option.confidential-circle.active {
+  border-color: #e63946;
+  background-color: rgba(230, 57, 70, 0.1);
+  box-shadow: 0 0 6px rgba(230, 57, 70, 0.2);
+}
+
+.risk-circle-option.confidential-circle.active .risk-circle-inner {
+  background-color: #e63946;
+  box-shadow: 0 0 4px rgba(230, 57, 70, 0.35);
+}
+
+/* Regular Circle - Grey */
+.risk-circle-option.regular-circle {
+  border-color: #6c757d;
+}
+
+.risk-circle-option.regular-circle.active {
+  border-color: #6c757d;
+  background-color: rgba(108, 117, 125, 0.1);
+  box-shadow: 0 0 6px rgba(108, 117, 125, 0.2);
+}
+
+.risk-circle-option.regular-circle.active .risk-circle-inner {
+  background-color: #6c757d;
+  box-shadow: 0 0 4px rgba(108, 117, 125, 0.35);
 }
 
 /* Success Modal and Popup Styles - Higher z-index to prevent dropdown interference */
@@ -436,6 +625,13 @@
   display: none !important;
 }
 
+/* Exception: Keep user icon visible in data type legend */
+.risk-data-type-legend-item.personal-option i.fas.fa-user,
+.risk-data-type-legend .risk-data-type-legend-item i.fas.fa-user {
+  display: inline-block !important;
+  visibility: visible !important;
+}
+
 /* Hide any blue user icon elements that might be added by external styling */
 .risk-instance-form > .form-group::before,
 .risk-instance-form .form-group label::before {
@@ -510,7 +706,14 @@
   font-weight: 600;
   color: var(--form-gray-700);
   text-align: left;
-  justify-content: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.form-group label > span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .form-group label i {
@@ -762,6 +965,21 @@
   
   .form-section {
     grid-template-columns: 1fr !important;
+  }
+  
+  .risk-instance-header-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  
+  .risk-data-type-legend {
+    width: 100%;
+  }
+  
+  .risk-data-type-legend-container {
+    width: 100%;
+    max-width: 100%;
   }
 }
 

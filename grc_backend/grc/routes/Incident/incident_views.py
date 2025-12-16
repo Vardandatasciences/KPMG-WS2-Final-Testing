@@ -741,6 +741,39 @@ def validate_incident_data(data):
         validated_data['FrameworkId'] = None
         print(f"✅ FrameworkId not provided - setting to None (All Frameworks)")
     
+    # Handle data_inventory - optional JSON field mapping field labels to data types
+    if 'data_inventory' in data and data.get('data_inventory'):
+        data_inventory = data.get('data_inventory')
+        if data_inventory is None or data_inventory == '':
+            validated_data['data_inventory'] = None
+        elif isinstance(data_inventory, str):
+            # Try to parse if it's a JSON string
+            try:
+                import json
+                validated_data['data_inventory'] = json.loads(data_inventory)
+            except (json.JSONDecodeError, TypeError):
+                # If parsing fails, set to None
+                print(f"Warning: Invalid JSON in data_inventory, setting to None: {data_inventory}")
+                validated_data['data_inventory'] = None
+        elif isinstance(data_inventory, dict):
+            # Already a dict, validate structure and keep as is
+            # Ensure all values are valid data types (personal, confidential, regular)
+            valid_data_types = ['personal', 'confidential', 'regular']
+            cleaned_inventory = {}
+            for key, value in data_inventory.items():
+                if isinstance(key, str) and isinstance(value, str) and value.lower() in valid_data_types:
+                    cleaned_inventory[key] = value.lower()
+                else:
+                    print(f"Warning: Invalid data type '{value}' for field '{key}', skipping")
+            validated_data['data_inventory'] = cleaned_inventory if cleaned_inventory else None
+        else:
+            # Invalid type, set to None
+            print(f"Warning: Invalid type for data_inventory, setting to None: {type(data_inventory)}")
+            validated_data['data_inventory'] = None
+    else:
+        # data_inventory not provided - set to None
+        validated_data['data_inventory'] = None
+    
     return validated_data
 
 

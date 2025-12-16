@@ -23,6 +23,138 @@
   --form-transition: all 0.3s ease;
 }
 
+/* Data Type Circle Toggle Styles */
+.risk-data-type-circle-toggle-wrapper {
+  display: inline-flex !important;
+  align-items: center;
+  margin-left: 12px;
+  padding: 4px 8px;
+  background-color: white;
+  border: 1px solid var(--form-gray-300);
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+}
+
+/* Ensure toggles are visible in BaseInput labels */
+.form-label .risk-data-type-circle-toggle-wrapper,
+.create-risk .form-label .risk-data-type-circle-toggle-wrapper,
+.create-risk .form-group .form-label .risk-data-type-circle-toggle-wrapper {
+  display: inline-flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  margin-left: 12px !important;
+  flex-shrink: 0 !important;
+}
+
+/* Ensure form-label properly displays toggles */
+.create-risk .form-group .form-label {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: 4px !important;
+}
+
+.create-risk .form-group .form-label > * {
+  flex-shrink: 0 !important;
+}
+
+.risk-data-type-circle-toggle {
+  display: flex !important;
+  align-items: center;
+  gap: 4px;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.risk-circle-option {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid var(--form-gray-300);
+  background-color: white;
+  cursor: pointer;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  position: relative;
+  visibility: visible !important;
+  opacity: 1 !important;
+  flex-shrink: 0;
+}
+
+.risk-circle-option:hover {
+  transform: scale(1.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12);
+}
+
+.risk-circle-inner {
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  background-color: transparent;
+}
+
+.risk-circle-option.active .risk-circle-inner {
+  width: 9px;
+  height: 9px;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Personal Circle - Blue */
+.risk-circle-option.personal-circle {
+  border-color: #4f7cff;
+}
+
+.risk-circle-option.personal-circle.active {
+  border-color: #4f7cff;
+  background-color: rgba(79, 124, 255, 0.1);
+  box-shadow: 0 0 6px rgba(79, 124, 255, 0.2);
+}
+
+.risk-circle-option.personal-circle.active .risk-circle-inner {
+  background-color: #4f7cff;
+  box-shadow: 0 0 4px rgba(79, 124, 255, 0.35);
+}
+
+/* Confidential Circle - Red */
+.risk-circle-option.confidential-circle {
+  border-color: #e63946;
+}
+
+.risk-circle-option.confidential-circle.active {
+  border-color: #e63946;
+  background-color: rgba(230, 57, 70, 0.1);
+  box-shadow: 0 0 6px rgba(230, 57, 70, 0.2);
+}
+
+.risk-circle-option.confidential-circle.active .risk-circle-inner {
+  background-color: #e63946;
+  box-shadow: 0 0 4px rgba(230, 57, 70, 0.35);
+}
+
+/* Regular Circle - Grey */
+.risk-circle-option.regular-circle {
+  border-color: #6c757d;
+}
+
+.risk-circle-option.regular-circle.active {
+  border-color: #6c757d;
+  background-color: rgba(108, 117, 125, 0.1);
+  box-shadow: 0 0 6px rgba(108, 117, 125, 0.2);
+}
+
+.risk-circle-option.regular-circle.active .risk-circle-inner {
+  background-color: #6c757d;
+  box-shadow: 0 0 4px rgba(108, 117, 125, 0.35);
+}
+
 /* Compliance Dropdown Styles */
 .risk-compliance-dropdown-container {
   position: relative;
@@ -239,13 +371,88 @@
   font-style: italic;
 }
 
+/* Data Type Legend Styles (Display Only) */
+.risk-data-type-legend {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.risk-data-type-legend-container {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--form-gray-200);
+  padding: 6px 10px;
+  min-width: 200px;
+  max-width: 240px;
+}
+
+.risk-data-type-options {
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+}
+
+.risk-data-type-legend-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 4px;
+  border-radius: 6px;
+  background-color: var(--form-gray-100);
+}
+
+.risk-data-type-legend-item i {
+  font-size: 0.9rem;
+  margin-bottom: 2px;
+}
+
+.risk-data-type-legend-item span {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+/* Personal Data Type - Blue */
+.risk-data-type-legend-item.personal-option i {
+  color: #4f7cff;
+}
+
+.risk-data-type-legend-item.personal-option span {
+  color: #4f7cff;
+}
+
+/* Confidential Data Type - Red */
+.risk-data-type-legend-item.confidential-option i {
+  color: #e63946;
+}
+
+.risk-data-type-legend-item.confidential-option span {
+  color: #e63946;
+}
+
+/* Regular Data Type - Gray */
+.risk-data-type-legend-item.regular-option i {
+  color: #6c757d;
+}
+
+.risk-data-type-legend-item.regular-option span {
+  color: #6c757d;
+}
+
 /* Creation Mode Toggle Styles */
 .risk-creation-mode-toggle {
   display: flex;
-  justify-content: flex-start;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 30px;
   margin-top: -30px;
   padding: 0 16px;
+  gap: 20px;
 }
 
 .risk-toggle-container {
@@ -257,6 +464,7 @@
   height: 40px;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .risk-toggle-option {
@@ -715,6 +923,12 @@
   font-weight: 600;
   color: var(--form-gray-700);
   margin-bottom: 2px;
+  flex-wrap: wrap;
+  position: relative;
+}
+
+.create-risk .risk-register-form-group label > * {
+  flex-shrink: 0;
 }
 
 .create-risk .risk-register-form-group input[type="text"],
@@ -981,6 +1195,26 @@
   .create-risk .form-row.full-width {
     grid-template-columns: 1fr;
   }
+  
+  .risk-creation-mode-toggle {
+    flex-wrap: wrap;
+    gap: 15px;
+  }
+  
+  .risk-toggle-container {
+    width: 100%;
+    max-width: 500px;
+  }
+  
+  .risk-data-type-legend {
+    width: 100%;
+  }
+  
+  .risk-data-type-legend-container {
+    min-width: 100%;
+    max-width: 100%;
+    padding: 6px 10px;
+  }
 }
 
 @media (max-width: 768px) {
@@ -990,6 +1224,36 @@
   
   .create-risk .compliance-id-container {
     max-width: 100%;
+  }
+  
+  .risk-creation-mode-toggle {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .risk-data-type-legend {
+    width: 100%;
+  }
+  
+  .risk-data-type-legend-container {
+    min-width: 100%;
+    width: 100%;
+  }
+  
+  .risk-data-type-options {
+    gap: 4px;
+  }
+  
+  .risk-data-type-legend-item {
+    padding: 5px 4px;
+  }
+  
+  .risk-data-type-legend-item i {
+    font-size: 0.85rem;
+  }
+  
+  .risk-data-type-legend-item span {
+    font-size: 0.6rem;
   }
 }
 

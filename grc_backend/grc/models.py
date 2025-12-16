@@ -17,6 +17,8 @@ class Users(models.Model):
     Email = models.EmailField(max_length=100)
     FirstName=models.CharField(max_length=255)
     LastName=models.CharField(max_length=255)
+    PhoneNumber=models.CharField(max_length=20, null=True, blank=True)
+    Address=models.TextField(null=True, blank=True)
     IsActive=models.CharField(max_length=1, default='Y', choices=[('Y', 'Yes'), ('N', 'No')])
     DepartmentId=models.CharField(max_length=50)
     session_token=models.CharField(max_length=1045, null=True, blank=True)
@@ -94,6 +96,8 @@ class Framework(models.Model):
     Amendment = models.JSONField(null=True, blank=True, default=list)  # Store amendment history
     latestAmmendmentDate= models.DateField(null=True, blank=True)
     latestComparisionCheckDate= models.DateField(null=True, blank=True)
+    # Data Inventory - JSON field mapping field labels to data types (personal, confidential, regular)
+    data_inventory = models.JSONField(null=True, blank=True)
     
  
     class Meta:
@@ -164,6 +168,8 @@ class Policy(models.Model):
     PolicySubCategory = models.CharField(max_length=255, null=True, blank=True)
     Reviewer = models.CharField(max_length=255, null=True, blank=True)
     Entities = models.JSONField(default=list, blank=True, null=True)  # Store entity IDs or "all"
+    # Data Inventory - JSON field mapping field labels to data types (personal, confidential, regular)
+    data_inventory = models.JSONField(null=True, blank=True)
  
  
     class Meta:
@@ -209,6 +215,8 @@ class SubPolicy(models.Model):
     PermanentTemporary = models.CharField(max_length=50, null=True, blank=True)
     Control = models.TextField(null=True, blank=True)
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    # Data Inventory - JSON field mapping field labels to data types (personal, confidential, regular)
+    data_inventory = models.JSONField(null=True, blank=True)
     class Meta:
         db_table = 'subpolicies'
  
@@ -319,6 +327,9 @@ class Compliance(models.Model):
     RiskCategory = models.CharField(max_length=45, null=True, blank=True)
     RiskBusinessImpact = models.CharField(max_length=45, null=True, blank=True)
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    
+    # Data Inventory - JSON field mapping field labels to data types (personal, confidential, regular)
+    data_inventory = models.JSONField(null=True, blank=True)
     class Meta:
         db_table = 'compliance'
 
@@ -457,6 +468,9 @@ class Audit(models.Model):
     Reports = models.JSONField(null=True, blank=True)
     ReviewStartDate = models.DateTimeField(null=True)
     ReviewDate = models.DateTimeField(null=True)
+    
+    # Data Inventory - JSON field mapping field labels to data types (personal, confidential, regular)
+    data_inventory = models.JSONField(null=True, blank=True)
 
     class Meta:
         db_table = 'audit'
@@ -550,6 +564,7 @@ class Incident(models.Model):
     AssignmentNotes = models.TextField(null=True, blank=True)
     IncidentFormDetails = models.JSONField(null=True, blank=True)
     MitigationCompletedDate = models.DateTimeField(null=True, blank=True)
+    data_inventory = models.JSONField(null=True, blank=True)
     class Meta:
         db_table = 'incidents'
 
@@ -777,6 +792,8 @@ class Risk(models.Model):
     RiskMitigation = models.TextField(null=True)
     CreatedAt = models.DateField(auto_now_add=True)
     FrameworkId = models.IntegerField(null=True)
+    data_inventory = models.JSONField(null=True)
+
     class Meta:
         db_table = 'risk'  # Ensure Django uses the correct table in the database
 
@@ -853,6 +870,7 @@ class RiskInstance(models.Model):
     # Field definitions with choices
     RiskStatus = models.CharField(max_length=50, choices=RISK_STATUS_CHOICES, default=STATUS_NOT_ASSIGNED, null=True)
     MitigationStatus = models.CharField(max_length=45, choices=MITIGATION_STATUS_CHOICES, default=MITIGATION_PENDING, null=True)
+    data_inventory = models.JSONField(null=True)
     
     def __str__(self):
         return f"Risk Instance {self.RiskInstanceId}"
@@ -1776,6 +1794,9 @@ class Event(models.Model):
     
     # Template Information
     IsTemplate = models.BooleanField(default=False)
+    
+    # Data Inventory - JSON field mapping field labels to data types (personal, confidential, regular)
+    data_inventory = models.JSONField(null=True, blank=True)
     
     class Meta:
         db_table = 'events'

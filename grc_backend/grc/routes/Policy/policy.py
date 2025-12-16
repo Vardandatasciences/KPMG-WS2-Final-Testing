@@ -715,6 +715,31 @@ def framework_list(request):
                         'error': f'Identifier "{identifier}" already exists. Please choose a different identifier.'
                     }, status=status.HTTP_400_BAD_REQUEST)
             
+            # Get data_inventory from request.data BEFORE validation (validator might filter it out)
+            data_inventory_raw = request.data.get('data_inventory')
+            print(f"DEBUG: data_inventory from request.data (before validation): {data_inventory_raw}, type: {type(data_inventory_raw)}")
+            
+            # Handle data_inventory - optional JSON field mapping field labels to data types
+            data_inventory = None
+            if data_inventory_raw:
+                if isinstance(data_inventory_raw, str):
+                    try:
+                        data_inventory = json.loads(data_inventory_raw)
+                    except json.JSONDecodeError:
+                        print(f"Warning: Invalid JSON in data_inventory, setting to None: {data_inventory_raw}")
+                        data_inventory = None
+                elif isinstance(data_inventory_raw, dict):
+                    # Clean the data_inventory to ensure all values are valid
+                    cleaned_inventory = {}
+                    valid_types = ['personal', 'confidential', 'regular']
+                    for key, value in data_inventory_raw.items():
+                        if value in valid_types:
+                            cleaned_inventory[key] = value
+                    data_inventory = cleaned_inventory if cleaned_inventory else None
+                else:
+                    print(f"Warning: Invalid type for data_inventory, setting to None: {type(data_inventory_raw)}")
+                    data_inventory = None
+            
             # Security: Prepare framework data with validated and sanitized inputs
             framework_data = {
                 'FrameworkName': validated_data['FrameworkName'],
@@ -729,7 +754,8 @@ def framework_list(request):
                 'Status': validated_data['Status'],
                 'ActiveInactive': validated_data['ActiveInactive'],
                 'CurrentVersion': validated_data['CurrentVersion'],
-                'InternalExternal': internal_external
+                'InternalExternal': internal_external,
+                'data_inventory': data_inventory  # Add data inventory
             }
 
             # Security: Secure reviewer lookup using parameterized queries
@@ -818,6 +844,29 @@ def framework_list(request):
                                 entities_data = []
                                 logger.warning("Invalid entities data received, defaulting to empty list")
                             
+                            # Handle data_inventory for policy
+                            policy_data_inventory = None
+                            if 'data_inventory' in policy_data and policy_data.get('data_inventory'):
+                                policy_data_inventory_raw = policy_data.get('data_inventory')
+                                print(f"DEBUG: Policy data_inventory received: {policy_data_inventory_raw}, type: {type(policy_data_inventory_raw)}")
+                                if isinstance(policy_data_inventory_raw, str):
+                                    try:
+                                        policy_data_inventory = json.loads(policy_data_inventory_raw)
+                                    except json.JSONDecodeError:
+                                        print(f"Warning: Invalid JSON in policy data_inventory, setting to None")
+                                        policy_data_inventory = None
+                                elif isinstance(policy_data_inventory_raw, dict):
+                                    # Clean the data_inventory to ensure all values are valid
+                                    cleaned_inventory = {}
+                                    valid_types = ['personal', 'confidential', 'regular']
+                                    for key, value in policy_data_inventory_raw.items():
+                                        if value in valid_types:
+                                            cleaned_inventory[key] = value
+                                    policy_data_inventory = cleaned_inventory if cleaned_inventory else None
+                                print(f"DEBUG: Policy data_inventory after processing: {policy_data_inventory}")
+                            else:
+                                print(f"DEBUG: No data_inventory found in policy_data. Available keys: {list(policy_data.keys())}")
+                            
                             # Security: Create policy with parameterized queries
                             policy = Policy.objects.create(
                                 FrameworkId=framework,
@@ -842,7 +891,8 @@ def framework_list(request):
                                 PolicyType=policy_data['PolicyType'],
                                 PolicyCategory=policy_data['PolicyCategory'],
                                 PolicySubCategory=policy_data['PolicySubCategory'],
-                                Entities=entities_data
+                                Entities=entities_data,
+                                data_inventory=policy_data_inventory  # Add data inventory
                             )
 
                             # Security: Create policy version with parameterized queries
@@ -863,6 +913,29 @@ def framework_list(request):
                                     if not created_by_name:
                                         created_by_name = policy.CreatedByName
 
+                                    # Handle data_inventory for subpolicy
+                                    subpolicy_data_inventory = None
+                                    if 'data_inventory' in subpolicy_data and subpolicy_data.get('data_inventory'):
+                                        subpolicy_data_inventory_raw = subpolicy_data.get('data_inventory')
+                                        print(f"DEBUG: Subpolicy data_inventory received: {subpolicy_data_inventory_raw}, type: {type(subpolicy_data_inventory_raw)}")
+                                        if isinstance(subpolicy_data_inventory_raw, str):
+                                            try:
+                                                subpolicy_data_inventory = json.loads(subpolicy_data_inventory_raw)
+                                            except json.JSONDecodeError:
+                                                print(f"Warning: Invalid JSON in subpolicy data_inventory, setting to None")
+                                                subpolicy_data_inventory = None
+                                        elif isinstance(subpolicy_data_inventory_raw, dict):
+                                            # Clean the data_inventory to ensure all values are valid
+                                            cleaned_inventory = {}
+                                            valid_types = ['personal', 'confidential', 'regular']
+                                            for key, value in subpolicy_data_inventory_raw.items():
+                                                if value in valid_types:
+                                                    cleaned_inventory[key] = value
+                                            subpolicy_data_inventory = cleaned_inventory if cleaned_inventory else None
+                                        print(f"DEBUG: Subpolicy data_inventory after processing: {subpolicy_data_inventory}")
+                                    else:
+                                        print(f"DEBUG: No data_inventory found in subpolicy_data. Available keys: {list(subpolicy_data.keys())}")
+
                                     SubPolicy.objects.create(
                                         PolicyId=policy,
                                         SubPolicyName=subpolicy_data['SubPolicyName'],
@@ -873,7 +946,8 @@ def framework_list(request):
                                         Status=subpolicy_data['Status'],
                                         PermanentTemporary=subpolicy_data['PermanentTemporary'],
                                         Control=subpolicy_data['Control'],
-                                        FrameworkId=framework
+                                        FrameworkId=framework,
+                                        data_inventory=subpolicy_data_inventory  # Add data inventory
                                     )
                             
                             # Security: Collect policy data for approval with safe serialization
@@ -1838,6 +1912,25 @@ def add_policy_to_framework(request, framework_id):
                         except Exception as reviewer_error:
                             logger.error(f"Error looking up policy reviewer: {type(reviewer_error).__name__}")
                     
+                    # Handle data_inventory for policy
+                    policy_data_inventory = None
+                    if 'data_inventory' in policy_data and policy_data.get('data_inventory'):
+                        policy_data_inventory_raw = policy_data.get('data_inventory')
+                        if isinstance(policy_data_inventory_raw, str):
+                            try:
+                                policy_data_inventory = json.loads(policy_data_inventory_raw)
+                            except json.JSONDecodeError:
+                                print(f"Warning: Invalid JSON in policy data_inventory, setting to None")
+                                policy_data_inventory = None
+                        elif isinstance(policy_data_inventory_raw, dict):
+                            # Clean the data_inventory to ensure all values are valid
+                            cleaned_inventory = {}
+                            valid_types = ['personal', 'confidential', 'regular']
+                            for key, value in policy_data_inventory_raw.items():
+                                if value in valid_types:
+                                    cleaned_inventory[key] = value
+                            policy_data_inventory = cleaned_inventory if cleaned_inventory else None
+                    
                     # Security: Sanitize all input data before database storage
                     policy_create_data = {
                         'FrameworkId': framework,
@@ -1862,7 +1955,8 @@ def add_policy_to_framework(request, framework_id):
                         'PolicyType': escape_html(policy_data['PolicyType']),
                         'PolicyCategory': escape_html(policy_data['PolicyCategory']),
                         'PolicySubCategory': escape_html(policy_data['PolicySubCategory']),
-                        'Entities': entities_data
+                        'Entities': entities_data,
+                        'data_inventory': policy_data_inventory  # Add data inventory
                     }
                     
                     # Check if policy name already exists in this framework
@@ -1901,6 +1995,25 @@ def add_policy_to_framework(request, framework_id):
                     if 'subpolicies' in policy_data and isinstance(policy_data['subpolicies'], list):
                         logger.info(f"Processing {len(policy_data['subpolicies'])} subpolicies for policy {policy.PolicyName}")
                         for subpolicy_data in policy_data['subpolicies']:
+                            # Handle data_inventory for subpolicy
+                            subpolicy_data_inventory = None
+                            if 'data_inventory' in subpolicy_data and subpolicy_data.get('data_inventory'):
+                                subpolicy_data_inventory_raw = subpolicy_data.get('data_inventory')
+                                if isinstance(subpolicy_data_inventory_raw, str):
+                                    try:
+                                        subpolicy_data_inventory = json.loads(subpolicy_data_inventory_raw)
+                                    except json.JSONDecodeError:
+                                        print(f"Warning: Invalid JSON in subpolicy data_inventory, setting to None")
+                                        subpolicy_data_inventory = None
+                                elif isinstance(subpolicy_data_inventory_raw, dict):
+                                    # Clean the data_inventory to ensure all values are valid
+                                    cleaned_inventory = {}
+                                    valid_types = ['personal', 'confidential', 'regular']
+                                    for key, value in subpolicy_data_inventory_raw.items():
+                                        if value in valid_types:
+                                            cleaned_inventory[key] = value
+                                    subpolicy_data_inventory = cleaned_inventory if cleaned_inventory else None
+                            
                             # Security: Sanitize subpolicy data before database storage
                             SubPolicy.objects.create(
                                 PolicyId=policy,
@@ -1912,7 +2025,8 @@ def add_policy_to_framework(request, framework_id):
                                 Status='Under Review',
                                 PermanentTemporary=subpolicy_data['PermanentTemporary'],
                                 Control=escape_html(subpolicy_data['Control']),
-                                FrameworkId=framework
+                                FrameworkId=framework,
+                                data_inventory=subpolicy_data_inventory  # Add data inventory
                             )
                     
                     # Security: Create policy approval record with validated data
@@ -7821,6 +7935,21 @@ def create_tailored_framework(request):
         if not reviewer_id:
             return Response({'error': 'No reviewer ID found'}, status=status.HTTP_400_BAD_REQUEST)
         
+        # Get data_inventory from request.data BEFORE validation (validator might filter it out)
+        framework_data_inventory_raw = request.data.get('data_inventory')
+        framework_data_inventory = None
+        if framework_data_inventory_raw:
+            if isinstance(framework_data_inventory_raw, str):
+                try:
+                    import json
+                    framework_data_inventory = json.loads(framework_data_inventory_raw)
+                except json.JSONDecodeError:
+                    print(f"Warning: Invalid JSON in framework data_inventory, setting to None")
+                    framework_data_inventory = None
+            elif isinstance(framework_data_inventory_raw, dict):
+                framework_data_inventory = framework_data_inventory_raw
+            print(f"DEBUG: Framework data_inventory: {framework_data_inventory}")
+        
         # Security: Sanitize framework data before database storage (Django ORM provides SQL injection protection)
         framework_data = {
             'FrameworkName': escape_html(data.get('title')),
@@ -7836,7 +7965,8 @@ def create_tailored_framework(request):
             'ActiveInactive': 'InActive',
             'Reviewer': escape_html(reviewer_name),
             'CurrentVersion': 1.0,
-            'InternalExternal': 'Internal'  # Default to Internal for tailored frameworks
+            'InternalExternal': 'Internal',  # Default to Internal for tailored frameworks
+            'data_inventory': framework_data_inventory
         }
         
         with transaction.atomic():
@@ -7903,6 +8033,21 @@ def create_tailored_framework(request):
                     entities_data = policy_data.get('Entities', [])
                     print(f"DEBUG: Entities data received in create_tailored_framework: {entities_data} (type: {type(entities_data)})")
                     
+                    # Handle data_inventory for policy
+                    policy_data_inventory = None
+                    if 'data_inventory' in policy_data and policy_data.get('data_inventory'):
+                        policy_data_inventory_raw = policy_data.get('data_inventory')
+                        if isinstance(policy_data_inventory_raw, str):
+                            try:
+                                import json
+                                policy_data_inventory = json.loads(policy_data_inventory_raw)
+                            except json.JSONDecodeError:
+                                print(f"Warning: Invalid JSON in policy data_inventory, setting to None")
+                                policy_data_inventory = None
+                        elif isinstance(policy_data_inventory_raw, dict):
+                            policy_data_inventory = policy_data_inventory_raw
+                        print(f"DEBUG: Policy data_inventory: {policy_data_inventory}")
+                    
                     # Security: Sanitize policy data before database storage
                     policy = Policy.objects.create(
                         FrameworkId=framework,
@@ -7928,7 +8073,8 @@ def create_tailored_framework(request):
                         PolicyType=escape_html(policy_data.get('PolicyType', '')),
                         PolicyCategory=escape_html(policy_data.get('PolicyCategory', '')),
                         PolicySubCategory=escape_html(policy_data.get('PolicySubCategory', '')),
-                        Entities=entities_data
+                        Entities=entities_data,
+                        data_inventory=policy_data_inventory
                     )
                     
                     created_policies.append(policy)
@@ -7978,6 +8124,21 @@ def create_tailored_framework(request):
                             if not subpolicy_created_by_name:
                                 subpolicy_created_by_name = policy.CreatedByName
                             
+                            # Handle data_inventory for subpolicy
+                            subpolicy_data_inventory = None
+                            if 'data_inventory' in subpolicy_data and subpolicy_data.get('data_inventory'):
+                                subpolicy_data_inventory_raw = subpolicy_data.get('data_inventory')
+                                if isinstance(subpolicy_data_inventory_raw, str):
+                                    try:
+                                        import json
+                                        subpolicy_data_inventory = json.loads(subpolicy_data_inventory_raw)
+                                    except json.JSONDecodeError:
+                                        print(f"Warning: Invalid JSON in subpolicy data_inventory, setting to None")
+                                        subpolicy_data_inventory = None
+                                elif isinstance(subpolicy_data_inventory_raw, dict):
+                                    subpolicy_data_inventory = subpolicy_data_inventory_raw
+                                print(f"DEBUG: Subpolicy data_inventory: {subpolicy_data_inventory}")
+                            
                             # Security: Sanitize subpolicy data before database storage
                             subpolicy = SubPolicy.objects.create(
                                 PolicyId=policy,
@@ -7989,7 +8150,8 @@ def create_tailored_framework(request):
                                 Status='Under Review',
                                 PermanentTemporary='',
                                 Control=escape_html(subpolicy_data.get('control', '')),
-                                FrameworkId=framework
+                                FrameworkId=framework,
+                                data_inventory=subpolicy_data_inventory
                             )
                             print(f"Created subpolicy: {subpolicy.SubPolicyName} (ID: {subpolicy.SubPolicyId})")
                             
@@ -8519,6 +8681,10 @@ def create_tailored_policy(request):
                 if not created_by_name:
                     return Response({"error": "Creator name not provided"}, status=status.HTTP_400_BAD_REQUEST)
 
+            # Extract data_inventory for policy
+            policy_data_inventory = data.get('data_inventory', {})
+            print(f"DEBUG: Policy data_inventory: {policy_data_inventory}")
+            
             # Security: Sanitize policy data before database storage (Django ORM provides SQL injection protection)
             new_policy_data = {
                 'FrameworkId': target_framework,
@@ -8545,6 +8711,7 @@ def create_tailored_policy(request):
                 'PolicyCategory': escape_html(policy_category),
                 'PolicySubCategory': escape_html(policy_subcategory),
                 'Entities': entities_data,
+                'data_inventory': policy_data_inventory
             }
             
             new_policy = Policy.objects.create(**new_policy_data)
@@ -8686,6 +8853,10 @@ def create_tailored_policy(request):
                     if subpolicy_data.get('exclude', False):
                         continue
                     
+                    # Extract data_inventory for subpolicy
+                    subpolicy_data_inventory = subpolicy_data.get('data_inventory', {})
+                    print(f"DEBUG: SubPolicy data_inventory: {subpolicy_data_inventory}")
+                    
                     # Security: Sanitize subpolicy data before database storage
                     new_subpolicy_data = {
                         'PolicyId': new_policy,
@@ -8697,7 +8868,8 @@ def create_tailored_policy(request):
                         'Status': 'Under Review',
                         'PermanentTemporary': subpolicy_data.get('PermanentTemporary', ''),
                         'Control': escape_html(subpolicy_data.get('Control', '')),
-                        'FrameworkId': target_framework
+                        'FrameworkId': target_framework,
+                        'data_inventory': subpolicy_data_inventory
                     }
                     
                     new_subpolicy = SubPolicy.objects.create(**new_subpolicy_data)

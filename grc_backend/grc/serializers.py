@@ -403,6 +403,8 @@ class AuditFindingSerializer(serializers.ModelSerializer):
 
 class IncidentSerializer(serializers.ModelSerializer):
     has_risk_instance = serializers.SerializerMethodField()
+    # Data inventory field - stores JSON mapping field labels to data types
+    data_inventory = serializers.JSONField(required=False, allow_null=True)
     
     class Meta:
         model = Incident
@@ -410,6 +412,43 @@ class IncidentSerializer(serializers.ModelSerializer):
     
     def get_has_risk_instance(self, obj):
         return RiskInstance.objects.filter(IncidentId=obj.IncidentId).exists()
+    
+    def to_internal_value(self, data):
+        # Convert the QueryDict or dict to a mutable dict
+        if hasattr(data, '_mutable'):
+            mutable_data = data.copy()
+        else:
+            mutable_data = dict(data)
+        
+        # Handle data_inventory field - ensure it's a valid JSON object
+        if 'data_inventory' in mutable_data:
+            data_inventory = mutable_data['data_inventory']
+            if data_inventory is None or data_inventory == '':
+                mutable_data['data_inventory'] = None
+            elif isinstance(data_inventory, str):
+                # Try to parse if it's a JSON string
+                try:
+                    import json
+                    mutable_data['data_inventory'] = json.loads(data_inventory)
+                except (json.JSONDecodeError, TypeError):
+                    # If parsing fails, set to None
+                    print(f"Warning: Invalid JSON in data_inventory, setting to None: {data_inventory}")
+                    mutable_data['data_inventory'] = None
+            elif isinstance(data_inventory, dict):
+                # Already a dict, keep as is
+                mutable_data['data_inventory'] = data_inventory
+            else:
+                # Invalid type, set to None
+                print(f"Warning: Invalid type for data_inventory, setting to None: {type(data_inventory)}")
+                mutable_data['data_inventory'] = None
+        
+        try:
+            result = super().to_internal_value(mutable_data)
+            return result
+        except Exception as e:
+            print(f"IncidentSerializer validation error: {e}")
+            print(f"Data being validated: {mutable_data}")
+            raise
 
 
 # =============================================================================
@@ -426,6 +465,8 @@ class RiskSerializer(serializers.ModelSerializer):
         allow_null=True,
         help_text="Framework ID is optional - only add if framework is selected"
     )
+    # Data inventory field - stores JSON mapping field labels to data types
+    data_inventory = serializers.JSONField(required=False, allow_null=True)
    
     class Meta:
         model = Risk
@@ -433,7 +474,7 @@ class RiskSerializer(serializers.ModelSerializer):
             'RiskId', 'ComplianceId', 'RiskTitle', 'Criticality', 'PossibleDamage',
             'Category', 'RiskType', 'BusinessImpact', 'RiskPriority', 'RiskDescription',
             'RiskLikelihood', 'RiskImpact', 'RiskExposureRating', 'RiskMultiplierX',
-            'RiskMultiplierY', 'RiskMitigation', 'CreatedAt', 'FrameworkId'
+            'RiskMultiplierY', 'RiskMitigation', 'CreatedAt', 'FrameworkId', 'data_inventory'
         ]  # Explicitly list fields that exist in the model
    
     def to_internal_value(self, data):
@@ -497,7 +538,29 @@ class RiskSerializer(serializers.ModelSerializer):
                     except (ValueError, TypeError):
                         # Leave as-is; DRF will handle invalid types later
                         pass
-       
+        
+        # Handle data_inventory field - ensure it's a valid JSON object
+        if 'data_inventory' in mutable_data:
+            data_inventory = mutable_data['data_inventory']
+            if data_inventory is None or data_inventory == '':
+                mutable_data['data_inventory'] = None
+            elif isinstance(data_inventory, str):
+                # Try to parse if it's a JSON string
+                try:
+                    import json
+                    mutable_data['data_inventory'] = json.loads(data_inventory)
+                except (json.JSONDecodeError, TypeError):
+                    # If parsing fails, set to None
+                    print(f"Warning: Invalid JSON in data_inventory, setting to None: {data_inventory}")
+                    mutable_data['data_inventory'] = None
+            elif isinstance(data_inventory, dict):
+                # Already a dict, keep as is
+                mutable_data['data_inventory'] = data_inventory
+            else:
+                # Invalid type, set to None
+                print(f"Warning: Invalid type for data_inventory, setting to None: {type(data_inventory)}")
+                mutable_data['data_inventory'] = None
+        
         try:
             result = super().to_internal_value(mutable_data)
             return result
@@ -536,6 +599,8 @@ class RiskInstanceSerializer(serializers.ModelSerializer):
         allow_null=True,
         help_text="Framework ID is optional - only add if framework is selected"
     )
+    # Data inventory field - stores JSON mapping field labels to data types
+    data_inventory = serializers.JSONField(required=False, allow_null=True)
    
     class Meta:
         model = RiskInstance
@@ -623,6 +688,28 @@ class RiskInstanceSerializer(serializers.ModelSerializer):
         # Handle RiskFormDetails if it's present but empty
         if 'RiskFormDetails' in mutable_data and not mutable_data['RiskFormDetails']:
             mutable_data['RiskFormDetails'] = None
+        
+        # Handle data_inventory field - ensure it's a valid JSON object
+        if 'data_inventory' in mutable_data:
+            data_inventory = mutable_data['data_inventory']
+            if data_inventory is None or data_inventory == '':
+                mutable_data['data_inventory'] = None
+            elif isinstance(data_inventory, str):
+                # Try to parse if it's a JSON string
+                try:
+                    import json
+                    mutable_data['data_inventory'] = json.loads(data_inventory)
+                except (json.JSONDecodeError, TypeError):
+                    # If parsing fails, set to None
+                    print(f"Warning: Invalid JSON in data_inventory, setting to None: {data_inventory}")
+                    mutable_data['data_inventory'] = None
+            elif isinstance(data_inventory, dict):
+                # Already a dict, keep as is
+                mutable_data['data_inventory'] = data_inventory
+            else:
+                # Invalid type, set to None
+                print(f"Warning: Invalid type for data_inventory, setting to None: {type(data_inventory)}")
+                mutable_data['data_inventory'] = None
        
         # Handle multiplier fields - convert from 1-10 range to 0.1-1.0 range for storage
         if 'RiskMultiplierX' in mutable_data and mutable_data['RiskMultiplierX'] is not None:

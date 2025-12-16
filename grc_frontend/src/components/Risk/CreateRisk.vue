@@ -15,7 +15,7 @@
       </div>
     </div>
     
-    <!-- Creation Mode Toggle -->
+    <!-- Creation Mode Toggle with Data Type Legend -->
     <div class="risk-creation-mode-toggle">
       <div class="risk-toggle-container">
         <div 
@@ -43,6 +43,26 @@
           'slide-center': creationMode === 'ai',
           'slide-right': creationMode === 'tailoring'
         }"></div>
+      </div>
+      
+      <!-- Data Type Legend (Display Only) -->
+      <div class="risk-data-type-legend">
+        <div class="risk-data-type-legend-container">
+          <div class="risk-data-type-options">
+            <div class="risk-data-type-legend-item personal-option">
+              <i class="fas fa-user"></i>
+              <span>Personal</span>
+            </div>
+            <div class="risk-data-type-legend-item confidential-option">
+              <i class="fas fa-shield-alt"></i>
+              <span>Confidential</span>
+            </div>
+            <div class="risk-data-type-legend-item regular-option">
+              <i class="fas fa-file-alt"></i>
+              <span>Regular</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     
@@ -103,6 +123,35 @@
         <div class="risk-register-form-group risk-compliance-id-container">
           <label>
             <span><i class="fas fa-hashtag"></i> Compliance ID</span>
+            <!-- Data Type Circle Toggle -->
+            <div class="risk-data-type-circle-toggle-wrapper">
+              <div class="risk-data-type-circle-toggle">
+                <div 
+                  class="risk-circle-option personal-circle" 
+                  :class="{ active: fieldDataTypes.complianceId === 'personal' }"
+                  @click="setDataType('complianceId', 'personal')"
+                  title="Personal Data"
+                >
+                  <div class="risk-circle-inner"></div>
+                </div>
+                <div 
+                  class="risk-circle-option confidential-circle" 
+                  :class="{ active: fieldDataTypes.complianceId === 'confidential' }"
+                  @click="setDataType('complianceId', 'confidential')"
+                  title="Confidential Data"
+                >
+                  <div class="risk-circle-inner"></div>
+                </div>
+                <div 
+                  class="risk-circle-option regular-circle" 
+                  :class="{ active: fieldDataTypes.complianceId === 'regular' }"
+                  @click="setDataType('complianceId', 'regular')"
+                  title="Regular Data"
+                >
+                  <div class="risk-circle-inner"></div>
+                </div>
+              </div>
+            </div>
           </label>
           <div class="risk-compliance-dropdown-container">
             <input 
@@ -175,11 +224,71 @@
             :options="criticalityOptions"
             name="Criticality"
             helper-text="Choose the severity level of this risk"
-          />
+          >
+            <template #label-append>
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.criticality === 'personal' }"
+                    @click="setDataType('criticality', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.criticality === 'confidential' }"
+                    @click="setDataType('criticality', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.criticality === 'regular' }"
+                    @click="setDataType('criticality', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </SelectInput>
           
           <div class="risk-register-form-group">
             <label>
               <span><i class="fas fa-tags"></i> Category</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.category === 'personal' }"
+                    @click="setDataType('category', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.category === 'confidential' }"
+                    @click="setDataType('category', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.category === 'regular' }"
+                    @click="setDataType('category', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
             </label>
             <div class="risk-category-container">
               <div class="risk-category-dropdown">
@@ -230,7 +339,38 @@
             required
             name="RiskPriority"
             helper-text="Set the priority level for risk treatment"
-          />
+          >
+            <template #label-append>
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.riskPriority === 'personal' }"
+                    @click="setDataType('riskPriority', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.riskPriority === 'confidential' }"
+                    @click="setDataType('riskPriority', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.riskPriority === 'regular' }"
+                    @click="setDataType('riskPriority', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </SelectInput>
         </div>
         
         <!-- Second Row: RiskLikelihood, RiskImpact, RiskExposureRating -->
@@ -238,6 +378,35 @@
           <div class="risk-register-form-group ai-enhanced">
             <label>
               <span><i class="fas fa-chart-line"></i> Risk Likelihood (1-10)</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.riskLikelihood === 'personal' }"
+                    @click="setDataType('riskLikelihood', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.riskLikelihood === 'confidential' }"
+                    @click="setDataType('riskLikelihood', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.riskLikelihood === 'regular' }"
+                    @click="setDataType('riskLikelihood', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
               <div v-if="riskJustifications.likelihood" class="ai-justification-indicator">
                 <div class="risk-ai-justification-tooltip" 
                      @mouseenter="handleTooltipInteraction($event)"
@@ -268,6 +437,35 @@
           <div class="risk-register-form-group ai-enhanced">
             <label>
               <span><i class="fas fa-exclamation-triangle"></i> Risk Impact (1-10)</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.riskImpact === 'personal' }"
+                    @click="setDataType('riskImpact', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.riskImpact === 'confidential' }"
+                    @click="setDataType('riskImpact', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.riskImpact === 'regular' }"
+                    @click="setDataType('riskImpact', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
               <div v-if="riskJustifications.impact" class="ai-justification-indicator">
                 <div class="risk-ai-justification-tooltip"
                      @mouseenter="handleTooltipInteraction($event)"
@@ -297,7 +495,38 @@
           
           <!-- Multiplier Fields -->
           <div class="risk-register-form-group">
-            <label><i class="fas fa-times"></i> Impact Multiplier (X) (1-10)</label>
+            <label>
+              <i class="fas fa-times"></i> Impact Multiplier (X) (1-10)
+              <!-- Data Type Circle Toggle -->
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.riskMultiplierX === 'personal' }"
+                    @click="setDataType('riskMultiplierX', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.riskMultiplierX === 'confidential' }"
+                    @click="setDataType('riskMultiplierX', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.riskMultiplierX === 'regular' }"
+                    @click="setDataType('riskMultiplierX', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <NumberInput
               id="riskMultiplierX"
               v-model="newRisk.RiskMultiplierX"
@@ -312,7 +541,38 @@
           </div>
           
           <div class="risk-register-form-group">
-            <label><i class="fas fa-times"></i> Likelihood Multiplier (Y) (1-10)</label>
+            <label>
+              <i class="fas fa-times"></i> Likelihood Multiplier (Y) (1-10)
+              <!-- Data Type Circle Toggle -->
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.riskMultiplierY === 'personal' }"
+                    @click="setDataType('riskMultiplierY', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.riskMultiplierY === 'confidential' }"
+                    @click="setDataType('riskMultiplierY', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.riskMultiplierY === 'regular' }"
+                    @click="setDataType('riskMultiplierY', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <NumberInput
               id="riskMultiplierY"
               v-model="newRisk.RiskMultiplierY"
@@ -334,7 +594,38 @@
             readonly
             name="RiskExposureRating"
             helper-text="Automatically calculated as Risk Impact × (X/10) × Risk Likelihood × (Y/10)"
-          />
+          >
+            <template #label-append>
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.riskExposureRating === 'personal' }"
+                    @click="setDataType('riskExposureRating', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.riskExposureRating === 'confidential' }"
+                    @click="setDataType('riskExposureRating', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.riskExposureRating === 'regular' }"
+                    @click="setDataType('riskExposureRating', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </NumberInput>
         </div>
         
         <!-- Third Row: RiskType, BusinessImpact, RiskTitle -->
@@ -348,11 +639,71 @@
             required
             name="RiskType"
             helper-text="Classify the nature and timing of this risk"
-          />
+          >
+            <template #label-append>
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.riskType === 'personal' }"
+                    @click="setDataType('riskType', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.riskType === 'confidential' }"
+                    @click="setDataType('riskType', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.riskType === 'regular' }"
+                    @click="setDataType('riskType', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </SelectInput>
           
           <div class="risk-register-form-group">
             <label>
               <span><i class="fas fa-building"></i> Business Impact</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.businessImpact === 'personal' }"
+                    @click="setDataType('businessImpact', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.businessImpact === 'confidential' }"
+                    @click="setDataType('businessImpact', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.businessImpact === 'regular' }"
+                    @click="setDataType('businessImpact', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
             </label>
             <div class="risk-business-impact-container">
               <div class="risk-business-impact-dropdown">
@@ -413,7 +764,38 @@
             :pattern="null"
             name="RiskTitle"
             helper-text="Provide a brief, descriptive title for this risk"
-          />
+          >
+            <template #label-append>
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.riskTitle === 'personal' }"
+                    @click="setDataType('riskTitle', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.riskTitle === 'confidential' }"
+                    @click="setDataType('riskTitle', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.riskTitle === 'regular' }"
+                    @click="setDataType('riskTitle', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </TextInput>
         </div>
         
         <!-- Fourth Row: RiskDescription, PossibleDamage, RiskMitigation -->
@@ -428,7 +810,38 @@
             @update:modelValue="value => newRisk.RiskDescription = sanitizeInput(value)"
             name="RiskDescription"
             helper-text="Describe the risk scenario, causes, and potential triggers"
-          />
+          >
+            <template #label-append>
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.riskDescription === 'personal' }"
+                    @click="setDataType('riskDescription', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.riskDescription === 'confidential' }"
+                    @click="setDataType('riskDescription', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.riskDescription === 'regular' }"
+                    @click="setDataType('riskDescription', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </TextareaInput>
           
           <TextareaInput
             id="possibleDamage"
@@ -440,12 +853,71 @@
             name="PossibleDamage"
             helper-text="Detail the potential consequences and damage if this risk materializes"
             style="min-height: 120px; height: 200px; resize: vertical;"
-
-          />
+          >
+            <template #label-append>
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.possibleDamage === 'personal' }"
+                    @click="setDataType('possibleDamage', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.possibleDamage === 'confidential' }"
+                    @click="setDataType('possibleDamage', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.possibleDamage === 'regular' }"
+                    @click="setDataType('possibleDamage', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </TextareaInput>
           
           <div class="risk-register-form-group">
             <label>
               <span><i class="fas fa-shield-alt"></i> Risk Mitigation</span>
+              <!-- Data Type Circle Toggle -->
+              <div class="risk-data-type-circle-toggle-wrapper">
+                <div class="risk-data-type-circle-toggle">
+                  <div 
+                    class="risk-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.riskMitigation === 'personal' }"
+                    @click="setDataType('riskMitigation', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.riskMitigation === 'confidential' }"
+                    @click="setDataType('riskMitigation', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="risk-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.riskMitigation === 'regular' }"
+                    @click="setDataType('riskMitigation', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="risk-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
             </label>
             <div class="risk-mitigation-form">
               <div class="risk-mitigation-input-group">
@@ -632,6 +1104,24 @@ export default {
       sourceRiskId: null,
       isLoadingSourceRisk: false,
       creationMode: 'manual', // 'manual', 'ai', 'tailoring'
+      // Store data type per field
+      fieldDataTypes: {
+        complianceId: 'regular',
+        criticality: 'regular',
+        category: 'regular',
+        riskPriority: 'regular',
+        riskLikelihood: 'regular',
+        riskImpact: 'regular',
+        riskMultiplierX: 'regular',
+        riskMultiplierY: 'regular',
+        riskExposureRating: 'regular',
+        riskType: 'regular',
+        businessImpact: 'regular',
+        riskTitle: 'regular',
+        riskDescription: 'regular',
+        possibleDamage: 'regular',
+        riskMitigation: 'regular'
+      },
       aiInput: {
         title: '',
         description: ''
@@ -1017,6 +1507,13 @@ export default {
       }
     },
 
+    setDataType(fieldName, type) {
+      if (Object.prototype.hasOwnProperty.call(this.fieldDataTypes, fieldName)) {
+        this.fieldDataTypes[fieldName] = type
+        console.log(`Data type selected for ${fieldName}:`, type)
+      }
+    },
+
     generateAiSuggestion() {
       if (!this.aiInput.title && !this.aiInput.description) {
         this.$popup.warning('Please provide either a title or description for AI analysis.');
@@ -1248,6 +1745,25 @@ export default {
       
       // Reset category selection
       this.selectedCategory = ''
+
+      // Reset all field data types
+      this.fieldDataTypes = {
+        complianceId: 'regular',
+        criticality: 'regular',
+        category: 'regular',
+        riskPriority: 'regular',
+        riskLikelihood: 'regular',
+        riskImpact: 'regular',
+        riskMultiplierX: 'regular',
+        riskMultiplierY: 'regular',
+        riskExposureRating: 'regular',
+        riskType: 'regular',
+        businessImpact: 'regular',
+        riskTitle: 'regular',
+        riskDescription: 'regular',
+        possibleDamage: 'regular',
+        riskMitigation: 'regular'
+      }
 
       // Reset Risk Mitigation form
       this.mitigationForm.actions = ['']
@@ -1498,6 +2014,32 @@ export default {
         console.error('Error getting consent config:', error);
       }
 
+      // Create data inventory JSON mapping field labels to data types
+      const fieldLabelMap = {
+        complianceId: 'Compliance ID',
+        criticality: 'Criticality',
+        category: 'Category',
+        riskPriority: 'Risk Priority',
+        riskLikelihood: 'Risk Likelihood',
+        riskImpact: 'Risk Impact',
+        riskMultiplierX: 'Risk Multiplier X',
+        riskMultiplierY: 'Risk Multiplier Y',
+        riskExposureRating: 'Risk Exposure Rating',
+        riskType: 'Risk Type',
+        businessImpact: 'Business Impact',
+        riskTitle: 'Risk Title',
+        riskDescription: 'Risk Description',
+        possibleDamage: 'Possible Damage',
+        riskMitigation: 'Risk Mitigation'
+      };
+
+      // Transform fieldDataTypes into data_inventory JSON with labels
+      const dataInventory = {};
+      for (const [fieldName, dataType] of Object.entries(this.fieldDataTypes)) {
+        const fieldLabel = fieldLabelMap[fieldName] || fieldName;
+        dataInventory[fieldLabel] = dataType;
+      }
+
       // Sanitize data before submission
       const sanitizedRiskData = {
         ...this.newRisk,
@@ -1509,6 +2051,7 @@ export default {
         RiskLikelihood: parseInt(this.newRisk.RiskLikelihood) || 1,
         RiskImpact: parseInt(this.newRisk.RiskImpact) || 1,
         RiskExposureRating: parseFloat(this.newRisk.RiskExposureRating) || 1,
+        data_inventory: dataInventory, // Include data inventory JSON with field labels
       };
 
       // Include consent data if consent was required and accepted

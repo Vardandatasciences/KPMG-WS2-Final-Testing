@@ -917,6 +917,30 @@ def create_event(request):
             except (ValueError, TypeError):
                 print(f"DEBUG: Invalid sub_event_type_id: {sub_event_type_id}")
 
+        # Handle data_inventory - optional JSON field mapping field labels to data types
+        data_inventory = None
+        if 'data_inventory' in data and data.get('data_inventory'):
+            data_inventory_raw = data.get('data_inventory')
+            if data_inventory_raw is None or data_inventory_raw == '':
+                data_inventory = None
+            elif isinstance(data_inventory_raw, str):
+                try:
+                    data_inventory = json.loads(data_inventory_raw)
+                except json.JSONDecodeError:
+                    print(f"Warning: Invalid JSON in data_inventory, setting to None: {data_inventory_raw}")
+                    data_inventory = None
+            elif isinstance(data_inventory_raw, dict):
+                # Clean the data_inventory to ensure all values are valid
+                cleaned_inventory = {}
+                valid_types = ['personal', 'confidential', 'regular']
+                for key, value in data_inventory_raw.items():
+                    if value in valid_types:
+                        cleaned_inventory[key] = value
+                data_inventory = cleaned_inventory if cleaned_inventory else None
+            else:
+                print(f"Warning: Invalid type for data_inventory, setting to None: {type(data_inventory_raw)}")
+                data_inventory = None
+        
         # Extract data from request - match Django Event model field names exactly
         event_data = {
             'EventTitle': data.get('title'),
@@ -941,7 +965,8 @@ def create_event(request):
             'Reviewer': reviewer_obj,
             'IsTemplate': is_template,
             'Evidence': evidence_string,  # Store evidence URLs as semicolon-separated string
-            'DynamicFieldsData': data.get('dynamic_fields', {})  # Store user-entered dynamic fields data
+            'DynamicFieldsData': data.get('dynamic_fields', {}),  # Store user-entered dynamic fields data
+            'data_inventory': data_inventory  # Store data inventory mapping
         }
         
         print(f"DEBUG: Event data to create: {event_data}")
@@ -1009,7 +1034,8 @@ def create_event(request):
                         'Owner': owner_obj,
                         'Reviewer': reviewer_obj,
                         'IsTemplate': is_template,
-                        'Evidence': evidence_string  # Include evidence for additional records too
+                        'Evidence': evidence_string,  # Include evidence for additional records too
+                        'data_inventory': data_inventory  # Include data inventory for additional records too
                     }
                     
                     # Create the additional event

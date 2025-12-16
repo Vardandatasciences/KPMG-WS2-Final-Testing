@@ -134,6 +134,45 @@
               </div>
               
               <div class="input-group">
+                <label for="phoneNumber">Phone Number *</label>
+                <div class="input-wrapper">
+                  <div class="input-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" stroke="currentColor" stroke-width="2"/>
+                    </svg>
+                  </div>
+                  <input 
+                    type="tel" 
+                    id="phoneNumber" 
+                    v-model="formData.phoneNumber" 
+                    placeholder="Enter phone number"
+                    required
+                    :disabled="isLoading"
+                  >
+                </div>
+              </div>
+              
+              <div class="input-group">
+                <label for="address">Address *</label>
+                <div class="input-wrapper">
+                  <div class="input-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" stroke="currentColor" stroke-width="2"/>
+                      <circle cx="12" cy="10" r="3" stroke="currentColor" stroke-width="2"/>
+                    </svg>
+                  </div>
+                  <textarea 
+                    id="address" 
+                    v-model="formData.address" 
+                    placeholder="Enter address"
+                    required
+                    :disabled="isLoading"
+                    rows="3"
+                  ></textarea>
+                </div>
+              </div>
+              
+              <div class="input-group">
                 <label for="role">Role *</label>
                 <div class="input-wrapper">
                   <div class="input-icon">
@@ -321,6 +360,8 @@ const formData = ref({
   email: '',
   firstName: '',
   lastName: '',
+  phoneNumber: '',
+  address: '',
   departmentId: '',
   role: '',
   isActive: 'Y'
@@ -475,6 +516,8 @@ const resetForm = () => {
     email: '',
     firstName: '',
     lastName: '',
+    phoneNumber: '',
+    address: '',
     departmentId: '',
     role: '',
     isActive: 'Y'
@@ -757,6 +800,8 @@ const createUser = async () => {
       email: formData.value.email,
       firstName: formData.value.firstName,
       lastName: formData.value.lastName,
+      phoneNumber: formData.value.phoneNumber,
+      address: formData.value.address,
       departmentId: formData.value.departmentId,
       role: formData.value.role,
       isActive: formData.value.isActive,

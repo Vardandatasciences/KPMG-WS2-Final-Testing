@@ -10,8 +10,9 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
-from ...models import Users, Department, BusinessUnit, Entity, Location, DataSubjectRequest, RBAC, AccessRequest, Framework
+from ...models import Users, Department, BusinessUnit, Entity, Location, DataSubjectRequest, RBAC, AccessRequest, Framework, S3File
 from ...rbac.utils import RBACUtils
+from .logging_service import send_log
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,18 @@ def get_user_business_info(request, user_id):
             if result['DepartmentHead']:
                 dept_head = Users.objects.filter(UserId=result['DepartmentHead']).first()
                 if dept_head:
-                    result['DepartmentHead'] = f"{dept_head.FirstName} {dept_head.LastName}"
+                    # Mask department head name
+                    from .data_masking import get_masking_service
+                    masking_service = get_masking_service()
+                    masked_first = masking_service.mask_name(dept_head.FirstName) if dept_head.FirstName else ''
+                    masked_last = masking_service.mask_name(dept_head.LastName) if dept_head.LastName else ''
+                    result['DepartmentHead'] = f"{masked_first} {masked_last}".strip()
+            
+            # Mask location address if present
+            if result.get('Location'):
+                from .data_masking import get_masking_service
+                masking_service = get_masking_service()
+                result['Location'] = masking_service.mask_address(result['Location'])
 
         return JsonResponse({
             'status': 'success',
@@ -69,16 +81,34 @@ def get_user_profile(request, user_id):
         logger.debug(f"Fetching user profile for user_id: {user_id}")
         user = Users.objects.get(UserId=user_id)
         
-        return JsonResponse({
-            'status': 'success',
-            'data': {
+        # Import masking service
+        from .data_masking import get_masking_service
+        masking_service = get_masking_service()
+        
+        # Mask sensitive data for display
+        masked_data = {
+            'firstName': masking_service.mask_name(user.FirstName) if user.FirstName else None,
+            'lastName': masking_service.mask_name(user.LastName) if user.LastName else None,
+            'email': masking_service.mask_email(user.Email) if user.Email else None,
+            'phoneNumber': masking_service.mask_phone(user.PhoneNumber) if user.PhoneNumber else None,
+            'address': masking_service.mask_address(user.Address) if user.Address else None,
+            'username': masking_service.mask_name(user.UserName) if user.UserName else None,
+            'isActive': user.IsActive,
+            'departmentId': user.DepartmentId,
+            # Include original values for editing (only if user is viewing their own profile or is admin)
+            'original': {
                 'firstName': user.FirstName,
                 'lastName': user.LastName,
                 'email': user.Email,
-                'username': user.UserName,
-                'isActive': user.IsActive,
-                'departmentId': user.DepartmentId
+                'phoneNumber': user.PhoneNumber,
+                'address': user.Address,
+                'username': user.UserName
             }
+        }
+        
+        return JsonResponse({
+            'status': 'success',
+            'data': masked_data
         })
 
     except Users.DoesNotExist:
@@ -87,6 +117,9 @@ def get_user_profile(request, user_id):
             'message': 'User not found'
         }, status=404)
     except Exception as e:
+        logger.error(f"Error fetching user profile: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return JsonResponse({
             'status': 'error',
             'message': str(e)
@@ -345,6 +378,27 @@ def create_data_subject_request(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # For RECTIFICATION requests on personal information, verify OTP
+        if request_type == 'RECTIFICATION' and info_type == 'personal':
+            from datetime import datetime
+            verified = request.session.get('profile_edit_verified', False)
+            verified_user_id = request.session.get('profile_edit_verified_user_id')
+            verified_at = request.session.get('profile_edit_verified_at')
+            
+            # Check if verification is valid (not expired - 15 minutes)
+            if not verified or str(user_id) != verified_user_id:
+                return Response(
+                    {'status': 'error', 'message': 'OTP verification required. Please verify your mobile number before editing personal information.'}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            if verified_at and datetime.now().timestamp() - verified_at > 900:  # 15 minutes
+                return Response(
+                    {'status': 'error', 'message': 'OTP verification expired. Please verify again before editing.'}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        
         # Get user to find framework
         user = Users.objects.get(UserId=user_id)
         framework = getattr(user, 'FrameworkId', None)
@@ -437,6 +491,307 @@ def create_data_subject_request(request):
         logger.error(f"Error creating data subject request: {str(e)}")
         return Response(
             {'status': 'error', 'message': f'Failed to create request: {str(e)}'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@csrf_exempt
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def export_user_data_portability(request):
+    """
+    Export user data for portability request
+    POST /api/export-user-data-portability/
+    
+    Body: {
+        "export_format": "json" | "csv" | "xlsx" (default: "json")
+    }
+    """
+    try:
+        from datetime import datetime
+        import tempfile
+        import os
+        
+        # Get user ID
+        user_id = RBACUtils.get_user_id_from_request(request)
+        if not user_id:
+            return Response(
+                {'status': 'error', 'message': 'User not authenticated'}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Get export format
+        export_format = request.data.get('export_format', 'json').lower()
+        if export_format not in ['json', 'csv', 'xlsx', 'pdf', 'xml', 'txt']:
+            export_format = 'json'
+        
+        # Get user data
+        try:
+            user = Users.objects.get(UserId=user_id)
+        except Users.DoesNotExist:
+            return Response(
+                {'status': 'error', 'message': 'User not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Collect personal information
+        personal_data = {
+            'userId': user.UserId,
+            'username': user.UserName,
+            'firstName': user.FirstName,
+            'lastName': user.LastName,
+            'email': user.Email,
+            'phoneNumber': user.PhoneNumber,
+            'address': user.Address,
+            'isActive': user.IsActive,
+            'createdAt': user.CreatedAt.isoformat() if user.CreatedAt else None,
+            'updatedAt': user.UpdatedAt.isoformat() if user.UpdatedAt else None,
+        }
+        
+        # Collect business information
+        business_data = {}
+        try:
+            department_id = user.DepartmentId
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT 
+                        d.DepartmentName,
+                        d.DepartmentHead,
+                        bu.Name as BusinessUnitName,
+                        e.EntityName,
+                        CONCAT(l.AddressLine, ', ', l.City, ', ', l.State, ', ', l.Country) as Location
+                    FROM department d
+                    LEFT JOIN businessunits bu ON d.BusinessUnitId = bu.BusinessUnitId
+                    LEFT JOIN mainentities e ON d.EntityId = e.Id
+                    LEFT JOIN locations l ON e.LocationId = l.LocationID
+                    WHERE d.DepartmentId = %s
+                """, [department_id])
+                
+                columns = [col[0] for col in cursor.description]
+                result = cursor.fetchone()
+                if result:
+                    business_data = dict(zip(columns, result))
+                    
+                    # Get department head name
+                    if business_data.get('DepartmentHead'):
+                        dept_head = Users.objects.filter(UserId=business_data['DepartmentHead']).first()
+                        if dept_head:
+                            business_data['DepartmentHeadName'] = f"{dept_head.FirstName or ''} {dept_head.LastName or ''}".strip()
+        except Exception as e:
+            logger.warning(f"Error fetching business info: {str(e)}")
+        
+        # Combine all data
+        export_data = {
+            'personalInformation': personal_data,
+            'businessInformation': business_data,
+            'exportedAt': timezone.now().isoformat(),
+            'exportFormat': export_format
+        }
+        
+        # Export to file
+        from .s3_fucntions import export_data as s3_export_data, create_direct_mysql_client
+        from django.conf import settings
+        
+        # Create S3 client
+        db_config = settings.DATABASES['default']
+        mysql_config = {
+            'host': db_config['HOST'],
+            'user': db_config['USER'],
+            'password': db_config['PASSWORD'],
+            'database': db_config['NAME'],
+            'port': db_config.get('PORT', 3306)
+        }
+        s3_client = create_direct_mysql_client(mysql_config)
+        
+        # Prepare data for export (convert dict to list format for export function)
+        export_list = [export_data] if export_format == 'json' else [personal_data, business_data]
+        
+        # Export and upload to S3
+        file_name = f"user_data_export_{user_id}_{int(timezone.now().timestamp())}"
+        export_result = s3_export_data(
+            data=export_list if export_format != 'json' else export_data,
+            file_format=export_format,
+            user_id=str(user_id),
+            options={
+                'file_name': file_name,
+                'module': 'portability'
+            },
+            s3_client_instance=s3_client
+        )
+        
+        if export_result.get('success'):
+            file_url = export_result.get('file_url')
+            file_name = export_result.get('file_name')
+            
+            # Get framework for logging
+            framework = getattr(user, 'FrameworkId', None)
+            if not framework:
+                framework = Framework.objects.filter(Status='Approved', ActiveInactive='Active').first()
+            framework_id_value = framework.FrameworkId if framework else None
+            
+            # Get client IP address
+            def get_client_ip(request):
+                x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+                if x_forwarded_for:
+                    ip = x_forwarded_for.split(',')[0]
+                else:
+                    ip = request.META.get('REMOTE_ADDR')
+                return ip
+            
+            client_ip = get_client_ip(request)
+            
+            # Save to s3_files table
+            s3_file = None
+            try:
+                if framework:
+                    s3_file = S3File.objects.create(
+                        url=file_url,
+                        file_type=export_format,
+                        file_name=file_name,
+                        user_id=str(user_id),
+                        metadata={
+                            'export_type': 'PORTABILITY',
+                            'export_format': export_format,
+                            'file_url': file_url,
+                            'file_name': file_name,
+                            'exported_at': timezone.now().isoformat(),
+                            'user_id': user_id,
+                            'user_name': user.UserName,
+                            'personal_data_exported': True,
+                            'business_data_exported': True
+                        },
+                        FrameworkId=framework
+                    )
+                    logger.info(f"S3 file record created with ID: {s3_file.id} for portability export")
+            except Exception as s3_error:
+                logger.error(f"Error saving to s3_files table: {str(s3_error)}")
+                import traceback
+                logger.error(traceback.format_exc())
+            
+            # Log to grc_logs table
+            try:
+                additional_info = {
+                    'export_format': export_format,
+                    'file_url': file_url,
+                    'file_name': file_name,
+                    'export_type': 'PORTABILITY',
+                    's3_file_id': s3_file.id if s3_file else None
+                }
+                
+                # Ensure framework exists before logging
+                if not framework:
+                    framework = Framework.objects.first()
+                    if framework:
+                        framework_id_value = framework.FrameworkId
+                
+                if framework:
+                    log_id = send_log(
+                        module='User Profile',
+                        actionType='DATA_EXPORT',
+                        description=f'User exported personal and business data in {export_format.upper()} format',
+                        userId=str(user_id),
+                        userName=user.UserName,
+                        entityType='PORTABILITY',
+                        entityId=str(user_id),
+                        logLevel='INFO',
+                        ipAddress=client_ip,
+                        additionalInfo=additional_info,
+                        frameworkId=framework_id_value
+                    )
+                    if log_id:
+                        logger.info(f"Log entry created in grc_logs with ID: {log_id} for portability export")
+                    else:
+                        logger.warning(f"Failed to create log entry in grc_logs (send_log returned None)")
+                else:
+                    logger.error(f"Cannot log to grc_logs: No framework found")
+            except Exception as log_error:
+                logger.error(f"Error logging to grc_logs table: {str(log_error)}")
+                import traceback
+                logger.error(traceback.format_exc())
+            
+            # Create or update data subject request for PORTABILITY
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute("""
+                        SELECT COLUMN_NAME 
+                        FROM INFORMATION_SCHEMA.COLUMNS 
+                        WHERE TABLE_SCHEMA = DATABASE() 
+                        AND TABLE_NAME = 'DataSubjectRequest' 
+                        AND COLUMN_NAME = 'FrameworkId'
+                    """)
+                    has_framework_id = cursor.fetchone() is not None
+                    
+                    audit_trail = {
+                        'request_type': 'PORTABILITY',
+                        'export_format': export_format,
+                        'file_url': file_url,
+                        'file_name': file_name,
+                        'exported_at': timezone.now().isoformat(),
+                        'requested_by': user_id,
+                        's3_file_id': s3_file.id if s3_file else None
+                    }
+                    
+                    if has_framework_id and framework_id_value:
+                        cursor.execute("""
+                            INSERT INTO `DataSubjectRequest` 
+                            (request_type, user_id, status, verification_status, audit_trail, approved_by, FrameworkId, created_at, updated_at)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """, [
+                            'PORTABILITY',
+                            user_id,
+                            'APPROVED',  # Auto-approved after OTP verification
+                            'VERIFIED',
+                            json.dumps(audit_trail),
+                            user_id,  # Self-approved after OTP
+                            framework_id_value,
+                            timezone.now(),
+                            timezone.now()
+                        ])
+                    else:
+                        cursor.execute("""
+                            INSERT INTO `DataSubjectRequest` 
+                            (request_type, user_id, status, verification_status, audit_trail, approved_by, created_at, updated_at)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        """, [
+                            'PORTABILITY',
+                            user_id,
+                            'APPROVED',
+                            'VERIFIED',
+                            json.dumps(audit_trail),
+                            user_id,
+                            timezone.now(),
+                            timezone.now()
+                        ])
+                    
+                    request_id = cursor.lastrowid
+                    logger.info(f"Portability request {request_id} created and approved for user {user_id}")
+            except Exception as req_error:
+                logger.warning(f"Error creating portability request record: {str(req_error)}")
+            
+            return Response({
+                'status': 'success',
+                'message': 'Data exported successfully',
+                'data': {
+                    'file_url': file_url,
+                    'file_name': file_name,
+                    'export_format': export_format,
+                    'download_url': file_url,
+                    's3_file_id': s3_file.id if s3_file else None
+                }
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response(
+                {'status': 'error', 'message': f'Export failed: {export_result.get("error", "Unknown error")}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+    except Exception as e:
+        logger.error(f"Error in export_user_data_portability: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return Response(
+            {'status': 'error', 'message': f'Failed to export data: {str(e)}'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 

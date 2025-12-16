@@ -203,6 +203,7 @@ export const complianceService = {
       BusinessUnitsCovered: defaultData.BusinessUnitsCovered || '',
       Identifier: defaultData.Identifier || '', // Add the missing Identifier field
       IsRisk: Boolean(defaultData.IsRisk),
+      data_inventory: defaultData.data_inventory || null, // Include data_inventory if present
       PossibleDamage: defaultData.PossibleDamage || '',
       mitigation: defaultData.mitigation || '',
       PotentialRiskScenarios: defaultData.PotentialRiskScenarios || '',

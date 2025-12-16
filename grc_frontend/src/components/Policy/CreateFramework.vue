@@ -8,14 +8,76 @@
         <!-- Framework ID and Name in one row -->
         <div class="form-row">
           <div class="form-group">
-            <label>Framework ID</label>
+            <label>
+              Framework ID
+              <!-- Data Type Circle Toggle -->
+              <div class="policy-data-type-circle-toggle-wrapper">
+                <div class="policy-data-type-circle-toggle">
+                  <div 
+                    class="policy-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.frameworkId === 'personal' }"
+                    @click="setDataType('frameworkId', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="policy-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="policy-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.frameworkId === 'confidential' }"
+                    @click="setDataType('frameworkId', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="policy-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="policy-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.frameworkId === 'regular' }"
+                    @click="setDataType('frameworkId', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="policy-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <div class="input-wrapper">
               <input type="text" v-model="formData.frameworkId" placeholder="Enter framework id" />
             </div>
           </div>
           
           <div class="form-group">
-            <label>Framework Name</label>
+            <label>
+              Framework Name
+              <!-- Data Type Circle Toggle -->
+              <div class="policy-data-type-circle-toggle-wrapper">
+                <div class="policy-data-type-circle-toggle">
+                  <div 
+                    class="policy-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.frameworkName === 'personal' }"
+                    @click="setDataType('frameworkName', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="policy-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="policy-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.frameworkName === 'confidential' }"
+                    @click="setDataType('frameworkName', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="policy-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="policy-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.frameworkName === 'regular' }"
+                    @click="setDataType('frameworkName', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="policy-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <div class="input-wrapper">
               <input type="text" v-model="formData.frameworkName" placeholder="Enter framework name" />
             </div>
@@ -25,7 +87,38 @@
         <!-- Version and Upload Document in one row -->
         <div class="form-row">
           <div class="form-group">
-            <label>Version</label>
+            <label>
+              Version
+              <!-- Data Type Circle Toggle -->
+              <div class="policy-data-type-circle-toggle-wrapper">
+                <div class="policy-data-type-circle-toggle">
+                  <div 
+                    class="policy-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.version === 'personal' }"
+                    @click="setDataType('version', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="policy-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="policy-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.version === 'confidential' }"
+                    @click="setDataType('version', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="policy-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="policy-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.version === 'regular' }"
+                    @click="setDataType('version', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="policy-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <div class="input-wrapper">
               <input type="text" v-model="formData.version" placeholder="Enter version" />
             </div>
@@ -44,14 +137,76 @@
         
         <div class="form-row">
           <div class="form-group">
-            <label>Effective Start Date</label>
+            <label>
+              Effective Start Date
+              <!-- Data Type Circle Toggle -->
+              <div class="policy-data-type-circle-toggle-wrapper">
+                <div class="policy-data-type-circle-toggle">
+                  <div 
+                    class="policy-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.effectiveStartDate === 'personal' }"
+                    @click="setDataType('effectiveStartDate', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="policy-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="policy-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.effectiveStartDate === 'confidential' }"
+                    @click="setDataType('effectiveStartDate', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="policy-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="policy-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.effectiveStartDate === 'regular' }"
+                    @click="setDataType('effectiveStartDate', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="policy-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <div class="input-wrapper">
               <input type="date" v-model="formData.effectiveStartDate" />
             </div>
           </div>
           
           <div class="form-group">
-            <label>Effective End Date</label>
+            <label>
+              Effective End Date
+              <!-- Data Type Circle Toggle -->
+              <div class="policy-data-type-circle-toggle-wrapper">
+                <div class="policy-data-type-circle-toggle">
+                  <div 
+                    class="policy-circle-option personal-circle" 
+                    :class="{ active: fieldDataTypes.effectiveEndDate === 'personal' }"
+                    @click="setDataType('effectiveEndDate', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="policy-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="policy-circle-option confidential-circle" 
+                    :class="{ active: fieldDataTypes.effectiveEndDate === 'confidential' }"
+                    @click="setDataType('effectiveEndDate', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="policy-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="policy-circle-option regular-circle" 
+                    :class="{ active: fieldDataTypes.effectiveEndDate === 'regular' }"
+                    @click="setDataType('effectiveEndDate', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="policy-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </label>
             <div class="input-wrapper">
               <input type="date" v-model="formData.effectiveEndDate" />
             </div>
@@ -59,7 +214,38 @@
         </div>
         
         <div class="form-group">
-          <label>Created By</label>
+          <label>
+            Created By
+            <!-- Data Type Circle Toggle -->
+            <div class="policy-data-type-circle-toggle-wrapper">
+              <div class="policy-data-type-circle-toggle">
+                <div 
+                  class="policy-circle-option personal-circle" 
+                  :class="{ active: fieldDataTypes.createdBy === 'personal' }"
+                  @click="setDataType('createdBy', 'personal')"
+                  title="Personal Data"
+                >
+                  <div class="policy-circle-inner"></div>
+                </div>
+                <div 
+                  class="policy-circle-option confidential-circle" 
+                  :class="{ active: fieldDataTypes.createdBy === 'confidential' }"
+                  @click="setDataType('createdBy', 'confidential')"
+                  title="Confidential Data"
+                >
+                  <div class="policy-circle-inner"></div>
+                </div>
+                <div 
+                  class="policy-circle-option regular-circle" 
+                  :class="{ active: fieldDataTypes.createdBy === 'regular' }"
+                  @click="setDataType('createdBy', 'regular')"
+                  title="Regular Data"
+                >
+                  <div class="policy-circle-inner"></div>
+                </div>
+              </div>
+            </div>
+          </label>
           <div class="input-wrapper">
             <input type="text" v-model="formData.createdBy" placeholder="Enter creator name" />
           </div>
@@ -190,6 +376,24 @@ export default {
       createdBy: ''
     })
 
+    // Field data types for toggling (personal, confidential, regular)
+    const fieldDataTypes = ref({
+      frameworkId: 'regular',
+      frameworkName: 'regular',
+      version: 'regular',
+      effectiveStartDate: 'regular',
+      effectiveEndDate: 'regular',
+      createdBy: 'regular'
+    })
+
+    // Set data type for a field
+    const setDataType = (fieldName, type) => {
+      if (Object.prototype.hasOwnProperty.call(fieldDataTypes.value, fieldName)) {
+        fieldDataTypes.value[fieldName] = type
+        console.log(`Data type selected for ${fieldName}:`, type)
+      }
+    }
+
     const handleFileUpload = (event) => {
       formData.value.document = event.target.files[0]
     }
@@ -302,7 +506,9 @@ export default {
       formData,
       handleFileUpload,
       handleFrameworkFormSubmit,
-      handleExtractionComplete
+      handleExtractionComplete,
+      fieldDataTypes,
+      setDataType
     }
   }
 }

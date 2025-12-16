@@ -361,6 +361,30 @@ def create_audit(request):
             # Persist single-letter code (I/E/S/A/R). DB column will be altered to VARCHAR(10).
             db_audit_type = audit_type
 
+            # Handle data_inventory - optional JSON field mapping field labels to data types
+            data_inventory = None
+            if 'data_inventory' in data and data.get('data_inventory'):
+                data_inventory_raw = data.get('data_inventory')
+                if data_inventory_raw is None or data_inventory_raw == '':
+                    data_inventory = None
+                elif isinstance(data_inventory_raw, str):
+                    try:
+                        data_inventory = json.loads(data_inventory_raw)
+                    except json.JSONDecodeError:
+                        print(f"Warning: Invalid JSON in data_inventory, setting to None: {data_inventory_raw}")
+                        data_inventory = None
+                elif isinstance(data_inventory_raw, dict):
+                    # Clean the data_inventory to ensure all values are valid
+                    cleaned_inventory = {}
+                    valid_types = ['personal', 'confidential', 'regular']
+                    for key, value in data_inventory_raw.items():
+                        if value in valid_types:
+                            cleaned_inventory[key] = value
+                    data_inventory = cleaned_inventory if cleaned_inventory else None
+                else:
+                    print(f"Warning: Invalid type for data_inventory, setting to None: {type(data_inventory_raw)}")
+                    data_inventory = None
+
             audit_fields = {
                 'Title': validated_data['title'],
                 'Scope': validated_data['scope'],
@@ -387,6 +411,7 @@ def create_audit(request):
                 'ReviewStartDate': None,
                 'ReviewDate': None,
                 'CompletionDate': None,
+                'data_inventory': data_inventory  # Store data inventory mapping
             }
 
             print(f"Audit fields for member {member_id}: {audit_fields}")

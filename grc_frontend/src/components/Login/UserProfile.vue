@@ -50,6 +50,7 @@
                   <h2 class="section-title"><i class="fas fa-user"></i> Personal Information</h2>
                   <p class="section-helper">Update your personal details and contact information.</p>
                 </div>
+                <div class="header-actions" style="display: flex; align-items: center; gap: 10px;">
                 <button
                   v-if="!editModePersonal"
                   type="button"
@@ -58,6 +59,46 @@
                 >
                   <i class="fas fa-edit"></i> Edit
                 </button>
+                  <div v-if="!editModePersonal" class="format-selector" style="position: relative;">
+                    <button
+                      type="button"
+                      class="format-select-btn"
+                      @click="showFormatDropdown = !showFormatDropdown"
+                      style="padding: 8px 16px; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer; display: flex; align-items: center; gap: 8px;"
+                    >
+                      <span>{{ selectedExportFormat.toUpperCase() || 'Select format' }}</span>
+                      <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <div
+                      v-if="showFormatDropdown"
+                      class="format-dropdown"
+                      style="position: absolute; top: 100%; left: 0; background: white; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); z-index: 1000; min-width: 180px; margin-top: 4px;"
+                    >
+                      <div
+                        v-for="format in exportFormats"
+                        :key="format.value"
+                        @click="selectExportFormat(format.value)"
+                        style="padding: 10px 16px; cursor: pointer; border-bottom: 1px solid #f0f0f0;"
+                        :style="{ backgroundColor: selectedExportFormat === format.value ? '#f0f7ff' : 'white' }"
+                        @mouseover="$event.target.style.backgroundColor = '#f5f5f5'"
+                        @mouseleave="$event.target.style.backgroundColor = selectedExportFormat === format.value ? '#f0f7ff' : 'white'"
+                      >
+                        {{ format.label }}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    v-if="!editModePersonal"
+                    type="button"
+                    class="export-btn"
+                    @click="initiatePortabilityExport"
+                    :disabled="exportingData || !selectedExportFormat"
+                    style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 8px;"
+                  >
+                    <i v-if="exportingData" class="fas fa-spinner fa-spin"></i>
+                    <i v-else class="fas fa-download"></i>
+                    {{ exportingData ? 'Exporting...' : 'Export' }}
+                  </button>
                 <div v-else class="edit-actions">
                   <button
                     type="button"
@@ -74,28 +115,61 @@
                   >
                     <i class="fas fa-save"></i> Save Edits
                   </button>
+                  </div>
                 </div>
               </div>
              
               <div class="form-row">
                 <div class="form-group">
                   <label>First Name:</label>
-                  <input type="text" v-model="form.firstName" :disabled="!editModePersonal || loading" />
+                  <input 
+                    type="text" 
+                    :value="editModePersonal ? form.firstName : maskedData.firstName"
+                    @input="updatePersonalField('firstName', $event.target.value)"
+                    :disabled="!editModePersonal || loading" 
+                  />
                 </div>
                 <div class="form-group">
                   <label>Last Name:</label>
-                  <input type="text" v-model="form.lastName" :disabled="!editModePersonal || loading" />
+                  <input 
+                    type="text" 
+                    :value="editModePersonal ? form.lastName : maskedData.lastName"
+                    @input="updatePersonalField('lastName', $event.target.value)"
+                    :disabled="!editModePersonal || loading" 
+                  />
                 </div>
               </div>
              
               <div class="form-row">
                 <div class="form-group">
                   <label>Email:</label>
-                  <input type="email" v-model="form.email" :disabled="!editModePersonal || loading" />
+                  <input 
+                    type="email" 
+                    :value="editModePersonal ? form.email : maskedData.email"
+                    @input="updatePersonalField('email', $event.target.value)"
+                    :disabled="!editModePersonal || loading" 
+                  />
                 </div>
                 <div class="form-group">
                   <label>Phone Number:</label>
-                  <input type="text" v-model="form.phone" :disabled="!editModePersonal || loading" />
+                  <input 
+                    type="text" 
+                    :value="editModePersonal ? form.phone : maskedData.phone"
+                    @input="updatePersonalField('phone', $event.target.value)"
+                    :disabled="!editModePersonal || loading" 
+                  />
+                </div>
+              </div>
+              
+              <div class="form-row">
+                <div class="form-group full-width">
+                  <label>Address:</label>
+                  <textarea 
+                    :value="editModePersonal ? form.address : maskedData.address"
+                    @input="updatePersonalField('address', $event.target.value)"
+                    :disabled="!editModePersonal || loading" 
+                    rows="3"
+                  ></textarea>
                 </div>
               </div>
              
@@ -498,6 +572,30 @@
                         {{ dept.name }}
                       </option>
                     </select>
+                  </div>
+                  
+                  <div class="form-group">
+                    <label for="phoneNumber">Phone Number *</label>
+                    <input 
+                      type="tel" 
+                      id="phoneNumber" 
+                      v-model="createUserForm.phoneNumber" 
+                      placeholder="Enter phone number"
+                      required
+                      :disabled="createUserLoading"
+                    />
+                  </div>
+                  
+                  <div class="form-group">
+                    <label for="address">Address *</label>
+                    <textarea 
+                      id="address" 
+                      v-model="createUserForm.address" 
+                      placeholder="Enter address"
+                      required
+                      :disabled="createUserLoading"
+                      rows="3"
+                    ></textarea>
                   </div>
                   
                   <div class="form-group">
@@ -1299,7 +1397,181 @@
       :username="''"
       @close="showForgotPasswordModal = false" 
     />
+
+    <!-- OTP Verification Modal for Profile Editing -->
+    <div v-if="showOtpModal" class="modal-overlay" @click.self="closeOtpModal">
+      <div class="modal-content otp-modal">
+        <div class="modal-header">
+          <h3><i class="fas fa-shield-alt"></i> Mobile OTP Verification</h3>
+          <button class="modal-close" @click="closeOtpModal">
+            <i class="fas fa-times"></i>
+          </button>
   </div>
+        <div class="modal-body">
+          <p class="otp-description">
+            For security purposes, please verify your mobile number with an OTP before editing your personal information.
+          </p>
+          
+          <div v-if="otpStep === 'send'" class="otp-step">
+            <div class="form-group">
+              <label>Mobile Number:</label>
+              <input 
+                type="text" 
+                :value="maskedPhoneNumber" 
+                disabled 
+                class="disabled-input"
+              />
+            </div>
+            <div v-if="otpError" class="message error-message">
+              <i class="fas fa-exclamation-circle"></i> {{ otpError }}
+            </div>
+            <div v-if="otpSuccess" class="message success-message">
+              <i class="fas fa-check-circle"></i> {{ otpSuccess }}
+            </div>
+            <button 
+              class="submit-btn" 
+              @click="sendProfileEditOtp" 
+              :disabled="sendingOtp || loading"
+            >
+              <i v-if="sendingOtp" class="fas fa-spinner fa-spin"></i>
+              <i v-else class="fas fa-paper-plane"></i>
+              {{ sendingOtp ? 'Sending OTP...' : 'Send OTP' }}
+            </button>
+          </div>
+
+          <div v-if="otpStep === 'verify'" class="otp-step">
+            <p class="otp-instruction">
+              Enter the 6-digit OTP sent to your mobile number ending in <strong>{{ maskedPhoneNumber.slice(-4) }}</strong>
+            </p>
+            <div class="otp-input-container">
+              <input
+                v-for="(digit, index) in otpDigits"
+                :key="index"
+                ref="otpInputs"
+                v-model="otpDigits[index]"
+                type="text"
+                maxlength="1"
+                class="otp-input"
+                @input="handleOtpInput(index, $event)"
+                @keydown="handleOtpKeydown(index, $event)"
+                @paste="handleOtpPaste($event)"
+              />
+            </div>
+            <div v-if="otpError" class="message error-message">
+              <i class="fas fa-exclamation-circle"></i> {{ otpError }}
+            </div>
+            <div class="otp-actions">
+              <button 
+                class="btn-secondary" 
+                @click="resendOtp" 
+                :disabled="resendingOtp || otpResendCooldown > 0"
+              >
+                <i v-if="resendingOtp" class="fas fa-spinner fa-spin"></i>
+                <i v-else class="fas fa-redo"></i>
+                {{ resendingOtp ? 'Resending...' : (otpResendCooldown > 0 ? `Resend (${otpResendCooldown}s)` : 'Resend OTP') }}
+              </button>
+              <button 
+                class="submit-btn" 
+                @click="verifyProfileEditOtp" 
+                :disabled="verifyingOtp || !isOtpComplete || loading"
+              >
+                <i v-if="verifyingOtp" class="fas fa-spinner fa-spin"></i>
+                <i v-else class="fas fa-check"></i>
+                {{ verifyingOtp ? 'Verifying...' : 'Verify OTP' }}
+              </button>
+            </div>
+          </div>
+        </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Portability OTP Verification Modal -->
+    <div v-if="showPortabilityOtpModal" class="modal-overlay" @click.self="closePortabilityOtpModal">
+      <div class="modal-content otp-modal">
+        <div class="modal-header">
+          <h3><i class="fas fa-shield-alt"></i> Mobile OTP Verification for Data Export</h3>
+          <button class="modal-close" @click="closePortabilityOtpModal">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p class="otp-description">
+            For security purposes, please verify your mobile number with an OTP before exporting your data.
+          </p>
+          
+          <div v-if="portabilityOtpStep === 'send'" class="otp-step">
+            <div class="form-group">
+              <label>Mobile Number:</label>
+              <input 
+                type="text" 
+                :value="maskedPhoneNumber" 
+                disabled 
+                class="disabled-input"
+              />
+            </div>
+            <div v-if="portabilityOtpError" class="message error-message">
+              <i class="fas fa-exclamation-circle"></i> {{ portabilityOtpError }}
+            </div>
+            <div v-if="portabilityOtpSuccess" class="message success-message">
+              <i class="fas fa-check-circle"></i> {{ portabilityOtpSuccess }}
+            </div>
+            <button 
+              class="submit-btn" 
+              @click="sendPortabilityOtp" 
+              :disabled="sendingPortabilityOtp || loading"
+            >
+              <i v-if="sendingPortabilityOtp" class="fas fa-spinner fa-spin"></i>
+              <i v-else class="fas fa-paper-plane"></i>
+              {{ sendingPortabilityOtp ? 'Sending OTP...' : 'Send OTP' }}
+            </button>
+          </div>
+
+          <div v-if="portabilityOtpStep === 'verify'" class="otp-step">
+            <p class="otp-instruction">
+              Enter the 6-digit OTP sent to your mobile number ending in <strong>{{ maskedPhoneNumber.slice(-4) }}</strong>
+            </p>
+            <div class="otp-input-container">
+              <input
+                v-for="(digit, index) in portabilityOtpDigits"
+                :key="index"
+                ref="portabilityOtpInputs"
+                v-model="portabilityOtpDigits[index]"
+                type="text"
+                maxlength="1"
+                class="otp-input"
+                @input="handlePortabilityOtpInput(index, $event)"
+                @keydown="handlePortabilityOtpKeydown(index, $event)"
+                @paste="handlePortabilityOtpPaste($event)"
+              />
+            </div>
+            <div v-if="portabilityOtpError" class="message error-message">
+              <i class="fas fa-exclamation-circle"></i> {{ portabilityOtpError }}
+            </div>
+            <div class="otp-actions">
+              <button 
+                class="btn-secondary" 
+                @click="resendPortabilityOtp" 
+                :disabled="resendingPortabilityOtp || portabilityOtpResendCooldown > 0"
+              >
+                <i v-if="resendingPortabilityOtp" class="fas fa-spinner fa-spin"></i>
+                <i v-else class="fas fa-redo"></i>
+                {{ resendingPortabilityOtp ? 'Resending...' : (portabilityOtpResendCooldown > 0 ? `Resend (${portabilityOtpResendCooldown}s)` : 'Resend OTP') }}
+              </button>
+              <button 
+                class="submit-btn" 
+                @click="verifyPortabilityOtp" 
+                :disabled="verifyingPortabilityOtp || !isPortabilityOtpComplete || loading"
+              >
+                <i v-if="verifyingPortabilityOtp" class="fas fa-spinner fa-spin"></i>
+                <i v-else class="fas fa-check"></i>
+                {{ verifyingPortabilityOtp ? 'Verifying...' : 'Verify OTP' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   
 
   
@@ -1331,11 +1603,20 @@ export default {
         { key: 'consent-config', label: 'Consent Management', icon: 'fas fa-check-circle' },
         { key: 'requests', label: 'Requests', icon: 'fas fa-file-alt'}
       ],
+      maskedData: {
+        firstName: '',
+        lastName: '',
+        email: '',
+        phone: '',
+        address: '',
+        username: ''
+      },
       form: {
         firstName: '',
         lastName: '',
         email: '',
         phone: '',
+        address: '',
         newPassword: '',
         confirmPassword: '',
         otp: '',
@@ -1391,6 +1672,8 @@ export default {
          email: '',
          firstName: '',
          lastName: '',
+         phoneNumber: '',
+         address: '',
          departmentId: '',
          role: '',
          isActive: 'Y'
@@ -1436,6 +1719,40 @@ export default {
       showRectificationModal: false,
       currentEditType: 'personal', // 'personal' or 'business'
       submittingRectification: false,
+      // OTP Verification for profile editing
+      showOtpModal: false,
+      otpStep: 'send', // 'send' or 'verify'
+      otpDigits: ['', '', '', '', '', ''],
+      otpError: null,
+      otpSuccess: null,
+      sendingOtp: false,
+      verifyingOtp: false,
+      resendingOtp: false,
+      otpResendCooldown: 0,
+      otpResendTimer: null,
+      // Portability OTP Verification
+      showPortabilityOtpModal: false,
+      portabilityOtpStep: 'send', // 'send' or 'verify'
+      portabilityOtpDigits: ['', '', '', '', '', ''],
+      portabilityOtpError: null,
+      portabilityOtpSuccess: null,
+      sendingPortabilityOtp: false,
+      verifyingPortabilityOtp: false,
+      resendingPortabilityOtp: false,
+      portabilityOtpResendCooldown: 0,
+      portabilityOtpResendTimer: null,
+      exportingData: false,
+      selectedExportFormat: 'json', // 'json', 'csv', 'xlsx', 'pdf', 'xml', 'txt'
+      showFormatDropdown: false,
+      exportFormats: [
+        { value: 'json', label: 'JSON (.json)' },
+        { value: 'csv', label: 'CSV (.csv)' },
+        { value: 'xlsx', label: 'Excel (.xlsx)' },
+        { value: 'pdf', label: 'PDF (.pdf)' },
+        { value: 'xml', label: 'XML (.xml)' },
+        { value: 'txt', label: 'Text (.txt)' }
+      ],
+      pendingEditType: null, // Store which edit type was requested
       showRequestDetailsModal: false,
       selectedRequest: null,
       rbacModules: [
@@ -1527,6 +1844,15 @@ export default {
     hasAccessRequests() {
       // Check if any data subject requests are of type ACCESS
       return this.dataSubjectRequests.some(req => req.request_type === 'ACCESS');
+    },
+    maskedPhoneNumber() {
+      return this.form.phone || this.maskedData.phone || '****';
+    },
+    isOtpComplete() {
+      if (!this.otpDigits || !Array.isArray(this.otpDigits)) {
+        return false;
+      }
+      return this.otpDigits.every(digit => digit !== '') && this.otpDigits.join('').length === 6;
     }
   },
   mounted() {
@@ -1571,6 +1897,431 @@ export default {
   },
 
   methods: {
+    // Update personal field only if in edit mode
+    updatePersonalField(field, value) {
+      if (this.editModePersonal) {
+        this.form[field] = value;
+      }
+    },
+    
+    // OTP Verification Methods
+    async checkProfileEditVerification() {
+      try {
+        const { API_BASE_URL } = await import('../../config/api.js');
+        const axios = (await import('axios')).default;
+        
+        const response = await axios.get(
+          `${API_BASE_URL}/api/profile-edit-otp/check/`,
+          { headers: this.getConsentAuthHeaders() }
+        );
+        
+        return response.data.verified === true;
+      } catch (error) {
+        console.error('Error checking profile edit verification:', error);
+        return false;
+      }
+    },
+    
+    async sendProfileEditOtp() {
+      this.sendingOtp = true;
+      this.otpError = null;
+      this.otpSuccess = null;
+      
+      try {
+        const { API_BASE_URL } = await import('../../config/api.js');
+        const axios = (await import('axios')).default;
+        
+        const response = await axios.post(
+          `${API_BASE_URL}/api/profile-edit-otp/send/`,
+          {},
+          { headers: this.getConsentAuthHeaders() }
+        );
+        
+        if (response.data.success) {
+          this.otpSuccess = response.data.message;
+          this.otpStep = 'verify';
+          this.otpDigits = ['', '', '', '', '', ''];
+          this.startOtpResendCooldown();
+          // Focus first OTP input
+          this.$nextTick(() => {
+            if (this.$refs.otpInputs && this.$refs.otpInputs[0]) {
+              this.$refs.otpInputs[0].focus();
+            }
+          });
+        } else {
+          this.otpError = response.data.message || 'Failed to send OTP';
+        }
+      } catch (error) {
+        console.error('Error sending profile edit OTP:', error);
+        this.otpError = error.response?.data?.message || 'Failed to send OTP. Please try again.';
+      } finally {
+        this.sendingOtp = false;
+      }
+    },
+    
+    async verifyProfileEditOtp() {
+      if (!this.isOtpComplete) {
+        this.otpError = 'Please enter a valid 6-digit OTP';
+        return;
+      }
+      
+      this.verifyingOtp = true;
+      this.otpError = null;
+      
+      try {
+        const { API_BASE_URL } = await import('../../config/api.js');
+        const axios = (await import('axios')).default;
+        
+        const otp = this.otpDigits.join('');
+        const response = await axios.post(
+          `${API_BASE_URL}/api/profile-edit-otp/verify/`,
+          { otp: otp },
+          { headers: this.getConsentAuthHeaders() }
+        );
+        
+        if (response.data.success) {
+          this.otpSuccess = response.data.message;
+          
+          // Enable edit mode for the pending type
+          if (this.pendingEditType === 'personal') {
+            // Reload user data to ensure we have the latest original unmasked data
+            await this.loadUserData();
+            
+            // Wait for data to be loaded, then set original data and enable edit mode
+            await this.$nextTick();
+            
+            this.originalPersonalData = {
+              firstName: this.form.firstName,
+              lastName: this.form.lastName,
+              email: this.form.email,
+              phone: this.form.phone || '',
+              address: this.form.address || ''
+            };
+            
+            // Enable edit mode
+            this.editModePersonal = true;
+            
+            // Close modal after enabling edit mode
+            this.closeOtpModal();
+            
+            // Show success message
+            this.success = 'OTP verified successfully! You can now edit your personal information.';
+            setTimeout(() => {
+              this.success = null;
+            }, 3000);
+          }
+          this.pendingEditType = null;
+        } else {
+          this.otpError = response.data.message || 'Invalid OTP. Please try again.';
+          // Clear OTP inputs on error
+          this.otpDigits = ['', '', '', '', '', ''];
+          this.$nextTick(() => {
+            if (this.$refs.otpInputs && this.$refs.otpInputs[0]) {
+              this.$refs.otpInputs[0].focus();
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Error verifying profile edit OTP:', error);
+        this.otpError = error.response?.data?.message || 'Failed to verify OTP. Please try again.';
+        // Clear OTP inputs on error
+        this.otpDigits = ['', '', '', '', '', ''];
+        this.$nextTick(() => {
+          if (this.$refs.otpInputs && this.$refs.otpInputs[0]) {
+            this.$refs.otpInputs[0].focus();
+          }
+        });
+      } finally {
+        this.verifyingOtp = false;
+      }
+    },
+    
+    async resendOtp() {
+      this.resendingOtp = true;
+      this.otpError = null;
+      this.otpSuccess = null;
+      
+      try {
+        await this.sendProfileEditOtp();
+      } finally {
+        this.resendingOtp = false;
+      }
+    },
+    
+    closeOtpModal() {
+      this.showOtpModal = false;
+      this.otpStep = 'send';
+      this.otpDigits = ['', '', '', '', '', ''];
+      this.otpError = null;
+      this.otpSuccess = null;
+      this.pendingEditType = null;
+      if (this.otpResendTimer) {
+        clearInterval(this.otpResendTimer);
+        this.otpResendTimer = null;
+      }
+      this.otpResendCooldown = 0;
+    },
+    
+    startOtpResendCooldown() {
+      this.otpResendCooldown = 60; // 60 seconds
+      if (this.otpResendTimer) {
+        clearInterval(this.otpResendTimer);
+      }
+      this.otpResendTimer = setInterval(() => {
+        this.otpResendCooldown--;
+        if (this.otpResendCooldown <= 0) {
+          clearInterval(this.otpResendTimer);
+          this.otpResendTimer = null;
+        }
+      }, 1000);
+    },
+    
+    // Portability Export Methods
+    async initiatePortabilityExport() {
+      if (!this.selectedExportFormat) {
+        this.error = 'Please select an export format';
+        return;
+      }
+      // Directly export without OTP verification
+      await this.exportUserData();
+    },
+    
+    selectExportFormat(format) {
+      this.selectedExportFormat = format;
+      this.showFormatDropdown = false;
+    },
+    
+    async sendPortabilityOtp() {
+      this.sendingPortabilityOtp = true;
+      this.portabilityOtpError = null;
+      this.portabilityOtpSuccess = null;
+      
+      try {
+        const { API_BASE_URL } = await import('../../config/api.js');
+        const axios = (await import('axios')).default;
+        
+        const response = await axios.post(
+          `${API_BASE_URL}/api/portability-otp/send/`,
+          {},
+          { headers: this.getConsentAuthHeaders() }
+        );
+        
+        if (response.data.success) {
+          this.portabilityOtpSuccess = response.data.message;
+          this.portabilityOtpStep = 'verify';
+          this.startPortabilityOtpResendCooldown();
+          this.$nextTick(() => {
+            if (this.$refs.portabilityOtpInputs && this.$refs.portabilityOtpInputs[0]) {
+              this.$refs.portabilityOtpInputs[0].focus();
+            }
+          });
+        } else {
+          this.portabilityOtpError = response.data.message || 'Failed to send OTP';
+        }
+      } catch (error) {
+        console.error('Error sending portability OTP:', error);
+        this.portabilityOtpError = error.response?.data?.message || 'Failed to send OTP. Please try again.';
+      } finally {
+        this.sendingPortabilityOtp = false;
+      }
+    },
+    
+    async verifyPortabilityOtp() {
+      this.verifyingPortabilityOtp = true;
+      this.portabilityOtpError = null;
+      
+      const otp = this.portabilityOtpDigits.join('');
+      
+      if (otp.length !== 6) {
+        this.portabilityOtpError = 'Please enter a complete 6-digit OTP';
+        this.verifyingPortabilityOtp = false;
+        return;
+      }
+      
+      try {
+        const { API_BASE_URL } = await import('../../config/api.js');
+        const axios = (await import('axios')).default;
+        
+        const response = await axios.post(
+          `${API_BASE_URL}/api/portability-otp/verify/`,
+          { otp: otp },
+          { headers: this.getConsentAuthHeaders() }
+        );
+        
+        if (response.data.success) {
+          this.portabilityOtpSuccess = response.data.message;
+          // Close OTP modal and proceed with export
+          this.closePortabilityOtpModal();
+          await this.exportUserData();
+        } else {
+          this.portabilityOtpError = response.data.message || 'Invalid OTP. Please try again.';
+          this.portabilityOtpDigits = ['', '', '', '', '', ''];
+          this.$nextTick(() => {
+            if (this.$refs.portabilityOtpInputs && this.$refs.portabilityOtpInputs[0]) {
+              this.$refs.portabilityOtpInputs[0].focus();
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Error verifying portability OTP:', error);
+        this.portabilityOtpError = error.response?.data?.message || 'Failed to verify OTP. Please try again.';
+        this.portabilityOtpDigits = ['', '', '', '', '', ''];
+        this.$nextTick(() => {
+          if (this.$refs.portabilityOtpInputs && this.$refs.portabilityOtpInputs[0]) {
+            this.$refs.portabilityOtpInputs[0].focus();
+          }
+        });
+      } finally {
+        this.verifyingPortabilityOtp = false;
+      }
+    },
+    
+    async resendPortabilityOtp() {
+      this.resendingPortabilityOtp = true;
+      this.portabilityOtpError = null;
+      this.portabilityOtpSuccess = null;
+      
+      try {
+        await this.sendPortabilityOtp();
+      } finally {
+        this.resendingPortabilityOtp = false;
+      }
+    },
+    
+    closePortabilityOtpModal() {
+      this.showPortabilityOtpModal = false;
+      this.portabilityOtpStep = 'send';
+      this.portabilityOtpDigits = ['', '', '', '', '', ''];
+      this.portabilityOtpError = null;
+      this.portabilityOtpSuccess = null;
+      if (this.portabilityOtpResendTimer) {
+        clearInterval(this.portabilityOtpResendTimer);
+        this.portabilityOtpResendTimer = null;
+      }
+      this.portabilityOtpResendCooldown = 0;
+    },
+    
+    startPortabilityOtpResendCooldown() {
+      this.portabilityOtpResendCooldown = 60; // 60 seconds
+      if (this.portabilityOtpResendTimer) {
+        clearInterval(this.portabilityOtpResendTimer);
+      }
+      this.portabilityOtpResendTimer = setInterval(() => {
+        this.portabilityOtpResendCooldown--;
+        if (this.portabilityOtpResendCooldown <= 0) {
+          clearInterval(this.portabilityOtpResendTimer);
+          this.portabilityOtpResendTimer = null;
+        }
+      }, 1000);
+    },
+    
+    handlePortabilityOtpInput(index, event) {
+      const value = event.target.value.replace(/[^0-9]/g, '');
+      if (value) {
+        this.portabilityOtpDigits[index] = value;
+        if (index < 5 && this.$refs.portabilityOtpInputs) {
+          this.$refs.portabilityOtpInputs[index + 1].focus();
+        }
+      } else {
+        this.portabilityOtpDigits[index] = '';
+      }
+    },
+    
+    handlePortabilityOtpKeydown(index, event) {
+      if (event.key === 'Backspace' && !this.portabilityOtpDigits[index] && index > 0 && this.$refs.portabilityOtpInputs) {
+        this.$refs.portabilityOtpInputs[index - 1].focus();
+      }
+    },
+    
+    handlePortabilityOtpPaste(event) {
+      event.preventDefault();
+      const pastedData = event.clipboardData.getData('text').replace(/[^0-9]/g, '').slice(0, 6);
+      for (let i = 0; i < pastedData.length && i < 6; i++) {
+        this.portabilityOtpDigits[i] = pastedData[i];
+      }
+      if (pastedData.length === 6 && this.$refs.portabilityOtpInputs) {
+        this.$refs.portabilityOtpInputs[5].focus();
+      }
+    },
+    
+    get isPortabilityOtpComplete() {
+      if (!this.portabilityOtpDigits || !Array.isArray(this.portabilityOtpDigits)) {
+        return false;
+      }
+      return this.portabilityOtpDigits.every(digit => digit !== '') && this.portabilityOtpDigits.join('').length === 6;
+    },
+    
+    async exportUserData() {
+      this.exportingData = true;
+      this.error = null;
+      this.success = null;
+      
+      try {
+        const { API_BASE_URL } = await import('../../config/api.js');
+        const axios = (await import('axios')).default;
+        
+        const response = await axios.post(
+          `${API_BASE_URL}/api/export-user-data-portability/`,
+          { export_format: this.selectedExportFormat },
+          { headers: this.getConsentAuthHeaders() }
+        );
+        
+        if (response.data.status === 'success') {
+          this.success = 'Data exported successfully!';
+          // Open download link
+          if (response.data.data && response.data.data.download_url) {
+            window.open(response.data.data.download_url, '_blank');
+          }
+          // Reload requests to show the new portability request
+          await this.loadDataSubjectRequests();
+        } else {
+          this.error = response.data.message || 'Failed to export data';
+        }
+      } catch (error) {
+        console.error('Error exporting user data:', error);
+        this.error = error.response?.data?.message || 'Failed to export data. Please try again.';
+      } finally {
+        this.exportingData = false;
+      }
+    },
+    
+    handleOtpInput(index, event) {
+      const value = event.target.value.replace(/[^0-9]/g, '');
+      if (value) {
+        this.otpDigits[index] = value;
+        // Move to next input
+        if (index < 5 && this.$refs.otpInputs && this.$refs.otpInputs[index + 1]) {
+          this.$refs.otpInputs[index + 1].focus();
+        }
+      } else {
+        this.otpDigits[index] = '';
+      }
+    },
+    
+    handleOtpKeydown(index, event) {
+      if (event.key === 'Backspace' && !this.otpDigits[index] && index > 0) {
+        // Move to previous input on backspace
+        if (this.$refs.otpInputs && this.$refs.otpInputs[index - 1]) {
+          this.$refs.otpInputs[index - 1].focus();
+        }
+      }
+    },
+    
+    handleOtpPaste(event) {
+      event.preventDefault();
+      const pastedData = event.clipboardData.getData('text').replace(/[^0-9]/g, '').slice(0, 6);
+      for (let i = 0; i < 6; i++) {
+        this.otpDigits[i] = pastedData[i] || '';
+      }
+      // Focus last filled input or first empty
+      const lastFilledIndex = Math.min(pastedData.length - 1, 5);
+      this.$nextTick(() => {
+        if (this.$refs.otpInputs && this.$refs.otpInputs[lastFilledIndex]) {
+          this.$refs.otpInputs[lastFilledIndex].focus();
+        }
+      });
+    },
+    
     // Password validation function
     validatePassword() {
       const password = this.createUserForm.password || ''
@@ -1713,9 +2464,33 @@ export default {
           
           if (profileResponse.data.status === 'success') {
             const data = profileResponse.data.data;
-            this.form.firstName = data.firstName;
-            this.form.lastName = data.lastName;
-            this.form.email = data.email;
+            console.log('Full profile data:', data);
+            
+            // Use original data for editing (if available), otherwise use masked
+            this.form.firstName = data.original?.firstName || data.firstName || '';
+            this.form.lastName = data.original?.lastName || data.lastName || '';
+            this.form.email = data.original?.email || data.email || '';
+            this.form.phone = data.original?.phoneNumber || data.phoneNumber || '';
+            this.form.address = data.original?.address || data.address || '';
+            
+            // Store masked versions for display
+            this.maskedData = {
+              firstName: data.firstName || '',
+              lastName: data.lastName || '',
+              email: data.email || '',
+              phone: data.phoneNumber || '',
+              address: data.address || '',
+              username: data.username || ''
+            };
+            
+            console.log('Form data set:', {
+              firstName: this.form.firstName,
+              lastName: this.form.lastName,
+              email: this.form.email,
+              phone: this.form.phone,
+              address: this.form.address
+            });
+            console.log('Masked data set:', this.maskedData);
             
             // Fetch business info using centralized API with JWT
             console.log('Fetching business info for userId:', userId);
@@ -1988,6 +2763,8 @@ async updatePassword() {
            email: '',
            firstName: '',
            lastName: '',
+           phoneNumber: '',
+           address: '',
            departmentId: '',
            role: '',
            isActive: 'Y'
@@ -2361,6 +3138,8 @@ async updatePassword() {
             email: this.createUserForm.email,
             firstName: this.createUserForm.firstName,
             lastName: this.createUserForm.lastName,
+            phoneNumber: this.createUserForm.phoneNumber,
+            address: this.createUserForm.address,
             departmentId: this.createUserForm.departmentId,
             role: this.createUserForm.role === '__custom__' ? this.customRole : this.createUserForm.role,
             isActive: this.createUserForm.isActive,
@@ -2820,14 +3599,27 @@ async updatePassword() {
       // Access Requests Methods
      
      // Edit mode methods
-     enableEditMode(type) {
+     async enableEditMode(type) {
        if (type === 'personal') {
+         // Check if OTP verification is required and not yet verified
+         const isVerified = await this.checkProfileEditVerification();
+         if (!isVerified) {
+           // Show OTP modal
+           this.pendingEditType = 'personal';
+           this.showOtpModal = true;
+           this.otpStep = 'send';
+           this.otpError = null;
+           this.otpSuccess = null;
+           return;
+         }
+         
          // Store original values
          this.originalPersonalData = {
            firstName: this.form.firstName,
            lastName: this.form.lastName,
            email: this.form.email,
-           phone: this.form.phone || ''
+          phone: this.form.phone || '',
+          address: this.form.address || ''
          };
          this.editModePersonal = true;
        } else if (type === 'business') {
@@ -2859,6 +3651,7 @@ async updatePassword() {
          this.form.lastName = this.originalPersonalData.lastName;
          this.form.email = this.originalPersonalData.email;
          this.form.phone = this.originalPersonalData.phone;
+         this.form.address = this.originalPersonalData.address;
          this.editModePersonal = false;
          this.originalPersonalData = {};
        } else if (type === 'business') {
@@ -2883,7 +3676,8 @@ async updatePassword() {
          this.form.firstName !== this.originalPersonalData.firstName ||
          this.form.lastName !== this.originalPersonalData.lastName ||
          this.form.email !== this.originalPersonalData.email ||
-         (this.form.phone || '') !== (this.originalPersonalData.phone || '')
+         (this.form.phone || '') !== (this.originalPersonalData.phone || '') ||
+         (this.form.address || '') !== (this.originalPersonalData.address || '')
        );
      },
     
@@ -2938,6 +3732,12 @@ async updatePassword() {
            changes.phone = {
              old: this.originalPersonalData.phone || '',
              new: this.form.phone || ''
+           };
+         }
+         if ((this.form.address || '') !== (this.originalPersonalData.address || '')) {
+           changes.address = {
+             old: this.originalPersonalData.address || '',
+             new: this.form.address || ''
            };
          }
        } else if (this.currentEditType === 'business' && this.editModeBusiness) {
@@ -3221,6 +4021,91 @@ async updatePassword() {
 .password-requirements.has-errors {
   background: #fef2f2;
   border: 1px solid #fecaca;
+}
+
+/* OTP Modal Styles */
+.otp-modal {
+  max-width: 500px;
+}
+
+.otp-description {
+  color: #6b7280;
+  margin-bottom: 1.5rem;
+  line-height: 1.6;
+}
+
+.otp-step {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.otp-instruction {
+  color: #374151;
+  margin-bottom: 1rem;
+  line-height: 1.6;
+}
+
+.otp-input-container {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  margin: 1.5rem 0;
+}
+
+.otp-input {
+  width: 50px;
+  height: 60px;
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 600;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.otp-input:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.otp-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+.btn-secondary {
+  padding: 0.75rem 1.5rem;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #e5e7eb;
+  border-color: #9ca3af;
+}
+
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.disabled-input {
+  background: #f3f4f6;
+  color: #6b7280;
+  cursor: not-allowed;
 }
 
 .requirement-item {
