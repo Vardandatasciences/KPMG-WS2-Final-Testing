@@ -302,6 +302,15 @@ def jira_oauth_callback(request):
             stored_state = request.session.get('jira_oauth_state')
             user_id = request.session.get('jira_user_id', 1)
             
+            # Get redirect URI configuration for error messages
+            redirect_uri = getattr(settings, 'JIRA_REDIRECT_URI', 'http://127.0.0.1:8000/api/jira/oauth-callback/')
+            use_local_dev = getattr(settings, 'USE_LOCAL_DEVELOPMENT', True)
+            scopes = getattr(settings, 'JIRA_SCOPES', 'read:jira-user read:jira-work')
+            if use_local_dev:
+                redirect_uri = 'http://127.0.0.1:8000/api/jira/oauth-callback/'
+            else:
+                redirect_uri = str(redirect_uri).strip().strip("'\"")
+            
             # Verify state parameter
             if state != stored_state:
                 logger.error("OAuth state mismatch")
@@ -312,8 +321,29 @@ def jira_oauth_callback(request):
             # Handle OAuth errors
             if error:
                 logger.error(f"OAuth error: {error} - {error_description}")
+                
+                # Provide more helpful error messages for common issues
+                if error == 'unauthorized_client' and 'redirect_uri' in error_description.lower():
+                    logger.error(f"REDIRECT URI NOT REGISTERED: The redirect URI '{redirect_uri}' is not registered in your Atlassian OAuth app.")
+                    logger.error(f"Please add this URI to your Atlassian OAuth app settings at: https://developer.atlassian.com/console/myapps/")
+                    logger.error(f"Current redirect URI: {redirect_uri}")
+                    logger.error(f"USE_LOCAL_DEVELOPMENT: {use_local_dev}")
+                    logger.error(f"To fix: Either register '{redirect_uri}' in Atlassian, or set USE_LOCAL_DEVELOPMENT=false and use a registered production URI")
+                
+                elif error == 'access_denied' or 'jira site' in error_description.lower():
+                    logger.error(f"ACCESS DENIED: {error_description}")
+                    logger.error(f"This usually means:")
+                    logger.error(f"  1. You don't have a Jira account/site - Create one at https://www.atlassian.com/software/jira")
+                    logger.error(f"  2. Your OAuth app needs permissions - Check app settings at https://developer.atlassian.com/console/myapps/")
+                    logger.error(f"  3. The app needs approval for your Jira site - Grant access when prompted")
+                    logger.error(f"  4. Your account doesn't have permission to access the Jira site")
+                    logger.error(f"Current scopes: {scopes}")
+                    logger.error(f"Make sure your OAuth app has 'Jira' product access enabled in the Atlassian Developer Console")
+                
                 frontend_base = getattr(settings, 'FRONTEND_URL', 'http://localhost:8080')
-                error_url = f"{frontend_base}/integration/jira?error={error}"
+                # Pass error_description to frontend for better error display
+                error_param = f"{error}&error_description={up.quote(error_description)}" if error_description else error
+                error_url = f"{frontend_base}/integration/jira?error={error_param}"
                 return HttpResponseRedirect(error_url)
             
             if not code:
@@ -326,15 +356,7 @@ def jira_oauth_callback(request):
             try:
                 client_id = getattr(settings, 'JIRA_CLIENT_ID', '')
                 client_secret = getattr(settings, 'JIRA_CLIENT_SECRET', '')
-                redirect_uri = getattr(settings, 'JIRA_REDIRECT_URI', 'http://127.0.0.1:8000/api/jira/oauth-callback/')
-                use_local_dev = getattr(settings, 'USE_LOCAL_DEVELOPMENT', True)
-                
-                # Force local redirect URI if in local development mode
-                if use_local_dev:
-                    redirect_uri = 'http://127.0.0.1:8000/api/jira/oauth-callback/'
-                else:
-                    # Ensure production redirect URI is clean (no quotes, no extra whitespace)
-                    redirect_uri = str(redirect_uri).strip().strip("'\"")
+                # redirect_uri and use_local_dev already defined above for error handling
                 
                 logger.info(f"Jira OAuth Callback - USE_LOCAL_DEVELOPMENT: {use_local_dev}, Redirect URI: {redirect_uri}")
                 

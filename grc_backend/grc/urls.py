@@ -2575,61 +2575,6 @@ consent_urlpatterns = [
 # ============================================================================
 
 retention_urlpatterns = [
-    # Retention Policy Management
-    path('retention/policies/', 
-         retention_views.list_retention_policies, 
-         name='list-retention-policies'),
-    
-    path('retention/policies/<int:policy_id>/', 
-         retention_views.get_retention_policy, 
-         name='get-retention-policy'),
-    
-    path('retention/policies/create/', 
-         retention_views.create_retention_policy, 
-         name='create-retention-policy'),
-    
-    path('retention/policies/<int:policy_id>/update/', 
-         retention_views.update_retention_policy, 
-         name='update-retention-policy'),
-    
-    path('retention/policies/<int:policy_id>/delete/', 
-         retention_views.delete_retention_policy, 
-         name='delete-retention-policy'),
-    
-    # Retention Timeline Management
-    path('retention/timelines/', 
-         retention_views.list_retention_timelines, 
-         name='list-retention-timelines'),
-    
-    path('retention/timelines/create/', 
-         retention_views.create_retention_timeline, 
-         name='create-retention-timeline'),
-    
-    path('retention/timelines/<int:timeline_id>/update/', 
-         retention_views.update_retention_timeline, 
-         name='update-retention-timeline'),
-    
-    # Data Processing Agreement Management
-    path('retention/dpa/', 
-         retention_views.list_data_processing_agreements, 
-         name='list-data-processing-agreements'),
-    
-    path('retention/dpa/<int:dpa_id>/', 
-         retention_views.get_data_processing_agreement, 
-         name='get-data-processing-agreement'),
-    
-    path('retention/dpa/create/', 
-         retention_views.create_data_processing_agreement, 
-         name='create-data-processing-agreement'),
-    
-    path('retention/dpa/<int:dpa_id>/update/', 
-         retention_views.update_data_processing_agreement, 
-         name='update-data-processing-agreement'),
-    
-    path('retention/dpa/<int:dpa_id>/delete/', 
-         retention_views.delete_data_processing_agreement, 
-         name='delete-data-processing-agreement'),
-    
     # Data Retention Module & Page Configuration
     path('retention/module-configs/', 
          retention_views.get_module_configs, 
@@ -2646,6 +2591,20 @@ retention_urlpatterns = [
     path('retention/page-configs/bulk-update/', 
          retention_views.bulk_update_page_configs, 
          name='bulk-update-page-configs'),
+
+    # Lifecycle actions
+    path('retention/archive/', retention_views.archive_retention_record, name='retention-archive'),
+    path('retention/unarchive/', retention_views.unarchive_retention_record, name='retention-unarchive'),
+    path('retention/pause-deletion/', retention_views.pause_deletion, name='retention-pause-deletion'),
+    path('retention/resume-deletion/', retention_views.resume_deletion, name='retention-resume-deletion'),
+    path('retention/extend/', retention_views.extend_retention, name='retention-extend'),
+
+    # Dashboard data
+    path('retention/dashboard/overview', retention_views.retention_dashboard_overview, name='retention-dashboard-overview'),
+    path('retention/dashboard/expiring', retention_views.retention_dashboard_expiring, name='retention-dashboard-expiring'),
+    path('retention/dashboard/archived', retention_views.retention_dashboard_archived, name='retention-dashboard-archived'),
+    path('retention/dashboard/paused', retention_views.retention_dashboard_paused, name='retention-dashboard-paused'),
+    path('retention/dashboard/audit-trail', retention_views.retention_dashboard_audit_trail, name='retention-dashboard-audit'),
 ]
 
 

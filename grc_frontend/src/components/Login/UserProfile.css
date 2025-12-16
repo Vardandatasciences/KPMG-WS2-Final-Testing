@@ -2102,6 +2102,166 @@ color: #10b981;
 .fade-enter-from, .fade-leave-to {
   opacity: 0;
 }
+
+/* ============================================================================
+   CONTENT MANAGEMENT SECTION - Split Layout for Consent & Data Retention
+   ============================================================================ */
+
+.content-management-section {
+  width: 100%;
+  padding: 20px;
+}
+
+.content-management-header {
+  margin-bottom: 24px;
+}
+
+/* Content Type Selector (uses same styling as account-type-selector) */
+.content-type-selector {
+  display: flex;
+  gap: 0;
+  margin-bottom: 2rem;
+  margin-top: 1rem;
+  margin-left: auto;
+  margin-right: auto;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  backdrop-filter: none;
+  border-bottom: 2px solid #e5e7eb;
+  max-width: 600px;
+  width: 100%;
+}
+
+/* Content Management Container */
+.content-management-container {
+  width: 100%;
+}
+
+/* Single Section Layout (replaces split layout) */
+.config-section-content {
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  max-height: calc(100vh - 400px);
+  overflow-y: auto;
+}
+
+.config-section-header {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #e9ecef;
+}
+
+.config-section-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #2c3e50;
+  margin: 0 0 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.config-section-title i {
+  color: #007bff;
+}
+
+.config-section-right .config-section-title i {
+  color: #28a745;
+}
+
+.config-section-description {
+  font-size: 14px;
+  color: #6c757d;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.retention-config-content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.retention-framework-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: #e7f3ff;
+  border-left: 4px solid #007bff;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #004085;
+}
+
+.retention-framework-info i {
+  color: #007bff;
+}
+
+.retention-module-section {
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 16px;
+  background: #f8f9fa;
+}
+
+.retention-subpages-section {
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 16px;
+  background: #f8f9fa;
+}
+
+.retention-no-framework {
+  padding: 40px 20px;
+  text-align: center;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 6px;
+  color: #856404;
+}
+
+.retention-no-framework i {
+  font-size: 32px;
+  margin-bottom: 12px;
+  display: block;
+}
+
+.retention-no-framework p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.retention-pages-tree-section {
+  width: 100%;
+}
+
+/* Responsive Design for Content Management */
+@media (max-width: 1200px) {
+  .content-management-split {
+    grid-template-columns: 1fr;
+  }
+  
+  .config-section-right {
+    max-height: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .content-management-section {
+    padding: 12px;
+  }
+  
+  .config-section-left,
+  .config-section-right {
+    padding: 16px;
+  }
+}
  
 /* Requests Section Styles */
 /* Request Type Tabs */

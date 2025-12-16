@@ -894,13 +894,43 @@
             <div class="consent-config-header">
               <div class="header-content">
                 <h2 class="section-title">
-                  Consent Management Configuration
+                  <i class="fas fa-cog"></i>
+                  Content Management Configuration
                 </h2>
                 <p class="section-helper">
-                  Configure which actions require user consent. Only GRC Administrators can access this section.
+                  Configure consent requirements and data retention policies. Only GRC Administrators can access this section.
                 </p>
               </div>
             </div>
+            
+            <!-- Content Management Type Selector -->
+            <div class="content-type-selector">
+              <button 
+                :class="['selector-btn', { active: contentManagementType === 'consent' }]" 
+                @click="contentManagementType = 'consent'"
+              >
+                <i class="fas fa-check-circle"></i> Consent Management
+              </button>
+              <button 
+                :class="['selector-btn', { active: contentManagementType === 'retention' }]" 
+                @click="contentManagementType = 'retention'"
+              >
+                <i class="fas fa-database"></i> Data Retention Configuration
+              </button>
+            </div>
+            
+            <div class="content-management-container">
+            <!-- Consent Management Section -->
+            <div v-if="contentManagementType === 'consent'" class="config-section-content">
+              <div class="config-section-header">
+                <h3 class="config-section-title">
+                  <i class="fas fa-check-circle"></i>
+                  Consent Management
+                </h3>
+                <p class="config-section-description">
+                  Configure which actions require user consent
+                </p>
+              </div>
             
             <div class="consent-config-content">
             <!-- Info Card -->
@@ -1016,6 +1046,45 @@
                 {{ consentMessage }}
               </div>
             </transition>
+            </div>
+            </div>
+
+            <!-- Data Retention Management Section -->
+            <div v-if="contentManagementType === 'retention'" class="config-section-content">
+              <div class="config-section-header">
+                <h3 class="config-section-title">
+                  <i class="fas fa-database"></i>
+                  Data Retention Configuration
+                </h3>
+                <p class="config-section-description">
+                  Configure data retention policies for modules and pages
+                </p>
+              </div>
+
+              <div class="retention-config-content">
+                <!-- Framework Info for Retention -->
+                <div v-if="consentFrameworks.length > 0 && consentFrameworkId" class="retention-framework-info">
+                  <i class="fas fa-info-circle"></i>
+                  <span>Configuring retention for: <strong>{{ consentFrameworks.find(f => f.FrameworkId == consentFrameworkId)?.FrameworkName || 'Selected Framework' }}</strong></span>
+                </div>
+
+                <!-- Show message if no framework selected -->
+                <div v-if="!consentFrameworkId" class="retention-no-framework">
+                  <i class="fas fa-info-circle"></i>
+                  <p>Please select a framework from the Consent Management section to configure data retention policies.</p>
+                </div>
+
+                <!-- Module Pages Tree (All Modules and Pages Where Data is Saved) -->
+                <div v-if="consentFrameworkId" class="retention-pages-tree-section">
+                  <ModulePagesTree
+                    :key="`pages-tree-${consentFrameworkId}`"
+                    :framework-id="consentFrameworkId"
+                    :initial-configs="{ modules: retentionModuleConfigs, pages: retentionPageConfigs }"
+                    @configs-saved="onRetentionConfigsSaved"
+                  />
+                </div>
+              </div>
+            </div>
             </div>
           </div>
         </div>
@@ -1310,18 +1379,21 @@
 import { api } from '../../data/api';
 import ConsentManagement from '../Consent/ConsentManagement.vue';
 import ForgotPassword from './ForgotPassword.vue';
+import ModulePagesTree from './DataRetention/ModulePagesTree.vue';
 
 export default {
   name: 'UserProfile',
   components: {
     ConsentManagement,
-    ForgotPassword
+    ForgotPassword,
+    ModulePagesTree
   },
   data() {
     return {
       activeTab: 'account',
       accountInfoType: 'personal', // New property to track which info type is displayed
       consentSubTab: 'my-consents', // Sub-tab within Consent Management: 'my-consents' or 'configuration'
+      contentManagementType: 'consent', // Track which content management section is displayed: 'consent' or 'retention'
       tabs: [
         { key: 'account', label: 'Account', icon: 'fas fa-user' },
         { key: 'role', label: 'Role', icon: 'fas fa-exchange-alt' },
@@ -1423,6 +1495,9 @@ export default {
       consentMessage: '',
       consentMessageType: 'success',
       showConsentFrameworkSelector: false,
+      // Data Retention Configuration properties
+      retentionModuleConfigs: {},
+      retentionPageConfigs: {},
       // Data Subject Requests
       dataSubjectRequests: [],
       loadingRequests: false,
@@ -2815,6 +2890,18 @@ async updatePassword() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         };
+      },
+      
+      // Data Retention Configuration Methods
+      onRetentionConfigsSaved(configs) {
+        if (configs.modules) {
+          this.retentionModuleConfigs = configs.modules;
+          console.log('Retention module configs saved:', configs.modules);
+        }
+        if (configs.pages) {
+          this.retentionPageConfigs = configs.pages;
+          console.log('Retention page configs saved:', configs.pages);
+        }
       },
 
       // Access Requests Methods

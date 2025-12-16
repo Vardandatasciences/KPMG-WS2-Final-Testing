@@ -1538,21 +1538,39 @@ export default {
         assigned: this.assignedRisks.length
       });
 
-      // Add formatted fields for display
+      // Filter out risks with missing/unknown data and format remaining risks
+      const filterValidRisks = (risks) => {
+        return risks.filter(risk => {
+          // Only include risks that have essential data available
+          const hasDescription = risk.RiskDescription && risk.RiskDescription !== null && risk.RiskDescription !== '' && risk.RiskDescription !== 'Unknown';
+          const hasCriticality = risk.Criticality && risk.Criticality !== null && risk.Criticality !== '' && risk.Criticality !== 'Unknown';
+          
+          // Include risk if it has at least description and criticality (category is optional)
+          return hasDescription && hasCriticality;
+        });
+      };
+      
+      // Filter each risk array to only show risks with available data
+      this.approvedRisks = filterValidRisks(this.approvedRisks);
+      this.rejectedRisks = filterValidRisks(this.rejectedRisks);
+      this.pendingReviewRisks = filterValidRisks(this.pendingReviewRisks);
+      this.assignedRisks = filterValidRisks(this.assignedRisks);
+      
+      // Add formatted fields for display (only for valid risks)
       [this.approvedRisks, this.rejectedRisks, this.pendingReviewRisks, this.assignedRisks].forEach(riskArray => {
         riskArray.forEach(risk => {
           // Ensure Origin field exists
-          if (!risk.Origin) {
+          if (!risk.Origin || risk.Origin === null) {
             risk.Origin = 'MANUAL';
           }
           
-          // Ensure RiskDescription exists
-          if (!risk.RiskDescription) {
-            risk.RiskDescription = risk.RiskTitle || 'No description available';
+          // Use RiskTitle as fallback if RiskDescription is missing (shouldn't happen after filter, but just in case)
+          if (!risk.RiskDescription || risk.RiskDescription === null || risk.RiskDescription === '') {
+            risk.RiskDescription = risk.RiskTitle || '';
           }
           
           // Format criticality with HTML
-          risk.criticality = `<span class="risk-workflow-criticality-badge ${risk.Criticality?.toLowerCase() || 'unknown'}">${risk.Criticality || 'Unknown'}</span>`;
+          risk.criticality = `<span class="risk-workflow-criticality-badge ${risk.Criticality?.toLowerCase() || 'unknown'}">${risk.Criticality || ''}</span>`;
           
           // Format status with HTML
           risk.status = this.formatRiskStatus(risk);
@@ -1571,26 +1589,37 @@ export default {
       this.approvedReviewerTasks = this.reviewerTasks.filter(task => task.RiskStatus === 'Approved');
       this.pendingReviewerTasks = this.reviewerTasks.filter(task => task.RiskStatus !== 'Approved');
 
-      // Add formatted fields for reviewer tasks
+      // Filter out reviewer tasks with missing/unknown data
+      const filterValidReviewerTasks = (tasks) => {
+        return tasks.filter(task => {
+          // Only include tasks that have essential data available
+          const hasDescription = task.RiskDescription && task.RiskDescription !== null && task.RiskDescription !== '' && task.RiskDescription !== 'Unknown';
+          const hasCriticality = task.Criticality && task.Criticality !== null && task.Criticality !== '' && task.Criticality !== 'Unknown';
+          
+          // Include task if it has at least description and criticality (category is optional)
+          return hasDescription && hasCriticality;
+        });
+      };
+      
+      // Filter reviewer task arrays to only show tasks with available data
+      this.approvedReviewerTasks = filterValidReviewerTasks(this.approvedReviewerTasks);
+      this.pendingReviewerTasks = filterValidReviewerTasks(this.pendingReviewerTasks);
+      
+      // Add formatted fields for reviewer tasks (only for valid tasks)
       [this.approvedReviewerTasks, this.pendingReviewerTasks].forEach(taskArray => {
         taskArray.forEach(task => {
           // Ensure Origin field exists
-          if (!task.Origin) {
+          if (!task.Origin || task.Origin === null) {
             task.Origin = 'MANUAL';
           }
           
-          // Ensure Category exists
-          if (!task.Category) {
-            task.Category = 'Unknown';
-          }
-          
-          // Ensure RiskDescription exists
-          if (!task.RiskDescription) {
-            task.RiskDescription = task.RiskTitle || 'No description available';
+          // Use RiskTitle as fallback if RiskDescription is missing (shouldn't happen after filter, but just in case)
+          if (!task.RiskDescription || task.RiskDescription === null || task.RiskDescription === '') {
+            task.RiskDescription = task.RiskTitle || '';
           }
           
           // Format criticality with HTML
-          task.criticality = `<span class="risk-workflow-criticality-badge ${task.Criticality?.toLowerCase() || 'unknown'}">${task.Criticality || 'Unknown'}</span>`;
+          task.criticality = `<span class="risk-workflow-criticality-badge ${task.Criticality?.toLowerCase() || 'unknown'}">${task.Criticality || ''}</span>`;
           
           // Format status with HTML
           task.status = this.formatReviewerTaskStatus(task);

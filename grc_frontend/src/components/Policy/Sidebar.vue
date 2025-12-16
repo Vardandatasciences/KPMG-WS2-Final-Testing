@@ -383,6 +383,11 @@
         <i class="fas fa-folder-open icon"></i>
         <span v-if="!isCollapsed" class="bold-text">Document Handling</span>
       </div>
+      <!-- Data Retention Dashboard -->
+      <div @click="navigate('/retention/dashboard')" class="menu-item" :class="{'active': isActive('/retention/dashboard')}">
+        <i class="fas fa-database icon"></i>
+        <span v-if="!isCollapsed" class="bold-text">Data Retention</span>
+      </div>
       <!-- KPI Dashboard Section -->
       <div @click="navigate('/kpis')" class="menu-item" :class="{'active': isActive('/kpis')}">
         <i class="fas fa-chart-line icon"></i>
