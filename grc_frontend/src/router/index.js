@@ -128,6 +128,7 @@ import TestAccessDenied from '../components/TestAccessDenied.vue'
 import ConsentConfiguration from '../components/Consent/ConsentConfiguration.vue'
 import DocumentHandling from '../components/DocumentHandling/DocumentHandling.vue'
 import DataWorkflowTree from '../components/Tree/tree.vue'
+const RetentionLifecycleDashboard = () => import('../components/Retention/RetentionLifecycleDashboard.vue')
  
 import ExternalIntegration from '../components/Integrations/external_integration.vue'
 import JiraIntegration from '../components/Integrations/JIRA/jira.vue'
@@ -878,6 +879,12 @@ const routes = [
     path: '/document-handling',
     name: 'DocumentHandling',
     component: DocumentHandling,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/retention/dashboard',
+    name: 'RetentionLifecycleDashboard',
+    component: RetentionLifecycleDashboard,
     meta: { requiresAuth: true }
   },
   {

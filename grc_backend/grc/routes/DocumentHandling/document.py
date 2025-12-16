@@ -2,7 +2,7 @@ from rest_framework.decorators import api_view, parser_classes
 from rest_framework.response import Response
 from rest_framework import status
 from django.db.models import Q
-from grc.models import FileOperations, Users
+from grc.models import FileOperations, Users, compute_retention_expiry, upsert_retention_timeline
 from datetime import datetime
 import logging
 import os
@@ -337,11 +337,29 @@ def upload_document(request):
                 # Update FileOperations record to reflect custom filename
                 if operation_id:
                     try:
-                        FileOperations.objects.filter(id=operation_id).update(
-                            file_name=custom_filename,
-                            original_name=custom_filename
+                        # Load operation, update filename and apply retention
+                        file_op = FileOperations.objects.get(id=operation_id)
+                        file_op.file_name = custom_filename
+                        file_op.original_name = custom_filename
+
+                        # Compute and set retention expiry based on configuration
+                        expiry_date = compute_retention_expiry('document_handling', 'document_upload')
+                        if expiry_date:
+                            file_op.retentionExpiry = expiry_date
+
+                        file_op.save(update_fields=['file_name', 'original_name', 'retentionExpiry'])
+
+                        # Always attempt to upsert a retention timeline; helper
+                        # will no-op if retentionExpiry is not set.
+                        # Do not depend on FrameworkId here; helper will
+                        # fall back to the default framework if needed.
+                        upsert_retention_timeline(
+                            file_op,
+                            'file_operations',
+                            record_name=file_op.display_name,
+                            created_date=file_op.created_at,
                         )
-                        # logger.info(f"📝 FileOperations record {operation_id} updated with custom filename")
+                        # logger.info(f"📝 FileOperations record {operation_id} updated with filename and retention timeline")
                     except Exception as db_err:
                         logger.warning(f"⚠️ Failed to update FileOperations record {operation_id}: {db_err}")
                 

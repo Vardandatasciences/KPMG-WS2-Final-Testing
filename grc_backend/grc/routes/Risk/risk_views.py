@@ -1807,6 +1807,19 @@ def get_user_risks(request, user_id):
             for row in cursor.fetchall():
                 risk_data = dict(zip(columns, row))
                 
+                # Skip risks with missing essential data (don't add to response)
+                # Check if essential fields have valid data
+                has_description = risk_data.get('RiskDescription') and risk_data['RiskDescription'] not in [None, '', 'Unknown']
+                has_criticality = risk_data.get('Criticality') and risk_data['Criticality'] not in [None, '', 'Unknown']
+                
+                # Only include risks that have at least description and criticality
+                if not (has_description and has_criticality):
+                    continue  # Skip this risk - don't include it in the response
+                
+                # Use RiskTitle as fallback for RiskDescription if needed
+                if not risk_data.get('RiskDescription') or risk_data['RiskDescription'] in [None, '']:
+                    risk_data['RiskDescription'] = risk_data.get('RiskTitle') or ''
+                
                 # Convert date objects to string to avoid utcoffset error
                 if 'MitigationDueDate' in risk_data and risk_data['MitigationDueDate']:
                     risk_data['MitigationDueDate'] = risk_data['MitigationDueDate'].isoformat()
@@ -2469,13 +2482,27 @@ def get_reviewer_tasks(request, user_id):
                 columns = [col[0] for col in cursor.description]
                 reviewer_tasks = []
                 
-                # Process each row to handle NULL values manually
+                # Process each row - only include tasks with valid data
                 for row in cursor.fetchall():
                     row_dict = dict(zip(columns, row))
-                    # Replace None values with defaults
-                    for key in ['RiskDescription', 'Criticality', 'Category', 'RiskStatus', 'RiskPriority']:
-                        if key in row_dict and row_dict[key] is None:
-                            row_dict[key] = 'Unknown'
+                    
+                    # Skip tasks with missing essential data (don't add to response)
+                    # Check if essential fields have valid data
+                    has_description = row_dict.get('RiskDescription') and row_dict['RiskDescription'] not in [None, '', 'Unknown']
+                    has_criticality = row_dict.get('Criticality') and row_dict['Criticality'] not in [None, '', 'Unknown']
+                    
+                    # Only include tasks that have at least description and criticality
+                    if not (has_description and has_criticality):
+                        continue  # Skip this task - don't include it in the response
+                    
+                    # Set defaults for optional fields only (not essential ones)
+                    if 'Category' in row_dict and row_dict['Category'] is None:
+                        row_dict['Category'] = ''  # Empty string instead of 'Unknown'
+                    if 'RiskStatus' in row_dict and row_dict['RiskStatus'] is None:
+                        row_dict['RiskStatus'] = ''
+                    if 'RiskPriority' in row_dict and row_dict['RiskPriority'] is None:
+                        row_dict['RiskPriority'] = ''
+                    
                     reviewer_tasks.append(row_dict)
             except Exception as e:
                 print(f"Error in main reviewer query: {e}")

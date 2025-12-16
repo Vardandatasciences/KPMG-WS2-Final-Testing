@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils import timezone
+from datetime import timedelta
 # from ...routes.Global.logging_service import send_log
 
 
@@ -24,7 +25,8 @@ class Users(models.Model):
     session_token=models.CharField(max_length=1045, null=True, blank=True)
     consent_accepted=models.CharField(max_length=1, default='0', choices=[('0', 'Not Accepted'), ('1', 'Accepted')])
     license_key=models.CharField(max_length=100, null=True, blank=True, unique=True)
-    
+
+    retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'users'
     
@@ -69,6 +71,7 @@ class CategoryBusinessUnit(models.Model):
     source = models.CharField(max_length=50)
     value = models.CharField(max_length=255)
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'categoryunit'
 
@@ -98,11 +101,46 @@ class Framework(models.Model):
     latestComparisionCheckDate= models.DateField(null=True, blank=True)
     # Data Inventory - JSON field mapping field labels to data types (personal, confidential, regular)
     data_inventory = models.JSONField(null=True, blank=True)
+    retentionExpiry = models.DateField(null=True, blank=True)
     
  
     class Meta:
         db_table = 'frameworks'
  
+
+# Product versioning for patch enforcement
+class ProductVersion(models.Model):
+    STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('deprecated', 'Deprecated'),
+        ('blocked', 'Blocked'),
+    ]
+
+    id = models.AutoField(primary_key=True)
+    version = models.CharField(max_length=50, unique=True)
+    description = models.TextField(null=True, blank=True)
+    release_date = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    min_supported = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.CharField(max_length=150, null=True, blank=True)
+
+    class Meta:
+        db_table = 'product_versions'
+        ordering = ['-release_date', '-created_at']
+
+    def __str__(self):
+        return f"{self.version} ({self.status})"
+
+    @classmethod
+    def get_latest(cls):
+        return cls.objects.filter(status='active').order_by('-release_date', '-created_at').first()
+
+    @classmethod
+    def get_min_supported(cls):
+        return cls.objects.filter(min_supported=True).order_by('-release_date', '-created_at').first()
+
 
 class Kpi(models.Model):
     KpiId = models.AutoField(primary_key=True, db_column='Id')
@@ -119,6 +157,7 @@ class Kpi(models.Model):
     CreatedAt = models.DateTimeField(null=True, blank=True)
     UpdatedAt = models.DateTimeField(null=True, blank=True)
     Module = models.CharField(max_length=255, null=True, blank=True)
+    retentionExpiry = models.DateField(null=True, blank=True)
 
     class Meta:
         db_table = 'kpis'
@@ -135,6 +174,7 @@ class FrameworkVersion(models.Model):
     CreatedBy = models.CharField(max_length=255)
     CreatedDate = models.DateField()
     PreviousVersionId = models.IntegerField(null=True, blank=True)
+    retentionExpiry = models.DateField(null=True, blank=True)
  
     class Meta:
         db_table = 'frameworkversions'
@@ -170,6 +210,7 @@ class Policy(models.Model):
     Entities = models.JSONField(default=list, blank=True, null=True)  # Store entity IDs or "all"
     # Data Inventory - JSON field mapping field labels to data types (personal, confidential, regular)
     data_inventory = models.JSONField(null=True, blank=True)
+    retentionExpiry = models.DateField(null=True, blank=True)
  
  
     class Meta:
@@ -185,6 +226,7 @@ class PolicyVersion(models.Model):
     CreatedDate = models.DateField()
     PreviousVersionId = models.IntegerField(null=True, blank=True)
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'policyversions'
 
@@ -194,6 +236,7 @@ class PolicyCategory(models.Model):
     PolicyCategory = models.CharField(max_length=255)
     PolicySubCategory = models.CharField(max_length=255)
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'policycategories'
         unique_together = ('PolicyType', 'PolicyCategory', 'PolicySubCategory')
@@ -217,6 +260,7 @@ class SubPolicy(models.Model):
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
     # Data Inventory - JSON field mapping field labels to data types (personal, confidential, regular)
     data_inventory = models.JSONField(null=True, blank=True)
+    retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'subpolicies'
  
@@ -233,6 +277,7 @@ class PolicyApproval(models.Model):
     PolicyId = models.ForeignKey('Policy', on_delete=models.CASCADE, db_column='PolicyId', null=True, blank=True)
     ApprovalDueDate = models.DateField(null=True, blank=True)
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    retentionExpiry = models.DateField(null=True, blank=True)
     def __str__(self):
         return f"PolicyApproval {self.Identifier} (Version {self.Version})"
  
@@ -251,6 +296,7 @@ class ComplianceApproval(models.Model):
     PolicyId = models.ForeignKey('Policy', on_delete=models.CASCADE, db_column='PolicyId', null=True, blank=True)
     ApprovalDueDate = models.DateField(null=True, blank=True)
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    retentionExpiry = models.DateField(null=True, blank=True)
     def __str__(self):
         return f"complianceApproval {self.Identifier} (Version {self.Version})"
  
@@ -269,9 +315,10 @@ class FrameworkApproval(models.Model):
     ApprovedNot = models.BooleanField(null=True)
     ApprovedDate = models.DateField(null=True, blank=True)
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    retentionExpiry = models.DateField(null=True, blank=True)
     def __str__(self):
         return f"FrameworkApproval {self.FrameworkId_id} (Version {self.Version})"
-
+ 
     class Meta:
         db_table = 'frameworkapproval'
 
@@ -330,6 +377,7 @@ class Compliance(models.Model):
     
     # Data Inventory - JSON field mapping field labels to data types (personal, confidential, regular)
     data_inventory = models.JSONField(null=True, blank=True)
+    retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'compliance'
 
@@ -435,6 +483,7 @@ class ExportTask(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     completed_at = models.DateTimeField(null=True, blank=True)
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'exported_files'
 
@@ -471,6 +520,7 @@ class Audit(models.Model):
     
     # Data Inventory - JSON field mapping field labels to data types (personal, confidential, regular)
     data_inventory = models.JSONField(null=True, blank=True)
+    retentionExpiry = models.DateField(null=True, blank=True)
 
     class Meta:
         db_table = 'audit'
@@ -502,6 +552,7 @@ class AuditFinding(models.Model):
     CheckedDate = models.DateTimeField(null=True, blank=True)
     AssignedDate = models.DateTimeField()
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'audit_findings'
         
@@ -565,6 +616,7 @@ class Incident(models.Model):
     IncidentFormDetails = models.JSONField(null=True, blank=True)
     MitigationCompletedDate = models.DateTimeField(null=True, blank=True)
     data_inventory = models.JSONField(null=True, blank=True)
+    retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'incidents'
 
@@ -578,6 +630,7 @@ class IncidentApproval(models.Model):
     ApprovedRejected = models.CharField(max_length=45, null=True)
     Date = models.DateTimeField(null=True, auto_now_add=True)
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'incident_approval'
         managed = False  # Since we're connecting to an existing table
@@ -590,6 +643,7 @@ class AuditReport(models.Model):
     PolicyId = models.ForeignKey('Policy', on_delete=models.CASCADE, db_column='PolicyId', null=True)
     SubPolicyId = models.ForeignKey('SubPolicy', on_delete=models.CASCADE, db_column='SubPolicyId', null=True)
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    retentionExpiry = models.DateField(null=True, blank=True)
 
     class Meta:
         db_table = 'audit_report'
@@ -654,6 +708,7 @@ class AuditDocument(models.Model):
         ('manual', 'Manual Upload')
     ], default='manual')
     ExternalId = models.CharField(max_length=100, null=True, blank=True)  # External system ID
+    retentionExpiry = models.DateField(null=True, blank=True)
     
     class Meta:
         db_table = 'audit_documents'
@@ -705,6 +760,7 @@ class AuditDocumentMapping(models.Model):
     ReviewedBy = models.ForeignKey(Users, on_delete=models.CASCADE, db_column='ReviewedBy', null=True, blank=True)
     ReviewedDate = models.DateTimeField(null=True, blank=True)
     ReviewComments = models.TextField(null=True, blank=True)
+    retentionExpiry = models.DateField(null=True, blank=True)
     
     class Meta:
         db_table = 'audit_document_mappings'
@@ -722,6 +778,7 @@ class Workflow(models.Model):
     AssigneeId = models.ForeignKey(Users, on_delete=models.CASCADE, db_column='assignee_id', related_name='workflow_assignee')
     ReviewerId = models.ForeignKey(Users, on_delete=models.CASCADE, db_column='reviewer_id', related_name='workflow_reviewer')
     AssignedAt = models.DateTimeField()
+    retentionExpiry = models.DateField(null=True, blank=True)
  
     class Meta:
         db_table = 'workflow'
@@ -735,6 +792,7 @@ class AuditVersion(models.Model):
     Date = models.DateTimeField(auto_now_add=True)
     ActiveInactive = models.CharField(max_length=1, default='1')
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'audit_version'
         unique_together = ('AuditId', 'Version')
@@ -754,6 +812,7 @@ class Notification(models.Model):
     error = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'notifications'
 
@@ -766,6 +825,7 @@ class S3File(models.Model):
     metadata = models.JSONField(null=True, blank=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 's3_files'
 
@@ -794,6 +854,7 @@ class Risk(models.Model):
     FrameworkId = models.IntegerField(null=True)
     data_inventory = models.JSONField(null=True)
 
+    retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'risk'  # Ensure Django uses the correct table in the database
 
@@ -871,6 +932,7 @@ class RiskInstance(models.Model):
     RiskStatus = models.CharField(max_length=50, choices=RISK_STATUS_CHOICES, default=STATUS_NOT_ASSIGNED, null=True)
     MitigationStatus = models.CharField(max_length=45, choices=MITIGATION_STATUS_CHOICES, default=MITIGATION_PENDING, null=True)
     data_inventory = models.JSONField(null=True)
+    retentionExpiry = models.DateField(null=True, blank=True)
     
     def __str__(self):
         return f"Risk Instance {self.RiskInstanceId}"
@@ -903,6 +965,7 @@ class RiskAssignment(models.Model):
     assigned_to = models.ForeignKey(Users, on_delete=models.CASCADE)
     assigned_by = models.ForeignKey(Users, on_delete=models.CASCADE, related_name='risk_assignments_created')
     assigned_date = models.DateTimeField(auto_now_add=True)
+    retentionExpiry = models.DateField(null=True, blank=True)
     
     class Meta:
         db_table = 'risk_assignments'
@@ -920,6 +983,7 @@ class RiskApproval(models.Model):
     ApprovedRejected = models.CharField(max_length=45, null=True)
     Date = models.DateTimeField(null=True, auto_now_add=True)
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'grc.risk_approval'
         managed = False  # Since we're connecting to an existing table
@@ -939,11 +1003,14 @@ class GRCLog(models.Model):
     IPAddress = models.CharField(max_length=45, null=True)
     AdditionalInfo = models.JSONField(null=True, blank=True)
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'grc_logs'
 
     def __str__(self):
         return f"Log {self.LogId}: {self.ActionType} on {self.Module}"
+
+
 
 
 class PasswordLog(models.Model):
@@ -1064,11 +1131,13 @@ class AccessRequest(models.Model):
  
 
 
+
 class Entity(models.Model):
     Id = models.AutoField(primary_key=True)
     EntityName = models.CharField(max_length=255)
     Location = models.CharField(max_length=255)
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'entities'
         verbose_name_plural = 'Entities'
@@ -1089,6 +1158,7 @@ class LastChecklistItemVerified(models.Model):
     Comments = models.TextField(null=True, blank=True)
     Count = models.IntegerField(default=0, null=True, blank=True)
     AuditFindingsId = models.IntegerField(null=True, blank=True)
+    retentionExpiry = models.DateField(null=True, blank=True)
  
     class Meta:
         db_table = 'lastchecklistitemverified'
@@ -1192,6 +1262,7 @@ class RBAC(models.Model):
     updated_at = models.DateTimeField(auto_now=True, db_column='UpdatedAt')
     is_active = models.CharField(max_length=1, default='Y', choices=[('Y', 'Yes'), ('N', 'No')], db_column='IsActive')
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'rbac'
         ordering = ['username', 'role']
@@ -1551,6 +1622,7 @@ class BusinessUnit(models.Model):
     IsActive = models.BooleanField(default=True)
     CreatedDate = models.DateTimeField()
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'businessunits'
 
@@ -1564,6 +1636,7 @@ class Category(models.Model):
     Description = models.TextField()
     IsActive = models.BooleanField(default=True)
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'category'
 
@@ -1580,6 +1653,7 @@ class Department(models.Model):
     CreatedDate = models.DateTimeField()
     BusinessUnitId = models.IntegerField()
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'department'
 
@@ -1596,6 +1670,7 @@ class Entity(models.Model):
     IsActive = models.BooleanField(default=True)
     CreatedDate = models.DateTimeField()
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'mainentities'
 
@@ -1609,6 +1684,7 @@ class Holiday(models.Model):
     HolidayDate = models.DateField()
     HolidayName = models.CharField(max_length=255)
     IsNational = models.BooleanField(default=True)
+    retentionExpiry = models.DateField(null=True, blank=True)
 
     class Meta:
         db_table = 'holidays'
@@ -1625,6 +1701,7 @@ class Location(models.Model):
     Country = models.CharField(max_length=255)
     PostalCode = models.CharField(max_length=45, null=True, blank=True)
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'locations'
 
@@ -1641,6 +1718,7 @@ class Applicability(models.Model):
     EndDate = models.DateField(null=True, blank=True)
     IsMandatory = models.BooleanField(default=True)
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'applicability'
 
@@ -1713,6 +1791,206 @@ def handle_compliance_risk_sync(sender, instance, created, **kwargs):
         print(f"Signal error handling compliance {instance.ComplianceId}: {str(e)}")
         import traceback
         print(f"Signal full traceback: {traceback.format_exc()}")
+
+
+# =====================================================
+# RETENTION EXPIRY SIGNALS (POLICY MODULE FIRST)
+# =====================================================
+
+def _set_retention_expiry(instance, module_key: str, page_key: str):
+    expiry = compute_retention_expiry(module_key, page_key)
+    if expiry:
+        # Persist to DB
+        type(instance).objects.filter(pk=instance.pk).update(retentionExpiry=expiry)
+        # Also set on in-memory instance so helpers can see it
+        try:
+            setattr(instance, 'retentionExpiry', expiry)
+        except Exception:
+            pass
+
+
+@receiver(post_save, sender=Policy)
+def set_policy_retention_expiry(sender, instance, created, **kwargs):
+    page_key = 'policy_create' if created else 'policy_update'
+    _set_retention_expiry(instance, 'policy', page_key)
+    upsert_retention_timeline(
+        instance,
+        'policy',
+        record_name=getattr(instance, 'PolicyName', None),
+        created_date=getattr(instance, 'CreatedByDate', None),
+        framework_id=getattr(instance, 'FrameworkId', None)
+    )
+
+
+@receiver(post_save, sender=PolicyVersion)
+def set_policy_version_retention_expiry(sender, instance, created, **kwargs):
+    if created:
+        _set_retention_expiry(instance, 'policy', 'policy_version_create')
+
+
+@receiver(post_save, sender=PolicyApproval)
+def set_policy_approval_retention_expiry(sender, instance, created, **kwargs):
+    _set_retention_expiry(instance, 'policy', 'policy_approval')
+
+
+@receiver(post_save, sender=SubPolicy)
+def set_subpolicy_retention_expiry(sender, instance, created, **kwargs):
+    if created:
+        _set_retention_expiry(instance, 'policy', 'policy_subpolicy_add')
+
+
+@receiver(post_save, sender=Framework)
+def set_framework_retention_expiry(sender, instance, created, **kwargs):
+    page_key = 'framework_create' if created else 'framework_update'
+    _set_retention_expiry(instance, 'policy', page_key)
+
+
+@receiver(post_save, sender=FrameworkVersion)
+def set_framework_version_retention_expiry(sender, instance, created, **kwargs):
+    if created:
+        _set_retention_expiry(instance, 'policy', 'framework_version_create')
+
+
+@receiver(post_save, sender=FrameworkApproval)
+def set_framework_approval_retention_expiry(sender, instance, created, **kwargs):
+    _set_retention_expiry(instance, 'policy', 'framework_approval')
+
+
+@receiver(post_save, sender=PolicyCategory)
+def set_policy_category_retention_expiry(sender, instance, created, **kwargs):
+    if created:
+        _set_retention_expiry(instance, 'policy', 'save_policy_category')
+
+
+# =====================================================
+# ADDITIONAL MODULES: COMPLIANCE, AUDIT, INCIDENT, RISK
+# =====================================================
+
+@receiver(post_save, sender=Compliance)
+def set_compliance_retention_expiry(sender, instance, created, **kwargs):
+    page_key = 'compliance_create' if created else 'compliance_edit'
+    _set_retention_expiry(instance, 'compliance', page_key)
+    upsert_retention_timeline(
+        instance,
+        'compliance',
+        record_name=getattr(instance, 'ComplianceTitle', None),
+        created_date=getattr(instance, 'CreatedByDate', None),
+        framework_id=getattr(instance, 'FrameworkId', None)
+    )
+
+
+@receiver(post_save, sender=CategoryBusinessUnit)
+def set_category_bu_retention_expiry(sender, instance, created, **kwargs):
+    if created:
+        _set_retention_expiry(instance, 'compliance', 'compliance_category_bu_add')
+
+
+@receiver(post_save, sender=Category)
+def set_category_retention_expiry(sender, instance, created, **kwargs):
+    if created:
+        _set_retention_expiry(instance, 'compliance', 'compliance_category_add')
+
+
+@receiver(post_save, sender=Audit)
+def set_audit_retention_expiry(sender, instance, created, **kwargs):
+    page_key = 'create_audit' if created else 'audit_status_update'
+    _set_retention_expiry(instance, 'audit', page_key)
+    upsert_retention_timeline(
+        instance,
+        'audit',
+        record_name=getattr(instance, 'Title', None),
+        created_date=getattr(instance, 'AssignedDate', None),
+        framework_id=getattr(instance, 'FrameworkId', None)
+    )
+
+
+@receiver(post_save, sender=AuditVersion)
+def set_audit_version_retention_expiry(sender, instance, created, **kwargs):
+    if created:
+        _set_retention_expiry(instance, 'audit', 'audit_version_save')
+
+
+@receiver(post_save, sender=AuditFinding)
+def set_audit_finding_retention_expiry(sender, instance, created, **kwargs):
+    _set_retention_expiry(instance, 'audit', 'audit_finding_update')
+
+
+@receiver(post_save, sender=Incident)
+def set_incident_retention_expiry(sender, instance, created, **kwargs):
+    page_key = 'incident_create' if created else 'incident_update'
+    _set_retention_expiry(instance, 'incident', page_key)
+    upsert_retention_timeline(
+        instance,
+        'incident',
+        record_name=getattr(instance, 'IncidentTitle', None),
+        created_date=getattr(instance, 'CreatedAt', None) or getattr(instance, 'Date', None),
+        framework_id=getattr(instance, 'FrameworkId', None)
+    )
+
+
+@receiver(post_save, sender=Workflow)
+def set_workflow_retention_expiry(sender, instance, created, **kwargs):
+    if created:
+        _set_retention_expiry(instance, 'incident', 'incident_workflow_create')
+
+
+@receiver(post_save, sender=Risk)
+def set_risk_retention_expiry(sender, instance, created, **kwargs):
+    page_key = 'risk_create' if created else 'risk_update'
+    _set_retention_expiry(instance, 'risk', page_key)
+    upsert_retention_timeline(
+        instance,
+        'risk',
+        record_name=getattr(instance, 'RiskTitle', None),
+        created_date=getattr(instance, 'CreatedAt', None),
+        framework_id=getattr(instance, 'FrameworkId', None)
+    )
+
+
+@receiver(post_save, sender=RiskInstance)
+def set_risk_instance_retention_expiry(sender, instance, created, **kwargs):
+    page_key = 'risk_instance_create' if created else 'risk_instance_update'
+    _set_retention_expiry(instance, 'risk', page_key)
+    upsert_retention_timeline(
+        instance,
+        'risk_instance',
+        record_name=getattr(instance, 'RiskTitle', None),
+        created_date=getattr(instance, 'CreatedAt', None),
+        framework_id=getattr(instance, 'FrameworkId', None)
+    )
+
+
+# =====================================================
+# DOCUMENT HANDLING MODULE: DOCUMENT UPLOADS
+# =====================================================
+
+@receiver(post_save, sender=AuditDocument)
+def set_audit_document_retention_expiry(sender, instance, created, **kwargs):
+    """Set retention expiry for document uploads (AuditDocument model)"""
+    page_key = 'document_upload' if created else 'document_save'
+    _set_retention_expiry(instance, 'document_handling', page_key)
+
+
+@receiver(post_save, sender=S3File)
+def set_s3file_retention_expiry(sender, instance, created, **kwargs):
+    """Set retention expiry for S3 file uploads"""
+    if created:
+        _set_retention_expiry(instance, 'document_handling', 'document_upload')
+
+
+# =====================================================
+# CHANGE MANAGEMENT MODULE
+# =====================================================
+# NOTE: ChangeRequest model does not exist in the codebase yet.
+# When the ChangeRequest model is created, add the following signal handler:
+#
+# @receiver(post_save, sender=ChangeRequest)
+# def set_change_request_retention_expiry(sender, instance, created, **kwargs):
+#     """Set retention expiry for change requests"""
+#     page_key = 'change_create' if created else 'change_update'
+#     _set_retention_expiry(instance, 'change_management', page_key)
+#
+# Until then, change requests will not automatically set retentionExpiry.
 
 
 class Event(models.Model):
@@ -1794,6 +2072,7 @@ class Event(models.Model):
     
     # Template Information
     IsTemplate = models.BooleanField(default=False)
+    retentionExpiry = models.DateField(null=True, blank=True)
     
     # Data Inventory - JSON field mapping field labels to data types (personal, confidential, regular)
     data_inventory = models.JSONField(null=True, blank=True)
@@ -1904,6 +2183,16 @@ class Event(models.Model):
         return f"{self.Reviewer.FirstName} {self.Reviewer.LastName}" if self.Reviewer else "Not Assigned"
 
 
+# =====================================================
+# EVENT HANDLING MODULE - Signal Handler
+# =====================================================
+
+@receiver(post_save, sender=Event)
+def set_event_retention_expiry(sender, instance, created, **kwargs):
+    """Set retention expiry for event creation/logging"""
+    page_key = 'event_create' if created else 'event_log'
+    _set_retention_expiry(instance, 'event_handling', page_key)
+
 
 class EventType(models.Model):
     """
@@ -1914,6 +2203,7 @@ class EventType(models.Model):
     eventtype = models.TextField()
     eventSubtype = models.JSONField(null=True, blank=True)  # This matches the database column name
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'eventtype'
         verbose_name = 'Event Type'
@@ -1930,6 +2220,7 @@ class Module(models.Model):
     moduleid = models.AutoField(primary_key=True, db_column='moduleid')
     modulename = models.CharField(max_length=255, db_column='modulename')
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'modules'
         verbose_name = 'Module'
@@ -1949,6 +2240,7 @@ class AWSCredentials(models.Model):
     region = models.CharField(max_length=45)
     bucketName = models.CharField(max_length=45)
     microServiceUrl = models.CharField(max_length=45)
+    retentionExpiry = models.DateField(null=True, blank=True)
 
     class Meta:
         db_table = 'aws_credentials'
@@ -2005,6 +2297,7 @@ class FileOperations(models.Model):
     completed_at = models.DateTimeField(null=True, blank=True)
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
     summary = models.TextField(null=True, blank=True)
+    retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
         db_table = 'file_operations'
         verbose_name = 'File Operation'
@@ -2031,6 +2324,19 @@ class FileOperations(models.Model):
     def display_name(self):
         """Return the best available name for display"""
         return self.original_name or self.file_name or "Unknown File"
+
+
+# =====================================================
+# DOCUMENT HANDLING MODULE - FileOperations Signal Handler
+# =====================================================
+
+@receiver(post_save, sender=FileOperations)
+def set_file_operations_retention_expiry(sender, instance, created, **kwargs):
+    """Set retention expiry for file operations (uploads, exports)"""
+    if created and instance.operation_type == 'upload':
+        _set_retention_expiry(instance, 'document_handling', 'document_upload')
+
+
 # =====================================================
 # EXTERNAL APPLICATIONS MODELS
 # =====================================================
@@ -2062,6 +2368,7 @@ class ExternalApplication(models.Model):
     api_endpoint = models.URLField(max_length=500, null=True, blank=True)
     oauth_url = models.URLField(max_length=500, null=True, blank=True)
     features = models.JSONField(null=True, blank=True)
+    retentionExpiry = models.DateField(null=True, blank=True)
 
     class Meta:
         db_table = 'external_applications'
@@ -2101,6 +2408,7 @@ class ExternalApplicationConnection(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     projects_data = models.JSONField(null=True, blank=True, help_text="Stores all retrieved project data in JSON format")
+    retentionExpiry = models.DateField(null=True, blank=True)
 
     class Meta:
         db_table = 'external_application_connections'
@@ -2151,6 +2459,7 @@ class ExternalApplicationSyncLog(models.Model):
     sync_started_at = models.DateTimeField()
     sync_completed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    retentionExpiry = models.DateField(null=True, blank=True)
 
     class Meta:
         db_table = 'external_application_sync_logs'
@@ -2191,6 +2500,7 @@ class UsersProjectList(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_active = models.BooleanField(default=True)
+    retentionExpiry = models.DateField(null=True, blank=True)
 
     class Meta:
         db_table = 'users_project_list'
@@ -2245,6 +2555,7 @@ class IntegrationDataList(models.Model):
  
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    retentionExpiry = models.DateField(null=True, blank=True)
  
     class Meta:
         db_table = "integration_data_list"
@@ -2268,6 +2579,7 @@ class OAuthState(models.Model):
     provider = models.CharField(max_length=50, default='bamboohr')
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
+    retentionExpiry = models.DateField(null=True, blank=True)
     
     class Meta:
         db_table = 'oauth_states'
@@ -2328,6 +2640,7 @@ class PolicyAcknowledgementRequest(models.Model):
     EmailNotificationSent = models.BooleanField(default=False)
     
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    retentionExpiry = models.DateField(null=True, blank=True)
     
     class Meta:
         db_table = 'policy_acknowledgement_requests'
@@ -2404,6 +2717,7 @@ class PolicyAcknowledgementUser(models.Model):
     # External access token for acknowledging without login
     Token = models.CharField(max_length=255, unique=True, null=True, blank=True, 
                             help_text="Unique token for external acknowledgement access")
+    retentionExpiry = models.DateField(null=True, blank=True)
     
     class Meta:
         db_table = 'policy_acknowledgement_users'
@@ -2484,6 +2798,7 @@ class ConsentConfiguration(models.Model):
     updated_by = models.ForeignKey('Users', on_delete=models.SET_NULL, null=True, 
                                    related_name='consent_configs_updated', db_column='UpdatedBy')
     updated_at = models.DateTimeField(auto_now=True, db_column='UpdatedAt')
+    retentionExpiry = models.DateField(null=True, blank=True)
     
     class Meta:
         db_table = 'consent_configuration'
@@ -2505,6 +2820,7 @@ class ConsentAcceptance(models.Model):
     ip_address = models.CharField(max_length=50, null=True, blank=True, db_column='IpAddress')
     user_agent = models.TextField(null=True, blank=True, db_column='UserAgent')
     framework = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    retentionExpiry = models.DateField(null=True, blank=True)
     
     class Meta:
         db_table = 'consent_acceptance'
@@ -2542,6 +2858,7 @@ class ConsentWithdrawal(models.Model):
     
     def __str__(self):
         return f"{self.user.UserName} withdrew {self.action_type} at {self.withdrawn_at}"
+
 
 
 # =====================================================
@@ -2764,6 +3081,10 @@ class ProductVersion(models.Model):
 
 
 
+# =====================================================
+# DATA RETENTION MODULE & PAGE CONFIGURATION MODEL
+# =====================================================
+
 class RetentionModulePageConfig(models.Model):
     """
     Stores module/page level retention selections coming from the UI tree.
@@ -2789,6 +3110,231 @@ class RetentionModulePageConfig(models.Model):
         return f"{self.module} - {self.sub_page} ({'checked' if self.checklist_status else 'unchecked'})"
 
 
+# =====================================================
+# RETENTION TIMELINE MODEL
+# Tracks retention period per record with archival/pause metadata
+# =====================================================
+class RetentionTimeline(models.Model):
+    STATUS_CHOICES = [
+        ('Active', 'Active'),
+        ('Expired', 'Expired'),
+        ('Disposed', 'Disposed'),
+        ('Extended', 'Extended'),
+        ('Archived', 'Archived'),
+        ('Paused', 'Paused'),
+    ]
+
+    RetentionTimelineId = models.AutoField(primary_key=True, db_column='RetentionTimelineId')
+    # Note: RetentionPolicy model not present; storing as nullable integer for compatibility
+    RetentionPolicyId = models.IntegerField(null=True, blank=True, db_column='RetentionPolicyId')
+    RecordType = models.CharField(max_length=50, db_column='RecordType')
+    RecordId = models.IntegerField(db_column='RecordId')
+    RecordName = models.CharField(max_length=255, null=True, blank=True, db_column='RecordName')
+    CreatedDate = models.DateField(db_column='CreatedDate')
+    RetentionStartDate = models.DateField(db_column='RetentionStartDate')
+    RetentionEndDate = models.DateField(db_column='RetentionEndDate')
+    Status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='Active', db_column='Status')
+
+    # Archival
+    is_archived = models.BooleanField(default=False, db_column='IsArchived')
+    archived_date = models.DateField(null=True, blank=True, db_column='ArchivedDate')
+    archived_by = models.ForeignKey(
+        Users,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column='ArchivedBy',
+        related_name='retention_archived_by'
+    )
+    archive_location = models.CharField(max_length=500, null=True, blank=True, db_column='ArchiveLocation')
+
+    # Deletion pause / auto-delete
+    deletion_paused = models.BooleanField(default=False, db_column='DeletionPaused')
+    pause_reason = models.TextField(null=True, blank=True, db_column='PauseReason')
+    pause_until = models.DateField(null=True, blank=True, db_column='PauseUntil')
+    auto_delete_enabled = models.BooleanField(default=True, db_column='AutoDeleteEnabled')
+
+    # Backup metadata
+    backup_created = models.BooleanField(default=False, db_column='BackupCreated')
+    backup_location = models.CharField(max_length=500, null=True, blank=True, db_column='BackupLocation')
+
+    FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    CreatedBy = models.ForeignKey(
+        Users,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='retention_timelines_created',
+        db_column='CreatedBy'
+    )
+    CreatedAt = models.DateTimeField(auto_now_add=True, db_column='CreatedAt')
+    UpdatedBy = models.ForeignKey(
+        Users,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='retention_timelines_updated',
+        db_column='UpdatedBy'
+    )
+    UpdatedAt = models.DateTimeField(auto_now=True, db_column='UpdatedAt')
+
+    class Meta:
+        db_table = 'retention_timelines'
+        ordering = ['-RetentionEndDate']
+        indexes = [
+            models.Index(fields=['RetentionPolicyId', 'Status']),
+            models.Index(fields=['RecordType', 'RecordId']),
+            models.Index(fields=['Status', 'RetentionEndDate']),
+            models.Index(fields=['FrameworkId', 'Status']),
+            models.Index(fields=['is_archived']),
+            models.Index(fields=['deletion_paused']),
+        ]
+
+    def __str__(self):
+        return f"{self.RecordType} #{self.RecordId} - {self.Status}"
+
+    @property
+    def is_expired(self):
+        """Check if retention period has expired (ignoring archived/paused states)."""
+        if self.Status in ['Disposed', 'Extended', 'Archived', 'Paused']:
+            return False
+        return timezone.now().date() > self.RetentionEndDate
+
+    @property
+    def days_until_expiry(self):
+        """Days until expiry; 0 if expired; None if archived/paused/disposed/extended."""
+        if self.Status in ['Disposed', 'Archived', 'Paused', 'Extended']:
+            return None
+        today = timezone.now().date()
+        if self.RetentionEndDate > today:
+            return (self.RetentionEndDate - today).days
+        return 0
+
+    def archive(self, user=None, location=None):
+        """Archive the record and pause deletion."""
+        self.is_archived = True
+        self.archived_date = timezone.now().date()
+        self.archived_by = user
+        self.archive_location = location
+        self.Status = 'Archived'
+        self.deletion_paused = True
+        self.save(update_fields=['is_archived', 'archived_date', 'archived_by', 'archive_location', 'Status', 'deletion_paused', 'UpdatedAt'])
+
+    def unarchive(self, user=None):
+        """Remove archived flag and resume active status."""
+        self.is_archived = False
+        self.archived_date = None
+        self.archived_by = None
+        self.archive_location = None
+        self.Status = 'Active'
+        self.deletion_paused = False
+        self.save(update_fields=['is_archived', 'archived_date', 'archived_by', 'archive_location', 'Status', 'deletion_paused', 'UpdatedAt'])
+
+    def pause_deletion(self, reason=None, pause_until=None):
+        """Pause automated deletion with an optional reason and end date."""
+        self.deletion_paused = True
+        self.pause_reason = reason
+        self.pause_until = pause_until
+        self.Status = 'Paused'
+        self.save(update_fields=['deletion_paused', 'pause_reason', 'pause_until', 'Status', 'UpdatedAt'])
+
+    def resume_deletion(self):
+        """Resume automated deletion; set status back to Active if not archived."""
+        self.deletion_paused = False
+        self.pause_reason = None
+        self.pause_until = None
+        if not self.is_archived:
+            self.Status = 'Active'
+        self.save(update_fields=['deletion_paused', 'pause_reason', 'pause_until', 'Status', 'UpdatedAt'])
+
+    def extend_retention(self, extra_days: int = 0):
+        """Extend retention end date by a number of days."""
+        if extra_days > 0:
+            self.RetentionEndDate = self.RetentionEndDate + timedelta(days=extra_days)
+            self.Status = 'Extended'
+            self.save(update_fields=['RetentionEndDate', 'Status', 'UpdatedAt'])
+
+
+# =====================================================
+# DATA LIFECYCLE AUDIT LOG
+# Logs retention lifecycle actions (create, archive, pause, extend, delete, warnings)
+# =====================================================
+class DataLifecycleAuditLog(models.Model):
+    ACTION_CHOICES = [
+        ('CREATE', 'CREATE'),
+        ('ARCHIVE', 'ARCHIVE'),
+        ('UNARCHIVE', 'UNARCHIVE'),
+        ('PAUSE', 'PAUSE'),
+        ('RESUME', 'RESUME'),
+        ('EXTEND', 'EXTEND'),
+        ('DELETE', 'DELETE'),
+        ('WARNING_SENT', 'WARNING_SENT'),
+        ('BACKUP', 'BACKUP'),
+    ]
+
+    id = models.AutoField(primary_key=True, db_column='Id')
+    action_type = models.CharField(max_length=50, choices=ACTION_CHOICES, db_column='ActionType')
+    record_type = models.CharField(max_length=100, db_column='RecordType')
+    record_id = models.IntegerField(db_column='RecordId')
+    record_name = models.CharField(max_length=255, null=True, blank=True, db_column='RecordName')
+    retention_timeline = models.ForeignKey(
+        RetentionTimeline,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='audit_logs',
+        db_column='RetentionTimelineId'
+    )
+    before_status = models.CharField(max_length=50, null=True, blank=True, db_column='BeforeStatus')
+    after_status = models.CharField(max_length=50, null=True, blank=True, db_column='AfterStatus')
+    reason = models.TextField(null=True, blank=True, db_column='Reason')
+    details = models.JSONField(null=True, blank=True, db_column='Details')
+    notification_recipients = models.TextField(null=True, blank=True, db_column='NotificationRecipients')
+    backup_id = models.CharField(max_length=255, null=True, blank=True, db_column='BackupId')
+    performed_by = models.ForeignKey(
+        Users,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='datalifecycle_actions',
+        db_column='PerformedBy'
+    )
+    timestamp = models.DateTimeField(auto_now_add=True, db_column='Timestamp')
+
+    class Meta:
+        db_table = 'data_lifecycle_audit_log'
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['record_type', 'record_id']),
+            models.Index(fields=['action_type', 'timestamp']),
+            models.Index(fields=['performed_by']),
+        ]
+
+    def __str__(self):
+        return f"{self.record_type}#{self.record_id} - {self.action_type}"
+
+    @classmethod
+    def log_action(cls, *, action_type: str, record_type: str, record_id: int, record_name: str = None,
+                   timeline: RetentionTimeline = None, performed_by: Users = None,
+                   before_status: str = None, after_status: str = None,
+                   reason: str = None, details=None, notification_recipients: str = None, backup_id: str = None):
+        """Convenience method to log lifecycle actions."""
+        return cls.objects.create(
+            action_type=action_type,
+            record_type=record_type,
+            record_id=record_id,
+            record_name=record_name,
+            retention_timeline=timeline,
+            before_status=before_status,
+            after_status=after_status,
+            reason=reason,
+            details=details,
+            notification_recipients=notification_recipients,
+            backup_id=backup_id,
+            performed_by=performed_by
+        )
+
+
 # -----------------------------------------------------
 # Retention helper: compute expiry date from config
 # -----------------------------------------------------
@@ -2807,3 +3353,56 @@ def compute_retention_expiry(module_key: str, page_key: str, default_days: int =
     except Exception:
         return None
 
+
+# -----------------------------------------------------
+# Retention Timeline helper: upsert timeline per record
+# -----------------------------------------------------
+def upsert_retention_timeline(instance, record_type: str, record_name: str = None, created_date=None, framework_id=None):
+    """
+    Create or update a RetentionTimeline entry for a record.
+    Requires instance.retentionExpiry to be set.
+    """
+    try:
+        rid = getattr(instance, 'pk', None)
+        if not rid:
+            return
+        end_date = getattr(instance, 'retentionExpiry', None)
+        if not end_date:
+            return
+        start_date = (
+            created_date
+            or getattr(instance, 'CreatedDate', None)
+            or getattr(instance, 'CreatedAt', None)
+            or timezone.now().date()
+        )
+        defaults = {
+            'RecordName': record_name,
+            'CreatedDate': start_date,
+            'RetentionStartDate': start_date,
+            'RetentionEndDate': end_date,
+            'Status': 'Active',
+            'is_archived': False,
+            'deletion_paused': False,
+            'auto_delete_enabled': True,
+        }
+        # Framework handling: if explicit framework provided use it; otherwise fall back to first framework
+        fw_id = None
+        if framework_id:
+            fw_id = framework_id if isinstance(framework_id, int) else getattr(framework_id, 'FrameworkId', None)
+        if not fw_id:
+            try:
+                fw_obj = Framework.objects.first()
+                fw_id = fw_obj.FrameworkId if fw_obj else None
+            except Exception:
+                fw_id = None
+        if fw_id:
+            defaults['FrameworkId_id'] = fw_id
+        timeline, created_flag = RetentionTimeline.objects.update_or_create(
+            RecordType=record_type,
+            RecordId=rid,
+            defaults=defaults
+        )
+        action = "created" if created_flag else "updated"
+        print(f"[RETENTION] RetentionTimeline {action} for {record_type}#{rid} (end={timeline.RetentionEndDate})")
+    except Exception as e:
+        print(f"[RETENTION] RetentionTimeline upsert failed for {record_type}#{getattr(instance, 'pk', None)}: {e}")

@@ -88,20 +88,39 @@ class JiraIntegration:
                 'error': f"Request failed: {str(e)}"
             }
 
-    def get_project_details(self, cloud_id, project_id):
-        """Get detailed project information"""
+    def get_project_details(self, cloud_id, project_id=None, project_key=None):
+        """Get detailed project information.
+        
+        Tries both project ID and project key to be resilient to Jira differences.
+        """
         try:
-            # Get basic project info
-            project_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/project/{project_id}"
-            project_response = requests.get(project_url, headers=self.headers, timeout=30)
+            project_data = None
             
-            if project_response.status_code != 200:
+            # First, try with project ID if provided
+            if project_id is not None:
+                project_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/project/{project_id}"
+                project_response = requests.get(project_url, headers=self.headers, timeout=30)
+                
+                if project_response.status_code == 200:
+                    project_data = project_response.json()
+                else:
+                    logger.warning(f"Failed to fetch project by ID {project_id}: {project_response.status_code} {project_response.text}")
+            
+            # If project not found by ID, try with project key (if available)
+            if project_data is None and project_key:
+                project_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/project/{project_key}"
+                project_response = requests.get(project_url, headers=self.headers, timeout=30)
+                
+                if project_response.status_code == 200:
+                    project_data = project_response.json()
+                else:
+                    logger.warning(f"Failed to fetch project by key {project_key}: {project_response.status_code} {project_response.text}")
+            
+            if project_data is None:
                 return {
                     'success': False,
-                    'error': f"Failed to fetch project: {project_response.status_code}"
+                    'error': f"Failed to fetch project: {project_response.status_code if 'project_response' in locals() else 'unknown'}"
                 }
-            
-            project_data = project_response.json()
             
             # Get project components
             components_data = []
@@ -126,13 +145,17 @@ class JiraIntegration:
             # Get project issues (first 50)
             issues_data = {"issues": [], "total": 0}
             try:
-                # Try with project ID first
-                issues_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/search?jql=project={project_id}&maxResults=50"
-                issues_response = requests.get(issues_url, headers=self.headers, timeout=30)
-                if issues_response.status_code == 200:
-                    issues_data = issues_response.json()
-                else:
-                    # Try with project key
+                # Try with project ID first (if available)
+                if project_id is not None:
+                    issues_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/search?jql=project={project_id}&maxResults=50"
+                    issues_response = requests.get(issues_url, headers=self.headers, timeout=30)
+                    if issues_response.status_code == 200:
+                        issues_data = issues_response.json()
+                    else:
+                        logger.warning(f"Failed to fetch issues by project ID {project_id}: {issues_response.status_code} {issues_response.text}")
+                
+                # If that failed, or no project_id, fall back to project key from project_data
+                if (not issues_data['issues']) and project_data.get('key'):
                     issues_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/search?jql=project=\"{project_data.get('key', '')}\"&maxResults=50"
                     issues_response = requests.get(issues_url, headers=self.headers, timeout=30)
                     if issues_response.status_code == 200:
@@ -236,6 +259,10 @@ def jira_oauth(request):
                 'error': 'Jira OAuth not configured - missing SCOPES'
             })
         
+        # Ensure session exists and is saved before storing state
+        if not request.session.session_key:
+            request.session.create()
+        
         # Store user_id in session for callback
         request.session['jira_user_id'] = user_id
         
@@ -243,6 +270,14 @@ def jira_oauth(request):
         import secrets
         state = secrets.token_urlsafe(24)
         request.session['jira_oauth_state'] = state
+        request.session.modified = True  # Mark session as modified
+        request.session.save()  # Explicitly save session to prevent conflicts
+        
+        # Check if we should force consent (useful for 409 conflicts)
+        # 409 Conflict errors often occur when there's an existing consent session
+        # Adding prompt=consent helps avoid these conflicts
+        force_consent = request.GET.get('force_consent', 'true').lower() == 'true'  # Default to true to avoid 409s
+        prompt_param = 'consent' if force_consent else None
         
         # Build Atlassian OAuth URL with correct parameters
         # Ensure all values are clean (no quotes)
@@ -254,6 +289,12 @@ def jira_oauth(request):
             'state': str(state).strip(),
             'audience': 'api.atlassian.com'
         }
+        
+        # Add prompt parameter to force consent screen (helps avoid 409 conflicts)
+        # This ensures a fresh consent flow and prevents conflicts with existing sessions
+        if prompt_param:
+            oauth_params['prompt'] = prompt_param
+            logger.info(f"Jira OAuth - Using prompt=consent to avoid 409 conflicts")
         
         # Validate no empty values
         for key, value in oauth_params.items():
@@ -302,6 +343,15 @@ def jira_oauth_callback(request):
             stored_state = request.session.get('jira_oauth_state')
             user_id = request.session.get('jira_user_id', 1)
             
+            # Get redirect URI configuration for error messages
+            redirect_uri = getattr(settings, 'JIRA_REDIRECT_URI', 'http://127.0.0.1:8000/api/jira/oauth-callback/')
+            use_local_dev = getattr(settings, 'USE_LOCAL_DEVELOPMENT', True)
+            scopes = getattr(settings, 'JIRA_SCOPES', 'read:jira-user read:jira-work')
+            if use_local_dev:
+                redirect_uri = 'http://127.0.0.1:8000/api/jira/oauth-callback/'
+            else:
+                redirect_uri = str(redirect_uri).strip().strip("'\"")
+            
             # Verify state parameter
             if state != stored_state:
                 logger.error("OAuth state mismatch")
@@ -312,8 +362,36 @@ def jira_oauth_callback(request):
             # Handle OAuth errors
             if error:
                 logger.error(f"OAuth error: {error} - {error_description}")
+                
+                # Provide more helpful error messages for common issues
+                if error == 'unauthorized_client' and 'redirect_uri' in error_description.lower():
+                    logger.error(f"REDIRECT URI NOT REGISTERED: The redirect URI '{redirect_uri}' is not registered in your Atlassian OAuth app.")
+                    logger.error(f"Please add this URI to your Atlassian OAuth app settings at: https://developer.atlassian.com/console/myapps/")
+                    logger.error(f"Current redirect URI: {redirect_uri}")
+                    logger.error(f"USE_LOCAL_DEVELOPMENT: {use_local_dev}")
+                    logger.error(f"To fix: Either register '{redirect_uri}' in Atlassian, or set USE_LOCAL_DEVELOPMENT=false and use a registered production URI")
+                
+                elif error == 'access_denied' or 'jira site' in error_description.lower():
+                    logger.error(f"ACCESS DENIED: {error_description}")
+                    logger.error(f"This usually means:")
+                    logger.error(f"  1. You don't have a Jira account/site - Create one at https://www.atlassian.com/software/jira")
+                    logger.error(f"  2. Your OAuth app needs permissions - Check app settings at https://developer.atlassian.com/console/myapps/")
+                    logger.error(f"  3. The app needs approval for your Jira site - Grant access when prompted")
+                    logger.error(f"  4. Your account doesn't have permission to access the Jira site")
+                    logger.error(f"Current scopes: {scopes}")
+                    logger.error(f"Make sure your OAuth app has 'Jira' product access enabled in the Atlassian Developer Console")
+                
+                # Handle 409 Conflict errors (consent conflicts)
+                elif 'conflict' in error_description.lower() or error == 'conflict':
+                    logger.error(f"409 CONFLICT ERROR: {error_description}")
+                    logger.error(f"This usually means there's a conflicting authorization session.")
+                    logger.error(f"Try again with ?force_consent=true parameter to force re-authorization")
+                    logger.error(f"Or clear your browser cookies/session and try again")
+                
                 frontend_base = getattr(settings, 'FRONTEND_URL', 'http://localhost:8080')
-                error_url = f"{frontend_base}/integration/jira?error={error}"
+                # Pass error_description to frontend for better error display
+                error_param = f"{error}&error_description={up.quote(error_description)}" if error_description else error
+                error_url = f"{frontend_base}/integration/jira?error={error_param}"
                 return HttpResponseRedirect(error_url)
             
             if not code:
@@ -326,15 +404,7 @@ def jira_oauth_callback(request):
             try:
                 client_id = getattr(settings, 'JIRA_CLIENT_ID', '')
                 client_secret = getattr(settings, 'JIRA_CLIENT_SECRET', '')
-                redirect_uri = getattr(settings, 'JIRA_REDIRECT_URI', 'http://127.0.0.1:8000/api/jira/oauth-callback/')
-                use_local_dev = getattr(settings, 'USE_LOCAL_DEVELOPMENT', True)
-                
-                # Force local redirect URI if in local development mode
-                if use_local_dev:
-                    redirect_uri = 'http://127.0.0.1:8000/api/jira/oauth-callback/'
-                else:
-                    # Ensure production redirect URI is clean (no quotes, no extra whitespace)
-                    redirect_uri = str(redirect_uri).strip().strip("'\"")
+                # redirect_uri and use_local_dev already defined above for error handling
                 
                 logger.info(f"Jira OAuth Callback - USE_LOCAL_DEVELOPMENT: {use_local_dev}, Redirect URI: {redirect_uri}")
                 
@@ -345,14 +415,17 @@ def jira_oauth_callback(request):
                     return HttpResponseRedirect(error_url)
                 
                 # Exchange code for token
+                # NOTE: For Atlassian OAuth 2.0 (3LO) the token endpoint typically expects:
+                # grant_type, code, redirect_uri, client_id, client_secret.
+                # The audience parameter is used in some flows but can cause issues here,
+                # so we omit it to avoid 401 access_denied errors during token exchange.
                 token_url = "https://auth.atlassian.com/oauth/token"
                 token_data = {
                     'grant_type': 'authorization_code',
                     'code': code,
                     'redirect_uri': redirect_uri,
                     'client_id': client_id,
-                    'client_secret': client_secret,
-                    'audience': 'api.atlassian.com'
+                    'client_secret': client_secret
                 }
                 
                 token_headers = {
@@ -711,6 +784,7 @@ def jira_project_details(request):
             data = json.loads(request.body)
             user_id = data.get('user_id', 1)
             project_id = data.get('project_id')
+            project_key = data.get('project_key')  # Optional, for robustness
             access_token = data.get('access_token')
             cloud_id = data.get('cloud_id')
             
@@ -724,7 +798,7 @@ def jira_project_details(request):
             jira_integration = JiraIntegration(access_token)
             
             # Fetch project details
-            details_result = jira_integration.get_project_details(cloud_id, project_id)
+            details_result = jira_integration.get_project_details(cloud_id, project_id=project_id, project_key=project_key)
             
             if details_result['success']:
                 # Save project details to database

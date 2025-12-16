@@ -12,14 +12,18 @@ from django.db import transaction
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
-from ...models import (
-    RetentionModulePageConfig,
-    Users, Framework, RBAC
-)
 from django.db.models import Q
+from django.apps import apps
 from datetime import timedelta
 import logging
 import json
+
+from ...models import (
+    RetentionModulePageConfig,
+    RetentionTimeline,
+    DataLifecycleAuditLog,
+    Users, Framework, RBAC
+)
 
 logger = logging.getLogger(__name__)
 
@@ -46,727 +50,6 @@ def is_user_administrator(user_id):
             return False
     except Users.DoesNotExist:
         return False
-
-
-# =====================================================
-# RETENTION POLICY VIEWS
-# =====================================================
-
-@csrf_exempt
-@api_view(['GET'])
-@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication, TokenAuthentication])
-@permission_classes([IsAuthenticated])
-def list_retention_policies(request):
-    """List all retention policies"""
-    try:
-        framework_id = request.GET.get('framework_id')
-        status_filter = request.GET.get('status')
-        retention_type = request.GET.get('retention_type')
-        
-        policies = RetentionPolicy.objects.all()
-        
-        if framework_id:
-            policies = policies.filter(FrameworkId=framework_id)
-        if status_filter:
-            policies = policies.filter(Status=status_filter)
-        if retention_type:
-            policies = policies.filter(RetentionType=retention_type)
-        
-        policies_list = []
-        for policy in policies:
-            policies_list.append({
-                'retention_policy_id': policy.RetentionPolicyId,
-                'policy_name': policy.PolicyName,
-                'policy_description': policy.PolicyDescription,
-                'retention_type': policy.RetentionType,
-                'retention_period_years': policy.RetentionPeriodYears,
-                'retention_period_months': policy.RetentionPeriodMonths,
-                'retention_period_days': policy.RetentionPeriodDays,
-                'total_retention_days': policy.total_retention_days,
-                'status': policy.Status,
-                'framework_id': policy.FrameworkId.FrameworkId,
-                'framework_name': policy.FrameworkId.FrameworkName,
-                'applicable_to': policy.ApplicableTo,
-                'legal_basis': policy.LegalBasis,
-                'regulatory_requirements': policy.RegulatoryRequirements,
-                'disposal_method': policy.DisposalMethod,
-                'review_frequency': policy.ReviewFrequency,
-                'last_reviewed_date': policy.LastReviewedDate.isoformat() if policy.LastReviewedDate else None,
-                'next_review_date': policy.NextReviewDate.isoformat() if policy.NextReviewDate else None,
-                'created_by': policy.CreatedBy.UserName if policy.CreatedBy else None,
-                'created_at': policy.CreatedAt.isoformat(),
-                'updated_at': policy.UpdatedAt.isoformat(),
-            })
-        
-        return Response({
-            'status': 'success',
-            'data': policies_list,
-            'count': len(policies_list)
-        }, status=status.HTTP_200_OK)
-        
-    except Exception as e:
-        logger.error(f"Error listing retention policies: {str(e)}")
-        return Response({
-            'status': 'error',
-            'message': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@csrf_exempt
-@api_view(['GET'])
-@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication, TokenAuthentication])
-@permission_classes([IsAuthenticated])
-def get_retention_policy(request, policy_id):
-    """Get a specific retention policy"""
-    try:
-        policy = get_object_or_404(RetentionPolicy, RetentionPolicyId=policy_id)
-        
-        data = {
-            'retention_policy_id': policy.RetentionPolicyId,
-            'policy_name': policy.PolicyName,
-            'policy_description': policy.PolicyDescription,
-            'retention_type': policy.RetentionType,
-            'retention_period_years': policy.RetentionPeriodYears,
-            'retention_period_months': policy.RetentionPeriodMonths,
-            'retention_period_days': policy.RetentionPeriodDays,
-            'total_retention_days': policy.total_retention_days,
-            'status': policy.Status,
-            'framework_id': policy.FrameworkId.FrameworkId,
-            'framework_name': policy.FrameworkId.FrameworkName,
-            'applicable_to': policy.ApplicableTo,
-            'legal_basis': policy.LegalBasis,
-            'regulatory_requirements': policy.RegulatoryRequirements,
-            'disposal_method': policy.DisposalMethod,
-            'review_frequency': policy.ReviewFrequency,
-            'last_reviewed_date': policy.LastReviewedDate.isoformat() if policy.LastReviewedDate else None,
-            'next_review_date': policy.NextReviewDate.isoformat() if policy.NextReviewDate else None,
-            'created_by': policy.CreatedBy.UserName if policy.CreatedBy else None,
-            'created_at': policy.CreatedAt.isoformat(),
-            'updated_at': policy.UpdatedAt.isoformat(),
-        }
-        
-        return Response({
-            'status': 'success',
-            'data': data
-        }, status=status.HTTP_200_OK)
-        
-    except Exception as e:
-        logger.error(f"Error getting retention policy: {str(e)}")
-        return Response({
-            'status': 'error',
-            'message': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@csrf_exempt
-@api_view(['POST'])
-@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication, TokenAuthentication])
-@permission_classes([IsAuthenticated])
-def create_retention_policy(request):
-    """Create a new retention policy"""
-    try:
-        user_id = request.user.UserId if hasattr(request.user, 'UserId') else None
-        if not user_id:
-            user_id = request.session.get('user_id') or request.data.get('user_id')
-        
-        data = request.data
-
-        # Helper to safely parse date strings (YYYY-MM-DD) or return None
-        def parse_date(value):
-            from datetime import datetime
-            if not value:
-                return None
-            if isinstance(value, str):
-                try:
-                    return datetime.strptime(value, '%Y-%m-%d').date()
-                except ValueError:
-                    return None
-            return value
-
-        with transaction.atomic():
-            policy = RetentionPolicy.objects.create(
-                PolicyName=data.get('policy_name'),
-                PolicyDescription=data.get('policy_description'),
-                RetentionType=data.get('retention_type', 'Other'),
-                RetentionPeriodYears=data.get('retention_period_years'),
-                RetentionPeriodMonths=data.get('retention_period_months'),
-                RetentionPeriodDays=data.get('retention_period_days'),
-                Status=data.get('status', 'Draft'),
-                FrameworkId_id=data.get('framework_id'),
-                ApplicableTo=data.get('applicable_to', []),
-                LegalBasis=data.get('legal_basis'),
-                RegulatoryRequirements=data.get('regulatory_requirements'),
-                DisposalMethod=data.get('disposal_method'),
-                ReviewFrequency=data.get('review_frequency'),
-                LastReviewedDate=parse_date(data.get('last_reviewed_date')),
-                NextReviewDate=parse_date(data.get('next_review_date')),
-                CreatedBy_id=user_id,
-            )
-            
-            return Response({
-                'status': 'success',
-                'message': 'Retention policy created successfully',
-                'data': {
-                    'retention_policy_id': policy.RetentionPolicyId,
-                    'policy_name': policy.PolicyName,
-                }
-            }, status=status.HTTP_201_CREATED)
-            
-    except Exception as e:
-        logger.error(f"Error creating retention policy: {str(e)}")
-        return Response({
-            'status': 'error',
-            'message': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@csrf_exempt
-@api_view(['PUT'])
-@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication, TokenAuthentication])
-@permission_classes([IsAuthenticated])
-def update_retention_policy(request, policy_id):
-    """Update a retention policy"""
-    try:
-        user_id = request.user.UserId if hasattr(request.user, 'UserId') else None
-        if not user_id:
-            user_id = request.session.get('user_id') or request.data.get('user_id')
-        
-        policy = get_object_or_404(RetentionPolicy, RetentionPolicyId=policy_id)
-        data = request.data
-        
-        with transaction.atomic():
-            if 'policy_name' in data:
-                policy.PolicyName = data['policy_name']
-            if 'policy_description' in data:
-                policy.PolicyDescription = data.get('policy_description')
-            if 'retention_type' in data:
-                policy.RetentionType = data['retention_type']
-            if 'retention_period_years' in data:
-                policy.RetentionPeriodYears = data.get('retention_period_years')
-            if 'retention_period_months' in data:
-                policy.RetentionPeriodMonths = data.get('retention_period_months')
-            if 'retention_period_days' in data:
-                policy.RetentionPeriodDays = data.get('retention_period_days')
-            if 'status' in data:
-                policy.Status = data['status']
-            if 'applicable_to' in data:
-                policy.ApplicableTo = data['applicable_to']
-            if 'legal_basis' in data:
-                policy.LegalBasis = data.get('legal_basis')
-            if 'regulatory_requirements' in data:
-                policy.RegulatoryRequirements = data.get('regulatory_requirements')
-            if 'disposal_method' in data:
-                policy.DisposalMethod = data.get('disposal_method')
-            if 'review_frequency' in data:
-                policy.ReviewFrequency = data.get('review_frequency')
-            if 'last_reviewed_date' in data:
-                policy.LastReviewedDate = data.get('last_reviewed_date')
-            if 'next_review_date' in data:
-                policy.NextReviewDate = data.get('next_review_date')
-            
-            policy.UpdatedBy_id = user_id
-            policy.save()
-            
-            return Response({
-                'status': 'success',
-                'message': 'Retention policy updated successfully',
-                'data': {
-                    'retention_policy_id': policy.RetentionPolicyId,
-                    'policy_name': policy.PolicyName,
-                }
-            }, status=status.HTTP_200_OK)
-            
-    except Exception as e:
-        logger.error(f"Error updating retention policy: {str(e)}")
-        return Response({
-            'status': 'error',
-            'message': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@csrf_exempt
-@api_view(['DELETE'])
-@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication, TokenAuthentication])
-@permission_classes([IsAuthenticated])
-def delete_retention_policy(request, policy_id):
-    """Delete a retention policy"""
-    try:
-        policy = get_object_or_404(RetentionPolicy, RetentionPolicyId=policy_id)
-        policy_name = policy.PolicyName
-        
-        with transaction.atomic():
-            policy.delete()
-            
-            return Response({
-                'status': 'success',
-                'message': f'Retention policy "{policy_name}" deleted successfully'
-            }, status=status.HTTP_200_OK)
-            
-    except Exception as e:
-        logger.error(f"Error deleting retention policy: {str(e)}")
-        return Response({
-            'status': 'error',
-            'message': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-# =====================================================
-# RETENTION TIMELINE VIEWS
-# =====================================================
-
-@csrf_exempt
-@api_view(['GET'])
-@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication, TokenAuthentication])
-@permission_classes([IsAuthenticated])
-def list_retention_timelines(request):
-    """List all retention timelines"""
-    try:
-        framework_id = request.GET.get('framework_id')
-        status_filter = request.GET.get('status')
-        record_type = request.GET.get('record_type')
-        record_id = request.GET.get('record_id')
-        policy_id = request.GET.get('retention_policy_id')
-        expired_only = request.GET.get('expired_only', 'false').lower() == 'true'
-        
-        timelines = RetentionTimeline.objects.all()
-        
-        if framework_id:
-            timelines = timelines.filter(FrameworkId=framework_id)
-        if status_filter:
-            timelines = timelines.filter(Status=status_filter)
-        if record_type:
-            timelines = timelines.filter(RecordType=record_type)
-        if record_id:
-            timelines = timelines.filter(RecordId=record_id)
-        if policy_id:
-            timelines = timelines.filter(RetentionPolicy_id=policy_id)
-        if expired_only:
-            today = timezone.now().date()
-            timelines = timelines.filter(RetentionEndDate__lt=today, Status='Active')
-        
-        timelines_list = []
-        for timeline in timelines:
-            timelines_list.append({
-                'retention_timeline_id': timeline.RetentionTimelineId,
-                'retention_policy_id': timeline.RetentionPolicy.RetentionPolicyId,
-                'retention_policy_name': timeline.RetentionPolicy.PolicyName,
-                'record_type': timeline.RecordType,
-                'record_id': timeline.RecordId,
-                'record_name': timeline.RecordName,
-                'created_date': timeline.CreatedDate.isoformat(),
-                'retention_start_date': timeline.RetentionStartDate.isoformat(),
-                'retention_end_date': timeline.RetentionEndDate.isoformat(),
-                'status': timeline.Status,
-                'is_expired': timeline.is_expired,
-                'days_until_expiry': timeline.days_until_expiry,
-                'disposal_date': timeline.DisposalDate.isoformat() if timeline.DisposalDate else None,
-                'disposal_method': timeline.DisposalMethod,
-                'disposal_confirmation': timeline.DisposalConfirmation,
-                'extension_reason': timeline.ExtensionReason,
-                'extended_until': timeline.ExtendedUntil.isoformat() if timeline.ExtendedUntil else None,
-                'framework_id': timeline.FrameworkId.FrameworkId,
-                'framework_name': timeline.FrameworkId.FrameworkName,
-                'created_by': timeline.CreatedBy.UserName if timeline.CreatedBy else None,
-                'created_at': timeline.CreatedAt.isoformat(),
-                'updated_at': timeline.UpdatedAt.isoformat(),
-            })
-        
-        return Response({
-            'status': 'success',
-            'data': timelines_list,
-            'count': len(timelines_list)
-        }, status=status.HTTP_200_OK)
-        
-    except Exception as e:
-        logger.error(f"Error listing retention timelines: {str(e)}")
-        return Response({
-            'status': 'error',
-            'message': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@csrf_exempt
-@api_view(['POST'])
-@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication, TokenAuthentication])
-@permission_classes([IsAuthenticated])
-def create_retention_timeline(request):
-    """Create a new retention timeline"""
-    try:
-        user_id = request.user.UserId if hasattr(request.user, 'UserId') else None
-        if not user_id:
-            user_id = request.session.get('user_id') or request.data.get('user_id')
-        
-        data = request.data
-        
-        # Get the retention policy to calculate end date
-        policy = get_object_or_404(RetentionPolicy, RetentionPolicyId=data.get('retention_policy_id'))
-        
-        # Calculate retention end date
-        start_date = data.get('retention_start_date') or data.get('created_date')
-        if isinstance(start_date, str):
-            from datetime import datetime
-            start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
-        
-        end_date = start_date
-        if policy.RetentionPeriodYears:
-            end_date += timedelta(days=policy.RetentionPeriodYears * 365)
-        if policy.RetentionPeriodMonths:
-            end_date += timedelta(days=policy.RetentionPeriodMonths * 30)
-        if policy.RetentionPeriodDays:
-            end_date += timedelta(days=policy.RetentionPeriodDays)
-        
-        with transaction.atomic():
-            timeline = RetentionTimeline.objects.create(
-                RetentionPolicy_id=data.get('retention_policy_id'),
-                RecordType=data.get('record_type'),
-                RecordId=data.get('record_id'),
-                RecordName=data.get('record_name'),
-                CreatedDate=data.get('created_date'),
-                RetentionStartDate=start_date,
-                RetentionEndDate=end_date,
-                Status='Active',
-                FrameworkId_id=data.get('framework_id'),
-                CreatedBy_id=user_id,
-            )
-            
-            return Response({
-                'status': 'success',
-                'message': 'Retention timeline created successfully',
-                'data': {
-                    'retention_timeline_id': timeline.RetentionTimelineId,
-                    'retention_end_date': timeline.RetentionEndDate.isoformat(),
-                }
-            }, status=status.HTTP_201_CREATED)
-            
-    except Exception as e:
-        logger.error(f"Error creating retention timeline: {str(e)}")
-        return Response({
-            'status': 'error',
-            'message': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@csrf_exempt
-@api_view(['PUT'])
-@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication, TokenAuthentication])
-@permission_classes([IsAuthenticated])
-def update_retention_timeline(request, timeline_id):
-    """Update a retention timeline"""
-    try:
-        user_id = request.user.UserId if hasattr(request.user, 'UserId') else None
-        if not user_id:
-            user_id = request.session.get('user_id') or request.data.get('user_id')
-        
-        timeline = get_object_or_404(RetentionTimeline, RetentionTimelineId=timeline_id)
-        data = request.data
-        
-        with transaction.atomic():
-            if 'status' in data:
-                timeline.Status = data['status']
-            if 'disposal_date' in data:
-                timeline.DisposalDate = data.get('disposal_date')
-            if 'disposal_method' in data:
-                timeline.DisposalMethod = data.get('disposal_method')
-            if 'disposal_confirmation' in data:
-                timeline.DisposalConfirmation = data.get('disposal_confirmation')
-            if 'extension_reason' in data:
-                timeline.ExtensionReason = data.get('extension_reason')
-            if 'extended_until' in data:
-                timeline.ExtendedUntil = data.get('extended_until')
-                if data.get('extended_until'):
-                    timeline.Status = 'Extended'
-            
-            timeline.UpdatedBy_id = user_id
-            timeline.save()
-            
-            return Response({
-                'status': 'success',
-                'message': 'Retention timeline updated successfully'
-            }, status=status.HTTP_200_OK)
-            
-    except Exception as e:
-        logger.error(f"Error updating retention timeline: {str(e)}")
-        return Response({
-            'status': 'error',
-            'message': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-# =====================================================
-# DATA PROCESSING AGREEMENT VIEWS
-# =====================================================
-
-@csrf_exempt
-@api_view(['GET'])
-@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication, TokenAuthentication])
-@permission_classes([IsAuthenticated])
-def list_data_processing_agreements(request):
-    """List all data processing agreements"""
-    try:
-        framework_id = request.GET.get('framework_id')
-        status_filter = request.GET.get('status')
-        expired_only = request.GET.get('expired_only', 'false').lower() == 'true'
-        
-        agreements = DataProcessingAgreement.objects.all()
-        
-        if framework_id:
-            agreements = agreements.filter(FrameworkId=framework_id)
-        if status_filter:
-            agreements = agreements.filter(Status=status_filter)
-        if expired_only:
-            today = timezone.now().date()
-            agreements = agreements.filter(ExpiryDate__lt=today, Status='Active')
-        
-        agreements_list = []
-        for agreement in agreements:
-            agreements_list.append({
-                'dpa_id': agreement.DPAId,
-                'agreement_name': agreement.AgreementName,
-                'agreement_number': agreement.AgreementNumber,
-                'description': agreement.Description,
-                'data_controller': agreement.DataController,
-                'data_processor': agreement.DataProcessor,
-                'processor_contact': agreement.ProcessorContact,
-                'processor_email': agreement.ProcessorEmail,
-                'effective_date': agreement.EffectiveDate.isoformat(),
-                'expiry_date': agreement.ExpiryDate.isoformat() if agreement.ExpiryDate else None,
-                'status': agreement.Status,
-                'is_expired': agreement.is_expired,
-                'days_until_expiry': agreement.days_until_expiry,
-                'framework_id': agreement.FrameworkId.FrameworkId,
-                'framework_name': agreement.FrameworkId.FrameworkName,
-                'purpose_of_processing': agreement.PurposeOfProcessing,
-                'types_of_data': agreement.TypesOfData,
-                'data_subjects': agreement.DataSubjects,
-                'security_measures': agreement.SecurityMeasures,
-                'data_retention': agreement.DataRetention,
-                'data_transfer': agreement.DataTransfer,
-                'sub_processors': agreement.SubProcessors,
-                'breach_notification': agreement.BreachNotification,
-                'audit_rights': agreement.AuditRights,
-                'document_url': agreement.DocumentURL,
-                'review_frequency': agreement.ReviewFrequency,
-                'last_reviewed_date': agreement.LastReviewedDate.isoformat() if agreement.LastReviewedDate else None,
-                'next_review_date': agreement.NextReviewDate.isoformat() if agreement.NextReviewDate else None,
-                'created_by': agreement.CreatedBy.UserName if agreement.CreatedBy else None,
-                'created_at': agreement.CreatedAt.isoformat(),
-                'updated_at': agreement.UpdatedAt.isoformat(),
-            })
-        
-        return Response({
-            'status': 'success',
-            'data': agreements_list,
-            'count': len(agreements_list)
-        }, status=status.HTTP_200_OK)
-        
-    except Exception as e:
-        logger.error(f"Error listing data processing agreements: {str(e)}")
-        return Response({
-            'status': 'error',
-            'message': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@csrf_exempt
-@api_view(['GET'])
-@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication, TokenAuthentication])
-@permission_classes([IsAuthenticated])
-def get_data_processing_agreement(request, dpa_id):
-    """Get a specific data processing agreement"""
-    try:
-        agreement = get_object_or_404(DataProcessingAgreement, DPAId=dpa_id)
-        
-        data = {
-            'dpa_id': agreement.DPAId,
-            'agreement_name': agreement.AgreementName,
-            'agreement_number': agreement.AgreementNumber,
-            'description': agreement.Description,
-            'data_controller': agreement.DataController,
-            'data_processor': agreement.DataProcessor,
-            'processor_contact': agreement.ProcessorContact,
-            'processor_email': agreement.ProcessorEmail,
-            'effective_date': agreement.EffectiveDate.isoformat(),
-            'expiry_date': agreement.ExpiryDate.isoformat() if agreement.ExpiryDate else None,
-            'status': agreement.Status,
-            'is_expired': agreement.is_expired,
-            'days_until_expiry': agreement.days_until_expiry,
-            'framework_id': agreement.FrameworkId.FrameworkId,
-            'framework_name': agreement.FrameworkId.FrameworkName,
-            'purpose_of_processing': agreement.PurposeOfProcessing,
-            'types_of_data': agreement.TypesOfData,
-            'data_subjects': agreement.DataSubjects,
-            'security_measures': agreement.SecurityMeasures,
-            'data_retention': agreement.DataRetention,
-            'data_transfer': agreement.DataTransfer,
-            'sub_processors': agreement.SubProcessors,
-            'breach_notification': agreement.BreachNotification,
-            'audit_rights': agreement.AuditRights,
-            'document_url': agreement.DocumentURL,
-            'review_frequency': agreement.ReviewFrequency,
-            'last_reviewed_date': agreement.LastReviewedDate.isoformat() if agreement.LastReviewedDate else None,
-            'next_review_date': agreement.NextReviewDate.isoformat() if agreement.NextReviewDate else None,
-            'created_by': agreement.CreatedBy.UserName if agreement.CreatedBy else None,
-            'created_at': agreement.CreatedAt.isoformat(),
-            'updated_at': agreement.UpdatedAt.isoformat(),
-        }
-        
-        return Response({
-            'status': 'success',
-            'data': data
-        }, status=status.HTTP_200_OK)
-        
-    except Exception as e:
-        logger.error(f"Error getting data processing agreement: {str(e)}")
-        return Response({
-            'status': 'error',
-            'message': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@csrf_exempt
-@api_view(['POST'])
-@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication, TokenAuthentication])
-@permission_classes([IsAuthenticated])
-def create_data_processing_agreement(request):
-    """Create a new data processing agreement"""
-    try:
-        user_id = request.user.UserId if hasattr(request.user, 'UserId') else None
-        if not user_id:
-            user_id = request.session.get('user_id') or request.data.get('user_id')
-        
-        data = request.data
-        
-        with transaction.atomic():
-            agreement = DataProcessingAgreement.objects.create(
-                AgreementName=data.get('agreement_name'),
-                AgreementNumber=data.get('agreement_number'),
-                Description=data.get('description'),
-                DataController=data.get('data_controller'),
-                DataProcessor=data.get('data_processor'),
-                ProcessorContact=data.get('processor_contact'),
-                ProcessorEmail=data.get('processor_email'),
-                EffectiveDate=data.get('effective_date'),
-                ExpiryDate=data.get('expiry_date'),
-                Status=data.get('status', 'Draft'),
-                FrameworkId_id=data.get('framework_id'),
-                PurposeOfProcessing=data.get('purpose_of_processing'),
-                TypesOfData=data.get('types_of_data'),
-                DataSubjects=data.get('data_subjects'),
-                SecurityMeasures=data.get('security_measures'),
-                DataRetention=data.get('data_retention'),
-                DataTransfer=data.get('data_transfer'),
-                SubProcessors=data.get('sub_processors', []),
-                BreachNotification=data.get('breach_notification'),
-                AuditRights=data.get('audit_rights'),
-                DocumentURL=data.get('document_url'),
-                ReviewFrequency=data.get('review_frequency'),
-                LastReviewedDate=data.get('last_reviewed_date'),
-                NextReviewDate=data.get('next_review_date'),
-                CreatedBy_id=user_id,
-            )
-            
-            return Response({
-                'status': 'success',
-                'message': 'Data processing agreement created successfully',
-                'data': {
-                    'dpa_id': agreement.DPAId,
-                    'agreement_name': agreement.AgreementName,
-                }
-            }, status=status.HTTP_201_CREATED)
-            
-    except Exception as e:
-        logger.error(f"Error creating data processing agreement: {str(e)}")
-        return Response({
-            'status': 'error',
-            'message': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@csrf_exempt
-@api_view(['PUT'])
-@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication, TokenAuthentication])
-@permission_classes([IsAuthenticated])
-def update_data_processing_agreement(request, dpa_id):
-    """Update a data processing agreement"""
-    try:
-        user_id = request.user.UserId if hasattr(request.user, 'UserId') else None
-        if not user_id:
-            user_id = request.session.get('user_id') or request.data.get('user_id')
-        
-        agreement = get_object_or_404(DataProcessingAgreement, DPAId=dpa_id)
-        data = request.data
-        
-        with transaction.atomic():
-            field_mapping = {
-                'agreement_name': 'AgreementName',
-                'agreement_number': 'AgreementNumber',
-                'description': 'Description',
-                'data_controller': 'DataController',
-                'data_processor': 'DataProcessor',
-                'processor_contact': 'ProcessorContact',
-                'processor_email': 'ProcessorEmail',
-                'effective_date': 'EffectiveDate',
-                'expiry_date': 'ExpiryDate',
-                'status': 'Status',
-                'purpose_of_processing': 'PurposeOfProcessing',
-                'types_of_data': 'TypesOfData',
-                'data_subjects': 'DataSubjects',
-                'security_measures': 'SecurityMeasures',
-                'data_retention': 'DataRetention',
-                'data_transfer': 'DataTransfer',
-                'sub_processors': 'SubProcessors',
-                'breach_notification': 'BreachNotification',
-                'audit_rights': 'AuditRights',
-                'document_url': 'DocumentURL',
-                'review_frequency': 'ReviewFrequency',
-                'last_reviewed_date': 'LastReviewedDate',
-                'next_review_date': 'NextReviewDate'
-            }
-            
-            for field, model_field in field_mapping.items():
-                if field in data:
-                    setattr(agreement, model_field, data[field])
-            
-            agreement.UpdatedBy_id = user_id
-            agreement.save()
-            
-            return Response({
-                'status': 'success',
-                'message': 'Data processing agreement updated successfully'
-            }, status=status.HTTP_200_OK)
-            
-    except Exception as e:
-        logger.error(f"Error updating data processing agreement: {str(e)}")
-        return Response({
-            'status': 'error',
-            'message': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@csrf_exempt
-@api_view(['DELETE'])
-@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication, TokenAuthentication])
-@permission_classes([IsAuthenticated])
-def delete_data_processing_agreement(request, dpa_id):
-    """Delete a data processing agreement"""
-    try:
-        agreement = get_object_or_404(DataProcessingAgreement, DPAId=dpa_id)
-        agreement_name = agreement.AgreementName
-        
-        with transaction.atomic():
-            agreement.delete()
-            
-            return Response({
-                'status': 'success',
-                'message': f'Data processing agreement "{agreement_name}" deleted successfully'
-            }, status=status.HTTP_200_OK)
-            
-    except Exception as e:
-        logger.error(f"Error deleting data processing agreement: {str(e)}")
-        return Response({
-            'status': 'error',
-            'message': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # =====================================================
@@ -814,6 +97,38 @@ MODULE_PAGES = {
         'update_event', 'attach_evidence', 'upload_event_evidence'
     ],
 }
+
+# Map RecordType (from RetentionTimeline) to Django app/model for updating retentionExpiry
+RECORD_MODEL_MAP = {
+    'policy': ('grc', 'Policy'),
+    'compliance': ('grc', 'Compliance'),
+    'audit': ('grc', 'Audit'),
+    'incident': ('grc', 'Incident'),
+    'risk': ('grc', 'Risk'),
+    'risk_instance': ('grc', 'RiskInstance'),
+    'event': ('grc', 'Event'),
+    'audit_document': ('grc', 'AuditDocument'),
+    's3_file': ('grc', 'S3File'),
+    'file_operations': ('grc', 'FileOperations'),
+}
+
+
+def _update_record_retention_expiry_from_timeline(timeline: RetentionTimeline):
+    """Update the underlying record's retentionExpiry to match the timeline."""
+    try:
+        key = (timeline.RecordType or '').lower()
+        if key not in RECORD_MODEL_MAP:
+            return
+        app_label, model_name = RECORD_MODEL_MAP[key]
+        model_cls = apps.get_model(app_label, model_name)
+        if not model_cls:
+            return
+        model_cls.objects.filter(pk=timeline.RecordId).update(retentionExpiry=timeline.RetentionEndDate)
+    except Exception as exc:
+        logger.error(
+            "Error updating retentionExpiry for %s#%s: %s",
+            timeline.RecordType, timeline.RecordId, str(exc)
+        )
 
 
 def ensure_defaults_for_module(module_key: str):
@@ -1000,9 +315,11 @@ def bulk_update_page_configs(request):
         for cfg in configs:
             page_key = cfg.get('page_key')
             module_key = cfg.get('module_key')
+            # Require a valid module, but allow any page_key so frontend
+            # can manage additional endpoints beyond the static MODULE_PAGES map.
             if not module_key or module_key not in MODULE_PAGES:
                 continue
-            if not page_key or page_key not in MODULE_PAGES[module_key]:
+            if not page_key:
                 continue
             enabled = bool(cfg.get('enabled', False))
             retention_days = int(cfg.get('retention_days', DEFAULT_RETENTION_DAYS) or DEFAULT_RETENTION_DAYS)
@@ -1012,6 +329,9 @@ def bulk_update_page_configs(request):
                 sub_page=page_key,
                 defaults={'checklist_status': enabled, 'retention_days': retention_days}
             )
+            # Safety: avoid ever persisting an explicit 0 for AutoField primary key
+            if getattr(obj, 'id', None) == 0:
+                obj.id = None
             obj.checklist_status = enabled
             obj.retention_days = retention_days
             obj.save()
@@ -1042,3 +362,460 @@ def bulk_update_page_configs(request):
             'status': 'error',
             'message': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# =====================================================
+# ARCHIVE / UNARCHIVE RETENTION RECORDS
+# =====================================================
+
+def _get_user(user_id):
+    try:
+        return Users.objects.get(UserId=user_id)
+    except Users.DoesNotExist:
+        return None
+
+
+@csrf_exempt
+@api_view(['POST'])
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication, TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def archive_retention_record(request):
+    """
+    Archive a record's retention timeline.
+    Body: { "retention_timeline_id": int, "archive_location": str, "archived_by": user_id }
+    """
+    try:
+        data = request.data
+        timeline_id = data.get('retention_timeline_id')
+        archive_location = data.get('archive_location')
+        archived_by_id = data.get('archived_by')
+
+        if not timeline_id:
+            return Response({'status': 'error', 'message': 'retention_timeline_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        timeline = get_object_or_404(RetentionTimeline, RetentionTimelineId=timeline_id)
+        if timeline.is_archived:
+            return Response({'status': 'error', 'message': 'Record already archived'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user_obj = _get_user(archived_by_id) if archived_by_id else None
+
+        before_status = timeline.Status
+        timeline.archive(user=user_obj, location=archive_location)
+
+        DataLifecycleAuditLog.log_action(
+            action_type='ARCHIVE',
+            record_type=timeline.RecordType,
+            record_id=timeline.RecordId,
+            record_name=timeline.RecordName,
+            timeline=timeline,
+            performed_by=user_obj,
+            before_status=before_status,
+            after_status='Archived',
+            details={'archive_location': archive_location}
+        )
+
+        return Response({'status': 'success', 'message': 'Record archived', 'data': {
+            'retention_timeline_id': timeline.RetentionTimelineId,
+            'status': timeline.Status,
+            'is_archived': timeline.is_archived,
+            'archived_date': timeline.archived_date,
+            'archive_location': timeline.archive_location,
+        }}, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        logger.error(f"Error archiving retention record: {str(e)}")
+        return Response({'status': 'error', 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication, TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def unarchive_retention_record(request):
+    """
+    Unarchive a record's retention timeline (resumes deletion if not paused).
+    Body: { "retention_timeline_id": int, "performed_by": user_id }
+    """
+    try:
+        data = request.data
+        timeline_id = data.get('retention_timeline_id')
+        performed_by_id = data.get('performed_by')
+
+        if not timeline_id:
+            return Response({'status': 'error', 'message': 'retention_timeline_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        timeline = get_object_or_404(RetentionTimeline, RetentionTimelineId=timeline_id)
+        if not timeline.is_archived:
+            return Response({'status': 'error', 'message': 'Record is not archived'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user_obj = _get_user(performed_by_id) if performed_by_id else None
+
+        before_status = timeline.Status
+        timeline.unarchive(user=user_obj)
+
+        DataLifecycleAuditLog.log_action(
+            action_type='UNARCHIVE',
+            record_type=timeline.RecordType,
+            record_id=timeline.RecordId,
+            record_name=timeline.RecordName,
+            timeline=timeline,
+            performed_by=user_obj,
+            before_status=before_status,
+            after_status=timeline.Status
+        )
+
+        return Response({'status': 'success', 'message': 'Record unarchived', 'data': {
+            'retention_timeline_id': timeline.RetentionTimelineId,
+            'status': timeline.Status,
+            'is_archived': timeline.is_archived,
+            'archived_date': timeline.archived_date,
+            'archive_location': timeline.archive_location,
+        }}, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        logger.error(f"Error unarchiving retention record: {str(e)}")
+        return Response({'status': 'error', 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# =====================================================
+# PAUSE / RESUME DELETION
+# =====================================================
+
+@csrf_exempt
+@api_view(['POST'])
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication, TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def pause_deletion(request):
+    """
+    Pause automated deletion for a record.
+    Body: { "retention_timeline_id": int, "reason": str, "pause_until": "YYYY-MM-DD", "performed_by": user_id }
+    """
+    try:
+        data = request.data
+        timeline_id = data.get('retention_timeline_id')
+        reason = data.get('reason')
+        pause_until = data.get('pause_until')
+        performed_by_id = data.get('performed_by')
+
+        if not timeline_id:
+            return Response({'status': 'error', 'message': 'retention_timeline_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        timeline = get_object_or_404(RetentionTimeline, RetentionTimelineId=timeline_id)
+        user_obj = _get_user(performed_by_id) if performed_by_id else None
+
+        before_status = timeline.Status
+        # parse pause_until if provided
+        if pause_until:
+            try:
+                pause_until_date = timezone.datetime.fromisoformat(pause_until).date()
+            except Exception:
+                return Response({'status': 'error', 'message': 'Invalid pause_until date format, expected YYYY-MM-DD'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            pause_until_date = None
+
+        timeline.pause_deletion(reason=reason, pause_until=pause_until_date)
+
+        DataLifecycleAuditLog.log_action(
+            action_type='PAUSE',
+            record_type=timeline.RecordType,
+            record_id=timeline.RecordId,
+            record_name=timeline.RecordName,
+            timeline=timeline,
+            performed_by=user_obj,
+            before_status=before_status,
+            after_status='Paused',
+            reason=reason,
+            details={'pause_until': pause_until}
+        )
+
+        return Response({'status': 'success', 'message': 'Deletion paused', 'data': {
+            'retention_timeline_id': timeline.RetentionTimelineId,
+            'status': timeline.Status,
+            'deletion_paused': timeline.deletion_paused,
+            'pause_reason': timeline.pause_reason,
+            'pause_until': timeline.pause_until,
+        }}, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        logger.error(f"Error pausing deletion: {str(e)}")
+        return Response({'status': 'error', 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication, TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def resume_deletion(request):
+    """
+    Resume automated deletion for a record.
+    Body: { "retention_timeline_id": int, "performed_by": user_id }
+    """
+    try:
+        data = request.data
+        timeline_id = data.get('retention_timeline_id')
+        performed_by_id = data.get('performed_by')
+
+        if not timeline_id:
+            return Response({'status': 'error', 'message': 'retention_timeline_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        timeline = get_object_or_404(RetentionTimeline, RetentionTimelineId=timeline_id)
+        user_obj = _get_user(performed_by_id) if performed_by_id else None
+
+        before_status = timeline.Status
+        timeline.resume_deletion()
+
+        DataLifecycleAuditLog.log_action(
+            action_type='RESUME',
+            record_type=timeline.RecordType,
+            record_id=timeline.RecordId,
+            record_name=timeline.RecordName,
+            timeline=timeline,
+            performed_by=user_obj,
+            before_status=before_status,
+            after_status=timeline.Status
+        )
+
+        return Response({'status': 'success', 'message': 'Deletion resumed', 'data': {
+            'retention_timeline_id': timeline.RetentionTimelineId,
+            'status': timeline.Status,
+            'deletion_paused': timeline.deletion_paused,
+            'pause_reason': timeline.pause_reason,
+            'pause_until': timeline.pause_until,
+        }}, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        logger.error(f"Error resuming deletion: {str(e)}")
+        return Response({'status': 'error', 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# =====================================================
+# EXTEND RETENTION
+# =====================================================
+
+@csrf_exempt
+@api_view(['POST'])
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication, TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def extend_retention(request):
+    """
+    Extend retention end date for a record.
+    Body: { "retention_timeline_id": int, "extra_days": int, "reason": str, "performed_by": user_id }
+    """
+    try:
+        data = request.data
+        timeline_id = data.get('retention_timeline_id')
+        extra_days = int(data.get('extra_days', 0) or 0)
+        reason = data.get('reason')
+        performed_by_id = data.get('performed_by')
+
+        if not timeline_id:
+            return Response({'status': 'error', 'message': 'retention_timeline_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+        if extra_days <= 0:
+            return Response({'status': 'error', 'message': 'extra_days must be > 0'}, status=status.HTTP_400_BAD_REQUEST)
+
+        timeline = get_object_or_404(RetentionTimeline, RetentionTimelineId=timeline_id)
+        user_obj = _get_user(performed_by_id) if performed_by_id else None
+
+        before_status = timeline.Status
+        before_end_date = timeline.RetentionEndDate
+
+        timeline.extend_retention(extra_days=extra_days)
+
+        # Keep underlying record's retentionExpiry in sync
+        _update_record_retentionExpiry_from_timeline = _update_record_retention_expiry_from_timeline  # alias for linting
+        _update_record_retentionExpiry_from_timeline(timeline)
+
+        DataLifecycleAuditLog.log_action(
+            action_type='EXTEND',
+            record_type=timeline.RecordType,
+            record_id=timeline.RecordId,
+            record_name=timeline.RecordName,
+            timeline=timeline,
+            performed_by=user_obj,
+            before_status=before_status,
+            after_status=timeline.Status,
+            reason=reason,
+            details={
+                'previous_end_date': before_end_date.isoformat(),
+                'new_end_date': timeline.RetentionEndDate.isoformat(),
+                'extra_days': extra_days
+            }
+        )
+
+        return Response({'status': 'success', 'message': 'Retention extended', 'data': {
+            'retention_timeline_id': timeline.RetentionTimelineId,
+            'status': timeline.Status,
+            'retention_end_date': timeline.RetentionEndDate,
+        }}, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        logger.error(f"Error extending retention: {str(e)}")
+        return Response({'status': 'error', 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# =====================================================
+# DASHBOARD DATA ENDPOINTS
+# =====================================================
+
+@csrf_exempt
+@api_view(['GET'])
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication, TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def retention_dashboard_overview(request):
+    """
+    Overview counts for retention dashboard.
+    """
+    today = timezone.now().date()
+    active_qs = RetentionTimeline.objects.filter(Status='Active')
+    archived_qs = RetentionTimeline.objects.filter(is_archived=True)
+    paused_qs = RetentionTimeline.objects.filter(deletion_paused=True)
+    disposed_qs = RetentionTimeline.objects.filter(Status='Disposed')
+
+    expiring_days = int(request.GET.get('expiring_days', 30) or 30)
+    expiring_qs = active_qs.filter(
+        RetentionEndDate__gte=today,
+        RetentionEndDate__lte=today + timedelta(days=expiring_days),
+        is_archived=False,
+        deletion_paused=False,
+        auto_delete_enabled=True
+    )
+
+    return Response({
+        'status': 'success',
+        'data': {
+            'active': active_qs.count(),
+            'expiring': expiring_qs.count(),
+            'archived': archived_qs.count(),
+            'paused': paused_qs.count(),
+            'disposed': disposed_qs.count(),
+        }
+    }, status=status.HTTP_200_OK)
+
+
+@csrf_exempt
+@api_view(['GET'])
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication, TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def retention_dashboard_expiring(request):
+    """
+    List expiring records within given days (default 30).
+    Query params: days (int), limit (int)
+    """
+    today = timezone.now().date()
+    days = int(request.GET.get('days', 30) or 30)
+    limit = int(request.GET.get('limit', 100) or 100)
+
+    qs = RetentionTimeline.objects.filter(
+        Status='Active',
+        RetentionEndDate__gte=today,
+        RetentionEndDate__lte=today + timedelta(days=days),
+        is_archived=False,
+        deletion_paused=False,
+        auto_delete_enabled=True
+    ).order_by('RetentionEndDate')[:limit]
+
+    data = [
+        {
+            'id': t.RetentionTimelineId,
+            'record_type': t.RecordType,
+            'record_id': t.RecordId,
+            'record_name': t.RecordName,
+            'status': t.Status,
+            'retention_end_date': t.RetentionEndDate,
+            'days_until_expiry': t.days_until_expiry,
+        } for t in qs
+    ]
+
+    return Response({'status': 'success', 'data': data}, status=status.HTTP_200_OK)
+
+
+@csrf_exempt
+@api_view(['GET'])
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication, TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def retention_dashboard_archived(request):
+    """
+    List archived records.
+    Query params: limit (int)
+    """
+    limit = int(request.GET.get('limit', 100) or 100)
+    qs = RetentionTimeline.objects.filter(is_archived=True).order_by('-archived_date')[:limit]
+    data = [
+        {
+            'id': t.RetentionTimelineId,
+            'record_type': t.RecordType,
+            'record_id': t.RecordId,
+            'record_name': t.RecordName,
+            'status': t.Status,
+            'archived_date': t.archived_date,
+            'archive_location': t.archive_location,
+        } for t in qs
+    ]
+    return Response({'status': 'success', 'data': data}, status=status.HTTP_200_OK)
+
+
+@csrf_exempt
+@api_view(['GET'])
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication, TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def retention_dashboard_paused(request):
+    """
+    List records with deletion paused.
+    Query params: limit (int)
+    """
+    limit = int(request.GET.get('limit', 100) or 100)
+    qs = RetentionTimeline.objects.filter(deletion_paused=True).order_by('-UpdatedAt')[:limit]
+    data = [
+        {
+            'id': t.RetentionTimelineId,
+            'record_type': t.RecordType,
+            'record_id': t.RecordId,
+            'record_name': t.RecordName,
+            'status': t.Status,
+            'pause_reason': t.pause_reason,
+            'pause_until': t.pause_until,
+            'updated_at': t.UpdatedAt,
+        } for t in qs
+    ]
+    return Response({'status': 'success', 'data': data}, status=status.HTTP_200_OK)
+
+
+@csrf_exempt
+@api_view(['GET'])
+@authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication, TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def retention_dashboard_audit_trail(request):
+    """
+    Audit trail feed.
+    Query params: record_type, record_id, limit
+    """
+    record_type = request.GET.get('record_type')
+    record_id = request.GET.get('record_id')
+    limit = int(request.GET.get('limit', 100) or 100)
+
+    qs = DataLifecycleAuditLog.objects.all().order_by('-timestamp')
+    if record_type:
+        qs = qs.filter(record_type=record_type)
+    if record_id:
+        qs = qs.filter(record_id=record_id)
+
+    qs = qs[:limit]
+    data = [
+        {
+            'id': log.id,
+            'action_type': log.action_type,
+            'record_type': log.record_type,
+            'record_id': log.record_id,
+            'record_name': log.record_name,
+            'before_status': log.before_status,
+            'after_status': log.after_status,
+            'reason': log.reason,
+            'details': log.details,
+            'notification_recipients': log.notification_recipients,
+            'backup_id': log.backup_id,
+            'performed_by': log.performed_by_id,
+            'timestamp': log.timestamp,
+        } for log in qs
+    ]
+
+    return Response({'status': 'success', 'data': data}, status=status.HTTP_200_OK)

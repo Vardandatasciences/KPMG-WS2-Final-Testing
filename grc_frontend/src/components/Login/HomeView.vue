@@ -432,6 +432,47 @@
             </div>
           </div>
 
+        <!-- Retention Dashboard Card -->
+        <div class="dashboard-card" data-aos="fade-up" data-aos-delay="450">
+          <div class="dashboard-card-header">
+            <div class="dashboard-icon compliance">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 4h16v16H4z"/>
+                <path d="M8 12h8M8 8h5M8 16h6"/>
+              </svg>
+            </div>
+            <div class="dashboard-info">
+              <h3 class="dashboard-title">Data Retention</h3>
+              <div class="dashboard-status">
+                <span class="status-indicator active"></span>
+                <span class="status-text">Active</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="dashboard-metrics">
+            <div class="metric-row">
+              <div class="metric-item">
+                <span class="metric-label">Lifecycle</span>
+                <span class="metric-value">Dashboard</span>
+              </div>
+              <div class="metric-item">
+                <span class="metric-label">Actions</span>
+                <span class="metric-value">Archive / Pause / Extend</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="dashboard-actions">
+            <button class="btn-primary" @click="navigateToModule('RetentionLifecycleDashboard')">
+              Open Retention Dashboard
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M5 12h14M12 5l7 7-7 7"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
           <!-- Auditor Dashboard Card -->
           <div class="dashboard-card" data-aos="fade-up" data-aos-delay="500">
             <div class="dashboard-card-header">
