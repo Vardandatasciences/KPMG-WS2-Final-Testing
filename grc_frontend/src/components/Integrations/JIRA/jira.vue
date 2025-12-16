@@ -832,6 +832,7 @@ export default {
           body: JSON.stringify({
             user_id: getCurrentUserId(),
             project_id: project.id,
+            project_key: project.key, // send key as well for robustness
             access_token: accessToken.value,
             cloud_id: selectedCloudId.value
           })
@@ -854,7 +855,20 @@ export default {
         }
       } catch (err) {
         console.error('❌ Error fetching project details:', err)
-        error.value = `Error fetching project details: ${err.message}`
+        
+        // Provide a more helpful message for common Jira 404 cases
+        const msg = err?.message || ''
+        if (msg.includes('Failed to fetch project: 404') || msg.toLowerCase().includes('no project could be found')) {
+          // This usually means the stored project comes from an old Jira site
+          // or has been deleted/renamed and no longer exists.
+          error.value = 'This Jira project could not be found in the selected account. It may have been deleted, renamed, or belongs to a different Jira site. Please refresh the projects list and select an available project.'
+          
+          // Optionally remove the stale project from the local list so the user
+          // doesn’t keep clicking a broken entry.
+          projects.value = projects.value.filter(p => p.id !== project.id)
+        } else {
+          error.value = `Error fetching project details: ${msg}`
+        }
       } finally {
         loadingDetails.value = false
       }
