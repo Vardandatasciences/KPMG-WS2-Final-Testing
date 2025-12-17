@@ -602,18 +602,26 @@ class ComplianceInputValidator:
             errors['ManualAutomatic'] = [str(e)]
         
         try:
-            # Validate Impact (required numeric field, 1-10)
-            validated_data['Impact'] = cls.validate_numeric_field(
-                request_data.get('Impact'), 'Impact', min_val=1.0, max_val=10.0
-            )
+            # Validate Impact (optional numeric field, 1-10, defaults to 5.0 if not provided)
+            impact_value = request_data.get('Impact')
+            if impact_value is None or impact_value == '':
+                validated_data['Impact'] = '5.0'  # Default value
+            else:
+                validated_data['Impact'] = str(cls.validate_numeric_field(
+                    impact_value, 'Impact', min_val=1.0, max_val=10.0
+                ))
         except ValidationError as e:
             errors['Impact'] = [str(e)]
         
         try:
-            # Validate Probability (required numeric field, 1-10)
-            validated_data['Probability'] = cls.validate_numeric_field(
-                request_data.get('Probability'), 'Probability', min_val=1.0, max_val=10.0
-            )
+            # Validate Probability (optional numeric field, 1-10, defaults to 5.0 if not provided)
+            probability_value = request_data.get('Probability')
+            if probability_value is None or probability_value == '':
+                validated_data['Probability'] = '5.0'  # Default value
+            else:
+                validated_data['Probability'] = str(cls.validate_numeric_field(
+                    probability_value, 'Probability', min_val=1.0, max_val=10.0
+                ))
         except ValidationError as e:
             errors['Probability'] = [str(e)]
         
@@ -1911,18 +1919,26 @@ def get_compliance_dashboard(request):
             errors['ManualAutomatic'] = [str(e)]
         
         try:
-            # Validate Impact (required numeric field, 1-10)
-            validated_data['Impact'] = cls.validate_numeric_field(
-                request_data.get('Impact'), 'Impact', min_val=1.0, max_val=10.0
-            )
+            # Validate Impact (optional numeric field, 1-10, defaults to 5.0 if not provided)
+            impact_value = request_data.get('Impact')
+            if impact_value is None or impact_value == '':
+                validated_data['Impact'] = '5.0'  # Default value
+            else:
+                validated_data['Impact'] = str(cls.validate_numeric_field(
+                    impact_value, 'Impact', min_val=1.0, max_val=10.0
+                ))
         except ValidationError as e:
             errors['Impact'] = [str(e)]
         
         try:
-            # Validate Probability (required numeric field, 1-10)
-            validated_data['Probability'] = cls.validate_numeric_field(
-                request_data.get('Probability'), 'Probability', min_val=1.0, max_val=10.0
-            )
+            # Validate Probability (optional numeric field, 1-10, defaults to 5.0 if not provided)
+            probability_value = request_data.get('Probability')
+            if probability_value is None or probability_value == '':
+                validated_data['Probability'] = '5.0'  # Default value
+            else:
+                validated_data['Probability'] = str(cls.validate_numeric_field(
+                    probability_value, 'Probability', min_val=1.0, max_val=10.0
+                ))
         except ValidationError as e:
             errors['Probability'] = [str(e)]
         
@@ -8107,18 +8123,26 @@ def get_compliance_approvals_by_reviewer(request, user_id):
             errors['ManualAutomatic'] = [str(e)]
         
         try:
-            # Validate Impact (required numeric field, 1-10)
-            validated_data['Impact'] = cls.validate_numeric_field(
-                request_data.get('Impact'), 'Impact', min_val=1.0, max_val=10.0
-            )
+            # Validate Impact (optional numeric field, 1-10, defaults to 5.0 if not provided)
+            impact_value = request_data.get('Impact')
+            if impact_value is None or impact_value == '':
+                validated_data['Impact'] = '5.0'  # Default value
+            else:
+                validated_data['Impact'] = str(cls.validate_numeric_field(
+                    impact_value, 'Impact', min_val=1.0, max_val=10.0
+                ))
         except ValidationError as e:
             errors['Impact'] = [str(e)]
         
         try:
-            # Validate Probability (required numeric field, 1-10)
-            validated_data['Probability'] = cls.validate_numeric_field(
-                request_data.get('Probability'), 'Probability', min_val=1.0, max_val=10.0
-            )
+            # Validate Probability (optional numeric field, 1-10, defaults to 5.0 if not provided)
+            probability_value = request_data.get('Probability')
+            if probability_value is None or probability_value == '':
+                validated_data['Probability'] = '5.0'  # Default value
+            else:
+                validated_data['Probability'] = str(cls.validate_numeric_field(
+                    probability_value, 'Probability', min_val=1.0, max_val=10.0
+                ))
         except ValidationError as e:
             errors['Probability'] = [str(e)]
         

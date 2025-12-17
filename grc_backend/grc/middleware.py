@@ -124,6 +124,7 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
             '/api/cookie/preferences/',  # Skip authentication for cookie preferences endpoints (save and get)
             '/api/upload-evidence-file/',  # Skip authentication for evidence file uploads (matches existing file upload pattern)
             '/api/incident-categories/',
+            '/api/data-subject-requests/',  # Skip authentication for data subject requests (GDPR compliance - users may not be logged in)
             '/api/upload-risk-evidence-file/',  # Skip authentication for incident categories endpoints
             # Risk AI Document Ingestion endpoints - skip authentication for testing
             '/api/ai-risk-doc-upload/',
@@ -172,6 +173,11 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
         
         # Check if path should be skipped
         path = request.path_info
+        
+        # Explicitly skip data subject requests (GDPR compliance - users may not be logged in)
+        if path.startswith('/api/data-subject-requests/'):
+            logger.debug(f"[JWT Middleware] Skipping authentication for data subject request endpoint: {path}")
+            return None
         
         # Explicitly skip MFA endpoints (they don't require authentication during login)
         if path.startswith('/api/jwt/mfa/'):

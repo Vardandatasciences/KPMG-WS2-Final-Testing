@@ -5472,7 +5472,7 @@ def register_user(request):
             user_full_name = f"{user.FirstName} {user.LastName}".strip() or user.UserName
             email_subject = "Your GRC Account Credentials"
             
-            # Get frontend URL from settings for reset password link
+            # Get frontend URL from settings for verification link
             frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:8080')
             reset_password_url = f"{frontend_url}/login?resetPassword=true&email={user.Email}"
             
@@ -5487,16 +5487,16 @@ Here are your login credentials:
 Username: {user.UserName}
 Password: {plain_password}
 
-IMPORTANT: For security reasons, please reset your password immediately after your first login.
+IMPORTANT: For security reasons, please verify your email and reset your password immediately after your first login.
 
-To reset your password, click on the following link:
+To verify your email, click on the following verification link:
 {reset_password_url}
 
 Or manually:
 1. Go to the login page
 2. Click on "Forgot Password"
 3. Enter your email address: {user.Email}
-4. Follow the instructions to reset your password
+4. Follow the instructions to verify your email and reset your password
 
 If you have any questions, please contact the administrator.
 
@@ -5546,17 +5546,17 @@ GRC System Administrator
             </div>
             
             <div class="warning">
-                <strong>⚠️ IMPORTANT:</strong> For security reasons, please reset your password immediately after your first login.
+                <strong>⚠️ IMPORTANT:</strong> For security reasons, please verify your email and reset your password immediately after your first login.
             </div>
             
             <div style="text-align: center; margin: 30px 0;">
                 <a href="{reset_password_url}" class="button" style="display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); transition: transform 0.2s;">
-                    🔐 Reset Password
+                    🔐 Verification Link
                 </a>
             </div>
             
             <p style="text-align: center; color: #6b7280; font-size: 14px; margin-top: 20px;">
-                Click the button above to reset your password, or manually go to the login page and click "Forgot Password"
+                Click the verification link above to verify your email, or manually go to the login page and click "Forgot Password"
             </p>
             
             <p>If you have any questions, please contact the administrator.</p>

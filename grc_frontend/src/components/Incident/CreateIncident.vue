@@ -146,7 +146,7 @@
         </div>
 
         <!-- Basic Information Section -->
-        <label class="field-third">
+        <label class="field-third required">
           <span>
             Origin
             <!-- Data Type Circle Toggle -->

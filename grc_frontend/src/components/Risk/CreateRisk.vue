@@ -888,7 +888,7 @@
           
           <div class="risk-register-form-group">
             <label>
-              <span><i class="fas fa-shield-alt"></i> Risk Mitigation</span>
+              <span><i class="fas fa-shield-alt"></i> Risk Mitigation <span style="color: red;">*</span></span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">

@@ -483,8 +483,7 @@
             <div class="event-creation-form-group">
               <label class="event-creation-form-label">
                 Owner
-                <span class="event-creation-form-required">*</span>
-                <span class="event-creation-form-hint">(Event owner/creator)</span>
+                <span class="event-creation-form-hint">(Event owner/creator - auto-filled)</span>
               </label>
               <input
                 type="text"

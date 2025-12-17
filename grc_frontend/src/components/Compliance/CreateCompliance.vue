@@ -30,7 +30,7 @@
       <div class="row-fields">
         <div class="compliance-field">
           <label for="framework">
-            Framework
+            Framework <span style="color: red;">*</span>
             <!-- Data Type Circle Toggle -->
             <div class="compliance-data-type-circle-toggle-wrapper">
               <div class="compliance-data-type-circle-toggle">
@@ -69,7 +69,7 @@
         </div>
         <div class="compliance-field">
           <label for="policy">
-            Policy
+            Policy <span style="color: red;">*</span>
             <!-- Data Type Circle Toggle -->
             <div class="compliance-data-type-circle-toggle-wrapper">
               <div class="compliance-data-type-circle-toggle">
@@ -108,7 +108,7 @@
         </div>
         <div class="compliance-field">
           <label for="subpolicy">
-            Sub Policy
+            Sub Policy <span style="color: red;">*</span>
             <!-- Data Type Circle Toggle -->
             <div class="compliance-data-type-circle-toggle-wrapper">
               <div class="compliance-data-type-circle-toggle">
@@ -217,7 +217,7 @@
           <div class="row-fields">
             <div class="compliance-field">
               <label>
-                Compliance Title
+                Compliance Title <span style="color: red;">*</span>
                 <!-- Data Type Circle Toggle -->
                 <div class="compliance-data-type-circle-toggle-wrapper">
                   <div class="compliance-data-type-circle-toggle">
@@ -271,7 +271,7 @@
             
             <div class="compliance-field">
               <label>
-                Compliance Type
+                Compliance Type <span style="color: red;">*</span>
                 <!-- Data Type Circle Toggle -->
                 <div class="compliance-data-type-circle-toggle-wrapper">
                   <div class="compliance-data-type-circle-toggle">
@@ -321,7 +321,7 @@
           
           <div class="compliance-field full-width">
             <label>
-              Compliance Description
+              Compliance Description <span style="color: red;">*</span>
               <!-- Data Type Circle Toggle -->
               <div class="compliance-data-type-circle-toggle-wrapper">
                 <div class="compliance-data-type-circle-toggle">
@@ -371,7 +371,7 @@
           
           <div class="compliance-field full-width">
             <label>
-              Scope
+              Scope <span style="color: red;">*</span>
               <!-- Data Type Circle Toggle -->
               <div class="compliance-data-type-circle-toggle-wrapper">
                 <div class="compliance-data-type-circle-toggle">
@@ -421,7 +421,7 @@
           
           <div class="compliance-field full-width">
             <label>
-              Objective
+              Objective <span style="color: red;">*</span>
               <!-- Data Type Circle Toggle -->
               <div class="compliance-data-type-circle-toggle-wrapper">
                 <div class="compliance-data-type-circle-toggle">
@@ -473,7 +473,7 @@
           <div class="row-fields">
             <div class="compliance-field full-width">
               <label>
-                Business Units Covered
+                Business Units Covered <span style="color: red;">*</span>
                 <!-- Data Type Circle Toggle -->
                 <div class="compliance-data-type-circle-toggle-wrapper">
                   <div class="compliance-data-type-circle-toggle">
@@ -578,13 +578,12 @@
                 </div>
               </div>
             </label>
-            <textarea
+              <textarea
               v-model="compliance.PossibleDamage" 
               @input="onFieldChange(idx, 'PossibleDamage', $event)"
               class="compliance-input" 
               placeholder="Possible Damage"
               rows="3"
-              required
               :maxlength="validationRules.maxLengths.PossibleDamage"
               title="Potential damage that could occur if this risk materializes" 
             ></textarea>
@@ -640,9 +639,8 @@
                   v-model="step.description"
                   @input="onMitigationStepChange(idx)"
                   class="compliance-input"
-                  placeholder="Describe this mitigation step (minimum 10 characters)"
+                  placeholder="Describe this mitigation step (minimum 10 characters if provided)"
                   rows="2"
-                  required
                 ></textarea>
               </div>
               <div class="add-step-container">
@@ -697,7 +695,6 @@
               class="compliance-input" 
               placeholder="Describe potential risk scenarios"
               rows="3"
-              required
               :maxlength="validationRules.maxLengths.PotentialRiskScenarios"
               title="Describe scenarios where this risk could materialize"
             ></textarea>
@@ -745,7 +742,6 @@
               <select 
                 v-model="compliance.RiskType"
                 class="compliance-input"
-                required
                 :maxlength="validationRules.maxLengths.RiskType"
                 title="Type of risk"
                 @change="validateComplianceField(compliance, 'RiskType', $event.target.value)"
@@ -802,7 +798,6 @@
                   v-model="riskCategorySearch[idx]" 
                   class="compliance-input" 
                   placeholder="Search or add risk category"
-                  required
                   :maxlength="validationRules.maxLengths.RiskCategory"
                   title="Category of risk (e.g. People, Process, Technology, External)"
                   @focus="showDropdown(idx, 'RiskCategory')"
@@ -873,7 +868,6 @@
                   v-model="riskBusinessImpactSearch[idx]" 
                   class="compliance-input" 
                   placeholder="Search or add business impact"
-                  required
                   :maxlength="validationRules.maxLengths.RiskBusinessImpact"
                   title="How this risk impacts business operations"
                   @focus="showDropdown(idx, 'RiskBusinessImpact')"
@@ -914,7 +908,7 @@
           <div class="row-fields">
             <div class="compliance-field">
               <label>
-                Criticality
+                Criticality <span style="color: red;">*</span>
                 <!-- Data Type Circle Toggle -->
                 <div class="compliance-data-type-circle-toggle-wrapper">
                   <div class="compliance-data-type-circle-toggle">
@@ -994,7 +988,6 @@
               <select 
                 v-model="compliance.MandatoryOptional" 
                 class="compliance-select" 
-                required
                 title="Whether this compliance item is mandatory or optional"
               >
                 <option value="Mandatory">Mandatory</option>
@@ -1041,7 +1034,6 @@
               <select 
                 v-model="compliance.ManualAutomatic" 
                 class="compliance-select" 
-                required
                 title="Whether this compliance is checked manually or automatically"
               >
                 <option value="Manual">Manual</option>
@@ -1135,8 +1127,7 @@
                 step="0.1" 
                 min="1" 
                 max="10"
-                required
-                title="Rate the Severity Rating from 1 (lowest) to 10 (highest)"
+                title="Rate the Severity Rating from 1 (lowest) to 10 (highest). Defaults to 5 if not provided."
               />
               <small>Rate the severity of non-compliance from 1 (minimal impact) to 10 (critical impact)</small>
               <div v-if="compliance.validationErrors && compliance.validationErrors.Impact" 
@@ -1186,8 +1177,7 @@
                 step="0.1" 
                 min="1" 
                 max="10"
-                required
-                title="Rate the probability from 1 (lowest) to 10 (highest)"
+                title="Rate the probability from 1 (lowest) to 10 (highest). Defaults to 5 if not provided."
               />
               <small>Rate the likelihood of non-compliance from 1 (very unlikely) to 10 (very likely)</small>
               <div v-if="compliance.validationErrors && compliance.validationErrors.Probability" 
@@ -1206,7 +1196,7 @@
             <!-- Assign Reviewer -->
             <div class="compliance-field">
               <label>
-                Assign Reviewer
+                Assign Reviewer <span style="color: red;">*</span>
                 <!-- Data Type Circle Toggle -->
                 <div class="compliance-data-type-circle-toggle-wrapper">
                   <div class="compliance-data-type-circle-toggle">
@@ -1796,12 +1786,19 @@ export default {
           break;
           
         case 'BusinessUnitsCovered':
-          result = this.validateRequiredString(
-            value, 'Business Units Covered', 
-            rules.maxLengths.BusinessUnitsCovered,
-            rules.minLengths.BusinessUnitsCovered,
-            rules.textPattern
-          );
+          // Required field - must have at least one business unit
+          if (!value || (Array.isArray(value) && value.length === 0) || (typeof value === 'string' && !value.trim())) {
+            result.errors.push('Business Units Covered is required and cannot be empty');
+          } else {
+            // Validate the string representation if it's an array
+            const stringValue = Array.isArray(value) ? value.join(', ') : value;
+            result = this.validateRequiredString(
+              stringValue, 'Business Units Covered', 
+              rules.maxLengths.BusinessUnitsCovered,
+              rules.minLengths.BusinessUnitsCovered,
+              rules.textPattern
+            );
+          }
           break;
           
         case 'Identifier':
@@ -1815,55 +1812,63 @@ export default {
           break;
           
         case 'PossibleDamage':
-          result = this.validateRequiredString(
-            value, 'Possible Damage', 
-            rules.maxLengths.PossibleDamage,
-            rules.minLengths.PossibleDamage,
-            rules.textPattern
-          );
+          // Optional field - only validate if value is provided
+          if (value && value.trim()) {
+            result = this.validateOptionalString(
+              value, 'Possible Damage', 
+              rules.maxLengths.PossibleDamage,
+              rules.textPattern
+            );
+          }
           break;
           
         case 'PotentialRiskScenarios':
-          result = this.validateRequiredString(
-            value, 'Potential Risk Scenarios', 
-            rules.maxLengths.PotentialRiskScenarios,
-            rules.minLengths.PotentialRiskScenarios,
-            rules.textPattern
-          );
+          // Optional field - only validate if value is provided
+          if (value && value.trim()) {
+            result = this.validateOptionalString(
+              value, 'Potential Risk Scenarios', 
+              rules.maxLengths.PotentialRiskScenarios,
+              rules.textPattern
+            );
+          }
           break;
           
         case 'RiskType':
-          result = this.validateRequiredString(
-            value, 'Risk Type', 
-            rules.maxLengths.RiskType,
-            rules.minLengths.RiskType,
-            rules.textPattern
-          );
+          // Optional field - only validate if value is provided
+          if (value && value.trim()) {
+            result = this.validateOptionalString(
+              value, 'Risk Type', 
+              rules.maxLengths.RiskType,
+              rules.textPattern
+            );
+          }
           break;
           
         case 'RiskCategory':
-          result = this.validateRequiredString(
-            value, 'Risk Category', 
-            rules.maxLengths.RiskCategory,
-            rules.minLengths.RiskCategory,
-            rules.textPattern
-          );
+          // Optional field - only validate if value is provided
+          if (value && value.trim()) {
+            result = this.validateOptionalString(
+              value, 'Risk Category', 
+              rules.maxLengths.RiskCategory,
+              rules.textPattern
+            );
+          }
           break;
           
         case 'RiskBusinessImpact':
-          result = this.validateRequiredString(
-            value, 'Risk Business Impact', 
-            rules.maxLengths.RiskBusinessImpact,
-            rules.minLengths.RiskBusinessImpact,
-            rules.textPattern
-          );
+          // Optional field - only validate if value is provided
+          if (value && value.trim()) {
+            result = this.validateOptionalString(
+              value, 'Risk Business Impact', 
+              rules.maxLengths.RiskBusinessImpact,
+              rules.textPattern
+            );
+          }
           break;
           
         case 'mitigation':
-          // Always validate mitigation steps regardless of IsRisk status
-          if (!compliance.mitigationSteps || compliance.mitigationSteps.length === 0) {
-            result.errors.push('At least one mitigation step is required');
-          } else {
+          // Optional field - only validate if mitigation steps are provided
+          if (compliance.mitigationSteps && compliance.mitigationSteps.length > 0) {
             // Check if all steps have descriptions and meet minimum length
             const invalidSteps = compliance.mitigationSteps.filter(step => {
               const description = step.description ? step.description.trim() : '';
@@ -1906,19 +1911,31 @@ export default {
           break;
           
         case 'Impact':
-          result = this.validateNumericField(
-            value, 'Severity Rating', 
-            rules.numericRanges.Impact.min, 
-            rules.numericRanges.Impact.max
-          );
+          // Optional field - only validate if value is provided
+          if (value !== null && value !== '' && value !== undefined) {
+            result = this.validateNumericField(
+              value, 'Severity Rating', 
+              rules.numericRanges.Impact.min, 
+              rules.numericRanges.Impact.max
+            );
+          } else {
+            // Set default value if not provided
+            result = { value: 5.0, errors: [] };
+          }
           break;
           
         case 'Probability':
-          result = this.validateNumericField(
-            value, 'Probability', 
-            rules.numericRanges.Probability.min, 
-            rules.numericRanges.Probability.max
-          );
+          // Optional field - only validate if value is provided
+          if (value !== null && value !== '' && value !== undefined) {
+            result = this.validateNumericField(
+              value, 'Probability', 
+              rules.numericRanges.Probability.min, 
+              rules.numericRanges.Probability.max
+            );
+          } else {
+            // Set default value if not provided
+            result = { value: 5.0, errors: [] };
+          }
           break;
           
 
@@ -2223,7 +2240,7 @@ export default {
         // Reset validation errors
         compliance.validationErrors = {};
         
-        // Required fields validation - all fields are mandatory including risk fields
+        // Required fields validation - only backend-required fields
         const requiredFields = [
           'ComplianceTitle',
           'ComplianceItemDescription', 
@@ -2231,17 +2248,7 @@ export default {
           'Scope',
           'Objective',
           'BusinessUnitsCovered',
-          'mitigation',
-          'PossibleDamage',
-          'PotentialRiskScenarios',
-          'RiskType',
-          'RiskCategory',
-          'RiskBusinessImpact',
-          'Criticality',
-          'MandatoryOptional',
-          'ManualAutomatic',
-          'Impact',
-          'Probability'
+          'Criticality'
         ];
         
         // Validate reviewer selection

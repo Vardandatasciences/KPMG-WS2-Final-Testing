@@ -152,7 +152,7 @@
         <div class="form-section">
           <div class="form-group" :class="{ 'has-error': validationErrors.Criticality }">
             <label for="criticality">
-              <span><i class="fas fa-exclamation-triangle"></i> Criticality</span>
+              <span><i class="fas fa-exclamation-triangle"></i> Criticality <span style="color: red;">*</span></span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
@@ -277,7 +277,7 @@
           
           <div class="form-group" :class="{ 'has-error': validationErrors.Appetite }">
             <label for="appetite">
-              <span><i class="fas fa-balance-scale"></i> Appetite</span>
+              <span><i class="fas fa-balance-scale"></i> Appetite <span style="color: red;">*</span></span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
@@ -328,7 +328,7 @@
           
           <div class="form-group" :class="{ 'has-error': validationErrors.RiskLikelihood }">
             <label for="riskLikelihood">
-              <span><i class="fas fa-chart-line"></i> Risk Likelihood</span>
+              <span><i class="fas fa-chart-line"></i> Risk Likelihood <span style="color: red;">*</span></span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
@@ -380,7 +380,7 @@
           
           <div class="form-group" :class="{ 'has-error': validationErrors.RiskImpact }">
             <label for="riskImpact">
-              <span><i class="fas fa-bolt"></i> Risk Impact</span>
+              <span><i class="fas fa-bolt"></i> Risk Impact <span style="color: red;">*</span></span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
@@ -577,7 +577,7 @@
           
           <div class="form-group" :class="{ 'has-error': validationErrors.RiskPriority }">
             <label for="riskPriority">
-              <span><i class="fas fa-flag"></i> Risk Priority</span>
+              <span><i class="fas fa-flag"></i> Risk Priority <span style="color: red;">*</span></span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
@@ -629,7 +629,7 @@
           
           <div class="form-group" :class="{ 'has-error': validationErrors.RiskResponseType }">
             <label for="riskResponseType">
-              <span><i class="fas fa-shield-alt"></i> Response Type</span>
+              <span><i class="fas fa-shield-alt"></i> Response Type <span style="color: red;">*</span></span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
@@ -812,7 +812,7 @@
           
           <div class="form-group" :class="{ 'has-error': validationErrors.RiskTitle }">
             <label for="riskTitle">
-              <span><i class="fas fa-heading"></i> Risk Title</span>
+              <span><i class="fas fa-heading"></i> Risk Title <span style="color: red;">*</span></span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
@@ -995,7 +995,7 @@
           
           <div class="form-group" :class="{ 'has-error': validationErrors.Origin }">
             <label for="origin">
-              <span><i class="fas fa-globe"></i> Origin</span>
+              <span><i class="fas fa-globe"></i> Origin <span style="color: red;">*</span></span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
@@ -1145,7 +1145,7 @@
           
           <div class="form-group" :class="{ 'has-error': validationErrors.RiskType }">
             <label for="riskType">
-              <span><i class="fas fa-cubes"></i> Risk Type</span>
+              <span><i class="fas fa-cubes"></i> Risk Type <span style="color: red;">*</span></span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">
@@ -1197,7 +1197,7 @@
         <div class="form-section text-areas-section">
           <div class="form-group field-full" :class="{ 'has-error': validationErrors.RiskDescription }">
             <label for="riskDescription">
-              <span><i class="fas fa-align-left"></i> Risk Description</span>
+              <span><i class="fas fa-align-left"></i> Risk Description <span style="color: red;">*</span></span>
               <!-- Data Type Circle Toggle -->
               <div class="risk-data-type-circle-toggle-wrapper">
                 <div class="risk-data-type-circle-toggle">

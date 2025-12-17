@@ -1373,7 +1373,7 @@
               </div>
               <div class="form-group entities-group">
                 <label>
-                  Applicable Entities <span class="required-star">*</span>
+                  Applicable Entities
                   <!-- Data Type Circle Toggle -->
                   <div class="policy-data-type-circle-toggle-wrapper">
                     <div class="policy-data-type-circle-toggle">
