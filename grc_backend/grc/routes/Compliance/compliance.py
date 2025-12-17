@@ -502,7 +502,10 @@ def get_compliances_by_type(request, type, id):
             ).order_by('ComplianceId')
         elif type == 'subpolicy':
             # Get all compliances directly under the subpolicy
-            compliances = Compliance.objects.filter(
+            compliances = Compliance.objects.select_related(
+                'SubPolicy', 'SubPolicy__PolicyId', 'SubPolicy__PolicyId__FrameworkId'
+            ).filter(
+ 
                 SubPolicy__SubPolicyId=id
             ).order_by('ComplianceId')
         else:
@@ -535,6 +538,7 @@ def get_compliances_by_type(request, type, id):
                 'CreatedByName': compliance.CreatedByName,
                 'CreatedByDate': compliance.CreatedByDate,
                 'Identifier': compliance.Identifier,
+                'Annex': compliance.SubPolicy.Identifier if compliance.SubPolicy and compliance.SubPolicy.Identifier else None,  # Add SubPolicy Identifier as Annex
                 'RiskType': compliance.RiskType,
                 'RiskCategory': compliance.RiskCategory,
                 'RiskBusinessImpact': compliance.RiskBusinessImpact,

@@ -76,6 +76,7 @@ import ApprovalModal from '../components/EventHandling/ApprovalModal.vue'
  
  
 import EditCompliance from '../components/Compliance/EditCompliance.vue'
+import CrossFrameworkMapping from '../components/Compliance/CrossFrameworkMapping.vue'
 import CopyCompliance from '../components/Compliance/CopyCompliance.vue'
 import ComplianceApprover from '../components/Compliance/ComplianceApprover.vue'
 import ComplianceDetails from '../components/Compliance/ComplianceDetails.vue'
@@ -655,6 +656,12 @@ const routes = [
     path: '/compliance/audit-management',
     name: 'AuditManagement',
     component: () => import('../components/Compliance/AuditManagementView.vue')
+  },
+  {
+    path: '/compliance/cross-framework-mapping',
+    name: 'CrossFrameworkMapping',
+    component: CrossFrameworkMapping,
+    meta: { requiresAuth: true }
   },
   {
     path: '/compliance/view/:type/:id/:name',

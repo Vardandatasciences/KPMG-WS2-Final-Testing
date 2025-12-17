@@ -537,7 +537,238 @@ class AIAuditDocumentUploadView(View):
                 'error': str(e)
             }, status=500)
     
-
+ 
+def save_ai_compliance_to_checklist(audit_id, document_id, analyses, user_id, framework_id, policy_id=None, subpolicy_id=None):
+    """
+    Save AI compliance results to lastchecklistitemverified table for standard compliance tracking.
+   
+    Args:
+        audit_id: The audit ID
+        document_id: The document ID that was analyzed
+        analyses: List of compliance analysis results from AI (or dict with 'compliance_analyses' key)
+        user_id: User ID who triggered the check
+        framework_id: Framework ID from the audit
+        policy_id: Policy ID (optional, will be resolved from compliance if not provided)
+        subpolicy_id: Sub-policy ID (optional, will be resolved from compliance if not provided)
+    """
+    from django.db import connection
+    from django.utils import timezone
+    import json
+   
+    try:
+        current_datetime = timezone.now()
+        current_date = current_datetime.date()
+        current_time = current_datetime.time()
+       
+        # Handle different analysis formats
+        if isinstance(analyses, dict):
+            # If it's a dict, extract the compliance_analyses array
+            analyses_list = analyses.get('compliance_analyses', [])
+        elif isinstance(analyses, list):
+            analyses_list = analyses
+        else:
+            analyses_list = []
+       
+        if not analyses_list or len(analyses_list) == 0:
+            logger.warning(f"No compliance analyses found for document {document_id}")
+            return
+       
+        logger.info(f"💾 Saving {len(analyses_list)} compliance results to lastchecklistitemverified for audit {audit_id}")
+       
+        with connection.cursor() as cursor:
+            # Get audit's policy and subpolicy IDs if not provided
+            if not policy_id or not subpolicy_id:
+                cursor.execute("""
+                    SELECT PolicyId, SubPolicyId
+                    FROM audit
+                    WHERE AuditId = %s
+                """, [int(audit_id) if str(audit_id).isdigit() else audit_id])
+                audit_row = cursor.fetchone()
+               
+                if audit_row:
+                    if not policy_id:
+                        policy_id = audit_row[0]
+                    if not subpolicy_id:
+                        subpolicy_id = audit_row[1]
+           
+            saved_count = 0
+            updated_count = 0
+           
+            # Process each compliance requirement result
+            for analysis in analyses_list:
+                if not isinstance(analysis, dict):
+                    continue
+                   
+                compliance_id = analysis.get('compliance_id')
+                if not compliance_id:
+                    logger.warning(f"⚠️ Analysis item missing compliance_id: {analysis}")
+                    continue
+               
+                # Map compliance_status to Complied field (0, 1, 2)
+                # Check for compliance_status field first
+                compliance_status = analysis.get('compliance_status', '').upper()
+               
+                # If compliance_status not found, check for 'status' field as fallback
+                if not compliance_status:
+                    status_value = analysis.get('status', '').upper()
+                    if status_value in ['COMPLIANT', 'COMPLIED']:
+                        compliance_status = 'COMPLIANT'
+                    elif status_value in ['PARTIALLY_COMPLIANT', 'PARTIALLY_COMPLIED']:
+                        compliance_status = 'PARTIALLY_COMPLIANT'
+                    elif status_value in ['NON_COMPLIANT', 'NON_COMPLIED', 'NOT_COMPLIANT']:
+                        compliance_status = 'NON_COMPLIANT'
+               
+                # Map to Complied value
+                if compliance_status == 'COMPLIANT':
+                    complied_value = '2'  # Fully Compliant
+                elif compliance_status == 'PARTIALLY_COMPLIANT':
+                    complied_value = '1'  # Partially Compliant
+                elif compliance_status == 'NON_COMPLIANT':
+                    complied_value = '0'  # Not Compliant
+                else:
+                    # Fallback: use compliance_score to determine status
+                    compliance_score = analysis.get('compliance_score', 0.0)
+                    if isinstance(compliance_score, str):
+                        try:
+                            compliance_score = float(compliance_score)
+                        except:
+                            compliance_score = 0.0
+                   
+                    if compliance_score >= 0.7:
+                        complied_value = '2'  # Fully Compliant
+                    elif compliance_score >= 0.4:
+                        complied_value = '1'  # Partially Compliant
+                    else:
+                        complied_value = '0'  # Not Compliant
+               
+                # Get subpolicy_id and policy_id from compliance requirement if not available
+                current_subpolicy_id = subpolicy_id
+                current_policy_id = policy_id
+               
+                if not current_subpolicy_id or not current_policy_id:
+                    cursor.execute("""
+                        SELECT c.SubPolicyId, sp.PolicyId
+                        FROM compliance c
+                        JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
+                        WHERE c.ComplianceId = %s
+                    """, [compliance_id])
+                   
+                    compliance_row = cursor.fetchone()
+                    if compliance_row:
+                        if not current_subpolicy_id:
+                            current_subpolicy_id = compliance_row[0]
+                        if not current_policy_id:
+                            current_policy_id = compliance_row[1]
+               
+                if not current_subpolicy_id or not current_policy_id:
+                    logger.warning(f"⚠️ Could not resolve SubPolicyId/PolicyId for compliance {compliance_id}")
+                    continue
+               
+                # Build comments from AI analysis
+                comments_parts = []
+               
+                # Add evidence found
+                if analysis.get('evidence') and isinstance(analysis['evidence'], list) and len(analysis['evidence']) > 0:
+                    evidence_text = ', '.join(str(e) for e in analysis['evidence'][:3])  # Limit to first 3
+                    comments_parts.append(f"Evidence: {evidence_text}")
+               
+                # Add gaps/missing elements
+                if analysis.get('missing') and isinstance(analysis['missing'], list) and len(analysis['missing']) > 0:
+                    missing_text = ', '.join(str(m) for m in analysis['missing'][:3])  # Limit to first 3
+                    comments_parts.append(f"Gaps: {missing_text}")
+               
+                # Add recommendations
+                if analysis.get('recommendations') and isinstance(analysis['recommendations'], list) and len(analysis['recommendations']) > 0:
+                    rec_text = ', '.join(str(r) for r in analysis['recommendations'][:2])  # Limit to first 2
+                    comments_parts.append(f"Recommendations: {rec_text}")
+               
+                # Add compliance score and status
+                compliance_score = analysis.get('compliance_score', 0.0)
+                if isinstance(compliance_score, str):
+                    try:
+                        compliance_score = float(compliance_score)
+                    except:
+                        compliance_score = 0.0
+                comments_parts.append(f"AI Score: {round(compliance_score * 100, 1)}% | Status: {compliance_status}")
+               
+                # Add document reference
+                comments_parts.append(f"[AI Audit - Document ID: {document_id}]")
+               
+                comments = " | ".join(comments_parts)
+                # Truncate if too long (some databases have limits)
+                if len(comments) > 1000:
+                    comments = comments[:997] + "..."
+               
+                # Check if record exists
+                cursor.execute("""
+                    SELECT COUNT(*), Count
+                    FROM lastchecklistitemverified
+                    WHERE ComplianceId = %s
+                """, [compliance_id])
+               
+                result = cursor.fetchone()
+                exists = result[0] > 0 if result else False
+                current_count = result[1] if result and result[1] is not None else 0
+                new_count = current_count + 1
+               
+                if exists:
+                    # Update existing record
+                    cursor.execute("""
+                        UPDATE lastchecklistitemverified
+                        SET SubPolicyId = %s,
+                            PolicyId = %s,
+                            FrameworkId = %s,
+                            Date = %s,
+                            Time = %s,
+                            User = %s,
+                            Complied = %s,
+                            Comments = %s,
+                            Count = %s
+                        WHERE ComplianceId = %s
+                    """, [
+                        current_subpolicy_id,
+                        current_policy_id,
+                        framework_id,
+                        current_date,
+                        current_time,
+                        user_id,
+                        complied_value,
+                        comments,
+                        new_count,
+                        compliance_id
+                    ])
+                    updated_count += 1
+                    logger.info(f"✅ Updated lastchecklistitemverified for compliance {compliance_id} (Complied={complied_value})")
+                else:
+                    # Insert new record
+                    cursor.execute("""
+                        INSERT INTO lastchecklistitemverified (
+                            ComplianceId, SubPolicyId, PolicyId, FrameworkId,
+                            Date, Time, User, Complied, Comments, Count
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, [
+                        compliance_id,
+                        current_subpolicy_id,
+                        current_policy_id,
+                        framework_id,
+                        current_date,
+                        current_time,
+                        user_id,
+                        complied_value,
+                        comments,
+                        new_count
+                    ])
+                    saved_count += 1
+                    logger.info(f"✅ Inserted into lastchecklistitemverified for compliance {compliance_id} (Complied={complied_value})")
+       
+        logger.info(f"✅ Saved AI compliance results: {saved_count} inserted, {updated_count} updated in lastchecklistitemverified")
+       
+    except Exception as e:
+        logger.error(f"❌ Error saving to lastchecklistitemverified: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+ 
+ 
 @method_decorator(csrf_exempt, name='dispatch')
 class AIAuditDocumentsView(View):
     """Get uploaded documents for an audit"""
@@ -556,13 +787,17 @@ class AIAuditDocumentsView(View):
                     'success': False,
                     'error': 'Authentication required'
                 }, status=401)
-            
+            framework_id = None
             with connection.cursor() as cursor:
                 # Debug the audit_id parameter
                 converted_audit_id = int(audit_id) if str(audit_id).isdigit() else audit_id
                 logger.info(f"📋 Querying documents for audit_id: {audit_id} (type: {type(audit_id)})")
                 logger.info(f"📋 Converted audit_id: {converted_audit_id} (type: {type(converted_audit_id)})")
                 
+                cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s", [converted_audit_id])
+                framework_row = cursor.fetchone()
+                if framework_row:
+                    framework_id = framework_row[0]
                 cursor.execute("""
                     SELECT document_id, document_name, document_type, file_size, 
                         created_at, upload_status, ai_processing_status, 
@@ -581,10 +816,12 @@ class AIAuditDocumentsView(View):
                 # Also load the audit's policy/subpolicy names to show mapping
                 policy_name = None
                 subpolicy_name = None
+                policy_id_from_audit = None
+                subpolicy_id_from_audit = None
                 try:
                     cursor.execute(
                         """
-                        SELECT p.PolicyName, sp.SubPolicyName
+                        SELECT p.PolicyName, sp.SubPolicyName, a.PolicyId, a.SubPolicyId
                         FROM audit a
                         LEFT JOIN policies p ON a.PolicyId = p.PolicyId
                         LEFT JOIN subpolicies sp ON a.SubPolicyId = sp.SubPolicyId
@@ -594,7 +831,7 @@ class AIAuditDocumentsView(View):
                     )
                     row = cursor.fetchone()
                     if row:
-                        policy_name, subpolicy_name = row[0], row[1]
+                        policy_name, subpolicy_name, policy_id_from_audit, subpolicy_id_from_audit = row[0], row[1], row[2], row[3]
                 except Exception as e:
                     logger.warning(f"ℹ️ Could not fetch policy/subpolicy names for audit {audit_id}: {e}")
                 
@@ -610,7 +847,32 @@ class AIAuditDocumentsView(View):
                         compliance_analyses = json.loads(doc_dict['compliance_analyses'])
                     except (json.JSONDecodeError, TypeError):
                         compliance_analyses = None
-                
+                                # AUTO-SAVE: If document has compliance_analyses and framework_id exists, save to lastchecklistitemverified
+                if compliance_analyses and framework_id:
+                    try:
+                        # Extract analyses list (handle both dict and list formats)
+                        analyses_list = None
+                        if isinstance(compliance_analyses, dict):
+                            analyses_list = compliance_analyses.get('compliance_analyses', [])
+                        elif isinstance(compliance_analyses, list):
+                            analyses_list = compliance_analyses
+                       
+                        if analyses_list and len(analyses_list) > 0:
+                            logger.info(f"💾 Auto-saving compliance results for document {doc_dict.get('document_id')} to lastchecklistitemverified")
+                            save_ai_compliance_to_checklist(
+                                audit_id=audit_id,
+                                document_id=doc_dict.get('document_id'),
+                                analyses=compliance_analyses,  # Pass the full compliance_analyses
+                                user_id=user_id,
+                                framework_id=framework_id,
+                                policy_id=doc_dict.get('policy_id') or policy_id_from_audit,
+                                subpolicy_id=doc_dict.get('subpolicy_id') or subpolicy_id_from_audit
+                            )
+                    except Exception as e:
+                        logger.warning(f"⚠️ Could not auto-save compliance results for document {doc_dict.get('document_id')}: {e}")
+                        # Don't fail the request if auto-save fails
+               
+ 
                 documents.append({
                         'document_id': doc_dict.get('document_id'),
                         'document_name': doc_dict.get('document_name'),
@@ -1724,9 +1986,25 @@ def check_document_compliance(request, audit_id, document_id):
                         ]
                 )
                 logger.info(f"✅ Persisted compliance results for doc {document_id} in ai_audit_data table")
+                        # Save to lastchecklistitemverified for standard compliance tracking
+                try:
+                    save_ai_compliance_to_checklist(
+                        audit_id=audit_id,
+                        document_id=document_id,
+                        analyses=analyses,  # The compliance analyses array
+                        user_id=user_id,
+                        framework_id=framework_id,
+                        policy_id=policy_id,
+                        subpolicy_id=subpolicy_id
+                    )
+                    logger.info(f"✅ Saved compliance results to lastchecklistitemverified for document {document_id}")
+                except Exception as e:
+                    logger.warning(f"⚠️ Could not save to lastchecklistitemverified: {e}")
+                    # Don't fail the whole request if this fails
         except Exception as e:
             logger.warning(f"ℹ️ Could not persist compliance results for doc {document_id}: {e}")
-
+ 
+ 
         return Response({
             'success': True,
             'document_id': int(document_id),

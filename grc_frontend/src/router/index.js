@@ -81,6 +81,7 @@ import ApprovalModal from '../components/EventHandling/ApprovalModal.vue'
  
 import EditCompliance from '../components/Compliance/EditCompliance.vue'
 import CopyCompliance from '../components/Compliance/CopyCompliance.vue'
+import CrossFrameworkMapping from '../components/Compliance/CrossFrameworkMapping.vue'
 import ComplianceApprover from '../components/Compliance/ComplianceApprover.vue'
 import ComplianceDetails from '../components/Compliance/ComplianceDetails.vue'
 import AllCompliance from '../components/Compliance/AllCompliance.vue'
@@ -98,7 +99,7 @@ import Notifications from '../views/Notifications.vue'
 import SystemLogs from '../views/SystemLogs.vue'
 import PublicPolicyAcknowledgement from '../views/PublicPolicyAcknowledgement.vue'
  
- 
+import BaselineConfiguration from '../components/Compliance/BaselineConfiguration.vue'
  
  
 import CreateRisk from '../components/Risk/CreateRisk.vue'
@@ -118,7 +119,7 @@ import ViewInstance from '../components/Risk/ViewInstance.vue'
 import RiskAIDocumentUpload from '../components/Risk/risk_ai.vue'
 import RiskInstanceAIUpload from '../components/Risk/risk_ai_instance.vue'
 import IncidentAIImport from '../components/Incident/incident_ai_import.vue'
- 
+
 import LoginView from '../components/Login/LoginView.vue'
 import HomeView from '../components/Login/HomeView.vue'
 import UserProfile from '../components/Login/UserProfile.vue'
@@ -750,6 +751,12 @@ const routes = [
     component: () => import('../components/Compliance/AuditManagementView.vue')
   },
   {
+    path: '/compliance/cross-framework-mapping',
+    name: 'CrossFrameworkMapping',
+    component: CrossFrameworkMapping,
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/compliance/view/:type/:id/:name',
     name: 'ComplianceView',
     component: ComplianceView,
@@ -779,6 +786,11 @@ const routes = [
     path: '/compliance/versioning',
     name: 'ComplianceVersioning',
     component: ComplianceVersioning
+  },
+  {
+    path: '/compliance/baseline-configuration',
+    name: 'BaselineConfiguration',
+    component: BaselineConfiguration
   },
   {
     path: '/compliance/popup-demo',

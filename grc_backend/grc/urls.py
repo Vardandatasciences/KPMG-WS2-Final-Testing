@@ -264,7 +264,7 @@ from .routes.Policy import policy_views
 from .routes.Compliance import compliance_views
 
 from .routes.Compliance import compliance
-
+from .routes.Compliance import cross_framework_mapping_views
 
 
 
@@ -1098,7 +1098,10 @@ compliance_urlpatterns = [
     # Framework and Policy Data Access
 
     path('api/compliance/frameworks/', compliance_views.get_frameworks, name='get-frameworks'),
-
+   
+    # Cross-framework mapping endpoint - BRAND NEW ENDPOINT (no 'api/' prefix because it's added by backend/urls.py)
+    path('cross-framework-mapping/<int:framework_id>/', compliance_views.cross_framework_get_compliances, name='cross-framework-get-compliances'),
+ 
     path('api/compliance/frameworks/public/', compliance_views.get_frameworks_public, name='get-frameworks-public'),
 
     path('compliance/frameworks/public/', compliance_views.get_frameworks_public, name='get-frameworks-public-alias'),
@@ -1142,7 +1145,10 @@ compliance_urlpatterns = [
     path('compliance/<int:compliance_id>/framework-info/', compliance_views.get_compliance_framework_info, name='get-compliance-framework-info'),
 
     path('compliance/<int:compliance_id>/', compliance_views.get_compliance_details, name='get-compliance-details'),
-
+  # Cross-Framework Mapping
+    path('api/compliance/cross-framework-check/', cross_framework_mapping_views.cross_framework_check, name='cross-framework-check'),
+    path('api/compliance/cross-framework-mappings/<int:document_id>/', cross_framework_mapping_views.get_cross_framework_mappings, name='get-cross-framework-mappings'),
+    path('api/compliance/available-frameworks/', cross_framework_mapping_views.get_available_frameworks, name='get-available-frameworks'),
     
 
     # Compliance by Type/Category
@@ -1225,7 +1231,19 @@ compliance_urlpatterns = [
 
     path('compliance/deactivation/<int:approval_id>/reject/', compliance_views.reject_compliance_deactivation, name='reject-compliance-deactivation'),
 
-    
+    # Baseline Configuration
+    path('compliance/baselines/<int:framework_id>/', compliance_views.get_baseline_configurations, name='get-baseline-configurations'),
+    path('api/compliance/baselines/<int:framework_id>/', compliance_views.get_baseline_configurations, name='api-get-baseline-configurations'),
+    path('compliance/baselines/<int:framework_id>/<str:baseline_level>/active/', compliance_views.get_active_baseline, name='get-active-baseline'),
+    path('api/compliance/baselines/<int:framework_id>/<str:baseline_level>/active/', compliance_views.get_active_baseline, name='api-get-active-baseline'),
+    path('compliance/baselines/create-version/', compliance_views.create_baseline_version, name='create-baseline-version'),
+    path('api/compliance/baselines/create-version/', compliance_views.create_baseline_version, name='api-create-baseline-version'),
+    path('compliance/baselines/create-single-version/', compliance_views.create_single_baseline_version, name='create-single-baseline-version'),
+    path('api/compliance/baselines/create-single-version/', compliance_views.create_single_baseline_version, name='api-create-single-baseline-version'),
+    path('compliance/baselines/<int:framework_id>/<str:baseline_level>/<str:version>/set-active/', compliance_views.set_active_baseline, name='set-active-baseline'),
+    path('api/compliance/baselines/<int:framework_id>/<str:baseline_level>/<str:version>/set-active/', compliance_views.set_active_baseline, name='api-set-active-baseline'),
+ 
+ 
 
     # Dashboards and Analytics (with API-prefixed aliases for frontend)
 

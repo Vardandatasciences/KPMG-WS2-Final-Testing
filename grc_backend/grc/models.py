@@ -1166,7 +1166,52 @@ class LastChecklistItemVerified(models.Model):
         unique_together = (('ComplianceId', 'SubPolicyId', 'PolicyId', 'FrameworkId'),)
 
 
-
+class ComplianceBaseline(models.Model):
+    """
+    Baseline Configuration model for defining compliance baseline levels
+    (Low, Moderate, High) per framework with versioning support
+    """
+    BASELINE_LEVEL_CHOICES = [
+        ('Low', 'Low'),
+        ('Moderate', 'Moderate'),
+        ('High', 'High'),
+    ]
+   
+    IMPORTANCE_CHOICES = [
+        ('Mandatory', 'Mandatory'),
+        ('Optional', 'Optional'),
+        ('Ignored', 'Ignored'),
+    ]
+   
+    BaselineId = models.AutoField(primary_key=True)
+    FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId', related_name='baselines')
+    BaselineLevel = models.CharField(max_length=20, choices=BASELINE_LEVEL_CHOICES)
+    ComplianceId = models.ForeignKey('Compliance', on_delete=models.CASCADE, db_column='ComplianceId', related_name='baseline_settings')
+    Importance = models.CharField(max_length=20, choices=IMPORTANCE_CHOICES, default='Mandatory')
+    CreatedBy = models.ForeignKey('Users', on_delete=models.SET_NULL, null=True, related_name='created_baselines', db_column='CreatedBy')
+    CreatedDate = models.DateTimeField(auto_now_add=True)
+    ModifiedBy = models.ForeignKey('Users', on_delete=models.SET_NULL, null=True, related_name='modified_baselines', db_column='ModifiedBy')
+    ModifiedDate = models.DateTimeField(auto_now=True)
+    Version = models.CharField(max_length=50, default='V1')  # For versioning (V1, V2, etc.)
+    IsActive = models.BooleanField(default=False)  # Only one active version per (FrameworkId, BaselineLevel)
+   
+    class Meta:
+        db_table = 'compliancebaseline'
+        unique_together = [['FrameworkId', 'BaselineLevel', 'ComplianceId', 'Version']]
+        indexes = [
+            models.Index(fields=['FrameworkId', 'BaselineLevel', 'IsActive']),
+            models.Index(fields=['ComplianceId']),
+        ]
+   
+    @property
+    def ComplianceStatus(self):
+        """Property to map Importance to ComplianceStatus for backward compatibility"""
+        return self.Importance
+   
+    def __str__(self):
+        return f"{self.FrameworkId.FrameworkName} - {self.BaselineLevel} - {self.ComplianceId.Identifier} ({self.Version}) - {self.ComplianceStatus}"
+ 
+ 
 
 # =====================================================
 # SINGLE RBAC MODEL - Add this to your models.py

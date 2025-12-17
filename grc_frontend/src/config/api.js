@@ -325,6 +325,13 @@ export const API_ENDPOINTS = {
   COMPLIANCE_ALL_POLICIES_FRAMEWORKS: `${API_BASE_URL}/api/compliance/all-policies/frameworks/`,
   COMPLIANCE_ALL_POLICIES_POLICIES: `${API_BASE_URL}/api/compliance/all-policies/policies/`,
   COMPLIANCE_ALL_POLICIES_SUBPOLICIES: `${API_BASE_URL}/api/compliance/all-policies/subpolicies/`,
+  // Baseline Configuration
+  BASELINE_CONFIGURATIONS: (frameworkId) => `${API_BASE_URL}/api/compliance/baselines/${frameworkId}/`,
+  ACTIVE_BASELINE: (frameworkId, level) => `${API_BASE_URL}/api/compliance/baselines/${frameworkId}/${level}/active/`,
+  CREATE_BASELINE_VERSION: `${API_BASE_URL}/api/compliance/baselines/create-version/`,
+  CREATE_SINGLE_BASELINE_VERSION: `${API_BASE_URL}/api/compliance/baselines/create-single-version/`,
+  SET_ACTIVE_BASELINE: (frameworkId, level, version) => `${API_BASE_URL}/api/compliance/baselines/${frameworkId}/${level}/${version}/set-active/`,
+ 
  
   // Audit Reports (corrected paths)
   AUDIT_REPORTS_CHECK: `${API_BASE_URL}/api/audit-reports/check/`,

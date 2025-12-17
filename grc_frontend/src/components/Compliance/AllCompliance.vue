@@ -290,6 +290,7 @@ const isExporting = ref(false)
 const tableColumns = [
   { key: 'identifier', label: 'ID', sortable: true },
   { key: 'name', label: 'Control', sortable: true },
+  { key: 'annex', label: 'Annex', sortable: true },
   { key: 'status', label: 'Status', sortable: true },
   { key: 'category', label: 'Criticality', sortable: true },
   { key: 'maturityLevel', label: 'Maturity Level', sortable: true },
@@ -594,6 +595,7 @@ async function selectSubpolicy(subpolicy) {
             createdBy: compliance.CreatedByName,
             createdDate: compliance.CreatedByDate,
             identifier: compliance.Identifier,
+            annex: compliance.Annex || compliance.SubPolicyIdentifier || null,  // Add Annex from SubPolicy Identifier
             version: compliance.ComplianceVersion,
             isRisk: compliance.IsRisk,
             

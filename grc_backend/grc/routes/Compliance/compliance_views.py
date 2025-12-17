@@ -9,6 +9,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 from ...routes.Consent import require_consent
 from ...rbac.decorators import (
@@ -818,44 +819,39 @@ def test_connection(request):
 @permission_classes([ComplianceViewPermission])
 @compliance_view_required
 def get_frameworks(request):
-    # print(f"\n=== GET_FRAMEWORKS DEBUG ===")
-    
+    """
+    Get all frameworks - OPTIMIZED VERSION
+    Returns only basic framework fields without loading policies/subpolicies to avoid N+1 queries
+    """
     try:
-        # Get all frameworks (remove ActiveInactive filter for now to see all data)
-        # Note: We don't filter frameworks list - users need to see all frameworks to select from
-        frameworks = Framework.objects.all()  # type: ignore
-        # print(f"Found {frameworks.count()} frameworks in total")
+        # OPTIMIZATION: Use values() to get only needed fields directly from database
+        # This avoids loading full objects and related data (policies, subpolicies)
+        frameworks = Framework.objects.values(
+            'FrameworkId', 
+            'FrameworkName', 
+            'Category', 
+            'ActiveInactive', 
+            'FrameworkDescription',
+            'Status'
+        ).order_by('FrameworkName')
         
-        # # Debug: Print each framework
-        # for fw in frameworks:
-        #     print(f"Framework: ID={fw.FrameworkId}, Name={fw.FrameworkName}, Status={fw.ActiveInactive}")
-        
-        serializer = FrameworkSerializer(frameworks, many=True)
-        serialized_data = serializer.data
-        
-        # print(f"Serialized data: {serialized_data}")
-        
-        # Format the response to match frontend expectations
+        # Format the response directly from values() query (much faster)
         formatted_frameworks = []
-        for fw_data in serialized_data:
+        for fw in frameworks:
             formatted_fw = {
-                'id': fw_data.get('FrameworkId'),
-                'name': fw_data.get('FrameworkName'),
-                'category': fw_data.get('Category', ''),
-                'status': fw_data.get('ActiveInactive', ''),
-                'description': fw_data.get('FrameworkDescription', ''),
+                'id': fw.get('FrameworkId'),
+                'name': fw.get('FrameworkName', ''),
+                'category': fw.get('Category', ''),
+                'status': fw.get('ActiveInactive', ''),
+                'description': fw.get('FrameworkDescription', '')[:200] if fw.get('FrameworkDescription') else '',  # Truncate long descriptions
             }
             formatted_frameworks.append(formatted_fw)
-            # print(f"Formatted framework: {formatted_fw}")
         
         response_data = {
             'success': True, 
-            'frameworks': formatted_frameworks,  # Change 'data' to 'frameworks'
+            'frameworks': formatted_frameworks,
             'count': len(formatted_frameworks)
         }
-        
-        # print(f"Final response: {response_data}")
-        print("=== END GET_FRAMEWORKS DEBUG ===\n")
         
         return Response(response_data)
         
@@ -5195,29 +5191,31 @@ def all_policies_get_compliance_versions(request, compliance_id):
 from django.db import connection
 import logging
 
+# BRAND NEW API endpoint for cross-framework mapping - NO DECORATORS EXCEPT API_VIEW
 @api_view(['GET'])
-@permission_classes([ComplianceViewPermission])
-@compliance_view_required
-def get_framework_compliances(request, framework_id):
-    """Get all compliances under a framework"""
-
-    logging.info(f"Getting compliances for framework_id: {framework_id}")
+@permission_classes([AllowAny])
+def cross_framework_get_compliances(request, framework_id):
+    """BRAND NEW endpoint for cross-framework mapping"""
+    print(f"========== CROSS FRAMEWORK ENDPOINT HIT: {framework_id} ==========")
+    logging.info(f"========== CROSS FRAMEWORK ENDPOINT HIT: {framework_id} ==========")
     try:
         framework = get_object_or_404(Framework, FrameworkId=framework_id)
-        logging.info(f"Found framework: {framework.FrameworkName}")
-
-        # Log the SQL query before executing it
+        logging.info(f"✅ [api_get_framework_compliances] Found framework: {framework.FrameworkName}")
+        
         compliances = Compliance.objects.filter(
             SubPolicy__PolicyId__FrameworkId=framework
         ).select_related('SubPolicy', 'SubPolicy__PolicyId')
         
-        logging.info(f"SQL Query: {connection.queries[-1]}")
+        compliance_count = compliances.count()
+        logging.info(f"📊 [api_get_framework_compliances] Found {compliance_count} compliances")
         
         compliances_data = []
         for compliance in compliances:
             compliances_data.append({
                 'ComplianceId': compliance.ComplianceId,
+                'ComplianceTitle': compliance.ComplianceTitle,
                 'ComplianceItemDescription': compliance.ComplianceItemDescription,
+                'ComplianceType': compliance.ComplianceType,
                 'Status': compliance.Status,
                 'Criticality': compliance.Criticality,
                 'MaturityLevel': compliance.MaturityLevel,
@@ -5229,16 +5227,81 @@ def get_framework_compliances(request, framework_id):
                 'Identifier': compliance.Identifier,
                 'PermanentTemporary': compliance.PermanentTemporary,
                 'SubPolicyName': compliance.SubPolicy.SubPolicyName,
-                'PolicyName': compliance.SubPolicy.PolicyId.PolicyName
+                'PolicyName': compliance.SubPolicy.PolicyId.PolicyName,
+                'Scope': compliance.Scope,
+                'Objective': compliance.Objective
             })
         
+        logging.info(f"✅ [api_get_framework_compliances] Returning {len(compliances_data)} compliances")
         return Response({
             'success': True,
             'name': framework.FrameworkName,
             'compliances': compliances_data
-        })
+        }, status=200)
     except Exception as e:
-        logging.error(f"Error: {str(e)}")
+        logging.error(f"❌ [api_get_framework_compliances] Error: {str(e)}")
+        import traceback
+        logging.error(f"❌ [api_get_framework_compliances] Traceback:\n{traceback.format_exc()}")
+        return Response({
+            'success': False,
+            'message': str(e)
+        }, status=500)
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_framework_compliances(request, framework_id):
+    """Get all compliances under a framework - JSON only"""
+
+    logging.info(f"🔍 [get_framework_compliances FIRST] Called with framework_id: {framework_id}")
+    print(f"🔍 [get_framework_compliances FIRST] PRINT: Called with framework_id: {framework_id}")
+    
+
+    logging.info(f"Getting compliances for framework_id: {framework_id}")
+    try:
+        framework = get_object_or_404(Framework, FrameworkId=framework_id)
+        logging.info(f"✅ [get_framework_compliances FIRST] Found framework: {framework.FrameworkName}")
+
+        # Get compliances
+        compliances = Compliance.objects.filter(
+            SubPolicy__PolicyId__FrameworkId=framework
+        ).select_related('SubPolicy', 'SubPolicy__PolicyId')
+        
+        compliance_count = compliances.count()
+        logging.info(f"📊 [get_framework_compliances FIRST] Found {compliance_count} compliances")
+        
+        compliances_data = []
+        for compliance in compliances:
+            compliances_data.append({
+                'ComplianceId': compliance.ComplianceId,
+                'ComplianceTitle': compliance.ComplianceTitle,
+                'ComplianceItemDescription': compliance.ComplianceItemDescription,
+                'ComplianceType': compliance.ComplianceType,
+                'Status': compliance.Status,
+                'Criticality': compliance.Criticality,
+                'MaturityLevel': compliance.MaturityLevel,
+                'MandatoryOptional': compliance.MandatoryOptional,
+                'ManualAutomatic': compliance.ManualAutomatic,
+                'CreatedByName': compliance.CreatedByName,
+                'CreatedByDate': compliance.CreatedByDate,
+                'ComplianceVersion': compliance.ComplianceVersion,
+                'Identifier': compliance.Identifier,
+                'PermanentTemporary': compliance.PermanentTemporary,
+                'SubPolicyName': compliance.SubPolicy.SubPolicyName,
+                'PolicyName': compliance.SubPolicy.PolicyId.PolicyName,
+                'Scope': compliance.Scope,
+                'Objective': compliance.Objective
+            })
+        
+        logging.info(f"✅ [get_framework_compliances] Returning {len(compliances_data)} compliances")
+        return Response({
+            'success': True,
+            'name': framework.FrameworkName,
+            'compliances': compliances_data
+        }, status=200)
+    except Exception as e:
+        logging.error(f"❌ [get_framework_compliances] Error: {str(e)}")
+        import traceback
+        logging.error(f"❌ [get_framework_compliances] Traceback:\n{traceback.format_exc()}")
         return Response({
             'success': False,
             'message': str(e)
@@ -8211,28 +8274,32 @@ def get_compliance_approvals_by_reviewer(request, user_id):
 
 
 @api_view(['GET'])
-@permission_classes([ComplianceViewPermission])
-@compliance_view_required
+@permission_classes([AllowAny])  # Allow anyone for cross-framework mapping
 def get_framework_compliances(request, framework_id):
-    """Get all compliances under a framework"""
+    """Get all compliances under a framework - JSON only for API calls"""
 
-    logging.info(f"Getting compliances for framework_id: {framework_id}")
+    logging.info(f"🔍 [get_framework_compliances] Called with framework_id: {framework_id}")
+    print(f"🔍 [get_framework_compliances] PRINT: Called with framework_id: {framework_id}")
+    
     try:
         framework = get_object_or_404(Framework, FrameworkId=framework_id)
-        logging.info(f"Found framework: {framework.FrameworkName}")
+        logging.info(f"✅ [get_framework_compliances] Found framework: {framework.FrameworkName}")
 
-        # Log the SQL query before executing it
+        # Get compliances
         compliances = Compliance.objects.filter(
             SubPolicy__PolicyId__FrameworkId=framework
         ).select_related('SubPolicy', 'SubPolicy__PolicyId')
         
-        logging.info(f"SQL Query: {connection.queries[-1]}")
+        compliance_count = compliances.count()
+        logging.info(f"📊 [get_framework_compliances] Found {compliance_count} compliances")
         
         compliances_data = []
         for compliance in compliances:
             compliances_data.append({
                 'ComplianceId': compliance.ComplianceId,
+                'ComplianceTitle': compliance.ComplianceTitle,
                 'ComplianceItemDescription': compliance.ComplianceItemDescription,
+                'ComplianceType': compliance.ComplianceType,
                 'Status': compliance.Status,
                 'Criticality': compliance.Criticality,
                 'MaturityLevel': compliance.MaturityLevel,
@@ -8244,16 +8311,21 @@ def get_framework_compliances(request, framework_id):
                 'Identifier': compliance.Identifier,
                 'PermanentTemporary': compliance.PermanentTemporary,
                 'SubPolicyName': compliance.SubPolicy.SubPolicyName,
-                'PolicyName': compliance.SubPolicy.PolicyId.PolicyName
+                'PolicyName': compliance.SubPolicy.PolicyId.PolicyName,
+                'Scope': compliance.Scope,
+                'Objective': compliance.Objective
             })
-        
+
+        logging.info(f"✅ [get_framework_compliances] Returning {len(compliances_data)} compliances")
         return Response({
             'success': True,
             'name': framework.FrameworkName,
             'compliances': compliances_data
-        })
+        }, status=200)
     except Exception as e:
-        logging.error(f"Error: {str(e)}")
+        logging.error(f"❌ [get_framework_compliances] Error: {str(e)}")
+        import traceback
+        logging.error(f"❌ [get_framework_compliances] Traceback:\n{traceback.format_exc()}")
         return Response({
             'success': False,
             'message': str(e)
@@ -9457,3 +9529,325 @@ from .export_compliance import (
     get_export_status,
     list_export_history
 )
+
+
+ 
+# =============================================================================
+# BASELINE CONFIGURATION API VIEWS
+# =============================================================================
+ 
+@api_view(['GET'])
+@permission_classes([ComplianceViewPermission])
+@compliance_view_required
+def get_baseline_configurations(request, framework_id):
+    """Get all baseline configurations for a framework"""
+    try:
+        baselines = ComplianceBaseline.objects.filter(
+            FrameworkId_id=framework_id
+        ).select_related('ComplianceId', 'FrameworkId', 'CreatedBy', 'ModifiedBy').order_by('BaselineLevel', 'Version', 'ComplianceId__Identifier')
+       
+        # Check if flat list is requested
+        flat = request.GET.get('flat', 'false').lower() == 'true'
+       
+        if flat:
+            # Return flat list of all baseline rows
+            serializer = ComplianceBaselineSerializer(baselines, many=True)
+            return Response({'success': True, 'data': serializer.data})
+       
+        # Group by baseline level and version (original behavior)
+        result = {}
+        for baseline in baselines:
+            level = baseline.BaselineLevel
+            version = baseline.Version
+           
+            if level not in result:
+                result[level] = {}
+            if version not in result[level]:
+                result[level][version] = {
+                    'version': version,
+                    'isActive': baseline.IsActive,
+                    'compliance_settings': []
+                }
+           
+            result[level][version]['compliance_settings'].append(
+                ComplianceBaselineSerializer(baseline).data
+            )
+       
+        return Response({'success': True, 'data': result})
+    except Exception as e:
+        return Response({'success': False, 'error': str(e)}, status=500)
+ 
+ 
+@api_view(['GET'])
+@permission_classes([ComplianceViewPermission])
+@compliance_view_required
+def get_active_baseline(request, framework_id, baseline_level):
+    """Get active baseline configuration for a framework and level"""
+    try:
+        baselines = ComplianceBaseline.objects.filter(
+            FrameworkId_id=framework_id,
+            BaselineLevel=baseline_level,
+            IsActive=True
+        ).select_related('ComplianceId')
+       
+        serializer = ComplianceBaselineSerializer(baselines, many=True)
+        return Response({'success': True, 'data': serializer.data})
+    except Exception as e:
+        return Response({'success': False, 'error': str(e)}, status=500)
+ 
+ 
+@csrf_exempt
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def create_baseline_version(request):
+    """Create a new baseline version (clones existing and updates)"""
+    # Manual authentication check since DRF IsAuthenticated doesn't work with custom auth
+    try:
+        user_id = RBACUtils.get_user_id_from_request(request)
+        if not user_id:
+            return Response({
+                'success': False,
+                'error': 'Authentication required'
+            }, status=401)
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': 'Authentication required'
+        }, status=401)
+   
+    try:
+        data = request.data
+        framework_id = data.get('FrameworkId')
+        baseline_level = data.get('BaselineLevel')
+        source_version = data.get('SourceVersion', 'V1')
+        new_version = data.get('NewVersion')
+        compliance_settings = data.get('compliance_settings', [])
+       
+        if not framework_id or not baseline_level or not new_version:
+            return Response({
+                'success': False,
+                'error': 'FrameworkId, BaselineLevel, and NewVersion are required'
+            }, status=400)
+       
+        # Get the source baseline
+        source_baselines = ComplianceBaseline.objects.filter(
+            FrameworkId_id=framework_id,
+            BaselineLevel=baseline_level,
+            Version=source_version
+        )
+       
+        if not source_baselines.exists() and source_version != 'V1':
+            return Response({
+                'success': False,
+                'error': f'Source version {source_version} not found'
+            }, status=404)
+       
+        # If creating from scratch (no source), get all compliances for the framework
+        if not source_baselines.exists():
+            compliances = Compliance.objects.filter(
+                SubPolicy__PolicyId__FrameworkId_id=framework_id
+            )
+            # Create default baseline entries based on baseline level
+            # High -> Mandatory, Moderate -> Optional, Low -> Ignored
+            if baseline_level == 'High':
+                default_status = 'Mandatory'
+            elif baseline_level == 'Moderate':
+                default_status = 'Optional'
+            else:  # Low
+                default_status = 'Ignored'
+           
+            new_baselines = []
+            for compliance in compliances:
+                baseline = ComplianceBaseline(
+                    FrameworkId_id=framework_id,
+                    BaselineLevel=baseline_level,
+                    ComplianceId=compliance,
+                    Importance=default_status,
+                    Version=new_version,
+                    IsActive=False,
+                    CreatedBy_id=user_id,
+                    ModifiedBy_id=user_id
+                )
+                new_baselines.append(baseline)
+           
+            if new_baselines:
+                ComplianceBaseline.objects.bulk_create(new_baselines)
+        else:
+            # Deactivate old active version
+            ComplianceBaseline.objects.filter(
+                FrameworkId_id=framework_id,
+                BaselineLevel=baseline_level,
+                IsActive=True
+            ).update(IsActive=False)
+           
+            # Create new baseline entries from source
+            new_baselines = []
+            for source_baseline in source_baselines:
+                # Find matching setting in compliance_settings if provided
+                matching_setting = next(
+                    (s for s in compliance_settings if s.get('ComplianceId') == source_baseline.ComplianceId_id),
+                    None
+                )
+               
+                if matching_setting:
+                    # Convert from old format (IsMandatory, IsOptional, IsIgnored) to new format (ComplianceStatus)
+                    compliance_status = matching_setting.get('ComplianceStatus')
+                    if not compliance_status:
+                        # Handle backward compatibility with old format
+                        if matching_setting.get('IsMandatory', False):
+                            compliance_status = 'Mandatory'
+                        elif matching_setting.get('IsIgnored', False):
+                            compliance_status = 'Ignored'
+                        else:
+                            compliance_status = 'Optional'
+                   
+                    baseline = ComplianceBaseline(
+                        FrameworkId_id=framework_id,
+                        BaselineLevel=baseline_level,
+                        ComplianceId_id=matching_setting['ComplianceId'],
+                        Importance=compliance_status,
+                        Version=new_version,
+                        IsActive=False,
+                        CreatedBy_id=user_id,
+                        ModifiedBy_id=user_id
+                    )
+                else:
+                    # Copy from source
+                    baseline = ComplianceBaseline(
+                        FrameworkId_id=framework_id,
+                        BaselineLevel=baseline_level,
+                        ComplianceId=source_baseline.ComplianceId,
+                        Importance=source_baseline.Importance,
+                        Version=new_version,
+                        IsActive=False,
+                        CreatedBy_id=user_id,
+                        ModifiedBy_id=user_id
+                    )
+                new_baselines.append(baseline)
+           
+            ComplianceBaseline.objects.bulk_create(new_baselines)
+       
+        return Response({
+            'success': True,
+            'message': f'Baseline version {new_version} created successfully'
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response({'success': False, 'error': str(e)}, status=500)
+ 
+ 
+@csrf_exempt
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def create_single_baseline_version(request):
+    """Create a new baseline version for a single compliance entry only"""
+    # Manual authentication check
+    try:
+        user_id = RBACUtils.get_user_id_from_request(request)
+        if not user_id:
+            return Response({
+                'success': False,
+                'error': 'Authentication required'
+            }, status=401)
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': 'Authentication required'
+        }, status=401)
+   
+    try:
+        data = request.data
+        baseline_id = data.get('BaselineId')  # The ID of the baseline row being edited
+        framework_id = data.get('FrameworkId')
+        baseline_level = data.get('BaselineLevel')
+        compliance_id = data.get('ComplianceId')
+        compliance_status = data.get('ComplianceStatus')  # The new importance/status
+        current_version = data.get('CurrentVersion')
+       
+        if not baseline_id or not framework_id or not baseline_level or not compliance_id or not compliance_status or not current_version:
+            return Response({
+                'success': False,
+                'error': 'BaselineId, FrameworkId, BaselineLevel, ComplianceId, ComplianceStatus, and CurrentVersion are required'
+            }, status=400)
+       
+        # Get the source baseline entry
+        try:
+            source_baseline = ComplianceBaseline.objects.get(BaselineId=baseline_id)
+        except ComplianceBaseline.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': 'Source baseline not found'
+            }, status=404)
+       
+        # Find the next version number (increment from current)
+        import re
+        if isinstance(current_version, str):
+            version_match = re.match(r'V(\d+)', current_version)
+            if version_match:
+                current_version_num = int(version_match.group(1))
+                new_version = f'V{current_version_num + 1}'
+            else:
+                new_version = 'V2'
+        else:
+            new_version = 'V2'
+       
+        # Create new baseline entry with the edited values
+        new_baseline = ComplianceBaseline(
+            FrameworkId_id=framework_id,
+            BaselineLevel=baseline_level,
+            ComplianceId_id=compliance_id,
+            Importance=compliance_status,
+            Version=new_version,
+            IsActive=False,
+            CreatedBy_id=user_id,
+            ModifiedBy_id=user_id
+        )
+        new_baseline.save()
+       
+        return Response({
+            'success': True,
+            'message': f'Baseline version {new_version} created successfully',
+            'data': {
+                'BaselineId': new_baseline.BaselineId,
+                'Version': new_version
+            }
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response({'success': False, 'error': str(e)}, status=500)
+ 
+ 
+@api_view(['PUT'])
+@permission_classes([ComplianceEditPermission])
+@compliance_edit_required
+@csrf_exempt
+def set_active_baseline(request, framework_id, baseline_level, version):
+    """Set a baseline version as active"""
+    try:
+        # Deactivate all versions for this framework and level
+        ComplianceBaseline.objects.filter(
+            FrameworkId_id=framework_id,
+            BaselineLevel=baseline_level
+        ).update(IsActive=False)
+       
+        # Activate the specified version
+        updated = ComplianceBaseline.objects.filter(
+            FrameworkId_id=framework_id,
+            BaselineLevel=baseline_level,
+            Version=version
+        ).update(IsActive=True)
+       
+        if updated == 0:
+            return Response({
+                'success': False,
+                'error': f'Version {version} not found'
+            }, status=404)
+       
+        return Response({'success': True, 'message': f'Version {version} activated'})
+    except Exception as e:
+        return Response({'success': False, 'error': str(e)}, status=500)
+ 

@@ -229,6 +229,7 @@ const maturityDropdownConfig = {
 const tableColumns = [
   { key: 'Identifier', label: 'ID', sortable: true },
   { key: 'ComplianceTitle', label: 'Title', sortable: true },
+  { key: 'Annex', label: 'Annex', sortable: true },
   { key: 'Status', label: 'Status', sortable: true },
   { key: 'Criticality', label: 'Criticality', sortable: true },
   { key: 'MaturityLevel', label: 'Maturity Level', sortable: true },
@@ -245,9 +246,11 @@ const filteredControls = computed(() => {
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase();
     result = result.filter(control => 
-      (control.ComplianceTitle?.toLowerCase().includes(query) ||
+    (control.ComplianceTitle?.toLowerCase().includes(query) ||
       control.ComplianceItemDescription?.toLowerCase().includes(query) ||
-      control.Identifier?.toLowerCase().includes(query))
+      control.Identifier?.toLowerCase().includes(query) ||
+      control.Annex?.toLowerCase().includes(query))
+ 
     );
   }
 

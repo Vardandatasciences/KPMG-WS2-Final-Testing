@@ -132,7 +132,7 @@
           </div> -->
             <div class="menu-item" @click="navigate('/compliance/audit-management')" :class="{'active': isActive('/compliance/audit-management')}">
               <i class="fas fa-clipboard-check icon"></i>
-              <span>Compliance Audit Management</span>
+              <span>Compliances</span>
             </div>
           <div class="menu-item" @click="navigate('/compliance/approver')" :class="{'active': isActive('/compliance/approver')}">
             <i class="fas fa-check-double icon"></i>
@@ -158,6 +158,10 @@
           <div class="menu-item" @click="navigate('/compliance/versioning')" :class="{'active': isActive('/compliance/versioning')}">
             <i class="fas fa-code-branch icon"></i>
             <span>Versioning</span>
+          </div>
+          <div class="menu-item" @click="navigate('/compliance/baseline-configuration')" :class="{'active': isActive('/compliance/baseline-configuration')}">
+            <i class="fas fa-sliders-h icon"></i>
+            <span>Baseline Configuration</span>
           </div>
         </div>
 
@@ -426,7 +430,7 @@
           <i class="fas fa-balance-scale icon"></i>
           <span>Framework Comparison</span>
         </div>
-        <div class="menu-item" @click="navigate('/framework-migration/migration')" :class="{'active': isActive('/framework-migration/migration')}">
+        <div class="menu-item" @click="navigate('/compliance/cross-framework-mapping')" :class="{'active': isActive('/compliance/cross-framework-mapping')}">
           <i class="fas fa-route icon"></i>
           <span>Gap Analysis</span>
         </div>
@@ -1117,8 +1121,15 @@ export default {
 
     const navigate = (path) => {
       // Simple navigation without interceptor interference
-      router.push(path)
+      console.log('🧭 Navigating to:', path)
+      router.push(path).catch(err => {
+        console.error('❌ Navigation error:', err)
+        if (err.name !== 'NavigationDuplicated') {
+          console.error('Navigation failed:', err)
+        }
+      })
     }
+ 
 
     // Poll unread notifications every 10 seconds
     const fetchUnreadCount = async () => {

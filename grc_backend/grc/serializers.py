@@ -6,7 +6,7 @@ from datetime import date
 
 # Import all models
 from .models import (
-    Audit, Framework, Policy, GRCLog, Users, SubPolicy, Compliance, 
+    Audit, Framework, Policy, GRCLog, Users, SubPolicy, Compliance, ComplianceBaseline,
     AuditFinding, Incident, Risk, RiskInstance, Workflow, PolicyApproval, 
     ComplianceApproval, ExportTask, LastChecklistItemVerified, Notification, S3File, 
     PolicyCategory, RiskAssignment
@@ -337,7 +337,38 @@ class ComplianceListSerializer(serializers.ModelSerializer):
             'ComplianceTitle', 'Scope', 'Objective', 'BusinessUnitsCovered', 'Applicability'
         ]
 
-
+class ComplianceBaselineSerializer(serializers.ModelSerializer):
+    FrameworkName = serializers.CharField(source='FrameworkId.FrameworkName', read_only=True)
+    ComplianceTitle = serializers.CharField(source='ComplianceId.ComplianceTitle', read_only=True)
+    ComplianceIdentifier = serializers.CharField(source='ComplianceId.Identifier', read_only=True)
+    CreatedByName = serializers.CharField(source='CreatedBy.UserName', read_only=True, allow_null=True)
+    ModifiedByName = serializers.CharField(source='ModifiedBy.UserName', read_only=True, allow_null=True)
+   
+    # Convenience properties for backward compatibility
+    IsMandatory = serializers.SerializerMethodField()
+    IsOptional = serializers.SerializerMethodField()
+    IsIgnored = serializers.SerializerMethodField()
+   
+    def get_IsMandatory(self, obj):
+        return obj.ComplianceStatus == 'Mandatory'
+   
+    def get_IsOptional(self, obj):
+        return obj.ComplianceStatus == 'Optional'
+   
+    def get_IsIgnored(self, obj):
+        return obj.ComplianceStatus == 'Ignored'
+   
+    class Meta:
+        model = ComplianceBaseline
+        fields = [
+            'BaselineId', 'FrameworkId', 'FrameworkName', 'BaselineLevel',
+            'ComplianceId', 'ComplianceTitle', 'ComplianceIdentifier',
+            'ComplianceStatus', 'IsMandatory', 'IsOptional', 'IsIgnored',
+            'CreatedBy', 'CreatedByName', 'CreatedDate',
+            'ModifiedBy', 'ModifiedByName', 'ModifiedDate',
+            'Version', 'IsActive'
+        ]
+ 
 class LastChecklistItemVerifiedSerializer(serializers.ModelSerializer):
     framework_name = serializers.CharField(source='FrameworkId.FrameworkName', read_only=True)
     
