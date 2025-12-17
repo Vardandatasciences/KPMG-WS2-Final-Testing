@@ -26,7 +26,7 @@ const vuetify = createVuetify({
 // Configure axios defaults for JWT authentication
 axios.defaults.baseURL = API_BASE_URL  // Use centralized API configuration
 axios.defaults.headers.common['Content-Type'] = 'application/json'
-// axios.defaults.timeout = 30000  // Removed timeout to prevent request timeouts
+axios.defaults.timeout = 30000  // 30 seconds timeout to prevent hanging requests
 
 // CRITICAL: Enable credentials (cookies) for session management
 axios.defaults.withCredentials = true

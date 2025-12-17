@@ -70,3 +70,5 @@ SQLAlchemy>=2.0.23
 # Production
 gunicorn>=21.2.0
 whitenoise>=6.6.0
+reportlab
+openpyxl
