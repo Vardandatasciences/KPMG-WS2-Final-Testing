@@ -74,7 +74,29 @@ export const API_ENDPOINTS = {
   
   // System Logs
   SYSTEM_LOGS: `${API_BASE_URL}/api/system-logs/`,
- 
+
+  // Data Analysis
+  DATA_ANALYSIS: (frameworkId = null) => {
+    const queryParam = frameworkId ? `?framework_id=${frameworkId}` : '';
+    return `${API_BASE_URL}/api/data-analysis${queryParam}`;
+  },
+  
+  // AI-Powered Privacy Analysis
+  AI_PRIVACY_ANALYSIS: (frameworkId = null) => {
+    const queryParam = frameworkId ? `?framework_id=${frameworkId}` : '';
+    return `${API_BASE_URL}/api/ai-privacy-analysis${queryParam}`;
+  },
+  PRIVACY_DASHBOARD_METRICS: (frameworkId = null) => {
+    const queryParam = frameworkId ? `?framework_id=${frameworkId}` : '';
+    return `${API_BASE_URL}/api/privacy-dashboard-metrics${queryParam}`;
+  },
+  PRIVACY_COMPLIANCE_REPORT: (frameworkId = null, includeAi = true) => {
+    const params = new URLSearchParams();
+    if (frameworkId) params.append('framework_id', frameworkId);
+    params.append('include_ai', includeAi);
+    return `${API_BASE_URL}/api/privacy-compliance-report?${params.toString()}`;
+  },
+
   // Policy Management
   POLICIES: `${API_BASE_URL}/api/policies/`,
   POLICY: (policyId) => `${API_BASE_URL}/api/policies/${policyId}/`,

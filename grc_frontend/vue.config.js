@@ -29,10 +29,18 @@ module.exports = defineConfig({
     proxy: {
       '/api': {
         target: 'http://localhost:8000',
-        changeOrigin: true
+        changeOrigin: true,
+        timeout: 30000, // 30 seconds timeout for proxy requests
+        proxyTimeout: 30000 // 30 seconds timeout for proxy connection
       }
     },
-    historyApiFallback: true
+    historyApiFallback: true,
+    client: {
+      overlay: {
+        errors: true,
+        warnings: false
+      }
+    }
   },
   
   // Configure webpack

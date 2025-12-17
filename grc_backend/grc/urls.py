@@ -434,6 +434,13 @@ from .routes.Global.export_status import get_export_status, list_user_exports
 
 
 from .routes.Retention import retention_views
+from .routes.DataAnalysis.dataAnalysis import get_data_analysis
+from .routes.DataAnalysis.aiDataAnalysis import (
+    get_ai_privacy_analysis,
+    get_privacy_dashboard_metrics,
+    get_privacy_compliance_report,
+    export_privacy_report
+)
 
 
 
@@ -2785,7 +2792,16 @@ urlpatterns = [
 
     *notification_urlpatterns,
 
+    # DATA ANALYSIS
+    # ========================================================================
+    path('data-analysis/', get_data_analysis, name='data-analysis'),
+    path('data-analysis', get_data_analysis, name='data-analysis-no-slash'),
     
+    # AI-POWERED PRIVACY ANALYSIS
+    path('ai-privacy-analysis/', get_ai_privacy_analysis, name='ai-privacy-analysis'),
+    path('privacy-dashboard-metrics/', get_privacy_dashboard_metrics, name='privacy-dashboard-metrics'),
+    path('privacy-compliance-report/', get_privacy_compliance_report, name='privacy-compliance-report'),
+    path('export-privacy-report/', export_privacy_report, name='export-privacy-report'),
 
     # ========================================================================
 

@@ -1,6 +1,7 @@
 from django.db import models
 from django.utils import timezone
 from datetime import timedelta
+from django.apps import apps
 # from ...routes.Global.logging_service import send_log
 
 
@@ -3114,6 +3115,35 @@ class RetentionModulePageConfig(models.Model):
 # RETENTION TIMELINE MODEL
 # Tracks retention period per record with archival/pause metadata
 # =====================================================
+
+# Map RecordType (case-insensitive) to app model label for deletion
+# Kept in models so it can be reused by management commands and helpers.
+RETENTION_DELETE_MODEL_MAP = {
+    'policy': 'grc.Policy',
+    'policyversion': 'grc.PolicyVersion',
+    'policyapproval': 'grc.PolicyApproval',
+    'subpolicy': 'grc.SubPolicy',
+    'policyacknowledgementrequest': 'grc.PolicyAcknowledgementRequest',
+    'framework': 'grc.Framework',
+    'frameworkversion': 'grc.FrameworkVersion',
+    'frameworkapproval': 'grc.FrameworkApproval',
+    'compliance': 'grc.Compliance',
+    'category': 'grc.Category',
+    'categorybusinessunit': 'grc.CategoryBusinessUnit',
+    'audit': 'grc.Audit',
+    'auditversion': 'grc.AuditVersion',
+    'auditfinding': 'grc.AuditFinding',
+    'incident': 'grc.Incident',
+    'workflow': 'grc.Workflow',
+    'risk': 'grc.Risk',
+    'riskinstance': 'grc.RiskInstance',
+    'event': 'grc.Event',
+    'auditdocument': 'grc.AuditDocument',
+    's3file': 'grc.S3File',
+    'fileoperations': 'grc.FileOperations',
+}
+
+
 class RetentionTimeline(models.Model):
     STATUS_CHOICES = [
         ('Active', 'Active'),
@@ -3253,6 +3283,62 @@ class RetentionTimeline(models.Model):
             self.RetentionEndDate = self.RetentionEndDate + timedelta(days=extra_days)
             self.Status = 'Extended'
             self.save(update_fields=['RetentionEndDate', 'Status', 'UpdatedAt'])
+
+    def dispose_and_delete_record(self, *, auto_delete: bool = False):
+        """
+        Delete the underlying record (if model mapping is known) and mark this
+        retention timeline as Disposed.
+
+        This centralises the deletion logic so it can be used both by the
+        scheduled auto-delete job and by any manual "dispose" actions.
+
+        Returns:
+            (deleted_record: bool, error_msg: Optional[str])
+        """
+        before_status = self.Status
+        deleted_record = False
+        error_msg = None
+
+        # Look up the Django model for this RecordType
+        key = (self.RecordType or '').lower()
+        model_label = RETENTION_DELETE_MODEL_MAP.get(key)
+        if model_label:
+            try:
+                app_label, model_name = model_label.split('.', 1)
+                model_cls = apps.get_model(app_label, model_name)
+                if model_cls is not None:
+                    obj = model_cls.objects.filter(pk=self.RecordId).first()
+                    if obj:
+                        obj.delete()
+                        deleted_record = True
+                    else:
+                        # Record already gone; still treat as "deleted" so stats stay accurate
+                        deleted_record = True
+            except Exception as exc:
+                error_msg = str(exc)
+
+        # Mark timeline as disposed
+        self.Status = 'Disposed'
+        self.save(update_fields=['Status', 'UpdatedAt'])
+
+        # Log audit entry
+        DataLifecycleAuditLog.log_action(
+            action_type='DELETE',
+            record_type=self.RecordType,
+            record_id=self.RecordId,
+            record_name=self.RecordName,
+            timeline=self,
+            before_status=before_status,
+            after_status='Disposed',
+            details={
+                'deleted_record': deleted_record,
+                'error': error_msg,
+                'auto_delete': bool(auto_delete),
+                'retention_end_date': self.RetentionEndDate.isoformat() if self.RetentionEndDate else None,
+            }
+        )
+
+        return deleted_record, error_msg
 
 
 # =====================================================

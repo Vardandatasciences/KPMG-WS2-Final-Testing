@@ -659,16 +659,14 @@ class AuthService {
                 throw new Error('No refresh token available')
             }
  
-            // Use a timeout to prevent hanging requests
+            // Use a timeout to prevent hanging requests (increased to 30 seconds)
             const refreshPromise = axios.post(`${this.baseURL}/api/jwt/refresh/`, {
                 refresh_token: refreshToken
+            }, {
+                timeout: 30000 // 30 seconds timeout for token refresh
             })
             
-            const timeoutPromise = new Promise((_, reject) => {
-                setTimeout(() => reject(new Error('Refresh token request timeout')), 10000)
-            })
-            
-            const response = await Promise.race([refreshPromise, timeoutPromise])
+            const response = await refreshPromise
  
             if (response.data.status === 'success') {
                 const { access_token, refresh_token, access_token_expires, refresh_token_expires } = response.data
@@ -701,6 +699,14 @@ class AuthService {
             }
         } catch (error) {
             console.error('❌ JWT token refresh error:', error)
+            
+            // Handle timeout errors specifically
+            if (error.code === 'ECONNABORTED' || error.message?.includes('timeout') || error.message?.includes('Timeout')) {
+                console.warn('⚠️ Token refresh timed out - this may be due to slow network or server load')
+                // Don't increment failed attempts for timeout errors - they're often temporary
+                this.isRefreshing = false
+                return false
+            }
             
             // Only increment failed attempts for actual errors, not if we're already refreshing
             if (!this.isRefreshing) {

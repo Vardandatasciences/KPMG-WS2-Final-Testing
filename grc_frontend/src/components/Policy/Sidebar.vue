@@ -394,6 +394,23 @@
         <span v-if="!isCollapsed" class="bold-text">{{ kpiLabel }}</span>
       </div>
 
+      <!-- Data Analysis Section -->
+      <div @click="toggleSubmenu('dataAnalysis')" class="menu-item has-submenu" :class="{'expanded': openMenus.dataAnalysis}">
+        <i class="fas fa-chart-pie icon"></i>
+        <span v-if="!isCollapsed" class="bold-text">Data Analysis</span>
+        <i v-if="!isCollapsed" class="fas fa-chevron-right submenu-arrow"></i>
+      </div>
+      <div v-if="!isCollapsed && openMenus.dataAnalysis" class="submenu">
+        <div class="menu-item" @click="navigate('/data-analysis')" :class="{'active': isActive('/data-analysis')}">
+          <i class="fas fa-chart-pie icon"></i>
+          <span>Data Inventory</span>
+        </div>
+        <div class="menu-item" @click="navigate('/ai-privacy-analysis')" :class="{'active': isActive('/ai-privacy-analysis')}">
+          <i class="fas fa-robot icon"></i>
+          <span>AI Privacy Analysis</span>
+        </div>
+      </div>
+
             <!-- Migration Gap Analysis Section -->
             <div @click="toggleSubmenu('frameworkMigration')" class="menu-item has-submenu" :class="{'expanded': openMenus.frameworkMigration}">
         <i class="fas fa-exchange-alt icon"></i>
@@ -1027,6 +1044,7 @@ export default {
       createPolicy: false,
       performance: false,
       auditFindings: false,
+      dataAnalysis: false,
       compliances: false,
       compliancesView: false,
       complianceCreation: false,

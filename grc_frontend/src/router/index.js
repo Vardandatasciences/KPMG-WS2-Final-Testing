@@ -813,6 +813,18 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/data-analysis',
+    name: 'DataAnalysis',
+    component: () => import('../components/DataAnalysis/dataAnalysis.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/ai-privacy-analysis',
+    name: 'AIPrivacyAnalysis',
+    component: () => import('../components/DataAnalysis/aiPrivacyAnalysis.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/user-profile',
     name: 'UserProfile',
     component: UserProfile,
