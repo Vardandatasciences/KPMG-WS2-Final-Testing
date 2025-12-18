@@ -8,8 +8,8 @@
         <button v-if="!isEditMode" class="risk-view-edit-button" @click="toggleEditMode">
           <i class="fas fa-edit"></i> Edit Risk
         </button>
-        <button v-if="isEditMode" class="risk-view-save-button" @click="saveRisk" :disabled="isSaving">
-          <i class="fas fa-save"></i> {{ isSaving ? 'Saving...' : 'Save Changes' }}
+        <button v-if="isEditMode" class="risk-view-request-button" @click="openRiskRectificationModal" :disabled="!hasRiskChanges()">
+          <i class="fas fa-paper-plane"></i> Request
         </button>
         <button v-if="isEditMode" class="risk-view-cancel-button" @click="cancelEdit">
           <i class="fas fa-times"></i> Cancel
@@ -179,6 +179,46 @@
     <div v-if="errorMessage" class="risk-view-error-message">
       <i class="fas fa-exclamation-circle"></i> {{ errorMessage }}
     </div>
+
+    <!-- Risk Rectification Request Modal -->
+    <div v-if="showRectificationModal" class="risk-rectification-modal-overlay" @click="closeRiskRectificationModal">
+      <div class="risk-rectification-modal-content" @click.stop>
+        <div class="risk-rectification-modal-header">
+          <h3>
+            <i class="fas fa-file-alt"></i>
+            Request Rectification of Risk Information
+          </h3>
+          <button class="risk-rectification-modal-close-btn" @click="closeRiskRectificationModal">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="risk-rectification-modal-body">
+          <p class="risk-rectification-modal-message">
+            You are requesting to update risk information. The changes will be reviewed and approved by an administrator.
+          </p>
+          <div class="risk-rectification-changes-summary" v-if="Object.keys(getRiskChanges()).length > 0">
+            <h4>Changes Summary:</h4>
+            <ul class="risk-rectification-changes-list">
+              <li v-for="(change, field) in getRiskChanges()" :key="field">
+                <strong>{{ formatRiskFieldName(field) }}:</strong>
+                <span class="risk-rectification-old-value">{{ change.old || 'N/A' }}</span> →
+                <span class="risk-rectification-new-value">{{ change.new || 'N/A' }}</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+        <div class="risk-rectification-modal-footer">
+          <button class="risk-rectification-modal-cancel-btn" @click="closeRiskRectificationModal">
+            Cancel
+          </button>
+          <button class="risk-rectification-modal-request-btn" @click="submitRiskRectificationRequest" :disabled="submittingRectification">
+            <i v-if="submittingRectification" class="fas fa-spinner fa-spin"></i>
+            <i v-else class="fas fa-paper-plane"></i>
+            {{ submittingRectification ? 'Submitting...' : 'Request' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -202,6 +242,8 @@ export default {
       originalRisk: {},
       successMessage: '',
       errorMessage: '',
+      showRectificationModal: false,
+      submittingRectification: false,
       riskScoreOptions: [
         { value: 1, label: '1 - Very Low' },
         { value: 2, label: '2 - Low' },
@@ -418,6 +460,194 @@ export default {
     },
     goBack() {
       this.$router.push('/risk/riskregister-list')
+    },
+    
+    hasRiskChanges() {
+      if (!this.isEditMode || !this.risk || !this.editRisk) return false
+      const changes = this.getRiskChanges()
+      return Object.keys(changes).length > 0
+    },
+    
+    getRiskChanges() {
+      const changes = {}
+      if (!this.isEditMode || !this.risk || !this.editRisk) return changes
+      
+      // Compare each field
+      const fieldsToCompare = [
+        'RiskTitle',
+        'Category',
+        'Criticality',
+        'ComplianceId',
+        'RiskDescription',
+        'BusinessImpact',
+        'PossibleDamage',
+        'RiskLikelihood',
+        'RiskImpact',
+        'RiskExposureRating',
+        'RiskPriority',
+        'RiskMitigation',
+        'RiskType'
+      ]
+      
+      fieldsToCompare.forEach(field => {
+        const oldValue = this.originalRisk[field] || null
+        const newValue = this.editRisk[field] || null
+        
+        // Normalize values for comparison
+        const normalizeValue = (val) => {
+          if (val === null || val === undefined || val === '') return null
+          if (typeof val === 'string') return val.trim()
+          return val
+        }
+        
+        const normalizedOld = normalizeValue(oldValue)
+        const normalizedNew = normalizeValue(newValue)
+        
+        // Handle RiskLikelihood and RiskImpact - convert numbers to labels if needed
+        if (field === 'RiskLikelihood' || field === 'RiskImpact') {
+          const oldLabel = this.getRiskScoreLabel(normalizedOld)
+          const newLabel = this.getRiskScoreLabel(normalizedNew)
+          if (oldLabel !== newLabel) {
+            changes[field] = {
+              old: oldLabel || 'N/A',
+              new: newLabel || 'N/A'
+            }
+          }
+        } else if (normalizedOld !== normalizedNew) {
+          changes[field] = {
+            old: normalizedOld || 'N/A',
+            new: normalizedNew || 'N/A'
+          }
+        }
+      })
+      
+      return changes
+    },
+    
+    getRiskScoreLabel(value) {
+      if (!value) return null
+      const option = this.riskScoreOptions.find(opt => opt.value === value || opt.value === parseInt(value))
+      return option ? option.label : value
+    },
+    
+    formatRiskFieldName(field) {
+      const fieldNames = {
+        RiskTitle: 'Risk Title',
+        Category: 'Category',
+        Criticality: 'Criticality',
+        ComplianceId: 'Compliance ID',
+        RiskDescription: 'Risk Description',
+        BusinessImpact: 'Business Impact',
+        PossibleDamage: 'Possible Damage',
+        RiskLikelihood: 'Risk Likelihood',
+        RiskImpact: 'Risk Impact',
+        RiskExposureRating: 'Risk Exposure Rating',
+        RiskPriority: 'Risk Priority',
+        RiskMitigation: 'Risk Mitigation',
+        RiskType: 'Risk Type'
+      }
+      return fieldNames[field] || field
+    },
+    
+    openRiskRectificationModal() {
+      const changes = this.getRiskChanges()
+      if (Object.keys(changes).length === 0) {
+        this.showError('No changes detected. Please make changes before requesting.')
+        return
+      }
+      this.showRectificationModal = true
+    },
+    
+    closeRiskRectificationModal() {
+      this.showRectificationModal = false
+    },
+    
+    async submitRiskRectificationRequest() {
+      this.submittingRectification = true
+      this.clearMessages()
+      
+      try {
+        const changes = this.getRiskChanges()
+        if (Object.keys(changes).length === 0) {
+          this.showError('No changes detected.')
+          this.submittingRectification = false
+          return
+        }
+        
+        // Get user ID from session or local storage
+        const userId = this.getCurrentUserId()
+        if (!userId) {
+          this.showError('User ID not found. Please log in again.')
+          this.submittingRectification = false
+          return
+        }
+        
+        const axios = (await import('axios')).default
+        
+        const response = await axios.post(
+          API_ENDPOINTS.CREATE_DATA_SUBJECT_REQUEST,
+          {
+            request_type: 'RECTIFICATION',
+            info_type: 'risk',
+            risk_id: this.risk.RiskId,
+            changes: changes
+          }
+        )
+        
+        if (response.data.status === 'success') {
+          this.showSuccess('Risk rectification request submitted successfully!')
+          this.closeRiskRectificationModal()
+          
+          // Exit edit mode
+          this.isEditMode = false
+          this.editRisk = { ...this.risk }
+          
+          setTimeout(() => {
+            this.successMessage = ''
+          }, 5000)
+        } else {
+          throw new Error(response.data.message || 'Failed to submit request')
+        }
+      } catch (error) {
+        console.error('Error submitting risk rectification request:', error)
+        this.showError(
+          error.response?.data?.message ||
+          error.response?.data?.error ||
+          error.message ||
+          'Failed to submit risk rectification request. Please try again.'
+        )
+      } finally {
+        this.submittingRectification = false
+      }
+    },
+    
+    getCurrentUserId() {
+      // Try to get user ID from various sources
+      try {
+        // Check localStorage
+        const storedUser = localStorage.getItem('user')
+        if (storedUser) {
+          const user = JSON.parse(storedUser)
+          return user.user_id || user.UserId || user.id
+        }
+        
+        // Check sessionStorage
+        const sessionUser = sessionStorage.getItem('user')
+        if (sessionUser) {
+          const user = JSON.parse(sessionUser)
+          return user.user_id || user.UserId || user.id
+        }
+        
+        // Try to get from RBAC context if available
+        if (window.rbacContext && window.rbacContext.user_id) {
+          return window.rbacContext.user_id
+        }
+        
+        return null
+      } catch (error) {
+        console.error('Error getting user ID:', error)
+        return null
+      }
     }
   }
 }

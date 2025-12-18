@@ -401,8 +401,10 @@ def create_data_subject_request(request):
         # Get request data
         request_type = request.data.get('request_type')
         changes = request.data.get('changes', {})
-        info_type = request.data.get('info_type', 'personal')  # 'personal' or 'business'
+        info_type = request.data.get('info_type', 'personal')  # 'personal', 'business', 'risk', or 'risk_instance'
         audit_trail_data = request.data.get('audit_trail', {})  # For ACCESS type requests
+        risk_id = request.data.get('risk_id')  # For risk rectification requests
+        risk_instance_id = request.data.get('risk_instance_id')  # For risk instance rectification requests
         
         # For GDPR compliance, we need user_id but it can come from request data
         # If still not found, try to get from email or other identifiers for GDPR compliance
@@ -488,6 +490,14 @@ def create_data_subject_request(request):
                 'requested_at': timezone.now().isoformat(),
                 'requested_by': user_id
             }
+            # Add risk_id for risk rectification requests
+            if info_type == 'risk' and risk_id:
+                audit_trail['risk_id'] = risk_id
+            # Add risk_instance_id for risk instance rectification requests
+            if info_type == 'risk_instance' and risk_instance_id:
+                audit_trail['risk_instance_id'] = risk_instance_id
+                if risk_id:
+                    audit_trail['risk_id'] = risk_id
         
         # Check if FrameworkId column exists in the database table
         # If it doesn't exist, we'll create the request without it
@@ -1135,6 +1145,135 @@ def update_data_subject_request_status(request, request_id):
                         # Business information changes would need to update department/business unit tables
                         # This is more complex and may require additional logic
                         logger.info(f"Business information changes requested for user {request_user_id}")
+                    
+                    elif info_type == 'risk':
+                        # Update risk information
+                        from ...models import Risk
+                        risk_id = audit_trail.get('risk_id')
+                        if not risk_id:
+                            # Try to get from changes if not in audit_trail
+                            risk_id = changes.get('risk_id') if isinstance(changes, dict) else None
+                        
+                        if risk_id:
+                            try:
+                                risk = Risk.objects.get(RiskId=risk_id)
+                                
+                                # Apply changes to risk fields
+                                field_mapping = {
+                                    'RiskTitle': 'RiskTitle',
+                                    'Category': 'Category',
+                                    'Criticality': 'Criticality',
+                                    'ComplianceId': 'ComplianceId',
+                                    'RiskDescription': 'RiskDescription',
+                                    'BusinessImpact': 'BusinessImpact',
+                                    'PossibleDamage': 'PossibleDamage',
+                                    'RiskLikelihood': 'RiskLikelihood',
+                                    'RiskImpact': 'RiskImpact',
+                                    'RiskExposureRating': 'RiskExposureRating',
+                                    'RiskPriority': 'RiskPriority',
+                                    'RiskMitigation': 'RiskMitigation',
+                                    'RiskType': 'RiskType'
+                                }
+                                
+                                for change_field, risk_field in field_mapping.items():
+                                    if change_field in changes:
+                                        new_value = changes[change_field].get('new')
+                                        if new_value and new_value != 'N/A':
+                                            # Handle special cases
+                                            if risk_field in ['RiskLikelihood', 'RiskImpact']:
+                                                # Extract numeric value from label if it's a label
+                                                if isinstance(new_value, str) and ' - ' in new_value:
+                                                    try:
+                                                        numeric_value = int(new_value.split(' - ')[0])
+                                                        setattr(risk, risk_field, numeric_value)
+                                                    except (ValueError, AttributeError):
+                                                        # Try to parse as integer directly
+                                                        try:
+                                                            setattr(risk, risk_field, int(new_value))
+                                                        except (ValueError, TypeError):
+                                                            pass
+                                                else:
+                                                    try:
+                                                        setattr(risk, risk_field, int(new_value))
+                                                    except (ValueError, TypeError):
+                                                        pass
+                                            elif risk_field == 'RiskExposureRating':
+                                                try:
+                                                    setattr(risk, risk_field, float(new_value))
+                                                except (ValueError, TypeError):
+                                                    pass
+                                            elif risk_field == 'ComplianceId':
+                                                try:
+                                                    setattr(risk, risk_field, int(new_value) if new_value else None)
+                                                except (ValueError, TypeError):
+                                                    pass
+                                            else:
+                                                setattr(risk, risk_field, new_value)
+                                
+                                risk.save()
+                                logger.info(f"Applied risk information changes for risk {risk_id}")
+                            except Risk.DoesNotExist:
+                                logger.error(f"Risk with ID {risk_id} not found")
+                                raise Exception(f"Risk with ID {risk_id} not found")
+                            except Exception as e:
+                                logger.error(f"Error applying risk changes: {str(e)}")
+                                raise
+                        else:
+                            logger.warning("Risk ID not found in audit trail for risk rectification request")
+                    
+                    elif info_type == 'risk_instance':
+                        # Update risk instance information
+                        from ...models import RiskInstance
+                        risk_instance_id = audit_trail.get('risk_instance_id')
+                        if not risk_instance_id:
+                            # Try to get from changes if not in audit_trail
+                            risk_instance_id = changes.get('risk_instance_id') if isinstance(changes, dict) else None
+                        
+                        if risk_instance_id:
+                            try:
+                                risk_instance = RiskInstance.objects.get(RiskInstanceId=risk_instance_id)
+                                
+                                # Apply changes to risk instance fields
+                                field_mapping = {
+                                    'RiskDescription': 'RiskDescription',
+                                    'Category': 'Category',
+                                    'Criticality': 'Criticality',
+                                    'RiskStatus': 'RiskStatus',
+                                    'PossibleDamage': 'PossibleDamage',
+                                    'Appetite': 'Appetite',
+                                    'RiskLikelihood': 'RiskLikelihood',
+                                    'RiskImpact': 'RiskImpact',
+                                    'RiskExposureRating': 'RiskExposureRating',
+                                    'RiskPriority': 'RiskPriority',
+                                    'RiskResponseType': 'RiskResponseType',
+                                    'RiskResponseDescription': 'RiskResponseDescription',
+                                    'RiskMitigation': 'RiskMitigation',
+                                    'RiskOwner': 'RiskOwner'
+                                }
+                                
+                                for change_field, instance_field in field_mapping.items():
+                                    if change_field in changes:
+                                        new_value = changes[change_field].get('new')
+                                        if new_value and new_value != 'N/A':
+                                            # Handle special cases
+                                            if instance_field == 'RiskExposureRating':
+                                                try:
+                                                    setattr(risk_instance, instance_field, float(new_value))
+                                                except (ValueError, TypeError):
+                                                    pass
+                                            else:
+                                                setattr(risk_instance, instance_field, new_value)
+                                
+                                risk_instance.save()
+                                logger.info(f"Applied risk instance information changes for risk instance {risk_instance_id}")
+                            except RiskInstance.DoesNotExist:
+                                logger.error(f"Risk instance with ID {risk_instance_id} not found")
+                                raise Exception(f"Risk instance with ID {risk_instance_id} not found")
+                            except Exception as e:
+                                logger.error(f"Error applying risk instance changes: {str(e)}")
+                                raise
+                        else:
+                            logger.warning("Risk instance ID not found in audit trail for risk instance rectification request")
                     
                     # Mark changes as applied in audit trail
                     audit_trail['changes_applied'] = True

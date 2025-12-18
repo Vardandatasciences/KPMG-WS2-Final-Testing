@@ -468,12 +468,24 @@ JWT_ALGORITHM = 'HS256'
 JWT_ACCESS_TOKEN_LIFETIME = timedelta(hours=1)  # 1 hour
 JWT_REFRESH_TOKEN_LIFETIME = timedelta(days=7)  # 7 days
 
-def generate_jwt_tokens(user):
-    """Generate JWT access and refresh tokens for a user"""
+def generate_jwt_tokens(user, login_time=None):
+    """Generate JWT access and refresh tokens for a user
+    
+    Args:
+        user: User object
+        login_time: Optional original login time (for token refresh - preserves original login time)
+                    If None, uses current time (for new login)
+    """
     try:
+        import time
         versions = _get_active_versions()
         latest_version = versions.get('latest_version') or '0.0.0'
         min_supported = versions.get('min_supported_version') or latest_version
+        
+        # Use provided login_time or current time (for new login)
+        if login_time is None:
+            login_time = time.time()  # Store original login time for 5-minute timeout check
+        
         # Create refresh token
         refresh = RefreshToken()
         refresh['user_id'] = user.UserId
@@ -483,6 +495,7 @@ def generate_jwt_tokens(user):
         refresh['last_name'] = user.LastName
         refresh['ver'] = latest_version
         refresh['min_ver'] = min_supported
+        refresh['login_time'] = login_time  # Store original login time (persists through token refresh)
         
         # Create access token
         access_token = refresh.access_token
@@ -493,6 +506,7 @@ def generate_jwt_tokens(user):
         access_token['last_name'] = user.LastName
         access_token['ver'] = latest_version
         access_token['min_ver'] = min_supported
+        access_token['login_time'] = login_time  # Store original login time
         
         return {
             'access': str(access_token),
@@ -925,10 +939,12 @@ def jwt_login(request):
         tokens = generate_jwt_tokens(user)
         
         # Store user info in session for compatibility with consistent naming
+        import time
         request.session['user_id'] = user.UserId
         request.session['username'] = user.UserName
         request.session['grc_user_id'] = user.UserId  # Backup key for RBAC
         request.session['grc_username'] = user.UserName
+        request.session['session_created_at'] = time.time()  # Store session creation time for timeout check
         
         # Initialize framework session keys if needed
         if 'grc_framework_selected' not in request.session:
@@ -942,6 +958,30 @@ def jwt_login(request):
         logger.info(f"✅ JWT LOGIN SUCCESS: User {user.UserName} (ID: {user.UserId}) logged in successfully with license verification")
         logger.info(f"JWT login successful for user {user.UserName} (ID: {user.UserId}) using {login_type}")
         logger.info(f"🔑 Session key created: {request.session.session_key}")
+        
+        # Log successful login to grc_logs
+        try:
+            from .routes.Global.logging_service import send_log
+            send_log(
+                module='Authentication',
+                actionType='LOGIN_SUCCESS',
+                description=f'User {user.UserName} (ID: {user.UserId}) logged in successfully using JWT with {login_type}',
+                userId=str(user.UserId),
+                userName=user.UserName,
+                logLevel='INFO',
+                ipAddress=client_ip,
+                additionalInfo={
+                    'login_type': login_type,
+                    'license_verified': True,
+                    'mfa_enabled': mfa_enabled,
+                    'user_activated': user_was_inactive,
+                    'auth_method': 'JWT'
+                },
+                frameworkId=user.FrameworkId.FrameworkId if user.FrameworkId else None
+            )
+        except Exception as log_error:
+            logger.error(f"Error logging successful JWT login to grc_logs: {str(log_error)}")
+            # Don't fail login if logging fails
         
         # Check if user has accepted consent
         # Handle both string and potential null/None values
@@ -1017,9 +1057,16 @@ def jwt_refresh(request):
             user_id = refresh['user_id']
             user = Users.objects.get(UserId=user_id)
             
-            # Generate new tokens FIRST (before blacklisting old token)
+            # Preserve original login_time from old token (for 5-minute timeout check)
+            # If login_time doesn't exist in old token, use current time (backward compatibility)
+            old_login_time = refresh.get('login_time')
+            if old_login_time is None:
+                import time
+                old_login_time = time.time()  # Fallback for old tokens without login_time
+            
+            # Generate new tokens with preserved login_time (before blacklisting old token)
             # This ensures we have valid tokens even if blacklisting fails
-            tokens = generate_jwt_tokens(user)
+            tokens = generate_jwt_tokens(user, login_time=old_login_time)
             
             # IMPORTANT: Blacklist the old refresh token AFTER generating new tokens
             # This prevents token reuse while ensuring we have new tokens ready
@@ -1029,9 +1076,6 @@ def jwt_refresh(request):
                 # Silently handle blacklist errors - don't log to avoid terminal spam
                 # Continue even if blacklisting fails, as new tokens are already generated
                 pass
-
-            # Generate new tokens (SimpleJWT will rotate refresh tokens as configured)
-            tokens = generate_jwt_tokens(user)
             
             # No logging for successful refresh to keep terminal clean
             
@@ -1071,10 +1115,62 @@ def jwt_refresh(request):
 def jwt_logout(request):
     """JWT Logout endpoint"""
     try:
+        # Get user info before clearing session
+        user_id = None
+        username = 'Unknown'
+        client_ip = request.META.get('REMOTE_ADDR', 'unknown')
+        framework_id = None
+        
+        # Try to get user from token or session
+        try:
+            # Try to get user from JWT token
+            auth_header = request.headers.get('Authorization')
+            if auth_header and auth_header.startswith('Bearer '):
+                token = auth_header.split(' ')[1]
+                user = get_user_from_token(token)
+                if user:
+                    user_id = user.UserId
+                    username = user.UserName
+                    framework_id = user.FrameworkId.FrameworkId if user.FrameworkId else None
+        except Exception:
+            pass
+        
+        # Fallback to session if token doesn't work
+        if not user_id:
+            user_id = request.session.get('user_id')
+            username = request.session.get('grc_username', 'Unknown')
+            if user_id:
+                try:
+                    user = Users.objects.get(UserId=user_id)
+                    framework_id = user.FrameworkId.FrameworkId if user.FrameworkId else None
+                    username = user.UserName
+                except Users.DoesNotExist:
+                    pass
+        
+        # Log logout to grc_logs before clearing session
+        if user_id:
+            try:
+                from .routes.Global.logging_service import send_log
+                send_log(
+                    module='Authentication',
+                    actionType='LOGOUT',
+                    description=f'User {username} (ID: {user_id}) logged out successfully (JWT)',
+                    userId=str(user_id),
+                    userName=username,
+                    logLevel='INFO',
+                    ipAddress=client_ip,
+                    additionalInfo={'auth_method': 'JWT'},
+                    frameworkId=framework_id
+                )
+                logger.info(f"JWT logout logged to grc_logs for user {username} (ID: {user_id})")
+            except Exception as log_error:
+                logger.error(f"Error logging JWT logout to grc_logs: {str(log_error)}")
+                # Don't fail logout if logging fails
+        
         # Clear session data
         request.session.flush()
         
-        logger.info(f"JWT logout successful for user {getattr(request.user, 'UserName', 'Unknown')}")
+        logger.info(f"JWT logout successful for user {username}")
         
         return Response({
             'status': 'success',
@@ -1546,6 +1642,30 @@ def mfa_verify_otp(request):
         consent_required = consent_accepted_value != '1'
         
         logger.info(f"✅ MFA LOGIN SUCCESS: User {user.UserName} (ID: {user.UserId}) logged in successfully and activated")
+        
+        # Log successful MFA login to grc_logs
+        try:
+            from .routes.Global.logging_service import send_log
+            send_log(
+                module='Authentication',
+                actionType='LOGIN_SUCCESS',
+                description=f'User {user.UserName} (ID: {user.UserId}) logged in successfully using MFA with {login_type}',
+                userId=str(user.UserId),
+                userName=user.UserName,
+                logLevel='INFO',
+                ipAddress=client_ip,
+                additionalInfo={
+                    'login_type': login_type,
+                    'license_verified': True,
+                    'mfa_verification': True,
+                    'user_activated': user_was_inactive,
+                    'auth_method': 'JWT_MFA'
+                },
+                frameworkId=user.FrameworkId.FrameworkId if user.FrameworkId else None
+            )
+        except Exception as log_error:
+            logger.error(f"Error logging successful MFA login to grc_logs: {str(log_error)}")
+            # Don't fail login if logging fails
         
         return Response({
             'status': 'success',
@@ -2081,6 +2201,36 @@ def google_oauth_callback(request):
         consent_required = consent_accepted_value != '1'
         
         logger.info(f"✅ GOOGLE SSO LOGIN SUCCESS: User {user.UserName} (ID: {user.UserId}) logged in successfully")
+        
+        # Log successful Google SSO login to grc_logs
+        try:
+            from .routes.Global.logging_service import send_log
+            client_ip = request.META.get('REMOTE_ADDR', 'unknown')
+            # Get google_id from user_info if available
+            google_id_for_log = None
+            try:
+                if 'user_info' in locals() and user_info:
+                    google_id_for_log = user_info.get('id')
+            except:
+                pass
+            send_log(
+                module='Authentication',
+                actionType='LOGIN_SUCCESS',
+                description=f'User {user.UserName} (ID: {user.UserId}) logged in successfully using Google SSO',
+                userId=str(user.UserId),
+                userName=user.UserName,
+                logLevel='INFO',
+                ipAddress=client_ip,
+                additionalInfo={
+                    'license_verified': True,
+                    'auth_method': 'Google_SSO',
+                    'google_id': google_id_for_log
+                },
+                frameworkId=user.FrameworkId.FrameworkId if user.FrameworkId else None
+            )
+        except Exception as log_error:
+            logger.error(f"Error logging successful Google SSO login to grc_logs: {str(log_error)}")
+            # Don't fail login if logging fails
         
         # Assign default RBAC permissions for Google SSO users (view permissions for all modules)
         try:

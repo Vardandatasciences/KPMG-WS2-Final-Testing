@@ -63,8 +63,27 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     
-    // If 401 and we haven't retried yet, try to refresh token
+    // If 401 and we haven't retried yet, check for session expiration first
     if (error.response?.status === 401 && !originalRequest._retry) {
+      // Check if this is a session expiration (5-minute timeout)
+      const errorData = error.response.data || {}
+      if (errorData.session_expired === true || errorData.logout_reason === 'Session timeout after 5 minutes') {
+        console.log('⏰ [API Service] Session expired after 5 minutes - redirecting to login')
+        // Clear all auth data
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('refresh_token')
+        localStorage.removeItem('user_id')
+        localStorage.removeItem('user')
+        localStorage.removeItem('user_email')
+        localStorage.removeItem('user_name')
+        localStorage.removeItem('is_logged_in')
+        // Redirect to login immediately
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login'
+        }
+        return Promise.reject(error)
+      }
+      
       originalRequest._retry = true;
       
       try {

@@ -38,6 +38,32 @@ logger = logging.getLogger(__name__)
 # In-memory OTP storage as fallback for session issues
 otp_storage = {}
 
+# Helper function to get default framework for logging
+def _get_default_framework():
+    """Get a default framework for logging purposes"""
+    try:
+        # Try to get the first active framework
+        framework = Framework.objects.filter(ActiveInactive='Active').first()
+        if framework:
+            return framework
+        # If no active framework, get any framework
+        framework = Framework.objects.first()
+        if framework:
+            return framework
+    except Exception as e:
+        logger.warning(f"Error getting default framework for logging: {str(e)}")
+    return None
+
+# Helper function to get client IP address
+def _get_client_ip(request):
+    """Get client IP address from request"""
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0].strip()
+    else:
+        ip = request.META.get('REMOTE_ADDR', 'unknown')
+    return ip
+
 # Track verified emails for password reset
 verified_emails = set()
 
@@ -5146,9 +5172,11 @@ def login_user(request):
             # Password logging is now handled in the password expiry check above
             
             # Set session data
+            import time
             request.session['user_id'] = user.UserId
             request.session['grc_user_id'] = user.UserId  # Backup key
             request.session['grc_username'] = user.UserName
+            request.session['session_created_at'] = time.time()  # Store session creation time for timeout check
             request.session.save()  # Explicitly save session
             
             # ========================================
@@ -5171,6 +5199,34 @@ def login_user(request):
             }
             
             logger.info(f"✅ LOGIN SUCCESS: User {user.UserName} (ID: {user.UserId}) logged in successfully with license verification")
+            
+            # Log successful login to grc_logs
+            try:
+                framework = _get_default_framework()
+                if framework:
+                    client_ip = _get_client_ip(request)
+                    log_entry = GRCLog(
+                        Module='Authentication',
+                        ActionType='LOGIN_SUCCESS',
+                        Description=f'User {user.UserName} (ID: {user.UserId}) logged in successfully',
+                        UserId=str(user.UserId),
+                        UserName=user.UserName,
+                        LogLevel='INFO',
+                        IPAddress=client_ip,
+                        FrameworkId=framework,
+                        AdditionalInfo={
+                            'login_type': login_type,
+                            'license_verified': True,
+                            'license_key': user.license_key[:10] + '...' if user.license_key else None
+                        }
+                    )
+                    log_entry.save()
+                    logger.debug(f"Logged successful login to grc_logs for user {user.UserName} (ID: {user.UserId})")
+                else:
+                    logger.warning("Cannot log successful login: No framework available")
+            except Exception as log_error:
+                logger.error(f"Error logging successful login to grc_logs: {str(log_error)}")
+            
             return Response(response_data)
             
         except Users.DoesNotExist:

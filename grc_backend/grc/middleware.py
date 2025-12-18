@@ -1,6 +1,7 @@
 import jwt
 import logging
 import sys
+import time
 from datetime import datetime
 from django.conf import settings
 from django.http import JsonResponse
@@ -258,6 +259,24 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
                     # Get user from database
                     user = Users.objects.get(UserId=user_id)
 
+                    # ========================================
+                    # 5-MINUTE SESSION TIMEOUT CHECK (for testing)
+                    # ========================================
+                    login_time = payload.get('login_time')
+                    if login_time:
+                        current_time = time.time()
+                        elapsed_time = current_time - login_time
+                        SESSION_TIMEOUT_SECONDS = 300  # 5 minutes
+                        
+                        if elapsed_time >= SESSION_TIMEOUT_SECONDS:
+                            logger.info(f"⏰ JWT Session timeout: User ID {user_id} logged out after 5 minutes (elapsed: {elapsed_time:.2f}s)")
+                            return JsonResponse({
+                                'status': 'error',
+                                'message': 'Session expired. Please login again.',
+                                'session_expired': True,
+                                'logout_reason': 'Session timeout after 5 minutes'
+                            }, status=401)
+
                     # Version enforcement: block outdated tokens if min_ver is set
                     token_version = payload.get('ver')
                     min_supported_obj = ProductVersion.get_min_supported()
@@ -383,6 +402,80 @@ class CORSMiddleware(MiddlewareMixin):
             response['Access-Control-Allow-Credentials'] = 'true'
             response['Access-Control-Max-Age'] = '86400'
             return response
+        return None
+
+class SessionTimeoutMiddleware(MiddlewareMixin):
+    """
+    Session Timeout Middleware
+    Automatically logs out users after 5 minutes (300 seconds) regardless of activity.
+    This is for testing/checking purposes - logs out even if user is active.
+    """
+    
+    # Session timeout in seconds (5 minutes)
+    SESSION_TIMEOUT_SECONDS = 300  # 5 minutes
+    
+    def process_request(self, request):
+        """Check if session has expired and force logout if needed"""
+        
+        # Skip timeout check for login/logout endpoints
+        skip_paths = [
+            '/api/login/',
+            '/api/jwt/login/',
+            '/api/logout/',
+            '/api/jwt/logout/',
+            '/api/register/',
+            '/api/send-otp/',
+            '/api/verify-otp/',
+            '/api/reset-password/',
+            '/api/jwt/refresh/',
+            '/api/jwt/verify/',
+            '/api/jwt/accept-consent/',
+            '/api/test-connection/',
+            '/admin/',
+            '/media/',
+            '/static/',
+        ]
+        
+        path = request.path_info
+        # Skip timeout check for these paths
+        for skip_path in skip_paths:
+            if path.startswith(skip_path):
+                return None
+        
+        # Only check if user has a session
+        if not request.session or not request.session.get('user_id'):
+            return None
+        
+        # Check if session creation time exists
+        session_created_at = request.session.get('session_created_at')
+        
+        if session_created_at:
+            # Calculate elapsed time
+            current_time = time.time()
+            elapsed_time = current_time - session_created_at
+            
+            # If 5 minutes have passed, force logout
+            if elapsed_time >= self.SESSION_TIMEOUT_SECONDS:
+                user_id = request.session.get('user_id')
+                logger.info(f"⏰ Session timeout: User ID {user_id} logged out after 5 minutes (elapsed: {elapsed_time:.2f}s)")
+                
+                # Clear session
+                request.session.flush()
+                request.session.delete()
+                
+                # Return logout response
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Session expired. Please login again.',
+                    'session_expired': True,
+                    'logout_reason': 'Session timeout after 5 minutes'
+                }, status=401)
+        else:
+            # If session_created_at doesn't exist, set it now (for existing sessions)
+            # This handles sessions that were created before this middleware was added
+            request.session['session_created_at'] = time.time()
+            request.session.save()
+        
         return None
 
 class AuditLoggingMiddleware(MiddlewareMixin):

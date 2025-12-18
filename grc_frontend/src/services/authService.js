@@ -108,6 +108,25 @@ class AuthService {
                
                 // Handle 401 errors (token expired)
                 if (error.response && error.response.status === 401 && !originalRequest._retry) {
+                    // Check if this is a session expiration (5-minute timeout)
+                    const errorData = error.response.data || {}
+                    if (errorData.session_expired === true || errorData.logout_reason === 'Session timeout after 5 minutes') {
+                        console.log('⏰ Session expired after 5 minutes - redirecting to login')
+                        // Clear all auth data
+                        localStorage.removeItem('access_token')
+                        localStorage.removeItem('refresh_token')
+                        localStorage.removeItem('user_id')
+                        localStorage.removeItem('user')
+                        localStorage.removeItem('user_email')
+                        localStorage.removeItem('user_name')
+                        localStorage.removeItem('is_logged_in')
+                        // Redirect to login immediately
+                        if (window.location.pathname !== '/login') {
+                            window.location.href = '/login'
+                        }
+                        return Promise.reject(error)
+                    }
+                    
                     // Don't try to refresh if we're already refreshing or logging out
                     if (this.isRefreshing || this.isLoggingOut) {
                         console.warn('⚠️ Refresh already in progress or logging out - skipping refresh attempt')
@@ -115,23 +134,23 @@ class AuthService {
                     }
                     
                     console.log('🔄 401 error detected - attempting token refresh...')
-                   
+                    
                     // Mark this request as retried to prevent infinite loops
                     originalRequest._retry = true
-                   
+                    
                     try {
                         // Attempt to refresh the token
                         const refreshSuccess = await this.refreshAccessToken()
-                       
+                        
                         if (refreshSuccess) {
                             console.log('✅ Token refreshed successfully, retrying original request')
-                           
+                            
                             // Update the authorization header with new token
                             const newToken = localStorage.getItem('access_token')
                             if (newToken) {
                                 originalRequest.headers.Authorization = `Bearer ${newToken}`
                             }
-                           
+                            
                             // Retry the original request
                             return axios(originalRequest)
                         } else {

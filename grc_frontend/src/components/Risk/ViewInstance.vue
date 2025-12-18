@@ -8,8 +8,8 @@
         <button v-if="!isEditMode" class="instance-view-edit-button" @click="toggleEditMode">
           <i class="fas fa-edit"></i> Edit Instance
         </button>
-        <button v-if="isEditMode" class="instance-view-save-button" @click="saveInstance" :disabled="isSaving">
-          <i class="fas fa-save"></i> {{ isSaving ? 'Saving...' : 'Save Changes' }}
+        <button v-if="isEditMode" class="instance-view-request-button" @click="openInstanceRectificationModal" :disabled="!hasInstanceChanges()">
+          <i class="fas fa-paper-plane"></i> Request
         </button>
         <button v-if="isEditMode" class="instance-view-cancel-button" @click="cancelEdit">
           <i class="fas fa-times"></i> Cancel
@@ -203,6 +203,46 @@
     <div v-if="errorMessage" class="instance-view-error-message">
       <i class="fas fa-exclamation-circle"></i> {{ errorMessage }}
     </div>
+
+    <!-- Risk Instance Rectification Request Modal -->
+    <div v-if="showRectificationModal" class="instance-rectification-modal-overlay" @click="closeInstanceRectificationModal">
+      <div class="instance-rectification-modal-content" @click.stop>
+        <div class="instance-rectification-modal-header">
+          <h3>
+            <i class="fas fa-file-alt"></i>
+            Request Rectification of Risk Instance Information
+          </h3>
+          <button class="instance-rectification-modal-close-btn" @click="closeInstanceRectificationModal">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="instance-rectification-modal-body">
+          <p class="instance-rectification-modal-message">
+            You are requesting to update risk instance information. The changes will be reviewed and approved by an administrator.
+          </p>
+          <div class="instance-rectification-changes-summary" v-if="Object.keys(getInstanceChanges()).length > 0">
+            <h4>Changes Summary:</h4>
+            <ul class="instance-rectification-changes-list">
+              <li v-for="(change, field) in getInstanceChanges()" :key="field">
+                <strong>{{ formatInstanceFieldName(field) }}:</strong>
+                <span class="instance-rectification-old-value">{{ change.old || 'N/A' }}</span> →
+                <span class="instance-rectification-new-value">{{ change.new || 'N/A' }}</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+        <div class="instance-rectification-modal-footer">
+          <button class="instance-rectification-modal-cancel-btn" @click="closeInstanceRectificationModal">
+            Cancel
+          </button>
+          <button class="instance-rectification-modal-request-btn" @click="submitInstanceRectificationRequest" :disabled="submittingRectification">
+            <i v-if="submittingRectification" class="fas fa-spinner fa-spin"></i>
+            <i v-else class="fas fa-paper-plane"></i>
+            {{ submittingRectification ? 'Submitting...' : 'Request' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -225,7 +265,9 @@ export default {
       isSaving: false,
       originalInstance: {},
       successMessage: '',
-      errorMessage: ''
+      errorMessage: '',
+      showRectificationModal: false,
+      submittingRectification: false
     }
   },
   created() {
@@ -409,6 +451,181 @@ export default {
     },
     goBack() {
       this.$router.push('/risk/riskinstances-list')
+    },
+    
+    hasInstanceChanges() {
+      if (!this.isEditMode || !this.instance || !this.editInstance) return false
+      const changes = this.getInstanceChanges()
+      return Object.keys(changes).length > 0
+    },
+    
+    getInstanceChanges() {
+      const changes = {}
+      if (!this.isEditMode || !this.instance || !this.editInstance) return changes
+      
+      // Compare each field
+      const fieldsToCompare = [
+        'RiskDescription',
+        'Category',
+        'Criticality',
+        'RiskStatus',
+        'PossibleDamage',
+        'Appetite',
+        'RiskLikelihood',
+        'RiskImpact',
+        'RiskExposureRating',
+        'RiskPriority',
+        'RiskResponseType',
+        'RiskResponseDescription',
+        'RiskMitigation',
+        'RiskOwner'
+      ]
+      
+      fieldsToCompare.forEach(field => {
+        const oldValue = this.originalInstance[field] || null
+        const newValue = this.editInstance[field] || null
+        
+        // Normalize values for comparison
+        const normalizeValue = (val) => {
+          if (val === null || val === undefined || val === '') return null
+          if (typeof val === 'string') return val.trim()
+          return val
+        }
+        
+        const normalizedOld = normalizeValue(oldValue)
+        const normalizedNew = normalizeValue(newValue)
+        
+        if (normalizedOld !== normalizedNew) {
+          changes[field] = {
+            old: normalizedOld || 'N/A',
+            new: normalizedNew || 'N/A'
+          }
+        }
+      })
+      
+      return changes
+    },
+    
+    formatInstanceFieldName(field) {
+      const fieldNames = {
+        RiskDescription: 'Description',
+        Category: 'Category',
+        Criticality: 'Criticality',
+        RiskStatus: 'Status',
+        PossibleDamage: 'Possible Damage',
+        Appetite: 'Risk Appetite',
+        RiskLikelihood: 'Likelihood',
+        RiskImpact: 'Impact',
+        RiskExposureRating: 'Exposure Rating',
+        RiskPriority: 'Priority',
+        RiskResponseType: 'Response Type',
+        RiskResponseDescription: 'Response Description',
+        RiskMitigation: 'Mitigation',
+        RiskOwner: 'Risk Owner'
+      }
+      return fieldNames[field] || field
+    },
+    
+    openInstanceRectificationModal() {
+      const changes = this.getInstanceChanges()
+      if (Object.keys(changes).length === 0) {
+        this.showError('No changes detected. Please make changes before requesting.')
+        return
+      }
+      this.showRectificationModal = true
+    },
+    
+    closeInstanceRectificationModal() {
+      this.showRectificationModal = false
+    },
+    
+    async submitInstanceRectificationRequest() {
+      this.submittingRectification = true
+      this.clearMessages()
+      
+      try {
+        const changes = this.getInstanceChanges()
+        if (Object.keys(changes).length === 0) {
+          this.showError('No changes detected.')
+          this.submittingRectification = false
+          return
+        }
+        
+        // Get user ID from session or local storage
+        const userId = this.getCurrentUserId()
+        if (!userId) {
+          this.showError('User ID not found. Please log in again.')
+          this.submittingRectification = false
+          return
+        }
+        
+        const axios = (await import('axios')).default
+        
+        const response = await axios.post(
+          API_ENDPOINTS.CREATE_DATA_SUBJECT_REQUEST,
+          {
+            request_type: 'RECTIFICATION',
+            info_type: 'risk_instance',
+            risk_instance_id: this.instance.RiskInstanceId,
+            risk_id: this.instance.RiskId,
+            changes: changes
+          }
+        )
+        
+        if (response.data.status === 'success') {
+          this.showSuccess('Risk instance rectification request submitted successfully!')
+          this.closeInstanceRectificationModal()
+          
+          // Exit edit mode
+          this.isEditMode = false
+          this.editInstance = { ...this.instance }
+          
+          setTimeout(() => {
+            this.successMessage = ''
+          }, 5000)
+        } else {
+          throw new Error(response.data.message || 'Failed to submit request')
+        }
+      } catch (error) {
+        console.error('Error submitting risk instance rectification request:', error)
+        this.showError(
+          error.response?.data?.message ||
+          error.response?.data?.error ||
+          error.message ||
+          'Failed to submit risk instance rectification request. Please try again.'
+        )
+      } finally {
+        this.submittingRectification = false
+      }
+    },
+    
+    getCurrentUserId() {
+      // Try to get user ID from various sources
+      try {
+        // Check localStorage
+        const storedUser = localStorage.getItem('user')
+        if (storedUser) {
+          const user = JSON.parse(storedUser)
+          return user.user_id || user.UserId || user.id
+        }
+        
+        // Check sessionStorage
+        const sessionUser = sessionStorage.getItem('user')
+        if (sessionUser) {
+          const user = JSON.parse(sessionUser)
+          return user.user_id || user.UserId || user.id
+        }
+        
+        // Try to get from RBAC context if available
+        if (window.rbacContext && window.rbacContext.user_id) {
+          return window.rbacContext.user_id
+        }
+        
+        return null
+      } catch (error) {
+        console.error('Error getting user ID:', error)
+        return null
+      }
     }
   }
 }

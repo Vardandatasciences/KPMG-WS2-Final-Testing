@@ -477,4 +477,237 @@
     right: 10px;
     width: auto;
   }
+}
+
+/* Risk Instance Rectification Modal Styles */
+.instance-rectification-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: instanceRectificationFadeIn 0.2s ease;
+}
+
+.instance-rectification-modal-content {
+  background: white;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: instanceRectificationSlideUp 0.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+@keyframes instanceRectificationFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes instanceRectificationSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.instance-rectification-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 32px;
+  border-bottom: 2px solid #e5e7eb;
+  background: linear-gradient(135deg, #7B6FDD, #6A5ED4);
+  color: white;
+  border-radius: 16px 16px 0 0;
+}
+
+.instance-rectification-modal-header h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.instance-rectification-modal-close-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.instance-rectification-modal-close-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: rotate(90deg);
+}
+
+.instance-rectification-modal-body {
+  padding: 32px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.instance-rectification-modal-message {
+  font-size: 16px;
+  color: #374151;
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+
+.instance-rectification-changes-summary {
+  margin-top: 24px;
+  padding: 20px;
+  background: #f9fafb;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+}
+
+.instance-rectification-changes-summary h4 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.instance-rectification-changes-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.instance-rectification-changes-list li {
+  padding: 12px 0;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.instance-rectification-changes-list li:last-child {
+  border-bottom: none;
+}
+
+.instance-rectification-changes-list li strong {
+  color: #374151;
+  min-width: 150px;
+}
+
+.instance-rectification-old-value {
+  color: #dc2626;
+  text-decoration: line-through;
+  padding: 4px 8px;
+  background: #fee2e2;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.instance-rectification-new-value {
+  color: #16a34a;
+  padding: 4px 8px;
+  background: #d1fae5;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.instance-rectification-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 24px 32px;
+  border-top: 2px solid #e5e7eb;
+  background: #f9fafb;
+  border-radius: 0 0 16px 16px;
+}
+
+.instance-rectification-modal-cancel-btn {
+  padding: 12px 24px;
+  background: #e5e7eb;
+  color: #374151;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.instance-rectification-modal-cancel-btn:hover {
+  background: #d1d5db;
+}
+
+.instance-rectification-modal-request-btn {
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #7B6FDD, #6A5ED4);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.instance-rectification-modal-request-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(123, 111, 221, 0.3);
+}
+
+.instance-rectification-modal-request-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.instance-view-request-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.instance-view-request-button:hover:not(:disabled) {
+  background-color: #2563eb;
+  transform: translateY(-1px);
+}
+
+.instance-view-request-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 } 
