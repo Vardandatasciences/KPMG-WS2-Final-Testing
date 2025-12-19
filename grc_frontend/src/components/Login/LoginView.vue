@@ -942,29 +942,59 @@ const loadRecaptcha = () => {
     return
   }
   
-  // Load reCAPTCHA script with error handling
+  // Load reCAPTCHA script with error handling and timeout
   const script = document.createElement('script')
   script.src = 'https://www.google.com/recaptcha/api.js?render=explicit&onload=onRecaptchaLoad'
   script.async = true
   script.defer = true
   
+  // Add timeout for script loading (30 seconds)
+  const loadTimeout = setTimeout(() => {
+    console.warn('⚠️ reCAPTCHA script load timeout - allowing bypass in development')
+    if (process.env.NODE_ENV === 'development') {
+      isCaptchaVerified.value = true // Allow bypass in development
+    }
+  }, 30000)
+  
   // Handle script load errors
   script.onerror = () => {
-    console.warn('Failed to load reCAPTCHA script. This may be due to network issues or ad blockers.')
+    clearTimeout(loadTimeout)
+    console.warn('⚠️ Failed to load reCAPTCHA script. This may be due to network issues or ad blockers.')
     // Don't block login if CAPTCHA fails to load in development
     if (process.env.NODE_ENV === 'development') {
       isCaptchaVerified.value = true // Allow bypass in development
     }
   }
   
-  // Set global callback
+  // Set global callback with timeout handling
   window.onRecaptchaLoad = () => {
-    nextTick(() => {
-      renderCaptcha()
-    })
+    clearTimeout(loadTimeout)
+    try {
+      nextTick(() => {
+        renderCaptcha()
+      })
+    } catch (error) {
+      console.warn('⚠️ Error in reCAPTCHA onload callback:', error)
+      // Suppress timeout errors from reCAPTCHA
+      if (error.message && !error.message.includes('Timeout')) {
+        console.error('reCAPTCHA error:', error)
+      }
+      if (process.env.NODE_ENV === 'development') {
+        isCaptchaVerified.value = true
+      }
+    }
   }
   
-  document.head.appendChild(script)
+  // Wrap script loading in try-catch to handle any errors
+  try {
+    document.head.appendChild(script)
+  } catch (error) {
+    clearTimeout(loadTimeout)
+    console.warn('⚠️ Error appending reCAPTCHA script:', error)
+    if (process.env.NODE_ENV === 'development') {
+      isCaptchaVerified.value = true
+    }
+  }
 }
 
 const renderCaptcha = () => {

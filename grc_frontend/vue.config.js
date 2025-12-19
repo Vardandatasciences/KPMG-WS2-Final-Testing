@@ -28,17 +28,60 @@ module.exports = defineConfig({
   devServer: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
-        timeout: 30000, // 30 seconds timeout for proxy requests
-        proxyTimeout: 30000 // 30 seconds timeout for proxy connection
+        timeout: 120000, // 2 minutes timeout for proxy requests (increased for long-running operations)
+        proxyTimeout: 120000, // 2 minutes timeout for proxy connection
+        onError: (err, req, res) => {
+          console.error('Proxy error:', err.message);
+        },
+        onProxyReq: (proxyReq, req, res) => {
+          console.log(`[Proxy] ${req.method} ${req.url} -> ${proxyReq.path}`);
+        }
       }
     },
     historyApiFallback: true,
     client: {
       overlay: {
         errors: true,
-        warnings: false
+        warnings: false,
+        runtimeErrors: (error) => {
+          const errorMessage = error.message || '';
+          const errorString = error.toString() || '';
+          
+          // Don't show overlay for timeout errors - they're handled gracefully
+          if (errorMessage.includes('Timeout') || errorString.includes('Timeout') || 
+              errorMessage.includes('timeout') || errorString.includes('timeout')) {
+            console.warn('⚠️ Timeout error suppressed from overlay:', errorMessage);
+            return false;
+          }
+          
+          // Don't show overlay for network errors - they're handled gracefully
+          if (errorMessage.includes('Network Error') || errorMessage.includes('ERR_NETWORK') ||
+              errorString.includes('Network Error') || errorString.includes('ERR_NETWORK')) {
+            console.warn('⚠️ Network error suppressed from overlay:', errorMessage);
+            return false;
+          }
+          
+          // Don't show overlay for reCAPTCHA errors - they're handled gracefully
+          if (errorMessage.includes('recaptcha') || errorString.includes('recaptcha') ||
+              errorMessage.includes('grecaptcha') || errorString.includes('grecaptcha') ||
+              error.stack?.includes('recaptcha') || error.stack?.includes('recaptcha_en.js')) {
+            console.warn('⚠️ reCAPTCHA error suppressed from overlay:', errorMessage);
+            return false;
+          }
+          
+          // Don't show overlay for unhandled promise rejections that are timeouts
+          if (error.name === 'UnhandledPromiseRejectionWarning' || 
+              error.name === 'UnhandledPromiseRejection') {
+            if (errorMessage.includes('Timeout') || errorString.includes('Timeout')) {
+              console.warn('⚠️ Promise rejection timeout suppressed from overlay:', errorMessage);
+              return false;
+            }
+          }
+          
+          return true;
+        }
       }
     }
   },

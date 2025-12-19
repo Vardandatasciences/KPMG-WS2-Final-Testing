@@ -28,13 +28,20 @@ export default defineConfig({
     historyApiFallback: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
-        secure: false
+        secure: false,
+        timeout: 120000, // 2 minutes timeout
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            console.error('Proxy error:', err.message);
+          });
+        }
       },
       '/grc': {
-        target: 'http://localhost:8000',
-        changeOrigin: true
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        timeout: 120000 // 2 minutes timeout
       }
     }
   }

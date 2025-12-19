@@ -9,7 +9,7 @@ const ENVIRONMENT = 'development';
 const API_URLS = {
   // aws: 'https://grc-backend.vardaands.com',
   aws: 'https://grc-backend.vardaands.com',
-  local: 'http://localhost:8000',
+  local: 'http://127.0.0.1:8000',
   development: 'http://127.0.0.1:8000'
 };
  
@@ -729,7 +729,7 @@ export const createAxiosInstance = (baseURL = API_BASE_URL) => {
       'Content-Type': 'application/json',
       'Accept': 'application/json'
     },
-    timeout: 30000,
+    timeout: 120000, // 2 minutes timeout (increased for long-running operations like AI analysis)
     withCredentials: true,  // Send cookies for CSRF protection
     xsrfCookieName: 'csrftoken',
     xsrfHeaderName: 'X-CSRFToken'

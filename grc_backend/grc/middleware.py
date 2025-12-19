@@ -260,13 +260,14 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
                     user = Users.objects.get(UserId=user_id)
 
                     # ========================================
-                    # 1-MINUTE SESSION TIMEOUT CHECK (for testing)
+                    # SESSION TIMEOUT CHECK
                     # ========================================
+                    # Set to 1 hour (3600 seconds)
                     login_time = payload.get('login_time')
                     if login_time:
                         current_time = time.time()
                         elapsed_time = current_time - login_time
-                        SESSION_TIMEOUT_SECONDS = 60  # 1 minute for testing
+                        SESSION_TIMEOUT_SECONDS = 3600  # 1 hour
                         
                         if elapsed_time >= SESSION_TIMEOUT_SECONDS:
                             logger.info(f"⏰ JWT Session timeout: User ID {user_id} logged out after {SESSION_TIMEOUT_SECONDS} seconds (elapsed: {elapsed_time:.2f}s)")

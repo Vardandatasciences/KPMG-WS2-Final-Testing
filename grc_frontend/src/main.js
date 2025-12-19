@@ -26,7 +26,7 @@ const vuetify = createVuetify({
 // Configure axios defaults for JWT authentication
 axios.defaults.baseURL = API_BASE_URL  // Use centralized API configuration
 axios.defaults.headers.common['Content-Type'] = 'application/json'
-axios.defaults.timeout = 30000  // 30 seconds timeout to prevent hanging requests
+axios.defaults.timeout = 120000  // 2 minutes timeout (increased for long-running operations)
 
 // CRITICAL: Enable credentials (cookies) for session management
 axios.defaults.withCredentials = true
@@ -85,5 +85,49 @@ app.use(Popup)
 // Make router and store available globally for AccessUtils
 window.router = router
 window.store = store
+
+// Global error handler to suppress reCAPTCHA timeout errors
+window.addEventListener('unhandledrejection', (event) => {
+  const error = event.reason;
+  const errorMessage = error?.message || '';
+  const errorString = error?.toString() || '';
+  const errorStack = error?.stack || '';
+  
+  // Suppress reCAPTCHA timeout errors
+  if (errorMessage.includes('Timeout') || errorString.includes('Timeout') ||
+      errorMessage.includes('timeout') || errorString.includes('timeout') ||
+      errorStack.includes('recaptcha') || errorStack.includes('recaptcha_en.js') ||
+      errorMessage.includes('recaptcha') || errorString.includes('recaptcha')) {
+    console.warn('⚠️ Suppressed unhandled promise rejection (likely reCAPTCHA timeout):', errorMessage);
+    event.preventDefault(); // Prevent the error from being logged to console
+    return;
+  }
+  
+  // Suppress network errors
+  if (errorMessage.includes('Network Error') || errorMessage.includes('ERR_NETWORK') ||
+      errorString.includes('Network Error') || errorString.includes('ERR_NETWORK')) {
+    console.warn('⚠️ Suppressed unhandled promise rejection (network error):', errorMessage);
+    event.preventDefault();
+    return;
+  }
+});
+
+// Global error handler for general errors
+window.addEventListener('error', (event) => {
+  const error = event.error || event;
+  const errorMessage = error?.message || '';
+  const errorString = error?.toString() || '';
+  const errorStack = error?.stack || '';
+  
+  // Suppress reCAPTCHA timeout errors
+  if (errorMessage.includes('Timeout') || errorString.includes('Timeout') ||
+      errorMessage.includes('timeout') || errorString.includes('timeout') ||
+      errorStack.includes('recaptcha') || errorStack.includes('recaptcha_en.js') ||
+      errorMessage.includes('recaptcha') || errorString.includes('recaptcha')) {
+    console.warn('⚠️ Suppressed error (likely reCAPTCHA timeout):', errorMessage);
+    event.preventDefault();
+    return;
+  }
+});
 
 app.mount('#app')

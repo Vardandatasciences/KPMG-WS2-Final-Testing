@@ -6,7 +6,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json'
   },
-  timeout: 30000, // 30 seconds timeout to prevent hanging requests
+  timeout: 120000, // 2 minutes timeout (increased for long-running operations)
   withCredentials: true // Include cookies in requests for session handling
 });
  
@@ -14,9 +14,35 @@ const api = axios.create({
 api.interceptors.response.use(
   response => response,
   error => {
+    // Handle timeout errors gracefully
+    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout') || error.message?.includes('Timeout')) {
+      console.error('⏱️ [API] Request timeout:', {
+        url: error.config?.url,
+        method: error.config?.method,
+        timeout: error.config?.timeout
+      });
+      
+      const timeoutError = new Error(`Request timed out after ${(error.config?.timeout || 120000) / 1000} seconds. The server may be slow or overloaded. Please try again.`);
+      timeoutError.isTimeout = true;
+      return Promise.reject(timeoutError);
+    }
+    
+    // Handle network errors gracefully
+    if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
+      console.error('🌐 [API] Network error:', {
+        url: error.config?.url,
+        method: error.config?.method,
+        message: error.message
+      });
+      
+      const networkError = new Error('Network error: Unable to connect to the server. Please check your connection and ensure the backend server is running.');
+      networkError.isNetworkError = true;
+      return Promise.reject(networkError);
+    }
+    
     console.error('API Error:', error);
    
-    // Add more detailed logging for network errors
+    // Add more detailed logging for other errors
     if (error.code === 'ERR_NETWORK') {
       console.error('Network error details:', {
         message: error.message,

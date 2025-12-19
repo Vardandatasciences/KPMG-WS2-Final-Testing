@@ -15,7 +15,7 @@ const apiClient = axios.create({
     'Content-Type': 'application/json',
     'Accept': 'application/json'
   },
-  timeout: 30000,
+  timeout: 120000, // 2 minutes timeout (increased for long-running operations)
   withCredentials: true,  // Send cookies for CSRF protection
   xsrfCookieName: 'csrftoken',
   xsrfHeaderName: 'X-CSRFToken'
@@ -62,6 +62,33 @@ apiClient.interceptors.response.use(
   },
   async (error) => {
     const originalRequest = error.config;
+    
+    // Handle timeout errors gracefully
+    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout') || error.message?.includes('Timeout')) {
+      console.error('⏱️ [API Service] Request timeout:', {
+        url: error.config?.url,
+        method: error.config?.method,
+        timeout: error.config?.timeout
+      });
+      
+      // Don't show webpack overlay for timeout errors - return a user-friendly error
+      const timeoutError = new Error(`Request timed out after ${(error.config?.timeout || 120000) / 1000} seconds. The server may be slow or overloaded. Please try again.`);
+      timeoutError.isTimeout = true;
+      return Promise.reject(timeoutError);
+    }
+    
+    // Handle network errors gracefully
+    if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
+      console.error('🌐 [API Service] Network error:', {
+        url: error.config?.url,
+        method: error.config?.method,
+        message: error.message
+      });
+      
+      const networkError = new Error('Network error: Unable to connect to the server. Please check your connection and ensure the backend server is running.');
+      networkError.isNetworkError = true;
+      return Promise.reject(networkError);
+    }
     
     // If 401 and we haven't retried yet, check for session expiration first
     if (error.response?.status === 401 && !originalRequest._retry) {
