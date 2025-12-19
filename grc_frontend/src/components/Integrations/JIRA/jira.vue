@@ -823,19 +823,32 @@ export default {
         console.log('Project ID:', project.id)
         console.log('Cloud ID:', selectedCloudId.value)
         
+        // Prepare request body - only include access_token if it's a real token (not a placeholder)
+        const requestBody = {
+          user_id: getCurrentUserId(),
+          project_id: project.id,
+          project_key: project.key, // send key as well for robustness
+          cloud_id: selectedCloudId.value
+        }
+        
+        // Only include access_token if it's a real token (not a placeholder like 'stored_data_token')
+        if (accessToken.value && 
+            accessToken.value !== 'stored_data_token' && 
+            accessToken.value !== 'oauth_success' &&
+            accessToken.value.length > 20) {
+          requestBody.access_token = accessToken.value
+          console.log('Using access token from frontend')
+        } else {
+          console.log('No valid access token in frontend, backend will use stored connection token')
+        }
+        
         // Call Django backend to fetch project details
         const projectResponse = await fetch(API_ENDPOINTS.JIRA_PROJECT_DETAILS, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            user_id: getCurrentUserId(),
-            project_id: project.id,
-            project_key: project.key, // send key as well for robustness
-            access_token: accessToken.value,
-            cloud_id: selectedCloudId.value
-          })
+          body: JSON.stringify(requestBody)
         })
         
         if (!projectResponse.ok) {

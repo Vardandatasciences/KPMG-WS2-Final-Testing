@@ -77,18 +77,31 @@ class SentinelOAuthService:
                 uri = uri[1:-1].strip()
             return uri.strip('"\'')
         
-        redirect_uri_from_env = clean_redirect_uri(os.getenv('MICROSOFT_REDIRECT_URI') or os.getenv('REDIRECT_URI'))
-        redirect_uri_from_settings = clean_redirect_uri(getattr(settings, 'REDIRECT_URI', None))
-        
-        # Determine default based on environment
-        use_local = os.getenv('USE_LOCAL_DEVELOPMENT', 'false').lower() == 'true'
+        # Determine default based on environment - use settings.USE_LOCAL_DEVELOPMENT for consistency
+        use_local = getattr(settings, 'USE_LOCAL_DEVELOPMENT', True)  # Default to True (local dev)
         default_redirect_uri = (
             'http://localhost:8000/auth/sentinel/callback' if use_local
             else 'https://grc-backend.vardaands.com/auth/sentinel/callback'
         )
         
-        # Use first available value, ensuring it's cleaned
-        self.redirect_uri = redirect_uri_from_env or redirect_uri_from_settings or default_redirect_uri
+        # Get redirect URI from environment or settings
+        redirect_uri_from_env = clean_redirect_uri(os.getenv('MICROSOFT_REDIRECT_URI') or os.getenv('REDIRECT_URI'))
+        redirect_uri_from_settings = clean_redirect_uri(getattr(settings, 'REDIRECT_URI', None))
+        
+        # If in local development mode, ignore production redirect URIs from env/settings
+        # Only use env/settings redirect URI if it's a localhost URL or if we're in production mode
+        if use_local:
+            # In local dev: only use env/settings if it's localhost, otherwise use default local
+            if redirect_uri_from_env and 'localhost' in redirect_uri_from_env.lower():
+                self.redirect_uri = redirect_uri_from_env
+            elif redirect_uri_from_settings and 'localhost' in redirect_uri_from_settings.lower():
+                self.redirect_uri = redirect_uri_from_settings
+            else:
+                # Force localhost in local dev mode, ignore production URIs
+                self.redirect_uri = default_redirect_uri
+        else:
+            # In production: use env > settings > default
+            self.redirect_uri = redirect_uri_from_env or redirect_uri_from_settings or default_redirect_uri
         
         # Validate redirect_uri is not empty and is a valid absolute URI
         if not self.redirect_uri:
@@ -1184,9 +1197,6 @@ def sentinel_oauth_callback(request):
         request.session['isSentinelConnected'] = True
         request.session['authMethod'] = 'oauth'
         request.session['lastConnected'] = datetime.now().isoformat()
-        request.session.modified = True  # Force session save
-        
-        print(f"[SENTINEL] Session data saved. Connected: {request.session.get('isSentinelConnected')}")
         
         # Parse ID token if available
         if token_response.get('id_token'):
@@ -1208,9 +1218,48 @@ def sentinel_oauth_callback(request):
                 except:
                     pass
         
-        # Redirect to frontend Vue app
+        # CRITICAL: Force session save after all modifications
+        request.session.modified = True
+        request.session.save()
+        
+        print(f"[SENTINEL] Session data saved. Connected: {request.session.get('isSentinelConnected')}")
+        print(f"[SENTINEL] Session key: {request.session.session_key}")
+        print(f"[SENTINEL] Session keys: {list(request.session.keys())}")
+        print(f"[SENTINEL] UserInfo: {request.session.get('userInfo')}")
+        
+        # Redirect to frontend Vue app with session ID in URL for local dev
         frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:8080')
-        return redirect(f'{frontend_url}/integration/sentinel?connected=sentinel')
+        use_local = getattr(settings, 'USE_LOCAL_DEVELOPMENT', True)
+        
+        # For local dev, include session ID in URL so frontend can use it
+        if use_local and request.session.session_key:
+            redirect_url = f'{frontend_url}/integration/sentinel?connected=sentinel&session_id={request.session.session_key}'
+        else:
+            redirect_url = f'{frontend_url}/integration/sentinel?connected=sentinel'
+        
+        response = redirect(redirect_url)
+        
+        # Ensure session cookie is set in the response
+        # This is critical for the session to persist after redirect
+        # Use None for SameSite to allow cross-site cookie sending in local dev
+        if request.session.session_key:
+            # For local dev, use None for SameSite to allow cross-origin cookie sending
+            samesite_value = None if use_local else settings.SESSION_COOKIE_SAMESITE
+            
+            response.set_cookie(
+                settings.SESSION_COOKIE_NAME,
+                request.session.session_key,
+                max_age=settings.SESSION_COOKIE_AGE,
+                path=settings.SESSION_COOKIE_PATH,
+                domain=settings.SESSION_COOKIE_DOMAIN,
+                secure=settings.SESSION_COOKIE_SECURE,
+                httponly=settings.SESSION_COOKIE_HTTPONLY,
+                samesite=samesite_value  # None allows cross-site in local dev
+            )
+            print(f"[SENTINEL] Session cookie set in redirect response: {request.session.session_key}")
+            print(f"[SENTINEL] Cookie settings - SameSite: {samesite_value}, Domain: {settings.SESSION_COOKIE_DOMAIN}, Path: {settings.SESSION_COOKIE_PATH}")
+        
+        return response
     except Exception as error:
         print(f"OAuth Error: {error}")
         frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:8080')
@@ -1220,22 +1269,58 @@ def sentinel_oauth_callback(request):
 @csrf_exempt
 def sentinel_disconnect(request):
     """Disconnect from Sentinel"""
-    request.session['isSentinelConnected'] = False
-    request.session.pop('sentinelAccessToken', None)
-    request.session.pop('sentinelRefreshToken', None)
-    request.session.pop('sentinelTokenExpiry', None)
-    request.session.pop('userInfo', None)
-    
-    # If it's an AJAX request, return JSON
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
-        return JsonResponse({
-            'success': True,
-            'message': 'Disconnected from Microsoft Sentinel'
-        })
-    
-    # Redirect to frontend
-    frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:8080')
-    return redirect(f'{frontend_url}/integration/sentinel?disconnected=sentinel')
+    try:
+        print("[SENTINEL] ===== sentinel_disconnect called =====")
+        print(f"[SENTINEL] Disconnect - Request cookies: {list(request.COOKIES.keys())}")
+        print(f"[SENTINEL] Disconnect - Query parameters: {dict(request.GET)}")
+        print(f"[SENTINEL] Disconnect - Current session key: {request.session.session_key}")
+
+        # 1) Disconnect current request.session (cookie-based)
+        request.session['isSentinelConnected'] = False
+        request.session.pop('sentinelAccessToken', None)
+        request.session.pop('sentinelRefreshToken', None)
+        request.session.pop('sentinelTokenExpiry', None)
+        request.session.pop('userInfo', None)
+        request.session.modified = True
+        request.session.save()
+
+        # 2) Also disconnect the session identified by session_id query param (URL-based flow)
+        session_id_from_url = request.GET.get('session_id')
+        if session_id_from_url:
+            print(f"[SENTINEL] Disconnect - Session ID from URL: {session_id_from_url[:20]}...")
+            try:
+                from django.contrib.sessions.models import Session
+                session_obj = Session.objects.get(session_key=session_id_from_url)
+                session_data = session_obj.get_decoded()
+                print(f"[SENTINEL] Disconnect - Loaded session data from URL session ID: {list(session_data.keys())}")
+
+                # Clear Sentinel-specific keys
+                session_data.pop('sentinelAccessToken', None)
+                session_data.pop('sentinelRefreshToken', None)
+                session_data.pop('sentinelTokenExpiry', None)
+                session_data.pop('userInfo', None)
+                session_data['isSentinelConnected'] = False
+
+                # Save back to DB
+                session_obj.session_data = Session.objects.encode(session_data)
+                session_obj.save()
+                print("[SENTINEL] Disconnect - Cleared Sentinel data from URL session")
+            except Exception as e:
+                print(f"[SENTINEL] Disconnect - Error clearing URL session: {e}")
+
+        # If it's an AJAX request, return JSON
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
+            return JsonResponse({
+                'success': True,
+                'message': 'Disconnected from Microsoft Sentinel'
+            })
+
+        # Redirect to frontend (for non-AJAX flows)
+        frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:8080')
+        return redirect(f'{frontend_url}/integration/sentinel?disconnected=sentinel')
+    except Exception as error:
+        print(f"[SENTINEL] Disconnect error: {error}")
+        return JsonResponse({'success': False, 'error': str(error)}, status=500)
 
 
 @csrf_exempt
@@ -1243,17 +1328,158 @@ def sentinel_disconnect(request):
 def sentinel_check_status(request):
     """Check Sentinel connection status"""
     try:
+        # Log incoming request details for debugging
+        print(f"[SENTINEL] Status check - Request cookies: {list(request.COOKIES.keys())}")
+        print(f"[SENTINEL] Status check - Query parameters: {dict(request.GET)}")
+        print(f"[SENTINEL] Status check - Session cookie name: {settings.SESSION_COOKIE_NAME}")
+        print(f"[SENTINEL] Status check - Has session cookie: {settings.SESSION_COOKIE_NAME in request.COOKIES}")
+        print(f"[SENTINEL] Status check - Current session key: {request.session.session_key}")
+        
+        # Check if session_id is provided as query parameter (for local dev workaround)
+        session_id_from_url = request.GET.get('session_id')
+        if session_id_from_url:
+            print(f"[SENTINEL] Status check - Session ID from URL: {session_id_from_url[:20]}...")
+            try:
+                from django.contrib.sessions.models import Session
+                session_obj = Session.objects.get(session_key=session_id_from_url)
+                session_data = session_obj.get_decoded()
+                print(f"[SENTINEL] Status check - Loaded session data from URL session ID: {list(session_data.keys())}")
+                
+                # Check if this session has Sentinel data
+                if 'isSentinelConnected' in session_data:
+                    print(f"[SENTINEL] Status check - Found Sentinel data in URL session!")
+                    is_connected = session_data.get('isSentinelConnected', False)
+                    user_info = session_data.get('userInfo')
+                    
+                    response = JsonResponse({
+                        'connected': is_connected,
+                        'userInfo': user_info
+                    })
+                    
+                    # Set CORS headers
+                    origin = request.headers.get('Origin')
+                    if origin:
+                        response['Access-Control-Allow-Origin'] = origin
+                    else:
+                        response['Access-Control-Allow-Origin'] = 'http://localhost:8080'
+                    response['Access-Control-Allow-Credentials'] = 'true'
+                    
+                    # Set the session cookie to ensure it persists
+                    use_local = getattr(settings, 'USE_LOCAL_DEVELOPMENT', True)
+                    samesite_value = 'Lax'  # Use Lax for local dev (None requires Secure=True)
+                    response.set_cookie(
+                        settings.SESSION_COOKIE_NAME,
+                        session_id_from_url,
+                        max_age=settings.SESSION_COOKIE_AGE,
+                        path=settings.SESSION_COOKIE_PATH,
+                        domain=settings.SESSION_COOKIE_DOMAIN,
+                        secure=False,  # False for local HTTP
+                        httponly=settings.SESSION_COOKIE_HTTPONLY,
+                        samesite=samesite_value
+                    )
+                    print(f"[SENTINEL] Status check - Returning data from URL session: Connected={is_connected}")
+                    return response
+            except Exception as e:
+                print(f"[SENTINEL] Status check - Error loading session from URL: {e}")
+        
+        # Get session cookie from request
+        session_cookie = request.COOKIES.get(settings.SESSION_COOKIE_NAME)
+        print(f"[SENTINEL] Status check - Session cookie value: {session_cookie[:20] if session_cookie else 'NONE'}...")
+        
+        # If we have a session cookie but it doesn't match current session, try to load it
+        if session_cookie and session_cookie != request.session.session_key:
+            print(f"[SENTINEL] Status check - Cookie session differs from current session, trying to load cookie session...")
+            try:
+                from django.contrib.sessions.models import Session
+                session_obj = Session.objects.get(session_key=session_cookie)
+                session_data = session_obj.get_decoded()
+                print(f"[SENTINEL] Status check - Loaded session data from DB: {list(session_data.keys())}")
+                
+                # Check if this session has Sentinel data
+                if 'isSentinelConnected' in session_data:
+                    print(f"[SENTINEL] Status check - Found Sentinel data in cookie session!")
+                    # Use this session data
+                    is_connected = session_data.get('isSentinelConnected', False)
+                    user_info = session_data.get('userInfo')
+                    
+                    response = JsonResponse({
+                        'connected': is_connected,
+                        'userInfo': user_info
+                    })
+                    
+                    # Set CORS headers
+                    origin = request.headers.get('Origin')
+                    if origin:
+                        response['Access-Control-Allow-Origin'] = origin
+                    else:
+                        response['Access-Control-Allow-Origin'] = 'http://localhost:8080'
+                    response['Access-Control-Allow-Credentials'] = 'true'
+                    
+                    # Set the session cookie to ensure it persists
+                    use_local = getattr(settings, 'USE_LOCAL_DEVELOPMENT', True)
+                    samesite_value = 'Lax'  # Use Lax for local dev
+                    response.set_cookie(
+                        settings.SESSION_COOKIE_NAME,
+                        session_cookie,
+                        max_age=settings.SESSION_COOKIE_AGE,
+                        path=settings.SESSION_COOKIE_PATH,
+                        domain=settings.SESSION_COOKIE_DOMAIN,
+                        secure=False,  # False for local HTTP
+                        httponly=settings.SESSION_COOKIE_HTTPONLY,
+                        samesite=samesite_value
+                    )
+                    print(f"[SENTINEL] Status check - Returning data from cookie session: Connected={is_connected}")
+                    return response
+            except Exception as e:
+                print(f"[SENTINEL] Status check - Error loading session from cookie: {e}")
+        
+        # Use current session (which might be empty if cookie wasn't sent)
         is_connected = request.session.get('isSentinelConnected', False)
         user_info = request.session.get('userInfo')
         
+        print(f"[SENTINEL] Status check - Session key: {request.session.session_key}")
         print(f"[SENTINEL] Status check - Connected: {is_connected}, User: {user_info}")
+        print(f"[SENTINEL] Status check - Session keys: {list(request.session.keys())}")
+        print(f"[SENTINEL] Status check - isSentinelConnected value: {request.session.get('isSentinelConnected')}")
+        print(f"[SENTINEL] Status check - hasAccessToken: {bool(request.session.get('sentinelAccessToken'))}")
         
-        return JsonResponse({
+        response = JsonResponse({
             'connected': is_connected,
             'userInfo': user_info
         })
+        
+        # CRITICAL: Set CORS headers to allow credentials
+        origin = request.headers.get('Origin')
+        if origin:
+            response['Access-Control-Allow-Origin'] = origin
+        else:
+            response['Access-Control-Allow-Origin'] = 'http://localhost:8080'
+        response['Access-Control-Allow-Credentials'] = 'true'
+        response['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, Cookie'
+        
+        # Ensure session cookie is set in response if we have a session
+        if request.session.session_key:
+            use_local = getattr(settings, 'USE_LOCAL_DEVELOPMENT', True)
+            samesite_value = 'Lax'  # Use Lax for local dev (None requires Secure=True)
+            response.set_cookie(
+                settings.SESSION_COOKIE_NAME,
+                request.session.session_key,
+                max_age=settings.SESSION_COOKIE_AGE,
+                path=settings.SESSION_COOKIE_PATH,
+                domain=settings.SESSION_COOKIE_DOMAIN,
+                secure=False,  # False for local HTTP
+                httponly=settings.SESSION_COOKIE_HTTPONLY,
+                samesite=samesite_value
+            )
+            print(f"[SENTINEL] Status check - Set session cookie in response: {request.session.session_key[:20]}...")
+            print(f"[SENTINEL] Status check - Cookie SameSite: {samesite_value}")
+        
+        return response
     except Exception as error:
         print(f"[SENTINEL] Status check error: {error}")
+        import traceback
+        traceback.print_exc()
         return JsonResponse({'error': str(error)}, status=500)
 
 
@@ -1262,10 +1488,47 @@ def sentinel_check_status(request):
 def get_sentinel_alerts(request):
     """Get alerts/incidents from Microsoft Defender"""
     try:
-        if not request.session.get('isSentinelConnected'):
-            return JsonResponse({'error': 'Not connected to Microsoft Defender'}, status=401)
-        
-        access_token = get_user_access_token(request)
+        # Log basic request info for debugging
+        print("[SENTINEL] ===== get_sentinel_alerts called =====")
+        print(f"[SENTINEL] Incidents - Request cookies: {list(request.COOKIES.keys())}")
+        print(f"[SENTINEL] Incidents - Query parameters: {dict(request.GET)}")
+        print(f"[SENTINEL] Incidents - Current session key: {request.session.session_key}")
+
+        access_token = None
+
+        # First, support session_id from URL (same pattern as sentinel_check_status)
+        session_id_from_url = request.GET.get('session_id')
+        if session_id_from_url:
+            print(f"[SENTINEL] Incidents - Session ID from URL: {session_id_from_url[:20]}...")
+            try:
+                from django.contrib.sessions.models import Session
+                session_obj = Session.objects.get(session_key=session_id_from_url)
+                session_data = session_obj.get_decoded()
+                print(f"[SENTINEL] Incidents - Loaded session data from URL session ID: {list(session_data.keys())}")
+
+                if not session_data.get('isSentinelConnected'):
+                    print("[SENTINEL] Incidents - URL session not connected to Sentinel")
+                    return JsonResponse({'error': 'Not connected to Microsoft Defender'}, status=401)
+
+                access_token = session_data.get('sentinelAccessToken')
+                if not access_token:
+                    print("[SENTINEL] Incidents - No access token in URL session")
+                    return JsonResponse({'error': 'No access token available for Microsoft Defender'}, status=401)
+
+                print("[SENTINEL] Incidents - Using access token from URL session")
+            except Exception as e:
+                print(f"[SENTINEL] Incidents - Error loading session from URL: {e}")
+                # Fall back to regular session-based logic
+
+        # If no access token from URL session, fall back to request.session (original behavior)
+        if access_token is None:
+            if not request.session.get('isSentinelConnected'):
+                print("[SENTINEL] Incidents - request.session not connected to Sentinel")
+                return JsonResponse({'error': 'Not connected to Microsoft Defender'}, status=401)
+
+            access_token = get_user_access_token(request)
+            print("[SENTINEL] Incidents - Using access token from request.session")
+
         defender_api = DefenderAPIService(access_token)
         
         filters = {}
@@ -1295,9 +1558,22 @@ def get_sentinel_alerts(request):
             'source': 'microsoft-defender'
         })
     except Exception as error:
+        error_str = str(error)
+        print(f"[SENTINEL] Error fetching incidents: {error_str}")
+
+        # If Defender API returned 403 (account mode / license issue), expose that clearly to frontend
+        if 'Defender API Error: 403' in error_str or '403 - Unauthorized request - Account Mode is not Active' in error_str:
+            return JsonResponse({
+                'error': 'Microsoft Defender API rejected the request',
+                'details': error_str,
+                'code': 403,
+                'userMessage': 'Your Microsoft Defender / Sentinel tenant is not fully activated (Account Mode is not Active). Please enable the Defender/Sentinel service for this tenant or use an account with an active license.'
+            }, status=403)
+
+        # Generic error for other cases
         return JsonResponse({
             'error': 'Failed to fetch incidents',
-            'details': str(error)
+            'details': error_str
         }, status=500)
 
 

@@ -1266,6 +1266,7 @@ import policyDataService from '@/services/policyService'; // NEW: Centralized po
 import treeDataService from '@/services/treeService'; // NEW: Centralized tree data service
 import documentDataService from '@/services/documentService'; // NEW: Centralized document data service
 import integrationsDataService from '@/services/integrationsService'; // NEW: Centralized integrations data service
+import aiPrivacyService from '@/services/aiPrivacyService'; // NEW: Centralized AI privacy analysis service
 import axios from 'axios';
 import { API_ENDPOINTS } from '@/config/api.js';
 import { getFrameworkContent } from '@/config/frameworkContent.js';
@@ -3505,6 +3506,33 @@ onMounted(() => {
     });
 
   window.homepageDataFetchPromise = homepagePrefetchPromise;
+  
+  // ==========================================
+  // NEW FEATURE: Prefetch AI Privacy Analysis on Home Page Load
+  // ==========================================
+  // This will trigger the AI privacy analysis in the background (including OpenAI),
+  // so that when the user navigates to the AI Privacy Analysis page, data is ready.
+  console.log('🚀 [HomeView] Starting AI Privacy Analysis prefetch...');
+
+  const frameworkForAiPrivacy =
+    selectedFrameworkId.value && selectedFrameworkId.value !== 'all'
+      ? selectedFrameworkId.value
+      : null;
+
+  const aiPrivacyPrefetchPromise = aiPrivacyService
+    .fetchAnalysis(frameworkForAiPrivacy)
+    .then(() => {
+      const cached = aiPrivacyService.getAnalysis(frameworkForAiPrivacy);
+      const hasData = !!cached;
+      console.log(
+        `✅ [HomeView] AI Privacy Analysis prefetch complete - Data available: ${hasData}`
+      );
+    })
+    .catch((error) => {
+      console.error('❌ [HomeView] AI Privacy Analysis prefetch failed:', error);
+    });
+
+  window.aiPrivacyDataFetchPromise = aiPrivacyPrefetchPromise;
   
   // Add click outside handler for popup
   document.addEventListener('click', (event) => {

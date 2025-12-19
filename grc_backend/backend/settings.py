@@ -250,8 +250,8 @@ TPRM_APPS = [
 
 # ===== SESSION CONFIGURATION - CRITICAL FOR AUTHENTICATION! =====
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'  # Use database sessions
-SESSION_SAVE_EVERY_REQUEST = True  # Save session on every request to keep it active
-SESSION_COOKIE_AGE = 604800  # Session expires after 7 days (604800 seconds) of inactivity - matches JWT refresh token lifetime
+SESSION_SAVE_EVERY_REQUEST = False  # Don't extend session on every request - allows timeout to work properly
+SESSION_COOKIE_AGE = 3600  # Session expires after 1 hour (3600 seconds) of inactivity
 SESSION_COOKIE_NAME = 'grc_sessionid'  # Custom session cookie name
 SESSION_COOKIE_HTTPONLY = False  # Allow JavaScript access (needed for SPA)
 SESSION_COOKIE_SECURE = False  # Set to True in production with HTTPS

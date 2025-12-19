@@ -66,7 +66,7 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
             '/api/google/oauth-callback/',  # Allow Google OAuth callback without authentication
             '/media/',  # Allow access to media files without authentication
             '/api/risks-for-dropdown/',  # Allow access to risks dropdown without authentication
-            '/api/risks/',  # Temporarily allow access to risks creation without authentication for testing
+            # '/api/risks/',  # Temporarily allow access to risks creation without authentication for testing
             '/oauth/callback/',  # Allow OAuth callbacks without authentication
             '/api/register/',
             '/api/send-otp/',
@@ -260,21 +260,21 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
                     user = Users.objects.get(UserId=user_id)
 
                     # ========================================
-                    # 5-MINUTE SESSION TIMEOUT CHECK (for testing)
+                    # 1-MINUTE SESSION TIMEOUT CHECK (for testing)
                     # ========================================
                     login_time = payload.get('login_time')
                     if login_time:
                         current_time = time.time()
                         elapsed_time = current_time - login_time
-                        SESSION_TIMEOUT_SECONDS = 300  # 5 minutes
+                        SESSION_TIMEOUT_SECONDS = 60  # 1 minute for testing
                         
                         if elapsed_time >= SESSION_TIMEOUT_SECONDS:
-                            logger.info(f"⏰ JWT Session timeout: User ID {user_id} logged out after 5 minutes (elapsed: {elapsed_time:.2f}s)")
+                            logger.info(f"⏰ JWT Session timeout: User ID {user_id} logged out after {SESSION_TIMEOUT_SECONDS} seconds (elapsed: {elapsed_time:.2f}s)")
                             return JsonResponse({
                                 'status': 'error',
                                 'message': 'Session expired. Please login again.',
                                 'session_expired': True,
-                                'logout_reason': 'Session timeout after 5 minutes'
+                                'logout_reason': f'Session timeout after {SESSION_TIMEOUT_SECONDS} seconds'
                             }, status=401)
 
                     # Version enforcement: block outdated tokens if min_ver is set
@@ -407,12 +407,11 @@ class CORSMiddleware(MiddlewareMixin):
 class SessionTimeoutMiddleware(MiddlewareMixin):
     """
     Session Timeout Middleware
-    Automatically logs out users after 5 minutes (300 seconds) regardless of activity.
-    This is for testing/checking purposes - logs out even if user is active.
+    Automatically logs out users after 1 hour (3600 seconds) regardless of activity.
     """
     
-    # Session timeout in seconds (5 minutes)
-    SESSION_TIMEOUT_SECONDS = 300  # 5 minutes
+    # Session timeout in seconds (1 hour)
+    SESSION_TIMEOUT_SECONDS = 3600  # 1 hour
     
     def process_request(self, request):
         """Check if session has expired and force logout if needed"""
@@ -454,10 +453,10 @@ class SessionTimeoutMiddleware(MiddlewareMixin):
             current_time = time.time()
             elapsed_time = current_time - session_created_at
             
-            # If 5 minutes have passed, force logout
+            # If timeout period has passed, force logout
             if elapsed_time >= self.SESSION_TIMEOUT_SECONDS:
                 user_id = request.session.get('user_id')
-                logger.info(f"⏰ Session timeout: User ID {user_id} logged out after 5 minutes (elapsed: {elapsed_time:.2f}s)")
+                logger.info(f"⏰ Session timeout: User ID {user_id} logged out after {self.SESSION_TIMEOUT_SECONDS} seconds (elapsed: {elapsed_time:.2f}s)")
                 
                 # Clear session
                 request.session.flush()
@@ -468,7 +467,7 @@ class SessionTimeoutMiddleware(MiddlewareMixin):
                     'status': 'error',
                     'message': 'Session expired. Please login again.',
                     'session_expired': True,
-                    'logout_reason': 'Session timeout after 5 minutes'
+                    'logout_reason': f'Session timeout after {self.SESSION_TIMEOUT_SECONDS} seconds'
                 }, status=401)
         else:
             # If session_created_at doesn't exist, set it now (for existing sessions)
@@ -476,7 +475,29 @@ class SessionTimeoutMiddleware(MiddlewareMixin):
             request.session['session_created_at'] = time.time()
             request.session.save()
         
+        # Store session timeout info in request for process_response
+        request._session_timeout_seconds = self.SESSION_TIMEOUT_SECONDS
+        if session_created_at:
+            request._session_created_at = session_created_at
+        
         return None
+    
+    def process_response(self, request, response):
+        """Add session expiration headers to response"""
+        # Only add headers for authenticated sessions
+        if hasattr(request, '_session_created_at') and hasattr(request, '_session_timeout_seconds'):
+            session_created_at = request._session_created_at
+            timeout_seconds = request._session_timeout_seconds
+            current_time = time.time()
+            elapsed_time = current_time - session_created_at
+            remaining_time = timeout_seconds - elapsed_time
+            
+            # Add headers for frontend to track session expiration
+            response['X-Session-Timeout-Seconds'] = str(timeout_seconds)
+            response['X-Session-Remaining-Seconds'] = str(max(0, int(remaining_time)))
+            response['X-Session-Created-At'] = str(int(session_created_at))
+        
+        return response
 
 class AuditLoggingMiddleware(MiddlewareMixin):
     """

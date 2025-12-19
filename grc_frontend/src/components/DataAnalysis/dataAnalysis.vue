@@ -78,6 +78,42 @@
             <p class="summary-count">{{ overallStats.confidentialCount }} fields</p>
           </div>
         </div>
+        <div class="summary-card">
+          <div class="summary-icon maturity">
+            <i class="fas fa-chart-line"></i>
+          </div>
+          <div class="summary-content">
+            <h3>Privacy Maturity</h3>
+            <p class="summary-percentage">
+              {{ privacyMetrics.maturity_score != null ? privacyMetrics.maturity_score : 0 }}<span style="font-size:14px;"> / 100</span>
+            </p>
+            <p class="summary-count">Overall privacy maturity score</p>
+          </div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-icon minimization">
+            <i class="fas fa-compress-arrows-alt"></i>
+          </div>
+          <div class="summary-content">
+            <h3>Data Minimization</h3>
+            <p class="summary-percentage">
+              {{ privacyMetrics.minimization_score != null ? privacyMetrics.minimization_score : 0 }}<span style="font-size:14px;"> / 100</span>
+            </p>
+            <p class="summary-count">Lower sensitive data → higher score</p>
+          </div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-icon coverage">
+            <i class="fas fa-database"></i>
+          </div>
+          <div class="summary-content">
+            <h3>Inventory Coverage</h3>
+            <p class="summary-percentage">
+              {{ privacyMetrics.data_inventory_coverage != null ? privacyMetrics.data_inventory_coverage : 0 }}%
+            </p>
+            <p class="summary-count">Modules with data inventory configured</p>
+          </div>
+        </div>
       </div>
 
       <!-- Module Cards -->
@@ -105,6 +141,55 @@
           </div>
 
           <div class="module-content">
+            <!-- AI Privacy Metrics Mini Charts -->
+            <div class="module-privacy-metrics" v-if="privacyMetrics">
+              <div class="metric-row">
+                <span class="metric-label">
+                  <i class="fas fa-chart-line"></i>
+                  Maturity
+                </span>
+                <div class="metric-bar">
+                  <div
+                    class="metric-bar-fill maturity"
+                    :style="{ width: (privacyMetrics.maturity_score || 0) + '%' }"
+                  ></div>
+                </div>
+                <span class="metric-value">
+                  {{ privacyMetrics.maturity_score != null ? privacyMetrics.maturity_score : 0 }}/100
+                </span>
+              </div>
+              <div class="metric-row">
+                <span class="metric-label">
+                  <i class="fas fa-compress-arrows-alt"></i>
+                  Minimization
+                </span>
+                <div class="metric-bar">
+                  <div
+                    class="metric-bar-fill minimization"
+                    :style="{ width: (privacyMetrics.minimization_score || 0) + '%' }"
+                  ></div>
+                </div>
+                <span class="metric-value">
+                  {{ privacyMetrics.minimization_score != null ? privacyMetrics.minimization_score : 0 }}/100
+                </span>
+              </div>
+              <div class="metric-row">
+                <span class="metric-label">
+                  <i class="fas fa-database"></i>
+                  Coverage
+                </span>
+                <div class="metric-bar">
+                  <div
+                    class="metric-bar-fill coverage"
+                    :style="{ width: (privacyMetrics.data_inventory_coverage || 0) + '%' }"
+                  ></div>
+                </div>
+                <span class="metric-value">
+                  {{ privacyMetrics.data_inventory_coverage != null ? privacyMetrics.data_inventory_coverage : 0 }}%
+                </span>
+              </div>
+            </div>
+
             <!-- Progress Bars -->
             <div class="progress-section">
               <div class="progress-item">
@@ -272,6 +357,7 @@ import { ref, onMounted, computed, watch } from 'vue'
 import axios from 'axios'
 import { API_ENDPOINTS, API_BASE_URL } from '../../config/api.js'
 import './dataAnalysis.css'
+import aiPrivacyService from '@/services/aiPrivacyService' // NEW: reuse AI privacy metrics
 
 export default {
   name: 'DataAnalysis',
@@ -288,6 +374,11 @@ export default {
       columns: [],
       x: 0,
       y: 0
+    })
+    const privacyMetrics = ref({
+      maturity_score: 0,
+      minimization_score: 0,
+      data_inventory_coverage: 0
     })
 
     const modules = computed(() => {
@@ -394,8 +485,37 @@ export default {
       }
     }
 
+    const fetchPrivacyMetrics = async () => {
+      try {
+        let frameworkId = selectedFrameworkId.value
+        if (frameworkId === 'all' || frameworkId === null || frameworkId === undefined) {
+          frameworkId = null
+        }
+
+        // Prefer cached AI privacy analysis if available
+        if (aiPrivacyService.hasValidCache(frameworkId)) {
+          console.log('[DataAnalysis] Using cached AI privacy metrics')
+          const cached = aiPrivacyService.getAnalysis(frameworkId)
+          if (cached?.metrics) {
+            privacyMetrics.value = cached.metrics
+          }
+          return
+        }
+
+        console.log('[DataAnalysis] No cached AI privacy metrics, fetching via service...')
+        const data = await aiPrivacyService.fetchAnalysis(frameworkId)
+        if (data?.metrics) {
+          privacyMetrics.value = data.metrics
+        }
+      } catch (err) {
+        console.error('Error fetching privacy metrics:', err)
+        // Keep existing values (defaults) on error
+      }
+    }
+
     const onFrameworkChange = () => {
       fetchData()
+      fetchPrivacyMetrics()
     }
 
     let tooltipTimeout = null
@@ -465,6 +585,7 @@ export default {
     // Watch for framework changes
     watch(selectedFrameworkId, () => {
       fetchData()
+      fetchPrivacyMetrics()
     })
 
     const formatModuleName = (name) => {
@@ -486,6 +607,7 @@ export default {
     onMounted(async () => {
       await fetchFrameworks()
       await fetchData()
+      await fetchPrivacyMetrics()
     })
 
     return {
@@ -497,6 +619,7 @@ export default {
       loadingFrameworks,
       selectedFrameworkId,
       tooltip,
+      privacyMetrics,
       fetchData,
       fetchFrameworks,
       onFrameworkChange,

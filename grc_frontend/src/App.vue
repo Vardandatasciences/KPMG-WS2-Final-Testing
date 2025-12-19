@@ -17,6 +17,8 @@
     <ConsentModal ref="consentModal" />
     <!-- Cookie Banner -->
     <CookieBanner />
+    <!-- Session Timeout Popup -->
+    <SessionTimeoutPopup />
     <!-- Debug component - remove in production -->
     <!-- <AuthDebug /> -->
   </div>
@@ -28,6 +30,7 @@ import GlobalNavbar from './components/GlobalNavbar.vue'
 import PopupModal from './modules/popup/PopupModal.vue'
 import ConsentModal from './components/Consent/ConsentModal.vue'
 import CookieBanner from './components/Cookie/CookieBanner.vue'
+import SessionTimeoutPopup from './components/SessionTimeoutPopup.vue'
 import consentService from './services/consentService.js'
 // import AuthDebug from './components/AuthDebug.vue'
  
@@ -38,7 +41,8 @@ export default {
     GlobalNavbar,
     PopupModal,
     ConsentModal,
-    CookieBanner
+    CookieBanner,
+    SessionTimeoutPopup
     // AuthDebug
   },
   data() {
@@ -196,6 +200,8 @@ export default {
       // Load framework after successful login
       this.loadFrameworkFromSession()
       this.startPeriodicTokenRefresh()
+      // Trigger auth changed event for session timeout service
+      window.dispatchEvent(new Event('authChanged'))
     },
    
     // Method to be called when user logs out

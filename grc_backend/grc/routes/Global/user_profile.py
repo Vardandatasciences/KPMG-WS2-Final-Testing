@@ -405,6 +405,7 @@ def create_data_subject_request(request):
         audit_trail_data = request.data.get('audit_trail', {})  # For ACCESS type requests
         risk_id = request.data.get('risk_id')  # For risk rectification requests
         risk_instance_id = request.data.get('risk_instance_id')  # For risk instance rectification requests
+        impact_analysis = request.data.get('impact_analysis', {})  # Impact analysis data
         
         # For GDPR compliance, we need user_id but it can come from request data
         # If still not found, try to get from email or other identifiers for GDPR compliance
@@ -498,6 +499,9 @@ def create_data_subject_request(request):
                 audit_trail['risk_instance_id'] = risk_instance_id
                 if risk_id:
                     audit_trail['risk_id'] = risk_id
+            # Add impact analysis if provided
+            if impact_analysis:
+                audit_trail['impact_analysis'] = impact_analysis
         
         # Check if FrameworkId column exists in the database table
         # If it doesn't exist, we'll create the request without it

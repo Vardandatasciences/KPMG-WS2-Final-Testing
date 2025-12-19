@@ -477,7 +477,7 @@
     right: 10px;
     width: auto;
   }
-}
+} 
 
 /* Risk Instance Rectification Modal Styles */
 .instance-rectification-modal-overlay {
@@ -570,6 +570,7 @@
   padding: 32px;
   overflow-y: auto;
   flex: 1;
+  max-height: calc(90vh - 200px);
 }
 
 .instance-rectification-modal-message {
@@ -710,4 +711,237 @@
 .instance-view-request-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Risk Instance Impact Analysis Panel */
+.instance-impact-analysis-panel {
+  margin-top: 24px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 2px solid #3b82f6;
+  border-radius: 12px;
+  padding: 0;
+  box-shadow: 0 4px 6px rgba(59, 130, 246, 0.1);
+}
+
+.instance-impact-analysis-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+  border-radius: 10px 10px 0 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.instance-impact-analysis-header h4 {
+  margin: 0;
+  flex: 1;
+  font-size: 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.instance-impact-analysis-header i {
+  font-size: 18px;
+}
+
+.instance-impact-toggle-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.instance-impact-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.instance-impact-analysis-content {
+  padding: 20px;
+  background: white;
+  border-radius: 0 0 10px 10px;
+}
+
+.instance-impact-loading {
+  text-align: center;
+  padding: 40px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.instance-impact-loading i {
+  margin-right: 8px;
+  color: #3b82f6;
+}
+
+.instance-impact-risk-level {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.instance-impact-risk-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.instance-impact-risk-badge.risk-level-high {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 2px solid #dc2626;
+}
+
+.instance-impact-risk-badge.risk-level-medium {
+  background: #fef3c7;
+  color: #92400e;
+  border: 2px solid #f59e0b;
+}
+
+.instance-impact-risk-badge.risk-level-low {
+  background: #d1fae5;
+  color: #065f46;
+  border: 2px solid #10b981;
+}
+
+.instance-impact-section {
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.instance-impact-section:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.instance-impact-section h5 {
+  margin: 0 0 12px 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.instance-impact-section h5 i {
+  color: #3b82f6;
+  font-size: 16px;
+}
+
+.instance-impact-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.instance-impact-list li {
+  padding: 10px 0;
+  padding-left: 24px;
+  position: relative;
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.instance-impact-list li::before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  color: #3b82f6;
+  font-weight: bold;
+}
+
+.instance-impact-list li strong {
+  color: #1e293b;
+  font-weight: 600;
+}
+
+.instance-impact-report {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.instance-impact-report-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+  border-left: 3px solid #3b82f6;
+}
+
+.instance-impact-report-label {
+  font-weight: 600;
+  color: #374151;
+  font-size: 14px;
+}
+
+.instance-impact-report-value {
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.instance-impact-report-value.risk-assessment-high {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.instance-impact-report-value.risk-assessment-medium {
+  color: #f59e0b;
+  font-weight: 600;
+}
+
+.instance-impact-report-value.risk-assessment-low {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.instance-impact-warning {
+  background: #fef3c7;
+  border: 1px solid #fbbf24;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-top: 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  color: #92400e;
+}
+
+.instance-impact-warning i {
+  color: #f59e0b;
+  font-size: 18px;
+  margin-top: 2px;
+}
+
+.instance-impact-warning strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #78350f;
+}
+
+.instance-impact-warning ul {
+  margin: 8px 0 0 0;
+  padding-left: 20px;
 } 

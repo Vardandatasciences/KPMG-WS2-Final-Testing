@@ -66,6 +66,12 @@
       {{ alertMessage.text }}
     </div>
 
+    <!-- Account Mode Warning Banner -->
+    <div v-if="accountModeError" class="sentinel-account-mode-warning">
+      <i class="fas fa-exclamation-triangle"></i>
+      <span>{{ accountModeError }}</span>
+    </div>
+
     <!-- Microsoft Sentinel Incidents Section -->
     <div v-if="isSentinelConnected" class="sentinel-incidents-section">
       <div class="sentinel-section-header">
@@ -408,14 +414,18 @@ export default {
         text: '',
         icon: ''
       },
-      axiosInstance: null
+      axiosInstance: null,
+      sessionId: null,  // Store session ID from URL for local dev workaround
+      accountModeError: null  // Store account mode error message for persistent display
     };
   },
   
   created() {
     // Configure axios instance for session-based authentication (no JWT tokens)
+    // Use API_BASE_URL from config instead of hardcoded localhost
+    const apiBaseUrl = API_ENDPOINTS.SENTINEL_STATUS.replace('/api/sentinel/status/', '');
     this.axiosInstance = axios.create({
-      baseURL: 'http://localhost:8000',
+      baseURL: apiBaseUrl,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -495,22 +505,45 @@ export default {
   },
 
   mounted() {
-    this.checkConnectionStatus();
+    // Extract session ID from URL/localStorage first
+    this.extractSessionId();
+    // Handle query params (which may trigger status check)
     this.handleQueryParams();
+    // Also do initial status check
+    this.checkConnectionStatus();
   },
 
   methods: {
     async checkConnectionStatus() {
       try {
-        const response = await this.axiosInstance.get(API_ENDPOINTS.SENTINEL_STATUS);
+        console.log('[SENTINEL] Checking connection status...');
+        // Include session_id in query params if available (for local dev workaround)
+        let url = API_ENDPOINTS.SENTINEL_STATUS;
+        if (this.sessionId) {
+          url += (url.includes('?') ? '&' : '?') + `session_id=${this.sessionId}`;
+          console.log('[SENTINEL] Using session ID from URL:', this.sessionId.substring(0, 20) + '...');
+        }
+        const response = await this.axiosInstance.get(url);
+        console.log('[SENTINEL] Status response:', response.data);
         this.isSentinelConnected = response.data.connected;
         this.userInfo = response.data.userInfo;
         
+        console.log('[SENTINEL] Connection status:', this.isSentinelConnected);
+        console.log('[SENTINEL] User info:', this.userInfo);
+        
         if (this.isSentinelConnected) {
+          console.log('[SENTINEL] Connected! Loading incidents...');
           this.loadIncidents();
+        } else {
+          console.log('[SENTINEL] Not connected yet');
         }
       } catch (error) {
-        console.error('Error checking connection status:', error);
+        console.error('[SENTINEL] Error checking connection status:', error);
+        console.error('[SENTINEL] Error details:', {
+          message: error.message,
+          response: error.response?.data,
+          status: error.response?.status
+        });
       }
     },
 
@@ -519,7 +552,13 @@ export default {
       try {
         // Include timeRange in the API call
         const timeRangeDays = this.filters.timeRange || '30';
-        const response = await this.axiosInstance.get(`${API_ENDPOINTS.SENTINEL_INCIDENTS}?days=${timeRangeDays}`);
+        // Include session_id if available (same as status check) so backend can load correct session
+        let url = `${API_ENDPOINTS.SENTINEL_INCIDENTS}?days=${timeRangeDays}`;
+        if (this.sessionId) {
+          url += `&session_id=${this.sessionId}`;
+          console.log('[SENTINEL] Loading incidents with session ID:', this.sessionId.substring(0, 20) + '...');
+        }
+        const response = await this.axiosInstance.get(url);
         console.log('[SENTINEL] Raw response:', response.data);
         const incidentsData = response.data.alerts || response.data.incidents || [];
         
@@ -536,7 +575,8 @@ export default {
         }
       } catch (error) {
         console.error('Error loading incidents:', error);
-        this.showAlert('alert-danger', 'Failed to load incidents', 'fas fa-exclamation-triangle');
+        const backendMsg = error.response?.data?.userMessage || error.response?.data?.details || 'Failed to load incidents';
+        this.showAlert('alert-danger', backendMsg, 'fas fa-exclamation-triangle');
       } finally {
         this.loading = false;
       }
@@ -566,7 +606,18 @@ export default {
 
     async disconnectSentinel() {
       try {
-        await this.axiosInstance.get(API_ENDPOINTS.SENTINEL_DISCONNECT);
+        // Include session_id so backend can disconnect the correct Sentinel session
+        let url = API_ENDPOINTS.SENTINEL_DISCONNECT;
+        if (this.sessionId) {
+          url += (url.includes('?') ? '&' : '?') + `session_id=${this.sessionId}`;
+          console.log('[SENTINEL] Disconnecting with session ID:', this.sessionId.substring(0, 20) + '...');
+        }
+        await this.axiosInstance.get(url);
+
+        // Clear local session tracking
+        this.sessionId = null;
+        localStorage.removeItem('sentinel_session_id');
+
         this.isSentinelConnected = false;
         this.userInfo = null;
         this.incidents = [];
@@ -642,15 +693,52 @@ export default {
       }, 5000);
     },
 
+    extractSessionId() {
+      const urlParams = new URLSearchParams(window.location.search);
+      
+      // Extract session_id from URL if present (for local dev workaround)
+      const sessionId = urlParams.get('session_id');
+      if (sessionId) {
+        this.sessionId = sessionId;
+        console.log('[SENTINEL] Extracted session ID from URL:', sessionId.substring(0, 20) + '...');
+        // Store in localStorage as backup
+        localStorage.setItem('sentinel_session_id', sessionId);
+      } else {
+        // Try to get from localStorage as fallback
+        const storedSessionId = localStorage.getItem('sentinel_session_id');
+        if (storedSessionId) {
+          this.sessionId = storedSessionId;
+          console.log('[SENTINEL] Using session ID from localStorage:', storedSessionId.substring(0, 20) + '...');
+        }
+      }
+    },
+
     async handleQueryParams() {
       const urlParams = new URLSearchParams(window.location.search);
       
       if (urlParams.get('connected') === 'sentinel') {
         this.showAlert('alert-success', 'Successfully connected to Microsoft Sentinel!', 'fas fa-check-circle');
+        // Wait a bit for session to be fully saved before checking status
+        await new Promise(resolve => setTimeout(resolve, 500));
         // Refresh connection status and load incidents after successful OAuth
-        await this.checkConnectionStatus();
+        // Retry a few times in case session isn't ready yet
+        let retries = 3;
+        while (retries > 0) {
+          await this.checkConnectionStatus();
+          if (this.isSentinelConnected) {
+            break;
+          }
+          retries--;
+          if (retries > 0) {
+            console.log(`[SENTINEL] Status check failed, retrying... (${retries} attempts left)`);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
       } else if (urlParams.get('disconnected') === 'sentinel') {
         this.showAlert('alert-info', 'Disconnected from Microsoft Sentinel.', 'fas fa-info-circle');
+        // Clear session ID on disconnect
+        this.sessionId = null;
+        localStorage.removeItem('sentinel_session_id');
         // Update connection status after disconnect
         await this.checkConnectionStatus();
       } else if (urlParams.get('error')) {

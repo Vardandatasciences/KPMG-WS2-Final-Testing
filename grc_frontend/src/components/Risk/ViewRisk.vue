@@ -206,6 +206,115 @@
               </li>
             </ul>
           </div>
+
+          <!-- Impact Analysis Section -->
+          <div class="risk-impact-analysis-panel" v-if="Object.keys(getRiskChanges()).length > 0">
+            <div class="risk-impact-analysis-header" @click="toggleImpactAnalysis">
+              <h4>
+                <i class="fas fa-chart-line"></i>
+                Impact Analysis
+              </h4>
+              <button class="risk-impact-toggle-btn" type="button">
+                <i :class="showImpactAnalysis ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
+              </button>
+            </div>
+            <div v-if="showImpactAnalysis" class="risk-impact-analysis-content">
+              <div class="risk-impact-loading" v-if="analyzingImpact">
+                <i class="fas fa-spinner fa-spin"></i> Analyzing impact...
+              </div>
+              <div v-else>
+                <!-- Risk Level Indicator -->
+                <div class="risk-impact-risk-level">
+                  <div class="risk-impact-risk-badge" :class="'risk-level-' + impactAnalysis.riskLevel.toLowerCase()">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Risk Level: {{ impactAnalysis.riskLevel }}
+                  </div>
+                </div>
+
+                <!-- Affected Modules -->
+                <div class="risk-impact-section">
+                  <h5><i class="fas fa-cubes"></i> Affected Modules</h5>
+                  <ul class="risk-impact-list">
+                    <li v-for="module in impactAnalysis.affectedModules" :key="module">
+                      <strong>{{ module }}</strong>
+                    </li>
+                  </ul>
+                </div>
+
+                <!-- Affected Users -->
+                <div class="risk-impact-section">
+                  <h5><i class="fas fa-users"></i> Affected Users</h5>
+                  <ul class="risk-impact-list">
+                    <li v-for="user in impactAnalysis.affectedUsers" :key="user">
+                      <strong>{{ user }}</strong>
+                    </li>
+                  </ul>
+                </div>
+
+                <!-- Dependencies -->
+                <div class="risk-impact-section">
+                  <h5><i class="fas fa-project-diagram"></i> Dependencies</h5>
+                  <ul class="risk-impact-list">
+                    <li v-for="dependency in impactAnalysis.dependencies" :key="dependency">
+                      <strong>{{ dependency }}</strong>
+                    </li>
+                  </ul>
+                </div>
+
+                <!-- Impact Report -->
+                <div class="risk-impact-section">
+                  <h5><i class="fas fa-file-alt"></i> Impact Report</h5>
+                  <div class="risk-impact-report">
+                    <div class="risk-impact-report-item">
+                      <span class="risk-impact-report-label">Affected Components:</span>
+                      <span class="risk-impact-report-value">{{ impactAnalysis.affectedComponents.length }}</span>
+                    </div>
+                    <div class="risk-impact-report-item">
+                      <span class="risk-impact-report-label">Estimated Impact:</span>
+                      <span class="risk-impact-report-value">{{ impactAnalysis.estimatedImpact }}</span>
+                    </div>
+                    <div class="risk-impact-report-item">
+                      <span class="risk-impact-report-label">Risk Assessment:</span>
+                      <span class="risk-impact-report-value" :class="'risk-assessment-' + impactAnalysis.riskLevel.toLowerCase()">
+                        {{ impactAnalysis.riskAssessment }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Recommendations -->
+                <div class="risk-impact-section">
+                  <h5><i class="fas fa-lightbulb"></i> Recommendations</h5>
+                  <ul class="risk-impact-list">
+                    <li v-for="(recommendation, index) in impactAnalysis.recommendations" :key="index">
+                      {{ recommendation }}
+                    </li>
+                  </ul>
+                </div>
+
+                <!-- High-Risk Areas -->
+                <div class="risk-impact-warning" v-if="impactAnalysis.highRiskAreas.length > 0">
+                  <i class="fas fa-exclamation-triangle"></i>
+                  <div>
+                    <strong>High-Risk Areas Detected:</strong>
+                    <ul class="risk-impact-list">
+                      <li v-for="area in impactAnalysis.highRiskAreas" :key="area">{{ area }}</li>
+                    </ul>
+                  </div>
+                </div>
+
+                <!-- Mitigation Steps -->
+                <div class="risk-impact-section">
+                  <h5><i class="fas fa-shield-alt"></i> Suggested Mitigation Steps</h5>
+                  <ul class="risk-impact-list">
+                    <li v-for="(step, index) in impactAnalysis.mitigationSteps" :key="index">
+                      <strong>Step {{ index + 1 }}:</strong> {{ step }}
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="risk-rectification-modal-footer">
           <button class="risk-rectification-modal-cancel-btn" @click="closeRiskRectificationModal">
@@ -244,6 +353,20 @@ export default {
       errorMessage: '',
       showRectificationModal: false,
       submittingRectification: false,
+      showImpactAnalysis: true,
+      analyzingImpact: false,
+      impactAnalysis: {
+        riskLevel: 'Medium',
+        affectedModules: [],
+        affectedUsers: [],
+        dependencies: [],
+        affectedComponents: [],
+        estimatedImpact: 'Moderate',
+        riskAssessment: 'Medium risk - Review recommended',
+        recommendations: [],
+        highRiskAreas: [],
+        mitigationSteps: []
+      },
       riskScoreOptions: [
         { value: 1, label: '1 - Very Low' },
         { value: 2, label: '2 - Low' },
@@ -556,6 +679,192 @@ export default {
         return
       }
       this.showRectificationModal = true
+      this.analyzeImpact()
+    },
+    
+    toggleImpactAnalysis() {
+      this.showImpactAnalysis = !this.showImpactAnalysis
+    },
+    
+    analyzeImpact() {
+      this.analyzingImpact = true
+      
+      // Simulate analysis delay for better UX
+      setTimeout(() => {
+        const changes = this.getRiskChanges()
+        this.impactAnalysis = this.calculateRiskImpact(changes)
+        this.analyzingImpact = false
+      }, 800)
+    },
+    
+    calculateRiskImpact(changes) {
+      // Analyze changes and determine impact
+      const affectedFields = Object.keys(changes)
+      const criticalFields = ['RiskPriority', 'Criticality', 'RiskLikelihood', 'RiskImpact', 'RiskExposureRating']
+      const hasCriticalChanges = affectedFields.some(field => criticalFields.includes(field))
+      
+      // Determine risk level
+      let riskLevel = 'Low'
+      let riskScore = 0
+      
+      affectedFields.forEach(field => {
+        if (criticalFields.includes(field)) {
+          riskScore += 3
+        } else if (['Category', 'RiskType', 'RiskMitigation'].includes(field)) {
+          riskScore += 2
+        } else {
+          riskScore += 1
+        }
+      })
+      
+      if (riskScore >= 10 || hasCriticalChanges) {
+        riskLevel = 'High'
+      } else if (riskScore >= 5) {
+        riskLevel = 'Medium'
+      }
+      
+      // Determine affected modules based on changes
+      const affectedModules = []
+      if (changes.Category) affectedModules.push('Risk Management', 'Compliance Module')
+      if (changes.ComplianceId) affectedModules.push('Compliance Module', 'Policy Management')
+      if (changes.RiskMitigation) affectedModules.push('Risk Handling', 'Workflow Engine')
+      if (changes.RiskPriority || changes.Criticality) {
+        affectedModules.push('Risk Dashboard', 'Analytics Module', 'Reporting System')
+      }
+      if (changes.RiskLikelihood || changes.RiskImpact) {
+        affectedModules.push('Risk Scoring', 'Heatmap Visualization', 'Risk Metrics')
+      }
+      
+      // Remove duplicates
+      const uniqueModules = [...new Set(affectedModules)]
+      
+      // Determine affected users
+      const affectedUsers = []
+      if (this.risk && this.risk.RiskOwner) {
+        affectedUsers.push(this.risk.RiskOwner)
+      }
+      if (changes.RiskPriority || changes.Criticality) {
+        affectedUsers.push('Risk Managers', 'Compliance Officers', 'Executive Team')
+      }
+      if (changes.RiskMitigation) {
+        affectedUsers.push('Risk Handlers', 'Assigned Users', 'Reviewers')
+      }
+      const uniqueUsers = [...new Set(affectedUsers)]
+      
+      // Determine dependencies
+      const dependencies = []
+      if (changes.ComplianceId) {
+        dependencies.push('Compliance Records', 'Policy Documents', 'Sub-Policy Mappings')
+      }
+      if (changes.RiskMitigation) {
+        dependencies.push('Mitigation Workflows', 'Approval Processes', 'Risk Instances')
+      }
+      if (changes.Category) {
+        dependencies.push('Category Filters', 'Risk Classifications', 'Reporting Queries')
+      }
+      if (changes.RiskPriority || changes.Criticality) {
+        dependencies.push('Risk Heatmaps', 'Dashboard Widgets', 'KPI Calculations', 'Analytics Reports')
+      }
+      const uniqueDependencies = [...new Set(dependencies)]
+      
+      // Affected components
+      const affectedComponents = []
+      if (changes.RiskTitle || changes.RiskDescription) {
+        affectedComponents.push('Risk Details View', 'Risk List Display', 'Search Index')
+      }
+      if (changes.Category) {
+        affectedComponents.push('Category Filters', 'Risk Grouping', 'Category Analytics')
+      }
+      if (changes.RiskPriority || changes.Criticality) {
+        affectedComponents.push('Priority Badges', 'Criticality Indicators', 'Sorting Logic', 'Filter Options')
+      }
+      if (changes.RiskLikelihood || changes.RiskImpact) {
+        affectedComponents.push('Risk Heatmap', 'Risk Matrix', 'Scoring Calculations')
+      }
+      if (changes.RiskMitigation) {
+        affectedComponents.push('Mitigation Display', 'Workflow Steps', 'Approval Forms')
+      }
+      
+      // Estimated impact
+      let estimatedImpact = 'Low'
+      if (riskScore >= 10) {
+        estimatedImpact = 'High - Significant system-wide impact expected'
+      } else if (riskScore >= 5) {
+        estimatedImpact = 'Moderate - Multiple components affected'
+      } else {
+        estimatedImpact = 'Low - Limited impact scope'
+      }
+      
+      // Risk assessment
+      let riskAssessment = 'Low risk - Changes are safe to proceed'
+      if (riskLevel === 'High') {
+        riskAssessment = 'High risk - Requires thorough review and approval'
+      } else if (riskLevel === 'Medium') {
+        riskAssessment = 'Medium risk - Review recommended before approval'
+      }
+      
+      // Recommendations
+      const recommendations = []
+      if (hasCriticalChanges) {
+        recommendations.push('Notify all stakeholders before applying changes')
+        recommendations.push('Schedule a review meeting with risk management team')
+        recommendations.push('Update related risk instances and workflows')
+      }
+      if (changes.RiskPriority || changes.Criticality) {
+        recommendations.push('Verify impact on risk heatmaps and dashboards')
+        recommendations.push('Check if changes affect active risk instances')
+        recommendations.push('Update risk metrics and KPI calculations')
+      }
+      if (changes.ComplianceId) {
+        recommendations.push('Verify compliance record exists and is valid')
+        recommendations.push('Check policy and sub-policy mappings')
+      }
+      if (changes.RiskMitigation) {
+        recommendations.push('Review mitigation steps with assigned users')
+        recommendations.push('Update workflow approvals if needed')
+      }
+      if (recommendations.length === 0) {
+        recommendations.push('Changes appear safe - standard review process applies')
+      }
+      
+      // High-risk areas
+      const highRiskAreas = []
+      if (changes.RiskPriority && (this.editRisk.RiskPriority === 'Critical' || this.editRisk.RiskPriority === 'High')) {
+        highRiskAreas.push('Priority escalation may trigger alerts and notifications')
+      }
+      if (changes.Criticality && (this.editRisk.Criticality === 'Critical' || this.editRisk.Criticality === 'High')) {
+        highRiskAreas.push('Criticality change affects risk scoring and heatmap positioning')
+      }
+      if (changes.RiskLikelihood || changes.RiskImpact) {
+        highRiskAreas.push('Score changes impact risk matrix and exposure calculations')
+      }
+      if (changes.ComplianceId) {
+        highRiskAreas.push('Compliance linkage changes may affect policy mappings')
+      }
+      
+      // Mitigation steps
+      const mitigationSteps = []
+      mitigationSteps.push('Review all affected modules and components listed above')
+      mitigationSteps.push('Notify affected users about pending changes')
+      if (hasCriticalChanges) {
+        mitigationSteps.push('Create backup of current risk data before applying changes')
+        mitigationSteps.push('Test changes in a staging environment if available')
+      }
+      mitigationSteps.push('Monitor system after changes are applied')
+      mitigationSteps.push('Update documentation if risk structure changes significantly')
+      
+      return {
+        riskLevel,
+        affectedModules: uniqueModules,
+        affectedUsers: uniqueUsers,
+        dependencies: uniqueDependencies,
+        affectedComponents,
+        estimatedImpact,
+        riskAssessment,
+        recommendations,
+        highRiskAreas,
+        mitigationSteps
+      }
     },
     
     closeRiskRectificationModal() {
@@ -584,13 +893,17 @@ export default {
         
         const axios = (await import('axios')).default
         
+        // Get impact analysis before submitting
+        const impactAnalysis = this.calculateRiskImpact(changes)
+        
         const response = await axios.post(
           API_ENDPOINTS.CREATE_DATA_SUBJECT_REQUEST,
           {
             request_type: 'RECTIFICATION',
             info_type: 'risk',
             risk_id: this.risk.RiskId,
-            changes: changes
+            changes: changes,
+            impact_analysis: impactAnalysis
           }
         )
         

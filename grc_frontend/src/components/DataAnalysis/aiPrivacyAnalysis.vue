@@ -469,9 +469,10 @@
 <script>
 import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import axios from 'axios'
-import { API_ENDPOINTS, API_BASE_URL } from '../../config/api.js'
+import { API_BASE_URL } from '../../config/api.js'
 import { Chart, registerables } from 'chart.js'
 import './aiPrivacyAnalysis.css'
+import aiPrivacyService from '@/services/aiPrivacyService' // NEW: centralized AI privacy cache
 
 // Register Chart.js components
 if (registerables && registerables.length > 0) {
@@ -583,29 +584,32 @@ export default {
           frameworkId = null
         }
 
-        const url = API_ENDPOINTS.AI_PRIVACY_ANALYSIS(frameworkId)
-        const accessToken = localStorage.getItem('access_token')
-
-        const response = await axios.get(url, {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          },
-          timeout: 120000 // 120 seconds (2 minutes) timeout for AI analysis
-        })
-
-        if (response.data && response.data.status === 'success') {
-          analysisData.value = response.data.data
-          checkAlerts(response.data.data)
-          // Wait for DOM to be ready before rendering charts
-          await nextTick()
-          // Add a small delay to ensure canvas elements are fully rendered
-          setTimeout(() => {
-            renderCharts()
-          }, 100)
-        } else {
-          throw new Error(response.data?.message || 'Failed to fetch AI analysis')
+        // 1) Try to use cached analysis from the shared AI privacy service
+        if (aiPrivacyService.hasValidCache(frameworkId)) {
+          console.log('[AI Privacy] Using cached analysis data')
+          const cachedData = aiPrivacyService.getAnalysis(frameworkId)
+          if (cachedData) {
+            analysisData.value = cachedData
+            checkAlerts(cachedData)
+            await nextTick()
+            setTimeout(() => {
+              renderCharts()
+            }, 100)
+            return
+          }
         }
+
+        // 2) If no cache, trigger fetch via the shared service
+        console.log('[AI Privacy] No valid cache, fetching from API via service...')
+        const data = await aiPrivacyService.fetchAnalysis(frameworkId)
+        analysisData.value = data
+        checkAlerts(data)
+
+        // Wait for DOM to be ready before rendering charts
+        await nextTick()
+        setTimeout(() => {
+          renderCharts()
+        }, 100)
       } catch (err) {
         console.error('Error fetching AI analysis:', err)
         error.value = err.response?.data?.message || err.message || 'Failed to load AI analysis'

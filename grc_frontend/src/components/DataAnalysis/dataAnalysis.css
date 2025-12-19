@@ -194,6 +194,21 @@
   color: #E57373;
 }
 
+.summary-icon.maturity {
+  background: #E0ECFF;
+  color: #1D4ED8;
+}
+
+.summary-icon.minimization {
+  background: #ECFDF3;
+  color: #16A34A;
+}
+
+.summary-icon.coverage {
+  background: #F3E8FF;
+  color: #7C3AED;
+}
+
 .summary-content {
   flex: 1;
 }
@@ -339,6 +354,67 @@
 
 .progress-fill.confidential {
   background: linear-gradient(90deg, #E57373, #EF9A9A);
+}
+
+/* Module-level AI Privacy Metrics (Maturity / Minimization / Coverage) */
+.module-privacy-metrics {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px dashed #e5e7eb;
+}
+
+.module-privacy-metrics .metric-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.module-privacy-metrics .metric-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #4b5563;
+  white-space: nowrap;
+}
+
+.module-privacy-metrics .metric-label i {
+  color: #6366f1;
+}
+
+.module-privacy-metrics .metric-bar {
+  width: 100%;
+  height: 6px;
+  background: #f3f4f6;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.module-privacy-metrics .metric-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.module-privacy-metrics .metric-bar-fill.maturity {
+  background: linear-gradient(90deg, #3b82f6, #2563eb);
+}
+
+.module-privacy-metrics .metric-bar-fill.minimization {
+  background: linear-gradient(90deg, #22c55e, #16a34a);
+}
+
+.module-privacy-metrics .metric-bar-fill.coverage {
+  background: linear-gradient(90deg, #a855f7, #7c3aed);
+}
+
+.module-privacy-metrics .metric-value {
+  font-weight: 600;
+  color: #111827;
+  text-align: right;
+  white-space: nowrap;
 }
 
 /* Chart Container */

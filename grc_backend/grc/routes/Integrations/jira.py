@@ -122,46 +122,122 @@ class JiraIntegration:
                     'error': f"Failed to fetch project: {project_response.status_code if 'project_response' in locals() else 'unknown'}"
                 }
             
-            # Get project components
+            # Use the actual project ID and key from the successfully fetched project data
+            # This ensures we use the correct identifiers even if the project was fetched by key
+            actual_project_id = project_data.get('id')
+            actual_project_key = project_data.get('key')
+            
+            # Get project components - use actual project ID or key from fetched project
             components_data = []
             try:
-                components_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/project/{project_id}/components"
-                components_response = requests.get(components_url, headers=self.headers, timeout=30)
-                if components_response.status_code == 200:
-                    components_data = components_response.json()
+                # Try with actual project ID first
+                if actual_project_id:
+                    components_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/project/{actual_project_id}/components"
+                    components_response = requests.get(components_url, headers=self.headers, timeout=30)
+                    if components_response.status_code == 200:
+                        components_data = components_response.json()
+                    else:
+                        logger.warning(f"Failed to fetch components by ID {actual_project_id}: {components_response.status_code}")
+                
+                # If that failed, try with project key
+                if not components_data and actual_project_key:
+                    components_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/project/{actual_project_key}/components"
+                    components_response = requests.get(components_url, headers=self.headers, timeout=30)
+                    if components_response.status_code == 200:
+                        components_data = components_response.json()
             except Exception as e:
                 logger.warning(f"Failed to fetch components: {str(e)}")
             
-            # Get project versions
+            # Get project versions - use actual project ID or key from fetched project
             versions_data = []
             try:
-                versions_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/project/{project_id}/versions"
-                versions_response = requests.get(versions_url, headers=self.headers, timeout=30)
-                if versions_response.status_code == 200:
-                    versions_data = versions_response.json()
+                # Try with actual project ID first
+                if actual_project_id:
+                    versions_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/project/{actual_project_id}/versions"
+                    versions_response = requests.get(versions_url, headers=self.headers, timeout=30)
+                    if versions_response.status_code == 200:
+                        versions_data = versions_response.json()
+                    else:
+                        logger.warning(f"Failed to fetch versions by ID {actual_project_id}: {versions_response.status_code}")
+                
+                # If that failed, try with project key
+                if not versions_data and actual_project_key:
+                    versions_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/project/{actual_project_key}/versions"
+                    versions_response = requests.get(versions_url, headers=self.headers, timeout=30)
+                    if versions_response.status_code == 200:
+                        versions_data = versions_response.json()
             except Exception as e:
                 logger.warning(f"Failed to fetch versions: {str(e)}")
             
-            # Get project issues (first 50)
+            # Get project issues (first 50) - JQL requires project key, not ID
+            # IMPORTANT: Use POST method with JSON body (GET with query params returns 410 error)
             issues_data = {"issues": [], "total": 0}
             try:
-                # Try with project ID first (if available)
-                if project_id is not None:
-                    issues_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/search?jql=project={project_id}&maxResults=50"
-                    issues_response = requests.get(issues_url, headers=self.headers, timeout=30)
-                    if issues_response.status_code == 200:
-                        issues_data = issues_response.json()
-                    else:
-                        logger.warning(f"Failed to fetch issues by project ID {project_id}: {issues_response.status_code} {issues_response.text}")
+                # Use standard /rest/api/3/search endpoint with POST method
+                # The 410 error occurs when using GET - POST with JSON body is required
+                search_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/search"
                 
-                # If that failed, or no project_id, fall back to project key from project_data
-                if (not issues_data['issues']) and project_data.get('key'):
-                    issues_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/search?jql=project=\"{project_data.get('key', '')}\"&maxResults=50"
-                    issues_response = requests.get(issues_url, headers=self.headers, timeout=30)
-                    if issues_response.status_code == 200:
-                        issues_data = issues_response.json()
+                if actual_project_key:
+                    # Try different JQL formats - some Jira instances prefer different syntax
+                    # Start with simplest format first
+                    jql_formats = [
+                        f'project={actual_project_key}',  # Simplest format (no spaces, no quotes)
+                        f'project = {actual_project_key}',  # With spaces
+                        f'project = "{actual_project_key}"',  # With quotes
+                        f'project="{actual_project_key}"',  # Without spaces, with quotes
+                    ]
+                    
+                    for jql_query in jql_formats:
+                        # Use POST with JSON body (required for /rest/api/3/search/jql endpoint)
+                        search_payload = {
+                            'jql': jql_query,
+                            'maxResults': 50
+                        }
+                        post_headers = {**self.headers, 'Content-Type': 'application/json'}
+                        try:
+                            issues_response = requests.post(
+                                search_url,
+                                headers=post_headers,
+                                json=search_payload,
+                                timeout=30
+                            )
+                            if issues_response.status_code == 200:
+                                issues_data = issues_response.json()
+                                logger.info(f"Successfully fetched {len(issues_data.get('issues', []))} issues for project {actual_project_key} using JQL: {jql_query}")
+                                break
+                            elif issues_response.status_code == 400:
+                                # Bad JQL syntax, try next format
+                                logger.debug(f"JQL format failed (400): {jql_query}, trying next format...")
+                                continue
+                            else:
+                                logger.warning(f"Failed to fetch issues by project key {actual_project_key} with JQL '{jql_query}': {issues_response.status_code} {issues_response.text}")
+                        except Exception as e:
+                            logger.warning(f"Exception while trying JQL '{jql_query}': {str(e)}")
+                            continue
+                
+                # Fallback: try with project ID if key didn't work (some Jira instances might accept it)
+                if not issues_data.get('issues') and actual_project_id:
+                    jql_query = f'project = {actual_project_id}'
+                    search_payload = {'jql': jql_query, 'maxResults': 50}
+                    post_headers = {**self.headers, 'Content-Type': 'application/json'}
+                    try:
+                        issues_response = requests.post(search_url, headers=post_headers, json=search_payload, timeout=30)
+                        if issues_response.status_code == 200:
+                            issues_data = issues_response.json()
+                            logger.info(f"Successfully fetched {len(issues_data.get('issues', []))} issues for project ID {actual_project_id}")
+                        else:
+                            logger.warning(f"Failed to fetch issues by project ID {actual_project_id}: {issues_response.status_code} {issues_response.text}")
+                    except Exception as e:
+                        logger.warning(f"Exception fetching issues by project ID: {str(e)}")
             except Exception as e:
                 logger.warning(f"Failed to fetch issues: {str(e)}")
+            
+            # If issues couldn't be fetched but we have project data, still return success
+            # with a note about issues
+            if not issues_data.get('issues') and project_data:
+                logger.info(f"Project details fetched successfully, but issues could not be retrieved. This may be due to API restrictions or permissions.")
+                # Keep issues_data as empty but valid structure
+                issues_data = {"issues": [], "total": 0, "warning": "Issues could not be fetched. This may be due to API restrictions or missing permissions."}
             
             return {
                 'success': True,
@@ -761,10 +837,35 @@ def jira_project_details(request):
                 
                 # Check if project details are stored
                 project_details = connection.projects_data.get('project_details', {})
+                
+                # Try to find project details - handle both string and numeric project IDs
+                project_detail = None
                 if project_id in project_details:
+                    project_detail = project_details[project_id]
+                else:
+                    # Try converting project_id to string or int to match stored keys
+                    project_id_str = str(project_id)
+                    project_id_int = None
+                    try:
+                        project_id_int = int(project_id)
+                    except (ValueError, TypeError):
+                        pass
+                    
+                    if project_id_str in project_details:
+                        project_detail = project_details[project_id_str]
+                    elif project_id_int is not None and project_id_int in project_details:
+                        project_detail = project_details[project_id_int]
+                    else:
+                        # Try to find by iterating through keys (handles type mismatches)
+                        for key, value in project_details.items():
+                            if str(key) == str(project_id) or str(key) == project_id_str:
+                                project_detail = value
+                                break
+                
+                if project_detail:
                     return JsonResponse({
                         'success': True,
-                        'project_details': project_details[project_id],
+                        'project_details': project_detail,
                         'last_updated': connection.updated_at.isoformat()
                     })
                 else:
@@ -788,6 +889,33 @@ def jira_project_details(request):
             access_token = data.get('access_token')
             cloud_id = data.get('cloud_id')
             
+            # Validate access token - if it's a placeholder or invalid, get from stored connection
+            if not access_token or access_token in ['stored_data_token', 'oauth_success'] or len(access_token) < 20:
+                logger.info("Access token not provided or invalid, fetching from stored connection")
+                try:
+                    user = Users.objects.get(UserId=user_id)
+                    jira_app = ExternalApplication.objects.get(name='Jira')
+                    connection = ExternalApplicationConnection.objects.get(
+                        application=jira_app,
+                        user=user,
+                        connection_status='active'
+                    )
+                    access_token = connection.connection_token
+                    logger.info("Using stored connection token")
+                    
+                    # If cloud_id not provided, try to get it from stored resources
+                    if not cloud_id and connection.projects_data:
+                        resources = connection.projects_data.get('resources', [])
+                        if resources and len(resources) > 0:
+                            # Use the first resource's cloud ID
+                            cloud_id = resources[0].get('id')
+                            logger.info(f"Using cloud ID from stored resources: {cloud_id}")
+                except (Users.DoesNotExist, ExternalApplication.DoesNotExist, ExternalApplicationConnection.DoesNotExist):
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Access token is required and no stored connection found'
+                    })
+            
             if not access_token or not project_id or not cloud_id:
                 return JsonResponse({
                     'success': False,
@@ -798,9 +926,11 @@ def jira_project_details(request):
             jira_integration = JiraIntegration(access_token)
             
             # Fetch project details
+            logger.info(f"Fetching project details for project_id={project_id}, project_key={project_key}, cloud_id={cloud_id}")
             details_result = jira_integration.get_project_details(cloud_id, project_id=project_id, project_key=project_key)
             
             if details_result['success']:
+                logger.info(f"Successfully fetched project details for project_id={project_id}")
                 # Save project details to database
                 try:
                     user = Users.objects.get(UserId=user_id)
@@ -813,7 +943,9 @@ def jira_project_details(request):
                     # Update projects_data with project details
                     projects_data = connection.projects_data or {}
                     project_details = projects_data.get('project_details', {})
-                    project_details[project_id] = {
+                    # Normalize project_id to string for consistent key storage
+                    project_id_key = str(project_id)
+                    project_details[project_id_key] = {
                         'data': details_result['data'],
                         'fetched_at': datetime.now().isoformat()
                     }

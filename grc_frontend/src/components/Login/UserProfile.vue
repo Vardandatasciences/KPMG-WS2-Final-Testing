@@ -1198,6 +1198,33 @@
           <p class="section-helper">
             View all your data subject requests including access, rectification, erasure, and portability requests.
           </p>
+          
+          <!-- Risk Level Filter -->
+          <div v-if="isAdminUser" class="requests-filters">
+            <div class="filter-group">
+              <label for="riskLevelFilter">
+                <i class="fas fa-filter"></i> Filter by Risk Level:
+              </label>
+              <select id="riskLevelFilter" v-model="riskLevelFilter" class="filter-select">
+                <option value="">All Risk Levels</option>
+                <option value="High">High Risk</option>
+                <option value="Medium">Medium Risk</option>
+                <option value="Low">Low Risk</option>
+                <option value="N/A">No Risk Analysis</option>
+              </select>
+              <button v-if="riskLevelFilter" @click="riskLevelFilter = ''" class="clear-filter-btn" title="Clear filter">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+            <div class="filter-stats">
+              <span class="filter-stat-item">
+                <strong>Total:</strong> {{ dataSubjectRequests.length }}
+              </span>
+              <span class="filter-stat-item">
+                <strong>Filtered:</strong> {{ filteredRequests.length }}
+              </span>
+            </div>
+          </div>
          
           <!-- Loading State -->
           <div v-if="loadingRequests" class="loading-container">
@@ -1219,6 +1246,7 @@
                   <th>User ID</th>
                   <th>User Name</th>
                   <th>Request Type</th>
+                  <th>Risk Level</th>
                   <th>Status</th>
                   <th>Verification Status</th>
                   <th>Created At</th>
@@ -1229,18 +1257,28 @@
               </thead>
               <tbody>
                 <tr v-if="dataSubjectRequests.length === 0">
-                  <td :colspan="isAdminUser ? 10 : 9" class="no-requests">
+                  <td :colspan="isAdminUser ? 11 : 10" class="no-requests">
                     <i class="fas fa-inbox"></i>
                     <p>No data subject requests found.</p>
                   </td>
                 </tr>
-                <tr v-for="request in dataSubjectRequests" :key="request.id">
+                <tr v-for="request in filteredRequests" :key="request.id" :class="getRequestRowClass(request)">
                   <td>{{ request.id }}</td>
                   <td>{{ request.user_id }}</td>
                   <td>{{ request.user_name }}</td>
                   <td>
                     <span class="request-type-badge" :class="'type-' + request.request_type.toLowerCase()">
                       {{ request.request_type_display }}
+                    </span>
+                  </td>
+                  <td>
+                    <span v-if="getRequestRiskLevel(request)" class="risk-level-badge" :class="'risk-level-' + getRequestRiskLevel(request).toLowerCase()">
+                      <i class="fas fa-exclamation-triangle"></i>
+                      {{ getRequestRiskLevel(request) }}
+                    </span>
+                    <span v-else class="risk-level-badge risk-level-na">
+                      <i class="fas fa-minus"></i>
+                      N/A
                     </span>
                   </td>
                   <td>
@@ -1338,10 +1376,24 @@
                 <!-- Show info_type for non-ACCESS requests -->
                 <div v-if="selectedRequest.request_type !== 'ACCESS'" class="info-item">
                   <label>Requested From:</label>
-                  <span class="info-type-badge" :class="selectedRequest.audit_trail?.info_type === 'personal' ? 'info-type-personal' : 'info-type-business'">
-                    <i :class="selectedRequest.audit_trail?.info_type === 'personal' ? 'fas fa-user' : 'fas fa-building'"></i>
-                    {{ selectedRequest.audit_trail?.info_type === 'personal' ? 'Personal Information' : 'Business Information' }}
+                  <span class="info-type-badge" :class="getInfoTypeClass(selectedRequest.audit_trail?.info_type)">
+                    <i :class="getInfoTypeIcon(selectedRequest.audit_trail?.info_type)"></i>
+                    {{ getInfoTypeLabel(selectedRequest.audit_trail?.info_type) }}
                   </span>
+                </div>
+                <!-- Show Risk ID for risk requests -->
+                <div v-if="selectedRequest.audit_trail?.info_type === 'risk' && selectedRequest.audit_trail?.risk_id" class="info-item">
+                  <label>Risk ID:</label>
+                  <span class="risk-id-badge">{{ selectedRequest.audit_trail.risk_id }}</span>
+                </div>
+                <!-- Show Risk Instance ID for risk_instance requests -->
+                <div v-if="selectedRequest.audit_trail?.info_type === 'risk_instance' && selectedRequest.audit_trail?.risk_instance_id" class="info-item">
+                  <label>Risk Instance ID:</label>
+                  <span class="risk-id-badge">{{ selectedRequest.audit_trail.risk_instance_id }}</span>
+                </div>
+                <div v-if="selectedRequest.audit_trail?.info_type === 'risk_instance' && selectedRequest.audit_trail?.risk_id" class="info-item">
+                  <label>Parent Risk ID:</label>
+                  <span class="risk-id-badge">{{ selectedRequest.audit_trail.risk_id }}</span>
                 </div>
                 <div class="info-item">
                   <label>Status:</label>
@@ -1387,6 +1439,116 @@
             </div>
             <div v-else-if="selectedRequest.request_type !== 'ACCESS'" class="no-changes">
               <p><i class="fas fa-info-circle"></i> No changes found in this request.</p>
+            </div>
+
+            <!-- Impact Analysis Section (for risk and risk_instance requests) -->
+            <div v-if="selectedRequest.request_type === 'RECTIFICATION' && (selectedRequest.audit_trail?.info_type === 'risk' || selectedRequest.audit_trail?.info_type === 'risk_instance')" class="impact-analysis-section">
+              <div v-if="selectedRequest.audit_trail?.impact_analysis">
+              <div class="impact-analysis-header-with-export">
+                <h4><i class="fas fa-chart-line"></i> Impact Analysis</h4>
+                <button 
+                  @click="exportImpactAnalysis" 
+                  class="export-impact-btn"
+                  :disabled="exportingImpactAnalysis"
+                  title="Export Impact Analysis as PDF"
+                >
+                  <i v-if="exportingImpactAnalysis" class="fas fa-spinner fa-spin"></i>
+                  <i v-else class="fas fa-download"></i>
+                  {{ exportingImpactAnalysis ? 'Exporting...' : 'Export PDF' }}
+                </button>
+              </div>
+              <div class="impact-analysis-content">
+                <!-- Risk Level Indicator -->
+                <div class="impact-risk-level">
+                  <div class="impact-risk-badge" :class="'risk-level-' + (selectedRequest.audit_trail.impact_analysis.riskLevel || 'medium').toLowerCase()">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Risk Level: {{ selectedRequest.audit_trail.impact_analysis.riskLevel || 'Medium' }}
+                  </div>
+                </div>
+
+                <!-- Affected Modules -->
+                <div class="impact-subsection" v-if="selectedRequest.audit_trail.impact_analysis.affectedModules && selectedRequest.audit_trail.impact_analysis.affectedModules.length > 0">
+                  <h5><i class="fas fa-cubes"></i> Affected Modules</h5>
+                  <ul class="impact-list">
+                    <li v-for="module in selectedRequest.audit_trail.impact_analysis.affectedModules" :key="module">
+                      <strong>{{ module }}</strong>
+                    </li>
+                  </ul>
+                </div>
+
+                <!-- Affected Users -->
+                <div class="impact-subsection" v-if="selectedRequest.audit_trail.impact_analysis.affectedUsers && selectedRequest.audit_trail.impact_analysis.affectedUsers.length > 0">
+                  <h5><i class="fas fa-users"></i> Affected Users</h5>
+                  <ul class="impact-list">
+                    <li v-for="user in selectedRequest.audit_trail.impact_analysis.affectedUsers" :key="user">
+                      <strong>{{ user }}</strong>
+                    </li>
+                  </ul>
+                </div>
+
+                <!-- Dependencies -->
+                <div class="impact-subsection" v-if="selectedRequest.audit_trail.impact_analysis.dependencies && selectedRequest.audit_trail.impact_analysis.dependencies.length > 0">
+                  <h5><i class="fas fa-project-diagram"></i> Dependencies</h5>
+                  <ul class="impact-list">
+                    <li v-for="dependency in selectedRequest.audit_trail.impact_analysis.dependencies" :key="dependency">
+                      <strong>{{ dependency }}</strong>
+                    </li>
+                  </ul>
+                </div>
+
+                <!-- Impact Report -->
+                <div class="impact-subsection" v-if="selectedRequest.audit_trail.impact_analysis.affectedComponents || selectedRequest.audit_trail.impact_analysis.estimatedImpact">
+                  <h5><i class="fas fa-file-alt"></i> Impact Report</h5>
+                  <div class="impact-report">
+                    <div class="impact-report-item" v-if="selectedRequest.audit_trail.impact_analysis.affectedComponents">
+                      <span class="impact-report-label">Affected Components:</span>
+                      <span class="impact-report-value">{{ selectedRequest.audit_trail.impact_analysis.affectedComponents.length || 0 }}</span>
+                    </div>
+                    <div class="impact-report-item" v-if="selectedRequest.audit_trail.impact_analysis.estimatedImpact">
+                      <span class="impact-report-label">Estimated Impact:</span>
+                      <span class="impact-report-value">{{ selectedRequest.audit_trail.impact_analysis.estimatedImpact }}</span>
+                    </div>
+                    <div class="impact-report-item" v-if="selectedRequest.audit_trail.impact_analysis.riskAssessment">
+                      <span class="impact-report-label">Risk Assessment:</span>
+                      <span class="impact-report-value" :class="'risk-assessment-' + (selectedRequest.audit_trail.impact_analysis.riskLevel || 'medium').toLowerCase()">
+                        {{ selectedRequest.audit_trail.impact_analysis.riskAssessment }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Recommendations -->
+                <div class="impact-subsection" v-if="selectedRequest.audit_trail.impact_analysis.recommendations && selectedRequest.audit_trail.impact_analysis.recommendations.length > 0">
+                  <h5><i class="fas fa-lightbulb"></i> Recommendations</h5>
+                  <ul class="impact-list">
+                    <li v-for="(recommendation, index) in selectedRequest.audit_trail.impact_analysis.recommendations" :key="index">
+                      {{ recommendation }}
+                    </li>
+                  </ul>
+                </div>
+
+                <!-- High-Risk Areas -->
+                <div class="impact-warning" v-if="selectedRequest.audit_trail.impact_analysis.highRiskAreas && selectedRequest.audit_trail.impact_analysis.highRiskAreas.length > 0">
+                  <i class="fas fa-exclamation-triangle"></i>
+                  <div>
+                    <strong>High-Risk Areas Detected:</strong>
+                    <ul class="impact-list">
+                      <li v-for="area in selectedRequest.audit_trail.impact_analysis.highRiskAreas" :key="area">{{ area }}</li>
+                    </ul>
+                  </div>
+                </div>
+
+                <!-- Mitigation Steps -->
+                <div class="impact-subsection" v-if="selectedRequest.audit_trail.impact_analysis.mitigationSteps && selectedRequest.audit_trail.impact_analysis.mitigationSteps.length > 0">
+                  <h5><i class="fas fa-shield-alt"></i> Suggested Mitigation Steps</h5>
+                  <ul class="impact-list">
+                    <li v-for="(step, index) in selectedRequest.audit_trail.impact_analysis.mitigationSteps" :key="index">
+                      <strong>Step {{ index + 1 }}:</strong> {{ step }}
+                    </li>
+                  </ul>
+                </div>
+              </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1830,6 +1992,8 @@ export default {
       pendingEditType: null, // Store which edit type was requested
       showRequestDetailsModal: false,
       selectedRequest: null,
+      riskLevelFilter: '',
+      exportingImpactAnalysis: false,
       rbacModules: [
         {
           name: 'compliance',
@@ -1928,6 +2092,18 @@ export default {
         return false;
       }
       return this.otpDigits.every(digit => digit !== '') && this.otpDigits.join('').length === 6;
+    },
+    filteredRequests() {
+      if (!this.riskLevelFilter) {
+        return this.dataSubjectRequests;
+      }
+      return this.dataSubjectRequests.filter(request => {
+        const riskLevel = this.getRequestRiskLevel(request);
+        if (this.riskLevelFilter === 'N/A') {
+          return !riskLevel;
+        }
+        return riskLevel === this.riskLevelFilter;
+      });
     }
   },
   mounted() {
@@ -3587,6 +3763,15 @@ async updatePassword() {
       viewRequestDetails(request) {
         this.selectedRequest = request;
         this.showRequestDetailsModal = true;
+        // Debug: Log the request data to console
+        console.log('Viewing request details:', {
+          id: request.id,
+          request_type: request.request_type,
+          audit_trail: request.audit_trail,
+          info_type: request.audit_trail?.info_type,
+          has_impact_analysis: !!request.audit_trail?.impact_analysis,
+          impact_analysis: request.audit_trail?.impact_analysis
+        });
       },
      
       closeRequestDetailsModal() {
@@ -3877,6 +4062,33 @@ async updatePassword() {
        return changes;
      },
     
+     getInfoTypeClass(infoType) {
+       if (!infoType) return 'info-type-personal';
+       if (infoType === 'personal') return 'info-type-personal';
+       if (infoType === 'business') return 'info-type-business';
+       if (infoType === 'risk') return 'info-type-risk';
+       if (infoType === 'risk_instance') return 'info-type-risk-instance';
+       return 'info-type-personal';
+     },
+     
+     getInfoTypeIcon(infoType) {
+       if (!infoType) return 'fas fa-user';
+       if (infoType === 'personal') return 'fas fa-user';
+       if (infoType === 'business') return 'fas fa-building';
+       if (infoType === 'risk') return 'fas fa-exclamation-triangle';
+       if (infoType === 'risk_instance') return 'fas fa-file-alt';
+       return 'fas fa-user';
+     },
+     
+     getInfoTypeLabel(infoType) {
+       if (!infoType) return 'Personal Information';
+       if (infoType === 'personal') return 'Personal Information';
+       if (infoType === 'business') return 'Business Information';
+       if (infoType === 'risk') return 'Risk Information';
+       if (infoType === 'risk_instance') return 'Risk Instance Information';
+       return 'Personal Information';
+     },
+     
      formatFieldName(field) {
        const fieldNames = {
          firstName: 'First Name',
@@ -3894,6 +4106,248 @@ async updatePassword() {
          departmentHead: 'Department Head'
        };
        return fieldNames[field] || field;
+     },
+     
+     getRequestRiskLevel(request) {
+       if (request.audit_trail?.impact_analysis?.riskLevel) {
+         return request.audit_trail.impact_analysis.riskLevel;
+       }
+       return null;
+     },
+     
+     getRequestRowClass(request) {
+       const riskLevel = this.getRequestRiskLevel(request);
+       if (!riskLevel) return '';
+       return `risk-row-${riskLevel.toLowerCase()}`;
+     },
+     
+     async exportImpactAnalysis() {
+       if (!this.selectedRequest || !this.selectedRequest.audit_trail?.impact_analysis) {
+         return;
+       }
+       
+       this.exportingImpactAnalysis = true;
+       try {
+         const impactAnalysis = this.selectedRequest.audit_trail.impact_analysis;
+         const request = this.selectedRequest;
+         
+         // Create HTML content for PDF
+         const htmlContent = `
+           <!DOCTYPE html>
+           <html>
+           <head>
+             <meta charset="UTF-8">
+             <title>Impact Analysis Report - Request ${request.id}</title>
+             <style>
+               body {
+                 font-family: Arial, sans-serif;
+                 padding: 40px;
+                 color: #1e293b;
+                 line-height: 1.6;
+               }
+               .header {
+                 border-bottom: 3px solid #3b82f6;
+                 padding-bottom: 20px;
+                 margin-bottom: 30px;
+               }
+               .header h1 {
+                 color: #1e293b;
+                 margin: 0;
+                 font-size: 28px;
+               }
+               .header-info {
+                 margin-top: 10px;
+                 color: #6b7280;
+                 font-size: 14px;
+               }
+               .risk-level-badge {
+                 display: inline-block;
+                 padding: 8px 16px;
+                 border-radius: 6px;
+                 font-weight: 600;
+                 margin: 20px 0;
+               }
+               .risk-level-high {
+                 background: #fee2e2;
+                 color: #991b1b;
+                 border: 2px solid #dc2626;
+               }
+               .risk-level-medium {
+                 background: #fef3c7;
+                 color: #92400e;
+                 border: 2px solid #f59e0b;
+               }
+               .risk-level-low {
+                 background: #d1fae5;
+                 color: #065f46;
+                 border: 2px solid #10b981;
+               }
+               .section {
+                 margin-bottom: 30px;
+                 padding: 20px;
+                 background: #f9fafb;
+                 border-radius: 8px;
+                 border-left: 4px solid #3b82f6;
+               }
+               .section h3 {
+                 color: #1e293b;
+                 margin-top: 0;
+                 font-size: 18px;
+                 border-bottom: 2px solid #e5e7eb;
+                 padding-bottom: 10px;
+               }
+               .section ul {
+                 margin: 10px 0;
+                 padding-left: 20px;
+               }
+               .section li {
+                 margin: 8px 0;
+               }
+               .report-item {
+                 display: flex;
+                 justify-content: space-between;
+                 padding: 10px;
+                 background: white;
+                 margin: 5px 0;
+                 border-radius: 4px;
+               }
+               .warning-box {
+                 background: #fef3c7;
+                 border: 2px solid #fbbf24;
+                 padding: 15px;
+                 border-radius: 8px;
+                 margin: 20px 0;
+               }
+               .footer {
+                 margin-top: 40px;
+                 padding-top: 20px;
+                 border-top: 2px solid #e5e7eb;
+                 text-align: center;
+                 color: #6b7280;
+                 font-size: 12px;
+               }
+             </style>
+           </head>
+           <body>
+             <div class="header">
+               <h1>Impact Analysis Report</h1>
+               <div class="header-info">
+                 <strong>Request ID:</strong> ${request.id} | 
+                 <strong>Request Type:</strong> ${request.request_type_display} | 
+                 <strong>Info Type:</strong> ${request.audit_trail?.info_type || 'N/A'} | 
+                 <strong>Generated:</strong> ${new Date().toLocaleString()}
+               </div>
+             </div>
+             
+             <div style="text-align: center;">
+               <div class="risk-level-badge risk-level-${impactAnalysis.riskLevel?.toLowerCase() || 'medium'}">
+                 Risk Level: ${impactAnalysis.riskLevel || 'Medium'}
+               </div>
+             </div>
+             
+             ${impactAnalysis.affectedModules && impactAnalysis.affectedModules.length > 0 ? `
+             <div class="section">
+               <h3>Affected Modules</h3>
+               <ul>
+                 ${impactAnalysis.affectedModules.map(m => `<li><strong>${m}</strong></li>`).join('')}
+               </ul>
+             </div>
+             ` : ''}
+             
+             ${impactAnalysis.affectedUsers && impactAnalysis.affectedUsers.length > 0 ? `
+             <div class="section">
+               <h3>Affected Users</h3>
+               <ul>
+                 ${impactAnalysis.affectedUsers.map(u => `<li><strong>${u}</strong></li>`).join('')}
+               </ul>
+             </div>
+             ` : ''}
+             
+             ${impactAnalysis.dependencies && impactAnalysis.dependencies.length > 0 ? `
+             <div class="section">
+               <h3>Dependencies</h3>
+               <ul>
+                 ${impactAnalysis.dependencies.map(d => `<li><strong>${d}</strong></li>`).join('')}
+               </ul>
+             </div>
+             ` : ''}
+             
+             <div class="section">
+               <h3>Impact Report</h3>
+               <div class="report-item">
+                 <span><strong>Affected Components:</strong></span>
+                 <span>${impactAnalysis.affectedComponents?.length || 0}</span>
+               </div>
+               <div class="report-item">
+                 <span><strong>Estimated Impact:</strong></span>
+                 <span>${impactAnalysis.estimatedImpact || 'N/A'}</span>
+               </div>
+               <div class="report-item">
+                 <span><strong>Risk Assessment:</strong></span>
+                 <span>${impactAnalysis.riskAssessment || 'N/A'}</span>
+               </div>
+             </div>
+             
+             ${impactAnalysis.recommendations && impactAnalysis.recommendations.length > 0 ? `
+             <div class="section">
+               <h3>Recommendations</h3>
+               <ul>
+                 ${impactAnalysis.recommendations.map((r) => `<li>${r}</li>`).join('')}
+               </ul>
+             </div>
+             ` : ''}
+             
+             ${impactAnalysis.highRiskAreas && impactAnalysis.highRiskAreas.length > 0 ? `
+             <div class="warning-box">
+               <h3 style="margin-top: 0; color: #92400e;">⚠ High-Risk Areas Detected</h3>
+               <ul>
+                 ${impactAnalysis.highRiskAreas.map(a => `<li>${a}</li>`).join('')}
+               </ul>
+             </div>
+             ` : ''}
+             
+             ${impactAnalysis.mitigationSteps && impactAnalysis.mitigationSteps.length > 0 ? `
+             <div class="section">
+               <h3>Suggested Mitigation Steps</h3>
+               <ol>
+                 ${impactAnalysis.mitigationSteps.map((s, i) => `<li><strong>Step ${i + 1}:</strong> ${s}</li>`).join('')}
+               </ol>
+             </div>
+             ` : ''}
+             
+             <div class="footer">
+               <p>This report was generated automatically by the GRC System</p>
+               <p>For questions or concerns, please contact the system administrator</p>
+             </div>
+           </body>
+           </html>
+         `;
+         
+         // Create blob and download
+         const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+         const url = URL.createObjectURL(blob);
+         const link = document.createElement('a');
+         link.href = url;
+         link.download = `impact-analysis-request-${request.id}-${new Date().toISOString().split('T')[0]}.html`;
+         document.body.appendChild(link);
+         link.click();
+         document.body.removeChild(link);
+         URL.revokeObjectURL(url);
+         
+         // Show success message
+         this.success = 'Impact Analysis exported successfully!';
+         setTimeout(() => {
+           this.success = null;
+         }, 3000);
+       } catch (error) {
+         console.error('Error exporting impact analysis:', error);
+         this.error = 'Failed to export impact analysis. Please try again.';
+         setTimeout(() => {
+           this.error = null;
+         }, 5000);
+       } finally {
+         this.exportingImpactAnalysis = false;
+       }
      },
     
      openRectificationModal(type) {
