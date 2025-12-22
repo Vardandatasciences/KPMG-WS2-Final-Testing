@@ -1,0 +1,101 @@
+name: CI/CD - GRC & TPRM
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    # This must match the labels of your EC2 self-hosted runner
+    runs-on: self-hosted
+
+    permissions:
+      contents: read
+
+    env:
+      # Adjust if your backend listens on a different port internally
+      BACKEND_PORT: 8000
+      # Root paths used by nginx.conf
+      GRC_WEB_ROOT: /var/www/html/grc
+      TPRM_WEB_ROOT: /var/www/html/tprm
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # -------------------------
+      # FRONTEND: GRC + TPRM
+      # -------------------------
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            grc_frontend/package-lock.json
+            grc_frontend/tprm_frontend/package-lock.json
+
+      - name: Install frontend dependencies (GRC root)
+        working-directory: grc_frontend
+        run: npm ci
+
+      - name: Install frontend dependencies (TPRM sub-app)
+        working-directory: grc_frontend/tprm_frontend
+        run: npm ci
+
+      - name: Build GRC + TPRM frontends
+        working-directory: grc_frontend
+        env:
+          NODE_ENV: production
+        run: |
+          # Builds:
+          # - GRC -> grc_frontend/dist
+          # - TPRM -> grc_frontend/tprm_frontend/dist
+          npm run build:all
+
+      - name: Deploy GRC frontend to nginx web root
+        run: |
+          sudo mkdir -p "$GRC_WEB_ROOT"
+          sudo rsync -av --delete grc_frontend/dist/ "$GRC_WEB_ROOT"/
+
+      - name: Deploy TPRM frontend to nginx web root
+        run: |
+          sudo mkdir -p "$TPRM_WEB_ROOT"
+          sudo rsync -av --delete grc_frontend/tprm_frontend/dist/ "$TPRM_WEB_ROOT"/
+
+      # -------------------------
+      # BACKEND: Django via Docker
+      # -------------------------
+      - name: Log in to Docker (optional)
+        if: ${{ false }}
+        run: |
+          echo "Configure Docker registry login here if you push images to a registry."
+
+      - name: Build and restart backend container
+        working-directory: grc_backend
+        run: |
+          # Stop existing containers (ignore failure if none are running)
+          docker-compose down || true
+
+          # Build updated backend image
+          docker-compose build
+
+          # Start backend in detached mode
+          docker-compose up -d
+
+      - name: Show running containers
+        run: docker ps -a
+
+      # -------------------------
+      # (Optional) Basic health checks
+      # -------------------------
+      - name: Check backend health (HTTP)
+        run: |
+          # Simple curl check against nginx -> Django stack.
+          # Adjust hostname/URL if needed (for HTTPS or custom domain).
+          curl -fsS http://127.0.0.1:${BACKEND_PORT}/ || echo "Backend HTTP check failed (non-blocking)."
+
+
