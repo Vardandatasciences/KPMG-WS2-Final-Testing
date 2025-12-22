@@ -21,6 +21,8 @@ jobs:
       # Root paths used by nginx.conf
       GRC_WEB_ROOT: /var/www/html/grc
       TPRM_WEB_ROOT: /var/www/html/tprm
+      # Existing backend image in ECR (adjust if needed)
+      BACKEND_IMAGE: 480940871468.dkr.ecr.ap-south-1.amazonaws.com/grc_tprm:latest
 
     steps:
       - name: Checkout repository
@@ -67,24 +69,32 @@ jobs:
           rsync -av --delete grc_frontend/tprm_frontend/dist/ "$TPRM_WEB_ROOT"/
 
       # -------------------------
-      # BACKEND: Django via Docker
+      # BACKEND: Django via existing Docker image (no docker-compose)
       # -------------------------
-      - name: Log in to Docker (optional)
-        if: ${{ false }}
+      - name: Pull backend Docker image from ECR
         run: |
-          echo "Configure Docker registry login here if you push images to a registry."
+          # If your instance is already logged in to ECR, this will just pull latest.
+          # Otherwise, you can add an aws ecr get-login-password step before this.
+          docker pull "${BACKEND_IMAGE}" || echo "Pull failed, using local image if available."
 
-      - name: Build and restart backend container
-        working-directory: grc_backend
+      - name: Restart backend container (grc_tprm)
         run: |
-          # Stop existing containers (ignore failure if none are running)
-          docker compose down || true
+          # Stop and remove existing container if it exists
+          if [ "$(docker ps -aq -f name=grc_tprm)" ]; then
+            docker stop grc_tprm || true
+            docker rm grc_tprm || true
+          fi
 
-          # Build updated backend image
-          docker compose build
-
-          # Start backend in detached mode
-          docker compose up -d
+          # Run new container
+          # Uses existing config.env and host volumes under /home/ec2-user
+          docker run -d \
+            --name grc_tprm \
+            --env-file /home/ec2-user/config.env \
+            -p ${BACKEND_PORT}:8000 \
+            -v /home/ec2-user/MEDIA_ROOT:/app/MEDIA_ROOT \
+            -v /home/ec2-user/TEMP_MEDIA_ROOT:/app/TEMP_MEDIA_ROOT \
+            -v /home/ec2-user/Reports:/app/Reports \
+            "${BACKEND_IMAGE}"
 
       - name: Show running containers
         run: docker ps -a
