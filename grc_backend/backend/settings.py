@@ -546,7 +546,13 @@ OLLAMA_BASE_URL = os.environ.get('OLLAMA_BASE_URL', 'http://13.126.18.17:11434')
 # Default timeout (seconds) for Ollama HTTP requests
 OLLAMA_TIMEOUT = int(os.environ.get('OLLAMA_TIMEOUT', '600'))
 # Default Ollama model to use (must exist on server per /api/tags)
-OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'llama3.2:3b')
+# Recommended: Use quantized models for better performance (e.g., llama3.2:3b-instruct-q4_K_M)
+OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'llama3.2:3b-instruct-q4_K_M')
+
+# Risk AI Provider Selection
+# Set to 'openai' or 'ollama' to choose which AI provider to use for risk document processing
+# Default: 'ollama' if both are configured, else 'openai'
+RISK_AI_PROVIDER = os.environ.get('RISK_AI_PROVIDER', 'ollama')
 
 # ===== PASSWORD EXPIRY CONFIGURATION =====
 # Password expiry in days (90 days)

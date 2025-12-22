@@ -1,9 +1,15 @@
 """
 AI-Powered Risk Instance Document Ingestion (Complete)
 - Reads PDF/DOCX/XLSX/TXT
-- Extracts risk instance data using OpenAI (GPT models)
+- Extracts risk instance data using AI (OpenAI or Ollama - configurable)
 - Fills missing fields with focused prompts
 - Returns normalized, DB-ready JSON for `risk_instance` table
+
+Configuration:
+- Set RISK_AI_PROVIDER='openai' or 'ollama' in environment or Django settings
+- Default: 'ollama' if Ollama is configured, else 'openai'
+- OpenAI requires: OPENAI_API_KEY
+- Ollama requires: OLLAMA_BASE_URL (uses optimized quantized models)
 """
 
 import os
@@ -50,22 +56,40 @@ from grc.models import RiskInstance  # Import RiskInstance model
 
 
 # =========================
-# OPENAI CONFIG
+# AI PROVIDER CONFIG (OpenAI or Ollama)
 # =========================
-# OpenAI API Configuration - Use Django settings
+# Use the same provider configuration as risk_ai_doc
 from django.conf import settings
+from .risk_ai_doc import (  # Reuse shared AI provider config and Ollama helpers
+    AI_PROVIDER,
+    call_ollama_json,
+    _calculate_optimal_context_size,
+    _select_ollama_model_by_complexity,
+    OLLAMA_BASE_URL,
+    OLLAMA_MODEL_DEFAULT,
+    OLLAMA_MODEL_FAST,
+    OLLAMA_MODEL_COMPLEX,
+)
+
 OPENAI_API_KEY = getattr(settings, 'OPENAI_API_KEY', None)
 OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 OPENAI_MODEL = getattr(settings, 'OPENAI_MODEL', 'gpt-3.5-turbo')
 
-if not OPENAI_API_KEY:
-    print("⚠️  WARNING: OPENAI_API_KEY not found in Django settings!")
-    print("   Please set OPENAI_API_KEY in your .env file.")
-else:
-    print(f"🌐 OpenAI Configuration for Risk Instance AI:")
-    print(f"   API URL: {OPENAI_API_URL}")
-    print(f"   Model: {OPENAI_MODEL}")
-    print(f"   API Key: {'*' * (len(OPENAI_API_KEY) - 4) + OPENAI_API_KEY[-4:]}")
+if AI_PROVIDER == 'openai':
+    if not OPENAI_API_KEY:
+        print("⚠️  WARNING: OPENAI_API_KEY not found in Django settings!")
+        print("   Please set OPENAI_API_KEY in your .env file.")
+    else:
+        print(f"🌐 OpenAI Configuration for Risk Instance AI:")
+        print(f"   API URL: {OPENAI_API_URL}")
+        print(f"   Model: {OPENAI_MODEL}")
+        print(f"   API Key: {'*' * (len(OPENAI_API_KEY) - 4) + OPENAI_API_KEY[-4:]}")
+elif AI_PROVIDER == 'ollama':
+    print("🚀 Ollama Configuration for Risk Instance AI (OPTIMIZED):")
+    print(f"   Base URL: {OLLAMA_BASE_URL}")
+    print(f"   Default Model: {OLLAMA_MODEL_DEFAULT}")
+    print(f"   Fast Model: {OLLAMA_MODEL_FAST}")
+    print(f"   Complex Model: {OLLAMA_MODEL_COMPLEX}")
 
 # RiskInstance DB fields (excluding auto-generated IDs: RiskInstanceId, UserId, ReportedBy, ReviewerId, IncidentId, ComplianceId, RiskId)
 RISK_INSTANCE_DB_FIELDS = [
@@ -613,18 +637,27 @@ def detect_and_parse_risk_instance_blocks(text: str) -> list[dict]:
 # =========================
 def infer_single_field(field_name: str, current_record: dict, document_context: str) -> tuple[Any, dict]:
     """
-    Focused prompt for ONE field using AI.
+    Focused prompt for ONE field using AI (supports both OpenAI and Ollama).
     Returns: (value, metadata_dict)
     """
-    print(f"🤖 AI PREDICTING FIELD: {field_name}")
+    provider_name = AI_PROVIDER.upper()
+    print(f"🤖 AI PREDICTING FIELD: {field_name} (using {provider_name})")
     
     guidance = FIELD_PROMPTS.get(field_name, "Return a concise, professional value.")
+    
+    # Optimize context size for Ollama; keep previous behavior for OpenAI
+    if AI_PROVIDER == 'ollama':
+        context_size = _calculate_optimal_context_size(len(document_context), "simple")
+        optimized_context = document_context[:context_size] if len(document_context) > context_size else document_context
+    else:
+        optimized_context = document_context[:3000]
+    
     mini = f"""
 You are a GRC analyst. Infer ONLY the field "{field_name}" for this risk instance.
-Return JSON: {{"value": <scalar or string or array>, "confidence": 0.0-1.0, "rationale": "brief explanation"}}
+Return JSON: {{"value": <scalar or string or array>, "confidence": 0.0-1.0, "rationale": "brief explanation"}}.
 
 Context (document):
-\"\"\"{document_context[:3000]}\"\"\"
+\"\"\"{optimized_context}\"\"\"
 
 Current risk instance (partial):
 {json.dumps({k: current_record.get(k) for k in RISK_INSTANCE_DB_FIELDS if current_record.get(k)}, indent=2)}
@@ -633,11 +666,19 @@ Rules:
 - {guidance}
 - If you cannot infer, return {{"value": null, "confidence": 0.0, "rationale": "Not enough information"}}.
 - Always include a brief rationale explaining your decision.
-- No extra text outside the JSON.
+- Return ONLY valid JSON, no markdown, no code blocks.
 """
     try:
-        print(f"   📤 Sending prompt to OpenAI for {field_name}...")
-        out = call_openai_json(mini)
+        if AI_PROVIDER == 'ollama':
+            print(f"   📤 Sending prompt to Ollama for {field_name}...")
+            model = _select_ollama_model_by_complexity(len(optimized_context), 1)
+            out = call_ollama_json(mini, model=model)
+            model_used = model
+        else:
+            print(f"   📤 Sending prompt to OpenAI for {field_name}...")
+            out = call_openai_json(mini)
+            model_used = OPENAI_MODEL
+
         v = out.get("value") if isinstance(out, dict) else None
         confidence = out.get("confidence", 0.7) if isinstance(out, dict) else 0.7
         rationale = out.get("rationale", "AI predicted based on document context") if isinstance(out, dict) else "AI predicted based on document context"
@@ -647,12 +688,15 @@ Rules:
         v = None
         confidence = 0.0
         rationale = f"AI prediction failed: {str(e)}"
+        model_used = None
 
     # Create metadata for this field
     metadata = {
         "source": "AI_GENERATED",
         "confidence": confidence,
-        "rationale": rationale
+        "rationale": rationale,
+        "provider": AI_PROVIDER,
+        "model_used": model_used,
     }
 
     # normalize after inference
@@ -1076,21 +1120,30 @@ def upload_and_process_risk_instance_document(request):
             print(f"✅ STEP 1 COMPLETE: Extracted {len(text)} characters from document")
             print(f"📄 First 200 chars: {text[:200]}...")
             
-            # Step 2: Check OpenAI API key
-            print(f"🔍 STEP 2: Checking OpenAI API configuration...")
-            if not OPENAI_API_KEY:
+            # Step 2: Check AI provider configuration
+            print(f"🔍 STEP 2: Checking AI provider configuration for risk instance module...")
+            if AI_PROVIDER == 'openai' and not OPENAI_API_KEY:
                 print(f"❌ ERROR: OPENAI_API_KEY is not set")
                 resp = JsonResponse({
                     'status': 'error', 
-                    'message': 'OPENAI_API_KEY environment variable is not set. Please configure your OpenAI API key.'
+                    'message': 'OPENAI_API_KEY environment variable is not set. Please configure your OpenAI API key or switch to Ollama.'
+                }, status=503)
+                resp['Access-Control-Allow-Origin'] = '*'
+                return resp
+            elif AI_PROVIDER == 'ollama' and not OLLAMA_BASE_URL:
+                print(f"❌ ERROR: OLLAMA_BASE_URL is not set")
+                resp = JsonResponse({
+                    'status': 'error', 
+                    'message': 'OLLAMA_BASE_URL environment variable is not set. Please configure your Ollama server URL.'
                 }, status=503)
                 resp['Access-Control-Allow-Origin'] = '*'
                 return resp
             
-            print(f"✅ STEP 2 COMPLETE: OpenAI API key is configured")
+            print(f"✅ STEP 2 COMPLETE: {AI_PROVIDER.upper()} provider is configured for risk instance module")
             
             # Step 3: Process with AI
-            print(f"🤖 STEP 3: Calling OpenAI model '{OPENAI_MODEL}' to extract risk instances...")
+            provider_info = f"{AI_PROVIDER.upper()} ({OPENAI_MODEL if AI_PROVIDER == 'openai' else OLLAMA_MODEL_DEFAULT})"
+            print(f"🤖 STEP 3: Calling {provider_info} to extract risk instances...")
             risk_instances = parse_risk_instances_from_text(text)
             
             print(f"✅ STEP 3 COMPLETE: AI extracted {len(risk_instances)} risk instance(s) from document")

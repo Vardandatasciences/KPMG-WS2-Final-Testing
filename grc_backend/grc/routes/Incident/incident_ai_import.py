@@ -18,6 +18,7 @@ from django.views.decorators.csrf import csrf_exempt
 from rest_framework.decorators import api_view, permission_classes, parser_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser
+import requests
 
 # --- OpenAI Integration ---
 try:
@@ -54,30 +55,49 @@ from grc.models import Incident
 
 
 # =========================
-# OPENAI CONFIG
+# AI PROVIDER CONFIG (OpenAI or Ollama)
 # =========================
-# OpenAI API Configuration - Use Django settings
+# Use same global toggle as risk modules
 from django.conf import settings
+
+AI_PROVIDER = getattr(settings, 'RISK_AI_PROVIDER', os.environ.get('RISK_AI_PROVIDER', 'ollama')).lower()
+
+# OpenAI config
 OPENAI_API_KEY = getattr(settings, 'OPENAI_API_KEY', None)
 OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
-OPENAI_MODEL = getattr(settings, 'OPENAI_MODEL', 'gpt-3.5-turbo')  # gpt-4o-mini is cost-effective and powerful
+OPENAI_MODEL = getattr(settings, 'OPENAI_MODEL', 'gpt-3.5-turbo')
 OPENAI_TEMPERATURE = 0.1  # Low temperature for consistent, factual outputs
 
-if not OPENAI_API_KEY:
-    print("[WARNING] OPENAI_API_KEY not found in Django settings!")
-    print("   Please set OPENAI_API_KEY in your .env file")
-else:
-    print(f"[INFO] Incident AI OpenAI Configuration:")
-    print(f"   Model: {OPENAI_MODEL}")
-    print(f"   Temperature: {OPENAI_TEMPERATURE}")
-    print(f"   API Key: {'*' * (len(OPENAI_API_KEY) - 4)}{OPENAI_API_KEY[-4:]}")
+# Ollama config
+OLLAMA_BASE_URL = getattr(settings, 'OLLAMA_BASE_URL', 'http://13.126.18.17:11434').rstrip('/')
+OLLAMA_MODEL = getattr(settings, 'OLLAMA_MODEL', 'llama3.2:3b-instruct-q4_K_M')
+OLLAMA_TEMPERATURE = getattr(settings, 'OLLAMA_TEMPERATURE', 0.1)
+OLLAMA_TIMEOUT = getattr(settings, 'OLLAMA_TIMEOUT', 600)
+OLLAMA_SEED = getattr(settings, 'OLLAMA_SEED', 42)
 
-# Initialize OpenAI client
+print("\n🤖 Incident Import AI Provider Configuration:")
+print(f"   Selected Provider: {AI_PROVIDER.upper()}")
+if AI_PROVIDER == 'openai':
+    if not OPENAI_API_KEY:
+        print("[WARNING] OPENAI_API_KEY not found in Django settings!")
+        print("   Please set OPENAI_API_KEY in your .env file")
+    else:
+        print(f"[INFO] Incident AI OpenAI Configuration:")
+        print(f"   Model: {OPENAI_MODEL}")
+        print(f"   Temperature: {OPENAI_TEMPERATURE}")
+        print(f"   API Key: {'*' * (len(OPENAI_API_KEY) - 4)}{OPENAI_API_KEY[-4:]}")
+elif AI_PROVIDER == 'ollama':
+    print(f"[INFO] Incident AI Ollama Configuration:")
+    print(f"   URL: {OLLAMA_BASE_URL}")
+    print(f"   Model: {OLLAMA_MODEL}")
+    print(f"   Temperature: {OLLAMA_TEMPERATURE}")
+
+# Initialize OpenAI client (if used)
 openai_client = None
-if OPENAI_AVAILABLE and OPENAI_API_KEY:
+if AI_PROVIDER == 'openai' and OPENAI_AVAILABLE and OPENAI_API_KEY:
     try:
         openai_client = OpenAI(api_key=OPENAI_API_KEY)
-        print("✅ OpenAI client initialized successfully")
+        print("✅ OpenAI client initialized successfully for incident import")
     except Exception as e:
         print(f"❌ Failed to initialize OpenAI client: {e}")
 
@@ -267,18 +287,58 @@ def _json_from_llm_text(text: str) -> Any:
     return json.loads(block)
 
 
+def _call_ollama_json(prompt: str, retries: int = 3) -> Any:
+    """
+    Call Ollama expecting JSON response (parsed).
+    """
+    url = f"{OLLAMA_BASE_URL}/api/generate"
+    payload = {
+        "model": OLLAMA_MODEL,
+        "prompt": prompt,
+        "stream": False,
+        "options": {
+            "temperature": OLLAMA_TEMPERATURE,
+            "top_p": 0.9,
+            "top_k": 40,
+            "num_predict": 2000,
+            "seed": OLLAMA_SEED,
+            "repeat_penalty": 1.1,
+        },
+        "format": "json",
+    }
+
+    print(f"🤖 Calling Ollama API for incident extraction (model: {OLLAMA_MODEL})")
+    for attempt in range(retries):
+        try:
+            start = time.time()
+            resp = requests.post(url, json=payload, timeout=OLLAMA_TIMEOUT)
+            resp.raise_for_status()
+            elapsed = time.time() - start
+            data = resp.json()
+            raw = data.get("response", "")
+            print(f"✅ Ollama responded in {elapsed:.2f}s (len={len(raw)})")
+
+            try:
+                return json.loads(raw)
+            except json.JSONDecodeError:
+                print("⚠️ Direct JSON parse failed, using regex extraction...")
+                return _json_from_llm_text(raw)
+        except Exception as e:
+            print(f"❌ Ollama error (attempt {attempt + 1}/{retries}): {e}")
+            if attempt < retries - 1:
+                time.sleep(1)
+                continue
+            raise RuntimeError(f"Ollama API call failed after {retries} attempts: {e}")
+
+
 def call_openai_json(prompt: str, retries: int = 3, temperature: float = None) -> Any:
     """
-    Call OpenAI API expecting JSON response with retry logic.
-    
-    Args:
-        prompt: The prompt to send to OpenAI
-        retries: Number of retry attempts
-        temperature: Temperature setting (defaults to OPENAI_TEMPERATURE)
-    
-    Returns:
-        Parsed JSON object/array from OpenAI response
+    Call configured AI provider (OpenAI or Ollama) expecting JSON response with retry logic.
     """
+    if AI_PROVIDER == 'ollama':
+        return _call_ollama_json(prompt, retries=retries)
+
+    # OpenAI path (unchanged behavior)
     if not OPENAI_AVAILABLE:
         raise RuntimeError("OpenAI library not installed. Run: pip install openai")
     
@@ -296,14 +356,10 @@ def call_openai_json(prompt: str, retries: int = 3, temperature: float = None) -
     print(f"🔍 Model check - Original: '{OPENAI_MODEL}', Cleaned: '{model_clean}', Lower: '{model_lower}'")
     
     # Models that support json_object response_format:
-    # gpt-4-turbo-preview, gpt-4-0125-preview, gpt-3.5-turbo-1106, gpt-4-turbo, gpt-4o
-    # Note: gpt-4o-mini does NOT support json_object format
-    # Explicitly exclude gpt-4o-mini first (it contains "gpt-4o" but doesn't support json_object)
     if "gpt-4o-mini" in model_lower:
         supports_json_format = False
         print(f"🔍 Model '{model_clean}' is gpt-4o-mini - NOT adding response_format")
     else:
-        # Check if model exactly matches or starts with a supported model
         models_with_json_support = [
             "gpt-4-turbo-preview", "gpt-4-0125-preview", "gpt-3.5-turbo-1106", 
             "gpt-4-turbo", "gpt-4o"
@@ -316,9 +372,8 @@ def call_openai_json(prompt: str, retries: int = 3, temperature: float = None) -
     
     for attempt in range(retries):
         try:
-            # Prepare request parameters
             request_params = {
-                "model": model_clean,  # Use cleaned model name
+                "model": model_clean,
                 "messages": [
                     {
                         "role": "system",
@@ -332,7 +387,6 @@ def call_openai_json(prompt: str, retries: int = 3, temperature: float = None) -
                 "temperature": temperature
             }
             
-            # Only add response_format for models that support it
             if supports_json_format:
                 request_params["response_format"] = {"type": "json_object"}
                 print(f"✅ Adding response_format: json_object (model '{model_clean}' supports it)")
@@ -341,10 +395,7 @@ def call_openai_json(prompt: str, retries: int = 3, temperature: float = None) -
             
             print(f"🔍 Request params keys: {list(request_params.keys())}")
             
-            # Call OpenAI Chat Completions API
             response = openai_client.chat.completions.create(**request_params)
-            
-            # Extract content from response
             raw_content = response.choices[0].message.content
             
             if not raw_content:
@@ -352,11 +403,9 @@ def call_openai_json(prompt: str, retries: int = 3, temperature: float = None) -
             
             print(f"✅ Received response from OpenAI (length: {len(raw_content)} chars)")
             
-            # Parse JSON from response
             try:
                 result = json.loads(raw_content)
             except json.JSONDecodeError:
-                # Fallback to regex extraction if direct parsing fails
                 print(f"⚠️  Direct JSON parse failed, using regex extraction...")
                 result = _json_from_llm_text(raw_content)
             
@@ -375,7 +424,6 @@ def call_openai_json(prompt: str, retries: int = 3, temperature: float = None) -
             error_message = str(e)
             print(f"❌ OpenAI API error (attempt {attempt + 1}/{retries}): {error_type}: {error_message}")
             
-            # Enhanced error logging for OpenAI SDK exceptions
             if hasattr(e, 'response') and e.response is not None:
                 try:
                     error_body = e.response.json() if hasattr(e.response, 'json') else {}
@@ -390,7 +438,7 @@ def call_openai_json(prompt: str, retries: int = 3, temperature: float = None) -
                     print(f"⚠️  Could not parse error response: {parse_err}")
             
             if attempt < retries - 1:
-                time.sleep(2 ** attempt)  # Exponential backoff
+                time.sleep(2 ** attempt)
                 continue
             raise RuntimeError(f"OpenAI API call failed after {retries} attempts: {e}")
     

@@ -5,17 +5,97 @@ import traceback
 import os
 from openai import OpenAI
 from django.conf import settings
+import requests
+import time
+
+# =========================
+# AI PROVIDER CONFIG (OpenAI or Ollama)
+# =========================
+AI_PROVIDER = getattr(settings, 'RISK_AI_PROVIDER', os.environ.get('RISK_AI_PROVIDER', 'ollama')).lower()
+
+OPENAI_MODEL_DEFAULT = getattr(settings, 'OPENAI_MODEL', 'gpt-3.5-turbo')
+OPENAI_API_KEY = getattr(settings, 'OPENAI_API_KEY', None)
+
+OLLAMA_BASE_URL = getattr(settings, 'OLLAMA_BASE_URL', 'http://13.126.18.17:11434').rstrip('/')
+OLLAMA_MODEL = getattr(settings, 'OLLAMA_MODEL', 'llama3.2:3b-instruct-q4_K_M')
+OLLAMA_TEMPERATURE = getattr(settings, 'OLLAMA_TEMPERATURE', 0.1)
+OLLAMA_TIMEOUT = getattr(settings, 'OLLAMA_TIMEOUT', 600)
+OLLAMA_SEED = getattr(settings, 'OLLAMA_SEED', 42)
+
+print("\n🤖 Incident SLM AI Provider Configuration:")
+print(f"   Selected Provider: {AI_PROVIDER.upper()}")
+if AI_PROVIDER == 'openai':
+    print(f"   OpenAI model: {OPENAI_MODEL_DEFAULT}")
+elif AI_PROVIDER == 'ollama':
+    print(f"   Ollama URL: {OLLAMA_BASE_URL}")
+    print(f"   Ollama model: {OLLAMA_MODEL}")
+
+
+def _call_ollama_chat(prompt: str, model: str = None, timeout: int | None = None) -> str:
+    """
+    Call Ollama for incident chat-style analysis (JSON string expected).
+    """
+    if model is None:
+        model = OLLAMA_MODEL
+    if timeout is None:
+        timeout = OLLAMA_TIMEOUT
+
+    url = f"{OLLAMA_BASE_URL}/api/generate"
+    payload = {
+        "model": model,
+        "prompt": prompt,
+        "stream": False,
+        "options": {
+            "temperature": OLLAMA_TEMPERATURE,
+            "top_p": 0.9,
+            "top_k": 40,
+            "num_predict": 2000,
+            "seed": OLLAMA_SEED,
+            "repeat_penalty": 1.1,
+        },
+        "format": "json",
+    }
+
+    print(f"🤖 Calling Ollama for incident analysis")
+    print(f"   URL: {url}")
+    print(f"   Model: {model}")
+
+    start = time.time()
+    resp = requests.post(url, json=payload, timeout=timeout)
+    elapsed = time.time() - start
+    resp.raise_for_status()
+
+    data = resp.json()
+    raw = data.get("response", "")
+    print(f"✅ Ollama responded in {elapsed:.2f}s (len={len(raw)})")
+    return raw
+
 
 class OpenAIIntegration:
-    """OpenAI integration class for incident analysis"""
+    """AI integration class for incident analysis (OpenAI or Ollama)"""
     
     def __init__(self, api_key=None):
-        """Initialize OpenAI client with API key from Django settings or parameter"""
+        """Initialize AI client based on provider"""
+        self.provider = AI_PROVIDER
+        self.client = None
+        self.is_available = False
+
+        if self.provider == 'ollama':
+            if not OLLAMA_BASE_URL:
+                print("⚠️ Ollama URL not configured properly")
+                print("   Please set OLLAMA_BASE_URL in your .env file")
+                self.is_available = False
+            else:
+                self.is_available = True
+                print("✅ Ollama integration initialized for incident analysis")
+                print(f"   Using model: {OLLAMA_MODEL}")
+            return
+
+        # OpenAI path
         if api_key is None:
-            # Try to get from Django settings (which loads from .env file)
-            api_key = getattr(settings, 'OPENAI_API_KEY', None)
+            api_key = OPENAI_API_KEY
         
-        if not api_key or api_key == 'your-openai-api-key-here' or api_key.startswith('YOUR_OPE'):
+        if not api_key or api_key == 'your-openai-api-key-here' or str(api_key).startswith('YOUR_OPE'):
             print("⚠️ OpenAI API key not configured properly")
             print("   Please set OPENAI_API_KEY in your .env file")
             self.client = None
@@ -25,17 +105,26 @@ class OpenAIIntegration:
                 self.client = OpenAI(api_key=api_key)
                 self.is_available = True
                 print("✅ OpenAI client initialized successfully")
-                print(f"   Using model: {getattr(settings, 'OPENAI_MODEL', 'gpt-3.5-turbo')}")
+                print(f"   Using model: {OPENAI_MODEL_DEFAULT}")
             except Exception as e:
                 print(f"❌ Failed to initialize OpenAI client: {e}")
                 self.client = None
                 self.is_available = False
     
     def generate_response(self, prompt, model="gpt-3.5-turbo", max_tokens=2000, temperature=0.3):
-        """Send request to OpenAI and get response"""
-        if not self.is_available or self.client is None:
-            print("OpenAI client is not available")
+        """Send request to AI provider and get response (JSON string)"""
+        if not self.is_available:
+            print("AI provider is not available")
             return None
+
+        # Ollama branch
+        if self.provider == 'ollama':
+            try:
+                return _call_ollama_chat(prompt, model=OLLAMA_MODEL)
+            except Exception as e:
+                print(f"❌ Ollama API error: {type(e).__name__}: {e}")
+                traceback.print_exc()
+                return None
 
         # Clean model name - strip quotes and whitespace
         model_clean = str(model).strip().strip('"').strip("'")
