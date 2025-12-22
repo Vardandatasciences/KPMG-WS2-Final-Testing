@@ -58,13 +58,13 @@ jobs:
 
       - name: Deploy GRC frontend to nginx web root
         run: |
-          sudo mkdir -p "$GRC_WEB_ROOT"
-          sudo rsync -av --delete grc_frontend/dist/ "$GRC_WEB_ROOT"/
+          mkdir -p "$GRC_WEB_ROOT"
+          rsync -av --delete grc_frontend/dist/ "$GRC_WEB_ROOT"/
 
       - name: Deploy TPRM frontend to nginx web root
         run: |
-          sudo mkdir -p "$TPRM_WEB_ROOT"
-          sudo rsync -av --delete grc_frontend/tprm_frontend/dist/ "$TPRM_WEB_ROOT"/
+          mkdir -p "$TPRM_WEB_ROOT"
+          rsync -av --delete grc_frontend/tprm_frontend/dist/ "$TPRM_WEB_ROOT"/
 
       # -------------------------
       # BACKEND: Django via Docker
@@ -78,13 +78,13 @@ jobs:
         working-directory: grc_backend
         run: |
           # Stop existing containers (ignore failure if none are running)
-          docker-compose down || true
+          docker compose down || true
 
           # Build updated backend image
-          docker-compose build
+          docker compose build
 
           # Start backend in detached mode
-          docker-compose up -d
+          docker compose up -d
 
       - name: Show running containers
         run: docker ps -a
