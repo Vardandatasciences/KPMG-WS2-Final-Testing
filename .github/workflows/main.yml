@@ -56,6 +56,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Clean up Docker to free space
+        run: |
+          echo "Cleaning up Docker to free disk space..."
+          docker container prune -f || true
+          docker image prune -a -f || true
+          docker volume prune -f || true
+          docker builder prune -a -f || true
+          echo "Disk space after cleanup:"
+          df -h /
+
       - name: Build Combined Frontend Docker image (GRC + TPRM)
         working-directory: grc_frontend
         run: |
@@ -109,6 +119,16 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Clean up Docker to free space
+        run: |
+          echo "Cleaning up Docker to free disk space..."
+          docker container prune -f || true
+          docker image prune -a -f || true
+          docker volume prune -f || true
+          docker builder prune -a -f || true
+          echo "Disk space after cleanup:"
+          df -h /
 
       - name: Build Backend Docker image
         working-directory: grc_backend
