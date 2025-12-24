@@ -16,8 +16,10 @@ env:
   # ECR repository details (adjust if needed)
   AWS_REGION: ap-south-1
   ECR_REGISTRY: 480940871468.dkr.ecr.ap-south-1.amazonaws.com
-  FRONTEND_IMAGE: ${ECR_REGISTRY}/grc_tprm_frontend:latest
-  BACKEND_IMAGE: ${ECR_REGISTRY}/grc_tprm_backend:latest
+  # NOTE: GitHub does not expand ${ECR_REGISTRY} inside env values,
+  # so we hard-code the full image URIs here.
+  FRONTEND_IMAGE: 480940871468.dkr.ecr.ap-south-1.amazonaws.com/grc_tprm_frontend:latest
+  BACKEND_IMAGE: 480940871468.dkr.ecr.ap-south-1.amazonaws.com/grc_tprm_backend:latest
 
 jobs:
   # ============================================
