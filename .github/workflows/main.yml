@@ -11,7 +11,7 @@ env:
   # Docker network name
   DOCKER_NETWORK: grc_tprm_network
   # Ports
-  FRONTEND_PORT: 80
+  FRONTEND_PORT: 8080
   BACKEND_PORT: 8000
   # ECR repository details (adjust if needed)
   AWS_REGION: ap-south-1
