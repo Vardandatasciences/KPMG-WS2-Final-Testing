@@ -7,33 +7,31 @@ on:
       - master
   workflow_dispatch:
 
-jobs:
-  build-and-deploy:
-    # This must match the labels of your EC2 self-hosted runner
-    runs-on: self-hosted
+env:
+  # Docker network name
+  DOCKER_NETWORK: grc_tprm_network
+  # Ports
+  FRONTEND_PORT: 80
+  BACKEND_PORT: 8000
+  # ECR repository details (adjust if needed)
+  AWS_REGION: ap-south-1
+  ECR_REGISTRY: 480940871468.dkr.ecr.ap-south-1.amazonaws.com
+  FRONTEND_IMAGE: ${ECR_REGISTRY}/grc_tprm_frontend:latest
+  BACKEND_IMAGE: ${ECR_REGISTRY}/grc_tprm_backend:latest
 
+jobs:
+  # ============================================
+  # JOB 1: Setup (Create Docker Network)
+  # ============================================
+  setup:
+    runs-on: self-hosted
     permissions:
       contents: read
-
-    env:
-      # Docker network name
-      DOCKER_NETWORK: grc_tprm_network
-      # Ports
-      FRONTEND_PORT: 80
-      BACKEND_PORT: 8000
-      # ECR repository details (adjust if needed)
-      AWS_REGION: ap-south-1
-      ECR_REGISTRY: 480940871468.dkr.ecr.ap-south-1.amazonaws.com
-      FRONTEND_IMAGE: ${ECR_REGISTRY}/grc_tprm_frontend:latest
-      BACKEND_IMAGE: ${ECR_REGISTRY}/grc_tprm_backend:latest
-
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # -------------------------
-      # CREATE DOCKER NETWORK
-      # -------------------------
       - name: Create Docker network
         run: |
           if [ "$(docker network ls -q -f name=${DOCKER_NETWORK})" ]; then
@@ -43,9 +41,19 @@ jobs:
             echo "Created network ${DOCKER_NETWORK}"
           fi
 
-      # -------------------------
-      # STEP 1: COMBINED FRONTEND (GRC + TPRM) DEPLOYMENT
-      # -------------------------
+  # ============================================
+  # JOB 2: Frontend Build & Deploy (Parallel)
+  # ============================================
+  frontend:
+    runs-on: self-hosted
+    needs: setup
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Build Combined Frontend Docker image (GRC + TPRM)
         working-directory: grc_frontend
         run: |
@@ -77,9 +85,29 @@ jobs:
             --restart unless-stopped \
             grc_tprm_frontend:latest
 
-      # -------------------------
-      # STEP 2: BACKEND DEPLOYMENT
-      # -------------------------
+      - name: Check Frontend health (GRC)
+        run: |
+          sleep 5
+          curl -fsS http://127.0.0.1:${FRONTEND_PORT}/ || echo "GRC Frontend check failed (non-blocking)."
+
+      - name: Check Frontend health (TPRM)
+        run: |
+          sleep 2
+          curl -fsS http://127.0.0.1:${FRONTEND_PORT}/tprm || echo "TPRM Frontend check failed (non-blocking)."
+
+  # ============================================
+  # JOB 3: Backend Build & Deploy (Parallel)
+  # ============================================
+  backend:
+    runs-on: self-hosted
+    needs: setup
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Build Backend Docker image
         working-directory: grc_backend
         run: |
@@ -115,25 +143,40 @@ jobs:
             --restart unless-stopped \
             grc_tprm_backend:latest
 
-      # -------------------------
-      # VERIFICATION
-      # -------------------------
-      - name: Show running containers
-        run: docker ps -a
-
-      - name: Check Frontend health (GRC)
+      - name: Check Backend health
         run: |
           sleep 5
-          curl -fsS http://127.0.0.1:${FRONTEND_PORT}/ || echo "GRC Frontend check failed (non-blocking)."
+          curl -fsS http://127.0.0.1:${BACKEND_PORT}/ || echo "Backend health check failed (non-blocking)."
 
-      - name: Check Frontend health (TPRM)
+  # ============================================
+  # JOB 4: Final Verification (After Both Deploy)
+  # ============================================
+  verify:
+    runs-on: self-hosted
+    needs: [frontend, backend]
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Show all running containers
         run: |
-          sleep 2
-          curl -fsS http://127.0.0.1:${FRONTEND_PORT}/tprm || echo "TPRM Frontend check failed (non-blocking)."
+          docker ps -a
+          echo "--- Network Info ---"
+          docker network inspect ${DOCKER_NETWORK} || true
 
-      - name: Check Backend API via Frontend
+      - name: Verify Frontend via API proxy
         run: |
-          sleep 2
-          curl -fsS http://127.0.0.1:${FRONTEND_PORT}/api/ || echo "Backend API check failed (non-blocking)."
+          sleep 3
+          echo "Testing Frontend → Backend connection..."
+          curl -fsS http://127.0.0.1:${FRONTEND_PORT}/api/ || echo "API proxy check failed (non-blocking)."
 
-
+      - name: Check container logs
+        if: failure()
+        run: |
+          echo "=== Frontend Logs ==="
+          docker logs grc_tprm_frontend --tail 50 || true
+          echo "=== Backend Logs ==="
+          docker logs grc_tprm_backend --tail 50 || true
