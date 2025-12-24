@@ -256,3 +256,4 @@ If you encounter issues:
 3. Verify your Ollama server configuration
 4. Ensure all required Python packages are installed
 
+

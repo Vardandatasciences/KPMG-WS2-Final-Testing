@@ -20,14 +20,29 @@ from rest_framework.permissions import AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser
 import requests
 
-# --- OpenAI Integration ---
-try:
-    from openai import OpenAI
-    OPENAI_AVAILABLE = True
-    print("[OK] OpenAI library is available")
-except ImportError:
-    OPENAI_AVAILABLE = False
-    print("[ERROR] OpenAI library not installed. Run: pip install openai")
+# Phase 2 Optimizations
+from ...utils.ai_cache import cached_llm_call
+from ...utils.document_preprocessor import preprocess_document, calculate_document_hash
+from ...utils.few_shot_prompts import get_field_extraction_prompt
+
+# Phase 3 Optimizations
+from ...utils.rag_system import (
+    add_document_to_rag,
+    retrieve_relevant_context,
+    build_rag_prompt,
+    is_rag_available,
+    get_rag_stats
+)
+from ...utils.model_router import (
+    route_model,
+    track_system_load,
+    get_current_system_load
+)
+from ...utils.request_queue import (
+    rate_limit_decorator,
+    process_with_queue,
+    get_queue_status
+)
 
 # --- Optional parsers (install as needed) ---
 try:
@@ -57,23 +72,22 @@ from grc.models import Incident
 # =========================
 # AI PROVIDER CONFIG (OpenAI or Ollama)
 # =========================
-# Use same global toggle as risk modules
+# Reuse shared AI provider config from risk_ai_doc
 from django.conf import settings
-
-AI_PROVIDER = getattr(settings, 'RISK_AI_PROVIDER', os.environ.get('RISK_AI_PROVIDER', 'ollama')).lower()
-
-# OpenAI config
-OPENAI_API_KEY = getattr(settings, 'OPENAI_API_KEY', None)
-OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
-OPENAI_MODEL = getattr(settings, 'OPENAI_MODEL', 'gpt-3.5-turbo')
-OPENAI_TEMPERATURE = 0.1  # Low temperature for consistent, factual outputs
-
-# Ollama config
-OLLAMA_BASE_URL = getattr(settings, 'OLLAMA_BASE_URL', 'http://13.126.18.17:11434').rstrip('/')
-OLLAMA_MODEL = getattr(settings, 'OLLAMA_MODEL', 'llama3.2:3b-instruct-q4_K_M')
-OLLAMA_TEMPERATURE = getattr(settings, 'OLLAMA_TEMPERATURE', 0.1)
-OLLAMA_TIMEOUT = getattr(settings, 'OLLAMA_TIMEOUT', 600)
-OLLAMA_SEED = getattr(settings, 'OLLAMA_SEED', 42)
+from ..Risk.risk_ai_doc import (
+    AI_PROVIDER,
+    call_ollama_json,
+    call_openai_json,
+    _calculate_optimal_context_size,
+    _select_ollama_model_by_complexity,
+    OLLAMA_BASE_URL,
+    OLLAMA_MODEL_DEFAULT,
+    OLLAMA_MODEL_FAST,
+    OLLAMA_MODEL_COMPLEX,
+    OPENAI_API_KEY,
+    OPENAI_API_URL,
+    OPENAI_MODEL,
+)
 
 print("\n🤖 Incident Import AI Provider Configuration:")
 print(f"   Selected Provider: {AI_PROVIDER.upper()}")
@@ -84,22 +98,13 @@ if AI_PROVIDER == 'openai':
     else:
         print(f"[INFO] Incident AI OpenAI Configuration:")
         print(f"   Model: {OPENAI_MODEL}")
-        print(f"   Temperature: {OPENAI_TEMPERATURE}")
         print(f"   API Key: {'*' * (len(OPENAI_API_KEY) - 4)}{OPENAI_API_KEY[-4:]}")
 elif AI_PROVIDER == 'ollama':
     print(f"[INFO] Incident AI Ollama Configuration:")
     print(f"   URL: {OLLAMA_BASE_URL}")
-    print(f"   Model: {OLLAMA_MODEL}")
-    print(f"   Temperature: {OLLAMA_TEMPERATURE}")
-
-# Initialize OpenAI client (if used)
-openai_client = None
-if AI_PROVIDER == 'openai' and OPENAI_AVAILABLE and OPENAI_API_KEY:
-    try:
-        openai_client = OpenAI(api_key=OPENAI_API_KEY)
-        print("✅ OpenAI client initialized successfully for incident import")
-    except Exception as e:
-        print(f"❌ Failed to initialize OpenAI client: {e}")
+    print(f"   Default Model: {OLLAMA_MODEL_DEFAULT}")
+    print(f"   Fast Model: {OLLAMA_MODEL_FAST}")
+    print(f"   Complex Model: {OLLAMA_MODEL_COMPLEX}")
 
 # Fields we want to extract from incidents table (excluding ID and date fields)
 INCIDENT_DB_FIELDS = [
@@ -287,162 +292,8 @@ def _json_from_llm_text(text: str) -> Any:
     return json.loads(block)
 
 
-def _call_ollama_json(prompt: str, retries: int = 3) -> Any:
-    """
-    Call Ollama expecting JSON response (parsed).
-    """
-    url = f"{OLLAMA_BASE_URL}/api/generate"
-    payload = {
-        "model": OLLAMA_MODEL,
-        "prompt": prompt,
-        "stream": False,
-        "options": {
-            "temperature": OLLAMA_TEMPERATURE,
-            "top_p": 0.9,
-            "top_k": 40,
-            "num_predict": 2000,
-            "seed": OLLAMA_SEED,
-            "repeat_penalty": 1.1,
-        },
-        "format": "json",
-    }
-
-    print(f"🤖 Calling Ollama API for incident extraction (model: {OLLAMA_MODEL})")
-    for attempt in range(retries):
-        try:
-            start = time.time()
-            resp = requests.post(url, json=payload, timeout=OLLAMA_TIMEOUT)
-            resp.raise_for_status()
-            elapsed = time.time() - start
-            data = resp.json()
-            raw = data.get("response", "")
-            print(f"✅ Ollama responded in {elapsed:.2f}s (len={len(raw)})")
-
-            try:
-                return json.loads(raw)
-            except json.JSONDecodeError:
-                print("⚠️ Direct JSON parse failed, using regex extraction...")
-                return _json_from_llm_text(raw)
-        except Exception as e:
-            print(f"❌ Ollama error (attempt {attempt + 1}/{retries}): {e}")
-            if attempt < retries - 1:
-                time.sleep(1)
-                continue
-            raise RuntimeError(f"Ollama API call failed after {retries} attempts: {e}")
-
-
-def call_openai_json(prompt: str, retries: int = 3, temperature: float = None) -> Any:
-    """
-    Call configured AI provider (OpenAI or Ollama) expecting JSON response with retry logic.
-    """
-    if AI_PROVIDER == 'ollama':
-        return _call_ollama_json(prompt, retries=retries)
-
-    # OpenAI path (unchanged behavior)
-    if not OPENAI_AVAILABLE:
-        raise RuntimeError("OpenAI library not installed. Run: pip install openai")
-    
-    if not openai_client:
-        raise RuntimeError("OpenAI client not initialized. Check OPENAI_API_KEY environment variable.")
-    
-    if temperature is None:
-        temperature = OPENAI_TEMPERATURE
-    
-    # Clean model name - strip quotes and whitespace
-    model_clean = str(OPENAI_MODEL).strip().strip('"').strip("'")
-    model_lower = model_clean.lower()
-    
-    print(f"🤖 Calling OpenAI API (model: {model_clean}, temp: {temperature})")
-    print(f"🔍 Model check - Original: '{OPENAI_MODEL}', Cleaned: '{model_clean}', Lower: '{model_lower}'")
-    
-    # Models that support json_object response_format:
-    if "gpt-4o-mini" in model_lower:
-        supports_json_format = False
-        print(f"🔍 Model '{model_clean}' is gpt-4o-mini - NOT adding response_format")
-    else:
-        models_with_json_support = [
-            "gpt-4-turbo-preview", "gpt-4-0125-preview", "gpt-3.5-turbo-1106", 
-            "gpt-4-turbo", "gpt-4o"
-        ]
-        supports_json_format = any(
-            model_lower == model.lower() or model_lower.startswith(model.lower() + "-")
-            for model in models_with_json_support
-        )
-        print(f"🔍 Model '{model_clean}' supports_json_format check result: {supports_json_format}")
-    
-    for attempt in range(retries):
-        try:
-            request_params = {
-                "model": model_clean,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": "You are a GRC (Governance, Risk, and Compliance) incident analysis expert. You extract and analyze incident data from documents with high accuracy. Always return valid JSON without markdown formatting."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                "temperature": temperature
-            }
-            
-            if supports_json_format:
-                request_params["response_format"] = {"type": "json_object"}
-                print(f"✅ Adding response_format: json_object (model '{model_clean}' supports it)")
-            else:
-                print(f"⚠️  NOT adding response_format (model '{model_clean}' does not support json_object)")
-            
-            print(f"🔍 Request params keys: {list(request_params.keys())}")
-            
-            response = openai_client.chat.completions.create(**request_params)
-            raw_content = response.choices[0].message.content
-            
-            if not raw_content:
-                raise ValueError("Empty response from OpenAI")
-            
-            print(f"✅ Received response from OpenAI (length: {len(raw_content)} chars)")
-            
-            try:
-                result = json.loads(raw_content)
-            except json.JSONDecodeError:
-                print(f"⚠️  Direct JSON parse failed, using regex extraction...")
-                result = _json_from_llm_text(raw_content)
-            
-            print(f"✅ Successfully parsed JSON from OpenAI response")
-            return result
-            
-        except json.JSONDecodeError as e:
-            print(f"❌ JSON parsing error (attempt {attempt + 1}/{retries}): {e}")
-            if attempt < retries - 1:
-                time.sleep(1)
-                continue
-            raise ValueError(f"Failed to parse JSON from OpenAI response after {retries} attempts: {e}")
-            
-        except Exception as e:
-            error_type = type(e).__name__
-            error_message = str(e)
-            print(f"❌ OpenAI API error (attempt {attempt + 1}/{retries}): {error_type}: {error_message}")
-            
-            if hasattr(e, 'response') and e.response is not None:
-                try:
-                    error_body = e.response.json() if hasattr(e.response, 'json') else {}
-                    error_detail = error_body.get('error', {})
-                    if isinstance(error_detail, dict):
-                        print(f"🔍 OpenAI Error Details:")
-                        print(f"   Type: {error_detail.get('type', 'Unknown')}")
-                        print(f"   Code: {error_detail.get('code', 'Unknown')}")
-                        print(f"   Message: {error_detail.get('message', 'Unknown error')}")
-                        print(f"   Full error: {error_detail}")
-                except Exception as parse_err:
-                    print(f"⚠️  Could not parse error response: {parse_err}")
-            
-            if attempt < retries - 1:
-                time.sleep(2 ** attempt)
-                continue
-            raise RuntimeError(f"OpenAI API call failed after {retries} attempts: {e}")
-    
-    raise RuntimeError(f"Failed to get valid response after {retries} attempts")
+# Note: call_ollama_json and call_openai_json are now imported from risk_ai_doc.py
+# They include Phase 2 caching and Phase 3 optimizations
 
 
 def normalize_choice(val: str, choices: list[str]) -> Optional[str]:
@@ -548,19 +399,54 @@ def extract_text_from_file(file_path: str, file_extension: str) -> str:
 # =========================
 # AI EXTRACTION CORE
 # =========================
-def infer_single_field(field_name: str, current_record: dict, document_context: str) -> Any:
-    """Focused prompt for ONE field using OpenAI."""
-    print(f"🤖 AI PREDICTING FIELD: {field_name}")
+def infer_single_field(field_name: str, current_record: dict, document_context: str, 
+                       document_hash: str = None) -> Any:
+    """
+    Focused prompt for ONE field using AI (supports both OpenAI and Ollama).
+    Uses Phase 2 few-shot prompts and caching, Phase 3 RAG context.
+    """
+    provider_name = AI_PROVIDER.upper()
+    print(f"🤖 AI PREDICTING FIELD: {field_name} (using {provider_name} with Phase 2+3 optimizations)")
     
-    guidance = FIELD_PROMPTS.get(field_name, "Return a concise, professional value.")
+    # Optimize context for Ollama
+    if AI_PROVIDER == 'ollama':
+        context_size = _calculate_optimal_context_size(len(document_context), "simple")
+        optimized_context = document_context[:context_size] if len(document_context) > context_size else document_context
+    else:
+        optimized_context = document_context[:3000]  # OpenAI default
     
-    # Build context of already-filled fields
-    filled_fields = {k: current_record.get(k) for k in INCIDENT_DB_FIELDS if current_record.get(k)}
+    # Phase 3: Try to retrieve relevant context from RAG
+    rag_context = None
+    if is_rag_available():
+        try:
+            query = f"What is the {field_name} for this incident?"
+            retrieved = retrieve_relevant_context(query, n_results=3)
+            if retrieved:
+                rag_context = retrieved
+                print(f"   📚 Phase 3 RAG: Retrieved {len(retrieved)} relevant document chunks")
+        except Exception as e:
+            print(f"   ⚠️  RAG retrieval failed: {e}")
     
-    mini = f"""Analyze the incident document and extract ONLY the "{field_name}" field.
+    # Use few-shot prompt template (Phase 2 optimization)
+    try:
+        mini = get_field_extraction_prompt(
+            field_name=field_name,
+            document_text=optimized_context,
+            field_prompts=FIELD_PROMPTS
+        )
+        # Add current record context
+        filled_fields = {k: current_record.get(k) for k in INCIDENT_DB_FIELDS if current_record.get(k)}
+        mini += f"\n\nALREADY EXTRACTED FIELDS:\n{json.dumps(filled_fields, indent=2)}"
+        print(f"   📚 Using few-shot prompt template for {field_name}")
+    except Exception as e:
+        print(f"   ⚠️  Few-shot prompt failed, using basic prompt: {e}")
+        # Fallback to basic prompt
+        guidance = FIELD_PROMPTS.get(field_name, "Return a concise, professional value.")
+        filled_fields = {k: current_record.get(k) for k in INCIDENT_DB_FIELDS if current_record.get(k)}
+        mini = f"""Analyze the incident document and extract ONLY the "{field_name}" field.
 
 DOCUMENT CONTEXT (first 3000 chars):
-\"\"\"{document_context[:3000]}\"\"\"
+\"\"\"{optimized_context}\"\"\"
 
 ALREADY EXTRACTED FIELDS:
 {json.dumps(filled_fields, indent=2)}
@@ -582,9 +468,23 @@ Rules:
 4. Return ONLY the JSON object, no other text
 """
     
+    # Phase 3: Enhance prompt with RAG context if available
+    if rag_context:
+        mini = build_rag_prompt(
+            user_query=mini,
+            retrieved_context=rag_context,
+            base_prompt=None
+        )
+    
     try:
-        print(f"   📤 Sending prompt to OpenAI for {field_name}...")
-        out = call_openai_json(mini)
+        if AI_PROVIDER == 'ollama':
+            print(f"   📤 Sending prompt to Ollama for {field_name}...")
+            model = _select_ollama_model_by_complexity(len(optimized_context), 1)
+            out = call_ollama_json(mini, model=model, document_hash=document_hash)
+        else:
+            print(f"   📤 Sending prompt to OpenAI for {field_name}...")
+            out = call_openai_json(mini, document_hash=document_hash)
+        
         v = out.get("value") if isinstance(out, dict) else None
         confidence = out.get("confidence", 0.0) if isinstance(out, dict) else 0.0
         print(f"   ✅ AI PREDICTED {field_name}: '{v}' (confidence: {confidence:.2f})")
@@ -703,15 +603,37 @@ def fallback_incident_extraction(text: str) -> list[dict]:
     return incidents
 
 
-def parse_incidents_from_text(text: str) -> list[dict]:
-    """Extract ALL incident fields using OpenAI with strict JSON schema."""
+def parse_incidents_from_text(text: str, document_hash: str = None) -> list[dict]:
+    """
+    Extract ALL incident fields using AI with strict JSON schema.
+    Phase 2: Uses document preprocessing and caching.
+    Phase 3: Uses RAG context retrieval and model routing.
+    """
     print(f"📊 parse_incidents_from_text() called with {len(text)} chars of text")
     
-    # Improved prompt for OpenAI
-    prompt = f"""You are a GRC (Governance, Risk, Compliance) incident analyst. Analyze the following document and extract ALL incidents mentioned.
+    # Phase 3: Try to retrieve relevant context from RAG
+    rag_context = None
+    if is_rag_available():
+        try:
+            retrieved = retrieve_relevant_context(text[:1000], n_results=3)  # Use first 1000 chars as query
+            if retrieved:
+                rag_context = retrieved
+                print(f"   📚 Phase 3 RAG: Retrieved {len(retrieved)} relevant document chunks for incident extraction")
+        except Exception as e:
+            print(f"   ⚠️  RAG retrieval failed: {e}")
+    
+    # Optimize context size for Ollama
+    if AI_PROVIDER == 'ollama':
+        context_size = _calculate_optimal_context_size(len(text), "complex")
+        optimized_text = text[:context_size] if len(text) > context_size else text
+    else:
+        optimized_text = text[:8000]  # OpenAI default
+    
+    # Improved prompt for AI
+    base_prompt = f"""You are a GRC (Governance, Risk, Compliance) incident analyst. Analyze the following document and extract ALL incidents mentioned.
 
 DOCUMENT TO ANALYZE:
-\"\"\"{text[:8000]}\"\"\"
+\"\"\"{optimized_text}\"\"\"
 
 EXTRACTION REQUIREMENTS:
 
@@ -780,14 +702,37 @@ CRITICAL RULES:
 - For JSON fields (Mitigation, IncidentFormDetails), ensure proper nested structure
 
 Begin analysis now and return the JSON object:"""
+    
+    # Phase 3: Enhance prompt with RAG context if available
+    if rag_context:
+        prompt = build_rag_prompt(
+            user_query=base_prompt,
+            retrieved_context=rag_context,
+            base_prompt=None
+        )
+    else:
+        prompt = base_prompt
 
-    print(f"📝 Generated prompt for OpenAI (length: {len(prompt)} chars)")
+    print(f"📝 Generated prompt for AI (length: {len(prompt)} chars)")
     
     try:
-        print(f"🚀 Calling OpenAI to extract incidents...")
+        provider_info = f"{AI_PROVIDER.upper()} ({OPENAI_MODEL if AI_PROVIDER == 'openai' else OLLAMA_MODEL_DEFAULT})"
+        print(f"🚀 Calling {provider_info} to extract incidents (Phase 2+3: cached + few-shot + RAG + routing)...")
         print(f"📊 Processing document with {len(text)} characters")
         
-        response = call_openai_json(prompt)
+        # Use shared AI functions with caching and routing
+        if AI_PROVIDER == 'ollama':
+            model = route_model(
+                task_type="incident_extraction",
+                text_length=len(text),
+                num_risks=1,  # Estimate 1 incident per document
+                accuracy_required="high",
+                system_load=get_current_system_load(),
+                provider="ollama"
+            )
+            response = call_ollama_json(prompt, model=model, document_hash=document_hash)
+        else:
+            response = call_openai_json(prompt, document_hash=document_hash)
         
         # Handle different response formats
         if isinstance(response, dict) and "incidents" in response:
@@ -855,7 +800,7 @@ Begin analysis now and return the JSON object:"""
             if missing_fields:
                 print(f"   📝 Missing fields to predict: {missing_fields}")
                 for field in missing_fields:
-                    predicted_value = infer_single_field(field, item, text)
+                    predicted_value = infer_single_field(field, item, text, document_hash=document_hash)
                     item[field] = predicted_value
                     # Mark as AI generated in metadata
                     if predicted_value is not None and predicted_value != "":
@@ -896,7 +841,7 @@ Begin analysis now and return the JSON object:"""
             # Ensure everything present
             for field in INCIDENT_DB_FIELDS:
                 if item.get(field) in (None, "", []):
-                    item[field] = infer_single_field(field, item, text)
+                    item[field] = infer_single_field(field, item, text, document_hash=document_hash)
             # Normalize again
             item["Criticality"] = normalize_choice(item.get("Criticality"), CRITICALITY_CHOICES) or "Medium"
             item["RiskPriority"] = normalize_choice(item.get("RiskPriority"), PRIORITY_CHOICES) or "Medium"
@@ -915,8 +860,13 @@ Begin analysis now and return the JSON object:"""
 @permission_classes([AllowAny])
 @parser_classes([MultiPartParser, FormParser])
 @csrf_exempt
+@rate_limit_decorator(requests_per_minute=10, requests_per_hour=100)  # Phase 3: Rate limiting
 def upload_and_process_incident_document(request):
-    """Upload a document and process it to extract incident data."""
+    """
+    Upload a document and process it to extract incident data.
+    Phase 2: Uses document preprocessing, few-shot prompts, and caching.
+    Phase 3: Uses RAG context retrieval, model routing, request queuing, and system load tracking.
+    """
     print(f"📤 Upload request for incident document")
 
     try:
@@ -948,27 +898,106 @@ def upload_and_process_incident_document(request):
         print(f"✅ File saved to: {file_path}")
 
         try:
-            # Extract text
-            print(f"🔍 Starting text extraction from {ext} file...")
-            text = extract_text_from_file(file_path, ext)
+            # Step 1: Extract text
+            print(f"🔍 STEP 1: Starting text extraction from {ext} file...")
+            raw_text = extract_text_from_file(file_path, ext)
             
-            if not text or len(text.strip()) < 50:
+            if not raw_text or len(raw_text.strip()) < 50:
                 return JsonResponse({'status': 'error', 'message': 'Could not extract meaningful text from document'}, status=400)
 
-            print(f"✅ Extracted {len(text)} characters from document")
+            print(f"✅ STEP 1A COMPLETE: Extracted {len(raw_text)} characters from document")
             
-            # Process with OpenAI
-            print(f"🤖 Calling OpenAI model '{OPENAI_MODEL}' to extract incidents...")
-            incidents = parse_incidents_from_text(text)
+            # Step 1B: Preprocess document (Phase 2 optimization)
+            print(f"🔍 STEP 1B: Preprocessing document (Phase 2 optimization)...")
+            text, preprocess_metadata = preprocess_document(raw_text, max_length=8000)
+            print(f"✅ STEP 1B COMPLETE: Preprocessed document")
+            print(f"   Original length: {preprocess_metadata['original_length']} chars")
+            print(f"   Processed length: {preprocess_metadata['processed_length']} chars")
+            if preprocess_metadata['was_truncated']:
+                print(f"   ⚠️  Document was truncated ({preprocess_metadata['reduction_percent']:.1f}% reduction)")
             
-            print(f"✅ OpenAI extracted {len(incidents)} incident(s) from document")
+            # Calculate document hash for caching (Phase 2)
+            document_hash = calculate_document_hash(text)
+            print(f"📝 Document hash: {document_hash[:16]}... (for caching)")
+            
+            # Step 2: Check AI provider configuration
+            print(f"🔍 STEP 2: Checking AI provider configuration...")
+            if AI_PROVIDER == 'openai' and not OPENAI_API_KEY:
+                print(f"❌ ERROR: OPENAI_API_KEY is not set")
+                return JsonResponse({
+                    'status': 'error', 
+                    'message': 'OPENAI_API_KEY environment variable is not set. Please configure your OpenAI API key or switch to Ollama.'
+                }, status=503)
+            elif AI_PROVIDER == 'ollama' and not OLLAMA_BASE_URL:
+                print(f"❌ ERROR: OLLAMA_BASE_URL is not set")
+                return JsonResponse({
+                    'status': 'error', 
+                    'message': 'OLLAMA_BASE_URL environment variable is not set. Please configure your Ollama server URL.'
+                }, status=503)
+            
+            print(f"✅ STEP 2 COMPLETE: {AI_PROVIDER.upper()} provider is configured")
+            
+            # Step 3: Process with AI (Phase 2+3 optimizations)
+            start_time = time.time()
+            
+            provider_info = f"{AI_PROVIDER.upper()} ({OPENAI_MODEL if AI_PROVIDER == 'openai' else OLLAMA_MODEL_DEFAULT})"
+            print(f"🤖 STEP 3: Calling {provider_info} to extract incidents (Phase 2+3: cached + few-shot + RAG + routing)...")
+            
+            # Phase 3: Process with queuing (if needed)
+            request_id = f"incident_doc_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{hash(file_name)}"
+            
+            def process_document():
+                return parse_incidents_from_text(text, document_hash=document_hash)
+            
+            # Use queuing for heavy processing
+            if len(text) > 10000:  # Large documents use queue
+                print(f"📋 Large document detected, using Phase 3 queuing...")
+                incidents = process_with_queue(request_id, process_document)
+            else:
+                incidents = process_document()
+            
+            # Track processing time for system load monitoring (Phase 3)
+            processing_time = time.time() - start_time
+            track_system_load(processing_time, len(text))
+            
+            # Phase 3: Add document to RAG for future context retrieval
+            if is_rag_available():
+                try:
+                    add_document_to_rag(
+                        document_text=text,
+                        document_id=f"incident_doc_{document_hash[:16]}",
+                        metadata={
+                            "type": "incident_assessment",
+                            "filename": file_name,
+                            "uploaded_at": datetime.now().isoformat(),
+                            "num_incidents": len(incidents) if 'incidents' in locals() else 0
+                        }
+                    )
+                    print(f"✅ Phase 3 RAG: Document added to knowledge base")
+                except Exception as e:
+                    print(f"⚠️  Phase 3 RAG: Failed to add document: {e}")
+            
+            print(f"✅ STEP 3 COMPLETE: AI extracted {len(incidents)} incident(s) from document")
+            for idx, incident in enumerate(incidents, 1):
+                print(f"  Incident {idx}: {incident.get('IncidentTitle', 'Untitled')[:50]}...")
 
+            # Phase 3: Include RAG and routing stats in response
+            phase3_metadata = {
+                "rag_available": is_rag_available(),
+                "rag_stats": get_rag_stats() if is_rag_available() else None,
+                "system_load": get_current_system_load(),
+                "processing_time": processing_time,
+                "model_routing": "enabled"
+            }
+            
             return JsonResponse({
                 'status': 'success',
                 'message': f'Successfully extracted {len(incidents)} incident(s)',
                 'document_name': file_name,
                 'saved_path': safe_filename,
                 'extracted_text_length': len(text),
+                'preprocessing_metadata': preprocess_metadata,
+                'phase3_metadata': phase3_metadata,  # Phase 3 stats
                 'incidents': incidents
             })
         except Exception as process_error:

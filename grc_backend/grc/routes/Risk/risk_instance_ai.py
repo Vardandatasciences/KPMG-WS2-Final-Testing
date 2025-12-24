@@ -30,6 +30,30 @@ from rest_framework.parsers import MultiPartParser, FormParser
 # RBAC imports
 from ...rbac.decorators import rbac_required
 
+# Phase 2 Optimizations (reuse same utilities as risk_ai_doc)
+from ...utils.ai_cache import cached_llm_call
+from ...utils.document_preprocessor import preprocess_document, calculate_document_hash
+from ...utils.few_shot_prompts import get_field_extraction_prompt
+
+# Phase 3 Optimizations (reuse same utilities as risk_ai_doc)
+from ...utils.rag_system import (
+    add_document_to_rag,
+    retrieve_relevant_context,
+    build_rag_prompt,
+    is_rag_available,
+    get_rag_stats,
+)
+from ...utils.model_router import (
+    route_model,
+    track_system_load,
+    get_current_system_load,
+)
+from ...utils.request_queue import (
+    rate_limit_decorator,
+    process_with_queue,
+    get_queue_status,
+)
+
 # --- Optional parsers (install as needed) ---
 try:
     import pdfplumber
@@ -58,22 +82,22 @@ from grc.models import RiskInstance  # Import RiskInstance model
 # =========================
 # AI PROVIDER CONFIG (OpenAI or Ollama)
 # =========================
-# Use the same provider configuration as risk_ai_doc
+# Use the same provider configuration and helpers as risk_ai_doc
 from django.conf import settings
-from .risk_ai_doc import (  # Reuse shared AI provider config and Ollama helpers
+from .risk_ai_doc import (
     AI_PROVIDER,
     call_ollama_json,
+    call_openai_json,  # Phase 2: cached OpenAI wrapper
     _calculate_optimal_context_size,
     _select_ollama_model_by_complexity,
     OLLAMA_BASE_URL,
     OLLAMA_MODEL_DEFAULT,
     OLLAMA_MODEL_FAST,
     OLLAMA_MODEL_COMPLEX,
+    OPENAI_API_KEY,
+    OPENAI_API_URL,
+    OPENAI_MODEL,
 )
-
-OPENAI_API_KEY = getattr(settings, 'OPENAI_API_KEY', None)
-OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
-OPENAI_MODEL = getattr(settings, 'OPENAI_MODEL', 'gpt-3.5-turbo')
 
 if AI_PROVIDER == 'openai':
     if not OPENAI_API_KEY:
@@ -225,203 +249,6 @@ Rules:
 - Return ONLY the JSON array, nothing else
 - Include _meta.per_field for EVERY field showing source (EXTRACTED or AI_GENERATED), confidence (0.0-1.0), and rationale
 """
-
-# =========================
-# UTILITIES / VALIDATORS
-# =========================
-def _json_from_llm_text(text: str) -> Any:
-    """Extract the first valid JSON array/object from the LLM response."""
-    # Remove markdown code blocks if present
-    text = re.sub(r'```json\s*', '', text)
-    text = re.sub(r'```\s*', '', text)
-    
-    # Try to find JSON array or object
-    m = re.search(r"(\[.*\]|\{.*\})", text, flags=re.S)
-    block = m.group(1) if m else text.strip()
-    
-    # Clean up common JSON issues
-    # Remove trailing commas before closing braces/brackets
-    block = re.sub(r',(\s*[}\]])', r'\1', block)
-    
-    return json.loads(block)
-
-def call_openai_json(prompt: str, retries: int = 3, timeout: int = 120) -> Any:
-    """Call OpenAI API expecting JSON response."""
-    if not OPENAI_API_KEY:
-        raise RuntimeError("OPENAI_API_KEY environment variable is not set")
-    
-    # OpenAI API format
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {OPENAI_API_KEY}"
-    }
-    
-    # Models that support json_object response_format:
-    # gpt-4-turbo-preview, gpt-4-0125-preview, gpt-3.5-turbo-1106, gpt-4-turbo, gpt-4o
-    # Note: gpt-4o-mini does NOT support json_object format
-    # Clean model name - strip quotes and whitespace
-    model_clean = str(OPENAI_MODEL).strip().strip('"').strip("'")
-    model_lower = model_clean.lower()
-    
-    print(f"🔍 Model check - Original: '{OPENAI_MODEL}', Cleaned: '{model_clean}', Lower: '{model_lower}'")
-    
-    # Explicitly exclude gpt-4o-mini first (it contains "gpt-4o" but doesn't support json_object)
-    if "gpt-4o-mini" in model_lower:
-        supports_json_format = False
-        print(f"🔍 Model '{model_clean}' is gpt-4o-mini - NOT adding response_format")
-    else:
-        # Check if model exactly matches or starts with a supported model
-        models_with_json_support = [
-            "gpt-4-turbo-preview", "gpt-4-0125-preview", "gpt-3.5-turbo-1106", 
-            "gpt-4-turbo", "gpt-4o"
-        ]
-        supports_json_format = any(
-            model_lower == model.lower() or model_lower.startswith(model.lower() + "-")
-            for model in models_with_json_support
-        )
-        print(f"🔍 Model '{model_clean}' supports_json_format check result: {supports_json_format}")
-    
-    payload = {
-        "model": model_clean,  # Use cleaned model name
-        "messages": [
-            {"role": "system", "content": "You are a GRC (Governance, Risk, and Compliance) analyst expert. Always return valid JSON responses as requested."},
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": 0.1
-    }
-    
-    # Only add response_format for models that support it
-    if supports_json_format:
-        payload["response_format"] = {"type": "json_object"}
-        print(f"✅ Adding response_format: json_object (model '{model_clean}' supports it)")
-    else:
-        print(f"⚠️  NOT adding response_format (model '{model_clean}' does not support json_object)")
-    
-    print(f"🤖 Calling OpenAI API at {OPENAI_API_URL}")
-    print(f"🤖 Model: {model_clean}")
-    print(f"🤖 Prompt length: {len(prompt)} chars")
-    print(f"🔍 Payload keys: {list(payload.keys())}")
-    if 'response_format' in payload:
-        print(f"🔍 response_format value: {payload['response_format']}")
-    else:
-        print(f"🔍 response_format: NOT in payload")
-    
-    for attempt in range(retries):
-        print(f"🤖 Attempt {attempt + 1}/{retries}...")
-        resp = None
-        try:
-            resp = requests.post(OPENAI_API_URL, json=payload, headers=headers, timeout=timeout)
-            resp.raise_for_status()
-            print(f"✅ OpenAI API responded with status {resp.status_code}")
-            
-            # OpenAI response format
-            response_data = resp.json()
-            raw = response_data.get("choices", [{}])[0].get("message", {}).get("content", "")
-            print(f"📝 Response length: {len(raw)} chars")
-            print(f"📝 First 200 chars: {raw[:200]}...")
-            
-            result = _json_from_llm_text(raw)
-            print(f"✅ Successfully parsed JSON from OpenAI response")
-            return result
-            
-        except json.JSONDecodeError as je:
-            print(f"❌ JSON parsing error on attempt {attempt + 1}: {je}")
-            if attempt < retries - 1:
-                print(f"⏳ Retrying in 1 second...")
-                time.sleep(1)
-                continue
-            print(f"❌ All retries exhausted. Raw response: {raw[:500] if 'raw' in locals() else 'N/A'}...")
-            raise RuntimeError(f"Failed to parse JSON from OpenAI response after {retries} attempts")
-            
-        except requests.exceptions.HTTPError as he:
-            print(f"❌ HTTP error on attempt {attempt + 1}: {he}")
-            
-            # Ensure resp is available
-            if resp is None:
-                print(f"⚠️  Response object is None - error occurred before response was received")
-                raise RuntimeError(f"OpenAI API HTTP error: {he}")
-            
-            print(f"🔍 Status Code: {resp.status_code}")
-            
-            # Log the actual error response from OpenAI - be more robust
-            try:
-                # Try to get response text first
-                response_text = resp.text if hasattr(resp, 'text') else 'N/A'
-                print(f"🔍 Raw response text (first 1000 chars): {response_text[:1000]}")
-                
-                # Try to parse as JSON
-                try:
-                    error_response = resp.json()
-                    error_message = error_response.get('error', {})
-                    if isinstance(error_message, dict):
-                        error_detail = error_message.get('message', 'Unknown error')
-                        error_type = error_message.get('type', 'Unknown type')
-                        error_code = error_message.get('code', 'Unknown code')
-                        print(f"🔍 OpenAI Error Details:")
-                        print(f"   Type: {error_type}")
-                        print(f"   Code: {error_code}")
-                        print(f"   Message: {error_detail}")
-                        print(f"   Full error object: {error_message}")
-                    else:
-                        print(f"🔍 OpenAI Error Response (non-dict): {error_response}")
-                except (ValueError, AttributeError, json.JSONDecodeError) as json_err:
-                    print(f"⚠️  Response is not valid JSON: {json_err}")
-                    print(f"   Response text: {response_text[:500]}")
-            except Exception as e:
-                print(f"⚠️  Could not parse error response: {e}")
-                print(f"   Exception type: {type(e).__name__}")
-                import traceback
-                print(f"   Traceback: {traceback.format_exc()}")
-            
-            if resp.status_code == 401:
-                raise RuntimeError("OpenAI API authentication failed. Please check your OPENAI_API_KEY.")
-            elif resp.status_code == 429:
-                print(f"⚠️  Rate limit exceeded. Waiting 5 seconds...")
-                if attempt < retries - 1:
-                    time.sleep(5)
-                    continue
-            elif resp.status_code >= 500:
-                print(f"⚠️  OpenAI server error. Retrying...")
-                if attempt < retries - 1:
-                    time.sleep(2)
-                    continue
-            elif resp.status_code == 400:
-                # For 400 errors, log the payload to help debug
-                print(f"🔍 Debugging 400 error - Payload being sent:")
-                print(f"   Model: {payload.get('model')}")
-                print(f"   Has response_format: {'response_format' in payload}")
-                if 'response_format' in payload:
-                    print(f"   response_format value: {payload.get('response_format')}")
-                print(f"   Messages count: {len(payload.get('messages', []))}")
-                print(f"   Temperature: {payload.get('temperature')}")
-            
-            raise RuntimeError(f"OpenAI API HTTP error: {he}")
-            
-        except requests.exceptions.ConnectionError as ce:
-            print(f"❌ Connection error on attempt {attempt + 1}: {ce}")
-            if attempt < retries - 1:
-                print(f"⏳ Retrying in 2 seconds...")
-                time.sleep(2)
-                continue
-            raise RuntimeError(f"Failed to connect to OpenAI API: {ce}")
-            
-        except requests.exceptions.Timeout as te:
-            print(f"❌ Timeout error on attempt {attempt + 1}: {te}")
-            if attempt < retries - 1:
-                print(f"⏳ Retrying in 2 seconds...")
-                time.sleep(2)
-                continue
-            raise RuntimeError(f"OpenAI API request timed out: {te}")
-            
-        except Exception as e:
-            print(f"❌ Unexpected error on attempt {attempt + 1}: {type(e).__name__}: {e}")
-            if attempt < retries - 1:
-                print(f"⏳ Retrying in 1 second...")
-                time.sleep(1)
-                continue
-            raise RuntimeError(f"Unexpected error calling OpenAI API: {e}")
-    
-    raise RuntimeError(f"Failed to get response from OpenAI API after {retries} attempts")
 
 def clamp_int(v, lo, hi) -> Optional[int]:
     if v is None: return None
@@ -635,24 +462,53 @@ def detect_and_parse_risk_instance_blocks(text: str) -> list[dict]:
 # =========================
 # AI EXTRACTION CORE
 # =========================
-def infer_single_field(field_name: str, current_record: dict, document_context: str) -> tuple[Any, dict]:
+def infer_single_field(
+    field_name: str,
+    current_record: dict,
+    document_context: str,
+    document_hash: str = None,
+) -> tuple[Any, dict]:
     """
     Focused prompt for ONE field using AI (supports both OpenAI and Ollama).
+    Uses Phase 2 few-shot prompts, Phase 3 RAG, and caching.
     Returns: (value, metadata_dict)
     """
     provider_name = AI_PROVIDER.upper()
-    print(f"🤖 AI PREDICTING FIELD: {field_name} (using {provider_name})")
-    
-    guidance = FIELD_PROMPTS.get(field_name, "Return a concise, professional value.")
-    
+    print(f"🤖 AI PREDICTING FIELD: {field_name} (using {provider_name} with Phase 2+3 optimizations)")
+
     # Optimize context size for Ollama; keep previous behavior for OpenAI
     if AI_PROVIDER == 'ollama':
         context_size = _calculate_optimal_context_size(len(document_context), "simple")
         optimized_context = document_context[:context_size] if len(document_context) > context_size else document_context
     else:
         optimized_context = document_context[:3000]
-    
-    mini = f"""
+
+    # Phase 3: Try to retrieve relevant context from RAG
+    rag_context = None
+    if is_rag_available():
+        try:
+            query = f"What is the {field_name} for this risk instance?"
+            retrieved = retrieve_relevant_context(query, n_results=3)
+            if retrieved:
+                rag_context = retrieved
+                print(f"   📚 Phase 3 RAG: Retrieved {len(retrieved)} relevant document chunks")
+        except Exception as e:
+            print(f"   ⚠️  RAG retrieval failed: {e}")
+
+    # Phase 2: Use few-shot prompt template (reuse shared helper)
+    try:
+        mini = get_field_extraction_prompt(
+            field_name=field_name,
+            document_text=optimized_context,
+            field_prompts=FIELD_PROMPTS,
+        )
+        # Add current record context
+        mini += f"\n\nCurrent risk instance (partial):\n{json.dumps({k: current_record.get(k) for k in RISK_INSTANCE_DB_FIELDS if current_record.get(k)}, indent=2)}"
+        print(f"   📚 Using few-shot prompt template for {field_name}")
+    except Exception as e:
+        print(f"   ⚠️  Few-shot prompt failed, using basic prompt: {e}")
+        guidance = FIELD_PROMPTS.get(field_name, "Return a concise, professional value.")
+        mini = f"""
 You are a GRC analyst. Infer ONLY the field "{field_name}" for this risk instance.
 Return JSON: {{"value": <scalar or string or array>, "confidence": 0.0-1.0, "rationale": "brief explanation"}}.
 
@@ -668,15 +524,24 @@ Rules:
 - Always include a brief rationale explaining your decision.
 - Return ONLY valid JSON, no markdown, no code blocks.
 """
+
+    # Phase 3: Enhance prompt with RAG context if available
+    if rag_context:
+        mini = build_rag_prompt(
+            user_query=mini,
+            retrieved_context=rag_context,
+            base_prompt=None,
+        )
+
     try:
         if AI_PROVIDER == 'ollama':
             print(f"   📤 Sending prompt to Ollama for {field_name}...")
             model = _select_ollama_model_by_complexity(len(optimized_context), 1)
-            out = call_ollama_json(mini, model=model)
+            out = call_ollama_json(mini, model=model, document_hash=document_hash)
             model_used = model
         else:
             print(f"   📤 Sending prompt to OpenAI for {field_name}...")
-            out = call_openai_json(mini)
+            out = call_openai_json(mini, document_hash=document_hash)
             model_used = OPENAI_MODEL
 
         v = out.get("value") if isinstance(out, dict) else None
@@ -863,7 +728,7 @@ def fallback_risk_instance_extraction(text: str) -> list[dict]:
     return risk_instances
 
 
-def parse_risk_instances_from_text(text: str) -> list[dict]:
+def parse_risk_instances_from_text(text: str, document_hash: str = None) -> list[dict]:
     """
     NEW APPROACH:
     1. First detect how many risk instances are in the document by finding 'Risk X:' patterns
@@ -980,10 +845,10 @@ def parse_risk_instances_from_text(text: str) -> list[dict]:
         if missing_fields:
             print(f"  🤖 Missing fields: {', '.join(missing_fields)}")
             print(f"  🤖 Using AI to infer missing fields...")
-            
+
             for field in missing_fields:
                 print(f"    🔍 Inferring {field}...")
-                value, metadata = infer_single_field(field, item, risk_block or text[:3000])
+                value, metadata = infer_single_field(field, item, risk_block or text[:3000], document_hash=document_hash)
                 item[field] = value
                 # Store AI generation metadata
                 item["_meta"]["per_field"][field] = metadata
@@ -1052,6 +917,7 @@ def parse_risk_instances_from_text(text: str) -> list[dict]:
 @parser_classes([MultiPartParser, FormParser])
 @csrf_exempt
 @rbac_required(required_permission='create_risk')
+@rate_limit_decorator(requests_per_minute=10, requests_per_hour=100)  # Phase 3: Rate limiting
 def upload_and_process_risk_instance_document(request):
     """
     Upload a document and process it to extract COMPLETE risk instance data
@@ -1109,17 +975,30 @@ def upload_and_process_risk_instance_document(request):
         try:
             # Step 1: Extract text from the saved file
             print(f"🔍 STEP 1: Starting text extraction from {ext} file...")
-            text = extract_text_from_file(file_path, ext)
-            
-            if not text or len(text.strip()) < 50:
-                print(f"❌ ERROR: Could not extract meaningful text. Length: {len(text) if text else 0}")
+            raw_text = extract_text_from_file(file_path, ext)
+
+            if not raw_text or len(raw_text.strip()) < 50:
+                print(f"❌ ERROR: Could not extract meaningful text. Length: {len(raw_text) if raw_text else 0}")
                 resp = JsonResponse({'status': 'error', 'message': 'Could not extract meaningful text from document'}, status=400)
                 resp['Access-Control-Allow-Origin'] = '*'
                 return resp
 
-            print(f"✅ STEP 1 COMPLETE: Extracted {len(text)} characters from document")
-            print(f"📄 First 200 chars: {text[:200]}...")
-            
+            print(f"✅ STEP 1 COMPLETE: Extracted {len(raw_text)} characters from document")
+            print(f"📄 First 200 chars: {raw_text[:200]}...")
+
+            # Step 1B: Preprocess document (Phase 2 optimization)
+            print(f"🔍 STEP 1B: Preprocessing document (Phase 2 optimization for risk instance)...")
+            text, preprocess_metadata = preprocess_document(raw_text, max_length=8000)
+            print(f"✅ STEP 1B COMPLETE: Preprocessed document")
+            print(f"   Original length: {preprocess_metadata['original_length']} chars")
+            print(f"   Processed length: {preprocess_metadata['processed_length']} chars")
+            if preprocess_metadata['was_truncated']:
+                print(f"   ⚠️  Document was truncated ({preprocess_metadata['reduction_percent']:.1f}% reduction)")
+
+            # Calculate document hash for caching / RAG (Phase 2/3)
+            document_hash = calculate_document_hash(text)
+            print(f"📝 Document hash (risk instance): {document_hash[:16]}...")
+
             # Step 2: Check AI provider configuration
             print(f"🔍 STEP 2: Checking AI provider configuration for risk instance module...")
             if AI_PROVIDER == 'openai' and not OPENAI_API_KEY:
@@ -1141,14 +1020,57 @@ def upload_and_process_risk_instance_document(request):
             
             print(f"✅ STEP 2 COMPLETE: {AI_PROVIDER.upper()} provider is configured for risk instance module")
             
-            # Step 3: Process with AI
+            # Step 3: Process with AI (Phase 2+3 optimizations)
+            # Phase 3: Use intelligent model routing and queuing
+            start_time = time.time()
+
             provider_info = f"{AI_PROVIDER.upper()} ({OPENAI_MODEL if AI_PROVIDER == 'openai' else OLLAMA_MODEL_DEFAULT})"
-            print(f"🤖 STEP 3: Calling {provider_info} to extract risk instances...")
-            risk_instances = parse_risk_instances_from_text(text)
-            
+            print(f"🤖 STEP 3: Calling {provider_info} to extract risk instances (Phase 2+3: cached + few-shot + RAG + routing)...")
+
+            def process_document():
+                return parse_risk_instances_from_text(text, document_hash=document_hash)
+
+            # Use queuing for heavy processing
+            if len(text) > 10000:
+                request_id = f"risk_instance_doc_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{hash(file_name)}"
+                print(f"📋 Large risk instance document detected, using Phase 3 queuing...")
+                risk_instances = process_with_queue(request_id, process_document)
+            else:
+                risk_instances = process_document()
+
+            # Track processing time for system load monitoring (Phase 3)
+            processing_time = time.time() - start_time
+            track_system_load(processing_time, len(text))
+
             print(f"✅ STEP 3 COMPLETE: AI extracted {len(risk_instances)} risk instance(s) from document")
             for idx, ri in enumerate(risk_instances, 1):
                 print(f"  Risk Instance {idx}: {ri.get('RiskTitle', 'Untitled')[:50]}...")
+
+            # Phase 3: Add document to RAG for future context retrieval
+            if is_rag_available():
+                try:
+                    add_document_to_rag(
+                        document_text=text,
+                        document_id=f"risk_instance_doc_{document_hash[:16]}",
+                        metadata={
+                            "type": "risk_instance_assessment",
+                            "filename": file_name,
+                            "uploaded_at": datetime.now().isoformat(),
+                            "num_risk_instances": len(risk_instances) if 'risk_instances' in locals() else 0,
+                        },
+                    )
+                    print(f"✅ Phase 3 RAG: Risk instance document added to knowledge base")
+                except Exception as e:
+                    print(f"⚠️  Phase 3 RAG (risk instance): Failed to add document: {e}")
+
+            # Phase 3: Include RAG and routing stats in response
+            phase3_metadata = {
+                "rag_available": is_rag_available(),
+                "rag_stats": get_rag_stats() if is_rag_available() else None,
+                "system_load": get_current_system_load(),
+                "processing_time": processing_time,
+                "model_routing": "enabled",
+            }
 
             resp = JsonResponse({
                 'status': 'success',
@@ -1156,6 +1078,8 @@ def upload_and_process_risk_instance_document(request):
                 'document_name': file_name,
                 'saved_path': safe_filename,
                 'extracted_text_length': len(text),
+                'preprocessing_metadata': preprocess_metadata,
+                'phase3_metadata': phase3_metadata,
                 'risk_instances': risk_instances
             })
             resp['Access-Control-Allow-Origin'] = '*'

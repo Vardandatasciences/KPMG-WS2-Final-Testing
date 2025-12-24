@@ -1,0 +1,910 @@
+{
+  "risk": {
+    "openai": {
+      "provider": "openai",
+      "processing_time": 19.31640338897705,
+      "num_risks_extracted": 0,
+      "risks": [],
+      "document_hash": "7d4a0f246f65d8c9",
+      "text_length": 2899,
+      "cache_stats": {
+        "status": "available",
+        "type": "fakeredis",
+        "total_keys": 1,
+        "message": "Using fakeredis (pure Python Redis - no server required)"
+      },
+      "rag_stats": {
+        "status": "available",
+        "total_chunks": 0,
+        "collection_name": "grc_risk_documents"
+      },
+      "system_load": 0.05599825342464446,
+      "timestamp": "2025-12-24T12:05:55.390292"
+    },
+    "ollama": {
+      "provider": "ollama",
+      "processing_time": 13.211955308914185,
+      "num_risks_extracted": 0,
+      "risks": [],
+      "document_hash": "7d4a0f246f65d8c9",
+      "text_length": 2899,
+      "cache_stats": {
+        "status": "available",
+        "type": "fakeredis",
+        "total_keys": 2,
+        "message": "Using fakeredis (pure Python Redis - no server required)"
+      },
+      "rag_stats": {
+        "status": "available",
+        "total_chunks": 0,
+        "collection_name": "grc_risk_documents"
+      },
+      "system_load": 0.04714985593259334,
+      "timestamp": "2025-12-24T12:06:11.740521"
+    }
+  },
+  "incident": {
+    "openai": {
+      "provider": "openai",
+      "processing_time": 68.09255719184875,
+      "num_incidents_extracted": 2,
+      "incidents": [
+        {
+          "IncidentTitle": "Insecure Data Transmission Over Unencrypted Protocols",
+          "Description": "The incident involves the transmission of sensitive data over HTTP instead of HTTPS, which poses significant risks of data interception. This insecure transmission method can lead to unauthorized access to confidential information. The potential for data leakage or tampering during transmission raises serious concerns about the breach of confidentiality.",
+          "Mitigation": [
+            {
+              "step": "Switch all sensitive traffic to HTTPS using strong ciphers.",
+              "status": "In Progress",
+              "responsible": "IT Security Team",
+              "deadline": "2025-10-12"
+            }
+          ],
+          "Origin": "INTERNAL_DETECTION",
+          "Comments": "This incident was detected during routine security assessments. Immediate action is required to mitigate the risks associated with data transmission.",
+          "RiskCategory": "Information Security",
+          "IncidentCategory": "Security Breach",
+          "RiskPriority": "High",
+          "Attachments": null,
+          "Status": "In Progress",
+          "RepeatedNot": false,
+          "CostOfIncident": "Not assessed",
+          "ReopenedNot": false,
+          "RejectionSource": null,
+          "AffectedBusinessUnit": "IT Department",
+          "SystemsAssetsInvolved": "Web Server",
+          "GeographicLocation": "Data Center",
+          "Criticality": "High",
+          "InitialImpactAssessment": "The initial assessment indicates a high risk of data exposure due to insecure transmission protocols. Immediate remediation is necessary to protect sensitive information.",
+          "InternalContacts": "John Doe, Jane Smith",
+          "ExternalPartiesInvolved": null,
+          "RegulatoryBodies": null,
+          "RelevantPoliciesProceduresViolated": "Data Protection Policy",
+          "ControlFailures": "The failure to enforce HTTPS for sensitive data transmission represents a significant security control lapse. This oversight could lead to severe data breaches if not addressed promptly.",
+          "LessonsLearned": "This incident highlights the importance of enforcing secure transmission protocols. Future assessments will include stricter checks on data transmission methods to prevent similar issues.",
+          "IncidentClassification": "INC-001",
+          "PossibleDamage": "The potential damage includes data leakage and unauthorized access to sensitive information, which could result in significant reputational harm and legal consequences.",
+          "IncidentFormDetails": {
+            "reported_by": "Security Team",
+            "detection_method": "Internal Audit",
+            "response_time_minutes": 120,
+            "escalation_level": "High",
+            "containment_status": "In Progress",
+            "root_cause_category": "Technical",
+            "affected_records_count": 1000,
+            "recovery_time_objective": "24 hours"
+          },
+          "_meta": {
+            "per_field": {
+              "IncidentTitle": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Found in document header"
+              },
+              "Description": {
+                "source": "AI_GENERATED",
+                "confidence": 0.8,
+                "rationale": "Inferred from context"
+              },
+              "Mitigation": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Found in document"
+              },
+              "Origin": {
+                "source": "AI_GENERATED",
+                "confidence": 0.8,
+                "rationale": "Inferred from context"
+              },
+              "Comments": {
+                "source": "AI_GENERATED",
+                "confidence": 0.7,
+                "rationale": "Inferred from context"
+              },
+              "RiskCategory": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "IncidentCategory": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "RiskPriority": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Found in document"
+              },
+              "Attachments": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "No attachments mentioned"
+              },
+              "Status": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Found in document"
+              },
+              "RepeatedNot": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "Assumed based on context"
+              },
+              "CostOfIncident": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "Not assessed in document"
+              },
+              "ReopenedNot": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "Assumed based on context"
+              },
+              "RejectionSource": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "No rejection source mentioned"
+              },
+              "AffectedBusinessUnit": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "SystemsAssetsInvolved": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "GeographicLocation": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "Criticality": {
+                "source": "AI_GENERATED",
+                "confidence": 0.8,
+                "rationale": "Inferred from context"
+              },
+              "InitialImpactAssessment": {
+                "source": "AI_GENERATED",
+                "confidence": 0.8,
+                "rationale": "Inferred from context"
+              },
+              "InternalContacts": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "ExternalPartiesInvolved": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "No external parties mentioned"
+              },
+              "RegulatoryBodies": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "No regulatory bodies mentioned"
+              },
+              "RelevantPoliciesProceduresViolated": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "ControlFailures": {
+                "source": "AI_GENERATED",
+                "confidence": 0.8,
+                "rationale": "Inferred from context"
+              },
+              "LessonsLearned": {
+                "source": "AI_GENERATED",
+                "confidence": 0.8,
+                "rationale": "Inferred from context"
+              },
+              "IncidentClassification": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "PossibleDamage": {
+                "source": "AI_GENERATED",
+                "confidence": 0.8,
+                "rationale": "Inferred from context"
+              },
+              "IncidentFormDetails": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Found in document"
+              }
+            }
+          }
+        },
+        {
+          "IncidentTitle": "Unpatched Vulnerability in Web Application",
+          "Description": "This incident involves a vulnerability identified in the login mechanism of a web application, which allows unauthorized access to user accounts. The flaw poses a significant risk as it can lead to the compromise of user accounts and unauthorized access to confidential information. Immediate action is required to patch the vulnerability and notify affected users.",
+          "Mitigation": [
+            {
+              "step": "Patch the web application immediately and notify affected users.",
+              "status": "Assigned",
+              "responsible": "Development Team",
+              "deadline": "2025-10-10"
+            }
+          ],
+          "Origin": "INTERNAL_DETECTION",
+          "Comments": "The vulnerability was discovered during a routine security assessment. Prompt action is necessary to mitigate the risk of unauthorized access.",
+          "RiskCategory": "Information Security",
+          "IncidentCategory": "Security Breach",
+          "RiskPriority": "Medium",
+          "Attachments": null,
+          "Status": "New",
+          "RepeatedNot": false,
+          "CostOfIncident": "Not assessed",
+          "ReopenedNot": false,
+          "RejectionSource": null,
+          "AffectedBusinessUnit": "Development Department",
+          "SystemsAssetsInvolved": "Web Application",
+          "GeographicLocation": "Cloud Environment",
+          "Criticality": "Medium",
+          "InitialImpactAssessment": "The initial assessment indicates a medium risk of user account compromise due to the identified vulnerability. Immediate remediation is essential to protect user data.",
+          "InternalContacts": "Alice Johnson, Bob Brown",
+          "ExternalPartiesInvolved": null,
+          "RegulatoryBodies": null,
+          "RelevantPoliciesProceduresViolated": "Application Security Policy",
+          "ControlFailures": "The failure to patch known vulnerabilities in a timely manner represents a significant oversight in application security. This could lead to severe consequences if not addressed quickly.",
+          "LessonsLearned": "This incident underscores the importance of regular vulnerability assessments and timely patch management. Future practices will include more rigorous testing before deployment.",
+          "IncidentClassification": "INC-002",
+          "PossibleDamage": "The potential damage includes unauthorized access to user accounts and exposure of confidential information, which could lead to reputational harm and legal liabilities.",
+          "IncidentFormDetails": {
+            "reported_by": "Security Team",
+            "detection_method": "Internal Audit",
+            "response_time_minutes": 90,
+            "escalation_level": "Medium",
+            "containment_status": "Assigned",
+            "root_cause_category": "Technical",
+            "affected_records_count": 500,
+            "recovery_time_objective": "48 hours"
+          },
+          "_meta": {
+            "per_field": {
+              "IncidentTitle": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Found in document header"
+              },
+              "Description": {
+                "source": "AI_GENERATED",
+                "confidence": 0.8,
+                "rationale": "Inferred from context"
+              },
+              "Mitigation": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Found in document"
+              },
+              "Origin": {
+                "source": "AI_GENERATED",
+                "confidence": 0.8,
+                "rationale": "Inferred from context"
+              },
+              "Comments": {
+                "source": "AI_GENERATED",
+                "confidence": 0.7,
+                "rationale": "Inferred from context"
+              },
+              "RiskCategory": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "IncidentCategory": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "RiskPriority": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Found in document"
+              },
+              "Attachments": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "No attachments mentioned"
+              },
+              "Status": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Found in document"
+              },
+              "RepeatedNot": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "Assumed based on context"
+              },
+              "CostOfIncident": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "Not assessed in document"
+              },
+              "ReopenedNot": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "Assumed based on context"
+              },
+              "RejectionSource": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "No rejection source mentioned"
+              },
+              "AffectedBusinessUnit": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "SystemsAssetsInvolved": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "GeographicLocation": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "Criticality": {
+                "source": "AI_GENERATED",
+                "confidence": 0.8,
+                "rationale": "Inferred from context"
+              },
+              "InitialImpactAssessment": {
+                "source": "AI_GENERATED",
+                "confidence": 0.8,
+                "rationale": "Inferred from context"
+              },
+              "InternalContacts": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "ExternalPartiesInvolved": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "No external parties mentioned"
+              },
+              "RegulatoryBodies": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "No regulatory bodies mentioned"
+              },
+              "RelevantPoliciesProceduresViolated": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "ControlFailures": {
+                "source": "AI_GENERATED",
+                "confidence": 0.8,
+                "rationale": "Inferred from context"
+              },
+              "LessonsLearned": {
+                "source": "AI_GENERATED",
+                "confidence": 0.8,
+                "rationale": "Inferred from context"
+              },
+              "IncidentClassification": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "PossibleDamage": {
+                "source": "AI_GENERATED",
+                "confidence": 0.8,
+                "rationale": "Inferred from context"
+              },
+              "IncidentFormDetails": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Found in document"
+              }
+            }
+          }
+        }
+      ],
+      "document_hash": "0b539a6e7d3d6b6a",
+      "text_length": 1345,
+      "cache_stats": {
+        "status": "available",
+        "type": "fakeredis",
+        "total_keys": 11,
+        "message": "Using fakeredis (pure Python Redis - no server required)"
+      },
+      "rag_stats": {
+        "status": "available",
+        "total_chunks": 0,
+        "collection_name": "grc_risk_documents"
+      },
+      "system_load": 0.06196140042940775,
+      "timestamp": "2025-12-24T12:07:20.020235"
+    },
+    "ollama": {
+      "provider": "ollama",
+      "processing_time": 0.4364786148071289,
+      "num_incidents_extracted": 2,
+      "incidents": [
+        {
+          "IncidentTitle": "Insecure Data Transmission Over Unencrypted Protocols",
+          "Description": "The incident involves the transmission of sensitive data over HTTP instead of HTTPS, which poses significant risks of data interception. This insecure transmission method can lead to unauthorized access to confidential information. The potential for data leakage or tampering during transmission raises serious concerns about the breach of confidentiality.",
+          "Mitigation": [
+            {
+              "step": "Switch all sensitive traffic to HTTPS using strong ciphers.",
+              "status": "In Progress",
+              "responsible": "IT Security Team",
+              "deadline": "2025-10-12"
+            }
+          ],
+          "Origin": "INTERNAL_DETECTION",
+          "Comments": "This incident was detected during routine security assessments. Immediate action is required to mitigate the risks associated with data transmission.",
+          "RiskCategory": "Information Security",
+          "IncidentCategory": "Security Breach",
+          "RiskPriority": "High",
+          "Attachments": null,
+          "Status": "In Progress",
+          "RepeatedNot": false,
+          "CostOfIncident": "Not assessed",
+          "ReopenedNot": false,
+          "RejectionSource": null,
+          "AffectedBusinessUnit": "IT Department",
+          "SystemsAssetsInvolved": "Web Server",
+          "GeographicLocation": "Data Center",
+          "Criticality": "High",
+          "InitialImpactAssessment": "The initial assessment indicates a high risk of data exposure due to insecure transmission protocols. Immediate remediation is necessary to protect sensitive information.",
+          "InternalContacts": "John Doe, Jane Smith",
+          "ExternalPartiesInvolved": null,
+          "RegulatoryBodies": null,
+          "RelevantPoliciesProceduresViolated": "Data Protection Policy",
+          "ControlFailures": "The failure to enforce HTTPS for sensitive data transmission represents a significant security control lapse. This oversight could lead to severe data breaches if not addressed promptly.",
+          "LessonsLearned": "This incident highlights the importance of enforcing secure transmission protocols. Future assessments will include stricter checks on data transmission methods to prevent similar issues.",
+          "IncidentClassification": "INC-001",
+          "PossibleDamage": "The potential damage includes data leakage and unauthorized access to sensitive information, which could result in significant reputational harm and legal consequences.",
+          "IncidentFormDetails": {
+            "reported_by": "Security Team",
+            "detection_method": "Internal Audit",
+            "response_time_minutes": 120,
+            "escalation_level": "High",
+            "containment_status": "In Progress",
+            "root_cause_category": "Technical",
+            "affected_records_count": 1000,
+            "recovery_time_objective": "24 hours"
+          },
+          "_meta": {
+            "per_field": {
+              "IncidentTitle": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Found in document header"
+              },
+              "Description": {
+                "source": "AI_GENERATED",
+                "confidence": 0.8,
+                "rationale": "Inferred from context"
+              },
+              "Mitigation": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Found in document"
+              },
+              "Origin": {
+                "source": "AI_GENERATED",
+                "confidence": 0.8,
+                "rationale": "Inferred from context"
+              },
+              "Comments": {
+                "source": "AI_GENERATED",
+                "confidence": 0.7,
+                "rationale": "Inferred from context"
+              },
+              "RiskCategory": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "IncidentCategory": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "RiskPriority": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Found in document"
+              },
+              "Attachments": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "No attachments mentioned"
+              },
+              "Status": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Found in document"
+              },
+              "RepeatedNot": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "Assumed based on context"
+              },
+              "CostOfIncident": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "Not assessed in document"
+              },
+              "ReopenedNot": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "Assumed based on context"
+              },
+              "RejectionSource": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "No rejection source mentioned"
+              },
+              "AffectedBusinessUnit": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "SystemsAssetsInvolved": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "GeographicLocation": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "Criticality": {
+                "source": "AI_GENERATED",
+                "confidence": 0.8,
+                "rationale": "Inferred from context"
+              },
+              "InitialImpactAssessment": {
+                "source": "AI_GENERATED",
+                "confidence": 0.8,
+                "rationale": "Inferred from context"
+              },
+              "InternalContacts": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "ExternalPartiesInvolved": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "No external parties mentioned"
+              },
+              "RegulatoryBodies": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "No regulatory bodies mentioned"
+              },
+              "RelevantPoliciesProceduresViolated": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "ControlFailures": {
+                "source": "AI_GENERATED",
+                "confidence": 0.8,
+                "rationale": "Inferred from context"
+              },
+              "LessonsLearned": {
+                "source": "AI_GENERATED",
+                "confidence": 0.8,
+                "rationale": "Inferred from context"
+              },
+              "IncidentClassification": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "PossibleDamage": {
+                "source": "AI_GENERATED",
+                "confidence": 0.8,
+                "rationale": "Inferred from context"
+              },
+              "IncidentFormDetails": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Found in document"
+              }
+            }
+          }
+        },
+        {
+          "IncidentTitle": "Unpatched Vulnerability in Web Application",
+          "Description": "This incident involves a vulnerability identified in the login mechanism of a web application, which allows unauthorized access to user accounts. The flaw poses a significant risk as it can lead to the compromise of user accounts and unauthorized access to confidential information. Immediate action is required to patch the vulnerability and notify affected users.",
+          "Mitigation": [
+            {
+              "step": "Patch the web application immediately and notify affected users.",
+              "status": "Assigned",
+              "responsible": "Development Team",
+              "deadline": "2025-10-10"
+            }
+          ],
+          "Origin": "INTERNAL_DETECTION",
+          "Comments": "The vulnerability was discovered during a routine security assessment. Prompt action is necessary to mitigate the risk of unauthorized access.",
+          "RiskCategory": "Information Security",
+          "IncidentCategory": "Security Breach",
+          "RiskPriority": "Medium",
+          "Attachments": null,
+          "Status": "New",
+          "RepeatedNot": false,
+          "CostOfIncident": "Not assessed",
+          "ReopenedNot": false,
+          "RejectionSource": null,
+          "AffectedBusinessUnit": "Development Department",
+          "SystemsAssetsInvolved": "Web Application",
+          "GeographicLocation": "Cloud Environment",
+          "Criticality": "Medium",
+          "InitialImpactAssessment": "The initial assessment indicates a medium risk of user account compromise due to the identified vulnerability. Immediate remediation is essential to protect user data.",
+          "InternalContacts": "Alice Johnson, Bob Brown",
+          "ExternalPartiesInvolved": null,
+          "RegulatoryBodies": null,
+          "RelevantPoliciesProceduresViolated": "Application Security Policy",
+          "ControlFailures": "The failure to patch known vulnerabilities in a timely manner represents a significant oversight in application security. This could lead to severe consequences if not addressed quickly.",
+          "LessonsLearned": "This incident underscores the importance of regular vulnerability assessments and timely patch management. Future practices will include more rigorous testing before deployment.",
+          "IncidentClassification": "INC-002",
+          "PossibleDamage": "The potential damage includes unauthorized access to user accounts and exposure of confidential information, which could lead to reputational harm and legal liabilities.",
+          "IncidentFormDetails": {
+            "reported_by": "Security Team",
+            "detection_method": "Internal Audit",
+            "response_time_minutes": 90,
+            "escalation_level": "Medium",
+            "containment_status": "Assigned",
+            "root_cause_category": "Technical",
+            "affected_records_count": 500,
+            "recovery_time_objective": "48 hours"
+          },
+          "_meta": {
+            "per_field": {
+              "IncidentTitle": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Found in document header"
+              },
+              "Description": {
+                "source": "AI_GENERATED",
+                "confidence": 0.8,
+                "rationale": "Inferred from context"
+              },
+              "Mitigation": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Found in document"
+              },
+              "Origin": {
+                "source": "AI_GENERATED",
+                "confidence": 0.8,
+                "rationale": "Inferred from context"
+              },
+              "Comments": {
+                "source": "AI_GENERATED",
+                "confidence": 0.7,
+                "rationale": "Inferred from context"
+              },
+              "RiskCategory": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "IncidentCategory": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "RiskPriority": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Found in document"
+              },
+              "Attachments": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "No attachments mentioned"
+              },
+              "Status": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Found in document"
+              },
+              "RepeatedNot": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "Assumed based on context"
+              },
+              "CostOfIncident": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "Not assessed in document"
+              },
+              "ReopenedNot": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "Assumed based on context"
+              },
+              "RejectionSource": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "No rejection source mentioned"
+              },
+              "AffectedBusinessUnit": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "SystemsAssetsInvolved": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "GeographicLocation": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "Criticality": {
+                "source": "AI_GENERATED",
+                "confidence": 0.8,
+                "rationale": "Inferred from context"
+              },
+              "InitialImpactAssessment": {
+                "source": "AI_GENERATED",
+                "confidence": 0.8,
+                "rationale": "Inferred from context"
+              },
+              "InternalContacts": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "ExternalPartiesInvolved": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "No external parties mentioned"
+              },
+              "RegulatoryBodies": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "No regulatory bodies mentioned"
+              },
+              "RelevantPoliciesProceduresViolated": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "ControlFailures": {
+                "source": "AI_GENERATED",
+                "confidence": 0.8,
+                "rationale": "Inferred from context"
+              },
+              "LessonsLearned": {
+                "source": "AI_GENERATED",
+                "confidence": 0.8,
+                "rationale": "Inferred from context"
+              },
+              "IncidentClassification": {
+                "source": "AI_GENERATED",
+                "confidence": 0.9,
+                "rationale": "Inferred from context"
+              },
+              "PossibleDamage": {
+                "source": "AI_GENERATED",
+                "confidence": 0.8,
+                "rationale": "Inferred from context"
+              },
+              "IncidentFormDetails": {
+                "source": "EXTRACTED",
+                "confidence": 0.9,
+                "rationale": "Found in document"
+              }
+            }
+          }
+        }
+      ],
+      "document_hash": "0b539a6e7d3d6b6a",
+      "text_length": 1345,
+      "cache_stats": {
+        "status": "available",
+        "type": "fakeredis",
+        "total_keys": 11,
+        "message": "Using fakeredis (pure Python Redis - no server required)"
+      },
+      "rag_stats": {
+        "status": "available",
+        "total_chunks": 0,
+        "collection_name": "grc_risk_documents"
+      },
+      "system_load": 0.046617816256284715,
+      "timestamp": "2025-12-24T12:07:23.526911"
+    }
+  },
+  "policy": {
+    "openai": {
+      "provider": "openai",
+      "processing_time": 4.760592222213745,
+      "num_policies_extracted": 6,
+      "policies": [
+        {
+          "policy_title": "Build and Maintain a Secure Network and Systems",
+          "policy_description": "Establish and maintain a secure network infrastructure to protect cardholder data."
+        },
+        {
+          "policy_title": "Protect Cardholder Data",
+          "policy_description": "Implement measures to safeguard cardholder data during storage and transmission."
+        }
+      ],
+      "document_hash": "a8c230c59a7f8c98",
+      "text_length": 7270,
+      "cache_stats": {
+        "status": "available",
+        "type": "fakeredis",
+        "total_keys": 12,
+        "message": "Using fakeredis (pure Python Redis - no server required)"
+      },
+      "rag_stats": {
+        "status": "available",
+        "total_chunks": 0,
+        "collection_name": "grc_risk_documents"
+      },
+      "system_load": 0.04421615409612656,
+      "timestamp": "2025-12-24T12:07:33.705061"
+    },
+    "ollama": {
+      "provider": "ollama",
+      "processing_time": 1.7898519039154053,
+      "num_policies_extracted": 1,
+      "policies": [
+        {
+          "policy_title": "Report",
+          "policy_description": "Documenting assessment and remediation details, and submitting compliance reports to the REPAIR acquiring bank and card brands you do business with (or other requesting entity if you’re a service provider)."
+        }
+      ],
+      "document_hash": "a8c230c59a7f8c98",
+      "text_length": 7270,
+      "cache_stats": {
+        "status": "available",
+        "type": "fakeredis",
+        "total_keys": 13,
+        "message": "Using fakeredis (pure Python Redis - no server required)"
+      },
+      "rag_stats": {
+        "status": "available",
+        "total_chunks": 0,
+        "collection_name": "grc_risk_documents"
+      },
+      "system_load": 0.03901549897034963,
+      "timestamp": "2025-12-24T12:07:43.113262"
+    }
+  }
+}

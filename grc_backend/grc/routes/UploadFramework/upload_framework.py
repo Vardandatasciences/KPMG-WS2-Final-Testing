@@ -13,13 +13,21 @@ from django.core.files.base import ContentFile
 from django.core.cache import cache
 import pandas as pd
 import re
-from langchain_ollama import OllamaLLM
-from langchain_core.prompts import PromptTemplate
-from langchain_core.runnables import RunnablePassthrough
 from django.db import transaction
 from django.utils import timezone
 from datetime import datetime
 from grc.models import Framework, Policy, SubPolicy, Compliance
+
+# Phase 3 Optimizations - Rate limiting and queuing
+from ...utils.request_queue import (
+    rate_limit_decorator,
+    process_with_queue,
+    get_queue_status
+)
+from ...utils.model_router import (
+    track_system_load,
+    get_current_system_load
+)
 
 # # Import the processing function from final_adithya.py
 # from .final_adithya import extract_document_sections
@@ -334,6 +342,7 @@ def process_pdf_framework_fast(pdf_path, task_id, output_dir):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+@rate_limit_decorator(requests_per_minute=5, requests_per_hour=50)  # Phase 3: Rate limiting
 def upload_framework_file(request):
     try:
         if 'file' not in request.FILES:

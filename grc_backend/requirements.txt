@@ -1,74 +1,119 @@
-Django>=4.2.7,<6.0
-djangorestframework>=3.14.0
+# ============================================================
+# CORE DJANGO & REST
+# ============================================================
+Django>=4.2.7,<5.1
+djangorestframework>=3.14.0,<3.16
 djangorestframework-simplejwt>=5.3.0
 django-cors-headers>=4.3.1
-PyJWT>=2.8.0
-python-dotenv>=1.0.0
-openpyxl>=3.1.2  # For Excel file handling (reading and writing)
-xlsxwriter>=3.1.0  # For Excel file handling with advanced formatting
-mysqlclient>=2.2.0
-pymysql>=1.1.0
-boto3>=1.34.0
-mysql-connector-python>=8.0.0
-pandas>=2.1.4
-xmltodict
-reportlab
-requests>=2.31.0
-celery>=5.3.4
-redis>=5
-python-docx
-langchain_openai
-langchain
-langchain-core
-langchain-community
-openai
-langchain_ollama
-werkzeug
-pdfplumber
-PyPDF2
-PyMuPDF>=1.23.0
-google-auth
-google-auth-oauthlib
-google-auth-httplib2
-google-api-python-client
-
-# =========================================================================
-# TPRM INTEGRATION DEPENDENCIES
-# =========================================================================
-# Django extensions for TPRM
 django-filter>=23.4
-drf-yasg>=1.21.7
 django-extensions>=3.2.3
 django-import-export>=3.3.4
 django-simple-history>=3.4.0
+drf-yasg>=1.21.7
 
-# Security packages for TPRM
+
+# ============================================================
+# AUTH / SECURITY
+# ============================================================
+PyJWT>=2.8.0
+python-dotenv>=1.0.0
 python-decouple>=3.8
 cryptography>=41.0.7
 bcrypt>=4.1.2
 
-# File Processing & OCR for TPRM
+
+# ============================================================
+# DATABASES
+# ============================================================
+mysqlclient>=2.2.0
+PyMySQL>=1.1.0
+mysql-connector-python>=8.0.33
+SQLAlchemy>=2.0.23,<2.1
+
+
+# ============================================================
+# DATA
+# ============================================================
+numpy>=1.25.2,<2.0
+pandas>=2.1.4,<2.2
+
+
+# ============================================================
+# DOCUMENT / PDF / OCR
+# ============================================================
+openpyxl>=3.1.2
+xlsxwriter>=3.1.0
+python-docx>=1.1.0
+reportlab>=4.0.8
+pdfplumber>=0.10.3
+PyPDF2>=3.0.1
+PyMuPDF>=1.23.8
+xmltodict>=0.13.0
 Pillow>=10.1.0
 pytesseract>=0.3.10
 
-# Data Processing
-numpy>=1.25.2
 
-# Storage & AWS
+# ============================================================
+# ASYNC / TASKS
+# ============================================================
+requests>=2.31.0
+aiohttp>=3.9.1
+celery>=5.3.6
+redis>=5.0.1
+fakeredis>=2.23.2
+
+
+# ============================================================
+# AWS / STORAGE
+# ============================================================
+boto3>=1.34.0
 django-storages>=1.14.2
 
-# Async & HTTP
-aiohttp>=3.9.1
 
-# Logging
+# ============================================================
+# LOGGING
+# ============================================================
 python-json-logger>=2.0.7
 django-debug-toolbar>=4.2.0
 
-# SQLAlchemy for vendor module
-SQLAlchemy>=2.0.23
 
-# Production
+# ============================================================
+# AI / LANGCHAIN (FINAL FIX)
+# ============================================================
+openai>=1.40.0,<2.0.0
+
+langchain>=0.2.17,<0.3.0
+langchain-core>=0.2.43,<0.3.0
+langchain-community>=0.2.16,<0.3.0
+langchain-openai>=0.1.22,<0.2.0
+langchain-ollama==0.1.3
+
+
+# ============================================================
+# VECTOR DB / EMBEDDINGS
+# ============================================================
+sentence-transformers>=2.2.2,<3.0
+chromadb>=0.4.24,<0.5.0
+
+
+# ============================================================
+# VALIDATION
+# ============================================================
+pydantic>=2.7,<2.9
+
+
+# ============================================================
+# PRODUCTION
+# ============================================================
 gunicorn>=21.2.0
 whitenoise>=6.6.0
-reportlab
-openpyxl
+werkzeug>=2.3.8,<3.0
+
+
+google-auth>=2.0.0
+google-auth-oauthlib>=1.2.0
+google-auth-httplib2>=0.2.0
+google-api-python-client>=2.100.0
+
+cerberus>=1.3.5
+

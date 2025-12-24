@@ -10,8 +10,6 @@ import os
 import re
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
-import openai
-from openai import OpenAI
 import time
 from datetime import datetime, date
 
@@ -26,7 +24,44 @@ except ImportError:
 
 # Configuration - Use Django settings
 from django.conf import settings
-OPENAI_API_KEY = getattr(settings, 'OPENAI_API_KEY', None)
+
+# Phase 1, 2, 3 Optimizations - Import shared AI utilities
+from ...routes.Risk.risk_ai_doc import (
+    AI_PROVIDER,
+    call_ollama_json,
+    call_openai_json,
+    _select_ollama_model_by_complexity,
+    OLLAMA_BASE_URL,
+    OLLAMA_MODEL_DEFAULT,
+    OLLAMA_MODEL_FAST,
+    OLLAMA_MODEL_COMPLEX,
+    OPENAI_API_KEY,
+    OPENAI_API_URL,
+    OPENAI_MODEL,
+)
+
+# Phase 2 Optimizations
+from ...utils.document_preprocessor import preprocess_document, calculate_document_hash
+from ...utils.few_shot_prompts import get_policy_extraction_prompt
+
+# Phase 3 Optimizations
+from ...utils.rag_system import (
+    add_document_to_rag,
+    retrieve_relevant_context,
+    build_rag_prompt,
+    is_rag_available,
+    get_rag_stats
+)
+from ...utils.model_router import (
+    route_model,
+    track_system_load,
+    get_current_system_load
+)
+from ...utils.request_queue import (
+    process_with_queue,
+    get_queue_status
+)
+
 # Clean model name - strip quotes and whitespace to avoid "invalid model ID" errors
 MODEL_NAME_RAW = getattr(settings, 'OPENAI_MODEL', 'gpt-4o-mini')
 MODEL_NAME = str(MODEL_NAME_RAW).strip().strip('"').strip("'")
@@ -35,25 +70,31 @@ OUTPUT_DIR = "policies_extracted_tcfd_UPDATED_ENHANCED_NEW"
 
 class EnhancedPolicyExtractor:
     def __init__(self, api_key: str = None, model: str = MODEL_NAME):
-        """Initialize the Enhanced PolicyExtractor with OpenAI API."""
-        if not api_key:
-            api_key = OPENAI_API_KEY
-        if not api_key:
-            raise ValueError("OpenAI API key is required. Set OPENAI_API_KEY in Django settings or pass api_key parameter.")
-        
-        self.client = OpenAI(api_key=api_key)
+        """
+        Initialize the Enhanced PolicyExtractor with Phase 1, 2, 3 optimizations.
+        Uses shared AI utilities from risk_ai_doc.py for better performance.
+        """
         # Clean model name - strip quotes and whitespace
         self.model = str(model).strip().strip('"').strip("'")
         
-        # Print configuration info similar to risk_instance_ai.py
-        if OPENAI_API_KEY:
-            print(f"🌐 OpenAI Configuration for Policy Extractor:")
-            print(f"   Model (original): '{MODEL_NAME_RAW}'")
-            print(f"   Model (cleaned): '{self.model}'")
-            print(f"   API Key: {'*' * (len(OPENAI_API_KEY) - 4) + OPENAI_API_KEY[-4:]}")
-        else:
-            print("⚠️  WARNING: OPENAI_API_KEY not found in Django settings!")
-            print("   Please set OPENAI_API_KEY in your Django settings.")
+        # Print configuration info
+        print(f"\n🤖 Policy Extractor AI Configuration (Phase 1, 2, 3 Optimized):")
+        print(f"   Selected Provider: {AI_PROVIDER.upper()}")
+        
+        if AI_PROVIDER == 'openai':
+            if OPENAI_API_KEY:
+                print(f"🌐 OpenAI Configuration:")
+                print(f"   Model (original): '{MODEL_NAME_RAW}'")
+                print(f"   Model (cleaned): '{self.model}'")
+                print(f"   API Key: {'*' * (len(OPENAI_API_KEY) - 4) + OPENAI_API_KEY[-4:]}")
+            else:
+                print("⚠️  WARNING: OPENAI_API_KEY not found in Django settings!")
+        elif AI_PROVIDER == 'ollama':
+            print(f"🚀 Ollama Configuration (OPTIMIZED):")
+            print(f"   Base URL: {OLLAMA_BASE_URL}")
+            print(f"   Default Model: {OLLAMA_MODEL_DEFAULT}")
+            print(f"   Fast Model: {OLLAMA_MODEL_FAST}")
+            print(f"   Complex Model: {OLLAMA_MODEL_COMPLEX}")
         
         # Framework detection and metadata
         self.framework_metadata = {}
@@ -303,116 +344,16 @@ class EnhancedPolicyExtractor:
         return chunks
 
     def analyze_content_for_policies_enhanced(self, content: str, section_title: str, framework_info: Dict[str, Any], max_retries: int = 3) -> Dict[str, Any]:
-        """Enhanced policy analysis with comprehensive metadata generation."""
-        
-        system_prompt = f"""You are an expert policy analyst specializing in {framework_info['framework_name']}. Your task is to analyze content and generate comprehensive policy and subpolicy information with detailed metadata.
-
-FRAMEWORK CONTEXT:
-- Framework: {framework_info['framework_name']}
-- Version: {framework_info['current_version']}
-- Category: {framework_info['category']}
-- Description: {framework_info['framework_description']}
-
-CRITICAL REQUIREMENTS:
-1. Every policy MUST have at least one subpolicy
-2. Every subpolicy MUST have a detailed "control" field
-3. Generate comprehensive metadata for all policies and subpolicies
-4. Create structured, implementable policies from the content
-
-ENHANCED FIELD REQUIREMENTS:
-For each POLICY, generate:
-- policy_id: Structured identifier (will be overridden with framework-specific format)
-- policy_title: Clear, specific title
-- policy_description: Comprehensive 3-4 sentence description explaining purpose, importance, and scope
-- policy_text: Complete policy statement with detailed requirements
-- scope: Detailed scope statement covering all applicable areas, systems, and personnel
-- objective: Comprehensive objective statement with specific goals and outcomes
-- policy_type: High-level category (Security/Compliance/Privacy/Risk Management/Operations/Governance/HR/General)
-- policy_category: Mid-level category within the type
-- policy_subcategory: Specific subcategory for detailed classification
-- subpolicies: Array of detailed subpolicies
-
-For each SUBPOLICY, generate:
-- subpolicy_id: Structured identifier (will be enhanced with parent policy reference)
-- subpolicy_title: Specific implementation area
-- subpolicy_description: Comprehensive implementation requirements
-- control: Detailed control statement with WHO, WHAT, WHEN, HOW, WHERE
-
-POLICY CATEGORIZATION GUIDELINES:
-- Security: Access control, data protection, network security, vulnerability management, incident response
-- Compliance: Regulatory adherence, audit requirements, standards compliance, reporting
-- Privacy: Data privacy, personal information protection, consent management
-- Risk Management: Risk assessment, business continuity, vendor management, threat management
-- Operations: Process management, change control, monitoring, system administration
-- Governance: Executive oversight, policy management, strategic alignment
-- Human Resources: Training, awareness, personnel security, competency management
-- General: Broad organizational policies, general requirements
-
-SCOPE GENERATION GUIDELINES:
-Generate detailed scope statements that specify:
-- Organizational units and personnel covered
-- Systems, applications, and infrastructure included
-- Geographic and jurisdictional coverage
-- Third-party and vendor relationships
-- Data types and information categories
-- Operational environments (on-premises, cloud, mobile, remote)
-
-OBJECTIVE GENERATION GUIDELINES:
-Create comprehensive objectives that include:
-- Primary policy purpose and goals
-- Specific measurable outcomes
-- Compliance and regulatory objectives
-- Risk mitigation goals
-- Operational effectiveness targets
-- Stakeholder protection measures
-
-CONTROL STATEMENT REQUIREMENTS:
-Each control must specify:
-1. WHAT: Specific actions, processes, or measures to implement
-2. WHO: Responsible roles, departments, or individuals
-3. WHEN: Frequency, timelines, deadlines, or triggers
-4. HOW: Methods, procedures, tools, or measurement criteria
-5. WHERE: Applicable scope, systems, locations, or organizational units
-
-Return ONLY valid JSON in this exact format:
-{{
-  "has_policies": true/false,
-  "framework_info": {{
-    "framework_name": "{framework_info['framework_name']}",
-    "current_version": "{framework_info['current_version']}",
-    "category": "{framework_info['category']}"
-  }},
-  "policies": [
-    {{
-      "policy_id": "string",
-      "policy_title": "string",
-      "policy_description": "comprehensive 3-4 sentence description",
-      "policy_text": "complete policy statement",
-      "scope": "detailed scope statement covering all applicable areas",
-      "objective": "comprehensive objective with specific goals",
-      "policy_type": "Security/Compliance/Privacy/Risk Management/Operations/Governance/HR/General",
-      "policy_category": "mid-level category",
-      "policy_subcategory": "specific subcategory",
-      "subpolicies": [
-        {{
-          "subpolicy_id": "string",
-          "subpolicy_title": "string",
-          "subpolicy_description": "comprehensive implementation requirements",
-          "control": "detailed control with WHO/WHAT/WHEN/HOW/WHERE"
-        }}
-      ]
-    }}
-  ],
-  "document_type": "regulation/standard/guideline/control_framework/policy_generated/other",
-  "confidence": 0.0-1.0
-}}
-
-IMPORTANT:
-- Generate policies that are specific to {framework_info['framework_name']} context
-- Ensure all metadata fields are comprehensive and detailed
-- Make policies actionable and measurable
-- Include specific implementation guidance in controls
-- Return ONLY the JSON, no additional text"""
+        """
+        Enhanced policy analysis with comprehensive metadata generation.
+        Phase 2: Now uses few-shot prompts for better accuracy.
+        """
+        # Phase 2: Use few-shot prompt template
+        base_prompt = get_policy_extraction_prompt(
+            section_title=section_title,
+            content=content,
+            framework_info=framework_info
+        )
 
         # Handle large content by chunking
         content_chunks = self.chunk_content(content)
@@ -421,37 +362,70 @@ IMPORTANT:
         confidences = []
         
         for i, chunk in enumerate(content_chunks):
-            user_prompt = f"""Section Title: {section_title}
-Chunk {i+1} of {len(content_chunks)}
+            # For chunked content, use the few-shot prompt with the specific chunk
+            if len(content_chunks) > 1:
+                user_prompt = get_policy_extraction_prompt(
+                    section_title=f"{section_title} (Chunk {i+1} of {len(content_chunks)})",
+                    content=chunk,
+                    framework_info=framework_info
+                )
+            else:
+                user_prompt = base_prompt
 
-Content to analyze for {framework_info['framework_name']}:
-{chunk}
-
-Generate comprehensive policies with all required metadata fields. Focus on creating policies that are:
-1. Specific to {framework_info['framework_name']} requirements
-2. Actionable and measurable
-3. Complete with detailed scope and objectives
-4. Properly categorized and classified
-5. Equipped with implementable controls
-
-Ensure all policies have comprehensive metadata including scope, objective, categorization, and structured identifiers."""
-
+            # Phase 2: Calculate document hash for caching
+            document_text = f"{section_title}\n{chunk}"
+            document_hash = calculate_document_hash(document_text)
+            
+            # Phase 3: Try to retrieve relevant context from RAG
+            rag_context = None
+            if is_rag_available():
+                try:
+                    query = f"Policy extraction for section: {section_title}. Framework: {framework_info['framework_name']}"
+                    retrieved = retrieve_relevant_context(query, n_results=3)
+                    if retrieved:
+                        rag_context = retrieved
+                        print(f"   📚 Phase 3 RAG: Retrieved {len(retrieved)} relevant chunks for policy extraction")
+                except Exception as e:
+                    print(f"   ⚠️  RAG retrieval failed: {e}")
+            
+            # Build the full prompt (user_prompt already includes system prompt and examples)
+            full_prompt = user_prompt
+            
+            # Phase 3: Enhance prompt with RAG context if available
+            if rag_context:
+                full_prompt = build_rag_prompt(
+                    user_query=full_prompt,
+                    retrieved_context=rag_context,
+                    base_prompt=None
+                )
+            
+            # Phase 3: Use intelligent model routing
+            selected_model = route_model(
+                task_type="policy_extraction",
+                text_length=len(full_prompt),
+                accuracy_required="high",
+                system_load=get_current_system_load(),
+                provider=AI_PROVIDER,
+            )
+            print(f"   🧠 Phase 3 Model Routing: Selected model '{selected_model}' for policy extraction")
+            
             for attempt in range(max_retries):
                 try:
-                    response = self.client.chat.completions.create(
-                        model=self.model,
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_prompt}
-                        ],
-                        temperature=0.1,
-                        max_tokens=4000
-                    )
+                    start_time = time.time()
                     
-                    response_text = response.choices[0].message.content.strip()
+                    # Phase 1, 2, 3: Use optimized AI wrappers with caching
+                    if AI_PROVIDER == 'ollama':
+                        result = call_ollama_json(full_prompt, model=selected_model, document_hash=document_hash)
+                    else:
+                        result = call_openai_json(full_prompt, document_hash=document_hash)
                     
+                    processing_time = time.time() - start_time
+                    track_system_load(processing_time, len(full_prompt))
+                    
+                    # Handle response format (already parsed JSON from wrappers)
                     try:
-                        result = json.loads(response_text)
+                        if isinstance(result, str):
+                            result = json.loads(result)
                         
                         if result.get("has_policies", False):
                             # Enhance policies with structured identifiers and metadata
@@ -505,39 +479,18 @@ Ensure all policies have comprehensive metadata including scope, objective, cate
                             confidences.append(result.get("confidence", 0.0))
                         break
                         
-                    except json.JSONDecodeError as e:
+                    except (json.JSONDecodeError, TypeError) as e:
                         print(f"[ERROR] Failed to parse JSON response for '{section_title}' chunk {i+1}, attempt {attempt+1}: {e}")
                         if attempt == max_retries - 1:
-                            print(f"Response was: {response_text[:500]}...")
+                            print(f"Response was: {str(result)[:500]}...")
                         else:
                             time.sleep(1)
+                            continue
                             
                 except Exception as e:
-                    # Enhanced error logging for OpenAI API errors
+                    # Enhanced error logging
                     error_msg = str(e)
-                    print(f"[ERROR] OpenAI API call failed for '{section_title}' chunk {i+1}, attempt {attempt+1}: {error_msg}")
-                    
-                    # Check if it's an OpenAI API error with details
-                    if hasattr(e, 'response') and hasattr(e.response, 'json'):
-                        try:
-                            error_data = e.response.json()
-                            error_obj = error_data.get('error', {})
-                            if isinstance(error_obj, dict):
-                                error_detail = error_obj.get('message', 'Unknown error')
-                                error_type = error_obj.get('type', 'Unknown type')
-                                error_code = error_obj.get('code', 'Unknown code')
-                                print(f"[ERROR] OpenAI Error Details:")
-                                print(f"   Type: {error_type}")
-                                print(f"   Code: {error_code}")
-                                print(f"   Message: {error_detail}")
-                                print(f"   Model sent: '{self.model}'")
-                        except Exception:
-                            pass
-                    elif 'invalid model ID' in error_msg.lower() or '400' in error_msg:
-                        print(f"[ERROR] Model ID issue detected!")
-                        print(f"   Original model from settings: '{MODEL_NAME_RAW}'")
-                        print(f"   Cleaned model: '{self.model}'")
-                        print(f"   Please check OPENAI_MODEL in Django settings")
+                    print(f"[ERROR] AI API call failed for '{section_title}' chunk {i+1}, attempt {attempt+1}: {error_msg}")
                     
                     if attempt == max_retries - 1:
                         print(f"[SKIP] Skipping chunk after {max_retries} attempts")
@@ -545,6 +498,7 @@ Ensure all policies have comprehensive metadata including scope, objective, cate
                         wait_time = 2 ** attempt
                         print(f"[RETRY] Waiting {wait_time}s before retry...")
                         time.sleep(wait_time)
+                        continue
         
         # Combine results
         if all_policies:
@@ -634,6 +588,27 @@ Ensure all policies have comprehensive metadata including scope, objective, cate
                 
                 print(f"[FOUND] {len(policies)} policies, {total_subpolicies} subpolicies, {total_controls} controls in '{section_title}'")
                 print(f"[METADATA] Generated comprehensive scope, objectives, and categorization")
+                
+                # Phase 3: Store extracted policies in RAG
+                if is_rag_available():
+                    try:
+                        policy_text = json.dumps(policy_analysis, indent=2)
+                        add_document_to_rag(
+                            document_text=policy_text,
+                            document_id=f"policy_extraction_{section_path.name}_{hash(section_title)}",
+                            metadata={
+                                "type": "policy_extraction",
+                                "section_title": section_title,
+                                "framework": framework_info.get('framework_name', ''),
+                                "num_policies": len(policies),
+                                "num_subpolicies": total_subpolicies,
+                                "extracted_at": datetime.now().isoformat()
+                            }
+                        )
+                        print(f"   ✅ Phase 3 RAG: Stored policy extraction in knowledge base")
+                    except Exception as e:
+                        print(f"   ⚠️  Phase 3 RAG: Failed to store policies: {e}")
+                
                 return result
             else:
                 print(f"[NO POLICIES] '{section_title}'")

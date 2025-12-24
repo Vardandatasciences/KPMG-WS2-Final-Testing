@@ -117,29 +117,17 @@ from .routes.Policy.homePolices import get_policies_by_status, get_policy_detail
 from .routes.Home.dynamic_homepage import get_homepage_data, get_all_frameworks_data
 
 from .routes.UploadFramework.new_upload_framework import (
-
     upload_framework_file as new_upload_framework_file, 
-
     get_processing_status as new_get_processing_status, 
-
     get_sections as new_get_sections,
-
     get_sections_by_user as new_get_sections_by_user,
-
     list_user_folders as new_list_user_folders,
-
     load_default_data as new_load_default_data,
-    
     save_checked_sections_json as new_save_checked_sections_json,
-    
     test_endpoint as new_test_endpoint,
-    
     generate_compliances_for_checked_sections as new_generate_compliances_for_checked_sections,
-    
     generate_consolidated_json as new_generate_consolidated_json,
-    
     get_checked_sections_with_compliance as new_get_checked_sections_with_compliance
-
 )
 
 from .routes.UploadFramework.upload_framework import (
@@ -163,13 +151,9 @@ from .routes.UploadFramework.upload_framework import (
 )
 
 from .routes.uploadNist.checked_sections import (
-
     save_selected_sections, get_checked_sections, delete_checked_sections,
-
     process_checked_sections_pdfs_endpoint, get_extracted_policies_form_data,
-
     serve_checked_section_pdf
-
 )
 
 # New AI Upload API endpoints

@@ -896,3 +896,4 @@ def upload_and_process_risk_document_optimized(request):
         resp['Access-Control-Allow-Origin'] = '*'
         return resp
 
+

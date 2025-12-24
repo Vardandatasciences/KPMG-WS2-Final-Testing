@@ -3,81 +3,60 @@ import re
 import random
 import traceback
 import os
-from openai import OpenAI
 from django.conf import settings
-import requests
 import time
 
-# =========================
-# AI PROVIDER CONFIG (OpenAI or Ollama)
-# =========================
-AI_PROVIDER = getattr(settings, 'RISK_AI_PROVIDER', os.environ.get('RISK_AI_PROVIDER', 'ollama')).lower()
+# Phase 2 / Phase 3 utilities (reuse same helpers as risk_ai_doc)
+from ...utils.document_preprocessor import calculate_document_hash
+from ...utils.rag_system import (
+    add_document_to_rag,
+    retrieve_relevant_context,
+    build_rag_prompt,
+    is_rag_available,
+    get_rag_stats,
+)
+from ...utils.model_router import (
+    route_model,
+    track_system_load,
+    get_current_system_load,
+)
+from ...utils.request_queue import (
+    process_with_queue,
+    get_queue_status,
+)
 
-OPENAI_MODEL_DEFAULT = getattr(settings, 'OPENAI_MODEL', 'gpt-3.5-turbo')
-OPENAI_API_KEY = getattr(settings, 'OPENAI_API_KEY', None)
-
-OLLAMA_BASE_URL = getattr(settings, 'OLLAMA_BASE_URL', 'http://13.126.18.17:11434').rstrip('/')
-OLLAMA_MODEL = getattr(settings, 'OLLAMA_MODEL', 'llama3.2:3b-instruct-q4_K_M')
-OLLAMA_TEMPERATURE = getattr(settings, 'OLLAMA_TEMPERATURE', 0.1)
-OLLAMA_TIMEOUT = getattr(settings, 'OLLAMA_TIMEOUT', 600)
-OLLAMA_SEED = getattr(settings, 'OLLAMA_SEED', 42)
+# Reuse AI provider configuration and JSON-call helpers from risk_ai_doc
+from ..Risk.risk_ai_doc import (
+    AI_PROVIDER,
+    call_ollama_json,
+    call_openai_json,
+    _select_ollama_model_by_complexity,
+    OLLAMA_BASE_URL,
+    OLLAMA_MODEL_DEFAULT,
+    OLLAMA_MODEL_FAST,
+    OLLAMA_MODEL_COMPLEX,
+    OPENAI_API_KEY,
+    OPENAI_API_URL,
+    OPENAI_MODEL,
+)
 
 print("\n🤖 Incident SLM AI Provider Configuration:")
 print(f"   Selected Provider: {AI_PROVIDER.upper()}")
 if AI_PROVIDER == 'openai':
-    print(f"   OpenAI model: {OPENAI_MODEL_DEFAULT}")
+    print(f"   OpenAI model: {OPENAI_MODEL}")
 elif AI_PROVIDER == 'ollama':
     print(f"   Ollama URL: {OLLAMA_BASE_URL}")
-    print(f"   Ollama model: {OLLAMA_MODEL}")
-
-
-def _call_ollama_chat(prompt: str, model: str = None, timeout: int | None = None) -> str:
-    """
-    Call Ollama for incident chat-style analysis (JSON string expected).
-    """
-    if model is None:
-        model = OLLAMA_MODEL
-    if timeout is None:
-        timeout = OLLAMA_TIMEOUT
-
-    url = f"{OLLAMA_BASE_URL}/api/generate"
-    payload = {
-        "model": model,
-        "prompt": prompt,
-        "stream": False,
-        "options": {
-            "temperature": OLLAMA_TEMPERATURE,
-            "top_p": 0.9,
-            "top_k": 40,
-            "num_predict": 2000,
-            "seed": OLLAMA_SEED,
-            "repeat_penalty": 1.1,
-        },
-        "format": "json",
-    }
-
-    print(f"🤖 Calling Ollama for incident analysis")
-    print(f"   URL: {url}")
-    print(f"   Model: {model}")
-
-    start = time.time()
-    resp = requests.post(url, json=payload, timeout=timeout)
-    elapsed = time.time() - start
-    resp.raise_for_status()
-
-    data = resp.json()
-    raw = data.get("response", "")
-    print(f"✅ Ollama responded in {elapsed:.2f}s (len={len(raw)})")
-    return raw
+    print(f"   Default model: {OLLAMA_MODEL_DEFAULT}")
+    print(f"   Fast model: {OLLAMA_MODEL_FAST}")
+    print(f"   Complex model: {OLLAMA_MODEL_COMPLEX}")
 
 
 class OpenAIIntegration:
-    """AI integration class for incident analysis (OpenAI or Ollama)"""
+    """AI integration class for incident analysis (OpenAI or Ollama) with Phase 2/3 helpers."""
     
     def __init__(self, api_key=None):
-        """Initialize AI client based on provider"""
+        """Initialize AI client based on provider (using shared helpers)."""
         self.provider = AI_PROVIDER
-        self.client = None
         self.is_available = False
 
         if self.provider == 'ollama':
@@ -88,7 +67,7 @@ class OpenAIIntegration:
             else:
                 self.is_available = True
                 print("✅ Ollama integration initialized for incident analysis")
-                print(f"   Using model: {OLLAMA_MODEL}")
+                print(f"   Using base URL: {OLLAMA_BASE_URL}")
             return
 
         # OpenAI path
@@ -98,21 +77,15 @@ class OpenAIIntegration:
         if not api_key or api_key == 'your-openai-api-key-here' or str(api_key).startswith('YOUR_OPE'):
             print("⚠️ OpenAI API key not configured properly")
             print("   Please set OPENAI_API_KEY in your .env file")
-            self.client = None
             self.is_available = False
         else:
-            try:
-                self.client = OpenAI(api_key=api_key)
-                self.is_available = True
-                print("✅ OpenAI client initialized successfully")
-                print(f"   Using model: {OPENAI_MODEL_DEFAULT}")
-            except Exception as e:
-                print(f"❌ Failed to initialize OpenAI client: {e}")
-                self.client = None
-                self.is_available = False
+            # We use shared call_openai_json wrapper instead of direct SDK client
+            self.is_available = True
+            print("✅ OpenAI integration initialized successfully for incident analysis")
+            print(f"   Using model: {OPENAI_MODEL}")
     
-    def generate_response(self, prompt, model="gpt-3.5-turbo", max_tokens=2000, temperature=0.3):
-        """Send request to AI provider and get response (JSON string)"""
+    def generate_response(self, prompt, model=None, max_tokens=2000, temperature=0.3, document_hash: str | None = None):
+        """Send request to AI provider and get response (JSON string), using Phase 2/3 utilities."""
         if not self.is_available:
             print("AI provider is not available")
             return None
@@ -120,85 +93,43 @@ class OpenAIIntegration:
         # Ollama branch
         if self.provider == 'ollama':
             try:
-                return _call_ollama_chat(prompt, model=OLLAMA_MODEL)
+                selected_model = model or route_model(
+                    task_type="incident_comprehensive",
+                    text_length=len(prompt),
+                    accuracy_required="high",
+                    system_load=get_current_system_load(),
+                    provider="ollama",
+                )
+                out_obj = call_ollama_json(
+                    prompt,
+                    model=selected_model,
+                    document_hash=document_hash,
+                )
+                return json.dumps(out_obj)
             except Exception as e:
-                print(f"❌ Ollama API error: {type(e).__name__}: {e}")
+                print(f"❌ Ollama JSON call error (incident_slm): {type(e).__name__}: {e}")
                 traceback.print_exc()
                 return None
 
-        # Clean model name - strip quotes and whitespace
-        model_clean = str(model).strip().strip('"').strip("'")
-        model_lower = model_clean.lower()
-        
-        print(f"🔍 Model check - Original: '{model}', Cleaned: '{model_clean}', Lower: '{model_lower}'")
-        
-        # Models that support json_object response_format:
-        # gpt-4-turbo-preview, gpt-4-0125-preview, gpt-3.5-turbo-1106, gpt-4-turbo, gpt-4o
-        # Note: gpt-4o-mini does NOT support json_object format
-        # Explicitly exclude gpt-4o-mini first (it contains "gpt-4o" but doesn't support json_object)
-        if "gpt-4o-mini" in model_lower:
-            supports_json_format = False
-            print(f"🔍 Model '{model_clean}' is gpt-4o-mini - NOT adding response_format")
-        else:
-            # Check if model exactly matches or starts with a supported model
-            models_with_json_support = [
-                "gpt-4-turbo-preview", "gpt-4-0125-preview", "gpt-3.5-turbo-1106", 
-                "gpt-4-turbo", "gpt-4o"
-            ]
-            supports_json_format = any(
-                model_lower == supported_model.lower() or model_lower.startswith(supported_model.lower() + "-")
-                for supported_model in models_with_json_support
-            )
-            print(f"🔍 Model '{model_clean}' supports_json_format check result: {supports_json_format}")
-
+        # OpenAI branch
         try:
-            request_params = {
-                "model": model_clean,  # Use cleaned model name
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": "You are a senior cybersecurity analyst specializing in banking GRC (Governance, Risk, and Compliance) systems. You provide detailed, structured incident analysis in JSON format."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                "max_tokens": max_tokens,
-                "temperature": temperature
-            }
-            
-            # Only add response_format for models that support it
-            if supports_json_format:
-                request_params["response_format"] = {"type": "json_object"}
-                print(f"✅ Adding response_format: json_object (model '{model_clean}' supports it)")
-            else:
-                print(f"⚠️  NOT adding response_format (model '{model_clean}' does not support json_object)")
-            
-            print(f"🔍 Request params keys: {list(request_params.keys())}")
-            
-            response = self.client.chat.completions.create(**request_params)
-            
-            return response.choices[0].message.content
+            selected_model = model or route_model(
+                task_type="incident_comprehensive",
+                text_length=len(prompt),
+                accuracy_required="high",
+                system_load=get_current_system_load(),
+                provider="openai",
+            )
+
+            out_obj = call_openai_json(
+                prompt,
+                document_hash=document_hash,
+            )
+            return json.dumps(out_obj)
         except Exception as e:
             error_type = type(e).__name__
             error_message = str(e)
-            print(f"❌ OpenAI API error: {error_type}: {error_message}")
-            
-            # Enhanced error logging for OpenAI SDK exceptions
-            if hasattr(e, 'response') and e.response is not None:
-                try:
-                    error_body = e.response.json() if hasattr(e.response, 'json') else {}
-                    error_detail = error_body.get('error', {})
-                    if isinstance(error_detail, dict):
-                        print(f"🔍 OpenAI Error Details:")
-                        print(f"   Type: {error_detail.get('type', 'Unknown')}")
-                        print(f"   Code: {error_detail.get('code', 'Unknown')}")
-                        print(f"   Message: {error_detail.get('message', 'Unknown error')}")
-                        print(f"   Full error: {error_detail}")
-                except Exception as parse_err:
-                    print(f"⚠️  Could not parse error response: {parse_err}")
-            print(f"Error calling OpenAI API: {e}")
+            print(f"❌ AI JSON call error (incident_slm): {error_type}: {error_message}")
             traceback.print_exc()
             return None
 
@@ -214,16 +145,31 @@ def analyze_incident_comprehensive(incident_title, incident_description):
         dict: JSON object containing comprehensive incident analysis
     """
     try:
-        # Initialize OpenAI integration
-        print("🔄 Using OpenAI for incident analysis")
+        # Initialize AI integration
+        print("🔄 Using AI for incident analysis (with Phase 2+3 optimizations)")
         openai_client = OpenAIIntegration()
         
         if not openai_client.is_available:
-            print("⚠️ OpenAI not available, falling back to comprehensive fallback analysis")
+            print("⚠️ AI provider not available, falling back to comprehensive fallback analysis")
             return generate_comprehensive_fallback_analysis(incident_title, incident_description)
 
-        # Create a comprehensive prompt for banking GRC incident analysis optimized for OpenAI
-        prompt = f"""Analyze the following security incident for a banking GRC system and provide a comprehensive JSON response.
+        # Phase 2: calculate document hash for caching / RAG
+        document_hash = calculate_document_hash(f"{incident_title}\n{incident_description}")
+        print(f"📝 Incident (comprehensive) document hash: {document_hash[:16]}...")
+
+        # Phase 3: optional RAG context from previous incidents / analyses
+        rag_context = None
+        if is_rag_available():
+            try:
+                query_text = f"Incident: {incident_title}\n\n{incident_description}"
+                rag_context = retrieve_relevant_context(query_text, n_results=3)
+                if rag_context:
+                    print(f"   📚 Phase 3 RAG (incident_slm): Retrieved {len(rag_context)} relevant chunks")
+            except Exception as e:
+                print(f"   ⚠️  RAG retrieval failed in incident_slm: {e}")
+
+        # Create a comprehensive prompt for banking GRC incident analysis
+        base_prompt = f"""Analyze the following security incident for a banking GRC system and provide a comprehensive JSON response.
 
 **INCIDENT DETAILS:**
 - Title: {incident_title}
@@ -275,13 +221,43 @@ def analyze_incident_comprehensive(incident_title, incident_description):
 8. Lessons learned should provide actionable recommendations
 
 **CRITICAL:** The costOfIncident MUST be a pure numeric value (integer) without any currency symbols, commas, or text. Example: 250000 NOT "$250,000" or "250000 USD"
-
+        
 Provide ONLY the JSON response, no additional text."""
 
-        # Process the incident using OpenAI
+        # Phase 3: weave RAG context into the prompt if available
+        if rag_context:
+            prompt = build_rag_prompt(
+                user_query=base_prompt,
+                retrieved_context=rag_context,
+                base_prompt=None,
+            )
+        else:
+            prompt = base_prompt
+
+        # Process the incident using AI (with routing + caching)
         print(f"📊 Analyzing incident: {incident_title}")
-        model = getattr(settings, 'OPENAI_MODEL', 'gpt-3.5-turbo')
-        response = openai_client.generate_response(prompt, model=model, max_tokens=2000, temperature=0.3)
+
+        def _do_analysis():
+            start_time = time.time()
+            response_local = openai_client.generate_response(
+                prompt,
+                model=None,  # let integration + router pick
+                max_tokens=2000,
+                temperature=0.3,
+                document_hash=document_hash,
+            )
+            processing_time = time.time() - start_time
+            track_system_load(processing_time, len(f"{incident_title}\n{incident_description}"))
+            print(f"⏱️ Incident SLM processing_time={processing_time:.2f}s")
+            return response_local
+
+        # Use queue for very large descriptions
+        if len(incident_description) > 5000:
+            request_id = f"incident_slm_{hash(incident_title + incident_description)}"
+            print(f"📋 Large incident description detected, using Phase 3 queuing (request_id={request_id})...")
+            response = process_with_queue(request_id, _do_analysis)
+        else:
+            response = _do_analysis()
         
         # Check if response is None (API error)
         if response is None:
@@ -334,6 +310,23 @@ Provide ONLY the JSON response, no additional text."""
                         return generate_comprehensive_fallback_analysis(incident_title, incident_description)
             
             print(f"✅ Successfully parsed comprehensive banking GRC incident analysis")
+
+            # Phase 3: add incident + analysis to RAG for future context
+            if is_rag_available():
+                try:
+                    add_document_to_rag(
+                        document_text=f"Incident Title: {incident_title}\n\nDescription: {incident_description}\n\nAnalysis: {json.dumps(incident_analysis)}",
+                        document_id=f"incident_slm_{document_hash[:16]}",
+                        metadata={
+                            "type": "incident_analysis",
+                            "source": "incident_slm",
+                            "uploaded_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                        },
+                    )
+                    print("✅ Phase 3 RAG (incident_slm): Incident analysis added to knowledge base")
+                except Exception as e:
+                    print(f"⚠️  Phase 3 RAG (incident_slm): Failed to add document: {e}")
+
             return incident_analysis
             
         except json.JSONDecodeError as e:

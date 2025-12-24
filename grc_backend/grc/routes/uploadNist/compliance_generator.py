@@ -32,15 +32,53 @@ Requirements:
 
 import os
 import pandas as pd
-from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnablePassthrough
 from dotenv import load_dotenv
 import json
+import time
 from datetime import datetime
  
 # Use Django settings for OpenAI API key
 from django.conf import settings
+
+# Phase 1, 2, 3 Optimizations - Import shared AI utilities
+from ...routes.Risk.risk_ai_doc import (
+    AI_PROVIDER,
+    call_ollama_json,
+    call_openai_json,
+    _select_ollama_model_by_complexity,
+    OLLAMA_BASE_URL,
+    OLLAMA_MODEL_DEFAULT,
+    OLLAMA_MODEL_FAST,
+    OLLAMA_MODEL_COMPLEX,
+    OPENAI_API_KEY,
+    OPENAI_API_URL,
+    OPENAI_MODEL,
+)
+
+# Phase 2 Optimizations
+from ...utils.document_preprocessor import calculate_document_hash
+from ...utils.few_shot_prompts import (
+    get_field_extraction_prompt,
+    get_compliance_generation_prompt
+)
+
+# Phase 3 Optimizations
+from ...utils.rag_system import (
+    add_document_to_rag,
+    retrieve_relevant_context,
+    build_rag_prompt,
+    is_rag_available,
+    get_rag_stats
+)
+from ...utils.model_router import (
+    route_model,
+    track_system_load,
+    get_current_system_load
+)
+from ...utils.request_queue import (
+    process_with_queue,
+    get_queue_status
+)
 
 def get_api_key():
     """Get OpenAI API key from Django settings"""
@@ -61,95 +99,102 @@ def load_excel_data(file_path):
         print(f"Error loading Excel file: {e}")
         return None
  
-def setup_llm_chain(api_key=None):
-    """Set up LangChain with OpenAI"""
-    if api_key is None:
-        api_key = get_api_key()
-    
-    # Initialize the LLM
-    llm = ChatOpenAI(
-        model="gpt-3.5-turbo",
-        temperature=0.3,
-        openai_api_key=api_key
-    )
-   
-    # Define the prompt template
-    template = """
-    You are a compliance expert that generates detailed compliance and risk records for policies.
-   
-    Based on the following subpolicy information:
-    - Subpolicy Name: {SubPolicyName}
-    - Description: {Description}
-    - Control: {Control}
-   
-    Generate 1-3 different compliance records that would be relevant for this subpolicy. Each compliance should cover different aspects or requirements of the subpolicy.
-    For each compliance record, also generate associated risk information.
-   
-    Provide the following information in valid JSON format:
-   
-    {{
-        "compliances": [
-            {{
-                "Identifier": "Unique identifier code for this compliance (e.g., COMP-001)",
-                "ComplianceTitle": "Clear, specific title for the compliance requirement",
-                "ComplianceItemDescription": "Detailed description of what needs to be complied with",
-                "ComplianceType": "One of: Regulatory, Internal, Industry Standard, Legal, Operational",
-                "Scope": "Description of what/who this compliance applies to",
-                "Objective": "What this compliance aims to achieve",
-                "BusinessUnitsCovered": "Which business units this applies to",
-                "IsRisk": 1,
-                "PossibleDamage": "Description of potential damage if not complied with",
-                "mitigation": {{"1": "first mitigation strategy", "2": "second mitigation strategy", "3": "third mitigation strategy"}},
-                "Criticality": "One of: Low, Medium, High, Critical",
-                "MandatoryOptional": "One of: Mandatory, Optional",
-                "ManualAutomatic": "One of: Manual, Automatic, Semi-Automatic",
-                "Impact": float between 1.0-10.0 (Risk impact severity),
-                "Probability": float between 1.0-10.0 (probability of occurrence),
-                "MaturityLevel": "One of: Initial, Developing, Defined, Managed, Optimizing",
-                "ActiveInactive": "Active",
-                "PermanentTemporary": "Permanent",
-                "CreatedByName": "radha.sharma",
-                "CreatedByDate": "{current_date}",
-                "ComplianceVersion": "1.0",
-                "Status": "Approved",
-                "Applicability": "One of: Global, Regional, Local, Specific",
-                "PotentialRiskScenarios": "Description of potential risk scenarios",
-                "RiskType": "One of: Current, Residual, Inherent, Emerging, Accepted",
-                "RiskCategory": "One of: Operational, Financial, IT, Legal, Compliance, Strategic, Reputational, Environmental",
-                "RiskBusinessImpact": "Description of which business units would be impacted by this risk",
-                "risk": {{
-                    "RiskTitle": "Clear, descriptive title for the associated risk",
-                    "Criticality": "One of: Low, Medium, High, Critical (should match compliance Criticality)",
-                    "PossibleDamage": "Description of potential damage (should match compliance PossibleDamage)",
-                    "Category": "One of: Operational, Financial, IT, Legal, Compliance, Strategic, Reputational, Environmental",
-                    "RiskType": "One of: Current, Residual, Inherent, Emerging, Accepted",
-                    "BusinessImpact": "Description of business impact",
-                    "RiskDescription": "Detailed description of the risk and its potential consequences",
-                    "RiskLikelihood": integer between 1-10 (likelihood of risk occurrence),
-                    "RiskImpact": integer between 1-10 (impact severity),
-                    "RiskExposureRating": float (calculated as RiskImpact * RiskLikelihood),
-                    "RiskPriority": "One of: Low, Medium, High",
-                    "RiskMitigation": {{"1": "first mitigation strategy", "2": "second mitigation strategy", "3": "third mitigation strategy"}},
-                    "CreatedAt": "{current_date}",
-                    "RiskMultiplierX": 0.1,
-                    "RiskMultiplierY": 0.1
-                }}
-            }}
-        ]
-    }}
-   
-    Ensure the JSON is valid and each compliance record with its associated risk is comprehensive and realistic based on the subpolicy information provided.
+def _generate_compliance_with_ai(subpolicy_name, description, control, current_date, document_hash=None):
     """
-   
-    prompt = ChatPromptTemplate.from_template(template)
-   
-    # Create the chain using modern langchain 1.0+ approach
-    chain = prompt | llm
-   
-    return chain
+    Generate compliance records using optimized AI (Phase 1, 2, 3).
+    Replaces LangChain with direct AI calls for better performance.
+    """
+    # Phase 3: Try to retrieve relevant context from RAG
+    rag_context = None
+    if is_rag_available():
+        try:
+            query = f"Compliance requirements for subpolicy: {subpolicy_name}. Control: {control}"
+            retrieved = retrieve_relevant_context(query, n_results=3)
+            if retrieved:
+                rag_context = retrieved
+                print(f"   📚 Phase 3 RAG: Retrieved {len(retrieved)} relevant chunks for compliance generation")
+        except Exception as e:
+            print(f"   ⚠️  RAG retrieval failed: {e}")
+    
+    # Phase 2: Build prompt with few-shot examples
+    base_prompt = get_compliance_generation_prompt(
+        subpolicy_name=subpolicy_name,
+        description=description,
+        control=control,
+        current_date=current_date
+    )
+    
+    # Remove the old prompt building code - now using few-shot template
+    # The get_compliance_generation_prompt already includes the full prompt with examples
+    
+    # Phase 3: Enhance prompt with RAG context if available
+    if rag_context:
+        prompt = build_rag_prompt(
+            user_query=base_prompt,
+            retrieved_context=rag_context,
+            base_prompt=None
+        )
+    else:
+        prompt = base_prompt
+    
+    # Phase 3: Use intelligent model routing
+    selected_model = route_model(
+        task_type="compliance_generation",
+        text_length=len(prompt),
+        accuracy_required="high",
+        system_load=get_current_system_load(),
+        provider=AI_PROVIDER,
+    )
+    print(f"   🧠 Phase 3 Model Routing: Selected model '{selected_model}' for compliance generation")
+    
+    # Call AI with selected model and caching (Phase 1 & 2)
+    start_time = time.time()
+    if AI_PROVIDER == 'ollama':
+        result = call_ollama_json(prompt, model=selected_model, document_hash=document_hash)
+    else:
+        result = call_openai_json(prompt, document_hash=document_hash)
+    
+    processing_time = time.time() - start_time
+    track_system_load(processing_time, len(prompt))
+    
+    return result
+
+def setup_llm_chain(api_key=None):
+    """
+    DEPRECATED: This function is kept for backward compatibility.
+    Use _generate_compliance_with_ai() directly for Phase 1, 2, 3 optimizations.
+    """
+    # Return a mock chain object that can be invoked
+    class MockChain:
+        def invoke(self, inputs):
+            subpolicy_name = inputs.get("SubPolicyName", "")
+            description = inputs.get("Description", "")
+            control = inputs.get("Control", "")
+            current_date = inputs.get("current_date", datetime.now().strftime("%Y-%m-%d"))
+            
+            # Calculate document hash for caching
+            document_text = f"{subpolicy_name}\n{description}\n{control}"
+            document_hash = calculate_document_hash(document_text)
+            
+            # Use optimized AI generation
+            result = _generate_compliance_with_ai(
+                subpolicy_name, description, control, current_date, document_hash
+            )
+            
+            # Return in LangChain-compatible format
+            class MockResponse:
+                def __init__(self, content):
+                    self.content = json.dumps(content) if isinstance(content, dict) else content
+            
+            return MockResponse(result)
+    
+    return MockChain()
  
-def process_excel_data(df, chain):
-    """Process each row of Excel data and generate separate compliance and risk records"""
+def process_excel_data(df, chain=None):
+    """
+    Process each row of Excel data and generate separate compliance and risk records.
+    Phase 1, 2, 3 optimized - uses direct AI calls instead of LangChain.
+    """
     compliance_results = []
     risk_results = []
    
@@ -166,6 +211,13 @@ def process_excel_data(df, chain):
     current_date = datetime.now().strftime("%Y-%m-%d")
     compliance_id_counter = 1  # Track compliance IDs for risk linking
     risk_id_counter = 1  # Track risk IDs
+    
+    # Phase 2: Calculate hash for entire dataset for caching
+    dataset_text = "\n".join([
+        f"{row['SubPolicyName']}\n{row['Description']}\n{row['Control']}"
+        for _, row in df.iterrows()
+    ])
+    dataset_hash = calculate_document_hash(dataset_text)
    
     for index, row in df.iterrows():
         print(f"Processing row {index+1}/{total_rows}...")
@@ -177,17 +229,31 @@ def process_excel_data(df, chain):
             Description = row["Description"]
             Control = row["Control"]
            
-            # Generate compliance records using LangChain
-            result = chain.invoke({
-                "SubPolicyName": SubPolicyName,
-                "Description": Description,
-                "Control": Control,
-                "current_date": current_date
-            })
+            # Phase 1, 2, 3: Generate compliance records using optimized AI
+            if chain:
+                # Backward compatibility with LangChain chain
+                result = chain.invoke({
+                    "SubPolicyName": SubPolicyName,
+                    "Description": Description,
+                    "Control": Control,
+                    "current_date": current_date
+                })
+                try:
+                    compliance_data = json.loads(result.content.strip())
+                except:
+                    compliance_data = result if isinstance(result, dict) else {}
+            else:
+                # Use optimized direct AI call
+                document_text = f"{SubPolicyName}\n{Description}\n{Control}"
+                document_hash = calculate_document_hash(document_text)
+                compliance_data = _generate_compliance_with_ai(
+                    SubPolicyName, Description, Control, current_date, document_hash
+                )
            
             # Parse the JSON response
             try:
-                compliance_data = json.loads(result.content.strip())
+                if isinstance(compliance_data, str):
+                    compliance_data = json.loads(compliance_data)
                 compliances = compliance_data.get("compliances", [])
                
                 # Process each compliance and its associated risk
@@ -308,7 +374,7 @@ def generate_compliance_for_single_subpolicy(
     api_key=None
 ):
     """
-    Generate compliance and risk records for a single subpolicy.
+    Generate compliance and risk records for a single subpolicy (Phase 1, 2, 3 optimized).
     
     Args:
         subpolicy_id (int): ID of the subpolicy
@@ -321,43 +387,75 @@ def generate_compliance_for_single_subpolicy(
         list: List of compliance records with associated risks
     """
     try:
-        # Setup LangChain
-        chain = setup_llm_chain(api_key)
-        
         current_date = datetime.now().strftime("%Y-%m-%d")
         
-        # Generate compliance records using LangChain
-        result = chain.invoke({
-            "SubPolicyName": subpolicy_name,
-            "Description": description,
-            "Control": control,
-            "current_date": current_date
-        })
+        # Phase 2: Calculate document hash for caching
+        document_text = f"{subpolicy_name}\n{description}\n{control}"
+        document_hash = calculate_document_hash(document_text)
         
-        # Parse the JSON response
-        compliance_data = json.loads(result.content.strip())
-        compliances = compliance_data.get("compliances", [])
+        # Phase 3: Use queuing for large documents
+        def _do_generation():
+            # Generate compliance records using optimized AI (Phase 1, 2, 3)
+            result = _generate_compliance_with_ai(
+                subpolicy_name, description, control, current_date, document_hash
+            )
+            
+            # Handle both dict and string responses
+            if isinstance(result, str):
+                compliance_data = json.loads(result)
+            else:
+                compliance_data = result
+            
+            compliances = compliance_data.get("compliances", [])
+            
+            # Process each compliance and add subpolicy reference
+            processed_compliances = []
+            for compliance in compliances:
+                # Extract risk data if present
+                risk_data = compliance.pop("risk", None)
+                
+                # Add subpolicy reference
+                compliance["SubPolicyId"] = subpolicy_id
+                compliance["SubPolicyName"] = subpolicy_name
+                
+                # Include risk data in compliance record
+                if risk_data:
+                    compliance["risk_details"] = risk_data
+                
+                processed_compliances.append(compliance)
+            
+            # Phase 3: Store generated compliance in RAG
+            if is_rag_available() and processed_compliances:
+                try:
+                    compliance_text = json.dumps(processed_compliances, indent=2)
+                    add_document_to_rag(
+                        document_text=compliance_text,
+                        document_id=f"compliance_{subpolicy_id}_{document_hash[:16]}",
+                        metadata={
+                            "type": "compliance_generation",
+                            "subpolicy_id": subpolicy_id,
+                            "subpolicy_name": subpolicy_name,
+                            "generated_at": current_date,
+                            "num_compliances": len(processed_compliances)
+                        }
+                    )
+                    print(f"   ✅ Phase 3 RAG: Stored compliance generation in knowledge base")
+                except Exception as e:
+                    print(f"   ⚠️  Phase 3 RAG: Failed to store compliance: {e}")
+            
+            return processed_compliances
         
-        # Process each compliance and add subpolicy reference
-        processed_compliances = []
-        for compliance in compliances:
-            # Extract risk data if present
-            risk_data = compliance.pop("risk", None)
-            
-            # Add subpolicy reference
-            compliance["SubPolicyId"] = subpolicy_id
-            compliance["SubPolicyName"] = subpolicy_name
-            
-            # Include risk data in compliance record
-            if risk_data:
-                compliance["risk_details"] = risk_data
-            
-            processed_compliances.append(compliance)
-        
-        return processed_compliances
+        # Use queuing for large inputs
+        if len(document_text) > 5000:
+            request_id = f"compliance_gen_{subpolicy_id}_{hash(document_text)}"
+            return process_with_queue(request_id, _do_generation)
+        else:
+            return _do_generation()
         
     except Exception as e:
         print(f"Error generating compliance for subpolicy {subpolicy_id}: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 

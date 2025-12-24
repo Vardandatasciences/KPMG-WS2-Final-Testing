@@ -543,6 +543,7 @@ LICENSE_CHECK_ENABLED = False
 # Ollama configuration
 # Ollama configuration
 OLLAMA_BASE_URL = os.environ.get('OLLAMA_BASE_URL', 'http://13.126.18.17:11434')
+REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/2')
 # Default timeout (seconds) for Ollama HTTP requests
 OLLAMA_TIMEOUT = int(os.environ.get('OLLAMA_TIMEOUT', '600'))
 # Default Ollama model to use (must exist on server per /api/tags)
@@ -770,7 +771,9 @@ os.environ.setdefault('GOOGLE_CLIENT_ID', GOOGLE_CLIENT_ID)
 os.environ.setdefault('GOOGLE_CLIENT_SECRET', GOOGLE_CLIENT_SECRET)
 os.environ.setdefault('GOOGLE_REDIRECT_URI', GOOGLE_REDIRECT_URI)
 os.environ.setdefault('GOOGLE_SCOPES', GOOGLE_SCOPES)
- 
+
+# Redis configuration for Phase 2 AI caching
+os.environ.setdefault('REDIS_URL', REDIS_URL)
 
 # Ollama configuration (fallback)
 OLLAMA_BASE_URL = os.environ.get('OLLAMA_BASE_URL', 'http://13.126.18.17:11434')

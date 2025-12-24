@@ -11,6 +11,17 @@ import time
 import threading
 from pathlib import Path
 
+# Phase 3 Optimizations - Rate limiting and queuing
+from ...utils.request_queue import (
+    rate_limit_decorator,
+    process_with_queue,
+    get_queue_status
+)
+from ...utils.model_router import (
+    track_system_load,
+    get_current_system_load
+)
+
 # Import the processing modules
 # COMMENTED OUT OLD IMPORT - Using new AI upload API
 # from ..uploadNist.all_integrated_upload import upload_pdf_and_extract_complete
@@ -138,103 +149,127 @@ def save_uploaded_file(uploaded_file, user_folder):
 
 def process_document_background(userid, file_path, task_id):
     """
-    Background processing function using NEW AI upload pipeline.
+    Background processing function using NEW AI upload pipeline (Phase 1, 2, 3 optimized).
     
     Args:
         userid (str): The user ID
         file_path (str): Path to the uploaded file
         task_id (str): Task ID for progress tracking
     """
-    try:
-        update_progress(task_id, 10, "Starting document processing...")
-        
-        # Get MEDIA_ROOT
-        media_root = ai_upload.get_media_root()
-        user_folder = media_root / f"upload_{userid}"
-        pdf_path = Path(file_path)
-        pdf_name = pdf_path.stem
-        
-        # Step 1: Extract Index
-        update_progress(task_id, 30, "Extracting PDF index...")
-        print(f"[STEP 1] Extracting index from {file_path}...")
-        
-        index_json_path = user_folder / f"{pdf_name}_index.json"
+    start_time = time.time()
+    
+    def _do_processing():
         try:
-            index_data = pdf_index_extractor.extract_and_save_index(
-                pdf_path=str(file_path),
-                output_path=str(index_json_path),
-                prefer_toc=True
-            )
-            index_items_count = len(index_data.get('items', []))
-            print(f"[SUCCESS] Extracted {index_items_count} index items")
-            update_progress(task_id, 40, f"Index extracted: {index_items_count} items")
-        except Exception as e:
-            update_progress(task_id, 100, f"Index extraction failed: {str(e)}")
-            return
-        
-        # Step 2: Extract Sections
-        update_progress(task_id, 45, "Extracting sections and creating PDFs...")
-        print(f"[STEP 2] Extracting sections...")
-        
-        sections_dir = user_folder / f"sections_{pdf_name}"
-        try:
-            manifest = index_content_extractor.process_pdf_sections(
-                pdf_path=str(file_path),
-                index_json_path=str(index_json_path),
-                output_dir=str(sections_dir),
-                verbose=True
-            )
-            sections_count = len(manifest.get('sections_written', []))
-            print(f"[SUCCESS] Extracted {sections_count} sections")
-            update_progress(task_id, 60, f"Sections extracted: {sections_count} sections")
-        except Exception as e:
-            update_progress(task_id, 100, f"Section extraction failed: {str(e)}")
-            return
-        
-        # Step 3: Extract Policies
-        update_progress(task_id, 65, "Extracting policies using AI...")
-        print(f"[STEP 3] Extracting policies...")
-        
-        policies_dir = user_folder / f"policies_{pdf_name}"
-        try:
-            policy_results = policy_extractor_enhanced.extract_policies(
-                sections_dir=str(sections_dir),
-                output_dir=str(policies_dir),
-                verbose=True
-            )
+            update_progress(task_id, 10, "Starting document processing...")
             
-            if not policy_results.get('success'):
-                raise Exception(policy_results.get('error', 'Policy extraction failed'))
+            # Get MEDIA_ROOT
+            media_root = ai_upload.get_media_root()
+            user_folder = media_root / f"upload_{userid}"
+            pdf_path = Path(file_path)
+            pdf_name = pdf_path.stem
             
-            total_policies = policy_results['summary']['extraction_summary']['total_policies']
-            total_subpolicies = policy_results['summary']['extraction_summary']['total_subpolicies']
+            # Step 1: Extract Index
+            update_progress(task_id, 30, "Extracting PDF index...")
+            print(f"[STEP 1] Extracting index from {file_path}...")
             
-            print(f"[SUCCESS] Extracted {total_policies} policies, {total_subpolicies} subpolicies")
-            update_progress(task_id, 95, f"Policies extracted: {total_policies} policies")
+            index_json_path = user_folder / f"{pdf_name}_index.json"
+            try:
+                index_data = pdf_index_extractor.extract_and_save_index(
+                    pdf_path=str(file_path),
+                    output_path=str(index_json_path),
+                    prefer_toc=True
+                )
+                index_items_count = len(index_data.get('items', []))
+                print(f"[SUCCESS] Extracted {index_items_count} index items")
+                update_progress(task_id, 40, f"Index extracted: {index_items_count} items")
+            except Exception as e:
+                update_progress(task_id, 100, f"Index extraction failed: {str(e)}")
+                return False
             
-            # Store final result
-            processing_status[task_id]["result"] = {
-                "status": "success",
-                "data": {
-                    'user_folder': f"upload_{userid}",
-                    'index_items': index_items_count,
-                    'sections': sections_count,
-                    'policies': total_policies,
-                    'subpolicies': total_subpolicies
+            # Step 2: Extract Sections
+            update_progress(task_id, 45, "Extracting sections and creating PDFs...")
+            print(f"[STEP 2] Extracting sections...")
+            
+            sections_dir = user_folder / f"sections_{pdf_name}"
+            try:
+                manifest = index_content_extractor.process_pdf_sections(
+                    pdf_path=str(file_path),
+                    index_json_path=str(index_json_path),
+                    output_dir=str(sections_dir),
+                    verbose=True
+                )
+                sections_count = len(manifest.get('sections_written', []))
+                print(f"[SUCCESS] Extracted {sections_count} sections")
+                update_progress(task_id, 60, f"Sections extracted: {sections_count} sections")
+            except Exception as e:
+                update_progress(task_id, 100, f"Section extraction failed: {str(e)}")
+                return False
+            
+            # Step 3: Extract Policies (Phase 1, 2, 3 optimized)
+            update_progress(task_id, 65, "Extracting policies using AI (Phase 1, 2, 3 optimized)...")
+            print(f"[STEP 3] Extracting policies with Phase 1, 2, 3 optimizations...")
+            
+            policies_dir = user_folder / f"policies_{pdf_name}"
+            try:
+                policy_results = policy_extractor_enhanced.extract_policies(
+                    sections_dir=str(sections_dir),
+                    output_dir=str(policies_dir),
+                    verbose=True
+                )
+                
+                if not policy_results.get('success'):
+                    raise Exception(policy_results.get('error', 'Policy extraction failed'))
+                
+                total_policies = policy_results['summary']['extraction_summary']['total_policies']
+                total_subpolicies = policy_results['summary']['extraction_summary']['total_subpolicies']
+                
+                print(f"[SUCCESS] Extracted {total_policies} policies, {total_subpolicies} subpolicies")
+                update_progress(task_id, 95, f"Policies extracted: {total_policies} policies")
+                
+                # Phase 3: Track system load
+                processing_time = time.time() - start_time
+                file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+                track_system_load(processing_time, file_size)
+                
+                # Store final result
+                processing_status[task_id]["result"] = {
+                    "status": "success",
+                    "data": {
+                        'user_folder': f"upload_{userid}",
+                        'index_items': index_items_count,
+                        'sections': sections_count,
+                        'policies': total_policies,
+                        'subpolicies': total_subpolicies,
+                        'phase3_metadata': {
+                            'processing_time': processing_time,
+                            'system_load': get_current_system_load(),
+                            'model_routing': 'enabled'
+                        }
+                    }
                 }
-            }
-            
-            update_progress(task_id, 100, "Document processing completed successfully!")
-            
+                
+                update_progress(task_id, 100, "Document processing completed successfully!")
+                return True
+                
+            except Exception as e:
+                update_progress(task_id, 100, f"Policy extraction failed: {str(e)}")
+                return False
+                
         except Exception as e:
-            update_progress(task_id, 100, f"Policy extraction failed: {str(e)}")
-            return
-            
-    except Exception as e:
-        update_progress(task_id, 100, f"Error during processing: {str(e)}")
+            update_progress(task_id, 100, f"Error during processing: {str(e)}")
+            return False
+    
+    # Phase 3: Use queuing for large files
+    file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+    if file_size > 10 * 1024 * 1024:  # 10MB threshold
+        print(f"📋 Large file detected ({file_size / 1024 / 1024:.2f}MB), using Phase 3 queuing...")
+        return process_with_queue(task_id, _do_processing)
+    else:
+        return _do_processing()
 
 @csrf_exempt
 @require_http_methods(["POST"])
+@rate_limit_decorator(requests_per_minute=5, requests_per_hour=50)  # Phase 3: Rate limiting
 def upload_framework_file(request):
     """
     Main upload endpoint that handles file upload and starts processing.
