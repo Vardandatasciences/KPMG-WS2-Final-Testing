@@ -55,21 +55,30 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1  # Only fetch latest commit (faster)
+
+      - name: Show current commit
+        run: |
+          echo "Building from commit: $(git rev-parse HEAD)"
+          echo "Commit message: $(git log -1 --pretty=%B)"
 
       - name: Clean up Docker to free space
         run: |
           echo "Cleaning up Docker to free disk space..."
           docker container prune -f || true
-          docker image prune -a -f || true
+          # Only prune old/unused images, keep recent ones for cache
+          docker image prune -f || true
           docker volume prune -f || true
-          docker builder prune -a -f || true
           echo "Disk space after cleanup:"
           df -h /
 
       - name: Build Combined Frontend Docker image (GRC + TPRM)
         working-directory: grc_frontend
         run: |
-          docker build -t grc_tprm_frontend:latest .
+          # Use cache for speed, but Docker will auto-invalidate when files change
+          COMMIT_HASH=$(git rev-parse --short HEAD)
+          docker build --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') --build-arg COMMIT_HASH=${COMMIT_HASH} -t grc_tprm_frontend:latest .
 
       - name: Tag Frontend image for ECR
         run: |
@@ -85,17 +94,27 @@ jobs:
         run: |
           # Stop and remove existing container if it exists
           if [ "$(docker ps -aq -f name=grc_tprm_frontend)" ]; then
+            echo "Stopping and removing existing frontend container..."
             docker stop grc_tprm_frontend || true
             docker rm grc_tprm_frontend || true
           fi
 
+          # Verify the image exists
+          echo "Verifying frontend image exists..."
+          docker images | grep grc_tprm_frontend || echo "WARNING: Image not found!"
+
           # Run new container on Docker network, expose port 80
+          echo "Starting new frontend container..."
           docker run -d \
             --name grc_tprm_frontend \
             --network ${DOCKER_NETWORK} \
             -p ${FRONTEND_PORT}:80 \
             --restart unless-stopped \
             grc_tprm_frontend:latest
+
+          # Verify container is running
+          sleep 2
+          docker ps | grep grc_tprm_frontend || echo "WARNING: Container not running!"
 
       - name: Check Frontend health (GRC)
         run: |
@@ -119,21 +138,30 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1  # Only fetch latest commit (faster)
+
+      - name: Show current commit
+        run: |
+          echo "Building from commit: $(git rev-parse HEAD)"
+          echo "Commit message: $(git log -1 --pretty=%B)"
 
       - name: Clean up Docker to free space
         run: |
           echo "Cleaning up Docker to free disk space..."
           docker container prune -f || true
-          docker image prune -a -f || true
+          # Only prune old/unused images, keep recent ones for cache
+          docker image prune -f || true
           docker volume prune -f || true
-          docker builder prune -a -f || true
           echo "Disk space after cleanup:"
           df -h /
 
       - name: Build Backend Docker image
         working-directory: grc_backend
         run: |
-          docker build -t grc_tprm_backend:latest .
+          # Use cache for speed, but Docker will auto-invalidate when files change
+          COMMIT_HASH=$(git rev-parse --short HEAD)
+          docker build --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') --build-arg COMMIT_HASH=${COMMIT_HASH} -t grc_tprm_backend:latest .
 
       - name: Tag Backend image for ECR
         run: |
@@ -149,12 +177,18 @@ jobs:
         run: |
           # Stop and remove existing container if it exists
           if [ "$(docker ps -aq -f name=grc_tprm_backend)" ]; then
+            echo "Stopping and removing existing backend container..."
             docker stop grc_tprm_backend || true
             docker rm grc_tprm_backend || true
           fi
 
+          # Verify the image exists
+          echo "Verifying backend image exists..."
+          docker images | grep grc_tprm_backend || echo "WARNING: Image not found!"
+
           # Run new container on Docker network
           # Uses existing config.env and host volumes under /home/ec2-user
+          echo "Starting new backend container..."
           docker run -d \
             --name grc_tprm_backend \
             --network ${DOCKER_NETWORK} \
@@ -164,6 +198,10 @@ jobs:
             -v /home/ec2-user/Reports:/app/Reports \
             --restart unless-stopped \
             grc_tprm_backend:latest
+
+          # Verify container is running
+          sleep 2
+          docker ps | grep grc_tprm_backend || echo "WARNING: Container not running!"
 
       - name: Check Backend health
         run: |
