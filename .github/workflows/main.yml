@@ -56,7 +56,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1  # Only fetch latest commit (faster)
+          fetch-depth: 0  # Fetch all history to ensure latest code
 
       - name: Show current commit
         run: |
@@ -67,18 +67,21 @@ jobs:
         run: |
           echo "Cleaning up Docker to free disk space..."
           docker container prune -f || true
-          # Only prune old/unused images, keep recent ones for cache
-          docker image prune -f || true
+          docker image prune -a -f || true
           docker volume prune -f || true
+          docker builder prune -a -f || true
           echo "Disk space after cleanup:"
           df -h /
+
+      - name: Remove old Frontend image
+        run: |
+          docker rmi grc_tprm_frontend:latest || true
+          docker rmi "${FRONTEND_IMAGE}" || true
 
       - name: Build Combined Frontend Docker image (GRC + TPRM)
         working-directory: grc_frontend
         run: |
-          # Use cache for speed, but Docker will auto-invalidate when files change
-          COMMIT_HASH=$(git rev-parse --short HEAD)
-          docker build --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') --build-arg COMMIT_HASH=${COMMIT_HASH} -t grc_tprm_frontend:latest .
+          docker build --no-cache --pull -t grc_tprm_frontend:latest .
 
       - name: Tag Frontend image for ECR
         run: |
@@ -139,7 +142,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1  # Only fetch latest commit (faster)
+          fetch-depth: 0  # Fetch all history to ensure latest code
 
       - name: Show current commit
         run: |
@@ -150,18 +153,21 @@ jobs:
         run: |
           echo "Cleaning up Docker to free disk space..."
           docker container prune -f || true
-          # Only prune old/unused images, keep recent ones for cache
-          docker image prune -f || true
+          docker image prune -a -f || true
           docker volume prune -f || true
+          docker builder prune -a -f || true
           echo "Disk space after cleanup:"
           df -h /
+
+      - name: Remove old Backend image
+        run: |
+          docker rmi grc_tprm_backend:latest || true
+          docker rmi "${BACKEND_IMAGE}" || true
 
       - name: Build Backend Docker image
         working-directory: grc_backend
         run: |
-          # Use cache for speed, but Docker will auto-invalidate when files change
-          COMMIT_HASH=$(git rev-parse --short HEAD)
-          docker build --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') --build-arg COMMIT_HASH=${COMMIT_HASH} -t grc_tprm_backend:latest .
+          docker build --no-cache --pull -t grc_tprm_backend:latest .
 
       - name: Tag Backend image for ECR
         run: |
