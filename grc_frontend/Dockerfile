@@ -38,8 +38,8 @@ RUN echo "=== Checking api.js configuration ===" && \
     echo "=== Cache Bust: ${CACHE_BUST} ===" && \
     echo "=== Current ENVIRONMENT value ===" && \
     grep "const ENVIRONMENT" src/config/api.js && \
-    echo "=== Expected API_BASE_URL ===" && \
-    node -e "const fs=require('fs'); const code=fs.readFileSync('src/config/api.js','utf8'); const envMatch=code.match(/const ENVIRONMENT = ['\"](.*?)['\"]/); const env=envMatch?envMatch[1]:'unknown'; const urlsMatch=code.match(/aws: ['\"](.*?)['\"]/); const awsUrl=urlsMatch?urlsMatch[1]:'unknown'; console.log('ENVIRONMENT:', env); console.log('AWS URL:', awsUrl);"
+    echo "=== Testing API_BASE_URL evaluation ===" && \
+    node -e "const fs=require('fs'); const code=fs.readFileSync('src/config/api.js','utf8'); eval(code.replace(/export const API_BASE_URL.*?;/, '')); const envMatch=code.match(/const ENVIRONMENT = ['\"](.*?)['\"]/); const env=envMatch?envMatch[1]:'unknown'; const urlsMatch=code.match(/aws: ['\"](.*?)['\"]/); const awsUrl=urlsMatch?urlsMatch[1]:'unknown'; const devUrl=code.match(/development: ['\"](.*?)['\"]/)?.[1]||'unknown'; console.log('ENVIRONMENT:', env); console.log('AWS URL:', awsUrl); console.log('DEV URL:', devUrl); const getApiBaseUrl = () => { const currentEnv = env; if (currentEnv === 'aws') return awsUrl; else if (currentEnv === 'local') return 'http://127.0.0.1:8000'; else if (currentEnv === 'development') return devUrl; return awsUrl; }; const result = getApiBaseUrl(); console.log('RESULT URL:', result); if (result.includes('127.0.0.1')) { console.error('ERROR: API_BASE_URL is evaluating to development URL!'); process.exit(1); } else { console.log('SUCCESS: API_BASE_URL is correct'); }"
 
 # Build GRC frontend with NO cache
 RUN npm run build -- --no-cache || npm run build
