@@ -140,11 +140,41 @@ jobs:
           docker rm ${TEMP_CONTAINER} || true
           
           if [ -d "./temp_dist_check" ]; then
-            echo "Checking built JavaScript files for API URLs..."
-            find ./temp_dist_check -name "*.js" -type f | head -3 | while read file; do
-              echo "--- Checking $file ---"
-              grep -o "grc-backend.vardaands.com\|127.0.0.1:8000" "$file" | head -3 || echo "No API URL found in this file"
-            done
+            echo "=== Checking built JavaScript files for API URLs ==="
+            echo ""
+            echo "Searching for AWS URL (should be present):"
+            AWS_COUNT=$(find ./temp_dist_check -name "*.js" -type f -exec grep -l "grc-backend.vardaands.com" {} \; | wc -l)
+            echo "Found AWS URL in $AWS_COUNT file(s)"
+            
+            echo ""
+            echo "Searching for development URL (should NOT be present):"
+            DEV_COUNT=$(find ./temp_dist_check -name "*.js" -type f -exec grep -l "127.0.0.1:8000" {} \; | wc -l)
+            if [ "$DEV_COUNT" -gt 0 ]; then
+              echo "❌ ERROR: Found development URL in $DEV_COUNT file(s)!"
+              echo "Files containing development URL:"
+              find ./temp_dist_check -name "*.js" -type f -exec grep -l "127.0.0.1:8000" {} \;
+              echo ""
+              echo "Sample content:"
+              find ./temp_dist_check -name "*.js" -type f -exec grep -H "127.0.0.1:8000" {} \; | head -3
+            else
+              echo "✓ No development URL found (good!)"
+            fi
+            
+            echo ""
+            echo "Checking for 'development environment' text:"
+            DEV_ENV_COUNT=$(find ./temp_dist_check -name "*.js" -type f -exec grep -l "development environment" {} \; | wc -l)
+            if [ "$DEV_ENV_COUNT" -gt 0 ]; then
+              echo "❌ ERROR: Found 'development environment' in $DEV_ENV_COUNT file(s)!"
+              find ./temp_dist_check -name "*.js" -type f -exec grep -H "development environment" {} \; | head -3
+            else
+              echo "✓ No 'development environment' text found (good!)"
+            fi
+            
+            echo ""
+            echo "Checking for 'aws environment' text:"
+            AWS_ENV_COUNT=$(find ./temp_dist_check -name "*.js" -type f -exec grep -l "aws environment" {} \; | wc -l)
+            echo "Found 'aws environment' in $AWS_ENV_COUNT file(s) (expected)"
+            
             rm -rf ./temp_dist_check
           else
             echo "WARNING: Could not extract dist folder for verification"
@@ -176,9 +206,34 @@ jobs:
           sleep 2
           docker ps | grep grc_tprm_frontend || echo "WARNING: Container not running!"
           
+          # Verify the container is using the NEW image
+          echo "=== Verifying container is using new image ==="
+          CONTAINER_IMAGE=$(docker inspect grc_tprm_frontend --format='{{.Config.Image}}' 2>/dev/null || echo "unknown")
+          echo "Container is using image: $CONTAINER_IMAGE"
+          IMAGE_ID=$(docker images grc_tprm_frontend:latest --format "{{.ID}}" 2>/dev/null || echo "unknown")
+          echo "Latest image ID: $IMAGE_ID"
+          
           # Show container logs to verify it started correctly
           echo "=== Container startup logs ==="
           docker logs grc_tprm_frontend --tail 20 || true
+          
+          # Test the actual served files
+          echo "=== Testing served files ==="
+          sleep 3
+          # Get the index.html to find the JS file names
+          INDEX_HTML=$(curl -s http://127.0.0.1:${FRONTEND_PORT}/ 2>/dev/null || echo "")
+          if [ -n "$INDEX_HTML" ]; then
+            # Extract first JS file name from index.html
+            JS_FILE=$(echo "$INDEX_HTML" | grep -o 'src="[^"]*\.js"' | head -1 | sed 's/src="//;s/"//')
+            if [ -n "$JS_FILE" ]; then
+              echo "Checking JS file: $JS_FILE"
+              curl -s "http://127.0.0.1:${FRONTEND_PORT}${JS_FILE}" 2>/dev/null | grep -o "grc-backend.vardaands.com\|127.0.0.1:8000\|development environment\|aws environment" | head -10 || echo "Could not find API URLs in JS file"
+            else
+              echo "Could not extract JS file name from index.html"
+            fi
+          else
+            echo "Could not fetch index.html"
+          fi
 
       - name: Check Frontend health (GRC)
         run: |
