@@ -60,8 +60,9 @@ jobs:
 
       - name: Show current commit
         run: |
-          echo "Building from commit: $(git rev-parse HEAD)"
-          echo "Commit message: $(git log -1 --pretty=%B)"
+          echo "Building from commit: ${{ github.sha }}"
+          echo "Commit ref: ${{ github.ref }}"
+          echo "Commit message: ${{ github.event.head_commit.message || 'N/A' }}"
 
       - name: Clean up Docker to free space
         run: |
@@ -98,11 +99,14 @@ jobs:
 
       - name: Build Combined Frontend Docker image (GRC + TPRM)
         working-directory: grc_frontend
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF: ${{ github.ref }}
         run: |
-          # Get commit hash and date for build args
-          COMMIT_HASH=$(git rev-parse HEAD)
-          BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
-          CACHE_BUST=$(date +%s)
+          # Use GitHub Actions environment variables for build args
+          COMMIT_HASH="${GITHUB_SHA:-unknown}"
+          BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || echo "$(date -u +'%Y-%m-%dT%H:%M:%SZ')")
+          CACHE_BUST=$(date +%s 2>/dev/null || echo "$(date +%s)")
           
           echo "Building with commit: $COMMIT_HASH"
           echo "Build date: $BUILD_DATE"
@@ -203,8 +207,9 @@ jobs:
 
       - name: Show current commit
         run: |
-          echo "Building from commit: $(git rev-parse HEAD)"
-          echo "Commit message: $(git log -1 --pretty=%B)"
+          echo "Building from commit: ${{ github.sha }}"
+          echo "Commit ref: ${{ github.ref }}"
+          echo "Commit message: ${{ github.event.head_commit.message || 'N/A' }}"
 
       - name: Clean up Docker to free space
         run: |
