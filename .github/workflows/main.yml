@@ -251,10 +251,12 @@ jobs:
 
           # Run new container on Docker network
           # Uses existing config.env and host volumes under /home/ec2-user
+          # Expose port 8000 to host for health checks
           echo "Starting new backend container..."
           docker run -d \
             --name grc_tprm_backend \
             --network ${DOCKER_NETWORK} \
+            -p ${BACKEND_PORT}:8000 \
             --env-file /home/ec2-user/config.env \
             -v /home/ec2-user/MEDIA_ROOT:/app/MEDIA_ROOT \
             -v /home/ec2-user/TEMP_MEDIA_ROOT:/app/TEMP_MEDIA_ROOT \
@@ -265,11 +267,30 @@ jobs:
           # Verify container is running
           sleep 2
           docker ps | grep grc_tprm_backend || echo "WARNING: Container not running!"
+          
+          # Show container logs to verify it started correctly
+          echo "=== Backend container startup logs ==="
+          docker logs grc_tprm_backend --tail 30 || true
 
       - name: Check Backend health
         run: |
-          sleep 5
-          curl -fsS http://127.0.0.1:${BACKEND_PORT}/ || echo "Backend health check failed (non-blocking)."
+          echo "Waiting for backend to be ready..."
+          sleep 10  # Give backend more time to start
+          
+          # Try to connect to backend
+          echo "Testing backend health at http://127.0.0.1:${BACKEND_PORT}/"
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:${BACKEND_PORT}/ || echo "000")
+          
+          if [ "$HTTP_CODE" = "000" ]; then
+            echo "ERROR: Backend not responding. Showing container status and logs:"
+            docker ps -a | grep grc_tprm_backend || echo "Container not found!"
+            docker logs grc_tprm_backend --tail 50 || true
+            echo "Backend health check failed (non-blocking)."
+          elif [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 500 ]; then
+            echo "Backend is responding (HTTP $HTTP_CODE) - Health check passed!"
+          else
+            echo "Backend returned HTTP $HTTP_CODE - may need investigation"
+          fi
 
   # ============================================
   # JOB 4: Final Verification (After Both Deploy)
@@ -292,9 +313,23 @@ jobs:
 
       - name: Verify Frontend via API proxy
         run: |
-          sleep 3
-          echo "Testing Frontend → Backend connection..."
-          curl -fsS http://127.0.0.1:${FRONTEND_PORT}/api/ || echo "API proxy check failed (non-blocking)."
+          sleep 5
+          echo "Testing Frontend → Backend connection via API proxy..."
+          
+          # Test the API proxy - 401 is expected (means backend is reachable, just needs auth)
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:${FRONTEND_PORT}/api/ || echo "000")
+          
+          if [ "$HTTP_CODE" = "000" ]; then
+            echo "ERROR: Frontend API proxy not responding"
+            docker logs grc_tprm_frontend --tail 30 || true
+            echo "API proxy check failed (non-blocking)."
+          elif [ "$HTTP_CODE" = "401" ]; then
+            echo "SUCCESS: API proxy is working! (401 Unauthorized is expected - backend is reachable)"
+          elif [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 500 ]; then
+            echo "SUCCESS: API proxy is working! (HTTP $HTTP_CODE)"
+          else
+            echo "API proxy returned HTTP $HTTP_CODE - backend may have issues"
+          fi
 
       - name: Check container logs
         if: failure()
