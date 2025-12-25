@@ -39,9 +39,12 @@ RUN echo "=== Checking api.js configuration ===" && \
     echo "=== Current ENVIRONMENT value ===" && \
     grep "const ENVIRONMENT" src/config/api.js && \
     echo "=== Verifying API configuration ===" && \
-    ENV_VALUE=$(grep "const ENVIRONMENT" src/config/api.js | grep -oP "['\"].*?['\"]" | head -1 | tr -d "'\"") && \
-    AWS_URL=$(grep "aws:" src/config/api.js | grep -oP "['\"].*?['\"]" | head -1 | tr -d "'\"") && \
-    DEV_URL=$(grep "development:" src/config/api.js | grep -oP "['\"].*?['\"]" | head -1 | tr -d "'\"") && \
+    ENV_LINE=$(grep "const ENVIRONMENT" src/config/api.js) && \
+    ENV_VALUE=$(echo "$ENV_LINE" | sed -n "s/.*= ['\"]\\([^'\"]*\\)['\"].*/\\1/p") && \
+    AWS_LINE=$(grep "aws:" src/config/api.js | grep -v "^[[:space:]]*//" | head -1) && \
+    AWS_URL=$(echo "$AWS_LINE" | sed -n "s/.*aws: ['\"]\\([^'\"]*\\)['\"].*/\\1/p") && \
+    DEV_LINE=$(grep "development:" src/config/api.js | head -1) && \
+    DEV_URL=$(echo "$DEV_LINE" | sed -n "s/.*development: ['\"]\\([^'\"]*\\)['\"].*/\\1/p") && \
     echo "ENVIRONMENT: $ENV_VALUE" && \
     echo "AWS URL: $AWS_URL" && \
     echo "DEV URL: $DEV_URL" && \
