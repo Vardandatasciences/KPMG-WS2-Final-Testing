@@ -78,10 +78,44 @@ jobs:
           docker rmi grc_tprm_frontend:latest || true
           docker rmi "${FRONTEND_IMAGE}" || true
 
+      - name: Verify API configuration before build
+        working-directory: grc_frontend
+        run: |
+          echo "=== Checking api.js configuration ==="
+          if [ -f "src/config/api.js" ]; then
+            echo "File exists. Showing ENVIRONMENT setting:"
+            grep -A 3 "ENVIRONMENT" src/config/api.js || echo "Could not find ENVIRONMENT"
+            echo ""
+            echo "Showing API_URLS:"
+            grep -A 5 "API_URLS" src/config/api.js | head -10 || echo "Could not find API_URLS"
+            echo ""
+            echo "Current API_BASE_URL will be:"
+            grep "API_BASE_URL" src/config/api.js || echo "Could not find API_BASE_URL"
+          else
+            echo "ERROR: api.js file not found!"
+            exit 1
+          fi
+
       - name: Build Combined Frontend Docker image (GRC + TPRM)
         working-directory: grc_frontend
         run: |
-          docker build --no-cache --pull -t grc_tprm_frontend:latest .
+          # Get commit hash and date for build args
+          COMMIT_HASH=$(git rev-parse HEAD)
+          BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          CACHE_BUST=$(date +%s)
+          
+          echo "Building with commit: $COMMIT_HASH"
+          echo "Build date: $BUILD_DATE"
+          echo "Cache bust: $CACHE_BUST"
+          
+          # Build with build args to force fresh build
+          docker build \
+            --no-cache \
+            --pull \
+            --build-arg BUILD_DATE="$BUILD_DATE" \
+            --build-arg GIT_COMMIT="$COMMIT_HASH" \
+            --build-arg CACHE_BUST="$CACHE_BUST" \
+            -t grc_tprm_frontend:latest .
 
       - name: Tag Frontend image for ECR
         run: |
@@ -92,6 +126,25 @@ jobs:
           aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
           docker push "${FRONTEND_IMAGE}"
           echo "Frontend image pushed to ECR successfully"
+
+      - name: Verify built image contains correct API URL
+        run: |
+          echo "=== Verifying API URL in built image ==="
+          # Create a temporary container to inspect built files
+          TEMP_CONTAINER=$(docker create grc_tprm_frontend:latest)
+          docker cp ${TEMP_CONTAINER}:/var/www/html/grc ./temp_dist_check || echo "Could not copy dist"
+          docker rm ${TEMP_CONTAINER} || true
+          
+          if [ -d "./temp_dist_check" ]; then
+            echo "Checking built JavaScript files for API URLs..."
+            find ./temp_dist_check -name "*.js" -type f | head -3 | while read file; do
+              echo "--- Checking $file ---"
+              grep -o "grc-backend.vardaands.com\|127.0.0.1:8000" "$file" | head -3 || echo "No API URL found in this file"
+            done
+            rm -rf ./temp_dist_check
+          else
+            echo "WARNING: Could not extract dist folder for verification"
+          fi
 
       - name: Deploy Frontend container
         run: |
@@ -118,6 +171,10 @@ jobs:
           # Verify container is running
           sleep 2
           docker ps | grep grc_tprm_frontend || echo "WARNING: Container not running!"
+          
+          # Show container logs to verify it started correctly
+          echo "=== Container startup logs ==="
+          docker logs grc_tprm_frontend --tail 20 || true
 
       - name: Check Frontend health (GRC)
         run: |

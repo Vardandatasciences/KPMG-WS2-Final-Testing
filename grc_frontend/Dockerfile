@@ -6,6 +6,11 @@
 # ============================================
 FROM node:20-alpine AS grc_builder
 
+# Build argument to force cache invalidation
+ARG BUILD_DATE
+ARG GIT_COMMIT
+ARG CACHE_BUST=1
+
 WORKDIR /app
 
 # Copy package files
@@ -16,11 +21,25 @@ COPY tprm_frontend/package*.json ./tprm_frontend/
 RUN npm ci
 RUN cd tprm_frontend && npm ci
 
-# Copy source code
+# Copy source code (this will invalidate cache when files change)
 COPY . .
 
-# Build GRC frontend
+# Remove any existing dist folder to ensure fresh build
+RUN rm -rf dist || true
+
+# Verify api.js is present and show environment setting
+RUN echo "=== Checking api.js configuration ===" && \
+    cat src/config/api.js | grep -A 2 "ENVIRONMENT" || echo "WARNING: Could not find ENVIRONMENT in api.js" && \
+    echo "=== Build Date: ${BUILD_DATE} ===" && \
+    echo "=== Git Commit: ${GIT_COMMIT} ===" && \
+    echo "=== Cache Bust: ${CACHE_BUST} ==="
+
+# Build GRC frontend (this will always run fresh due to COPY . . above)
 RUN npm run build
+
+# Verify the built files contain the correct API URL
+RUN echo "=== Verifying built API configuration ===" && \
+    find dist -name "*.js" -type f | head -1 | xargs grep -o "grc-backend.vardaands.com\|127.0.0.1:8000" | head -5 || echo "Could not verify API URL in built files"
 
 # ============================================
 # STAGE 2: Build TPRM Frontend
