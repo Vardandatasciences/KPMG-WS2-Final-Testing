@@ -142,3 +142,4 @@ def calculate_document_hash(text: str) -> str:
     import hashlib
     return hashlib.sha256(text.encode('utf-8')).hexdigest()
 
+

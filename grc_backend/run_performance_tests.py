@@ -74,3 +74,4 @@ else:
     print("  1. set RISK_AI_PROVIDER=openai && python generate_performance_report.py")
     print("  2. set RISK_AI_PROVIDER=ollama && python generate_performance_report.py")
 
+

@@ -324,3 +324,4 @@ OLLAMA_TEMPERATURE = 0.1  # Deterministic for extraction tasks
 **File**: `grc_backend/grc/routes/Risk/risk_ai_doc.py`
 **Status**: ✅ **COMPLETE**
 
+

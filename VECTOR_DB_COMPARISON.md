@@ -375,3 +375,4 @@ results = collection.query(
 
 **ChromaDB is the best choice for your GRC system!** 🎯
 
+

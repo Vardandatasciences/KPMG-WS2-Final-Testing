@@ -125,3 +125,4 @@ print("  5. Save all results to performance_report_output/")
 print("\nNote: This may take 10-30 minutes depending on document sizes.")
 print("="*80)
 
+

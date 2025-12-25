@@ -34,3 +34,4 @@ else
     echo "❌ Redis setup failed. Please check the errors above."
 fi
 
+
