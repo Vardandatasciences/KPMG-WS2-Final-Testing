@@ -318,6 +318,189 @@ class EnhancedPolicyExtractor:
         """Generate structured identifier for subpolicies."""
         return f"{policy_id}.{subpolicy_index:02d}"
     
+    def _is_valid_policy_response(self, response: Dict[str, Any]) -> bool:
+        """
+        Check if the response contains valid policy data (not just metadata).
+        
+        Args:
+            response: LLM response to validate
+            
+        Returns:
+            True if response contains actual policy content, False if it's just metadata
+        """
+        if not isinstance(response, dict):
+            return False
+        
+        # Check for correct format
+        if "has_policies" in response and "policies" in response:
+            policies = response.get("policies", [])
+            if isinstance(policies, list) and len(policies) > 0:
+                # Check if policies have actual content
+                for policy in policies:
+                    if isinstance(policy, dict):
+                        # Must have at least title or description
+                        if policy.get("policy_title") or policy.get("policy_description"):
+                            return True
+            return False
+        
+        # Check for Policy key with actual content
+        if "Policy" in response:
+            policy_data = response["Policy"]
+            if isinstance(policy_data, dict):
+                # Check if it has actual policy fields (not just metadata)
+                has_policy_fields = any(key in policy_data for key in [
+                    "policy_title", "PolicyTitle", "title",
+                    "policy_description", "PolicyDescription", "description",
+                    "policy_text", "PolicyText", "text"
+                ])
+                # If it only has metadata fields, it's invalid
+                only_metadata = all(key in ["Scope", "Objective", "Categorization", 
+                                           "scope", "objective", "categorization"] 
+                                  for key in policy_data.keys())
+                
+                return has_policy_fields and not only_metadata
+        
+        return False
+    
+    def _normalize_policy_response(self, response: Dict[str, Any], section_title: str) -> Dict[str, Any]:
+        """
+        Normalize LLM response to expected format.
+        Handles various response structures that LLMs might return.
+        
+        Args:
+            response: Raw LLM response (dict or str)
+            section_title: Section title for logging
+            
+        Returns:
+            Normalized response with has_policies and policies array
+        """
+        if not isinstance(response, dict):
+            return {"has_policies": False, "policies": []}
+        
+        # Check if already in correct format
+        if "has_policies" in response and "policies" in response:
+            return response
+        
+        # Handle case where response has "Policy" (singular) instead of "policies" (plural)
+        if "Policy" in response:
+            policy_data = response["Policy"]
+            
+            # Log the full Policy structure for debugging
+            print(f"[DEBUG] Policy object keys: {list(policy_data.keys()) if isinstance(policy_data, dict) else 'Not a dict'}")
+            if isinstance(policy_data, dict) and len(str(policy_data)) < 1000:
+                print(f"[DEBUG] Full Policy object: {policy_data}")
+            
+            # Convert single policy to array format
+            if isinstance(policy_data, dict):
+                # Check if this is a malformed response with only metadata (Scope, Objective, etc.)
+                # but no actual policy content
+                has_metadata_only = all(key in ["Scope", "Objective", "Categorization", "scope", "objective", "categorization"] 
+                                       for key in policy_data.keys() if isinstance(policy_data, dict))
+                
+                if has_metadata_only:
+                    print(f"[WARNING] Policy object contains only metadata, no actual policy content. This suggests the LLM didn't extract policies from the content.")
+                    print(f"[WARNING] This might indicate: 1) The prompt format isn't being followed, 2) The model is too small, 3) The response was truncated")
+                    # Try to create a policy from the section title as fallback
+                    if section_title:
+                        print(f"[INFO] Attempting to create policy from section title: {section_title}")
+                        # Extract scope and objective if available
+                        scope = policy_data.get("Scope") or policy_data.get("scope") or ""
+                        if isinstance(scope, list):
+                            scope = ", ".join(scope) if scope else ""
+                        objective = policy_data.get("Objective") or policy_data.get("objective") or ""
+                        
+                        # Create a basic policy from the section
+                        fallback_policy = {
+                            "policy_title": section_title,
+                            "policy_description": f"Policy extracted from section: {section_title}",
+                            "policy_text": objective or f"Content from {section_title}",
+                            "scope": scope or f"This policy applies to {section_title}",
+                            "objective": objective or f"Ensure compliance with {section_title}",
+                            "policy_type": "General",
+                            "policy_category": "General Requirements",
+                            "policy_subcategory": "General",
+                            "subpolicies": []
+                        }
+                        return {
+                            "has_policies": True,
+                            "policies": [fallback_policy],
+                            "document_type": response.get("document_type", "other"),
+                            "confidence": 0.3  # Low confidence since we're creating a fallback
+                        }
+                    return {"has_policies": False, "policies": []}
+                
+                # Check if it's already a policy object or needs wrapping
+                if "policy_title" in policy_data or "PolicyTitle" in policy_data or "title" in policy_data:
+                    # It's a policy object, wrap in array
+                    policies = [policy_data]
+                else:
+                    # It might be a wrapper, try to extract
+                    policies = [policy_data]
+            else:
+                policies = []
+            
+            # Normalize policy structure
+            normalized_policies = []
+            for policy in policies:
+                normalized_policy = {
+                    "policy_title": policy.get("policy_title") or policy.get("PolicyTitle") or policy.get("title") or section_title or "Untitled Policy",
+                    "policy_description": policy.get("policy_description") or policy.get("PolicyDescription") or policy.get("description") or "",
+                    "policy_text": policy.get("policy_text") or policy.get("PolicyText") or policy.get("text") or "",
+                    "scope": policy.get("scope") or policy.get("Scope") or "",
+                    "objective": policy.get("objective") or policy.get("Objective") or "",
+                    "policy_type": policy.get("policy_type") or policy.get("PolicyType") or policy.get("type") or "General",
+                    "policy_category": policy.get("policy_category") or policy.get("PolicyCategory") or policy.get("category") or "General Requirements",
+                    "policy_subcategory": policy.get("policy_subcategory") or policy.get("PolicySubcategory") or policy.get("subcategory") or "General",
+                    "subpolicies": policy.get("subpolicies") or policy.get("Subpolicies") or []
+                }
+                
+                # Handle scope if it's a list
+                if isinstance(normalized_policy["scope"], list):
+                    normalized_policy["scope"] = ", ".join(normalized_policy["scope"]) if normalized_policy["scope"] else ""
+                
+                # Normalize subpolicies
+                normalized_subpolicies = []
+                for subpolicy in normalized_policy["subpolicies"]:
+                    if isinstance(subpolicy, dict):
+                        normalized_subpolicy = {
+                            "subpolicy_title": subpolicy.get("subpolicy_title") or subpolicy.get("SubpolicyTitle") or subpolicy.get("title") or "",
+                            "subpolicy_description": subpolicy.get("subpolicy_description") or subpolicy.get("SubpolicyDescription") or subpolicy.get("description") or "",
+                            "subpolicy_text": subpolicy.get("subpolicy_text") or subpolicy.get("SubpolicyText") or subpolicy.get("text") or "",
+                            "control": subpolicy.get("control") or subpolicy.get("Control") or ""
+                        }
+                        normalized_subpolicies.append(normalized_subpolicy)
+                normalized_policy["subpolicies"] = normalized_subpolicies
+                
+                # Only add if it has meaningful content (title is required)
+                if normalized_policy["policy_title"] and normalized_policy["policy_title"] != "Untitled Policy":
+                    normalized_policies.append(normalized_policy)
+            
+            if normalized_policies:
+                print(f"[INFO] Normalized {len(normalized_policies)} policy/policies from alternative response format")
+                return {
+                    "has_policies": True,
+                    "policies": normalized_policies,
+                    "document_type": response.get("document_type", "other"),
+                    "confidence": response.get("confidence", 0.0)
+                }
+        
+        # Handle case where response has "policies" but no "has_policies"
+        if "policies" in response:
+            policies = response["policies"]
+            if isinstance(policies, list) and len(policies) > 0:
+                return {
+                    "has_policies": True,
+                    "policies": policies,
+                    "document_type": response.get("document_type", "other"),
+                    "confidence": response.get("confidence", 0.0)
+                }
+        
+        # If we get here, no valid policies found
+        print(f"[WARNING] Could not normalize response format for '{section_title}'. Response keys: {list(response.keys())}")
+        if len(str(response)) < 500:
+            print(f"[DEBUG] Full response: {response}")
+        return {"has_policies": False, "policies": []}
+    
     def chunk_content(self, content: str, max_chunk_size: int = 8000) -> List[str]:
         """Split content into chunks to handle large sections without losing information."""
         if len(content) <= max_chunk_size:
@@ -426,6 +609,29 @@ class EnhancedPolicyExtractor:
                     try:
                         if isinstance(result, str):
                             result = json.loads(result)
+                        
+                        # Debug: Log response structure for troubleshooting (first attempt only)
+                        if attempt == 0:
+                            response_keys = list(result.keys()) if isinstance(result, dict) else "Not a dict"
+                            print(f"[DEBUG] Response keys for '{section_title}': {response_keys}")
+                            # Always log the full response for Policy key to debug Ollama issues
+                            if isinstance(result, dict) and "Policy" in result:
+                                print(f"[DEBUG] Full Policy response structure: {json.dumps(result, indent=2)[:1000]}")
+                            elif isinstance(result, dict) and len(str(result)) < 500:
+                                print(f"[DEBUG] Full response: {result}")
+                        
+                        # Validate response before normalizing
+                        if not self._is_valid_policy_response(result):
+                            print(f"[WARNING] Invalid response format detected on attempt {attempt + 1}")
+                            if attempt < max_retries - 1:
+                                print(f"[INFO] Retrying with original prompt...")
+                                time.sleep(1)
+                                continue
+                            else:
+                                print(f"[WARNING] All retries exhausted. Response format is invalid. Using fallback normalization.")
+                        
+                        # Normalize response format - handle different LLM response structures
+                        result = self._normalize_policy_response(result, section_title)
                         
                         if result.get("has_policies", False):
                             # Enhance policies with structured identifiers and metadata
@@ -712,13 +918,16 @@ class EnhancedPolicyExtractor:
                 
             processed_count += 1
         
-        # Save final results with enhanced metadata
+        # Save final results with enhanced metadata (even if empty, for debugging)
+        # Always save the file, even if no policies were found
+        all_policies_file = output_path / "all_policies.json"
+        with open(all_policies_file, 'w', encoding='utf-8') as f:
+            json.dump(all_policies, f, ensure_ascii=False, indent=2)
+        
+        if verbose:
+            print(f"[INFO] Saved all_policies.json with {len(all_policies)} sections")
+        
         if all_policies:
-            # Save complete analysis
-            all_policies_file = output_path / "all_policies.json"
-            with open(all_policies_file, 'w', encoding='utf-8') as f:
-                json.dump(all_policies, f, ensure_ascii=False, indent=2)
-            
             # Enhanced summary with framework metadata
             total_policies = sum(len(item["analysis"]["policies"]) for item in all_policies)
             total_subpolicies = sum(

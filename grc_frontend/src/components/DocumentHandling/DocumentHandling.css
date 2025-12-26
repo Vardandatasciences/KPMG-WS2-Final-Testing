@@ -329,11 +329,12 @@ h2::after,
 /* Module Tabs */
 .module-tabs {
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 8px;
   margin-bottom: 32px;
   margin-top: 60px;
-  margin-left: -260px;
+  margin-left: 0;
+  padding-left: 0;
   flex-wrap: wrap;
 }
 

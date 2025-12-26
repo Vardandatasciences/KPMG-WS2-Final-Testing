@@ -115,28 +115,16 @@
         <i v-if="!isCollapsed" class="fas fa-chevron-right submenu-arrow"></i>
       </div>
       <div v-if="!isCollapsed && openMenus.compliances" class="submenu">
-        <!-- 1. Compliance List -->
+        <!-- 1. Control Management -->
         <div @click="toggleSubmenu('complianceList')" class="menu-item has-submenu" :class="{'expanded': openMenus.complianceList}">
           <i class="fas fa-list icon"></i>
-          <span>Compliance List</span>
+          <span>Control Management</span>
           <i class="fas fa-chevron-right submenu-arrow"></i>
         </div>
         <div v-if="!isCollapsed && openMenus.complianceList" class="submenu">
           <div class="menu-item" @click="navigate('/compliance/list')" :class="{'active': isActive('/compliance/list')}">
             <i class="fas fa-shield-alt icon"></i>
-            <span>Control Management</span>
-          </div>
-          <!-- <div class="menu-item" @click="navigate('/compliance/audit-status/all')" :class="{'active': isActive('/compliance/audit-status/all')}">
-            <i class="fas fa-tasks icon"></i>
-            <span>Compliance Audit Management</span>
-          </div> -->
-            <div class="menu-item" @click="navigate('/compliance/audit-management')" :class="{'active': isActive('/compliance/audit-management')}">
-              <i class="fas fa-clipboard-check icon"></i>
-              <span>Compliances</span>
-            </div>
-          <div class="menu-item" @click="navigate('/compliance/approver')" :class="{'active': isActive('/compliance/approver')}">
-            <i class="fas fa-check-double icon"></i>
-            <span>Compliance Approval</span>
+            <span>Controls</span>
           </div>
           <div class="menu-item" @click="navigate('/compliance/organizational-controls')" :class="{'active': isActive('/compliance/organizational-controls')}">
             <i class="fas fa-sitemap icon"></i>
@@ -144,7 +132,24 @@
           </div>
         </div>
 
-        <!-- 2. Compliance Creation -->
+        <!-- 2. Compliance Management -->
+        <div @click="toggleSubmenu('complianceManagement')" class="menu-item has-submenu" :class="{'expanded': openMenus.complianceManagement}">
+          <i class="fas fa-clipboard-check icon"></i>
+          <span>Compliance Management</span>
+          <i class="fas fa-chevron-right submenu-arrow"></i>
+        </div>
+        <div v-if="!isCollapsed && openMenus.complianceManagement" class="submenu">
+          <div class="menu-item" @click="navigate('/compliance/audit-management')" :class="{'active': isActive('/compliance/audit-management')}">
+            <i class="fas fa-clipboard-check icon"></i>
+            <span>Compliances</span>
+          </div>
+          <div class="menu-item" @click="navigate('/compliance/approver')" :class="{'active': isActive('/compliance/approver')}">
+            <i class="fas fa-check-double icon"></i>
+            <span>Compliance Approval</span>
+          </div>
+        </div>
+
+        <!-- 3. Compliance Creation -->
         <div @click="toggleSubmenu('complianceCreation')" class="menu-item has-submenu" :class="{'expanded': openMenus.complianceCreation}">
           <i class="fas fa-plus-square icon"></i>
           <span>Compliance Creation</span>
@@ -169,7 +174,7 @@
           </div>
         </div>
 
-        <!-- 3. Performance Analysis -->
+        <!-- 4. Performance Analysis -->
         <div @click="toggleSubmenu('compliancePerformance')" class="menu-item has-submenu" :class="{'expanded': openMenus.compliancePerformance}">
           <i class="fas fa-chart-line icon"></i>
           <span>Performance Analysis</span>
@@ -1057,6 +1062,7 @@ export default {
       compliancesView: false,
       complianceCreation: false,
       complianceList: false,
+      complianceManagement: false,
       compliancePerformance: false,
       // TPRM Menu States
       rfpManagement: false,

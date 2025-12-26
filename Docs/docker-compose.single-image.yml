@@ -1,0 +1,30 @@
+# Single Image Docker Compose (Simpler Alternative)
+# This uses ONE image containing everything: GRC Frontend, TPRM Frontend, Backend, and Nginx
+
+version: '3.8'
+
+services:
+  grc_tprm_app:
+    build:
+      context: .
+      dockerfile: Dockerfile.single
+    container_name: grc_tprm_all_in_one
+    ports:
+      - "80:80"
+      - "8000:8000"  # Backend API (optional direct access)
+    env_file:
+      - /home/ec2-user/config.env
+    volumes:
+      - /home/ec2-user/MEDIA_ROOT:/app/MEDIA_ROOT
+      - /home/ec2-user/TEMP_MEDIA_ROOT:/app/TEMP_MEDIA_ROOT
+      - /home/ec2-user/Reports:/app/Reports
+    restart: unless-stopped
+    networks:
+      - grc_tprm_network
+
+networks:
+  grc_tprm_network:
+    driver: bridge
+
+
+

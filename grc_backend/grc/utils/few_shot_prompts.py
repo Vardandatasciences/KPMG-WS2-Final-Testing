@@ -596,14 +596,47 @@ CRITICAL REQUIREMENTS:
 2. Every subpolicy MUST have a detailed "control" field with WHO, WHAT, WHEN, HOW, WHERE
 3. Generate comprehensive metadata for all policies and subpolicies
 4. Create structured, implementable policies from the content
+5. Extract ACTUAL policies from the content - do NOT return generic templates
+6. The response MUST include "has_policies": true and a "policies" array
 
 Section Title: {section_title}
 
 Content to analyze:
 {content[:8000]}
 
-Generate comprehensive policies with all required metadata fields. Follow the examples above for structure, detail level, and format.
+IMPORTANT: You MUST extract actual policies from the content above. Do NOT return generic templates or placeholder data.
+- If the content describes requirements, controls, or procedures, extract them as policies
+- Each policy must have: policy_title, policy_description, policy_text, scope, objective, policy_type, policy_category, policy_subcategory, and subpolicies array
+- Each subpolicy must have: subpolicy_title, subpolicy_description, subpolicy_text, and control
+
+Generate comprehensive policies with all required metadata fields. Follow the examples above EXACTLY for structure, detail level, and format.
 Ensure all policies have comprehensive metadata including scope, objective, categorization, and structured identifiers.
 
-Return ONLY valid JSON in the exact format shown in the examples above."""
+Return ONLY valid JSON in this EXACT format:
+{{
+    "has_policies": true,
+    "policies": [
+        {{
+            "policy_title": "...",
+            "policy_description": "...",
+            "policy_text": "...",
+            "scope": "...",
+            "objective": "...",
+            "policy_type": "...",
+            "policy_category": "...",
+            "policy_subcategory": "...",
+            "subpolicies": [...]
+        }}
+    ],
+    "document_type": "...",
+    "confidence": 0.95
+}}
+
+If no policies can be extracted, return:
+{{
+    "has_policies": false,
+    "policies": [],
+    "document_type": "other",
+    "confidence": 0.0
+}}"""
 
