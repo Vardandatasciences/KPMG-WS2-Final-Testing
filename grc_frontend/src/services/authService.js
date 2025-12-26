@@ -12,6 +12,7 @@ class AuthService {
         this.failedRefreshAttempts = 0 // Track failed refresh attempts
         this.maxRefreshAttempts = 5 // Increased max attempts to be more lenient
         this.refreshInterval = null // Periodic refresh interval
+        this.sessionCheckInterval = null // Periodic session check interval (for multi-session management)
         this.setupAxiosInterceptors()
         
         // Start periodic refresh if tokens exist (handles page reloads)
@@ -20,6 +21,7 @@ class AuthService {
         if (hasTokens) {
             console.log('🔄 [AuthService] Tokens found on initialization - starting periodic refresh')
             this.startPeriodicTokenRefresh()
+            this.startPeriodicSessionCheck()
         }
     }
  
@@ -27,21 +29,22 @@ class AuthService {
         // Request interceptor to add JWT token
         axios.interceptors.request.use(
             async (config) => {
-                // Don't add token if we're in the process of logging out
-                if (this.isLoggingOut) {
-                    return Promise.reject(new Error('Logging out'))
-                }
-               
-                // Skip auth check for login/refresh/MFA/Google OAuth endpoints
+                // Skip auth check for login/refresh/MFA/logout/Google OAuth endpoints
                 const isAuthEndpoint = config.url && (
                     config.url.includes('/api/jwt/login/') ||
                     config.url.includes('/api/jwt/refresh/') ||
                     config.url.includes('/api/jwt/mfa/') ||
                     config.url.includes('/api/login/') ||
                     config.url.includes('/api/logout/') ||
+                    config.url.includes('/api/jwt/logout/') ||
                     config.url.includes('/api/google/oauth/') ||
                     config.url.includes('/api/google/oauth-callback/')
                 )
+                
+                // Don't block logout endpoint even if we're logging out
+                if (this.isLoggingOut && !config.url.includes('/logout/')) {
+                    return Promise.reject(new Error('Logging out'))
+                }
                
                 if (!isAuthEndpoint) {
                     // Check if token is expired and refresh if needed
@@ -370,6 +373,8 @@ class AuthService {
                 
                 // Start periodic token refresh
                 this.startPeriodicTokenRefresh()
+                // Start periodic session check (for multi-session management)
+                this.startPeriodicSessionCheck()
                 
                 // Emit login event
                 eventBus.emit(LOGIN_EVENT, { user })
@@ -461,6 +466,8 @@ class AuthService {
                
                 // Start periodic token refresh
                 this.startPeriodicTokenRefresh()
+                // Start periodic session check (for multi-session management)
+                this.startPeriodicSessionCheck()
                
                 // Emit login event
                 eventBus.emit(LOGIN_EVENT, { user })
@@ -841,6 +848,7 @@ class AuthService {
  
     async logout() {
         try {
+            console.log('🚪 [AuthService] Starting logout process...')
             // Set logout flag to prevent refresh attempts
             this.isLoggingOut = true
             this.isRefreshing = false
@@ -849,14 +857,31 @@ class AuthService {
             eventBus.emit(LOGOUT_EVENT, {})
            
             const token = localStorage.getItem('access_token')
-            if (token) {
-                // Call logout endpoint
-                await axios.post(`${this.baseURL}/api/jwt/logout/`, {}, {
-                    headers: { Authorization: `Bearer ${token}` }
+            const userId = localStorage.getItem('user_id')
+            const userName = localStorage.getItem('user_name')
+            
+            console.log('🚪 [AuthService] Logout - Token exists:', !!token, 'User ID:', userId, 'User Name:', userName)
+            console.log('🚪 [AuthService] Calling logout endpoint:', `${this.baseURL}/api/jwt/logout/`)
+            
+            // Always try to call logout endpoint, even if token is missing
+            // This ensures the backend can log the logout attempt
+            try {
+                const headers = {}
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`
+                }
+                
+                const response = await axios.post(`${this.baseURL}/api/jwt/logout/`, {}, {
+                    headers: headers
                 })
+                console.log('✅ [AuthService] Logout API call successful:', response.data)
+            } catch (apiError) {
+                console.error('❌ [AuthService] Logout API call failed:', apiError.response?.status, apiError.response?.data || apiError.message)
+                // Continue with cleanup even if API call fails
             }
         } catch (error) {
-            console.warn('Logout API call failed, but continuing with local cleanup:', error)
+            console.error('❌ [AuthService] Logout error:', error)
+            console.warn('⚠️ [AuthService] Logout API call failed, but continuing with local cleanup:', error)
         } finally {
             // Clear all stored data (don't auto-redirect, let logout flow handle it)
             this.clearAuthData(false)
@@ -864,6 +889,7 @@ class AuthService {
             this.isLoggingOut = false
             this.isRefreshing = false
             this.failedRefreshAttempts = 0
+            console.log('🧹 [AuthService] Logout cleanup completed')
         }
     }
  
@@ -876,6 +902,8 @@ class AuthService {
     clearAuthData(shouldRedirect = true) {
         // Stop periodic refresh
         this.stopPeriodicTokenRefresh()
+        // Stop periodic session check
+        this.stopPeriodicSessionCheck()
        
         // Clear tokens
         localStorage.removeItem('access_token')
@@ -1001,6 +1029,77 @@ class AuthService {
             console.log('🛑 Periodic token refresh stopped')
         }
     }
+
+    startPeriodicSessionCheck() {
+        // Check if we have tokens before starting session check
+        const accessToken = localStorage.getItem('access_token')
+        
+        if (!accessToken) {
+            console.log('⚠️ No access token found, skipping periodic session check')
+            return
+        }
+        
+        // Clear any existing interval
+        this.stopPeriodicSessionCheck()
+        
+        // Check session every 5 seconds (for multi-session management)
+        // This detects when user logs in from another location
+        this.sessionCheckInterval = setInterval(async () => {
+            try {
+                // Check if we still have tokens before attempting verification
+                const currentAccessToken = localStorage.getItem('access_token')
+                
+                if (!currentAccessToken) {
+                    console.log('⚠️ Access token cleared, stopping periodic session check')
+                    this.stopPeriodicSessionCheck()
+                    return
+                }
+                
+                // Verify token - this checks if session is still valid
+                // verifyToken throws on 401, returns false on other errors, returns true on success
+                try {
+                    const isValid = await this.verifyToken()
+                    if (!isValid) {
+                        // Non-401 error (network, etc.) - don't logout, just log
+                        console.warn('⚠️ Session check failed (non-401 error) - will retry')
+                    }
+                    // If isValid is true, session is still valid - do nothing
+                } catch (error) {
+                    // If verification fails with 401, it means session is invalid
+                    if (error.response && error.response.status === 401) {
+                        console.warn('⚠️ Session check returned 401 - session invalidated')
+                        this.handleSessionInvalidated()
+                    } else {
+                        // Other errors (network, etc.) - don't logout, just log
+                        console.warn('⚠️ Session check error (will retry):', error.message)
+                    }
+                }
+            } catch (error) {
+                // Catch any unexpected errors in the outer try block
+                console.error('❌ Unexpected error in periodic session check:', error)
+            }
+        }, 5 * 1000) // Check every 5 seconds
+        
+        console.log('🔐 Periodic session check started (every 5 seconds)')
+    }
+
+    stopPeriodicSessionCheck() {
+        if (this.sessionCheckInterval) {
+            clearInterval(this.sessionCheckInterval)
+            this.sessionCheckInterval = null
+            console.log('🛑 Periodic session check stopped')
+        }
+    }
+
+    handleSessionInvalidated() {
+        console.warn('🚪 Session invalidated - logging out and redirecting to login')
+        // Stop periodic checks to prevent loops
+        this.stopPeriodicSessionCheck()
+        this.stopPeriodicTokenRefresh()
+        
+        // Clear auth data and redirect
+        this.clearAuthData(true)
+    }
  
     async verifyToken() {
         try {
@@ -1008,13 +1107,17 @@ class AuthService {
             if (!token) {
                 return false
             }
- 
+
             const response = await axios.get(`${this.baseURL}/api/jwt/verify/`, {
                 headers: { Authorization: `Bearer ${token}` }
             })
- 
+
             return response.data.status === 'success'
         } catch (error) {
+            // Re-throw error so caller can check status code
+            if (error.response && error.response.status === 401) {
+                throw error
+            }
             console.error('❌ Token verification failed:', error)
             return false
         }
@@ -1234,6 +1337,8 @@ class AuthService {
                 // Start periodic token refresh (same as normal login)
                 console.log('🔄 [AuthService] Starting periodic token refresh for Google SSO user')
                 this.startPeriodicTokenRefresh()
+                // Start periodic session check (for multi-session management)
+                this.startPeriodicSessionCheck()
                 
                 // Verify periodic refresh started
                 setTimeout(() => {

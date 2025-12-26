@@ -549,6 +549,7 @@ import axios from 'axios'
 import { API_ENDPOINTS, API_BASE_URL } from '../../config/api.js'
 import './dataAnalysis.css'
 import aiPrivacyService from '@/services/aiPrivacyService' // NEW: reuse AI privacy metrics
+import moduleAiAnalysisService from '@/services/moduleAiAnalysisService' // NEW: reuse module AI analysis
 
 export default {
   name: 'DataAnalysis',
@@ -756,23 +757,31 @@ export default {
         }
 
         // Fetch module-specific AI analysis (recommendations and miscategorizations)
+        // First try to use cached data from the service
         try {
-          const url = API_ENDPOINTS.MODULE_AI_ANALYSIS(moduleName, frameworkId)
-          const accessToken = localStorage.getItem('access_token')
-          const response = await axios.get(url, {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json'
+          if (moduleAiAnalysisService.hasValidCache(moduleName, frameworkId)) {
+            console.log(`[DataAnalysis] Using cached module AI analysis for ${moduleName}`)
+            const cachedData = moduleAiAnalysisService.getModuleAnalysis(moduleName, frameworkId)
+            if (cachedData?.ai_analysis) {
+              const aiAnalysis = cachedData.ai_analysis
+              moduleRecommendations.value = aiAnalysis.recommendations || []
+              moduleMiscategorizations.value = aiAnalysis.miscategorizations || []
+            } else {
+              moduleRecommendations.value = []
+              moduleMiscategorizations.value = []
             }
-          })
-
-          if (response.data && response.data.status === 'success') {
-            const aiAnalysis = response.data.data?.ai_analysis || {}
-            moduleRecommendations.value = aiAnalysis.recommendations || []
-            moduleMiscategorizations.value = aiAnalysis.miscategorizations || []
           } else {
-            moduleRecommendations.value = []
-            moduleMiscategorizations.value = []
+            // If no cache, fetch from API via service
+            console.log(`[DataAnalysis] No cached module AI analysis for ${moduleName}, fetching from API...`)
+            const moduleData = await moduleAiAnalysisService.fetchModuleAnalysis(moduleName, frameworkId)
+            if (moduleData?.ai_analysis) {
+              const aiAnalysis = moduleData.ai_analysis
+              moduleRecommendations.value = aiAnalysis.recommendations || []
+              moduleMiscategorizations.value = aiAnalysis.miscategorizations || []
+            } else {
+              moduleRecommendations.value = []
+              moduleMiscategorizations.value = []
+            }
           }
         } catch (aiErr) {
           console.error('Error fetching module AI analysis:', aiErr)

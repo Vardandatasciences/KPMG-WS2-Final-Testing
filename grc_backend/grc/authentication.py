@@ -2,6 +2,7 @@ import jwt
 import json
 import logging
 import time
+import uuid
 import requests
 from datetime import datetime, timedelta
 from django.conf import settings
@@ -10,7 +11,7 @@ from django.contrib.auth import authenticate
 from django.core.cache import cache
 from django.core.mail import send_mail
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -83,6 +84,45 @@ def _get_default_framework():
     except Exception as e:
         logger.warning(f"Error getting default framework for logging: {str(e)}")
     return None
+
+def _get_user_session_token(user_id):
+    """Get the active session token for a user"""
+    cache_key = f"user_session_{user_id}"
+    return cache.get(cache_key)
+
+def _set_user_session_token(user_id, session_token):
+    """Set the active session token for a user (expires after 7 days to match refresh token lifetime)"""
+    cache_key = f"user_session_{user_id}"
+    # Cache for 7 days (same as refresh token lifetime)
+    cache.set(cache_key, session_token, 7 * 24 * 60 * 60)
+    logger.debug(f"Session token set for user {user_id}: {session_token}")
+
+def _invalidate_user_session(user_id):
+    """Invalidate the active session for a user (used when logging in from new location)"""
+    cache_key = f"user_session_{user_id}"
+    cache.delete(cache_key)
+    logger.info(f"Session invalidated for user {user_id}")
+
+def _is_session_token_valid(user_id, session_token):
+    """Check if a session token is valid for a user
+    
+    Args:
+        user_id: User ID
+        session_token: Session token to validate (can be None for backward compatibility)
+    
+    Returns:
+        True if session token is valid, False otherwise
+        If session_token is None (old tokens without jti), returns True for backward compatibility
+    """
+    # Backward compatibility: if session_token is None, allow (old tokens without jti)
+    if session_token is None:
+        return True
+    
+    active_session_token = _get_user_session_token(user_id)
+    if active_session_token is None:
+        # No active session exists (user logged out or never logged in with new system)
+        return False
+    return active_session_token == session_token
 
 def _log_failed_login(username, login_type, client_ip, reason, failed_attempts=None, additional_info=None):
     """Log failed login attempt to grc_logs table"""
@@ -468,13 +508,15 @@ JWT_ALGORITHM = 'HS256'
 JWT_ACCESS_TOKEN_LIFETIME = timedelta(hours=1)  # 1 hour
 JWT_REFRESH_TOKEN_LIFETIME = timedelta(days=7)  # 7 days
 
-def generate_jwt_tokens(user, login_time=None):
+def generate_jwt_tokens(user, login_time=None, session_token=None):
     """Generate JWT access and refresh tokens for a user
     
     Args:
         user: User object
         login_time: Optional original login time (for token refresh - preserves original login time)
                     If None, uses current time (for new login)
+        session_token: Optional session token (for multi-session management)
+                      If None, generates a new one (for new login)
     """
     try:
         import time
@@ -486,6 +528,10 @@ def generate_jwt_tokens(user, login_time=None):
         if login_time is None:
             login_time = time.time()  # Store original login time for 5-minute timeout check
         
+        # Generate or use provided session token
+        if session_token is None:
+            session_token = str(uuid.uuid4())
+        
         # Create refresh token
         refresh = RefreshToken()
         refresh['user_id'] = user.UserId
@@ -496,6 +542,7 @@ def generate_jwt_tokens(user, login_time=None):
         refresh['ver'] = latest_version
         refresh['min_ver'] = min_supported
         refresh['login_time'] = login_time  # Store original login time (persists through token refresh)
+        refresh['jti'] = session_token  # Store session token in JWT ID claim
         
         # Create access token
         access_token = refresh.access_token
@@ -507,21 +554,41 @@ def generate_jwt_tokens(user, login_time=None):
         access_token['ver'] = latest_version
         access_token['min_ver'] = min_supported
         access_token['login_time'] = login_time  # Store original login time
+        access_token['jti'] = session_token  # Store session token in JWT ID claim
         
         return {
             'access': str(access_token),
             'refresh': str(refresh),
             'access_token_expires': access_token.current_time + JWT_ACCESS_TOKEN_LIFETIME,
-            'refresh_token_expires': refresh.current_time + JWT_REFRESH_TOKEN_LIFETIME
+            'refresh_token_expires': refresh.current_time + JWT_REFRESH_TOKEN_LIFETIME,
+            'session_token': session_token
         }
     except Exception as e:
         logger.error(f"Error generating JWT tokens: {str(e)}")
         raise
 
-def verify_jwt_token(token):
-    """Verify and decode JWT token"""
+def verify_jwt_token(token, check_session=True):
+    """Verify and decode JWT token
+    
+    Args:
+        token: JWT token string
+        check_session: If True, also validates session token (multi-session management)
+    """
     try:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        
+        # If check_session is enabled, validate session token
+        if check_session:
+            user_id = payload.get('user_id')
+            session_token = payload.get('jti')  # JWT ID claim contains session token
+            
+            # Only check session if both user_id and session_token exist
+            # If session_token is None (old tokens), _is_session_token_valid returns True for backward compatibility
+            if user_id:
+                if not _is_session_token_valid(user_id, session_token):
+                    logger.warning(f"Session token invalid for user {user_id} - session may have been invalidated")
+                    return None  # Session token doesn't match active session
+        
         return payload
     except jwt.ExpiredSignatureError:
         logger.warning("JWT token has expired")
@@ -926,17 +993,38 @@ def jwt_login(request):
         cache.delete(user_cache_key)
         cache.delete(lockout_cache_key)
         
-        # Activate user on successful login (set IsActive to 'Y')
+        # Update last login time and activate user on successful login
+        from django.utils import timezone
+        fields_to_update = ['last_login']
+        user.last_login = timezone.now()
+        
         if user.IsActive != 'Y':
             user.IsActive = 'Y'
-            user.save(update_fields=['IsActive'])
+            fields_to_update.append('IsActive')
             logger.info(f"✅ User {user.UserName} (ID: {user.UserId}) activated on first login")
         
-        # Log password usage on login
-        log_password_action(user, 'login', request=request)
+        user.save(update_fields=fields_to_update)
+        logger.info(f"✅ User {user.UserName} (ID: {user.UserId}) last login updated: {user.last_login}")
         
-        # Generate JWT tokens
-        tokens = generate_jwt_tokens(user)
+        # Note: Password logs are only saved when password is changed, not on every login
+        # Login activities are logged to grc_logs instead
+        
+        # ========================================
+        # MULTI-SESSION MANAGEMENT - INVALIDATE PREVIOUS SESSION
+        # ========================================
+        # Invalidate any existing session for this user (force logout from other locations)
+        _invalidate_user_session(user.UserId)
+        
+        # Generate a new session token for this login
+        session_token = str(uuid.uuid4())
+        
+        # Store the new session token in cache
+        _set_user_session_token(user.UserId, session_token)
+        
+        logger.info(f"🔐 New session token generated for user {user.UserName} (ID: {user.UserId}): {session_token}")
+        
+        # Generate JWT tokens with the new session token
+        tokens = generate_jwt_tokens(user, session_token=session_token)
         
         # Store user info in session for compatibility with consistent naming
         import time
@@ -959,10 +1047,12 @@ def jwt_login(request):
         logger.info(f"JWT login successful for user {user.UserName} (ID: {user.UserId}) using {login_type}")
         logger.info(f"🔑 Session key created: {request.session.session_key}")
         
-        # Log successful login to grc_logs
+        # Log successful login to grc_logs - DIRECT DATABASE SAVE (fallback if send_log fails)
+        log_saved = False
         try:
             from .routes.Global.logging_service import send_log
-            send_log(
+            logger.info(f"🔍 Attempting to log successful login for user {user.UserName} (ID: {user.UserId})")
+            log_id = send_log(
                 module='Authentication',
                 actionType='LOGIN_SUCCESS',
                 description=f'User {user.UserName} (ID: {user.UserId}) logged in successfully using JWT with {login_type}',
@@ -979,9 +1069,49 @@ def jwt_login(request):
                 },
                 frameworkId=user.FrameworkId.FrameworkId if user.FrameworkId else None
             )
+            if log_id:
+                logger.info(f"✅ Successfully logged login to grc_logs with ID: {log_id}")
+                log_saved = True
+            else:
+                logger.warning(f"⚠️  send_log returned None for user {user.UserName} - trying direct database save")
         except Exception as log_error:
-            logger.error(f"Error logging successful JWT login to grc_logs: {str(log_error)}")
-            # Don't fail login if logging fails
+            logger.error(f"❌ Error in send_log: {str(log_error)}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+        
+        # FALLBACK: Direct database save if send_log failed
+        if not log_saved:
+            try:
+                logger.info(f"🔄 Attempting direct database save for login log")
+                framework = _get_default_framework()
+                if framework:
+                    log_entry = GRCLog(
+                        Module='Authentication',
+                        ActionType='LOGIN_SUCCESS',
+                        Description=f'User {user.UserName} (ID: {user.UserId}) logged in successfully using JWT with {login_type}',
+                        UserId=str(user.UserId),
+                        UserName=user.UserName,
+                        LogLevel='INFO',
+                        IPAddress=client_ip,
+                        FrameworkId=framework,
+                        AdditionalInfo={
+                            'login_type': login_type,
+                            'license_verified': True,
+                            'mfa_enabled': mfa_enabled,
+                            'user_activated': user_was_inactive,
+                            'auth_method': 'JWT',
+                            'logged_via': 'direct_database_save'
+                        }
+                    )
+                    log_entry.save()
+                    logger.info(f"✅ DIRECT SAVE SUCCESS: Logged login to grc_logs with ID: {log_entry.LogId}")
+                else:
+                    logger.error(f"❌ Cannot save login log: No framework available")
+            except Exception as direct_save_error:
+                logger.error(f"❌ CRITICAL: Direct database save also failed: {str(direct_save_error)}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
+                # Don't fail login if logging fails
         
         # Check if user has accepted consent
         # Handle both string and potential null/None values
@@ -1064,9 +1194,21 @@ def jwt_refresh(request):
                 import time
                 old_login_time = time.time()  # Fallback for old tokens without login_time
             
-            # Generate new tokens with preserved login_time (before blacklisting old token)
+            # Preserve session token from old token (for multi-session management)
+            # This ensures the same session continues after token refresh
+            old_session_token = refresh.get('jti')
+            if old_session_token:
+                # Verify the old session token is still valid (user hasn't logged in elsewhere)
+                if not _is_session_token_valid(user_id, old_session_token):
+                    logger.warning(f"Session token invalid during refresh for user {user_id} - user logged in elsewhere")
+                    return Response({
+                        'status': 'error',
+                        'message': 'Session invalidated. Please log in again.'
+                    }, status=status.HTTP_401_UNAUTHORIZED)
+            
+            # Generate new tokens with preserved login_time and session_token (before blacklisting old token)
             # This ensures we have valid tokens even if blacklisting fails
-            tokens = generate_jwt_tokens(user, login_time=old_login_time)
+            tokens = generate_jwt_tokens(user, login_time=old_login_time, session_token=old_session_token)
             
             # IMPORTANT: Blacklist the old refresh token AFTER generating new tokens
             # This prevents token reuse while ensuring we have new tokens ready
@@ -1112,19 +1254,31 @@ def jwt_refresh(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
+@authentication_classes([])  # Disable authentication to allow logout with expired/invalid tokens
+@permission_classes([AllowAny])  # Allow logout even without valid token to ensure logging
 def jwt_logout(request):
     """JWT Logout endpoint"""
+    print("=" * 80)
+    print("🚪🚪🚪 JWT LOGOUT FUNCTION CALLED 🚪🚪🚪")
+    print("=" * 80)
+    logger.info("=" * 80)
+    logger.info("🚪 JWT LOGOUT CALLED")
+    logger.info("=" * 80)
     try:
+        print("[DEBUG] JWT Logout: Starting logout process...")
         # Get user info before clearing session
         user_id = None
         username = 'Unknown'
         client_ip = request.META.get('REMOTE_ADDR', 'unknown')
         framework_id = None
         
+        logger.info(f"Initial state - IP: {client_ip}, Session keys: {list(request.session.keys())}")
+        
         # Try to get user from token or session
         try:
             # Try to get user from JWT token
             auth_header = request.headers.get('Authorization')
+            logger.info(f"Authorization header present: {auth_header is not None}")
             if auth_header and auth_header.startswith('Bearer '):
                 token = auth_header.split(' ')[1]
                 user = get_user_from_token(token)
@@ -1132,41 +1286,183 @@ def jwt_logout(request):
                     user_id = user.UserId
                     username = user.UserName
                     framework_id = user.FrameworkId.FrameworkId if user.FrameworkId else None
-        except Exception:
-            pass
+                    logger.info(f"✅ Got user from token: {username} (ID: {user_id})")
+        except Exception as token_error:
+            logger.warning(f"Could not get user from token: {str(token_error)}")
         
-        # Fallback to session if token doesn't work
+        # Fallback to session if token doesn't work - CHECK ALL POSSIBLE SESSION KEYS
         if not user_id:
-            user_id = request.session.get('user_id')
-            username = request.session.get('grc_username', 'Unknown')
+            logger.info("Token method failed, trying session...")
+            # Try multiple session keys to find user_id
+            user_id = (request.session.get('user_id') or 
+                      request.session.get('grc_user_id') or
+                      request.session.get('grc_username'))  # Sometimes username is stored as ID
+            
+            # Try to get username from multiple session keys
+            username = (request.session.get('grc_username') or 
+                       request.session.get('username') or 
+                       'Unknown')
+            
+            logger.info(f"Session data - user_id: {user_id}, username: {username}")
+            logger.info(f"All session keys: {list(request.session.keys())}")
+            
             if user_id:
                 try:
-                    user = Users.objects.get(UserId=user_id)
+                    # If user_id is actually a username string, try to find user by username
+                    if isinstance(user_id, str) and not user_id.isdigit():
+                        user = Users.objects.get(UserName=user_id)
+                        user_id = user.UserId
+                        username = user.UserName
+                    else:
+                        user = Users.objects.get(UserId=user_id)
+                        username = user.UserName
+                    
                     framework_id = user.FrameworkId.FrameworkId if user.FrameworkId else None
-                    username = user.UserName
-                except Users.DoesNotExist:
-                    pass
+                    logger.info(f"✅ Got user from session: {username} (ID: {user_id})")
+                except (Users.DoesNotExist, ValueError, TypeError) as e:
+                    logger.warning(f"User ID {user_id} from session not found in database: {str(e)}")
+                    # Try one more time with just the user_id as integer
+                    try:
+                        if user_id and str(user_id).isdigit():
+                            user = Users.objects.get(UserId=int(user_id))
+                            username = user.UserName
+                            framework_id = user.FrameworkId.FrameworkId if user.FrameworkId else None
+                            logger.info(f"✅ Got user after retry: {username} (ID: {user_id})")
+                    except:
+                        pass
         
-        # Log logout to grc_logs before clearing session
+        logger.info(f"Final user info - user_id: {user_id}, username: {username}, framework_id: {framework_id}")
+        print(f"[DEBUG] Final user info - user_id: {user_id}, username: {username}, framework_id: {framework_id}")
+        
+        # Invalidate session token for multi-session management
         if user_id:
             try:
+                _invalidate_user_session(user_id)
+                logger.info(f"🔐 Session token invalidated for user {user_id} on logout")
+            except Exception as session_error:
+                logger.warning(f"Error invalidating session token: {str(session_error)}")
+        
+        # Log logout to grc_logs before clearing session - ALWAYS LOG, even if user_id is None
+        log_saved = False
+        logger.info("=" * 80)
+        logger.info("🔍 STARTING LOGOUT LOGGING PROCESS")
+        logger.info(f"User info - user_id: {user_id}, username: {username}, IP: {client_ip}")
+        logger.info("=" * 80)
+        print("=" * 80)
+        print("🔍 STARTING LOGOUT LOGGING PROCESS")
+        print(f"User info - user_id: {user_id}, username: {username}, IP: {client_ip}")
+        print("=" * 80)
+        
+        # ALWAYS try to log, even if user_id is None
+        print("[DEBUG] About to enter logging block...")
+        if True:  # Changed from "if user_id:" to always log
+            print("[DEBUG] Inside logging block - attempting send_log...")
+            try:
                 from .routes.Global.logging_service import send_log
-                send_log(
+                logger.info(f"🔍 Attempting to log logout for user {username} (ID: {user_id})")
+                print(f"[DEBUG] 🔍 Attempting to log logout for user {username} (ID: {user_id})")
+                log_id = send_log(
                     module='Authentication',
                     actionType='LOGOUT',
-                    description=f'User {username} (ID: {user_id}) logged out successfully (JWT)',
-                    userId=str(user_id),
-                    userName=username,
+                    description=f'User {username} (ID: {user_id or "Unknown"}) logged out successfully (JWT)',
+                    userId=str(user_id) if user_id else None,
+                    userName=username if username != 'Unknown' else None,
                     logLevel='INFO',
                     ipAddress=client_ip,
-                    additionalInfo={'auth_method': 'JWT'},
+                    additionalInfo={'auth_method': 'JWT', 'user_id_found': user_id is not None},
                     frameworkId=framework_id
                 )
-                logger.info(f"JWT logout logged to grc_logs for user {username} (ID: {user_id})")
+                print(f"[DEBUG] send_log returned: {log_id}")
+                if log_id is not None:
+                    logger.info(f"✅ Successfully logged logout to grc_logs with ID: {log_id}")
+                    print(f"[DEBUG] ✅ Successfully logged logout to grc_logs with ID: {log_id}")
+                    log_saved = True
+                else:
+                    logger.warning(f"⚠️  send_log returned None for logout - trying direct database save")
+                    print(f"[DEBUG] ⚠️  send_log returned None for logout - trying direct database save")
             except Exception as log_error:
-                logger.error(f"Error logging JWT logout to grc_logs: {str(log_error)}")
-                # Don't fail logout if logging fails
+                logger.error(f"❌ Error in send_log for logout: {str(log_error)}")
+                print(f"[DEBUG] ❌ Error in send_log for logout: {str(log_error)}")
+                import traceback
+                error_trace = traceback.format_exc()
+                logger.error(f"Traceback: {error_trace}")
+                print(f"[DEBUG] Traceback: {error_trace}")
+            
+            # FALLBACK: Direct database save if send_log failed
+            print(f"[DEBUG] log_saved status: {log_saved}")
+            if not log_saved:
+                print("[DEBUG] Entering direct database save fallback...")
+                try:
+                    logger.info(f"🔄 Attempting direct database save for logout log")
+                    print(f"[DEBUG] 🔄 Attempting direct database save for logout log")
+                    framework = _get_default_framework()
+                    print(f"[DEBUG] Framework retrieved: {framework}")
+                    if framework:
+                        print(f"[DEBUG] Framework found: ID={framework.FrameworkId}, Name={framework.FrameworkName}")
+                        print(f"[DEBUG] Creating GRCLog entry with:")
+                        print(f"  - Module: Authentication")
+                        print(f"  - ActionType: LOGOUT")
+                        print(f"  - UserId: {user_id} (type: {type(user_id)})")
+                        print(f"  - UserName: {username}")
+                        print(f"  - FrameworkId: {framework.FrameworkId}")
+                        print(f"  - IPAddress: {client_ip}")
+                        
+                        log_entry = GRCLog(
+                            Module='Authentication',
+                            ActionType='LOGOUT',
+                            Description=f'User {username} (ID: {user_id or "Unknown"}) logged out successfully (JWT)',
+                            UserId=str(user_id) if user_id else None,
+                            UserName=username if username != 'Unknown' else None,
+                            LogLevel='INFO',
+                            IPAddress=client_ip,
+                            FrameworkId=framework,
+                            AdditionalInfo={
+                                'auth_method': 'JWT',
+                                'logged_via': 'direct_database_save',
+                                'user_id_found': user_id is not None
+                            }
+                        )
+                        print(f"[DEBUG] GRCLog object created, about to save...")
+                        log_entry.save()
+                        print(f"[DEBUG] ✅ GRCLog.save() called successfully, LogId: {log_entry.LogId}")
+                        
+                        # Verify the log was saved with user_id
+                        try:
+                            saved_log = GRCLog.objects.get(LogId=log_entry.LogId)
+                            logger.info(f"✅ DIRECT SAVE SUCCESS: Logged logout to grc_logs with ID: {log_entry.LogId}")
+                            logger.info(f"✅ VERIFIED: Saved log has UserId={saved_log.UserId}, UserName={saved_log.UserName}")
+                            print(f"[DEBUG] ✅ VERIFIED: Saved log has UserId={saved_log.UserId}, UserName={saved_log.UserName}")
+                            log_saved = True
+                            print(f"[LOGOUT LOG] ✅ Saved logout log with ID: {log_entry.LogId} for user {username} (ID: {user_id})")
+                        except Exception as verify_error:
+                            print(f"[DEBUG] ❌ Verification failed: {str(verify_error)}")
+                            logger.error(f"❌ Verification failed: {str(verify_error)}")
+                    else:
+                        logger.error(f"❌ Cannot save logout log: No framework available")
+                        print(f"[DEBUG] ❌ Cannot save logout log: No framework available")
+                except Exception as direct_save_error:
+                    logger.error(f"❌ CRITICAL: Direct database save for logout also failed: {str(direct_save_error)}")
+                    print(f"[DEBUG] ❌ CRITICAL: Direct database save for logout also failed: {str(direct_save_error)}")
+                    import traceback
+                    error_trace = traceback.format_exc()
+                    logger.error(f"Traceback: {error_trace}")
+                    print(f"[DEBUG] Traceback: {error_trace}")
+                    print(f"[LOGOUT LOG ERROR] {str(direct_save_error)}")
         
+        print(f"[DEBUG] Final log_saved status: {log_saved}")
+        if not log_saved:
+            logger.error(f"❌❌❌ CRITICAL WARNING: Logout log was NOT saved to database!")
+            print(f"[DEBUG] ❌❌❌ CRITICAL WARNING: Logout log was NOT saved to database!")
+            print(f"[LOGOUT LOG ERROR] ❌ Failed to save logout log - check Django logs for details")
+        else:
+            logger.info("=" * 80)
+            logger.info("✅ LOGOUT LOGGING COMPLETED SUCCESSFULLY")
+            logger.info("=" * 80)
+            print("=" * 80)
+            print("✅ LOGOUT LOGGING COMPLETED SUCCESSFULLY")
+            print("=" * 80)
+        
+        print("[DEBUG] About to clear session data...")
         # Clear session data
         request.session.flush()
         

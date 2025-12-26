@@ -36,6 +36,7 @@
 import logo from '../assets/RiskaVaire.png'
 import axios from 'axios'
 import { API_ENDPOINTS } from '../config/api.js'
+import authService from '../services/authService.js'
 
 export default {
   name: 'GlobalNavbar',
@@ -107,24 +108,37 @@ export default {
       this.fetchUnreadCount()
       this.pollInterval = setInterval(this.fetchUnreadCount, 30000) // Poll every 30 seconds instead of 10
     },
-    logout() {
-      // Clear authentication data
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('user_id')
-      localStorage.removeItem('is_logged_in')
-      localStorage.removeItem('user_email')
-      localStorage.removeItem('user_name')
-      
-      // Stop notification polling
-      if (this.pollInterval) {
-        clearInterval(this.pollInterval)
+    async logout() {
+      try {
+        console.log('🔄 [GlobalNavbar] Logout button clicked - starting logout process...')
+        
+        // Stop notification polling
+        if (this.pollInterval) {
+          clearInterval(this.pollInterval)
+          this.pollInterval = null
+          console.log('🛑 [GlobalNavbar] Notification polling stopped')
+        }
+        
+        // Call authService.logout() which will:
+        // 1. Call the backend /api/jwt/logout/ endpoint
+        // 2. Clear all auth data properly
+        // 3. Emit logout events
+        console.log('📞 [GlobalNavbar] Calling authService.logout()...')
+        await authService.logout()
+        
+        console.log('✅ [GlobalNavbar] Logout successful')
+        
+        // Dispatch auth change event
+        window.dispatchEvent(new CustomEvent('authChanged'))
+        
+        // Navigate to login
+        console.log('🔄 [GlobalNavbar] Redirecting to login page...')
+        this.$router.push('/login')
+      } catch (error) {
+        console.error('❌ [GlobalNavbar] Logout error:', error)
+        // Force redirect to login even if logout fails
+        this.$router.push('/login')
       }
-      
-      // Dispatch auth change event
-      window.dispatchEvent(new CustomEvent('authChanged'))
-      
-      // Navigate to login
-      this.$router.push('/login')
     }
   }
 }

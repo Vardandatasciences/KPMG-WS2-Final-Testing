@@ -239,7 +239,16 @@ from .routes.Policy import policy_views
 
 
 
-
+from .routes.Compliance.organizational_controls import (
+    get_framework_controls,
+    get_organizational_control,
+    save_organizational_control,
+    upload_organizational_document,
+    run_control_mapping_audit,
+    delete_organizational_control,
+    get_mapping_statistics,
+    get_frameworks_with_org_stats
+)
 
 
 
@@ -1378,7 +1387,14 @@ compliance_urlpatterns = [
 
     path('compliance-approvals/reviewer/<int:user_id>/', compliance_views.get_compliance_approvals_by_reviewer, name='get_compliance_approvals_by_reviewer'),
 
-    # Additional API endpoints for subpolicy integration
+    path('organizational-controls/framework/<int:framework_id>/', get_framework_controls, name='get_framework_controls'),
+    path('organizational-controls/compliance/<int:compliance_id>/', get_organizational_control, name='get_organizational_control'),
+    path('organizational-controls/save/', save_organizational_control, name='save_organizational_control'),
+    path('organizational-controls/upload/', upload_organizational_document, name='upload_organizational_document'),
+    path('organizational-controls/run-audit/', run_control_mapping_audit, name='run_control_mapping_audit'),
+    path('organizational-controls/delete/<int:org_control_id>/', delete_organizational_control, name='delete_organizational_control'),
+    path('organizational-controls/statistics/<int:framework_id>/', get_mapping_statistics, name='get_mapping_statistics'),
+    path('organizational-controls/frameworks-with-stats/', get_frameworks_with_org_stats, name='get_frameworks_with_org_stats'),# Additional API endpoints for subpolicy integration
 
     path('compliance/policies/<int:policy_id>/subpolicies/add/', add_subpolicy_to_policy, name='api-add-subpolicy-to-policy'),
 

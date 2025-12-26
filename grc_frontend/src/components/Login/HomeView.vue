@@ -1267,6 +1267,7 @@ import treeDataService from '@/services/treeService'; // NEW: Centralized tree d
 import documentDataService from '@/services/documentService'; // NEW: Centralized document data service
 import integrationsDataService from '@/services/integrationsService'; // NEW: Centralized integrations data service
 import aiPrivacyService from '@/services/aiPrivacyService'; // NEW: Centralized AI privacy analysis service
+import moduleAiAnalysisService from '@/services/moduleAiAnalysisService'; // NEW: Centralized module AI analysis service
 import axios from 'axios';
 import { API_ENDPOINTS } from '@/config/api.js';
 import { getFrameworkContent } from '@/config/frameworkContent.js';
@@ -3533,6 +3534,33 @@ onMounted(() => {
     });
 
   window.aiPrivacyDataFetchPromise = aiPrivacyPrefetchPromise;
+  
+  // ==========================================
+  // NEW FEATURE: Prefetch Module AI Analysis on Home Page Load
+  // ==========================================
+  // This will trigger the module AI analysis for all modules in the background,
+  // so that when the user clicks on a module in DataAnalysis page, data is ready instantly.
+  console.log('🚀 [HomeView] Starting Module AI Analysis prefetch for all modules...');
+
+  // Wait for AI privacy analysis to complete first (it provides module scores)
+  const moduleAiPrefetchPromise = aiPrivacyPrefetchPromise
+    .then(() => {
+      // Fetch all module analyses in parallel
+      return moduleAiAnalysisService.fetchAllModuleAnalyses(frameworkForAiPrivacy);
+    })
+    .then(() => {
+      const cacheKey = moduleAiAnalysisService.getCacheKey(frameworkForAiPrivacy);
+      const stats = moduleAiAnalysisService.getCacheStats();
+      const cachedModules = stats.entries.filter(e => e.framework === cacheKey && e.hasData);
+      console.log(
+        `✅ [HomeView] Module AI Analysis prefetch complete - ${cachedModules.length} modules cached`
+      );
+    })
+    .catch((error) => {
+      console.error('❌ [HomeView] Module AI Analysis prefetch failed:', error);
+    });
+
+  window.moduleAiAnalysisDataFetchPromise = moduleAiPrefetchPromise;
   
   // Add click outside handler for popup
   document.addEventListener('click', (event) => {

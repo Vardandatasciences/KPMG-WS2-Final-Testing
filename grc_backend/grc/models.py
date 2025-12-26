@@ -16,16 +16,19 @@ class Users(models.Model):
     Password = models.CharField(max_length=255)
     CreatedAt = models.DateTimeField(auto_now_add=True)
     UpdatedAt = models.DateTimeField(auto_now=True)
-    Email = models.EmailField(max_length=100)
+    # Changed Email from EmailField to CharField to store encrypted data
+    Email = models.CharField(max_length=255)
     FirstName=models.CharField(max_length=255)
     LastName=models.CharField(max_length=255)
-    PhoneNumber=models.CharField(max_length=20, null=True, blank=True)
+    # PhoneNumber and Address will be encrypted before storage
+    PhoneNumber=models.CharField(max_length=255, null=True, blank=True)
     Address=models.TextField(null=True, blank=True)
     IsActive=models.CharField(max_length=1, default='Y', choices=[('Y', 'Yes'), ('N', 'No')])
     DepartmentId=models.CharField(max_length=50)
     session_token=models.CharField(max_length=1045, null=True, blank=True)
     consent_accepted=models.CharField(max_length=1, default='0', choices=[('0', 'Not Accepted'), ('1', 'Accepted')])
     license_key=models.CharField(max_length=100, null=True, blank=True, unique=True)
+    last_login=models.DateTimeField(null=True, blank=True)  # Track last successful login
 
     retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
@@ -33,6 +36,49 @@ class Users(models.Model):
     
     def __str__(self):
         return f"User {self.UserId} - {self.UserName}"
+    
+    def save(self, *args, **kwargs):
+        """
+        Override save to encrypt sensitive fields (Email, PhoneNumber, Address) before storing.
+        Handles both new data and updates, with backward compatibility for existing plain text data.
+        """
+        # Import encryption service
+        from .utils.data_encryption import encrypt_data, is_encrypted_data
+        
+        # Encrypt Email if not already encrypted
+        if self.Email:
+            if not is_encrypted_data(self.Email):
+                self.Email = encrypt_data(self.Email)
+        
+        # Encrypt PhoneNumber if not already encrypted
+        if self.PhoneNumber:
+            if not is_encrypted_data(self.PhoneNumber):
+                self.PhoneNumber = encrypt_data(self.PhoneNumber)
+        
+        # Encrypt Address if not already encrypted
+        if self.Address:
+            if not is_encrypted_data(self.Address):
+                self.Address = encrypt_data(self.Address)
+        
+        super().save(*args, **kwargs)
+    
+    @property
+    def email_plain(self):
+        """Get decrypted email address"""
+        from .utils.data_encryption import decrypt_data
+        return decrypt_data(self.Email) if self.Email else None
+    
+    @property
+    def phone_plain(self):
+        """Get decrypted phone number"""
+        from .utils.data_encryption import decrypt_data
+        return decrypt_data(self.PhoneNumber) if self.PhoneNumber else None
+    
+    @property
+    def address_plain(self):
+        """Get decrypted address"""
+        from .utils.data_encryption import decrypt_data
+        return decrypt_data(self.Address) if self.Address else None
     
     @property
     def is_active(self):
@@ -62,6 +108,63 @@ class Users(models.Model):
     def get_full_name(self):
         """Django REST Framework compatibility - returns full name"""
         return f"{self.FirstName} {self.LastName}".strip()
+    
+    @classmethod
+    def find_by_email(cls, email):
+        """
+        Find a user by email address. Handles encrypted email fields with backward compatibility.
+        
+        Args:
+            email: Plain text email address to search for
+            
+        Returns:
+            Users object if found, None otherwise
+            
+        Note: This method handles both encrypted and plain text emails in the database.
+        For better performance with large datasets, consider adding an email hash field for searching.
+        """
+        if not email:
+            return None
+        
+        from .utils.data_encryption import encrypt_data, decrypt_data
+        
+        # Method 1: Try direct comparison first (backward compatibility - if database still has plain text)
+        try:
+            user = cls.objects.filter(Email=email).first()
+            if user:
+                # Verify it's actually a match (could be encrypted data that happens to match)
+                # If it's encrypted, decrypt and verify; if plain text, direct comparison already verified
+                if user.Email == email:
+                    return user
+        except:
+            pass
+        
+        # Method 2: Try encrypted search (encrypt the input and search)
+        try:
+            encrypted_email = encrypt_data(email)
+            user = cls.objects.filter(Email=encrypted_email).first()
+            if user:
+                return user
+        except:
+            pass
+        
+        # Method 3: Fallback - iterate through users and decrypt to compare
+        # This is slower but handles edge cases and ensures backward compatibility
+        users = cls.objects.all()
+        email_lower = email.lower().strip()
+        for user in users:
+            if user.Email:
+                try:
+                    # Try to decrypt (if encrypted)
+                    decrypted_email = decrypt_data(user.Email)
+                    if decrypted_email and decrypted_email.lower().strip() == email_lower:
+                        return user
+                except:
+                    # If decryption fails, it might be plain text - try direct comparison
+                    if user.Email.lower().strip() == email_lower:
+                        return user
+        
+        return None
  
 
 
@@ -1024,8 +1127,8 @@ class PasswordLog(models.Model):
     ActionType = models.CharField(max_length=50, choices=[
         ('created', 'Password Created'),
         ('changed', 'Password Changed'),
-        ('reset', 'Password Reset'),
-        ('login', 'Password Used (Login)')
+        ('reset', 'Password Reset')
+        # Note: Login events are logged to grc_logs, not password_logs
     ])
     IPAddress = models.CharField(max_length=45, null=True, blank=True)
     UserAgent = models.TextField(null=True, blank=True)
@@ -3537,3 +3640,88 @@ def upsert_retention_timeline(instance, record_type: str, record_name: str = Non
         print(f"[RETENTION] RetentionTimeline {action} for {record_type}#{rid} (end={timeline.RetentionEndDate})")
     except Exception as e:
         print(f"[RETENTION] RetentionTimeline upsert failed for {record_type}#{getattr(instance, 'pk', None)}: {e}")
+
+class OrganizationalControl(models.Model):
+    """
+    Stores organizational controls mapped to framework compliances.
+    AI audits these against framework controls to determine mapping status.
+    """
+    OrgControlId = models.AutoField(primary_key=True)
+    FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId', related_name='org_controls')
+    PolicyId = models.ForeignKey('Policy', on_delete=models.CASCADE, db_column='PolicyId', null=True, blank=True, related_name='org_controls')
+    SubPolicyId = models.ForeignKey('SubPolicy', on_delete=models.CASCADE, db_column='SubPolicyId', null=True, blank=True, related_name='org_controls')
+    ComplianceId = models.ForeignKey('Compliance', on_delete=models.CASCADE, db_column='ComplianceId', null=True, blank=True, related_name='org_controls')
+   
+    # Organizational Control Content
+    ControlText = models.TextField(null=True, blank=True)  # Manually entered control text
+    ExtractedText = models.TextField(null=True, blank=True)  # Aggregated text from all documents (for AI analysis)
+   
+    # AI Audit Results
+    MappingStatus = models.CharField(max_length=30, choices=[
+        ('not_audited', 'Not Audited'),
+        ('fully_mapped', 'Fully Mapped'),
+        ('partially_mapped', 'Partially Mapped'),
+        ('not_mapped', 'Not Mapped')
+    ], default='not_audited')
+   
+    # AI Reasoning
+    AIAnalysis = models.JSONField(null=True, blank=True)  # Stores detailed AI analysis (includes what_is_satisfying, what_is_left, why_not_mapped)
+    ConfidenceScore = models.FloatField(null=True, blank=True)  # AI confidence 0-100
+   
+    # Metadata
+    CreatedBy = models.ForeignKey('Users', on_delete=models.SET_NULL, null=True, db_column='CreatedBy', related_name='created_org_controls')
+    CreatedAt = models.DateTimeField(auto_now_add=True)
+    UpdatedAt = models.DateTimeField(auto_now=True)
+    LastAuditedAt = models.DateTimeField(null=True, blank=True)
+   
+    # Bulk upload tracking
+    BulkUploadId = models.CharField(max_length=100, null=True, blank=True)  # Groups controls from same bulk upload
+   
+    class Meta:
+        db_table = 'organizational_controls'
+        indexes = [
+            models.Index(fields=['FrameworkId', 'MappingStatus']),
+            models.Index(fields=['ComplianceId']),
+            models.Index(fields=['BulkUploadId']),
+        ]
+   
+    def __str__(self):
+        return f"OrgControl {self.OrgControlId} - {self.MappingStatus}"
+ 
+ 
+class OrganizationalControlDocument(models.Model):
+    """
+    Stores multiple documents for organizational controls.
+    One OrganizationalControl can have multiple documents.
+    """
+    DocumentId = models.AutoField(primary_key=True)
+    OrgControlId = models.ForeignKey(
+        'OrganizationalControl',
+        on_delete=models.CASCADE,
+        db_column='OrgControlId',
+        related_name='documents'
+    )
+   
+    # Document details
+    DocumentName = models.CharField(max_length=255)
+    DocumentPath = models.CharField(max_length=500)
+    DocumentType = models.CharField(max_length=50)  # pdf, docx, txt, etc.
+    FileSize = models.BigIntegerField(null=True, blank=True)  # File size in bytes
+    ExtractedText = models.TextField(null=True, blank=True)  # Text extracted from this specific document
+   
+    # Metadata
+    UploadedBy = models.ForeignKey('Users', on_delete=models.SET_NULL, null=True, db_column='UploadedBy', related_name='uploaded_org_control_docs')
+    UploadedAt = models.DateTimeField(auto_now_add=True)
+    IsPrimary = models.BooleanField(default=False)  # Primary document for AI analysis
+   
+    class Meta:
+        db_table = 'organizational_documents'
+        indexes = [
+            models.Index(fields=['OrgControlId']),
+            models.Index(fields=['OrgControlId', 'IsPrimary']),
+            models.Index(fields=['UploadedBy', 'UploadedAt']),
+        ]
+        ordering = ['-UploadedAt']
+   
+    def __str__(self):
+        return f"Document {self.DocumentId} - {self.DocumentName} (OrgControl {self.OrgControlId.OrgControlId})"
