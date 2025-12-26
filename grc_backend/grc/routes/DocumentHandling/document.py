@@ -275,7 +275,21 @@ def upload_document(request):
                 'success': False,
                 'error': 'Module is required'
             }, status=status.HTTP_400_BAD_REQUEST)
-        
+           # Convert framework name to framework_id if framework is provided
+        framework_id = None
+        if framework:
+            try:
+                from ...models import Framework
+                # Try to find framework by name
+                framework_obj = Framework.objects.filter(FrameworkName=framework).first()
+                if framework_obj:
+                    framework_id = framework_obj.FrameworkId
+                    logger.info(f"✅ Found framework_id {framework_id} for framework '{framework}'")
+                else:
+                    logger.warning(f"⚠️ Framework '{framework}' not found in database")
+            except Exception as e:
+                logger.warning(f"⚠️ Error looking up framework '{framework}': {str(e)}")
+ 
         # Get file extension
         original_filename = uploaded_file.name
         file_extension = os.path.splitext(original_filename)[1]  # includes the dot
@@ -326,7 +340,8 @@ def upload_document(request):
                 file_path=temp_file_path,
                 user_id=user_id,
                 custom_file_name=custom_filename,
-                module=module
+                module=module,
+                framework_id=framework_id
             )
             
             if upload_result.get('success'):
@@ -341,14 +356,26 @@ def upload_document(request):
                         file_op = FileOperations.objects.get(id=operation_id)
                         file_op.file_name = custom_filename
                         file_op.original_name = custom_filename
+                        if framework_id:
+                            from ...models import Framework
+                            try:
+                                framework_obj = Framework.objects.get(FrameworkId=framework_id)
+                                file_op.FrameworkId = framework_obj
+                                logger.info(f"✅ Set FrameworkId {framework_id} for operation {operation_id}")
+                            except Framework.DoesNotExist:
+                                logger.warning(f"⚠️ Framework with ID {framework_id} not found")
+ 
+ 
 
                         # Compute and set retention expiry based on configuration
                         expiry_date = compute_retention_expiry('document_handling', 'document_upload')
                         if expiry_date:
                             file_op.retentionExpiry = expiry_date
-
-                        file_op.save(update_fields=['file_name', 'original_name', 'retentionExpiry'])
-
+                            update_fields = ['file_name', 'original_name', 'retentionExpiry']
+                        if framework_id:
+                            update_fields.append('FrameworkId')
+                        file_op.save(update_fields=update_fields)
+ 
                         # Always attempt to upsert a retention timeline; helper
                         # will no-op if retentionExpiry is not set.
                         # Do not depend on FrameworkId here; helper will

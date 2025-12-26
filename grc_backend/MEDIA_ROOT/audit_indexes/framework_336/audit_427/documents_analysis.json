@@ -1,0 +1,19 @@
+{
+  "framework_id": 336,
+  "audit_id": 427,
+  "last_updated": "2025-12-26T13:17:09.358300",
+  "documents": [
+    {
+      "operation_id": 1526,
+      "s3_key": "vikram.patel_1766735169515_p5ekgz_document_handling_20251226_basel_iii_framework_incident_compliant_dataset_3_1.xlsx",
+      "stored_name": "vikram.patel_1766735169515_p5ekgz_document_handling_20251226_basel_iii_framework_incident_compliant_dataset_3_1.xlsx",
+      "analyzed_at": "2025-12-26T13:17:09.358300",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a snapshot of financial institutions' compliance with regulatory requirements, specifically focusing on tier 1 capital, total assets, leverage ratio, and stress test impact. While it does not directly address all framework elements, it indirectly supports the audit's objective by providing relevant information for assessing management's response to stress testing results.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    }
+  ],
+  "database_data": []
+}

@@ -1,0 +1,994 @@
+{
+  "framework_id": 336,
+  "audit_id": 300,
+  "last_updated": "2025-12-25T14:23:18.239475",
+  "documents": [
+    {
+      "operation_id": 2400,
+      "s3_key": "radha.sharma_1766649229601_umj94d_document_handling_20251225_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766649229601_umj94d_document_handling_20251225_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:06:09.843676",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive view of the banks' capital adequacy under various stress testing scenarios, which directly addresses the audit's objective to ensure accurate and consistent leverage ratio calculations. Although it does not explicitly state critical findings or recommendations, the report may indicate potential capital adequacy issues that require further analysis and mitigation strategies.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 2394,
+      "s3_key": "radha.sharma_1766648759267_2cuxsa_document_handling_20251225_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766648759267_2cuxsa_document_handling_20251225_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:06:19.064904",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which addresses the Minimum Leverage Ratio Monitoring Compliance Audit's objective of ensuring accurate and consistent leverage ratio calculations. Although it does not directly address all framework elements, it provides relevant information on capital adequacy, risk exposure, and stress testing under various scenarios.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 2371,
+      "s3_key": "radha.sharma_1766647604294_6ov35b_document_handling_20251225_basel_iii_framework_policy_partially_compliant_dataset_1.xlsx",
+      "stored_name": "radha.sharma_1766647604294_6ov35b_document_handling_20251225_basel_iii_framework_policy_partially_compliant_dataset_1.xlsx",
+      "analyzed_at": "2025-12-25T14:06:26.397068",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive overview of the financial institution's leverage ratio, highlighting potential risks to its financial stability. It addresses specific compliance requirements related to the Minimum Leverage Ratio Monitoring policy and subpolicy.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 2323,
+      "s3_key": "radha.sharma_1766645094760_yppebs_document_handling_20251225_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766645094760_yppebs_document_handling_20251225_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:06:35.621006",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress test report for several banks, which indirectly addresses the audit's objective of ensuring accurate and consistent leverage ratio calculations. Although it does not directly address the assigned policy (Leverage Ratio Policy) or subpolicy (Minimum Leverage Ratio Monitoring), it touches upon the concept of leverage ratios and their importance in maintaining bank stability.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 2280,
+      "s3_key": "radha.sharma_1766642366212_piifst_document_handling_20251225_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766642366212_piifst_document_handling_20251225_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:06:45.909644",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive overview of stress testing results for several banks, detailing their capital adequacy and leverage ratios under various scenarios. Although it does not explicitly state any critical findings or recommendations, it appears to address some compliance requirements related to leverage ratio monitoring.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 2237,
+      "s3_key": "radha.sharma_1766641632884_vgu1tr_document_handling_20251225_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766641632884_vgu1tr_document_handling_20251225_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:06:57.713758",
+      "relevance_score": 0.85,
+      "relevance_reason": "Document contains detailed stress testing results for several banks under various scenarios, which directly address compliance requirements related to leverage ratio monitoring and capital adequacy.",
+      "matched_policies": [
+        1211
+      ],
+      "matched_subpolicies": [],
+      "matched_compliances": [
+        1789,
+        1796
+      ]
+    },
+    {
+      "operation_id": 2236,
+      "s3_key": "radha.sharma_1766641343901_pqbcnz_document_handling_20251225_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766641343901_pqbcnz_document_handling_20251225_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:07:07.036471",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which indirectly addresses the Minimum Leverage Ratio Monitoring Compliance Audit's objective of ensuring accurate and consistent leverage ratio calculations. Although it does not directly address all framework elements, it provides insights into bank resilience under various market scenarios.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 2217,
+      "s3_key": "radha.sharma_1766640110369_4ay5ee_document_handling_20251225_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766640110369_4ay5ee_document_handling_20251225_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:07:23.339410",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which is relevant to the audit's objective of ensuring accurate and consistent leverage ratio calculations. Although it does not directly address the assigned policy or subpolicy, it addresses some compliance requirements related to risk management and capital adequacy.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 2165,
+      "s3_key": "radha.sharma_1766636925097_lnz3nn_document_handling_20251225_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766636925097_lnz3nn_document_handling_20251225_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:07:42.584702",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress test report for several banks, which partially addresses the audit's objective of ensuring accurate and consistent leverage ratio calculations. Although it does not directly address the assigned policy (Leverage Ratio Policy) or subpolicy (Minimum Leverage Ratio Monitoring), it touches upon the concept of leverage ratio monitoring in its analysis of financial stability under various scenarios.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 2125,
+      "s3_key": "radha.sharma_1766577846128_mxhiqs_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766577846128_mxhiqs_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:07:59.773675",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which indirectly addresses some compliance requirements related to risk management and capital adequacy. However, it does not directly address any specific policies, subpolicies, or compliance requirements listed in the framework.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 2124,
+      "s3_key": "radha.sharma_1766577616869_x6419w_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766577616869_x6419w_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:08:14.134883",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which addresses some compliance requirements related to capital adequacy and leverage ratio monitoring. Although it does not directly address all assigned policies and subpolicies, it indirectly supports the audit's objective by providing insights into the banks' risk management strategies.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 2044,
+      "s3_key": "radha.sharma_1766575922070_l9vjbz_document_handling_20251224_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766575922070_l9vjbz_document_handling_20251224_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:08:22.114480",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress test report for several banks, which indirectly addresses some compliance requirements related to risk management and capital adequacy. Although it does not directly address the audit's objective of ensuring accurate leverage ratio calculations, it provides valuable insights into the financial health and risk profiles of the banks under review.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 2038,
+      "s3_key": "radha.sharma_1766575249092_aefzet_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766575249092_aefzet_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:08:33.926775",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which directly addresses compliance requirements related to leverage ratio monitoring and risk management. Specifically, it highlights potential vulnerabilities in the banks' financial positions under severe market conditions, which aligns with the audit's objective of ensuring accurate and consistent leverage ratio calculations.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 2029,
+      "s3_key": "radha.sharma_1766574905749_7wogvf_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766574905749_7wogvf_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:08:46.583996",
+      "relevance_score": 0.85,
+      "relevance_reason": "Document contains detailed stress testing report that directly addresses compliance requirements for leverage ratio monitoring and capital adequacy.",
+      "matched_policies": [
+        1211
+      ],
+      "matched_subpolicies": [],
+      "matched_compliances": [
+        1796,
+        1799
+      ]
+    },
+    {
+      "operation_id": 2023,
+      "s3_key": "radha.sharma_1766574190462_2q0ahz_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766574190462_2q0ahz_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:09:00.488287",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress test report for several banks, which addresses the audit's objective of ensuring accurate and consistent leverage ratio calculations. Although it does not directly address all framework elements, it provides relevant information on risk exposure, leverage ratios, and stress testing, which are important aspects of the Basel III Framework.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 2006,
+      "s3_key": "radha.sharma_1766572641288_wlcllg_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766572641288_wlcllg_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:09:19.330897",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive stress testing report for multiple banks, which addresses some of the compliance requirements related to risk management and capital adequacy. Although it does not directly address all framework elements, it indirectly supports the audit's objective by providing insights into the banks' risk exposure and capital adequacy under various scenarios.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 2000,
+      "s3_key": "radha.sharma_1766570120951_cjrxsd_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766570120951_cjrxsd_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:09:37.415281",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive stress testing report for several banks, which addresses some of the compliance requirements related to leverage ratio monitoring and risk management. Although it does not directly address all framework elements, it provides relevant information on stress testing results, which can be useful in assessing the bank's ability to withstand various stress scenarios.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1993,
+      "s3_key": "radha.sharma_1766569741122_fcuvl0_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766569741122_fcuvl0_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:09:47.352343",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which directly addresses compliance requirements related to leverage ratio monitoring and capital adequacy. Specifically, it discusses potential risks and vulnerabilities in Tier 1 capital and total exposure, which aligns with the audit's objective of ensuring accurate and consistent calculations.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1985,
+      "s3_key": "radha.sharma_1766565120801_fnn3bi_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766565120801_fnn3bi_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:09:56.750254",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which addresses the audit's objective of ensuring accurate and consistent leverage ratio calculations. Although it does not directly address all assigned policies and subpolicies, it indirectly supports the Minimum Leverage Ratio Monitoring policy by providing insights into capital adequacy under various scenarios.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1976,
+      "s3_key": "radha.sharma_1766564805278_y4f1w7_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766564805278_y4f1w7_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:10:05.899779",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive stress testing report for several banks, which indirectly addresses some of the compliance requirements related to risk management and capital adequacy. Although it does not directly address all the policies, subpolicies, or compliance requirements listed above, it provides valuable insights into the banks' financial stability under various scenarios.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1947,
+      "s3_key": "radha.sharma_1766564309858_klctc8_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766564309858_klctc8_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:10:15.767747",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive stress testing report for several banks, which directly addresses compliance requirements related to leverage ratio monitoring and capital adequacy. Specifically, it highlights the importance of maintaining adequate capital buffers to withstand potential shocks, which aligns with the audit's objective.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1940,
+      "s3_key": "radha.sharma_1766564008135_qya55o_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766564008135_qya55o_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:10:25.268389",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a detailed stress testing report for several banks, which directly addresses compliance requirements related to leverage ratio monitoring and capital adequacy. Specifically, it highlights potential vulnerabilities in the banks' balance sheets during severe market shocks or economic downturns.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1931,
+      "s3_key": "radha.sharma_1766563468347_l2ypnw_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766563468347_l2ypnw_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:10:34.903052",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which directly addresses compliance requirements related to leverage ratio monitoring and risk management under Basel III framework.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1920,
+      "s3_key": "radha.sharma_1766561966069_n0ee4q_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766561966069_n0ee4q_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:10:42.295964",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which directly addresses the audit's objective of ensuring accurate and consistent leverage ratio calculations. Although it does not specifically address all assigned policies and subpolicies, it touches on some relevant compliance requirements.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1915,
+      "s3_key": "radha.sharma_1766561596452_sed362_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766561596452_sed362_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:10:51.401555",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides stress testing results for several banks, which indirectly addresses the Leverage Ratio Policy and Minimum Leverage Ratio Monitoring Subpolicy. Although it does not explicitly address other compliance requirements, it may provide insights into the banks' risk profiles and potential vulnerabilities under various market conditions.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1910,
+      "s3_key": "radha.sharma_1766561245538_uxl69v_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766561245538_uxl69v_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:11:02.292975",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The stress testing report provides a comprehensive analysis of each bank's ability to withstand various stress scenarios, including Normal, Market Shock, Severe, and Economic Downturn. Although it does not directly address all framework elements, it indirectly addresses several compliance requirements related to leverage ratio monitoring, stress testing, and risk management.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1905,
+      "s3_key": "radha.sharma_1766559503049_hxd86e_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766559503049_hxd86e_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:11:12.565577",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for multiple banks, which addresses some compliance requirements related to leverage ratio and capital adequacy. Although it does not directly address all framework elements, it provides relevant information that can be used to support the audit's objective.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1900,
+      "s3_key": "radha.sharma_1766559194370_4ljoww_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766559194370_4ljoww_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:11:22.207871",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which addresses the audit's objective of ensuring accurate and consistent leverage ratio calculations. Although it does not directly address all assigned policies (Leverage Ratio Policy and Minimum Leverage Ratio Monitoring), it indirectly supports the audit by providing insights into capital adequacy under various scenarios.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1893,
+      "s3_key": "radha.sharma_1766558860040_65066o_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766558860040_65066o_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:11:32.072057",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive overview of stress testing results for several banks, highlighting potential vulnerabilities and areas for improvement. While it does not directly address the assigned policy or subpolicy, it indirectly addresses some compliance requirements related to leverage ratio monitoring and capital adequacy.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1888,
+      "s3_key": "radha.sharma_1766558323426_lfd73d_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766558323426_lfd73d_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:11:41.904641",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which addresses the Minimum Leverage Ratio Monitoring Compliance Audit's objective of ensuring accurate and consistent leverage ratio calculations. Although it doesn't directly address all framework elements, it does provide relevant information on Tier1 Capital, Total Exposure, Leverage Ratio, Stress Scenario, and Stress Result Date for each bank.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1882,
+      "s3_key": "radha.sharma_1766558089305_3mw1j3_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766558089305_3mw1j3_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:11:56.370292",
+      "relevance_score": 0.85,
+      "relevance_reason": "Document provides a comprehensive stress testing report that addresses compliance requirements for leverage ratio monitoring and reporting.",
+      "matched_policies": [
+        1211
+      ],
+      "matched_subpolicies": [],
+      "matched_compliances": [
+        1796
+      ]
+    },
+    {
+      "operation_id": 1877,
+      "s3_key": "radha.sharma_1766557916453_vqedbf_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766557916453_vqedbf_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:12:09.179861",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for various banks, which directly addresses compliance requirements related to leverage ratio monitoring and risk management. Specifically, it highlights the impact of different stress scenarios on financial stability, which aligns with the audit's objective of ensuring accurate and consistent calculations of the minimum leverage ratio.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1872,
+      "s3_key": "radha.sharma_1766557684102_1wj6ml_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766557684102_1wj6ml_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:12:22.871235",
+      "relevance_score": 0.85,
+      "relevance_reason": "Document provides a comprehensive stress testing report that indirectly addresses compliance requirements related to leverage ratio monitoring.",
+      "matched_policies": [
+        1211
+      ],
+      "matched_subpolicies": [],
+      "matched_compliances": [
+        1796,
+        1799
+      ]
+    },
+    {
+      "operation_id": 1867,
+      "s3_key": "radha.sharma_1766557186277_wkqqvb_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766557186277_wkqqvb_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:12:38.696525",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides detailed information on stress testing results for several banks, which directly addresses compliance requirements related to leverage ratio monitoring and risk management. Specifically, it highlights potential risks and vulnerabilities in the banks' balance sheets during the stress testing period.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1866,
+      "s3_key": "radha.sharma_1766557085318_lhb62j_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766557085318_lhb62j_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:13:01.714025",
+      "relevance_score": 0.75,
+      "relevance_reason": "The document provides a comprehensive stress testing report for several banks, which addresses some of the compliance requirements related to risk management and capital adequacy.",
+      "matched_policies": [
+        1211
+      ],
+      "matched_subpolicies": [],
+      "matched_compliances": [
+        1796
+      ]
+    },
+    {
+      "operation_id": 1865,
+      "s3_key": "radha.sharma_1766556642445_86mmo6_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766556642445_86mmo6_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:13:23.689778",
+      "relevance_score": 0.45,
+      "relevance_reason": "Document provides a stress testing report that may indirectly address capital adequacy issues, which are related to leverage ratio calculations.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1860,
+      "s3_key": "radha.sharma_1766555488190_1j8b93_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766555488190_1j8b93_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:13:36.422130",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive stress testing report for several banks, which indirectly addresses some of the compliance requirements related to risk management and capital adequacy. However, it does not explicitly address any specific policies or subpolicies assigned to this audit.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1855,
+      "s3_key": "radha.sharma_1766555183889_eug2bs_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766555183889_eug2bs_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:13:43.766104",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which addresses the leverage ratio monitoring compliance audit's objective of ensuring accurate and consistent calculations. Although it does not directly address all framework elements, it touches on some relevant aspects, such as leverage ratios and capital adequacy.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1850,
+      "s3_key": "radha.sharma_1766554101078_5yknnt_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766554101078_5yknnt_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:13:53.624364",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive overview of stress test results for multiple banks, which indirectly addresses the audit's objective of ensuring accurate and consistent leverage ratio calculations. Although it does not explicitly address any policies or subpolicies, it touches upon compliance requirements related to leverage ratio monitoring.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1845,
+      "s3_key": "radha.sharma_1766553735053_plc46t_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766553735053_plc46t_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:14:06.176463",
+      "relevance_score": 0.75,
+      "relevance_reason": "The document provides a stress testing report for several banks, which indirectly addresses the Minimum Leverage Ratio Monitoring Compliance Audit's objective of ensuring accurate and consistent leverage ratio calculations.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": [
+        1796
+      ]
+    },
+    {
+      "operation_id": 1841,
+      "s3_key": "radha.sharma_1766553164508_gkohf8_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766553164508_gkohf8_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:14:18.444499",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive stress testing report for several banks, which directly addresses compliance requirements related to leverage ratio monitoring and capital adequacy. Although it does not explicitly mention specific policies or subpolicies, its content indirectly supports the audit's objective of ensuring accurate leverage ratio calculations.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1838,
+      "s3_key": "radha.sharma_1766551839937_5go6jv_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766551839937_5go6jv_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:14:32.293219",
+      "relevance_score": 0.75,
+      "relevance_reason": "Document provides a comprehensive stress testing report that addresses some compliance requirements related to leverage ratio monitoring and capital adequacy.",
+      "matched_policies": [
+        1211
+      ],
+      "matched_subpolicies": [],
+      "matched_compliances": [
+        1786
+      ]
+    },
+    {
+      "operation_id": 1835,
+      "s3_key": "radha.sharma_1766551180571_m3b2od_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766551180571_m3b2od_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:14:49.097668",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which directly addresses compliance requirements related to capital adequacy and leverage ratio monitoring. Specifically, it highlights potential capital adequacy issues for several banks, which aligns with the audit's objective of ensuring accurate and consistent leverage ratio calculations.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1832,
+      "s3_key": "radha.sharma_1766550911417_dibrhk_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766550911417_dibrhk_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:14:57.307315",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides information relevant to the audit's objective, which is to ensure accurate and consistent leverage ratio calculations. It addresses specific compliance requirements related to leverage ratio monitoring, such as [ID:1295] Minimum Leverage Ratio Monitoring and [ID:1786] Leverage Ratio Compliance.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1828,
+      "s3_key": "radha.sharma_1766550184241_fpv1vk_document_handling_20251224_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766550184241_fpv1vk_document_handling_20251224_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:15:06.605595",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which is relevant to the audit's objective of ensuring accurate and consistent leverage ratio calculations. Although it does not directly address all framework elements, it addresses some compliance requirements that are related to the audit's scope.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1825,
+      "s3_key": "radha.sharma_1766491668057_am97vr_document_handling_20251223_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766491668057_am97vr_document_handling_20251223_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:15:16.467422",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive stress testing report for several banks, which directly addresses compliance requirements related to leverage ratio monitoring and risk management.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1822,
+      "s3_key": "radha.sharma_1766491077771_9ii7qs_document_handling_20251223_basel_iii_framework_incident_compliant_dataset_3_1.xlsx",
+      "stored_name": "radha.sharma_1766491077771_9ii7qs_document_handling_20251223_basel_iii_framework_incident_compliant_dataset_3_1.xlsx",
+      "analyzed_at": "2025-12-25T14:15:26.436769",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a detailed report on stress testing impact, which directly addresses compliance requirements related to leverage ratio monitoring and capital adequacy. Specifically, it addresses Policy ID 1211 (Leverage Ratio Policy), Subpolicy ID 1295 (Minimum Leverage Ratio Monitoring), and Compliance IDs 1789 (Counterparty Credit Risk Derivative Exposure Compliance) and 1796 (Leverage Ratio Compliance).",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1818,
+      "s3_key": "radha.sharma_1766490004583_bgm6c6_document_handling_20251223_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766490004583_bgm6c6_document_handling_20251223_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:15:36.853190",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive stress testing report for several banks, which indirectly addresses the audit's objective of ensuring accurate and consistent leverage ratio calculations. Although it does not explicitly address any specific policies or subpolicies assigned to this audit, it touches on some compliance requirements related to capital adequacy, liquidity risk management, and stress testing.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1815,
+      "s3_key": "radha.sharma_1766489046919_c7kqnn_document_handling_20251223_basel_iii_framework_audit_compliant_dataset_1_1.xlsx",
+      "stored_name": "radha.sharma_1766489046919_c7kqnn_document_handling_20251223_basel_iii_framework_audit_compliant_dataset_1_1.xlsx",
+      "analyzed_at": "2025-12-25T14:15:46.409009",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a detailed breakdown of leverage ratio calculations, compliance status, and critical findings, which directly addresses the audit's objective to ensure accurate and consistent leverage ratio calculations. Specifically, it addresses Compliance IDs 8 (Leverage Ratio Compliance) and 9 (Leverage Ratio Stress Testing & Reporting Compliance), which are relevant to the audit's scope.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1812,
+      "s3_key": "radha.sharma_1766488567445_uu9ut7_document_handling_20251223_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766488567445_uu9ut7_document_handling_20251223_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:15:58.484662",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive overview of each bank's financial health during the specified period, highlighting potential stress points for each bank under different scenarios (MarketShock, Severe, Economic Downturn). Although it does not explicitly state specific recommendations, the data suggests that banks should maintain adequate Tier1 Capital and Leverage Ratios to mitigate potential risks. This information is relevant to the audit's objective of ensuring accurate and consistent leverage ratio calculations.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1808,
+      "s3_key": "radha.sharma_1766488146976_j6q1jf_document_handling_20251223_basel_iii_framework_audit_compliant_dataset_1_1.xlsx",
+      "stored_name": "radha.sharma_1766488146976_j6q1jf_document_handling_20251223_basel_iii_framework_audit_compliant_dataset_1_1.xlsx",
+      "analyzed_at": "2025-12-25T14:16:08.340954",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a structured summary and critical findings related to Tier 1 Capital, Total Assets, Leverage Ratio, and Stress Test Impact Report submissions, which directly addresses compliance requirements for minimum leverage ratio monitoring. Specifically, it highlights potential compliance concerns and suggests further review is necessary to ensure adherence to regulatory requirements.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1806,
+      "s3_key": "radha.sharma_1766486902747_t9vdht_document_handling_20251223_basel_iii_framework_incident_compliant_dataset_1_1.xlsx",
+      "stored_name": "radha.sharma_1766486902747_t9vdht_document_handling_20251223_basel_iii_framework_incident_compliant_dataset_1_1.xlsx",
+      "analyzed_at": "2025-12-25T14:16:17.368703",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress test impact report submission for Tier 1 capital, total assets, leverage ratio, and compliance status, which directly addresses the audit's objective of ensuring accurate and consistent leverage ratio calculations. Specifically, it highlights instances of non-compliance with the leverage ratio threshold, indicating potential risks to financial stability.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1804,
+      "s3_key": "radha.sharma_1766486702390_6vp4n0_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766486702390_6vp4n0_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:16:25.617933",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The stress testing report provides detailed information on each bank's ability to withstand various market and economic shocks, which directly addresses the audit's objective of ensuring accurate and consistent leverage ratio calculations. Specifically, the report highlights the importance of stress testing in assessing a bank's resilience to market and economic shocks, which is relevant to Compliance IDs 8 (Leverage Ratio Stress Testing & Reporting) and 9 (Leverage Ratio Compliance).",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1802,
+      "s3_key": "radha.sharma_1766486250573_g4awao_document_handling_20251223_basel_iii_framework_incident_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766486250573_g4awao_document_handling_20251223_basel_iii_framework_incident_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:16:35.931381",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a detailed stress testing report for several banks, which addresses the audit's objective of ensuring accurate and consistent leverage ratio calculations. Although it doesn't directly address the assigned policy (Leverage Ratio Policy) or subpolicy (Minimum Leverage Ratio Monitoring), it indirectly supports the audit by highlighting potential risks related to leverage ratios exceeding normal thresholds.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1800,
+      "s3_key": "radha.sharma_1766485428403_zvzmd1_document_handling_20251223_basel_iii_framework_audit_compliant_dataset_1_1.xlsx",
+      "stored_name": "radha.sharma_1766485428403_zvzmd1_document_handling_20251223_basel_iii_framework_audit_compliant_dataset_1_1.xlsx",
+      "analyzed_at": "2025-12-25T14:16:47.525439",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress test impact report for a financial institution, which directly addresses compliance requirements related to leverage ratio calculations and reporting. Specifically, it highlights instances where the leverage ratio exceeds the threshold of 0.04, indicating potential non-compliance with regulatory requirements.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1798,
+      "s3_key": "radha.sharma_1766484031168_9bir0t_document_handling_20251223_basel_iii_framework_audit_compliant_only_dataset_1.xlsx",
+      "stored_name": "radha.sharma_1766484031168_9bir0t_document_handling_20251223_basel_iii_framework_audit_compliant_only_dataset_1.xlsx",
+      "analyzed_at": "2025-12-25T14:16:57.476531",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a snapshot of Tier 1 Capital, Total Assets, and Leverage Ratios for multiple entities, which directly addresses the audit's objective of ensuring accurate and consistent leverage ratio calculations. Although it does not explicitly state critical findings or recommendations, it highlights instances where entities failed to meet the Leverage Ratio Threshold (0.04), indicating potential compliance issues that need further analysis.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1796,
+      "s3_key": "radha.sharma_1766483700467_938lrw_document_handling_20251223_basel_iii_framework_audit_compliant_dataset_1_1.xlsx",
+      "stored_name": "radha.sharma_1766483700467_938lrw_document_handling_20251223_basel_iii_framework_audit_compliant_dataset_1_1.xlsx",
+      "analyzed_at": "2025-12-25T14:17:06.989467",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a detailed report on Tier 1 Capital, Total Assets, Leverage Ratio, and Compliance Status for various entities. It highlights the importance of maintaining a healthy leverage ratio to ensure compliance with Basel III requirements. Specifically, it addresses the need for entities to maintain a lower leverage ratio threshold (0.04) to ensure compliance.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1794,
+      "s3_key": "radha.sharma_1766482698986_wprpnb_document_handling_20251223_basel_iii_framework_policy_compliant_dataset_1_1.xlsx",
+      "stored_name": "radha.sharma_1766482698986_wprpnb_document_handling_20251223_basel_iii_framework_policy_compliant_dataset_1_1.xlsx",
+      "analyzed_at": "2025-12-25T14:17:20.583203",
+      "relevance_score": 0.75,
+      "relevance_reason": "Document provides a comprehensive overview of Tier 1 Capital, Total Assets, and Leverage Ratios for various entities, which indirectly relates to Policy ID 1215 (Leverage Ratio Policy) and Subpolicy ID 1295 (Minimum Leverage Ratio Monitoring). The document also highlights potential compliance issues due to entities failing to meet the Leverage Ratio Threshold, which aligns with Compliance IDs 8 (Leverage Ratio Compliance) and 9 (Leverage Ratio Stress Testing & Reporting Compliance).",
+      "matched_policies": [
+        1215
+      ],
+      "matched_subpolicies": [
+        1295
+      ],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1792,
+      "s3_key": "radha.sharma_1766482094520_v1cqw3_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766482094520_v1cqw3_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:17:39.169307",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for multiple banks, which addresses the audit's objective of ensuring accurate and consistent leverage ratio calculations. Although it does not directly address all framework elements, it indirectly supports the audit by providing insights into bank resilience under different scenarios.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1790,
+      "s3_key": "radha.sharma_1766480005370_so9vhy_document_handling_20251223_basel_iii_framework_policy_compliant_only_dataset_1.xlsx",
+      "stored_name": "radha.sharma_1766480005370_so9vhy_document_handling_20251223_basel_iii_framework_policy_compliant_only_dataset_1.xlsx",
+      "analyzed_at": "2025-12-25T14:17:57.594677",
+      "relevance_score": 0.85,
+      "relevance_reason": "Document provides a stress test impact report submission for Tier 1 capital, total assets, leverage ratio, and compliance status, directly addressing the audit's objective of ensuring accurate and consistent leverage ratio calculations.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1787,
+      "s3_key": "radha.sharma_1766479894974_0gq7cr_document_handling_20251223_basel_iii_framework_incident_compliant_dataset_3_1.xlsx",
+      "stored_name": "radha.sharma_1766479894974_0gq7cr_document_handling_20251223_basel_iii_framework_incident_compliant_dataset_3_1.xlsx",
+      "analyzed_at": "2025-12-25T14:18:12.930996",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress test impact report for a financial institution, which directly addresses compliance requirements related to leverage ratio monitoring and reporting. Specifically, it addresses Policy ID 1215 (Leverage Ratio Policy), Subpolicy ID 1295 (Minimum Leverage Ratio Monitoring), and Compliance IDs 8 (Leverage Ratio Compliance) and 9 (Leverage Ratio Stress Testing & Reporting Compliance).",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1785,
+      "s3_key": "radha.sharma_1766479755111_johhc0_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766479755111_johhc0_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:18:30.569752",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The stress testing report provides detailed information on each bank's ability to withstand various stress scenarios, which is directly related to the audit's objective of ensuring accurate and consistent leverage ratio calculations. Specifically, the document addresses compliance requirements for minimum leverage ratio monitoring (Compliance ID: 1295) and market risk capital adequacy (Compliance ID: 1215).",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1783,
+      "s3_key": "radha.sharma_1766479496524_8x4ayo_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766479496524_8x4ayo_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:18:42.250198",
+      "relevance_score": 0.7,
+      "relevance_reason": "Document provides a comprehensive stress testing report that addresses some compliance requirements related to risk management and capital adequacy, supporting the audit's objective.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1781,
+      "s3_key": "radha.sharma_1766478622731_fk4xxz_document_handling_20251223_basel_iii_framework_risk_compliant_dataset_1_1.xlsx",
+      "stored_name": "radha.sharma_1766478622731_fk4xxz_document_handling_20251223_basel_iii_framework_risk_compliant_dataset_1_1.xlsx",
+      "analyzed_at": "2025-12-25T14:18:58.631646",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides detailed information on financial institutions' leverage ratio, total assets, and compliance status, which directly addresses the audit's objective of ensuring accurate and consistent leverage ratio calculations. Although it does not explicitly mention any specific policies or subpolicies, it indirectly relates to Policy ID 1211 (Leverage Ratio Policy) and Subpolicy ID 1295 (Minimum Leverage Ratio Monitoring). The document also provides compliance status information, which is relevant to Compliance IDs 8 (Leverage Ratio Compliance), 9 (Leverage Ratio Stress Testing & Reporting Compliance), and 1786 (Leverage Ratio Compliance).",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1777,
+      "s3_key": "radha.sharma_1766478301669_4pua46_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766478301669_4pua46_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:19:16.550958",
+      "relevance_score": 0.75,
+      "relevance_reason": "Document provides a comprehensive view of banks' financial health under different stress scenarios, indirectly addressing audit's objective.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1758,
+      "s3_key": "radha.sharma_1766475998808_9msfis_document_handling_20251223_basel_iii_framework_incident_compliant_dataset_1_1.xlsx",
+      "stored_name": "radha.sharma_1766475998808_9msfis_document_handling_20251223_basel_iii_framework_incident_compliant_dataset_1_1.xlsx",
+      "analyzed_at": "2025-12-25T14:19:34.560094",
+      "relevance_score": 0.85,
+      "relevance_reason": "Document provides a stress test impact report submission for a financial institution, directly addressing compliance requirements related to leverage ratio calculations and capital adequacy.",
+      "matched_policies": [
+        1211
+      ],
+      "matched_subpolicies": [],
+      "matched_compliances": [
+        1788
+      ]
+    },
+    {
+      "operation_id": 1757,
+      "s3_key": "radha.sharma_1766475824986_3gw0ey_document_handling_20251223_basel_iii_framework_incident_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766475824986_3gw0ey_document_handling_20251223_basel_iii_framework_incident_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:19:55.028850",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which directly addresses compliance requirements related to leverage ratio monitoring and capital adequacy. Although it does not explicitly mention the assigned policy or subpolicy, its content indirectly supports the audit's objective of ensuring accurate and consistent leverage ratio calculations.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1756,
+      "s3_key": "radha.sharma_1766475644921_4yu6yf_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766475644921_4yu6yf_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:20:07.326692",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress test report for several banks, which indirectly addresses the Minimum Leverage Ratio Monitoring Compliance Audit objective of ensuring accurate and consistent leverage ratio calculations. Although it does not directly address the assigned policy (Leverage Ratio Policy) or subpolicy (Minimum Leverage Ratio Monitoring), it touches on related concepts such as capital adequacy, risk management, and stress testing.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1755,
+      "s3_key": "radha.sharma_1766472780942_qyof38_document_handling_20251223_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766472780942_qyof38_document_handling_20251223_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:20:17.744251",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which addresses some of the compliance requirements related to capital adequacy and leverage ratio monitoring. Although it does not directly address all policies, subpolicies, or compliance requirements listed above, it provides relevant information that can be used to support the audit's objective.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1739,
+      "s3_key": "radha.sharma_1766471068427_gvadzy_document_handling_20251223_basel_iii_framework_audit_partially_compliant_dataset_1.xlsx",
+      "stored_name": "radha.sharma_1766471068427_gvadzy_document_handling_20251223_basel_iii_framework_audit_partially_compliant_dataset_1.xlsx",
+      "analyzed_at": "2025-12-25T14:20:29.659060",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides detailed financial information, including Tier 1 Capital, Total Assets, Leverage Ratios, and Compliance Status, which directly addresses compliance requirements for minimum leverage ratio monitoring. Specifically, it addresses Policy ID 1215 (Leverage Ratio Policy), Subpolicy ID 1295 (Minimum Leverage Ratio Monitoring), and Compliance IDs 1786 (Leverage Ratio Compliance) and 1796 (Leverage Ratio Stress Testing & Reporting Compliance).",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1720,
+      "s3_key": "radha.sharma_1766470693860_jhxkqp_document_handling_20251223_basel_iii_framework_incident_compliant_dataset_1_1.xlsx",
+      "stored_name": "radha.sharma_1766470693860_jhxkqp_document_handling_20251223_basel_iii_framework_incident_compliant_dataset_1_1.xlsx",
+      "analyzed_at": "2025-12-25T14:20:39.114475",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a compliance status report on Tier 1 Capital, Total Assets, Leverage Ratio, and Stress Test Impact for various entities. It highlights critical findings that several entities have failed to meet the Leverage Ratio Threshold, requiring corrective actions to comply with regulations. This directly addresses the audit's objective of ensuring accurate and consistent leverage ratio calculations.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1705,
+      "s3_key": "radha.sharma_1766470449342_b4f247_document_handling_20251223_basel_iii_framework_incident_compliant_dataset_3_1.xlsx",
+      "stored_name": "radha.sharma_1766470449342_b4f247_document_handling_20251223_basel_iii_framework_incident_compliant_dataset_3_1.xlsx",
+      "analyzed_at": "2025-12-25T14:20:49.963801",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a compliance assessment of Tier 1 Capital, Total Assets, and Leverage Ratios against a specified threshold, which directly addresses the audit's objective to ensure accurate and consistent leverage ratio calculations. Specifically, it highlights non-compliance with the leverage ratio threshold and emphasizes the importance of regular reviews and corrective measures to maintain regulatory adherence.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1680,
+      "s3_key": "radha.sharma_1766470321157_i4glim_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766470321157_i4glim_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:21:00.412497",
+      "relevance_score": 0.7,
+      "relevance_reason": "Document provides stress test results that indirectly address the audit's objective, highlighting variations in banks' resilience to stress scenarios.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1656,
+      "s3_key": "radha.sharma_1766470144483_4lo25f_document_handling_20251223_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766470144483_4lo25f_document_handling_20251223_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:21:11.567761",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides stress test results for multiple banks, evaluating Tier 1 capital, total exposure, leverage ratios, and stress scenarios. While it does not directly address the audit's objective of ensuring accurate and consistent leverage ratio calculations, it indirectly supports this objective by providing insights into the banks' ability to withstand stress scenarios.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1649,
+      "s3_key": "radha.sharma_1766469957613_ok3idq_document_handling_20251223_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766469957613_ok3idq_document_handling_20251223_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:21:21.310212",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides stress test results for multiple banks, which indirectly addresses the audit's objective of ensuring accurate and consistent leverage ratio calculations. Although it does not directly address the assigned policy or subpolicy, it touches upon some compliance requirements related to risk management and reporting.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1631,
+      "s3_key": "radha.sharma_1766469591702_e90n6q_document_handling_20251223_basel_iii_framework_policy_compliant_only_dataset_1.xlsx",
+      "stored_name": "radha.sharma_1766469591702_e90n6q_document_handling_20251223_basel_iii_framework_policy_compliant_only_dataset_1.xlsx",
+      "analyzed_at": "2025-12-25T14:21:32.520977",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a compliance assessment of Tier 1 Capital, Total Assets, and Leverage Ratios against specified thresholds, which directly addresses the audit's objective of ensuring accurate and consistent calculations of leverage ratios. Specifically, it highlights areas needing improvement to meet regulatory requirements, which is relevant to the audit's scope.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1601,
+      "s3_key": "radha.sharma_1766468725205_t18lac_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766468725205_t18lac_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:21:42.967102",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides stress test results for multiple banks, including Tier 1 capital, total exposure, leverage ratios, and stress scenarios. Although it does not directly address the audit's objective of ensuring accurate leverage ratio calculations, it indirectly addresses compliance requirements related to risk management and capital adequacy.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1577,
+      "s3_key": "radha.sharma_1766467817930_89fro2_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766467817930_89fro2_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:21:53.829676",
+      "relevance_score": 0.8,
+      "relevance_reason": "Document provides stress test results that indirectly address compliance requirements related to leverage ratio calculations and risk management.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": [
+        1788,
+        1796
+      ]
+    },
+    {
+      "operation_id": 1544,
+      "s3_key": "radha.sharma_1766467617383_8vi0tw_document_handling_20251223_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766467617383_8vi0tw_document_handling_20251223_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:22:03.689345",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides detailed stress test results for multiple banks, including Tier 1 capital, total exposure, leverage ratios, and outcomes submitted to the regulator. Although it does not directly address the audit's objective of ensuring accurate and consistent leverage ratio calculations, it indirectly addresses several compliance requirements related to risk management and monitoring.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1516,
+      "s3_key": "radha.sharma_1766467401501_mp5fzb_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766467401501_mp5fzb_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:22:15.284300",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides stress test results for multiple banks, assessing their Tier 1 capital, total exposure, leverage ratios, and responses to stress scenarios. While it does not directly address the assigned policy (Leverage Ratio Policy) or subpolicy (Minimum Leverage Ratio Monitoring), it indirectly addresses compliance requirements related to risk management and capital adequacy.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1515,
+      "s3_key": "radha.sharma_1766467228312_3jmrg3_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766467228312_3jmrg3_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:22:26.146840",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides stress test results for multiple banks, including Tier 1 capital, total exposure, leverage ratios, and stress scenarios, which directly addresses compliance requirements related to risk management and capital adequacy.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1514,
+      "s3_key": "radha.sharma_1766466808025_bo68li_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766466808025_bo68li_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:22:36.323772",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides stress test results for multiple banks, evaluating Tier 1 capital, total exposure, leverage ratios, and stress scenarios. While it does not directly address the audit's objective of ensuring accurate Leverage Ratio Calculations, it indirectly addresses some compliance requirements related to risk management and capital adequacy.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1511,
+      "s3_key": "radha.sharma_1766466405143_g1phz5_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766466405143_g1phz5_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:22:46.744834",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides stress test results for multiple banks, evaluating Tier 1 capital, total exposure, leverage ratios, and stress scenarios. While it does not directly address all assigned policies (Leverage Ratio Policy) or subpolicies (Minimum Leverage Ratio Monitoring), it indirectly addresses the audit's objective of ensuring accurate and consistent calculations by providing insights into bank resilience under stress scenarios.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1510,
+      "s3_key": "radha.sharma_1766404975553_wn4xtt_document_handling_20251222_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766404975553_wn4xtt_document_handling_20251222_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:22:57.096483",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides stress test results for multiple banks, assessing Tier 1 capital, total exposure, leverage ratios, and stress scenarios. Although it does not directly address the audit's objective of ensuring accurate and consistent leverage ratio calculations, it indirectly supports this objective by providing insights into the impact of different stress scenarios on banks' leverage ratios.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1509,
+      "s3_key": "radha.sharma_1766404872131_bx3jss_document_handling_20251222_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766404872131_bx3jss_document_handling_20251222_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:23:06.715413",
+      "relevance_score": 0.65,
+      "relevance_reason": "The document provides stress test results for multiple banks, which indirectly addresses the Minimum Leverage Ratio Monitoring compliance requirement (Compliance ID 1295).",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1508,
+      "s3_key": "radha.sharma_1766404680135_anhcsa_document_handling_20251222_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766404680135_anhcsa_document_handling_20251222_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T14:23:18.239440",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides stress test results for multiple banks, which directly addresses compliance requirements related to leverage ratio monitoring and capital adequacy. Although it does not explicitly mention specific policies or subpolicies, it indirectly supports the audit's objective by providing evidence of banks' resilience under different stress scenarios.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    }
+  ],
+  "database_data": []
+}

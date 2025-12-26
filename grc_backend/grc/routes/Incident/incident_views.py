@@ -3678,17 +3678,20 @@ def get_audit_findings(request):
             additionalInfo={"status_filter": status_filter, "search_query": search_query, "framework_id": framework_id}
         )
             
-        # Query incidents with origin = "Audit Finding" or "Compliance Gap"
-        queryset = Incident.objects.filter(Origin__in=['Audit Finding', 'Compliance Gap'])
+        # Query incidents with origin = "Audit Finding" or "AuditFinding" or "Compliance Gap"
+        # Include both variations since database might have either format
+        queryset = Incident.objects.filter(Origin__in=['Audit Finding', 'AuditFinding', 'Compliance Gap'])
         
         # Apply framework filter if provided
         if framework_id:
             print(f"🔍 Filtering audit findings by framework_id: {framework_id}")
-            # Filter by compliance that belongs to the selected framework
+            # Filter by both direct FrameworkId field AND compliance relationship
+            # Use Q objects to combine both filters with OR
             queryset = queryset.filter(
-                ComplianceId__SubPolicy__PolicyId__FrameworkId__FrameworkId=framework_id
-            ).select_related('ComplianceId__SubPolicy__PolicyId__FrameworkId')
-            print(f"✅ Framework filter applied. Found {queryset.count()} audit findings.")
+                Q(FrameworkId=framework_id) |  # Direct FrameworkId field on Incident
+                Q(ComplianceId__SubPolicy__PolicyId__FrameworkId__FrameworkId=framework_id)  # Through compliance relationship
+            ).select_related('ComplianceId__SubPolicy__PolicyId__FrameworkId').distinct()
+            print(f"✅ Framework filter applied (checking both FrameworkId and Compliance path). Found {queryset.count()} audit findings.")
         else:
             print(f"ℹ️ No framework filter applied. Showing all audit findings.")
         
@@ -3736,13 +3739,16 @@ def get_audit_findings(request):
             print(f"  Item {i+1}: IncidentId={item.get('IncidentId')}, Status={item.get('Status')}")
         
         # Calculate summary statistics - use base queryset with framework filter applied
-        base_queryset = Incident.objects.filter(Origin__in=['Audit Finding', 'Compliance Gap'])
+        # Include both "Audit Finding" and "AuditFinding" variations
+        base_queryset = Incident.objects.filter(Origin__in=['Audit Finding', 'AuditFinding', 'Compliance Gap'])
         
         # Apply framework filter to summary statistics if provided
         if framework_id:
+            # Use Q objects to combine both FrameworkId checks with OR
             base_queryset = base_queryset.filter(
-                ComplianceId__SubPolicy__PolicyId__FrameworkId__FrameworkId=framework_id
-            )
+                Q(FrameworkId=framework_id) |  # Direct FrameworkId field on Incident
+                Q(ComplianceId__SubPolicy__PolicyId__FrameworkId__FrameworkId=framework_id)  # Through compliance relationship
+            ).distinct()
         
         total_count = base_queryset.count()
         open_count = base_queryset.filter(Status__in=['Open', None, '']).count()
@@ -3861,7 +3867,7 @@ def export_audit_findings(request):
                     return Response({'error': 'Invalid JSON format in data field'}, status=400)
         else:
             # Fetch audit finding incidents from database with filters
-            audit_findings_query = Incident.objects.filter(Origin__in=['Audit Finding', 'Compliance Gap'])
+            audit_findings_query = Incident.objects.filter(Origin__in=['Audit Finding', 'AuditFinding', 'Compliance Gap'])
             
             # Apply filters from export options
             filters = export_options.get('filters', {})
@@ -4419,7 +4425,7 @@ def audit_finding_incident_detail(request, incident_id):
             return Response({'success': False, 'message': str(e)}, status=400)
         
         # Get the specific incident (audit finding or compliance gap)
-        incident = Incident.objects.get(IncidentId=validated_incident_id, Origin__in=['Audit Finding', 'Compliance Gap'])
+        incident = Incident.objects.get(IncidentId=validated_incident_id, Origin__in=['Audit Finding', 'AuditFinding', 'Compliance Gap'])
         
         # Use the serializer to properly convert the model to JSON-serializable data
         serializer = IncidentSerializer(incident)
@@ -5872,7 +5878,7 @@ def user_audit_findings(request, user_id):
         print(f"🔍 DEBUG: user_audit_findings - Filtering by AssignerId={validated_user_id}")
         incidents = Incident.objects.filter(
             Q(AssignerId=validated_user_id) &  # Filter by AssignerId (the person WHO assigned it)
-            (Q(Origin__in=['Audit Finding', 'Compliance Gap']))
+            (Q(Origin__in=['Audit Finding', 'AuditFinding', 'Compliance Gap']))
         ).exclude(
             Status__in=['Closed', 'Completed', 'Cancelled']
         )
@@ -5929,7 +5935,7 @@ def audit_finding_reviewer_tasks(request, user_id):
         print(f"🔍 DEBUG: audit_finding_reviewer_tasks - Filtering by ReviewerId={validated_user_id}")
         incidents = Incident.objects.filter(
             Q(ReviewerId=validated_user_id) &
-            (Q(Origin__in=['Audit Finding', 'Compliance Gap']))
+            (Q(Origin__in=['Audit Finding', 'AuditFinding', 'Compliance Gap']))
         ).exclude(
             Status__in=['Closed', 'Completed', 'Cancelled']
         )

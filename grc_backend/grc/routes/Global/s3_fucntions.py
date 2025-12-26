@@ -128,6 +128,11 @@ try:
 except ImportError:
     OPENAI_AVAILABLE = False
 
+# Ollama configuration
+OLLAMA_BASE_URL = "http://13.205.15.232:11434"
+OLLAMA_MODEL = "llama3:8b-instruct-q4_K_M"
+OLLAMA_AVAILABLE = True  # Assume available if server is running
+
 # Import Django settings for database configuration
 try:
     from django.conf import settings
@@ -183,6 +188,11 @@ class RenderS3Client:
         """
         self.api_base_url = api_base_url.rstrip('/')
         self.db_pool = None
+        
+        # Track last trigger time for each audit_id to prevent connection pool exhaustion
+        # Key: audit_id, Value: timestamp of last trigger
+        self._last_trigger_time = {}
+        self._trigger_lock = threading.Lock()
         
         # Initialize MySQL connection if config provided
         if mysql_config:
@@ -348,8 +358,8 @@ class RenderS3Client:
             INSERT INTO file_operations 
             (operation_type, user_id, file_name, original_name, stored_name, s3_url, s3_key, s3_bucket,
              file_type, file_size, content_type, export_format, record_count, status, metadata, platform,
-             module, created_at, updated_at) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+             module, FrameworkId, created_at, updated_at) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
             
             now = datetime.datetime.now()
@@ -372,6 +382,7 @@ class RenderS3Client:
                 json.dumps(operation_data.get('metadata', {})),
                 'Direct',
                 convert_safe_string(operation_data.get('module', 'general')),
+                operation_data.get('framework_id'),  # FrameworkId
                 now,
                 now
             )
@@ -694,9 +705,9 @@ class RenderS3Client:
             print(f"ERROR Failed to extract PDF metadata: {str(e)}")
             return metadata
     
-    def _generate_summary_with_openai(self, text: str, metadata: Dict) -> str:
+    def _generate_summary_with_ollama(self, text: str, metadata: Dict) -> str:
         """
-        Generate an intelligent summary of the document using OpenAI GPT-3.5-turbo
+        Generate an intelligent summary of the document using Ollama
         
         Summary approach:
         - Small documents (1-5 pages): Detailed summary with key points
@@ -706,25 +717,11 @@ class RenderS3Client:
         All summaries limited to maximum 10 lines for consistency
         """
         
-        if not OPENAI_AVAILABLE:
-            print("⚠️  OpenAI library not available")
-            return "Summary unavailable: OpenAI library not installed"
+        if not OLLAMA_AVAILABLE:
+            print("⚠️  Ollama not available")
+            return "Summary unavailable: Ollama server not available"
         
         try:
-            # Get OpenAI API key from Django settings
-            api_key = None
-            if DJANGO_SETTINGS_AVAILABLE and hasattr(settings, 'OPENAI_API_KEY'):
-                api_key = settings.OPENAI_API_KEY
-            
-            if not api_key or api_key == 'your-openai-api-key-here':
-                print("⚠️  OpenAI API key not configured")
-                return "Summary unavailable: OpenAI API key not configured"
-            
-            # Initialize OpenAI client
-            client = OpenAI(api_key=api_key)
-            
-            # Always use GPT-3.5-turbo as requested
-            model = 'gpt-3.5-turbo'
             
             # Determine document size and extraction strategy
             page_count = metadata.get('page_count', 0)
@@ -780,32 +777,27 @@ Document Content:
 
 Important: Keep the summary concise, professional, and actionable. Focus on what matters most."""
 
-            print(f"🤖 Generating intelligent summary using {model}...")
+            print(f"🤖 Generating intelligent summary using Ollama ({OLLAMA_MODEL})...")
             print(f"   Document: {page_count} pages ({doc_size}), Extraction: {extraction_strategy}")
             
-            # Call OpenAI API with optimized parameters
-            response = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {
-                        "role": "system", 
-                        "content": """You are an expert document analyst specializing in creating concise, professional summaries for compliance, governance, risk, and policy documents. 
+            system_message = """You are an expert document analyst specializing in creating concise, professional summaries for compliance, governance, risk, and policy documents. 
 Your summaries should be:
 - Highly informative and actionable
 - Structured and easy to scan
 - Maximum 10 lines
 - Focused on key points, findings, and recommendations
 - Professional and objective in tone"""
-                    },
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=600,  # Increased slightly for better quality
-                temperature=0.3,  # Low temperature for consistent, focused summaries
-                presence_penalty=0.1,  # Slight penalty to avoid repetition
-                frequency_penalty=0.1  # Slight penalty for varied language
+            
+            # Call Ollama API
+            summary = self._call_ollama(
+                prompt=prompt,
+                system_message=system_message,
+                max_tokens=600,
+                temperature=0.3
             )
             
-            summary = response.choices[0].message.content.strip()
+            if not summary:
+                raise Exception("Ollama returned empty response")
             
             # Ensure summary is not more than 10 lines
             lines = [line.strip() for line in summary.split('\n') if line.strip()]
@@ -896,7 +888,7 @@ Your summaries should be:
             
             # Step 4: Generate AI summary using OpenAI
             print(f"\n[Step 4/5] 🤖 Generating AI-powered summary...")
-            summary = self._generate_summary_with_openai(text, metadata)
+            summary = self._generate_summary_with_ollama(text, metadata)
             
             if summary and not summary.startswith("Summary unavailable"):
                 print(f"   ✅ Summary generated successfully")
@@ -908,6 +900,25 @@ Your summaries should be:
             # Step 5: Update database with all information
             print(f"\n[Step 5/5] 💾 Updating database with metadata and summary...")
             self._update_pdf_metadata_in_db(operation_id, metadata, summary)
+            
+            # Step 6: Analyze audit relevance (runs in background thread)
+            print(f"\n[Step 6/6] 🔍 Starting audit relevance analysis in background...")
+            try:
+                # Get framework_id from file_operations
+                framework_id = self._get_file_framework_id(operation_id)
+                if framework_id:
+                    # Start background thread for audit relevance analysis
+                    analysis_thread = threading.Thread(
+                        target=self._analyze_audit_relevance_background,
+                        args=(operation_id, summary, metadata, framework_id),
+                        daemon=True
+                    )
+                    analysis_thread.start()
+                    print(f"   ✅ Background analysis started for framework {framework_id}")
+                else:
+                    print(f"   ⚠️  No framework_id found, skipping audit relevance analysis")
+            except Exception as e:
+                print(f"   ⚠️  Failed to start audit relevance analysis: {str(e)}")
             
             print(f"\n{'='*60}")
             print(f"✅ PDF PROCESSING COMPLETED SUCCESSFULLY")
@@ -1024,6 +1035,2678 @@ Your summaries should be:
         finally:
             cursor.close()
             conn.close()
+    
+    def _process_excel_after_upload(self, operation_id: int, s3_url: str, file_name: str):
+        """
+        Process Excel file after upload:
+        1. Download Excel from S3
+        2. Extract text from all sheets
+        3. Extract metadata
+        4. Generate AI-powered summary using OpenAI GPT-3.5-turbo
+        5. Update database with all information
+        6. Analyze audit relevance
+        
+        This runs in a background thread to not block the upload response
+        """
+        try:
+            print(f"\n{'='*60}")
+            print(f"🔄 Starting Excel Processing")
+            print(f"📄 Operation ID: {operation_id}")
+            print(f"📂 File: {file_name}")
+            print(f"{'='*60}")
+            
+            # Step 1: Download Excel content from S3
+            print(f"\n[Step 1/6] ⬇️  Downloading Excel from S3...")
+            print(f"   URL: {s3_url}")
+            response = requests.get(s3_url, timeout=90)
+            response.raise_for_status()
+            excel_content = response.content
+            
+            file_size_mb = round(len(excel_content) / (1024 * 1024), 2)
+            print(f"   ✅ Downloaded: {len(excel_content)} bytes ({file_size_mb} MB)")
+            
+            # Step 2: Extract text from Excel
+            print(f"\n[Step 2/6] 📊 Extracting text from Excel...")
+            text = self._extract_text_from_excel(excel_content, file_name)
+            
+            if not text:
+                print("   ⚠️  No text extracted from Excel")
+                metadata = {
+                    'file_type': 'excel',
+                    'file_name': file_name,
+                    'file_size_bytes': len(excel_content),
+                    'file_size_mb': file_size_mb,
+                    'sheet_count': 0,
+                    'extraction_failed': True
+                }
+                
+                print(f"\n[Step 6/6] 💾 Updating database...")
+                self._update_pdf_metadata_in_db(
+                    operation_id, 
+                    metadata, 
+                    "No text content available for summary. Excel file may be empty or corrupted."
+                )
+                print(f"\n⚠️  Excel processing completed with limited results (no text extracted)")
+                return
+            
+            # Step 3: Extract metadata
+            print(f"\n[Step 3/6] 📋 Extracting metadata...")
+            metadata = self._extract_excel_metadata(excel_content, file_name, text)
+            
+            print(f"   Document Details:")
+            print(f"   - Sheets: {metadata.get('sheet_count', 'Unknown')}")
+            print(f"   - Rows: {metadata.get('total_rows', 'Unknown')}")
+            print(f"   - File Size: {file_size_mb} MB")
+            
+            # Step 4: Generate AI summary using OpenAI
+            print(f"\n[Step 4/6] 🤖 Generating AI-powered summary...")
+            summary = self._generate_summary_with_ollama(text, metadata)
+            
+            if summary and not summary.startswith("Summary unavailable"):
+                print(f"   ✅ Summary generated successfully")
+                print(f"   - Length: {len(summary)} characters")
+            else:
+                print(f"   ⚠️  Summary generation had issues: {summary[:100]}...")
+            
+            # Step 5: Update database with all information
+            print(f"\n[Step 5/6] 💾 Updating database with metadata and summary...")
+            self._update_pdf_metadata_in_db(operation_id, metadata, summary)
+            
+            # Step 6: Analyze audit relevance (runs in background thread)
+            print(f"\n[Step 6/6] 🔍 Starting audit relevance analysis in background...")
+            try:
+                # Get framework_id from file_operations
+                framework_id = self._get_file_framework_id(operation_id)
+                if framework_id:
+                    # Start background thread for audit relevance analysis
+                    analysis_thread = threading.Thread(
+                        target=self._analyze_audit_relevance_background,
+                        args=(operation_id, summary, metadata, framework_id),
+                        daemon=True
+                    )
+                    analysis_thread.start()
+                    print(f"   ✅ Background analysis started for framework {framework_id}")
+                else:
+                    print(f"   ⚠️  No framework_id found, skipping audit relevance analysis")
+            except Exception as e:
+                print(f"   ⚠️  Failed to start audit relevance analysis: {str(e)}")
+            
+            print(f"\n{'='*60}")
+            print(f"✅ EXCEL PROCESSING COMPLETED SUCCESSFULLY")
+            print(f"   Operation ID: {operation_id}")
+            print(f"   File: {file_name}")
+            print(f"   Summary Length: {len(summary)} chars")
+            print(f"{'='*60}\n")
+            
+        except requests.exceptions.RequestException as req_error:
+            error_msg = f"Failed to download Excel from S3: {str(req_error)}"
+            print(f"\n❌ ERROR: {error_msg}")
+            try:
+                self._update_pdf_metadata_in_db(
+                    operation_id, 
+                    {'error': error_msg, 'processing_failed': True}, 
+                    f"Processing failed: Unable to download file from S3"
+                )
+            except:
+                pass
+                
+        except Exception as e:
+            error_msg = f"Excel processing error: {str(e)}"
+            print(f"\n❌ ERROR: Excel processing failed for operation {operation_id}")
+            print(f"   Error: {str(e)}")
+            print(f"   Type: {type(e).__name__}")
+            
+            # Update database with error information
+            try:
+                self._update_pdf_metadata_in_db(
+                    operation_id, 
+                    {
+                        'error': error_msg, 
+                        'processing_failed': True,
+                        'error_type': type(e).__name__
+                    }, 
+                    f"Automatic processing failed. Please review document manually.\nError: {str(e)}"
+                )
+            except Exception as db_error:
+                print(f"   ⚠️  Also failed to update database: {str(db_error)}")
+    
+    def _extract_text_from_excel(self, excel_content: bytes, file_name: str) -> str:
+        """Extract text content from Excel file"""
+        try:
+            if not PANDAS_AVAILABLE:
+                print("⚠️  pandas not available, cannot extract Excel content")
+                return ""
+            
+            import io
+            import pandas as pd
+            
+            # Read Excel file from bytes
+            excel_file = io.BytesIO(excel_content)
+            
+            # Read all sheets
+            excel_data = pd.read_excel(excel_file, sheet_name=None, engine='openpyxl' if '.xlsx' in file_name.lower() else None)
+            
+            # Combine text from all sheets
+            text_parts = []
+            for sheet_name, df in excel_data.items():
+                text_parts.append(f"Sheet: {sheet_name}")
+                # Convert DataFrame to string representation
+                text_parts.append(df.to_string())
+                text_parts.append("")  # Empty line between sheets
+            
+            combined_text = "\n".join(text_parts)
+            
+            # Limit text length for processing (similar to PDF extraction)
+            max_text_length = 50000  # Limit to ~50k characters
+            if len(combined_text) > max_text_length:
+                combined_text = combined_text[:max_text_length] + "\n\n[Content truncated for processing...]"
+            
+            print(f"   ✅ Extracted {len(combined_text)} characters from {len(excel_data)} sheet(s)")
+            return combined_text
+            
+        except Exception as e:
+            print(f"⚠️  Error extracting text from Excel: {str(e)}")
+            return ""
+    
+    def _extract_excel_metadata(self, excel_content: bytes, file_name: str, text: str) -> Dict:
+        """Extract metadata from Excel file"""
+        try:
+            import io
+            import pandas as pd
+            
+            metadata = {
+                'file_type': 'excel',
+                'file_name': file_name,
+                'file_size_bytes': len(excel_content),
+                'file_size_mb': round(len(excel_content) / (1024 * 1024), 2),
+                'document_size_category': 'medium',  # Default
+                'extraction_strategy': 'full_extraction',
+                'full_text_extracted': True
+            }
+            
+            if PANDAS_AVAILABLE:
+                excel_file = io.BytesIO(excel_content)
+                excel_data = pd.read_excel(excel_file, sheet_name=None, engine='openpyxl' if '.xlsx' in file_name.lower() else None)
+                
+                metadata['sheet_count'] = len(excel_data)
+                metadata['sheet_names'] = list(excel_data.keys())
+                
+                total_rows = sum(len(df) for df in excel_data.values())
+                metadata['total_rows'] = total_rows
+                metadata['total_columns'] = sum(len(df.columns) for df in excel_data.values())
+                
+                # Determine size category
+                if total_rows < 100:
+                    metadata['document_size_category'] = 'small'
+                elif total_rows < 1000:
+                    metadata['document_size_category'] = 'medium'
+                else:
+                    metadata['document_size_category'] = 'large'
+            
+            # Add text length info
+            metadata['extracted_text_length'] = len(text)
+            
+            return metadata
+            
+        except Exception as e:
+            print(f"⚠️  Error extracting Excel metadata: {str(e)}")
+            return {
+                'file_type': 'excel',
+                'file_name': file_name,
+                'file_size_bytes': len(excel_content),
+                'error': str(e)
+            }
+    
+    def _get_file_framework_id(self, operation_id: int) -> Optional[int]:
+        """Get framework_id from file_operations record"""
+        if not self.db_pool or not operation_id:
+            return None
+        
+        conn = self._get_db_connection()
+        if not conn:
+            return None
+        
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT FrameworkId FROM file_operations WHERE id = %s", (operation_id,))
+            result = cursor.fetchone()
+            if result:
+                return result[0]
+            return None
+        except Exception as e:
+            print(f"⚠️  Error getting framework_id: {str(e)}")
+            return None
+        finally:
+            cursor.close()
+            conn.close()
+    
+    def _get_all_database_data(self, framework_id: int) -> Dict:
+        """Get all database data relevant to audits: policies, subpolicies, compliances, findings, incidents, risks, events"""
+        if not self.db_pool:
+            return {}
+        
+        conn = self._get_db_connection()
+        if not conn:
+            return {}
+        
+        cursor = conn.cursor(dictionary=True)
+        data = {
+            "policies": [],
+            "subpolicies": [],
+            "compliances": [],
+            "audit_findings": [],
+            "incidents": [],
+            "risks": [],
+            "events": []
+        }
+        
+        try:
+            # Get all policies
+            cursor.execute("""
+                SELECT PolicyId, PolicyName, PolicyDescription, Scope, Objective
+                FROM policies WHERE FrameworkId = %s
+            """, (framework_id,))
+            data["policies"] = cursor.fetchall()
+            
+            # Get all subpolicies
+            cursor.execute("""
+                SELECT sp.SubPolicyId, sp.SubPolicyName, sp.Description, sp.PolicyId
+                FROM subpolicies sp
+                JOIN policies p ON sp.PolicyId = p.PolicyId
+                WHERE p.FrameworkId = %s
+            """, (framework_id,))
+            data["subpolicies"] = cursor.fetchall()
+            
+            # Get all compliances
+            cursor.execute("""
+                SELECT c.ComplianceId, c.ComplianceTitle, c.ComplianceItemDescription, 
+                       c.SubPolicyId, sp.PolicyId, c.Scope, c.Objective
+                FROM compliance c
+                JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
+                JOIN policies p ON sp.PolicyId = p.PolicyId
+                WHERE p.FrameworkId = %s
+            """, (framework_id,))
+            data["compliances"] = cursor.fetchall()
+            
+            # Get all audit findings
+            cursor.execute("""
+                SELECT af.AuditFindingsId, af.AuditId, af.ComplianceId, af.DetailsOfFinding, 
+                       af.Evidence, af.Impact, af.Recommendation, af.FrameworkId
+                FROM audit_findings af
+                WHERE af.FrameworkId = %s
+            """, (framework_id,))
+            data["audit_findings"] = cursor.fetchall()
+            
+            # Get all incidents (table name is 'incidents' plural)
+            # NOTE: Incident model does not have Impact/Resolution columns; use existing fields.
+            cursor.execute("""
+                SELECT IncidentId, IncidentTitle, Description, Status, CostOfIncident, FrameworkId
+                FROM incidents WHERE FrameworkId = %s
+            """, (framework_id,))
+            data["incidents"] = cursor.fetchall()
+            
+            # Get all risks
+            # NOTE: Risk model uses RiskTitle, BusinessImpact, RiskLikelihood, RiskImpact instead of RiskName/Impact/Probability.
+            cursor.execute("""
+                SELECT RiskId, RiskTitle, RiskDescription, BusinessImpact, RiskLikelihood, RiskImpact, FrameworkId
+                FROM risk WHERE FrameworkId = %s
+            """, (framework_id,))
+            data["risks"] = cursor.fetchall()
+            
+            # Get all events
+            # NOTE: Physical table name is likely 'events' (plural) in grc2; avoid selecting non-existent columns.
+            cursor.execute("""
+                SELECT EventId, EventTitle, Description, FrameworkId
+                FROM events WHERE FrameworkId = %s
+            """, (framework_id,))
+            data["events"] = cursor.fetchall()
+            
+        except Exception as e:
+            print(f"⚠️  Error getting database data: {str(e)}")
+        finally:
+            cursor.close()
+            conn.close()
+        
+        return data
+    
+    def _get_all_documents_from_file_operations(self, framework_id: int) -> List[Dict]:
+        """Get all documents from file_operations table for this framework"""
+        if not self.db_pool:
+            return []
+        
+        conn = self._get_db_connection()
+        if not conn:
+            return []
+        
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute("""
+                SELECT id, file_name, original_name, s3_url, s3_key, file_size, 
+                       file_type, content_type, stored_name, user_id, FrameworkId,
+                       summary, metadata, status, created_at
+                FROM file_operations 
+                WHERE FrameworkId = %s AND operation_type = 'upload' AND status = 'completed'
+                ORDER BY created_at DESC
+            """, (framework_id,))
+            return cursor.fetchall()
+        except Exception as e:
+            print(f"⚠️  Error getting documents from file_operations: {str(e)}")
+            return []
+        finally:
+            cursor.close()
+            conn.close()
+
+    def _get_db_record_id(self, table_name: str, record: Dict) -> Optional[int]:
+        """
+        Helper to consistently resolve the primary key field for a given table's record.
+        This is used both when writing JSON indexes and when doing incremental filtering.
+        """
+        pk_fields = {
+            "policies": "PolicyId",
+            "subpolicies": "SubPolicyId",
+            "compliances": "ComplianceId",
+            "audit_findings": "AuditFindingsId",
+            "incidents": "IncidentId",
+            "risks": "RiskId",
+            "events": "EventId",
+        }
+        col = pk_fields.get(table_name)
+        if col and isinstance(record, dict):
+            rid = record.get(col)
+        else:
+            rid = record.get("id") if isinstance(record, dict) else None
+        try:
+            return int(rid) if rid is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    def _analyze_database_data_relevance(self, audit_id: int, audit_details: Dict, database_data: Dict) -> Dict:
+        """Analyze relevance of database data to audit"""
+        results = {
+            "policies": [],
+            "subpolicies": [],
+            "compliances": [],
+            "audit_findings": [],
+            "incidents": [],
+            "risks": [],
+            "events": []
+        }
+        
+        # Build audit context
+        audit_context = f"=== AUDIT PURPOSE AND CONTEXT ===\n"
+        audit_context += f"Audit Title: {audit_details.get('audit_title', 'Not specified')}\n"
+        if audit_details.get('audit_objective'):
+            audit_context += f"Audit Objective: {audit_details.get('audit_objective')[:800]}\n"
+        if audit_details.get('audit_scope'):
+            audit_context += f"Audit Scope: {audit_details.get('audit_scope')[:800]}\n"
+
+        # Add explicit list of compliance requirements (with IDs) so the model can map DB rows to them
+        compliances = audit_details.get('compliances') or []
+        if compliances:
+            audit_context += "\n=== RELEVANT COMPLIANCE REQUIREMENTS (use these IDs in matched_compliances) ===\n"
+            # Support both dicts with keys like 'compliance_id' / 'ComplianceId'
+            for c in compliances[:100]:
+                if not isinstance(c, dict):
+                    continue
+                cid = c.get('compliance_id') or c.get('ComplianceId') or c.get('id')
+                title = c.get('title') or c.get('ComplianceTitle') or c.get('name') or ''
+                desc = c.get('description') or c.get('ComplianceItemDescription') or ''
+                desc = str(desc)[:200]
+                audit_context += f"- [ComplianceId:{cid}] {title} - {desc}\n"
+            if len(compliances) > 100:
+                audit_context += f"... and {len(compliances) - 100} more compliances not listed here\n"
+        
+        # Analyze each table's data
+        for table_name, records in database_data.items():
+            if not records:
+                continue
+            
+            print(f"      📊 Analyzing {len(records)} {table_name} records for database relevance...")
+            
+            analyzed_count = 0
+            relevant_count_60 = 0
+            relevant_count_80 = 0
+
+            for record in records[:50]:  # Limit to first 50 per table
+                try:
+                    # Build content string from record
+                    content_parts = []
+                    for key, value in record.items():
+                        if value and isinstance(value, (str, int, float)):
+                            content_parts.append(f"{key}: {str(value)[:200]}")
+                    content = "\n".join(content_parts)
+                    
+                    prompt = f"""Analyze if this database record is relevant to this audit.
+
+{audit_context}
+
+Database Record ({table_name}):
+{content[:2000]}
+
+You are given the list of compliance requirements above with explicit ComplianceId values.
+If (and only if) this database record clearly provides evidence for one or more of those
+requirements, include their numeric ComplianceId values in matched_compliances.
+
+Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly in this shape:
+{{
+    "relevance_score": 0.0-1.0,
+    "relevance_reason": "brief explanation",
+    "matched_policies": [],
+    "matched_subpolicies": [],
+    "matched_compliances": []
+}}"""
+                    
+                    result_text = self._call_ollama(
+                        prompt=prompt,
+                        system_message="You are an expert GRC auditor. Return only valid JSON.",
+                        max_tokens=400,
+                        temperature=0.3
+                    )
+                    
+                    if result_text:
+                        import re
+                        analysis = None
+                        
+                        # Try to extract JSON from markdown code blocks
+                        json_code_block = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', result_text, re.DOTALL)
+                        if json_code_block:
+                            try:
+                                analysis = json.loads(json_code_block.group(1))
+                            except:
+                                pass
+                        
+                        # If not found, try to extract JSON object directly
+                        if not analysis:
+                            json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', result_text, re.DOTALL)
+                            if json_match:
+                                try:
+                                    analysis = json.loads(json_match.group())
+                                except:
+                                    pass
+                        
+                        # If still not found, try parsing markdown format
+                        if not analysis:
+                            try:
+                                score_match = re.search(r'(?:relevance_score|Relevance Score)[:\s]*([0-9.]+)', result_text, re.IGNORECASE)
+                                score = float(score_match.group(1)) if score_match else 0.0
+                                
+                                reason_match = re.search(r'(?:relevance_reason|Relevance Reason)[:\s]*(.+?)(?:\n\n|\n\*\*|$)', result_text, re.IGNORECASE | re.DOTALL)
+                                reason = reason_match.group(1).strip() if reason_match else ""
+                                
+                                analysis = {
+                                    "relevance_score": score,
+                                    "relevance_reason": reason,
+                                    "matched_policies": [],
+                                    "matched_subpolicies": [],
+                                    "matched_compliances": []
+                                }
+                            except:
+                                pass
+                        
+                        if analysis:
+                            analyzed_count += 1
+                            record_id = self._get_db_record_id(table_name, record)
+                            analysis["record_id"] = record_id if record_id is not None else 0
+                            score = float(analysis.get("relevance_score", 0.0) or 0.0)
+
+                            # Simple counters for how many DB rows are actually "relevant"
+                            if score >= 0.6:
+                                relevant_count_60 += 1
+                            if score >= 0.8:
+                                relevant_count_80 += 1
+
+                            # Compact, easy-to-read log for every analyzed DB row
+                            reason_preview = (analysis.get("relevance_reason") or "").replace("\n", " ")
+                            if len(reason_preview) > 140:
+                                reason_preview = reason_preview[:140] + "..."
+                            print(
+                                f"         💾 [{table_name}] record_id={record_id} "
+                                f"score={score:.2f} | reason={reason_preview}"
+                            )
+
+                            results[table_name].append(analysis)
+                            
+                except Exception as e:
+                    # Stop immediately on any unexpected error so it is clearly visible
+                    print(f"      ❌ Fatal error analyzing {table_name} record: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+                    raise
+            
+            # Per-table summary so you can quickly see how many DB rows were relevant
+            if analyzed_count:
+                print(
+                    f"      ✅ {table_name}: analyzed={analyzed_count}, "
+                    f"relevant_>=0.6={relevant_count_60}, relevant_>=0.8={relevant_count_80}"
+                )
+            else:
+                print(f"      ℹ️  No {table_name} records could be analyzed for relevance.")
+
+        return results
+    
+    def _analyze_audit_relevance_background(self, operation_id: int, summary: str, metadata: Dict, framework_id: int):
+        """
+        Background function to analyze ALL documents and database data relevance to all active audits.
+        Also creates ai_audit_data evidence from relevant database records and can update
+        lastchecklistitemverified for high-confidence matches.
+        """
+        try:
+            print(f"\n{'='*60}")
+            print(f"🔍 Starting Comprehensive Audit Relevance Analysis")
+            print(f"   Framework ID: {framework_id}")
+            print(f"{'='*60}\n")
+            
+            # Get all active audits for this framework
+            audits = self._get_active_ai_audits(framework_id)
+            
+            if not audits:
+                print(f"   ℹ️  No active audits found for framework {framework_id}")
+                return
+            
+            print(f"   📋 Found {len(audits)} active audits to analyze")
+            
+            # Get ALL documents from file_operations
+            all_documents = self._get_all_documents_from_file_operations(framework_id)
+            print(f"   📄 Found {len(all_documents)} documents in file_operations")
+            
+            # Get ALL database data
+            all_database_data = self._get_all_database_data(framework_id)
+            db_count = sum(len(v) for v in all_database_data.values())
+            print(f"   💾 Found {db_count} database records across all tables")
+            
+            # Analyze relevance for each audit
+            for audit in audits:
+                try:
+                    audit_id = audit['audit_id']
+                    print(f"\n   🔍 Analyzing Audit ID: {audit_id} - {audit.get('audit_title', 'No Title')[:50]}")
+                    
+                    # Get audit details
+                    audit_details = self._get_audit_details(audit_id)
+                    audit_framework_id = audit_details.get('framework_id')
+                    
+                    # Load JSON indexes
+                    docs_index_path = self._get_json_index_path(framework_id, audit_id, "documents")
+                    db_index_path = self._get_json_index_path(framework_id, audit_id, "database")
+                    docs_index = self._load_json_index(docs_index_path)
+                    db_index = self._load_json_index(db_index_path)
+                    
+                    # Track analyzed documents by s3_key/stored_name (not operation_id) to handle same file uploaded with different modules
+                    # This ensures the same physical file is not re-analyzed when uploaded with different module selections
+                    analyzed_file_keys = set()
+                    analyzed_operation_ids = set()  # Also track by operation_id for backward compatibility
+                    for d in docs_index.get("documents", []):
+                        # Check both s3_key and stored_name for deduplication (preferred method)
+                        file_key = d.get("s3_key") or d.get("stored_name")
+                        if file_key:
+                            analyzed_file_keys.add(file_key)
+                        # Also track by operation_id for backward compatibility (old entries might not have s3_key/stored_name)
+                        op_id = d.get("operation_id")
+                        if op_id:
+                            analyzed_operation_ids.add(op_id)
+                    
+                    # Analyze ALL documents (incremental via docs_index)
+                    print(f"      📄 Analyzing {len(all_documents)} documents...")
+                    for doc in all_documents:
+                        doc_id = doc.get('id')
+                        # Use s3_key or stored_name as the unique identifier (not operation_id)
+                        doc_s3_key = doc.get('s3_key')
+                        doc_stored_name = doc.get('stored_name')
+                        file_key = doc_s3_key or doc_stored_name
+                        
+                        # Check if already analyzed by file_key (s3_key/stored_name) - preferred method
+                        if file_key and file_key in analyzed_file_keys:
+                            print(f"      ⏭️  Skipping document {doc_id} (s3_key/stored_name='{file_key[:50]}...' already analyzed)")
+                            continue
+                        
+                        # Fallback: Check if already analyzed by operation_id (for backward compatibility with old JSON entries)
+                        if doc_id in analyzed_operation_ids:
+                            print(f"      ⏭️  Skipping document {doc_id} (operation_id already analyzed - backward compatibility check)")
+                            continue
+                        
+                        doc_summary = doc.get('summary') or summary
+                        doc_metadata = json.loads(doc.get('metadata', '{}')) if isinstance(doc.get('metadata'), str) else doc.get('metadata', {})
+                        if not doc_metadata:
+                            doc_metadata = {
+                                'title': doc.get('file_name', 'Unknown'),
+                                'file_name': doc.get('file_name', 'Unknown')
+                            }
+                        
+                        print(f"      🔍 Analyzing document {doc_id} (file_name='{doc.get('file_name', 'unknown')[:50]}...', s3_key='{doc_s3_key[:50] if doc_s3_key else 'none'}...', stored_name='{doc_stored_name[:50] if doc_stored_name else 'none'}...')")
+                        relevance_result = self._analyze_document_audit_relevance(
+                            summary=doc_summary,
+                            metadata=doc_metadata,
+                            audit_id=audit_id,
+                            audit_details=audit_details
+                        )
+                        
+                        if relevance_result:
+                            # Update JSON index (pass s3_key/stored_name for deduplication)
+                            self._update_json_index_document(framework_id, audit_id, doc_id, relevance_result, doc_s3_key=doc_s3_key, doc_stored_name=doc_stored_name)
+                            
+                            # Store in database if relevant
+                            if relevance_result.get('relevance_score', 0) >= 0.6:
+                                self._store_audit_relevance(doc_id, audit_id, relevance_result, doc_s3_key=doc_s3_key, doc_stored_name=doc_stored_name)
+                            else:
+                                print(f"      ⏭️  Document {doc_id} relevance score {relevance_result.get('relevance_score', 0):.2f} < 0.6, not storing in database")
+                        else:
+                            print(f"      ⚠️  Document {doc_id} analysis returned no result")
+                    # Analyze ALL database data (incremental using existing db_index)
+                    print(f"      💾 Analyzing database data...")
+
+                    # Build a quick lookup of which (table, record_id) are already analyzed.
+                    # The JSON structure groups records under data["database_data"][table_name].
+                    already_analyzed_db = {}
+                    db_data = db_index.get("database_data", {}) or {}
+                    for t, records_list in db_data.items():
+                        if not isinstance(records_list, list):
+                            continue
+                        for existing in records_list:
+                            if not isinstance(existing, dict):
+                                continue
+                            rid = existing.get("record_id")
+                            if rid is None:
+                                continue
+                            already_analyzed_db.setdefault(t, set()).add(rid)
+
+                    # How many DB records are already cached for this audit (from previous runs)
+                    cached_total = sum(len(ids) for ids in already_analyzed_db.values())
+
+                    # Filter database_data to only NEW records for this audit
+                    incremental_db_data = {}
+                    new_total = 0
+                    for table_name, records in all_database_data.items():
+                        if not records:
+                            continue
+                        seen_ids = already_analyzed_db.get(table_name, set())
+                        new_records = []
+                        for record in records:
+                            # Resolve primary key for this table's record
+                            record_id = self._get_db_record_id(table_name, record)
+                            if record_id is None:
+                                continue
+                            if record_id in seen_ids:
+                                continue
+                            new_records.append(record)
+                        if new_records:
+                            incremental_db_data[table_name] = new_records
+                            new_total += len(new_records)
+
+                    print(f"      💾 Database incremental mode: {new_total} new record(s) to analyze")
+                    print(f"      💾 Using {cached_total} cached database record(s) from JSON index")
+
+                    # Run relevance only on new DB records
+                    db_results = {}
+                    if incremental_db_data:
+                        db_results = self._analyze_database_data_relevance(audit_id, audit_details, incremental_db_data)
+                    
+                    # Update database JSON index with new analyses
+                    for table_name, analyses in db_results.items():
+                        for analysis in analyses:
+                            record_id = analysis.get("record_id", 0)
+                            if record_id:
+                                self._update_json_index_database(framework_id, audit_id, table_name, record_id, analysis)
+
+                    # Reload the full DB index so we have BOTH cached and newly-added records
+                    db_index = self._load_json_index(db_index_path)
+                    full_db_results = db_index.get("database_data", {}) or {}
+                    
+                    # Create ai_audit_data evidence from ALL relevant DB records
+                    # (cached ones from previous runs + any new ones from this run)
+                    self._create_ai_evidence_from_database_results(
+                        framework_id=audit_framework_id or framework_id,
+                        audit_id=audit_id,
+                        db_results=full_db_results
+                    )
+                    
+                    # Determine overall relevance
+                    all_doc_scores = [d.get("relevance_score", 0) for d in docs_index.get("documents", [])]
+                    all_db_scores = []
+                    for table_analyses in full_db_results.values():
+                        if not isinstance(table_analyses, list):
+                            continue
+                        all_db_scores.extend([a.get("relevance_score", 0) for a in table_analyses if isinstance(a, dict)])
+                    
+                    overall_score = 0.0
+                    if all_doc_scores or all_db_scores:
+                        all_scores = all_doc_scores + all_db_scores
+                        overall_score = max(all_scores) if all_scores else 0.0  # Use max score
+                    
+                    print(f"      📊 Overall Relevance Score: {overall_score:.2f}")
+                    
+                    # Determine what evidence exists
+                    has_document_evidence = len(all_doc_scores) > 0
+                    has_database_evidence = len(all_db_scores) > 0
+                    
+                    print(f"      📊 Evidence summary: {len(all_doc_scores)} document(s), {len(all_db_scores)} database record(s)")
+                    
+                    # Trigger audit if relevant
+                    if overall_score >= 0.6:
+                        print(f"      ✅ Audit {audit_id} is relevant - triggering audit execution")
+                        
+                        # Get best document for mapping creation
+                        best_doc = max(
+                            docs_index.get("documents", []),
+                            key=lambda x: x.get("relevance_score", 0),
+                            default=None
+                        )
+                        
+                        # Determine check type based on available evidence
+                        if has_document_evidence and has_database_evidence:
+                            # BOTH exist → trigger combined check
+                            print(f"      🔄 BOTH document and database evidence found → triggering COMBINED EVIDENCE check")
+                            if best_doc:
+                                try:
+                                    relevance_result = {
+                                        "relevance_score": best_doc.get("relevance_score", 0),
+                                        "relevance_reason": best_doc.get("relevance_reason", ""),
+                                        "matched_policies": best_doc.get("matched_policies", []),
+                                        "matched_subpolicies": best_doc.get("matched_subpolicies", []),
+                                        "matched_compliances": best_doc.get("matched_compliances", [])
+                                    }
+                                    import threading
+                                    threading.Thread(
+                                        target=self._auto_process_relevant_document,
+                                        args=(best_doc.get("operation_id"), audit_id, relevance_result),
+                                        daemon=True
+                                    ).start()
+                                    print(f"      ✅ Auto-processing triggered - compliance check will use COMBINED EVIDENCE (document + database)")
+                                except Exception as e:
+                                    print(f"      ⚠️  Error triggering combined check: {str(e)}")
+                            else:
+                                print(f"      ⚠️  No document found to trigger combined check (database evidence exists but no document)")
+                        elif has_document_evidence:
+                            # Only document → trigger document-only check
+                            print(f"      📄 Only document evidence found → triggering DOCUMENT-ONLY check")
+                            if best_doc:
+                                try:
+                                    relevance_result = {
+                                        "relevance_score": best_doc.get("relevance_score", 0),
+                                        "relevance_reason": best_doc.get("relevance_reason", ""),
+                                        "matched_policies": best_doc.get("matched_policies", []),
+                                        "matched_subpolicies": best_doc.get("matched_subpolicies", []),
+                                        "matched_compliances": best_doc.get("matched_compliances", [])
+                                    }
+                                    import threading
+                                    threading.Thread(
+                                        target=self._auto_process_relevant_document,
+                                        args=(best_doc.get("operation_id"), audit_id, relevance_result),
+                                        daemon=True
+                                    ).start()
+                                    print(f"      ✅ Auto-processing triggered - compliance check will use DOCUMENT-ONLY evidence")
+                                except Exception as e:
+                                    print(f"      ⚠️  Error triggering document-only check: {str(e)}")
+                        elif has_database_evidence:
+                            # Only database → database evidence already created, will be checked when document is uploaded
+                            print(f"      💾 Only database evidence found → database evidence created in ai_audit_data")
+                            print(f"      💡 Database evidence will be checked when a document is uploaded or manually checked")
+                        else:
+                            print(f"      ⚠️  No evidence found to trigger audit")
+                    
+                except Exception as e:
+                    # Treat any error in a given audit as fatal for this background run
+                    print(f"      ❌ Fatal error analyzing audit {audit.get('audit_id', 'unknown')}: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+                    # Stop processing further audits so the first error is clearly visible
+                    raise
+            
+            print(f"\n{'='*60}")
+            print(f"✅ Comprehensive Audit Relevance Analysis Completed")
+            print(f"{'='*60}\n")
+            
+        except Exception as e:
+            print(f"\n❌ Error in audit relevance analysis: {str(e)}")
+            import traceback
+            traceback.print_exc()
+
+    def _create_ai_evidence_from_database_results(self, framework_id: Optional[int], audit_id: int, db_results: Dict):
+        """
+        Create ai_audit_data evidence (and optionally checklist entries) from relevant
+        database records. This makes DB records first-class evidence alongside documents.
+        """
+        if not self.db_pool or not framework_id:
+            return
+        
+        conn = self._get_db_connection()
+        if not conn:
+            return
+        
+        # Thresholds
+        evidence_threshold = 0.6  # create ai_audit_data when score >= 0.6
+        checklist_threshold = 0.8  # update checklist when score >= 0.8
+        
+        try:
+            cursor = conn.cursor()
+            dict_cursor = conn.cursor(dictionary=True)
+            
+            for table_name, analyses in db_results.items():
+                for analysis in analyses:
+                    try:
+                        score = float(analysis.get("relevance_score", 0) or 0)
+                        record_id = analysis.get("record_id")
+                        if not record_id or score < evidence_threshold:
+                            continue
+                        
+                        # Attempt to resolve one primary compliance/policy/subpolicy from matched_compliances.
+                        # Ollama sometimes returns this as:
+                        #   - a plain integer ID:       1798
+                        #   - a numeric string:         "1798"
+                        #   - an object:                {"ComplianceId": 1798, ...}
+                        #   - an object:                {"compliance_id": 1798, ...}
+                        #   - or even a nested object with generic "id" field.
+                        primary_policy_id = None
+                        primary_subpolicy_id = None
+                        primary_compliance_id = None
+                        matched_compliances = analysis.get("matched_compliances") or []
+
+                        def _extract_compliance_id(raw_val: Any) -> Optional[int]:
+                            """Normalize different Ollama structures into a numeric ComplianceId."""
+                            try:
+                                # Direct int
+                                if isinstance(raw_val, int):
+                                    return raw_val
+                                # String that might be an int
+                                if isinstance(raw_val, str):
+                                    return int(raw_val.strip())
+                                # Dict-like structures
+                                if isinstance(raw_val, dict):
+                                    for key in ["ComplianceId", "compliance_id", "id"]:
+                                        if key in raw_val and raw_val[key] is not None:
+                                            try:
+                                                return int(raw_val[key])
+                                            except (TypeError, ValueError):
+                                                continue
+                            except Exception:
+                                return None
+                            return None
+
+                        comp_id: Optional[int] = None
+                        # For entries coming directly from the `compliances` table,
+                        # the record_id itself *is* the ComplianceId, so prefer that.
+                        if table_name == "compliances" and record_id:
+                            try:
+                                comp_id = int(record_id)
+                            except (TypeError, ValueError):
+                                comp_id = None
+
+                        # Otherwise, or if that failed, try to extract from matched_compliances.
+                        if not comp_id and matched_compliances:
+                            for mc in matched_compliances:
+                                comp_id = _extract_compliance_id(mc)
+                                if comp_id:
+                                    break
+
+                        if comp_id:
+                            try:
+                                # Use your actual table name: `compliance` (singular)
+                                dict_cursor.execute("""
+                                    SELECT c.ComplianceId, c.SubPolicyId, sp.PolicyId
+                                    FROM compliance c
+                                    LEFT JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
+                                    WHERE c.ComplianceId = %s
+                                """, (comp_id,))
+                                comp_row = dict_cursor.fetchone()
+                                if comp_row:
+                                    primary_compliance_id = comp_row.get("ComplianceId")
+                                    primary_subpolicy_id = comp_row.get("SubPolicyId")
+                                    primary_policy_id = comp_row.get("PolicyId")
+                                else:
+                                    print(f"      ⚠️  No compliance row found for ComplianceId={comp_id}")
+                            except Exception as comp_err:
+                                print(f"      ⚠️  Error resolving compliance mapping for {comp_id}: {str(comp_err)}")
+
+                        # If we still don't have a concrete compliance mapping, keep the relevance in JSON
+                        # but do NOT create a first-class evidence record to avoid "unmapped" noise.
+                        if not primary_compliance_id:
+                            continue
+
+                        # Build identifiers (generic names without table/record mentions)
+                        doc_name = f"Evidence {record_id}"
+                        document_path = f"{table_name}:{record_id}"
+                        external_id = f"{table_name}:{record_id}"
+                        evidence_reason = analysis.get("relevance_reason", "")[:500]
+
+                        # Prepare a lightweight analysis payload so the UI can show "Details"
+                        # for database evidence similar to uploaded documents.
+                        try:
+                            import json as _json
+                            db_compliance_analysis = [{
+                                "source": "database_record",
+                                "table_name": table_name,
+                                "record_id": record_id,
+                                "compliance_id": primary_compliance_id,
+                                "relevance_score": score,
+                                "relevance_reason": evidence_reason,
+                                "status": "EVIDENCE_ONLY"
+                            }]
+                            db_compliance_analysis_json = _json.dumps({
+                                "compliance_analyses": db_compliance_analysis
+                            })
+                        except Exception:
+                            db_compliance_analysis_json = None
+                        
+                        # Check if evidence already exists for this audit + DB record
+                        try:
+                            check_sql = """
+                                SELECT id, policy_id, subpolicy_id, compliance_analyses
+                                FROM ai_audit_data
+                                WHERE audit_id = %s AND external_source = 'database_record' AND external_id = %s
+                                LIMIT 1
+                            """
+                            cursor.execute(check_sql, (audit_id, external_id))
+                            existing = cursor.fetchone()
+                            if existing:
+                                # If an old row exists without mapping or analysis data, update it
+                                existing_id = existing[0]
+                                existing_policy_id = existing[1] if len(existing) > 1 else None
+                                existing_subpolicy_id = existing[2] if len(existing) > 2 else None
+                                existing_analyses = existing[3] if len(existing) > 3 else None
+                                
+                                needs_update = False
+                                update_fields = []
+                                update_values = []
+                                
+                                # Update mapping if missing
+                                if not existing_policy_id or not existing_subpolicy_id:
+                                    needs_update = True
+                                    update_fields.append("policy_id = %s")
+                                    update_fields.append("subpolicy_id = %s")
+                                    update_values.extend([primary_policy_id, primary_subpolicy_id])
+                                
+                                # Update document name
+                                needs_update = True
+                                update_fields.append("document_name = %s")
+                                update_values.append(doc_name)
+                                
+                                # Update compliance_analyses if missing or empty
+                                if not existing_analyses and db_compliance_analysis_json:
+                                    needs_update = True
+                                    update_fields.append("compliance_analyses = %s")
+                                    update_values.append(db_compliance_analysis_json)
+                                
+                                if needs_update:
+                                    try:
+                                        update_sql = f"""
+                                            UPDATE ai_audit_data
+                                            SET {', '.join(update_fields)}
+                                            WHERE id = %s
+                                        """
+                                        update_values.append(existing_id)
+                                        cursor.execute(update_sql, tuple(update_values))
+                                        print(f"      ✅ Updated existing ai_audit_data record {existing_id} with analysis data")
+                                    except Exception as upd_err:
+                                        print(f"      ⚠️  Error updating existing ai_audit_data mapping for {external_id}: {str(upd_err)}")
+                                # Either way, we don't insert a duplicate row
+                                continue
+                        except Exception as check_err:
+                            print(f"      ⚠️  Error checking existing ai_audit_data for {external_id}: {str(check_err)}")
+
+                        # Insert ai_audit_data entry to represent this DB record as evidence
+                        insert_query = """
+                            INSERT INTO ai_audit_data 
+                            (audit_id, document_id, document_name, document_path, document_type, 
+                             file_size, mime_type, uploaded_by, ai_processing_status, uploaded_date,
+                             policy_id, subpolicy_id, upload_status, external_source, external_id,
+                             FrameworkId, compliance_analyses, processing_completed_at, created_at, updated_at)
+                            VALUES (%s, 0, %s, %s, %s, %s, %s, %s, 'completed', NOW(),
+                                   %s, %s, 'uploaded', 'database_record', %s, %s, %s, NOW(), NOW(), NOW())
+                        """
+                        
+                        params_with_framework = [
+                            audit_id,
+                            doc_name,
+                            document_path,
+                            'db_record',
+                            0,  # file_size
+                            'application/json',  # mime_type
+                            None,  # uploaded_by
+                            primary_policy_id,
+                            primary_subpolicy_id,
+                            external_id,
+                            framework_id,
+                            db_compliance_analysis_json,
+                        ]
+                        
+                        try:
+                            cursor.execute(insert_query, params_with_framework)
+                        except mysql.connector.Error as framework_err:
+                            # Handle missing FrameworkId column (older schema)
+                            if 'Unknown column' in str(framework_err) and 'FrameworkId' in str(framework_err):
+                                fallback_query = """
+                                    INSERT INTO ai_audit_data 
+                                    (audit_id, document_id, document_name, document_path, document_type, 
+                                     file_size, mime_type, uploaded_by, ai_processing_status, uploaded_date,
+                                     policy_id, subpolicy_id, upload_status, external_source, external_id,
+                                     compliance_analyses, processing_completed_at, created_at, updated_at)
+                                    VALUES (%s, 0, %s, %s, %s, %s, %s, %s, 'completed', NOW(),
+                                           %s, %s, 'uploaded', 'database_record', %s, %s, NOW(), NOW(), NOW())
+                                """
+                                cursor.execute(fallback_query, [
+                                    audit_id,
+                                    doc_name,
+                                    document_path,
+                                    'db_record',
+                                    0,
+                                    'application/json',
+                                    None,
+                                    primary_policy_id,
+                                    primary_subpolicy_id,
+                                    external_id,
+                                    db_compliance_analysis_json,
+                                ])
+                            else:
+                                raise
+                        
+                        # Get the created document_id (ai_audit_data.id) and update document_id column
+                        cursor.execute("SELECT LAST_INSERT_ID()")
+                        row = cursor.fetchone()
+                        if row:
+                            new_doc_id = row[0]
+                            try:
+                                cursor.execute(
+                                    "UPDATE ai_audit_data SET document_id = %s WHERE id = %s",
+                                    (new_doc_id, new_doc_id),
+                                )
+                            except Exception as upd_err:
+                                print(f"      ⚠️  Error updating document_id for DB evidence row {new_doc_id}: {str(upd_err)}")
+                        
+                        # Optionally, for very high scores and known compliance, update checklist
+                        if score >= checklist_threshold and primary_compliance_id:
+                            try:
+                                now_date = datetime.datetime.now().date()
+                                now_time = datetime.datetime.now().time()
+                                comments = f"Auto evidence from {table_name} record {record_id}: {evidence_reason}"
+                                
+                                # Check if an entry already exists
+                                cursor.execute(
+                                    """
+                                    SELECT ComplianceId FROM lastchecklistitemverified
+                                    WHERE ComplianceId = %s AND FrameworkId = %s
+                                          AND PolicyId = %s AND SubPolicyId = %s
+                                    """,
+                                    (
+                                        primary_compliance_id,
+                                        framework_id,
+                                        primary_policy_id or 0,
+                                        primary_subpolicy_id or 0,
+                                    ),
+                                )
+                                existing_row = cursor.fetchone()
+                                
+                                complied_value = '1'  # Conservative: mark as partially compliant based on DB evidence
+                                
+                                if existing_row:
+                                    cursor.execute(
+                                        """
+                                        UPDATE lastchecklistitemverified
+                                        SET Date = %s,
+                                            Time = %s,
+                                            Complied = %s,
+                                            Comments = %s,
+                                            Count = IFNULL(Count, 0) + 1
+                                        WHERE ComplianceId = %s AND FrameworkId = %s
+                                          AND PolicyId = %s AND SubPolicyId = %s
+                                        """,
+                                        (
+                                            now_date,
+                                            now_time,
+                                            complied_value,
+                                            comments,
+                                            primary_compliance_id,
+                                            framework_id,
+                                            primary_policy_id or 0,
+                                            primary_subpolicy_id or 0,
+                                        ),
+                                    )
+                                else:
+                                    cursor.execute(
+                                        """
+                                        INSERT INTO lastchecklistitemverified
+                                            (ComplianceId, SubPolicyId, PolicyId, FrameworkId,
+                                             Date, Time, User, Complied, Comments, Count)
+                                        VALUES (%s, %s, %s, %s,
+                                                %s, %s, %s, %s, %s, %s)
+                                        """,
+                                        (
+                                            primary_compliance_id,
+                                            primary_subpolicy_id or 0,
+                                            primary_policy_id or 0,
+                                            framework_id,
+                                            now_date,
+                                            now_time,
+                                            None,
+                                            complied_value,
+                                            comments,
+                                            1,
+                                        ),
+                                    )
+                            except Exception as checklist_err:
+                                print(f"      ⚠️  Error updating lastchecklistitemverified for compliance {primary_compliance_id}: {str(checklist_err)}")
+                        
+                    except Exception as per_record_err:
+                        print(f"      ⚠️  Error creating DB evidence for {table_name} record {analysis.get('record_id')}: {str(per_record_err)}")
+                        import traceback
+                        traceback.print_exc()
+                        continue
+            
+            conn.commit()
+        
+        except Exception as e:
+            print(f"      ❌ Error while creating ai_audit_data evidence from database results: {str(e)}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            try:
+                dict_cursor.close()
+            except Exception:
+                pass
+            try:
+                cursor.close()
+            except Exception:
+                pass
+            conn.close()
+    
+    def _get_active_ai_audits(self, framework_id: int) -> List[Dict]:
+        """Get all active audits for a given framework (matching what's shown in dropdown)
+        
+        The dropdown shows all audits (AI, Internal, External, etc.) that are:
+        - In the same framework
+        - Not completed
+        - Assigned to users, for review, or public
+        
+        This function gets ALL audits in the framework (not just AI) to match dropdown behavior.
+        """
+        if not self.db_pool:
+            return []
+        
+        conn = self._get_db_connection()
+        if not conn:
+            return []
+        
+        cursor = conn.cursor(dictionary=True)
+        try:
+            # Get ALL audits in framework that are not completed (matching dropdown logic)
+            # This includes AI, Internal, External, Regular, Self-Audit types
+            # FILTER: Only process audits 426 and 427
+            query = """
+            SELECT a.AuditId as audit_id, a.FrameworkId, a.PolicyId, a.SubPolicyId,
+                   a.Title as audit_title, a.Objective as audit_objective, a.Scope as audit_scope,
+                   a.AuditType, a.Status,
+                   f.FrameworkName, p.PolicyName, sp.SubPolicyName
+            FROM audit a
+            LEFT JOIN frameworks f ON a.FrameworkId = f.FrameworkId
+            LEFT JOIN policies p ON a.PolicyId = p.PolicyId
+            LEFT JOIN subpolicies sp ON a.SubPolicyId = sp.SubPolicyId
+            WHERE a.FrameworkId = %s
+              AND (a.Status != 'Completed' OR a.Status IS NULL)
+              AND a.AuditId IN (426, 427)
+            ORDER BY a.AuditId DESC
+            """
+            cursor.execute(query, (framework_id,))
+            return cursor.fetchall()
+        except Exception as e:
+            print(f"⚠️  Error getting active AI audits: {str(e)}")
+            return []
+        finally:
+            cursor.close()
+            conn.close()
+    
+    def trigger_audit_relevance_analysis_for_framework(self, framework_id: int):
+        """
+        Manually trigger comprehensive audit relevance analysis for a framework
+        This can be called when new database data is added (policies, incidents, etc.)
+        """
+        try:
+            print(f"\n{'='*60}")
+            print(f"🔄 Manual Trigger: Audit Relevance Analysis for Framework {framework_id}")
+            print(f"{'='*60}\n")
+            
+            # Get all active audits
+            audits = self._get_active_ai_audits(framework_id)
+            if not audits:
+                print(f"   ℹ️  No active audits found")
+                return
+            
+            # Get all documents
+            all_documents = self._get_all_documents_from_file_operations(framework_id)
+            print(f"   📄 Found {len(all_documents)} documents")
+            
+            # Get all database data
+            all_database_data = self._get_all_database_data(framework_id)
+            db_count = sum(len(v) for v in all_database_data.values())
+            print(f"   💾 Found {db_count} database records")
+            
+            # Analyze each audit
+            for audit in audits:
+                audit_id = audit['audit_id']
+                audit_details = self._get_audit_details(audit_id)
+                
+                # Analyze all documents
+                for doc in all_documents:
+                    doc_summary = doc.get('summary', '')
+                    doc_metadata = json.loads(doc.get('metadata', '{}')) if isinstance(doc.get('metadata'), str) else doc.get('metadata', {})
+                    if not doc_metadata:
+                        doc_metadata = {'title': doc.get('file_name', 'Unknown')}
+                    
+                    relevance_result = self._analyze_document_audit_relevance(
+                        summary=doc_summary,
+                        metadata=doc_metadata,
+                        audit_id=audit_id,
+                        audit_details=audit_details
+                    )
+                    
+                    if relevance_result:
+                        doc_s3_key = doc.get('s3_key')
+                        doc_stored_name = doc.get('stored_name')
+                        self._update_json_index_document(framework_id, audit_id, doc.get('id'), relevance_result, doc_s3_key=doc_s3_key, doc_stored_name=doc_stored_name)
+                        if relevance_result.get('relevance_score', 0) >= 0.6:
+                            self._store_audit_relevance(doc.get('id'), audit_id, relevance_result, doc_s3_key=doc_s3_key, doc_stored_name=doc_stored_name)
+                
+                # Analyze all database data
+                db_results = self._analyze_database_data_relevance(audit_id, audit_details, all_database_data)
+                for table_name, analyses in db_results.items():
+                    for analysis in analyses:
+                        record_id = analysis.get("record_id", 0)
+                        if record_id:
+                            self._update_json_index_database(framework_id, audit_id, table_name, record_id, analysis)
+            
+            print(f"\n✅ Manual analysis completed for framework {framework_id}\n")
+            
+        except Exception as e:
+            print(f"❌ Error in manual analysis: {str(e)}")
+            import traceback
+            traceback.print_exc()
+    
+    def _get_audit_details(self, audit_id: int) -> Dict:
+        """Get detailed audit information including policies, subpolicies, and compliances"""
+        if not self.db_pool:
+            return {}
+        
+        conn = self._get_db_connection()
+        if not conn:
+            return {}
+        
+        cursor = conn.cursor(dictionary=True)
+        try:
+            # Get audit basic info
+            cursor.execute("""
+                SELECT a.AuditId, a.FrameworkId, a.PolicyId, a.SubPolicyId,
+                       a.Title as audit_title, a.Objective as audit_objective, a.Scope as audit_scope,
+                       f.FrameworkName, p.PolicyName, sp.SubPolicyName
+                FROM audit a
+                LEFT JOIN frameworks f ON a.FrameworkId = f.FrameworkId
+                LEFT JOIN policies p ON a.PolicyId = p.PolicyId
+                LEFT JOIN subpolicies sp ON a.SubPolicyId = sp.SubPolicyId
+                WHERE a.AuditId = %s
+            """, (audit_id,))
+            audit_info = cursor.fetchone()
+            
+            if not audit_info:
+                return {}
+            
+            framework_id = audit_info.get('FrameworkId')
+            
+            result = {
+                'audit_id': audit_id,
+                'audit_title': audit_info.get('audit_title'),
+                'audit_objective': audit_info.get('audit_objective'),
+                'audit_scope': audit_info.get('audit_scope'),
+                'framework_id': framework_id,
+                'framework_name': audit_info.get('FrameworkName'),
+                'policy_id': audit_info.get('PolicyId'),
+                'policy_name': audit_info.get('PolicyName'),
+                'subpolicy_id': audit_info.get('SubPolicyId'),
+                'subpolicy_name': audit_info.get('SubPolicyName'),
+                'policies': [],
+                'subpolicies': [],
+                'compliances': []
+            }
+            
+            # Get ALL policies for this framework (user can select any in AI audit page)
+            cursor.execute("""
+                SELECT PolicyId, PolicyName, PolicyDescription
+                FROM policies
+                WHERE FrameworkId = %s
+                ORDER BY PolicyName
+            """, (framework_id,))
+            policies = cursor.fetchall()
+            result['policies'] = [
+                {
+                    'policy_id': p['PolicyId'],
+                    'name': p['PolicyName'],
+                    'description': p.get('PolicyDescription', '')
+                }
+                for p in policies
+            ]
+            
+            # Get ALL subpolicies for this framework (user can select any in AI audit page)
+            cursor.execute("""
+                SELECT sp.SubPolicyId, sp.SubPolicyName, sp.Description, sp.PolicyId
+                FROM subpolicies sp
+                JOIN policies p ON sp.PolicyId = p.PolicyId
+                WHERE p.FrameworkId = %s
+                ORDER BY sp.SubPolicyName
+            """, (framework_id,))
+            subpolicies = cursor.fetchall()
+            result['subpolicies'] = [
+                {
+                    'subpolicy_id': sp['SubPolicyId'],
+                    'name': sp['SubPolicyName'],
+                    'description': sp.get('Description', ''),
+                    'policy_id': sp['PolicyId']
+                }
+                for sp in subpolicies
+            ]
+            
+            # Get ALL compliances for this framework (user can select any in AI audit page)
+            cursor.execute("""
+                SELECT c.ComplianceId, c.ComplianceTitle, c.ComplianceItemDescription, 
+                       c.SubPolicyId, sp.PolicyId
+                FROM compliance c
+                JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
+                JOIN policies p ON sp.PolicyId = p.PolicyId
+                WHERE p.FrameworkId = %s
+                ORDER BY c.ComplianceTitle
+            """, (framework_id,))
+            compliances = cursor.fetchall()
+            result['compliances'] = [
+                {
+                    'compliance_id': c['ComplianceId'],
+                    'title': c['ComplianceTitle'],
+                    'description': c['ComplianceItemDescription'],
+                    'subpolicy_id': c['SubPolicyId'],
+                    'policy_id': c['PolicyId']
+                }
+                for c in compliances
+            ]
+            
+            return result
+            
+        except Exception as e:
+            print(f"⚠️  Error getting audit details: {str(e)}")
+            return {}
+        finally:
+            cursor.close()
+            conn.close()
+    
+    def _call_ollama(self, prompt: str, system_message: str = None, max_tokens: int = 800, temperature: float = 0.3) -> Optional[str]:
+        """
+        Call Ollama API instead of OpenAI
+        Returns the response text or None if failed
+        """
+        try:
+            url = f"{OLLAMA_BASE_URL}/api/chat"
+            
+            messages = []
+            if system_message:
+                messages.append({"role": "system", "content": system_message})
+            messages.append({"role": "user", "content": prompt})
+            
+            payload = {
+                "model": OLLAMA_MODEL,
+                "messages": messages,
+                "stream": False,
+                "options": {
+                    "temperature": temperature,
+                    "num_predict": max_tokens
+                }
+            }
+            
+            response = requests.post(url, json=payload, timeout=120)
+            response.raise_for_status()
+            
+            result = response.json()
+            if 'message' in result and 'content' in result['message']:
+                return result['message']['content'].strip()
+            return None
+            
+        except Exception as e:
+            print(f"⚠️  Error calling Ollama: {str(e)}")
+            return None
+    
+    def _get_json_index_path(self, framework_id: int, audit_id: int, index_type: str = "documents") -> str:
+        """
+        Get path for JSON index file
+        index_type: "documents" or "database"
+        """
+        if DJANGO_SETTINGS_AVAILABLE and hasattr(settings, 'MEDIA_ROOT'):
+            base_dir = settings.MEDIA_ROOT
+        else:
+            base_dir = os.path.join(os.path.dirname(__file__), '../../MEDIA_ROOT')
+        
+        index_dir = os.path.join(base_dir, 'audit_indexes', f'framework_{framework_id}', f'audit_{audit_id}')
+        os.makedirs(index_dir, exist_ok=True)
+        
+        filename = f"{index_type}_analysis.json"
+        return os.path.join(index_dir, filename)
+    
+    def _load_json_index(self, file_path: str) -> Dict:
+        """Load JSON index file, return empty dict if not exists"""
+        try:
+            if os.path.exists(file_path):
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+        except Exception as e:
+            print(f"⚠️  Error loading JSON index {file_path}: {str(e)}")
+        return {
+            "framework_id": None,
+            "audit_id": None,
+            "last_updated": None,
+            "documents": [] if "documents" in file_path else {},
+            "database_data": {} if "database" in file_path else []
+        }
+    
+    def _save_json_index(self, file_path: str, data: Dict):
+        """Save JSON index file"""
+        try:
+            data["last_updated"] = datetime.datetime.now().isoformat()
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            
+            # Extract audit_id and framework_id from file path or data to trigger re-processing
+            audit_id = data.get("audit_id")
+            framework_id = data.get("framework_id")
+            
+            # Trigger audit re-processing when JSON is updated (with debouncing to prevent connection pool exhaustion)
+            if audit_id and framework_id:
+                try:
+                    import time
+                    current_time = time.time()
+                    audit_id_key = str(audit_id)
+                    
+                    # Debounce: Only trigger if last trigger was more than 5 seconds ago
+                    # This prevents hundreds of threads from being created when updating many records
+                    should_trigger = False
+                    with self._trigger_lock:
+                        last_trigger = self._last_trigger_time.get(audit_id_key, 0)
+                        if current_time - last_trigger >= 5.0:  # 5 second debounce
+                            should_trigger = True
+                            self._last_trigger_time[audit_id_key] = current_time
+                    
+                    if not should_trigger:
+                        # Skip triggering - too soon since last trigger (but JSON was already saved above)
+                        return
+                    
+                    # Run in background thread to avoid blocking JSON save
+                    def trigger_processing():
+                        try:
+                            # Use direct database call to avoid circular imports
+                            if self.db_pool:
+                                conn = self.db_pool.get_connection()
+                                try:
+                                    cursor = conn.cursor()
+                                    # Mark all documents in ai_audit_data for this audit as 'pending'
+                                    # This will cause them to be re-processed with the new matched compliances from JSON
+                                    cursor.execute("""
+                                        UPDATE ai_audit_data
+                                        SET ai_processing_status = 'pending',
+                                            updated_at = NOW()
+                                        WHERE audit_id = %s
+                                          AND (external_source != 'database_record' AND document_type != 'db_record')
+                                          AND ai_processing_status != 'failed'
+                                    """, [int(audit_id) if str(audit_id).isdigit() else audit_id])
+                                    
+                                    updated_count = cursor.rowcount
+                                    conn.commit()
+                                    print(f"✅ Marked {updated_count} document(s) as 'pending' for re-processing in audit {audit_id}")
+                                except Exception as db_err:
+                                    conn.rollback()
+                                    print(f"⚠️  Database error triggering re-processing: {str(db_err)}")
+                                finally:
+                                    cursor.close()
+                                    conn.close()
+                            else:
+                                print(f"⚠️  No database pool available to trigger re-processing")
+                        except Exception as trigger_err:
+                            print(f"⚠️  Error in background trigger: {str(trigger_err)}")
+                    
+                    trigger_thread = threading.Thread(target=trigger_processing, daemon=True)
+                    trigger_thread.start()
+                    print(f"🔄 Started background thread to trigger audit re-processing for audit {audit_id}")
+                except Exception as trigger_err:
+                    # Don't fail JSON save if trigger fails
+                    print(f"⚠️  Error triggering audit re-processing (non-fatal): {str(trigger_err)}")
+                    
+        except Exception as e:
+            print(f"⚠️  Error saving JSON index {file_path}: {str(e)}")
+    
+    def _update_json_index_document(self, framework_id: int, audit_id: int, operation_id: int, analysis_result: Dict, doc_s3_key: str = None, doc_stored_name: str = None):
+        """Update documents JSON index with new document analysis
+        
+        Uses s3_key/stored_name for deduplication instead of operation_id to handle
+        same file uploaded with different modules.
+        """
+        file_path = self._get_json_index_path(framework_id, audit_id, "documents")
+        data = self._load_json_index(file_path)
+        
+        if "documents" not in data:
+            data["documents"] = []
+        
+        # Use s3_key or stored_name as the unique identifier (not operation_id)
+        file_key = doc_s3_key or doc_stored_name
+        
+        # Find existing entry by s3_key/stored_name (preferred) or operation_id (fallback for backward compatibility)
+        doc_index = None
+        if file_key:
+            doc_index = next((i for i, d in enumerate(data["documents"]) 
+                            if (d.get("s3_key") == doc_s3_key) or (d.get("stored_name") == doc_stored_name)), None)
+        
+        # Fallback to operation_id if not found by file_key (for backward compatibility)
+        if doc_index is None:
+            doc_index = next((i for i, d in enumerate(data["documents"]) if d.get("operation_id") == operation_id), None)
+        
+        doc_entry = {
+            "operation_id": operation_id,  # Keep for reference
+            "s3_key": doc_s3_key,  # Add for deduplication
+            "stored_name": doc_stored_name,  # Add for deduplication
+            "analyzed_at": datetime.datetime.now().isoformat(),
+            "relevance_score": analysis_result.get("relevance_score", 0),
+            "relevance_reason": analysis_result.get("relevance_reason", ""),
+            "matched_policies": analysis_result.get("matched_policies", []),
+            "matched_subpolicies": analysis_result.get("matched_subpolicies", []),
+            "matched_compliances": analysis_result.get("matched_compliances", [])
+        }
+        
+        if doc_index is not None:
+            # Update existing entry (preserve operation_id if it was different)
+            existing = data["documents"][doc_index]
+            if existing.get("operation_id") != operation_id:
+                print(f"      🔄 Updating existing document entry: s3_key/stored_name='{file_key[:50] if file_key else 'none'}...' (operation_id: {existing.get('operation_id')} -> {operation_id})")
+            data["documents"][doc_index] = doc_entry
+        else:
+            data["documents"].append(doc_entry)
+        
+        data["framework_id"] = framework_id
+        data["audit_id"] = audit_id
+        self._save_json_index(file_path, data)
+    
+    def _update_json_index_database(self, framework_id: int, audit_id: int, table_name: str, record_id: int, analysis_result: Dict):
+        """Update database data JSON index with new database record analysis"""
+        file_path = self._get_json_index_path(framework_id, audit_id, "database")
+        data = self._load_json_index(file_path)
+        
+        if "database_data" not in data:
+            data["database_data"] = {}
+        
+        if table_name not in data["database_data"]:
+            data["database_data"][table_name] = []
+        
+        # Update or add database record entry
+        record_key = f"{table_name}_{record_id}"
+        record_index = next((i for i, r in enumerate(data["database_data"][table_name]) if r.get("record_id") == record_id), None)
+        record_entry = {
+            "table_name": table_name,
+            "record_id": record_id,
+            "analyzed_at": datetime.datetime.now().isoformat(),
+            "relevance_score": analysis_result.get("relevance_score", 0),
+            "relevance_reason": analysis_result.get("relevance_reason", ""),
+            "matched_policies": analysis_result.get("matched_policies", []),
+            "matched_subpolicies": analysis_result.get("matched_subpolicies", []),
+            "matched_compliances": analysis_result.get("matched_compliances", [])
+        }
+        
+        if record_index is not None:
+            data["database_data"][table_name][record_index] = record_entry
+        else:
+            data["database_data"][table_name].append(record_entry)
+        
+        data["framework_id"] = framework_id
+        data["audit_id"] = audit_id
+        self._save_json_index(file_path, data)
+    
+    def _analyze_document_audit_relevance(self, summary: str, metadata: Dict, audit_id: int, audit_details: Dict) -> Optional[Dict]:
+        """
+        Use Ollama to analyze if document is relevant to a specific audit
+        Returns relevance score, reason, and matched policies/compliances
+        """
+        if not OLLAMA_AVAILABLE:
+            return None
+        
+        try:
+            
+            # Build audit context - emphasize audit purpose and why it's being conducted
+            audit_context = f"=== AUDIT PURPOSE AND CONTEXT ===\n"
+            audit_context += f"Audit Title: {audit_details.get('audit_title', 'Not specified')}\n"
+            if audit_details.get('audit_objective'):
+                audit_context += f"Audit Objective (WHY this audit is being conducted): {audit_details.get('audit_objective')[:800]}\n"
+            if audit_details.get('audit_scope'):
+                audit_context += f"Audit Scope (WHAT is being audited): {audit_details.get('audit_scope')[:800]}\n"
+            audit_context += f"\nFramework: {audit_details.get('framework_name', 'Unknown')}\n"
+            if audit_details.get('policy_name'):
+                audit_context += f"Assigned Policy: {audit_details.get('policy_name')}\n"
+            if audit_details.get('subpolicy_name'):
+                audit_context += f"Assigned Subpolicy: {audit_details.get('subpolicy_name')}\n"
+            
+            # Add ALL policies in framework (user can select any in AI audit page)
+            policies = audit_details.get('policies', [])
+            if policies:
+                audit_context += f"\nAll Available Policies in Framework ({len(policies)} total):\n"
+                # Include all policies but limit description length
+                for i, policy in enumerate(policies[:50], 1):  # Limit to first 50 for token management
+                    desc = policy.get('description', '')[:150] if policy.get('description') else 'No description'
+                    audit_context += f"{i}. [ID:{policy.get('policy_id')}] {policy.get('name', 'Unknown')}: {desc}\n"
+                if len(policies) > 50:
+                    audit_context += f"... and {len(policies) - 50} more policies\n"
+            
+            # Add ALL subpolicies in framework
+            subpolicies = audit_details.get('subpolicies', [])
+            if subpolicies:
+                audit_context += f"\nAll Available Subpolicies in Framework ({len(subpolicies)} total):\n"
+                for i, subpolicy in enumerate(subpolicies[:50], 1):  # Limit to first 50
+                    desc = subpolicy.get('description', '')[:150] if subpolicy.get('description') else 'No description'
+                    audit_context += f"{i}. [ID:{subpolicy.get('subpolicy_id')}] {subpolicy.get('name', 'Unknown')}: {desc}\n"
+                if len(subpolicies) > 50:
+                    audit_context += f"... and {len(subpolicies) - 50} more subpolicies\n"
+            
+            # Add ALL compliance requirements in framework
+            compliances = audit_details.get('compliances', [])
+            if compliances:
+                audit_context += f"\nAll Available Compliance Requirements in Framework ({len(compliances)} total):\n"
+                for i, comp in enumerate(compliances[:150], 1):  # Increased limit to 150 for better coverage
+                    comp_id = comp.get('compliance_id') or comp.get('ComplianceId')
+                    comp_title = comp.get('title') or comp.get('ComplianceTitle') or 'Unknown'
+                    desc = comp.get('description') or comp.get('ComplianceItemDescription') or 'No description'
+                    desc_short = desc[:200] if desc else 'No description'  # Increased length
+                    audit_context += f"{i}. [ID:{comp_id}] {comp_title}: {desc_short}\n"
+                if len(compliances) > 150:
+                    audit_context += f"... and {len(compliances) - 150} more compliance requirements\n"
+            
+            # Create prompt
+            prompt = f"""You are an expert GRC auditor. Analyze if this document is useful for conducting this audit.
+
+CRITICAL: First understand WHAT this audit is about and WHY it's being conducted by reading the Audit Purpose and Context section below.
+Then determine if the document helps achieve the audit's objectives and addresses what needs to be audited.
+
+IMPORTANT: In the AI audit page, users can select ANY policies, subpolicies, and compliances from the framework. 
+Therefore, analyze the document's relevance against ALL available framework elements, not just the audit's assigned ones.
+
+Document Information:
+- Title: {metadata.get('title', 'Unknown')}
+- Summary: {summary[:1000]}
+
+Audit Context:
+{audit_context}
+
+Analyze and determine:
+1. How relevant is this document for conducting this audit? (Score: 0.0 to 1.0)
+   - FIRST: Consider if the document helps achieve the audit's OBJECTIVE and addresses what's in the audit's SCOPE
+   - Consider if the document addresses ANY of the policies, subpolicies, or compliance requirements listed above
+   - Score higher if the document directly supports the audit's purpose and addresses multiple framework elements, especially compliance requirements
+   - A document is highly relevant if it provides evidence or information needed to fulfill the audit's objective
+2. Why is it relevant or not relevant?
+   - Explain how the document relates to the audit's OBJECTIVE and SCOPE
+   - Explain which specific policies/subpolicies/compliances the document addresses
+   - Be specific about which compliance requirements are addressed and how they relate to the audit's purpose
+3. Which specific policies/subpolicies/compliances does this document address? 
+   - CRITICAL: You MUST identify compliances if the document addresses any compliance requirements
+   - Match the document content to compliance requirements by their titles and descriptions
+   - Consider how these framework elements relate to the audit's objective
+   - Only use IDs from the lists provided above. Do NOT use IDs from other frameworks.
+   - Only include IDs that appear in the "All Available Policies", "All Available Subpolicies", or "All Available Compliance Requirements" lists shown above.
+   - If an ID is not in the lists above, do NOT include it in the matched arrays.
+   - IMPORTANT: Always include matched_compliances array, even if empty. If the document addresses compliance requirements, you MUST include their IDs.
+
+Return ONLY valid JSON in this exact format:
+{{
+    "relevance_score": 0.85,
+    "relevance_reason": "Document contains detailed access control procedures that directly address compliance requirements for user authentication. Specifically addresses Policy ID 5, Subpolicy ID 12, and Compliance IDs 30, 31.",
+    "matched_policies": [5],
+    "matched_subpolicies": [12],
+    "matched_compliances": [30, 31]
+}}
+
+Focus on content relevance, not just keyword matching. Score based on how well the document addresses ANY of the audit's framework requirements that users might select.
+IMPORTANT: Only return IDs that are present in the framework lists provided above."""
+
+            system_message = "You are an expert GRC auditor specializing in document-audit relevance analysis. Always return valid JSON with matched_policies, matched_subpolicies, and matched_compliances arrays. You MUST identify specific compliance requirements that the document addresses."
+            
+            result_text = self._call_ollama(
+                prompt=prompt,
+                system_message=system_message,
+                max_tokens=800,
+                temperature=0.3
+            )
+            
+            if not result_text:
+                return None
+            
+            # Parse JSON response - handle both pure JSON and markdown responses
+            import re
+            result_json = None
+            
+            # First, try to extract JSON from markdown code blocks
+            json_code_block = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', result_text, re.DOTALL)
+            if json_code_block:
+                try:
+                    result_json = json.loads(json_code_block.group(1))
+                except:
+                    pass
+            
+            # If not found, try to extract JSON object directly
+            if not result_json:
+                json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', result_text, re.DOTALL)
+                if json_match:
+                    try:
+                        result_json = json.loads(json_match.group())
+                    except:
+                        pass
+            
+            # If still not found, try parsing markdown format and convert to JSON
+            if not result_json:
+                try:
+                    # Extract relevance_score from markdown
+                    score_match = re.search(r'(?:relevance_score|Relevance Score)[:\s]*([0-9.]+)', result_text, re.IGNORECASE)
+                    score = float(score_match.group(1)) if score_match else 0.0
+                    
+                    # Extract relevance_reason
+                    reason_match = re.search(r'(?:relevance_reason|Relevance Reason)[:\s]*(.+?)(?:\n\n|\n\*\*|$)', result_text, re.IGNORECASE | re.DOTALL)
+                    reason = reason_match.group(1).strip() if reason_match else ""
+                    
+                    # Extract matched arrays
+                    policies_match = re.search(r'(?:matched_policies|Matched Policies)[:\s]*\[?([0-9,\s]+)\]?', result_text, re.IGNORECASE)
+                    policies = []
+                    if policies_match:
+                        policies = [int(x.strip()) for x in policies_match.group(1).split(',') if x.strip().isdigit()]
+                    
+                    subpolicies_match = re.search(r'(?:matched_subpolicies|Matched Subpolicies)[:\s]*\[?([0-9,\s]+)\]?', result_text, re.IGNORECASE)
+                    subpolicies = []
+                    if subpolicies_match:
+                        subpolicies = [int(x.strip()) for x in subpolicies_match.group(1).split(',') if x.strip().isdigit()]
+                    
+                    compliances_match = re.search(r'(?:matched_compliances|Matched Compliances)[:\s]*\[?([0-9,\s]+)\]?', result_text, re.IGNORECASE)
+                    compliances = []
+                    if compliances_match:
+                        compliances = [int(x.strip()) for x in compliances_match.group(1).split(',') if x.strip().isdigit()]
+                    
+                    result_json = {
+                        "relevance_score": score,
+                        "relevance_reason": reason,
+                        "matched_policies": policies,
+                        "matched_subpolicies": subpolicies,
+                        "matched_compliances": compliances
+                    }
+                except Exception as parse_err:
+                    print(f"      ⚠️  Failed to parse markdown response: {str(parse_err)}")
+                    return None
+            
+            if not result_json:
+                print(f"      ⚠️  Could not parse response as JSON or markdown")
+                print(f"      Response preview: {result_text[:200]}")
+                return None
+            
+            # Validate and filter matched IDs to ensure they belong to the current framework
+            framework_policy_ids = {p.get('policy_id') or p.get('PolicyId') for p in audit_details.get('policies', [])}
+            framework_subpolicy_ids = {sp.get('subpolicy_id') or sp.get('SubPolicyId') for sp in audit_details.get('subpolicies', [])}
+            framework_compliance_ids = {c.get('compliance_id') or c.get('ComplianceId') for c in audit_details.get('compliances', [])}
+            
+            print(f"      📊 Framework has {len(framework_policy_ids)} policies, {len(framework_subpolicy_ids)} subpolicies, {len(framework_compliance_ids)} compliances")
+            
+            # Filter matched policies - only keep IDs that exist in this framework
+            matched_policies = result_json.get('matched_policies', [])
+            if isinstance(matched_policies, list):
+                original_policies = matched_policies.copy()
+                result_json['matched_policies'] = [pid for pid in matched_policies if pid in framework_policy_ids]
+                filtered_policies = set(original_policies) - set(result_json['matched_policies'])
+                if filtered_policies:
+                    print(f"      ⚠️  Filtered out policy IDs from other frameworks: {filtered_policies}")
+                print(f"      ✅ Matched {len(result_json['matched_policies'])} policies: {result_json['matched_policies']}")
+            
+            # Filter matched subpolicies - only keep IDs that exist in this framework
+            matched_subpolicies = result_json.get('matched_subpolicies', [])
+            if isinstance(matched_subpolicies, list):
+                original_subpolicies = matched_subpolicies.copy()
+                result_json['matched_subpolicies'] = [sid for sid in matched_subpolicies if sid in framework_subpolicy_ids]
+                filtered_subpolicies = set(original_subpolicies) - set(result_json['matched_subpolicies'])
+                if filtered_subpolicies:
+                    print(f"      ⚠️  Filtered out subpolicy IDs from other frameworks: {filtered_subpolicies}")
+                print(f"      ✅ Matched {len(result_json['matched_subpolicies'])} subpolicies: {result_json['matched_subpolicies']}")
+            
+            # Filter matched compliances - only keep IDs that exist in this framework
+            matched_compliances = result_json.get('matched_compliances', [])
+            if not matched_compliances:
+                matched_compliances = []  # Ensure it's always a list
+            if isinstance(matched_compliances, list):
+                original_compliances = matched_compliances.copy()
+                result_json['matched_compliances'] = [cid for cid in matched_compliances if cid in framework_compliance_ids]
+                filtered_compliances = set(original_compliances) - set(result_json['matched_compliances'])
+                if filtered_compliances:
+                    print(f"      ⚠️  Filtered out compliance IDs from other frameworks: {filtered_compliances}")
+                print(f"      ✅ Matched {len(result_json['matched_compliances'])} compliances: {result_json['matched_compliances']}")
+            else:
+                result_json['matched_compliances'] = []
+                print(f"      ⚠️  matched_compliances was not a list, reset to empty array")
+            
+            return result_json
+                
+        except json.JSONDecodeError as e:
+            print(f"⚠️  Failed to parse AI response as JSON: {str(e)}")
+            print(f"   Response: {result_text[:200]}")
+            return None
+        except Exception as e:
+            print(f"⚠️  Error in audit relevance analysis: {str(e)}")
+            return None
+    
+    def _store_audit_relevance(self, operation_id: int, audit_id: int, relevance_result: Dict, doc_s3_key: str = None, doc_stored_name: str = None):
+        """Store audit relevance analysis in document_audit_relevance table
+        
+        Checks for existing records by s3_key/stored_name to avoid duplicates when
+        the same file is uploaded with different modules.
+        """
+        if not self.db_pool:
+            return
+        
+        conn = self._get_db_connection()
+        if not conn:
+            return
+        
+        cursor = conn.cursor()
+        try:
+            # Get S3 URL and s3_key/stored_name from file_operations
+            s3_url = None
+            s3_key_from_db = None
+            stored_name_from_db = None
+            cursor.execute("SELECT s3_url, s3_key, stored_name FROM file_operations WHERE id = %s", (operation_id,))
+            result = cursor.fetchone()
+            if result:
+                s3_url = result[0] if len(result) > 0 else None
+                s3_key_from_db = result[1] if len(result) > 1 else None
+                stored_name_from_db = result[2] if len(result) > 2 else None
+            
+            # Use provided values or fallback to database values
+            file_s3_key = doc_s3_key or s3_key_from_db
+            file_stored_name = doc_stored_name or stored_name_from_db
+            
+            # Check if a record already exists for this s3_key/stored_name + audit_id combination
+            # This prevents duplicate analysis when the same file is uploaded with different modules
+            # We check by looking up other file_operations with the same s3_key/stored_name, then checking if they have relevance records
+            existing_relevance_id = None
+            if file_s3_key or file_stored_name:
+                # Find other file_operations with the same s3_key or stored_name
+                if file_s3_key:
+                    cursor.execute("""
+                        SELECT id FROM file_operations 
+                        WHERE (s3_key = %s OR stored_name = %s) AND id != %s AND status = 'completed'
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                    """, (file_s3_key, file_s3_key, operation_id))
+                else:
+                    cursor.execute("""
+                        SELECT id FROM file_operations 
+                        WHERE stored_name = %s AND id != %s AND status = 'completed'
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                    """, (file_stored_name, operation_id))
+                
+                other_operation = cursor.fetchone()
+                if other_operation:
+                    other_op_id = other_operation[0]
+                    # Check if that other operation_id already has a relevance record for this audit
+                    cursor.execute("""
+                        SELECT file_operation_id FROM document_audit_relevance 
+                        WHERE file_operation_id = %s AND audit_id = %s
+                        LIMIT 1
+                    """, (other_op_id, audit_id))
+                    existing = cursor.fetchone()
+                    if existing:
+                        existing_relevance_id = existing[0]
+                        file_key_display = (file_s3_key or file_stored_name or 'none')[:50] if (file_s3_key or file_stored_name) else 'none'
+                        print(f"      🔄 Found existing relevance record for same file (s3_key/stored_name='{file_key_display}...') (file_operation_id={existing_relevance_id}, current operation_id={operation_id})")
+            
+            # Prepare JSON arrays for matched items
+            matched_policies = json.dumps(relevance_result.get('matched_policies', []))
+            matched_subpolicies = json.dumps(relevance_result.get('matched_subpolicies', []))
+            matched_compliances = json.dumps(relevance_result.get('matched_compliances', []))
+            
+            # If existing record found, update it instead of creating duplicate
+            if existing_relevance_id:
+                # Update the existing record (may have different file_operation_id but same s3_key/stored_name)
+                # Try to update with s3_key/stored_name columns if they exist, otherwise just update basic fields
+                try:
+                    query = """
+                    UPDATE document_audit_relevance 
+                    SET file_operation_id = %s,
+                        s3_url = %s,
+                        s3_key = %s,
+                        stored_name = %s,
+                        relevance_score = %s,
+                        relevance_reason = %s,
+                        matched_policies = %s,
+                        matched_subpolicies = %s,
+                        matched_compliances = %s,
+                        analyzed_at = %s,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE file_operation_id = %s AND audit_id = %s
+                    """
+                    params = (
+                        operation_id,  # Update to latest operation_id
+                        s3_url,
+                        file_s3_key,
+                        file_stored_name,
+                        float(relevance_result.get('relevance_score', 0)),
+                        relevance_result.get('relevance_reason', '')[:1000],
+                        matched_policies,
+                        matched_subpolicies,
+                        matched_compliances,
+                        datetime.datetime.now(),
+                        existing_relevance_id,
+                        audit_id
+                    )
+                    cursor.execute(query, params)
+                    print(f"      ✅ Updated existing relevance record (same file, different module upload)")
+                except mysql.connector.Error as col_err:
+                    # If s3_key/stored_name columns don't exist, update without them
+                    if 'Unknown column' in str(col_err):
+                        query = """
+                        UPDATE document_audit_relevance 
+                        SET file_operation_id = %s,
+                            s3_url = %s,
+                            relevance_score = %s,
+                            relevance_reason = %s,
+                            matched_policies = %s,
+                            matched_subpolicies = %s,
+                            matched_compliances = %s,
+                            analyzed_at = %s,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE file_operation_id = %s AND audit_id = %s
+                        """
+                        params = (
+                            operation_id,
+                            s3_url,
+                            float(relevance_result.get('relevance_score', 0)),
+                            relevance_result.get('relevance_reason', '')[:1000],
+                            matched_policies,
+                            matched_subpolicies,
+                            matched_compliances,
+                            datetime.datetime.now(),
+                            existing_relevance_id,
+                            audit_id
+                        )
+                        cursor.execute(query, params)
+                        print(f"      ✅ Updated existing relevance record (s3_key/stored_name columns not available)")
+                    else:
+                        raise
+            else:
+                # Insert new record - try with s3_key/stored_name first, fallback if columns don't exist
+                try:
+                    query = """
+                    INSERT INTO document_audit_relevance 
+                    (file_operation_id, audit_id, s3_url, s3_key, stored_name, relevance_score, relevance_reason, 
+                     matched_policies, matched_subpolicies, matched_compliances, analyzed_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                        s3_url = VALUES(s3_url),
+                        s3_key = VALUES(s3_key),
+                        stored_name = VALUES(stored_name),
+                        relevance_score = VALUES(relevance_score),
+                        relevance_reason = VALUES(relevance_reason),
+                        matched_policies = VALUES(matched_policies),
+                        matched_subpolicies = VALUES(matched_subpolicies),
+                        matched_compliances = VALUES(matched_compliances),
+                        analyzed_at = VALUES(analyzed_at),
+                        updated_at = CURRENT_TIMESTAMP
+                    """
+                    params = (
+                        operation_id,
+                        audit_id,
+                        s3_url,
+                        file_s3_key,
+                        file_stored_name,
+                        float(relevance_result.get('relevance_score', 0)),
+                        relevance_result.get('relevance_reason', '')[:1000],
+                        matched_policies,
+                        matched_subpolicies,
+                        matched_compliances,
+                        datetime.datetime.now()
+                    )
+                    cursor.execute(query, params)
+                    print(f"      💾 Stored new relevance in database")
+                except mysql.connector.Error as col_err:
+                    # If s3_key/stored_name columns don't exist, insert without them
+                    if 'Unknown column' in str(col_err):
+                        query = """
+                        INSERT INTO document_audit_relevance 
+                        (file_operation_id, audit_id, s3_url, relevance_score, relevance_reason, 
+                         matched_policies, matched_subpolicies, matched_compliances, analyzed_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON DUPLICATE KEY UPDATE
+                            s3_url = VALUES(s3_url),
+                            relevance_score = VALUES(relevance_score),
+                            relevance_reason = VALUES(relevance_reason),
+                            matched_policies = VALUES(matched_policies),
+                            matched_subpolicies = VALUES(matched_subpolicies),
+                            matched_compliances = VALUES(matched_compliances),
+                            analyzed_at = VALUES(analyzed_at),
+                            updated_at = CURRENT_TIMESTAMP
+                        """
+                        params = (
+                            operation_id,
+                            audit_id,
+                            s3_url,
+                            float(relevance_result.get('relevance_score', 0)),
+                            relevance_result.get('relevance_reason', '')[:1000],
+                            matched_policies,
+                            matched_subpolicies,
+                            matched_compliances,
+                            datetime.datetime.now()
+                        )
+                        cursor.execute(query, params)
+                        print(f"      💾 Stored new relevance in database (s3_key/stored_name columns not available)")
+                    else:
+                        raise
+            
+            conn.commit()
+            
+            # Auto-process: Create ai_audit_data entries for ALL audit types
+            # This automatically links relevant documents to audits without user interaction
+            try:
+                print(f"      🤖 Triggering auto-processing for audit {audit_id}")
+                # Trigger auto-processing in background thread for all audit types
+                import threading
+                auto_process_thread = threading.Thread(
+                    target=self._auto_process_relevant_document,
+                    args=(operation_id, audit_id, relevance_result),
+                    daemon=True,
+                    name=f"AutoProcess-{operation_id}-{audit_id}"
+                )
+                auto_process_thread.start()
+                print(f"      ✅ Auto-processing thread started")
+            except Exception as auto_err:
+                print(f"      ⚠️  Error starting auto-processing: {str(auto_err)}")
+                import traceback
+                traceback.print_exc()
+                # Don't fail the whole operation if auto-processing fails
+            
+        except mysql.connector.Error as e:
+            print(f"      ❌ Database error storing relevance: {str(e)}")
+        except Exception as e:
+            print(f"      ❌ Error storing relevance: {str(e)}")
+        finally:
+            cursor.close()
+            conn.close()
+    
+    def _auto_process_relevant_document(self, operation_id: int, audit_id: int, relevance_result: Dict):
+        """
+        Automatically create ai_audit_data entries and trigger compliance checks
+        for documents from Document Handling that are relevant to an AI audit.
+        This runs in a background thread after relevance is stored.
+        
+        CRITICAL: This now processes ALL relevant documents from documents_analysis.json,
+        not just the one that was uploaded. This ensures all matched documents are processed.
+        """
+        try:
+            print(f"\n{'='*60}")
+            print(f"🤖 AUTO-PROCESSING: Will process ALL relevant documents from JSON for Audit {audit_id}")
+            print(f"   (Triggered by document {operation_id})")
+            print(f"{'='*60}")
+            
+            if not self.db_pool:
+                print(f"      ❌ Database pool not available")
+                return
+            
+            conn = self._get_db_connection()
+            if not conn:
+                print(f"      ❌ Database connection failed")
+                return
+            
+            cursor = conn.cursor(dictionary=True)
+            
+            try:
+                # Get framework_id first (needed for JSON path)
+                cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s", (audit_id,))
+                audit_row = cursor.fetchone()
+                if not audit_row or not audit_row.get('FrameworkId'):
+                    print(f"      ❌ No FrameworkId found for audit {audit_id}")
+                    return
+                
+                framework_id = audit_row.get('FrameworkId')
+                
+                # STEP 1: Read documents_analysis.json to find ALL relevant documents
+                all_relevant_documents_to_process = []  # List of (operation_id, matched_compliances) tuples
+                
+                try:
+                    import os
+                    import json
+                    from django.conf import settings
+                    
+                    # Construct path to documents_analysis.json
+                    json_path = os.path.join(
+                        settings.MEDIA_ROOT,
+                        'audit_indexes',
+                        f'framework_{framework_id}',
+                        f'audit_{audit_id}',
+                        'documents_analysis.json'
+                    )
+                    
+                    print(f"      📋 Looking for documents_analysis.json at: {json_path}")
+                    
+                    if os.path.exists(json_path):
+                        try:
+                            with open(json_path, 'r', encoding='utf-8') as f:
+                                json_data = json.load(f)
+                            
+                            documents_in_json = json_data.get('documents', [])
+                            print(f"      📋 Found {len(documents_in_json)} document(s) in documents_analysis.json - will process ALL documents with matched compliances")
+                            
+                            for doc_entry in documents_in_json:
+                                doc_operation_id = doc_entry.get('operation_id')
+                                matched_compliances_for_doc = doc_entry.get('matched_compliances', [])
+                                
+                                if matched_compliances_for_doc and doc_operation_id:
+                                    # This document is relevant - add it to the processing list
+                                    all_relevant_documents_to_process.append((doc_operation_id, matched_compliances_for_doc))
+                                    print(f"      📋 Document operation_id={doc_operation_id} has {len(matched_compliances_for_doc)} matched compliances: {matched_compliances_for_doc} - will be processed")
+                                elif doc_operation_id:
+                                    print(f"      📋 Document operation_id={doc_operation_id} has NO matched compliances - skipping")
+                            
+                            print(f"      ✅✅✅ WILL PROCESS {len(all_relevant_documents_to_process)} relevant document(s) from JSON")
+                            
+                        except Exception as json_err:
+                            print(f"      ⚠️ Could not read/parse documents_analysis.json: {json_err}")
+                            import traceback
+                            traceback.print_exc()
+                    else:
+                        print(f"      ℹ️ documents_analysis.json not found at {json_path}, will process only uploaded document")
+                
+                except Exception as json_read_err:
+                    print(f"      ⚠️ Error reading documents_analysis.json: {json_read_err}")
+                    import traceback
+                    traceback.print_exc()
+                
+                # STEP 2: If no documents found in JSON, add the uploaded document to processing list
+                if not all_relevant_documents_to_process:
+                    print(f"      📋 No relevant documents found in JSON - will process only the uploaded document (file_operation_id={operation_id})")
+                    # Get matched compliances from relevance_result for the uploaded document
+                    matched_compliances_for_uploaded = relevance_result.get('matched_compliances', [])
+                    if matched_compliances_for_uploaded:
+                        all_relevant_documents_to_process.append((operation_id, matched_compliances_for_uploaded))
+                        print(f"      ✅✅✅ MATCHED COMPLIANCES FOUND for file_operation_id={operation_id}, audit_id={audit_id}")
+                        print(f"      📋 Found {len(matched_compliances_for_uploaded)} matched compliances: {matched_compliances_for_uploaded}")
+                    else:
+                        # Add with empty compliances (will be processed but might not have matches)
+                        all_relevant_documents_to_process.append((operation_id, []))
+                
+                # STEP 3: Also ensure the uploaded document is in the processing list (if it's not already there)
+                uploaded_doc_in_list = any(op_id == operation_id for op_id, _ in all_relevant_documents_to_process)
+                if not uploaded_doc_in_list:
+                    print(f"      📋 Adding uploaded document (file_operation_id={operation_id}) to processing list")
+                    matched_compliances_for_uploaded = relevance_result.get('matched_compliances', [])
+                    all_relevant_documents_to_process.append((operation_id, matched_compliances_for_uploaded))
+                
+                # STEP 4: Log what documents we found
+                print(f"      🔄 Found {len(all_relevant_documents_to_process)} relevant document(s) to process from JSON:")
+                for op_id, comps in all_relevant_documents_to_process:
+                    print(f"        - operation_id={op_id} with {len(comps)} matched compliances: {comps}")
+                
+                # STEP 5: Process ALL documents from the list
+                all_created_document_ids = []  # Accumulate all document IDs created
+                
+                # Get user_id once (will be used for all documents)
+                # First, get it from the uploaded document
+                cursor.execute("""
+                    SELECT user_id FROM file_operations WHERE id = %s
+                """, (operation_id,))
+                uploaded_file_op = cursor.fetchone()
+                raw_user_id = uploaded_file_op.get('user_id') if uploaded_file_op else None
+
+                # Normalize uploaded_by user_id (ai_audit_data.uploaded_by is INT)
+                uploaded_by = None
+                if raw_user_id is not None:
+                    try:
+                        uploaded_by = int(raw_user_id)
+                        print(f"      👤 Using numeric user_id: {uploaded_by}")
+                    except (ValueError, TypeError):
+                        try:
+                            cursor.execute("SELECT UserId FROM users WHERE UserName = %s LIMIT 1", (raw_user_id,))
+                            user_row = cursor.fetchone()
+                            if user_row and user_row.get('UserId'):
+                                uploaded_by = int(user_row.get('UserId'))
+                                print(f"      👤 Resolved username '{raw_user_id}' to UserId {uploaded_by}")
+                            else:
+                                cursor.execute("SELECT UserId FROM users WHERE LOWER(UserName) = LOWER(%s) LIMIT 1", (raw_user_id,))
+                                user_row = cursor.fetchone()
+                                if user_row and user_row.get('UserId'):
+                                    uploaded_by = int(user_row.get('UserId'))
+                                    print(f"      👤 Resolved username '{raw_user_id}' (case-insensitive) to UserId {uploaded_by}")
+                        except Exception as user_lookup_err:
+                            print(f"      ⚠️  Error in user lookup query: {str(user_lookup_err)}")
+                
+                if not uploaded_by:
+                    print(f"      ⚠️  Could not resolve user_id (raw_user_id={raw_user_id}); notifications will be skipped")
+                
+                # Track processed operation_ids to avoid duplicates
+                processed_operation_ids = set()
+                
+                # Process each document from the list
+                for doc_operation_id, doc_matched_compliances in all_relevant_documents_to_process:
+                    try:
+                        # Skip if already processed in this batch
+                        if doc_operation_id in processed_operation_ids:
+                            print(f"      ⏭️ Skipping duplicate document operation_id={doc_operation_id} (already processed in this batch)")
+                            continue
+                        
+                        print(f"      📄 Processing document operation_id={doc_operation_id} with {len(doc_matched_compliances)} matched compliances: {doc_matched_compliances}")
+                        
+                        # Get file information for this document
+                        cursor.execute("""
+                            SELECT file_name, original_name, s3_url, s3_key, file_size, 
+                                   file_type, content_type, stored_name, user_id
+                            FROM file_operations 
+                            WHERE id = %s AND status = 'completed'
+                        """, (doc_operation_id,))
+                        file_op = cursor.fetchone()
+                        
+                        if not file_op:
+                            print(f"      ⚠️ File operation {doc_operation_id} not found or not completed - skipping")
+                            continue
+                        
+                        file_name = file_op.get('file_name') or file_op.get('original_name') or 'Unknown Document'
+                        s3_url = file_op.get('s3_url')
+                        s3_key = file_op.get('s3_key')
+                        file_size = file_op.get('file_size') or 0
+                        file_type = file_op.get('file_type') or 'pdf'
+                        content_type = file_op.get('content_type') or 'application/pdf'
+                        stored_name = file_op.get('stored_name')
+                        
+                        # Determine external_id for duplicate check
+                        external_id = str(doc_operation_id)  # Use operation_id for lookup
+                        compact_external_id = s3_key or stored_name or external_id
+                        if compact_external_id and len(compact_external_id) > 100:
+                            compact_external_id = compact_external_id[-100:]
+                        
+                        # Check if this document is already processed for this audit
+                        cursor.execute("""
+                            SELECT COUNT(*) as count FROM ai_audit_data 
+                            WHERE audit_id = %s 
+                              AND external_source = 'evidence_attachment'
+                              AND (external_id = %s OR external_id = %s OR external_id = %s)
+                              AND ai_processing_status != 'failed'
+                        """, (audit_id, external_id, compact_external_id, stored_name if stored_name else ''))
+                        count_result = cursor.fetchone()
+                        existing_count = count_result.get('count', 0) if count_result else 0
+                        
+                        if existing_count > 0:
+                            print(f"      ⏭️ Document operation_id={doc_operation_id} already exists in ai_audit_data for audit {audit_id} ({existing_count} record(s)) - skipping to avoid duplicate")
+                            processed_operation_ids.add(doc_operation_id)
+                            continue
+                        
+                        # Mark as processed to avoid duplicates within this batch
+                        processed_operation_ids.add(doc_operation_id)
+                        
+                        # Get matched compliances, policies, and subpolicies for this document
+                        matched_compliances = doc_matched_compliances
+                        # Get policies/subpolicies from compliances
+                        matched_policies = []
+                        matched_subpolicies = []
+                        if matched_compliances:
+                            cursor.execute(f"""
+                                SELECT DISTINCT c.SubPolicyId, sp.PolicyId
+                                FROM compliance c
+                                LEFT JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
+                                WHERE c.ComplianceId IN ({','.join(['%s'] * len(matched_compliances))})
+                            """, matched_compliances)
+                            comp_infos = cursor.fetchall()
+                            matched_policies = list(set([info.get('PolicyId') for info in comp_infos if info.get('PolicyId')]))
+                            matched_subpolicies = list(set([info.get('SubPolicyId') for info in comp_infos if info.get('SubPolicyId')]))
+                        
+                        print(f"        📋 Matched Compliances: {len(matched_compliances)}")
+                        print(f"        📋 Matched Policies: {len(matched_policies)}")
+                        print(f"        📋 Matched Subpolicies: {len(matched_subpolicies)}")
+                        
+                        # Determine document_path (external_id already set above for duplicate check)
+                        document_path = s3_key or stored_name or f"file_operations/{doc_operation_id}/{file_name}"
+                        
+                        # Create mappings: one per compliance for this document
+                        mappings_to_create = []
+                        
+                        if matched_compliances:
+                            # Create one mapping per compliance
+                            for compliance_id in matched_compliances:
+                                cursor.execute("""
+                                    SELECT c.SubPolicyId, sp.PolicyId
+                                    FROM compliance c
+                                    LEFT JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
+                                    WHERE c.ComplianceId = %s
+                                """, (compliance_id,))
+                                comp_info = cursor.fetchone()
+                                policy_id = comp_info.get('PolicyId') if comp_info else None
+                                subpolicy_id = comp_info.get('SubPolicyId') if comp_info else None
+                                
+                                mappings_to_create.append({
+                                    'policy_id': policy_id,
+                                    'subpolicy_id': subpolicy_id,
+                                    'compliance_id': compliance_id
+                                })
+                        elif matched_subpolicies:
+                            # Fallback: create one mapping per subpolicy
+                            for subpolicy_id in matched_subpolicies:
+                                cursor.execute("SELECT PolicyId FROM subpolicies WHERE SubPolicyId = %s", (subpolicy_id,))
+                                sub_info = cursor.fetchone()
+                                policy_id = sub_info.get('PolicyId') if sub_info else None
+                                
+                                mappings_to_create.append({
+                                    'policy_id': policy_id,
+                                    'subpolicy_id': subpolicy_id,
+                                    'compliance_id': None
+                                })
+                        elif matched_policies:
+                            # Fallback: create one mapping per policy
+                            for policy_id in matched_policies:
+                                mappings_to_create.append({
+                                    'policy_id': policy_id,
+                                    'subpolicy_id': None,
+                                    'compliance_id': None
+                                })
+                        else:
+                            # No matches - create a single unmapped entry
+                            mappings_to_create.append({
+                                'policy_id': None,
+                                'subpolicy_id': None,
+                                'compliance_id': None
+                            })
+                        
+                        print(f"        📝 Creating {len(mappings_to_create)} mapping(s) for document operation_id={doc_operation_id}")
+                        
+                        # Create ai_audit_data entries for this document
+                        doc_created_document_ids = []
+                        cursor.close()  # Close dictionary cursor
+                        cursor = conn.cursor()  # Use regular cursor for inserts
+                        
+                        for mapping in mappings_to_create:
+                            try:
+                                # Determine mime_type from content_type or file_type
+                                mime_type = content_type
+                                if not mime_type:
+                                    if file_type.lower() == 'pdf':
+                                        mime_type = 'application/pdf'
+                                    elif file_type.lower() in ['doc', 'docx']:
+                                        mime_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                                    elif file_type.lower() in ['xls', 'xlsx']:
+                                        mime_type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                                    else:
+                                        mime_type = 'application/octet-stream'
+                                
+                                # Insert into ai_audit_data
+                                insert_query = """
+                                    INSERT INTO ai_audit_data 
+                                    (audit_id, document_id, document_name, document_path, document_type, 
+                                     file_size, mime_type, uploaded_by, ai_processing_status, uploaded_date,
+                                     policy_id, subpolicy_id, upload_status, external_source, external_id,
+                                     FrameworkId, created_at, updated_at)
+                                    VALUES (%s, 0, %s, %s, %s, %s, %s, %s, 'pending', NOW(),
+                                           %s, %s, 'uploaded', 'evidence_attachment', %s, %s, NOW(), NOW())
+                                """
+                                
+                                # Try with FrameworkId first
+                                try:
+                                    cursor.execute(insert_query, [
+                                        audit_id,
+                                        file_name,
+                                        document_path,
+                                        file_type[:50],  # Truncate to fit varchar(50)
+                                        file_size,
+                                        mime_type,
+                                        uploaded_by,
+                                        mapping['policy_id'],
+                                        mapping['subpolicy_id'],
+                                        external_id,
+                                        framework_id
+                                    ])
+                                except mysql.connector.Error as framework_err:
+                                    # Handle missing FrameworkId column
+                                    if 'Unknown column' in str(framework_err) and 'FrameworkId' in str(framework_err):
+                                        insert_query_no_framework = """
+                                            INSERT INTO ai_audit_data 
+                                            (audit_id, document_id, document_name, document_path, document_type, 
+                                             file_size, mime_type, uploaded_by, ai_processing_status, uploaded_date,
+                                             policy_id, subpolicy_id, upload_status, external_source, external_id,
+                                             created_at, updated_at)
+                                            VALUES (%s, 0, %s, %s, %s, %s, %s, %s, 'pending', NOW(),
+                                                   %s, %s, 'uploaded', 'evidence_attachment', %s, NOW(), NOW())
+                                        """
+                                        cursor.execute(insert_query_no_framework, [
+                                            audit_id,
+                                            file_name,
+                                            document_path,
+                                            file_type[:50],
+                                            file_size,
+                                            mime_type,
+                                            uploaded_by,
+                                            mapping['policy_id'],
+                                            mapping['subpolicy_id'],
+                                            external_id
+                                        ])
+                                    else:
+                                        raise
+                                
+                                # Get the created document_id
+                                cursor.execute("SELECT LAST_INSERT_ID()")
+                                result = cursor.fetchone()
+                                document_id = result[0] if result else None
+                                
+                                if document_id:
+                                    # Update document_id column
+                                    cursor.execute("""
+                                        UPDATE ai_audit_data 
+                                        SET document_id = %s 
+                                        WHERE id = %s
+                                    """, [document_id, document_id])
+                                    
+                                    doc_created_document_ids.append(document_id)
+                                    all_created_document_ids.append(document_id)
+                                    print(f"        ✅ Created mapping: document_id={document_id}, policy_id={mapping['policy_id']}, subpolicy_id={mapping['subpolicy_id']}, compliance_id={mapping['compliance_id']}")
+                            
+                            except Exception as mapping_err:
+                                print(f"        ❌ Error creating mapping: {str(mapping_err)}")
+                                import traceback
+                                traceback.print_exc()
+                                continue
+                        
+                        conn.commit()
+                        print(f"        ✅ Finished processing document operation_id={doc_operation_id} - created {len(doc_created_document_ids)} record(s)")
+                        
+                        # Re-open dictionary cursor for next document
+                        cursor.close()
+                        cursor = conn.cursor(dictionary=True)
+                        
+                    except Exception as doc_process_err:
+                        print(f"      ❌ Error processing document {doc_operation_id}: {doc_process_err}")
+                        import traceback
+                        traceback.print_exc()
+                        # Re-open dictionary cursor for next document
+                        try:
+                            cursor.close()
+                        except:
+                            pass
+                        cursor = conn.cursor(dictionary=True)
+                        continue
+                
+                cursor.close()
+                print(f"      ✅✅✅ Processed ALL {len(all_relevant_documents_to_process)} relevant document(s) from JSON - created {len(all_created_document_ids)} total record(s)")
+                
+                # Automatically trigger compliance checks for all created documents
+                # Note: The compliance check will automatically detect if database evidence exists
+                # and use COMBINED EVIDENCE approach (both document + database) if both are available
+                if all_created_document_ids:
+                    print(f"      🔍 Triggering automatic compliance checks for {len(all_created_document_ids)} document(s)...")
+                    print(f"      📋 Note: Checks will automatically use COMBINED EVIDENCE if both document and database evidence exist")
+                    
+                    # Store compliance_ids for each document
+                    # We need to track which compliance_id each document_id corresponds to
+                    # Since we process documents in order, we can track this during creation
+                    doc_compliance_map = {}
+                    
+                    # Re-query to get compliance_id for each document_id
+                    cursor = conn.cursor(dictionary=True)
+                    for doc_id in all_created_document_ids:
+                        try:
+                            cursor.execute("SELECT compliance_id FROM ai_audit_data WHERE id = %s", (doc_id,))
+                            doc_row = cursor.fetchone()
+                            compliance_id = doc_row.get('compliance_id') if doc_row else None
+                            doc_compliance_map[doc_id] = compliance_id
+                        except:
+                            doc_compliance_map[doc_id] = None
+                    cursor.close()
+                    
+                    def trigger_compliance_check(doc_id, audit_id_val, user_id_val, compliance_id_val):
+                        """Run compliance check in background thread"""
+                        try:
+                            import time
+                            # Small delay to ensure database transaction is committed
+                            time.sleep(2)
+                            
+                            # Import the internal compliance check function
+                            import sys
+                            import os
+                            # Add the Django project root to path
+                            django_project_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+                            if django_project_path not in sys.path:
+                                sys.path.insert(0, django_project_path)
+                            
+                            # Setup Django environment
+                            os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'grc.settings')
+                            import django
+                            django.setup()
+                            
+                            # Now import and call the internal function
+                            from grc.routes.Audit.ai_audit_api import _check_document_compliance_internal
+                            
+                            # Call internal compliance check
+                            result = _check_document_compliance_internal(
+                                audit_id=audit_id_val,
+                                document_id=doc_id,
+                                user_id=user_id_val,
+                                selected_compliance_ids=[compliance_id_val] if compliance_id_val else None
+                            )
+                            
+                            if result.get('success'):
+                                print(f"      ✅ Auto-compliance check completed for document_id={doc_id}")
+                            else:
+                                print(f"      ⚠️ Auto-compliance check failed for document_id={doc_id}: {result.get('error', 'Unknown error')}")
+                        except Exception as check_err:
+                            print(f"      ❌ Error in auto-compliance check for document_id={doc_id}: {str(check_err)}")
+                            import traceback
+                            traceback.print_exc()
+                    
+                    # Start compliance checks in background threads
+                    # Use uploaded_by (resolved UserId) or raw_user_id for the compliance check
+                    user_id_for_check = uploaded_by if uploaded_by else raw_user_id
+                    for doc_id in all_created_document_ids:
+                        compliance_id_for_doc = doc_compliance_map.get(doc_id)
+                        check_thread = threading.Thread(
+                            target=trigger_compliance_check,
+                            args=(doc_id, audit_id, user_id_for_check, compliance_id_for_doc),
+                            daemon=True,
+                            name=f"AutoComplianceCheck-{doc_id}"
+                        )
+                        check_thread.start()
+                        print(f"      🚀 Started compliance check thread for document_id={doc_id}")
+                
+                print(f"{'='*60}")
+                print(f"✅ AUTO-PROCESSING COMPLETED")
+                print(f"   Processed: {len(all_relevant_documents_to_process)} document(s) from JSON")
+                print(f"   Created: {len(all_created_document_ids)} ai_audit_data record(s)")
+                print(f"   Checked: {len(all_created_document_ids)} document(s)")
+                print(f"{'='*60}\n")
+                
+                # Create notification for audit completion
+                # Wait a bit for compliance checks to complete, then send notification
+                def send_audit_completion_notification(audit_id_val, doc_count, user_id_val):
+                    """Send notification after auto-processing completes"""
+                    try:
+                        import time
+                        import os
+                        import sys
+                        import django
+                        
+                        # Setup Django environment for background thread
+                        if not django.apps.apps.ready:
+                            django_project_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+                            if django_project_path not in sys.path:
+                                sys.path.insert(0, django_project_path)
+                            os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'grc.settings')
+                            django.setup()
+                        
+                        # Wait 5 seconds to allow compliance checks to start
+                        time.sleep(5)
+                        
+                        # Get audit name for notification
+                        conn_notif = self._get_db_connection()
+                        if conn_notif:
+                            cursor_notif = conn_notif.cursor(dictionary=True)
+                            try:
+                                cursor_notif.execute("""
+                                    SELECT Title, FrameworkId 
+                                    FROM audit 
+                                    WHERE AuditId = %s
+                                """, (audit_id_val,))
+                                audit_info = cursor_notif.fetchone()
+                                audit_name = audit_info.get('Title', f'Audit {audit_id_val}') if audit_info else f'Audit {audit_id_val}'
+                                
+                                # Import notification helper using proper import (not dynamic file loading)
+                                # This ensures we use the same notifications_storage instance
+                                try:
+                                    from grc.routes.Global.notifications import create_audit_completion_notification
+                                    
+                                    # Create notification using helper function
+                                    print(f"      🔔 Calling create_audit_completion_notification: audit_id={audit_id_val}, user_id={user_id_val}, doc_count={doc_count}")
+                                    notification = create_audit_completion_notification(
+                                        audit_id=audit_id_val,
+                                        audit_name=audit_name,
+                                        document_count=len(all_created_document_ids) if 'all_created_document_ids' in locals() else doc_count,
+                                        user_id=user_id_val
+                                    )
+                                    
+                                    if notification:
+                                        print(f"      📬 Notification created successfully for audit {audit_id_val}: {audit_name}")
+                                        print(f"      📬 Notification details: user_id={notification.get('user_id')}, title={notification.get('title')}")
+                                    else:
+                                        print(f"      ⚠️  Notification creation returned None for audit {audit_id_val}")
+                                except ImportError as import_err:
+                                    print(f"      ⚠️  Could not import notifications module: {str(import_err)}")
+                                    import traceback
+                                    traceback.print_exc()
+                                except Exception as notif_create_err:
+                                    print(f"      ⚠️  Error creating notification: {str(notif_create_err)}")
+                                    import traceback
+                                    traceback.print_exc()
+                            finally:
+                                cursor_notif.close()
+                                conn_notif.close()
+                    except Exception as notif_err:
+                        print(f"      ⚠️ Error creating notification: {str(notif_err)}")
+                        import traceback
+                        traceback.print_exc()
+                        # Don't fail auto-processing if notification fails
+                
+                # Start notification thread (non-blocking)
+                # Use uploaded_by (numeric UserId) for notifications, not username string
+                notification_user_id = uploaded_by if uploaded_by else None
+                if all_created_document_ids:
+                    if notification_user_id:
+                        print(f"      📬 Will create notification for user_id={notification_user_id} (numeric UserId)")
+                        notif_thread = threading.Thread(
+                            target=send_audit_completion_notification,
+                            args=(audit_id, len(all_created_document_ids), notification_user_id),
+                            daemon=True,
+                            name=f"Notification-{audit_id}"
+                        )
+                        notif_thread.start()
+                    else:
+                        print(f"      ⚠️  Skipping notification: Could not resolve user_id (raw_user_id={raw_user_id}, uploaded_by={uploaded_by})")
+                
+            except Exception as e:
+                print(f"      ❌ Error in auto-processing: {str(e)}")
+                import traceback
+                traceback.print_exc()
+            finally:
+                cursor.close()
+                conn.close()
+                
+        except Exception as e:
+            print(f"      ❌ Fatal error in auto-processing: {str(e)}")
+            import traceback
+            traceback.print_exc()
     
     def get_pdf_processing_status(self, operation_id: int) -> Dict:
         """Check if PDF processing is complete and get metadata/summary"""
@@ -1252,7 +3935,8 @@ Your summaries should be:
         return result
     
     def upload(self, file_path: str, user_id: str = "default-user", 
-               custom_file_name: Optional[str] = None, module: str = None) -> Dict:
+               custom_file_name: Optional[str] = None, module: str = None, 
+               framework_id: Optional[int] = None) -> Dict:
         """Upload a file to S3 via Render microservice with MySQL tracking
         
         Args:
@@ -1294,6 +3978,7 @@ Your summaries should be:
                 'file_name': original_file_name,  # Keep original filename for S3 upload
                 'original_name': original_file_name,  # Store actual original filename
                 'module': module or 'general',  # Store module name
+                'framework_id': framework_id,  # Store framework ID
                 'file_type': os.path.splitext(file_name)[1][1:].lower() if '.' in file_name else '',
                 'file_size': file_size,
                 'content_type': mimetypes.guess_type(file_path)[0],
@@ -1304,6 +3989,7 @@ Your summaries should be:
                     'platform': 'Direct',
                     'direct_url': self.api_base_url,
                     'module': module or 'general',
+                    'framework_id': framework_id,
                     'naming_convention': 'original_filename_username_module_timestamp',
                     'modified_name': new_original_name  # Store the modified name for reference
                 }
@@ -1381,7 +4067,7 @@ Your summaries should be:
                 
                 print(f"SUCCESS Upload successful! File: {file_info['storedName']}")
                 
-                # Check if file is PDF and trigger background processing
+                # Check if file is PDF or Excel and trigger background processing
                 file_extension = os.path.splitext(file_name)[1].lower()
                 if file_extension == '.pdf' and operation_id:
                     print(f"📄 PDF detected, starting background processing...")
@@ -1393,6 +4079,16 @@ Your summaries should be:
                     )
                     processing_thread.start()
                     print(f"✅ PDF processing thread started for operation {operation_id}")
+                elif file_extension in ['.xlsx', '.xls'] and operation_id:
+                    print(f"📊 Excel file detected, starting background processing...")
+                    # Start Excel processing in a background thread (non-blocking)
+                    processing_thread = threading.Thread(
+                        target=self._process_excel_after_upload,
+                        args=(operation_id, file_info['url'], file_name),
+                        daemon=True
+                    )
+                    processing_thread.start()
+                    print(f"✅ Excel processing thread started for operation {operation_id}")
                 
                 return {
                     'success': True,
@@ -1401,7 +4097,7 @@ Your summaries should be:
                     'platform': 'Direct',
                     'database': 'MySQL',
                     'message': 'File uploaded successfully to Direct/S3',
-                    'pdf_processing': 'started' if file_extension == '.pdf' else 'not_applicable'
+                    'pdf_processing': 'started' if file_extension == '.pdf' else ('started' if file_extension in ['.xlsx', '.xls'] else 'not_applicable')
                 }
             else:
                 # Update MySQL with failure
@@ -1454,7 +4150,15 @@ Your summaries should be:
             operation_id = self._save_operation_record('download', operation_data)
             
             # Get download URL from Direct service
-            url = f"{self.api_base_url}/api/download/{s3_key}/{file_name}"
+            # URL encode the s3_key and file_name to handle special characters
+            from urllib.parse import quote
+            encoded_s3_key = quote(s3_key, safe='')
+            encoded_file_name = quote(file_name, safe='')
+            url = f"{self.api_base_url}/api/download/{encoded_s3_key}/{encoded_file_name}"
+            
+            print(f"DEBUG: Download URL: {url}")
+            print(f"DEBUG: Original s3_key: {s3_key}, encoded: {encoded_s3_key}")
+            print(f"DEBUG: Original file_name: {file_name}, encoded: {encoded_file_name}")
             
             response = requests.get(url, timeout=60)
             response.raise_for_status()

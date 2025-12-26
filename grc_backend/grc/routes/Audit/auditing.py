@@ -5,6 +5,9 @@ from django.shortcuts import get_object_or_404
 from ...models import Audit, AuditVersion
 from django.db import connection
 import json,datetime
+import json
+import datetime
+from datetime import date
 from rest_framework.decorators import api_view, permission_classes, authentication_classes, parser_classes
 from rest_framework.response import Response
 from rest_framework import status
@@ -77,6 +80,7 @@ def get_audit_task_details(request, audit_id):
                     a.Objective,
                     a.BusinessUnit,
                     a.Evidence,
+                    a.FrameworkId,
                     f.FrameworkName,
                     p.PolicyName,
                     sp.SubPolicyName,
@@ -106,10 +110,11 @@ def get_audit_task_details(request, audit_id):
             audit_objective = audit_row[3] or 'Not Specified'
             audit_business_unit = audit_row[4] or 'Not Specified'
             audit_evidence = audit_row[5] or ''
-            framework_name = audit_row[6] or 'Not Specified'
-            policy_name = audit_row[7] or 'Not Specified'
-            subpolicy_name = audit_row[8] or 'Not Specified'
-            audit_comments = audit_row[9] or ''
+            framework_id = audit_row[6]
+            framework_name = audit_row[7] or 'Not Specified'
+            policy_name = audit_row[8] or 'Not Specified'
+            subpolicy_name = audit_row[9] or 'Not Specified'
+            audit_comments = audit_row[10] or ''
             
             print(f"Found audit: {audit_title} with ID {audit_id_val}")
 
@@ -306,6 +311,7 @@ def get_audit_task_details(request, audit_id):
                         'objective': metadata.get('audit_objective', audit_objective),
                         'business_unit': metadata.get('business_unit', audit_business_unit),
                         'evidence_urls': audit_evidence,
+                        'framework_id': framework_id,
                         'framework_name': framework_name,
                         'policy_name': policy_name,
                         'subpolicy_name': subpolicy_name,
@@ -510,6 +516,7 @@ def get_audit_task_details(request, audit_id):
                 'objective': audit_objective,
                 'business_unit': audit_business_unit,
                 'evidence_urls': audit_evidence,
+                'framework_id': framework_id,
                 'framework_name': framework_name,
                 'policy_name': policy_name,
                 'subpolicy_name': subpolicy_name,
