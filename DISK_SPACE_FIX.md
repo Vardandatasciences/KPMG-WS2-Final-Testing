@@ -74,3 +74,4 @@ sudo xfs_growfs /
 - Much less disk space needed
 
 
+

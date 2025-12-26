@@ -2,7 +2,7 @@
 // Change this variable to switch between different environments
  
 // Environment Configuration
-const ENVIRONMENT = 'aws'; 
+const ENVIRONMENT = 'development'; 
 // Options: 'aws', 'local', 'development'
  
 // API Base URLs for different environments
@@ -93,6 +93,13 @@ export const API_ENDPOINTS = {
   SYSTEM_LOGS: `${API_BASE_URL}/api/system-logs/`,
 
   // Data Analysis
+  MODULE_AI_ANALYSIS: (moduleName, frameworkId = null) => {
+    let url = `${API_BASE_URL}/api/module-ai-analysis/?module_name=${encodeURIComponent(moduleName)}`
+    if (frameworkId && frameworkId !== 'all' && frameworkId !== 'null') {
+      url += `&framework_id=${frameworkId}`
+    }
+    return url
+  },
   DATA_ANALYSIS: (frameworkId = null) => {
     const queryParam = frameworkId ? `?framework_id=${frameworkId}` : '';
     return `${API_BASE_URL}/api/data-analysis${queryParam}`;
