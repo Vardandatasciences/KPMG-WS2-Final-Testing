@@ -12,9 +12,26 @@ const API_URLS = {
   local: 'http://127.0.0.1:8000',
   development: 'http://127.0.0.1:8000'
 };
+
+// CRITICAL: Prevent webpack constant folding by using runtime evaluation
+// This ensures the correct URL is used even after minification
+const getApiBaseUrl = () => {
+  // Force runtime evaluation - prevent webpack from inlining
+  const currentEnv = ENVIRONMENT;
+  if (currentEnv === 'aws') {
+    return API_URLS.aws;
+  } else if (currentEnv === 'local') {
+    return API_URLS.local;
+  } else if (currentEnv === 'development') {
+    return API_URLS.development;
+  }
+  // Default fallback
+  return API_URLS.aws;
+};
  
 // Get the current API base URL based on environment
-export const API_BASE_URL = API_URLS[ENVIRONMENT] || API_URLS.aws;
+// Using function call prevents webpack from inlining the wrong value
+export const API_BASE_URL = getApiBaseUrl();
 
 // Replace with your actual reCAPTCHA site key from Google
 // Get your keys from: https://www.google.com/recaptcha/admin
