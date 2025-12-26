@@ -28,15 +28,14 @@
 
     <!-- Filter Section -->
     <div class="filter-section">
-      <div class="filter-controls" style="display: flex; flex-direction: row; align-items: flex-end; gap: 24px; flex-wrap: nowrap; justify-content: flex-start; width: 100%;">
-        <div class="filter-group" style="display: flex; flex-direction: column; gap: 8px; min-width: 250px; flex: 0 0 auto;">
-          <label for="framework-filter" style="font-size: 12px; font-weight: 600; color: #374151; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Filter by Framework:</label>
+      <div class="filter-controls">
+        <div class="filter-group">
+          <label for="framework-filter">Filter by Framework:</label>
           <select 
             id="framework-filter" 
             v-model="selectedFramework" 
             @change="handleFrameworkChange"
             class="framework-select"
-            style="padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; background: #ffffff; color: #374151; font-size: 14px; font-weight: 500; outline: none; min-width: 250px;"
           >
             <option value="">All Frameworks</option>
             <option 
@@ -49,14 +48,13 @@
           </select>
         </div>
         
-        <div class="filter-group" style="display: flex; flex-direction: column; gap: 8px; min-width: 200px; flex: 0 0 auto;">
-          <label for="status-filter" style="font-size: 12px; font-weight: 600; color: #374151; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Filter by Status:</label>
+        <div class="filter-group">
+          <label for="status-filter">Filter by Status:</label>
           <select 
             id="status-filter" 
             v-model="selectedStatus" 
             @change="handleStatusChange"
             class="status-select"
-            style="padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; background: #ffffff; color: #374151; font-size: 14px; font-weight: 500; outline: none; min-width: 200px;"
           >
             <option value="">All Statuses</option>
             <option value="Fully Compliant">Fully Compliant</option>
@@ -66,14 +64,13 @@
           </select>
         </div>
         
-        <div class="filter-group" style="display: flex; flex-direction: column; gap: 8px; min-width: 200px; flex: 0 0 auto;">
-          <label for="category-filter" style="font-size: 12px; font-weight: 600; color: #374151; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Filter by Category:</label>
+        <div class="filter-group">
+          <label for="category-filter">Filter by Category:</label>
           <select 
             id="category-filter" 
             v-model="selectedCategory" 
             @change="handleCategoryChange"
             class="category-select"
-            style="padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; background: #ffffff; color: #374151; font-size: 14px; font-weight: 500; outline: none; min-width: 200px;"
           >
             <option value="">All Categories</option>
             <option 
@@ -86,14 +83,13 @@
           </select>
         </div>
         
-        <div class="filter-group" style="display: flex; flex-direction: column; gap: 8px; min-width: 200px; flex: 0 0 auto;">
-          <label for="business-unit-filter" style="font-size: 12px; font-weight: 600; color: #374151; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Filter by Business Unit:</label>
+        <div class="filter-group">
+          <label for="business-unit-filter">Filter by Business Unit:</label>
           <select 
             id="business-unit-filter" 
             v-model="selectedBusinessUnit" 
             @change="handleBusinessUnitChange"
             class="business-unit-select"
-            style="padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; background: #ffffff; color: #374151; font-size: 14px; font-weight: 500; outline: none; min-width: 200px;"
           >
             <option value="">All Business Units</option>
             <option 
@@ -106,8 +102,8 @@
           </select>
         </div>
         
-        <div class="filter-group" style="display: flex; flex-direction: column; gap: 8px; min-width: auto; flex: 0 0 auto; margin-left: auto;">
-          <label style="visibility: hidden; height: 20px;">.</label>
+        <div class="filter-group filter-group-action">
+          <label class="filter-label-spacer">&nbsp;</label>
           <button class="btn btn-secondary" @click="clearFilters">
             <i class="fas fa-times"></i>
             Clear Filters
@@ -1073,18 +1069,17 @@ async function handleExport(format) {
 .filter-section {
   background: #f8fafc;
   border-radius: 8px;
-  padding: 24px;
+  padding: 20px;
   margin: 32px 0;
   border: 1px solid #e2e8f0;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .filter-controls {
-  display: flex;
-  gap: 24px;
-  align-items: flex-end;
-  flex-wrap: nowrap;
-  justify-content: flex-start;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  align-items: end;
   width: 100%;
 }
 
@@ -1092,14 +1087,20 @@ async function handleExport(format) {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  min-width: 200px;
-  flex: 0 0 auto;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
-.filter-group:last-child {
-  margin-left: auto;
-  min-width: 70;
-  flex: 0 0 auto;
+.filter-group-action {
+  display: flex;
+  align-items: flex-end;
+}
+
+.filter-label-spacer {
+  height: 20px;
+  visibility: hidden;
+  margin: 0;
+  padding: 0;
 }
 
 .filter-group label {
@@ -1109,6 +1110,9 @@ async function handleExport(format) {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .framework-select,
@@ -1124,7 +1128,9 @@ async function handleExport(format) {
   font-weight: 500;
   outline: none;
   transition: all 0.2s ease;
-  min-width: 200px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .framework-select:hover,
@@ -1701,25 +1707,24 @@ async function handleExport(format) {
   }
   
   .filter-controls {
-    flex-direction: column;
+    grid-template-columns: 1fr;
     gap: 16px;
-    align-items: stretch;
   }
   
   .filter-group {
     min-width: 100%;
-    flex: none;
+    width: 100%;
   }
   
-  .filter-group:last-child {
-    margin-left: 0;
+  .filter-group-action {
+    justify-content: flex-start;
   }
   
   .framework-select,
   .status-select,
   .category-select,
   .business-unit-select {
-    min-width: 100%;
+    width: 100%;
   }
   
   .data-summary {
@@ -1772,6 +1777,18 @@ async function handleExport(format) {
   }
 }
 
+@media (max-width: 1024px) {
+  .filter-controls {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .filter-controls {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 640px) {
   .audit-management-container {
     padding: 16px;
@@ -1813,7 +1830,12 @@ async function handleExport(format) {
   }
   
   .filter-section {
-    padding: 20px;
+    padding: 16px;
+  }
+  
+  .filter-controls {
+    grid-template-columns: 1fr;
+    gap: 12px;
   }
   
   .data-summary {
