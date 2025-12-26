@@ -5097,6 +5097,30 @@ def login_user(request):
                         # Step 4: Check if license verification was successful
                         if not license_verification_result.get("success"):
                             logger.warning(f"❌ LICENSE VALIDATION FAILED: User {user.UserName} - {license_verification_result.get('error')}")
+                            # Log failed login attempt due to license verification failure
+                            try:
+                                from .models import GRCLog
+                                framework = _get_default_framework()
+                                if framework:
+                                    log_entry = GRCLog(
+                                        Module='Authentication',
+                                        ActionType='LOGIN_FAILED',
+                                        Description=f'Failed login attempt for user {user.UserName} (ID: {user.UserId}). Reason: License verification failed',
+                                        UserId=str(user.UserId),
+                                        UserName=user.UserName,
+                                        LogLevel='WARNING',
+                                        IPAddress=client_ip,
+                                        FrameworkId=framework,
+                                        AdditionalInfo={
+                                            'login_type': login_type,
+                                            'reason': 'License verification failed',
+                                            'license_error': license_verification_result.get('error', 'Unknown license error')
+                                        }
+                                    )
+                                    log_entry.save()
+                                    logger.debug(f"Logged failed login (license verification) for {user.UserName} to grc_logs")
+                            except Exception as log_error:
+                                logger.error(f"Error logging failed login attempt to grc_logs: {str(log_error)}")
                             return Response({
                                 'status': 'error',
                                 'message': 'License verification failed. Please contact your administrator.',
@@ -5106,6 +5130,30 @@ def login_user(request):
                             logger.info(f"✅ LICENSE VALIDATION SUCCESS: User {user.UserName} license verified successfully")
                     except Exception as license_error:
                         logger.error(f"❌ LICENSE VALIDATION ERROR: User {user.UserName} - {str(license_error)}")
+                        # Log failed login attempt due to license verification error
+                        try:
+                            from .models import GRCLog
+                            framework = _get_default_framework()
+                            if framework:
+                                log_entry = GRCLog(
+                                    Module='Authentication',
+                                    ActionType='LOGIN_FAILED',
+                                    Description=f'Failed login attempt for user {user.UserName} (ID: {user.UserId}). Reason: License verification error',
+                                    UserId=str(user.UserId),
+                                    UserName=user.UserName,
+                                    LogLevel='ERROR',
+                                    IPAddress=client_ip,
+                                    FrameworkId=framework,
+                                    AdditionalInfo={
+                                        'login_type': login_type,
+                                        'reason': 'License verification error',
+                                        'license_error': str(license_error)
+                                    }
+                                )
+                                log_entry.save()
+                                logger.debug(f"Logged failed login (license error) for {user.UserName} to grc_logs")
+                        except Exception as log_error:
+                            logger.error(f"Error logging failed login attempt to grc_logs: {str(log_error)}")
                         return Response({
                             'status': 'error',
                             'message': 'License verification error. Please contact your administrator.',
@@ -5114,6 +5162,29 @@ def login_user(request):
                 else:
                     # Step 5: Handle case where user has no license key
                     logger.warning(f"❌ LICENSE VALIDATION: User {user.UserName} has no license key assigned")
+                    # Log failed login attempt due to missing license key
+                    try:
+                        from .models import GRCLog
+                        framework = _get_default_framework()
+                        if framework:
+                            log_entry = GRCLog(
+                                Module='Authentication',
+                                ActionType='LOGIN_FAILED',
+                                Description=f'Failed login attempt for user {user.UserName} (ID: {user.UserId}). Reason: No license key assigned',
+                                UserId=str(user.UserId),
+                                UserName=user.UserName,
+                                LogLevel='WARNING',
+                                IPAddress=client_ip,
+                                FrameworkId=framework,
+                                AdditionalInfo={
+                                    'login_type': login_type,
+                                    'reason': 'No license key assigned'
+                                }
+                            )
+                            log_entry.save()
+                            logger.debug(f"Logged failed login (no license key) for {user.UserName} to grc_logs")
+                    except Exception as log_error:
+                        logger.error(f"Error logging failed login attempt to grc_logs: {str(log_error)}")
                     return Response({
                         'status': 'error',
                         'message': 'No license key assigned to this user. Please contact your administrator.'
@@ -5152,8 +5223,8 @@ def login_user(request):
                     send_password_expiry_email(user, is_expired=False, days_until_expiry=days_until_expiry)
                     cache.set(warning_cache_key, True, 86400)  # Cache for 24 hours
             
-            # Log password usage (login)
-            log_password_action(user, 'login', request=request)
+            # Note: Password logs are only saved when password is changed, not on every login
+            # Login activities are logged to grc_logs instead
             
             # ========================================
             # SUCCESSFUL LOGIN - CLEAR FAILED ATTEMPT COUNTERS
@@ -5161,13 +5232,20 @@ def login_user(request):
             cache.delete(user_cache_key)
             cache.delete(lockout_cache_key)
             
+            # Update last login time and activate user on successful login
+            fields_to_update = ['last_login']
+            user.last_login = timezone.now()
+            
             # Activate user on successful login (set IsActive to 'Y')
             # This happens after password verification, so new users can login after resetting password
             if user.IsActive != 'Y':
                 user.IsActive = 'Y'
-                user.save(update_fields=['IsActive'])
+                fields_to_update.append('IsActive')
                 logger.info(f"✅ User {user.UserName} (ID: {user.UserId}) activated on successful login (was inactive)")
                 print(f"[DEBUG] ✅ User {user.UserName} (ID: {user.UserId}) activated on successful login")
+            
+            user.save(update_fields=fields_to_update)
+            logger.info(f"✅ User {user.UserName} (ID: {user.UserId}) last login updated: {user.last_login}")
             
             # Password logging is now handled in the password expiry check above
             
@@ -5191,7 +5269,7 @@ def login_user(request):
                     'id': user.UserId,
                     'UserId': user.UserId,
                     'username': user.UserName,
-                    'Email': user.Email,
+                    'Email': user.email_plain,  # Use decrypted email
                     'firstName': user.FirstName,
                     'lastName': user.LastName,
                     'license_key': user.license_key  # Include the validated license key
@@ -5200,8 +5278,10 @@ def login_user(request):
             
             logger.info(f"✅ LOGIN SUCCESS: User {user.UserName} (ID: {user.UserId}) logged in successfully with license verification")
             
-            # Log successful login to grc_logs
+            # Log successful login to grc_logs - DIRECT DATABASE SAVE
+            log_saved = False
             try:
+                logger.info(f"🔍 Attempting to log successful login for user {user.UserName} (ID: {user.UserId})")
                 framework = _get_default_framework()
                 if framework:
                     client_ip = _get_client_ip(request)
@@ -5217,15 +5297,43 @@ def login_user(request):
                         AdditionalInfo={
                             'login_type': login_type,
                             'license_verified': True,
-                            'license_key': user.license_key[:10] + '...' if user.license_key else None
+                            'license_key': user.license_key[:10] + '...' if user.license_key else None,
+                            'auth_method': 'SESSION'
                         }
                     )
                     log_entry.save()
-                    logger.debug(f"Logged successful login to grc_logs for user {user.UserName} (ID: {user.UserId})")
+                    logger.info(f"✅ Successfully logged login to grc_logs with ID: {log_entry.LogId} for user {user.UserName} (ID: {user.UserId})")
+                    log_saved = True
                 else:
-                    logger.warning("Cannot log successful login: No framework available")
+                    logger.warning("⚠️  Cannot log successful login: No framework available")
             except Exception as log_error:
-                logger.error(f"Error logging successful login to grc_logs: {str(log_error)}")
+                logger.error(f"❌ Error logging successful login to grc_logs: {str(log_error)}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
+            
+            # If direct save failed, try one more time with minimal data
+            if not log_saved:
+                try:
+                    logger.info(f"🔄 Retrying login log save with minimal data")
+                    framework = _get_default_framework()
+                    if framework:
+                        client_ip = _get_client_ip(request)
+                        log_entry = GRCLog(
+                            Module='Authentication',
+                            ActionType='LOGIN_SUCCESS',
+                            Description=f'User {user.UserName} logged in',
+                            UserId=str(user.UserId),
+                            UserName=user.UserName,
+                            LogLevel='INFO',
+                            IPAddress=client_ip or 'unknown',
+                            FrameworkId=framework
+                        )
+                        log_entry.save()
+                        logger.info(f"✅ RETRY SUCCESS: Logged login with ID: {log_entry.LogId}")
+                    else:
+                        logger.error(f"❌ CRITICAL: Cannot save login log - no framework available")
+                except Exception as retry_error:
+                    logger.error(f"❌ CRITICAL: Retry also failed: {str(retry_error)}")
             
             return Response(response_data)
             
@@ -5235,6 +5343,31 @@ def login_user(request):
             # ========================================
             failed_attempts = cache.get(user_cache_key, 0) + 1
             cache.set(user_cache_key, failed_attempts, 900)  # Keep counter for 15 minutes
+            
+            # Log failed login attempt to grc_logs
+            try:
+                from .models import GRCLog
+                framework = _get_default_framework()
+                if framework:
+                    log_entry = GRCLog(
+                        Module='Authentication',
+                        ActionType='LOGIN_FAILED',
+                        Description=f'Failed login attempt for {login_type}: {username}. Reason: Invalid credentials',
+                        UserName=username,
+                        LogLevel='WARNING',
+                        IPAddress=client_ip,
+                        FrameworkId=framework,
+                        AdditionalInfo={
+                            'login_type': login_type,
+                            'failed_attempts': failed_attempts,
+                            'attempt_number': failed_attempts
+                        }
+                    )
+                    log_entry.save()
+                    logger.debug(f"Logged failed login attempt for {username} to grc_logs")
+            except Exception as log_error:
+                logger.error(f"Error logging failed login attempt to grc_logs: {str(log_error)}")
+                # Don't fail login if logging fails
             
             if failed_attempts >= 5:
                 # Lock account for 15 minutes
@@ -5254,6 +5387,29 @@ def login_user(request):
                 'message': f'Invalid {login_type} or password. ({failed_attempts}/5 attempts)'
             }, status=status.HTTP_401_UNAUTHORIZED)
         except ValueError:
+            # Log failed login attempt due to invalid format
+            try:
+                from .models import GRCLog
+                framework = _get_default_framework()
+                if framework:
+                    log_entry = GRCLog(
+                        Module='Authentication',
+                        ActionType='LOGIN_FAILED',
+                        Description=f'Failed login attempt - invalid user ID format: {username}',
+                        UserName=username if username else 'Unknown',
+                        LogLevel='WARNING',
+                        IPAddress=client_ip,
+                        FrameworkId=framework,
+                        AdditionalInfo={
+                            'login_type': login_type,
+                            'reason': 'Invalid user ID format'
+                        }
+                    )
+                    log_entry.save()
+                    logger.debug(f"Logged failed login attempt (invalid format) for {username} to grc_logs")
+            except Exception as log_error:
+                logger.error(f"Error logging failed login attempt to grc_logs: {str(log_error)}")
+            
             logger.warning(f"Login failed - invalid user ID format: {username}")
             return Response({
                 'status': 'error',
@@ -5271,11 +5427,172 @@ def login_user(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def logout_user(request):
+    print("=" * 80)
+    print("🚪🚪🚪 SESSION LOGOUT FUNCTION CALLED 🚪🚪🚪")
+    print("=" * 80)
     try:
-        # Log the logout attempt
-        user_id = request.session.get('user_id')
+        print("[DEBUG] Session logout: Starting logout process...")
+        # Get user info before clearing session - CHECK ALL POSSIBLE SESSION KEYS
+        logger.info(f"Session keys available: {list(request.session.keys())}")
+        print(f"[DEBUG] Session keys available: {list(request.session.keys())}")
+        
+        # Try multiple session keys to find user_id
+        user_id = (request.session.get('user_id') or 
+                  request.session.get('grc_user_id') or
+                  None)
+        
+        # Try to get username from multiple session keys
+        username = (request.session.get('grc_username') or 
+                   request.session.get('username') or 
+                   'Unknown')
+        
+        client_ip = request.META.get('REMOTE_ADDR', 'unknown')
+        framework_id = None
+        
+        logger.info(f"Initial session data - user_id: {user_id}, username: {username}, IP: {client_ip}")
+        
+        # Try to get framework_id from user if available
         if user_id:
-            logger.info(f"Logout initiated for user ID: {user_id}")
+            try:
+                from .models import Users
+                # Handle case where user_id might be string
+                if isinstance(user_id, str) and user_id.isdigit():
+                    user_id = int(user_id)
+                user = Users.objects.get(UserId=user_id)
+                username = user.UserName
+                framework_id = user.FrameworkId.FrameworkId if user.FrameworkId else None
+                logger.info(f"✅ Got user from database: {username} (ID: {user_id}), framework_id: {framework_id}")
+            except (Users.DoesNotExist, ValueError, TypeError) as e:
+                logger.warning(f"Could not get user from database: {str(e)}")
+                pass
+        
+        # Invalidate session token for multi-session management
+        if user_id:
+            try:
+                from .authentication import _invalidate_user_session
+                _invalidate_user_session(user_id)
+                logger.info(f"🔐 Session token invalidated for user {user_id} on session logout")
+            except Exception as session_error:
+                logger.warning(f"Error invalidating session token: {str(session_error)}")
+        
+        # Log logout to grc_logs before clearing session - ALWAYS LOG, even if user_id is None
+        logger.info("=" * 80)
+        logger.info("🚪 SESSION LOGOUT CALLED")
+        logger.info(f"User info - user_id: {user_id}, username: {username}, IP: {client_ip}")
+        logger.info("=" * 80)
+        print("=" * 80)
+        print("🚪 SESSION LOGOUT CALLED")
+        print(f"User info - user_id: {user_id}, username: {username}, IP: {client_ip}")
+        print("=" * 80)
+        
+        log_saved = False
+        print("[DEBUG] About to enter logging block...")
+        # ALWAYS try to log, even if user_id is None
+        if True:  # Changed from "if user_id:" to always log
+            print("[DEBUG] Inside logging block - attempting send_log...")
+            try:
+                from .routes.Global.logging_service import send_log
+                logger.info(f"🔍 Attempting to log logout for user {username} (ID: {user_id})")
+                print(f"[DEBUG] 🔍 Attempting to log logout for user {username} (ID: {user_id})")
+                log_id = send_log(
+                    module='Authentication',
+                    actionType='LOGOUT',
+                    description=f'User {username} (ID: {user_id or "Unknown"}) logged out successfully',
+                    userId=str(user_id) if user_id else None,
+                    userName=username if username != 'Unknown' else None,
+                    logLevel='INFO',
+                    ipAddress=client_ip,
+                    additionalInfo={'auth_method': 'session', 'user_id_found': user_id is not None},
+                    frameworkId=framework_id
+                )
+                print(f"[DEBUG] send_log returned: {log_id}")
+                if log_id:
+                    logger.info(f"✅ Successfully logged logout to grc_logs with ID: {log_id}")
+                    print(f"[DEBUG] ✅ Successfully logged logout to grc_logs with ID: {log_id}")
+                    log_saved = True
+                else:
+                    logger.warning(f"⚠️  send_log returned None for logout - trying direct database save")
+                    print(f"[DEBUG] ⚠️  send_log returned None for logout - trying direct database save")
+            except Exception as log_error:
+                logger.error(f"❌ Error in send_log for logout: {str(log_error)}")
+                print(f"[DEBUG] ❌ Error in send_log for logout: {str(log_error)}")
+                import traceback
+                error_trace = traceback.format_exc()
+                logger.error(f"Traceback: {error_trace}")
+                print(f"[DEBUG] Traceback: {error_trace}")
+            
+            # FALLBACK: Direct database save if send_log failed
+            print(f"[DEBUG] log_saved status: {log_saved}")
+            if not log_saved:
+                print("[DEBUG] Entering direct database save fallback...")
+                try:
+                    logger.info(f"🔄 Attempting direct database save for logout log")
+                    print(f"[DEBUG] 🔄 Attempting direct database save for logout log")
+                    framework = _get_default_framework()
+                    print(f"[DEBUG] Framework retrieved: {framework}")
+                    if framework:
+                        print(f"[DEBUG] Framework found: ID={framework.FrameworkId}, Name={framework.FrameworkName}")
+                        log_entry = GRCLog(
+                            Module='Authentication',
+                            ActionType='LOGOUT',
+                            Description=f'User {username} (ID: {user_id or "Unknown"}) logged out successfully',
+                            UserId=str(user_id) if user_id else None,
+                            UserName=username if username != 'Unknown' else None,
+                            LogLevel='INFO',
+                            IPAddress=client_ip,
+                            FrameworkId=framework,
+                            AdditionalInfo={
+                                'auth_method': 'session',
+                                'logged_via': 'direct_database_save',
+                                'user_id_found': user_id is not None
+                            }
+                        )
+                        print(f"[DEBUG] Creating GRCLog entry with:")
+                        print(f"  - Module: Authentication")
+                        print(f"  - ActionType: LOGOUT")
+                        print(f"  - UserId: {user_id} (type: {type(user_id)})")
+                        print(f"  - UserName: {username}")
+                        print(f"  - FrameworkId: {framework.FrameworkId}")
+                        print(f"  - IPAddress: {client_ip}")
+                        
+                        log_entry.save()
+                        print(f"[DEBUG] ✅ GRCLog.save() called successfully, LogId: {log_entry.LogId}")
+                        
+                        # Verify the log was saved with user_id
+                        try:
+                            saved_log = GRCLog.objects.get(LogId=log_entry.LogId)
+                            logger.info(f"✅ DIRECT SAVE SUCCESS: Logged logout to grc_logs with ID: {log_entry.LogId}")
+                            logger.info(f"✅ VERIFIED: Saved log has UserId={saved_log.UserId}, UserName={saved_log.UserName}")
+                            print(f"[DEBUG] ✅ VERIFIED: Saved log has UserId={saved_log.UserId}, UserName={saved_log.UserName}")
+                            log_saved = True
+                            print(f"[LOGOUT LOG] ✅ Saved logout log with ID: {log_entry.LogId} for user {username} (ID: {user_id})")
+                        except Exception as verify_error:
+                            print(f"[DEBUG] ❌ Verification failed: {str(verify_error)}")
+                            logger.error(f"❌ Verification failed: {str(verify_error)}")
+                    else:
+                        logger.error(f"❌ Cannot save logout log: No framework available")
+                        print(f"[DEBUG] ❌ Cannot save logout log: No framework available")
+                except Exception as direct_save_error:
+                    logger.error(f"❌ CRITICAL: Direct database save for logout also failed: {str(direct_save_error)}")
+                    print(f"[DEBUG] ❌ CRITICAL: Direct database save for logout also failed: {str(direct_save_error)}")
+                    import traceback
+                    error_trace = traceback.format_exc()
+                    logger.error(f"Traceback: {error_trace}")
+                    print(f"[DEBUG] Traceback: {error_trace}")
+                    print(f"[LOGOUT LOG ERROR] {str(direct_save_error)}")
+        
+        print(f"[DEBUG] Final log_saved status: {log_saved}")
+        if not log_saved:
+            logger.error(f"❌❌❌ CRITICAL WARNING: Logout log was NOT saved to database!")
+            print(f"[DEBUG] ❌❌❌ CRITICAL WARNING: Logout log was NOT saved to database!")
+            print(f"[LOGOUT LOG ERROR] ❌ Failed to save logout log - check Django logs for details")
+        else:
+            logger.info("=" * 80)
+            logger.info("✅ LOGOUT LOGGING COMPLETED SUCCESSFULLY")
+            logger.info("=" * 80)
+            print("=" * 80)
+            print("✅ LOGOUT LOGGING COMPLETED SUCCESSFULLY")
+            print("=" * 80)
         
         # Clear all session data
         request.session.flush()
@@ -5484,7 +5801,7 @@ def register_user(request):
             logger.info(f"✅ User created successfully: {user.UserId} - {user.UserName}")
             print(f"[DEBUG] ✅ User created successfully: {user.UserId} - {user.UserName}")
             
-            # Log password creation
+            # Log password creation to password_logs
             try:
                 from .models import PasswordLog
                 PasswordLog.objects.create(
@@ -5502,6 +5819,26 @@ def register_user(request):
             except Exception as log_error:
                 logger.error(f"❌ Failed to create password log: {str(log_error)}")
                 print(f"[DEBUG] ❌ Failed to create password log: {str(log_error)}")
+                # Don't fail user creation if logging fails
+            
+            # Also log user registration and password creation to grc_logs
+            try:
+                from .routes.Global.logging_service import send_log
+                client_ip = request.META.get('REMOTE_ADDR', 'unknown')
+                send_log(
+                    module='User Management',
+                    actionType='USER_REGISTERED',
+                    description=f'New user {user.UserName} (ID: {user.UserId}) registered with email {user.Email}',
+                    userId=str(user.UserId),
+                    userName=user.UserName,
+                    logLevel='INFO',
+                    ipAddress=client_ip,
+                    additionalInfo={'email': user.Email, 'created_by': 'admin', 'password_created': True},
+                    frameworkId=user.FrameworkId.FrameworkId if user.FrameworkId else None
+                )
+                logger.info(f"✅ User registration logged to grc_logs: {user.UserName}")
+            except Exception as log_error:
+                logger.error(f"❌ Failed to log user registration to grc_logs: {str(log_error)}")
                 # Don't fail user creation if logging fails
         except Exception as create_error:
             import traceback
@@ -5940,23 +6277,28 @@ def get_user_profile(request, user_id):
         from .routes.Global.data_masking import get_masking_service
         masking_service = get_masking_service()
         
-        # Mask sensitive data for display
+        # Get decrypted values for encrypted fields
+        email_plain = user.email_plain
+        phone_plain = user.phone_plain
+        address_plain = user.address_plain
+        
+        # Mask sensitive data for display (using decrypted values)
         masked_data = {
             'firstName': masking_service.mask_name(user.FirstName) if user.FirstName else None,
             'lastName': masking_service.mask_name(user.LastName) if user.LastName else None,
-            'email': masking_service.mask_email(user.Email) if user.Email else None,
-            'phoneNumber': masking_service.mask_phone(user.PhoneNumber) if user.PhoneNumber else None,
-            'address': masking_service.mask_address(user.Address) if user.Address else None,
+            'email': masking_service.mask_email(email_plain) if email_plain else None,
+            'phoneNumber': masking_service.mask_phone(phone_plain) if phone_plain else None,
+            'address': masking_service.mask_address(address_plain) if address_plain else None,
             'username': masking_service.mask_name(user.UserName) if user.UserName else None,
             'isActive': user.IsActive,
             'departmentId': user.DepartmentId,
-            # Include original values for editing (only if user is viewing their own profile or is admin)
+            # Include original values for editing (decrypted values)
             'original': {
                 'firstName': user.FirstName,
                 'lastName': user.LastName,
-                'email': user.Email,
-                'phoneNumber': user.PhoneNumber,
-                'address': user.Address,
+                'email': email_plain,  # Use decrypted email
+                'phoneNumber': phone_plain,  # Use decrypted phone
+                'address': address_plain,  # Use decrypted address
                 'username': user.UserName
             }
         }
@@ -6394,10 +6736,16 @@ def send_otp(request):
                 'message': 'Email is required'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Check if user exists with this Email
+        # Check if user exists with this Email (handles encrypted email fields)
         try:
-            user = Users.objects.get(Email=Email)
-        except Users.DoesNotExist:
+            user = Users.find_by_email(Email)
+            if not user:
+                return Response({
+                    'success': False,
+                    'message': 'No user found with this Email address'
+                }, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error finding user by email: {str(e)}")
             return Response({
                 'success': False,
                 'message': 'No user found with this Email address'
@@ -6532,7 +6880,7 @@ def get_user_email_by_username(request):
             user = Users.objects.get(UserName=username)
             return Response({
                 'success': True,
-                'email': user.Email,
+                'email': user.email_plain,  # Use decrypted email
                 'message': 'User found'
             })
         except Users.DoesNotExist:
@@ -6707,16 +7055,33 @@ def reset_password(request):
                 'message': 'Email does not match the verified OTP request.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Find and update user password
+        # Find and update user password (handles encrypted email fields)
         try:
-            user = Users.objects.get(Email=Email)
+            user = Users.find_by_email(Email)
+            if not user:
+                return Response({
+                    'success': False,
+                    'message': 'No user found with this Email address'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # Check password history to prevent reuse
+            from .routes.Global.password_expiry_utils import check_password_history, get_password_history_count
+            is_reused, checked_count = check_password_history(user, new_password)
+            if is_reused:
+                history_count = get_password_history_count()
+                logger.warning(f"⚠️ Password reuse blocked for user {user.UserName}: new password matches one of the last {history_count} passwords")
+                return Response({
+                    'success': False,
+                    'message': f'Password has been used recently. Please choose a different password that is not one of your last {history_count} passwords.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
             # Store old password hash for logging
             old_password_hash = user.Password
             # Always store password as a secure hash
             user.Password = make_password(new_password)
             user.save(update_fields=['Password'])
             
-            # Log password reset using utility function
+            # Log password reset using utility function (to password_logs)
             try:
                 from .routes.Global.password_expiry_utils import log_password_action
                 log_password_action(
@@ -6729,6 +7094,26 @@ def reset_password(request):
                 logger.info(f"✅ Password log created for reset: {user.UserName}")
             except Exception as log_error:
                 logger.error(f"❌ Failed to create password log on reset: {str(log_error)}")
+                # Don't fail password reset if logging fails
+            
+            # Also log password reset to grc_logs
+            try:
+                from .routes.Global.logging_service import send_log
+                client_ip = request.META.get('REMOTE_ADDR', 'unknown')
+                send_log(
+                    module='Authentication',
+                    actionType='PASSWORD_RESET',
+                    description=f'User {user.UserName} (ID: {user.UserId}) reset their password via forgot password flow',
+                    userId=str(user.UserId),
+                    userName=user.UserName,
+                    logLevel='INFO',
+                    ipAddress=client_ip,
+                    additionalInfo={'reset_method': 'forgot_password', 'email': Email},
+                    frameworkId=user.FrameworkId.FrameworkId if user.FrameworkId else None
+                )
+                logger.info(f"✅ Password reset logged to grc_logs for user: {user.UserName}")
+            except Exception as log_error:
+                logger.error(f"❌ Failed to log password reset to grc_logs: {str(log_error)}")
                 # Don't fail password reset if logging fails
             
             # Clear session data (only if they exist)
@@ -6882,7 +7267,7 @@ def test_jwt_auth(request):
                 'user': {
                     'id': user.UserId,
                     'username': user.UserName,
-                    'Email': user.Email,
+                    'Email': user.email_plain,  # Use decrypted email
                     'firstName': user.FirstName,
                     'lastName': user.LastName
                 },

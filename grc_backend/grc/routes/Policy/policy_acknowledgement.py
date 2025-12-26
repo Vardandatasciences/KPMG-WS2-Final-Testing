@@ -194,12 +194,15 @@ def create_acknowledgement_request(request):
                     print(f"User for email {manual_email} already processed (UserId: {existing_manual_user.UserId})")
                     continue
                 
-                # Try to find existing user by email
+                # Try to find existing user by email (handles encrypted email fields)
                 try:
-                    manual_user = Users.objects.get(Email=manual_email, IsActive='Y')
-                    manual_users.append(manual_user)
-                    print(f"Found existing user for manual email: {manual_email} (UserId: {manual_user.UserId})")
-                except Users.DoesNotExist:
+                    manual_user = Users.find_by_email(manual_email)
+                    if manual_user and manual_user.IsActive == 'Y':
+                        manual_users.append(manual_user)
+                        print(f"Found existing user for manual email: {manual_email} (UserId: {manual_user.UserId})")
+                    else:
+                        raise Users.DoesNotExist
+                except (Users.DoesNotExist, AttributeError):
                     # User doesn't exist, create a minimal user record
                     try:
                         manual_user = Users.objects.create(

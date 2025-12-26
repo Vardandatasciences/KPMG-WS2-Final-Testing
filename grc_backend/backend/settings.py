@@ -560,6 +560,20 @@ RISK_AI_PROVIDER = os.environ.get('RISK_AI_PROVIDER', 'ollama')
 PASSWORD_EXPIRY_DAYS = int(os.environ.get('PASSWORD_EXPIRY_DAYS', '90'))
 # Days before expiry to send warning email (7 days before expiry)
 PASSWORD_EXPIRY_WARNING_DAYS = int(os.environ.get('PASSWORD_EXPIRY_WARNING_DAYS', '7'))
+# Number of previous passwords to check for reuse prevention (5 passwords)
+PASSWORD_HISTORY_COUNT = int(os.environ.get('PASSWORD_HISTORY_COUNT', '5'))
+
+# =========================================================================
+# USER INACTIVITY SETTINGS
+# =========================================================================
+# Number of days of inactivity before a user is automatically deactivated
+# Users who haven't logged in for this many days will have their IsActive status changed to 'N'
+# Default: 90 days (3 months)
+USER_INACTIVITY_DAYS = int(os.environ.get('USER_INACTIVITY_DAYS', '90'))
+# Whether to send email notifications to users before deactivation (future feature)
+USER_INACTIVITY_EMAIL_ENABLED = os.environ.get('USER_INACTIVITY_EMAIL_ENABLED', 'false').lower() == 'true'
+# Days before deactivation to send warning email (future feature)
+USER_INACTIVITY_WARNING_DAYS = int(os.environ.get('USER_INACTIVITY_WARNING_DAYS', '7'))
 
 # ===== EMAIL AND NOTIFICATION CONFIGURATION =====
 

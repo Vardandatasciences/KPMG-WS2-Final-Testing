@@ -97,23 +97,28 @@ def get_user_profile(request, user_id):
         from .data_masking import get_masking_service
         masking_service = get_masking_service()
         
-        # Mask sensitive data for display
+        # Get decrypted values for encrypted fields
+        email_plain = user.email_plain
+        phone_plain = user.phone_plain
+        address_plain = user.address_plain
+        
+        # Mask sensitive data for display (using decrypted values)
         masked_data = {
             'firstName': masking_service.mask_name(user.FirstName) if user.FirstName else None,
             'lastName': masking_service.mask_name(user.LastName) if user.LastName else None,
-            'email': masking_service.mask_email(user.Email) if user.Email else None,
-            'phoneNumber': masking_service.mask_phone(user.PhoneNumber) if user.PhoneNumber else None,
-            'address': masking_service.mask_address(user.Address) if user.Address else None,
+            'email': masking_service.mask_email(email_plain) if email_plain else None,
+            'phoneNumber': masking_service.mask_phone(phone_plain) if phone_plain else None,
+            'address': masking_service.mask_address(address_plain) if address_plain else None,
             'username': masking_service.mask_name(user.UserName) if user.UserName else None,
             'isActive': user.IsActive,
             'departmentId': user.DepartmentId,
-            # Include original values for editing (only if user is viewing their own profile or is admin)
+            # Include original values for editing (decrypted values)
             'original': {
                 'firstName': user.FirstName,
                 'lastName': user.LastName,
-                'email': user.Email,
-                'phoneNumber': user.PhoneNumber,
-                'address': user.Address,
+                'email': email_plain,  # Use decrypted email
+                'phoneNumber': phone_plain,  # Use decrypted phone
+                'address': address_plain,  # Use decrypted address
                 'username': user.UserName
             }
         }
@@ -411,19 +416,18 @@ def create_data_subject_request(request):
         # If still not found, try to get from email or other identifiers for GDPR compliance
         if not user_id:
             # Try to get user by email if provided (for GDPR data subject requests)
+            # Note: Using find_by_email to handle encrypted email fields
             email = request.data.get('email')
             if email:
                 try:
-                    user = Users.objects.get(Email=email)
-                    user_id = user.UserId
-                    logger.info(f"[Data Subject Request] Found user_id {user_id} from email {email}")
-                except Users.DoesNotExist:
-                    logger.warning(f"[Data Subject Request] User not found with email {email}")
-                except Users.MultipleObjectsReturned:
-                    logger.warning(f"[Data Subject Request] Multiple users found with email {email}")
-                    user = Users.objects.filter(Email=email).first()
+                    user = Users.find_by_email(email)
                     if user:
                         user_id = user.UserId
+                        logger.info(f"[Data Subject Request] Found user_id {user_id} from email {email}")
+                    else:
+                        logger.warning(f"[Data Subject Request] User not found with email {email}")
+                except Exception as e:
+                    logger.warning(f"[Data Subject Request] Error finding user by email {email}: {str(e)}")
         
         # For GDPR compliance, we need user_id but it can come from request data
         if not user_id:
@@ -631,15 +635,15 @@ def export_user_data_portability(request):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Collect personal information
+        # Collect personal information (using decrypted values for encrypted fields)
         personal_data = {
             'userId': user.UserId,
             'username': user.UserName,
             'firstName': user.FirstName,
             'lastName': user.LastName,
-            'email': user.Email,
-            'phoneNumber': user.PhoneNumber,
-            'address': user.Address,
+            'email': user.email_plain,  # Use decrypted email
+            'phoneNumber': user.phone_plain,  # Use decrypted phone
+            'address': user.address_plain,  # Use decrypted address
             'isActive': user.IsActive,
             'createdAt': user.CreatedAt.isoformat() if user.CreatedAt else None,
             'updatedAt': user.UpdatedAt.isoformat() if user.UpdatedAt else None,

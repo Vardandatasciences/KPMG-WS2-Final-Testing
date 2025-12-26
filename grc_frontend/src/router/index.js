@@ -146,6 +146,7 @@ import PrivacySecurity from '../components/Help/PrivacySecurity.vue'
 import HelpUsImprove from '../components/Help/HelpUsImprove.vue'
 import Acknowledgement from '../components/Help/Acknowledgement.vue'
 import CookiePolicy from '../components/Cookie/CookiePolicy.vue'
+import OrganizationalControls from '../components/Compliance/OrganizationalControls.vue'
  
 const routes = [
   {
@@ -796,6 +797,12 @@ const routes = [
     path: '/compliance/popup-demo',
     name: 'PopupDemo',
     component: PopupDemo
+  },
+  {
+    path: '/compliance/organizational-controls',
+    name: 'OrganizationalControls',
+    component: OrganizationalControls,
+    meta: { requiresAuth: true }
   },
   {
     path: '/compliance/edit/:id',

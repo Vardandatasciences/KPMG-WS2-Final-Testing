@@ -422,16 +422,29 @@ class ForgotPasswordService:
             # Update password in database
             from django.contrib.auth.hashers import make_password
             from grc.models import Users, PasswordLog
+            from .password_expiry_utils import check_password_history, get_password_history_count
             
             try:
                 user = Users.objects.get(UserId=otp_validation['user_id'])
+                
+                # Check password history to prevent reuse
+                is_reused, checked_count = check_password_history(user, new_password)
+                if is_reused:
+                    history_count = get_password_history_count()
+                    self.log_password_reset_action(user.UserId, email, 'reset_password', False, f'Password reuse detected (checked last {checked_count} passwords)', ip_address, user_agent)
+                    logger.warning(f"⚠️ Password reuse blocked for user {user.UserName}: new password matches one of the last {history_count} passwords")
+                    return {
+                        'success': False,
+                        'message': f'Password has been used recently. Please choose a different password that is not one of your last {history_count} passwords.'
+                    }
+                
                 # Store old password hash for logging
                 old_password_hash = user.Password
                 # Hash the new password properly
                 user.Password = make_password(new_password)
                 user.save(update_fields=['Password'])
                 
-                # Log password reset
+                # Log password reset to password_logs
                 try:
                     PasswordLog.objects.create(
                         UserId=user.UserId,
@@ -446,6 +459,25 @@ class ForgotPasswordService:
                     logger.info(f"✅ Password log created for reset: {user.UserName}")
                 except Exception as log_error:
                     logger.error(f"❌ Failed to create password log on reset: {str(log_error)}")
+                    # Don't fail password reset if logging fails
+                
+                # Also log password reset to grc_logs
+                try:
+                    from ...routes.Global.logging_service import send_log
+                    send_log(
+                        module='Authentication',
+                        actionType='PASSWORD_RESET',
+                        description=f'User {user.UserName} (ID: {user.UserId}) reset their password via forgot password service',
+                        userId=str(user.UserId),
+                        userName=user.UserName,
+                        logLevel='INFO',
+                        ipAddress=ip_address,
+                        additionalInfo={'reset_method': 'forgot_password_service', 'email': email},
+                        frameworkId=user.FrameworkId.FrameworkId if user.FrameworkId else None
+                    )
+                    logger.info(f"✅ Password reset logged to grc_logs for user: {user.UserName}")
+                except Exception as log_error:
+                    logger.error(f"❌ Failed to log password reset to grc_logs: {str(log_error)}")
                     # Don't fail password reset if logging fails
             except Users.DoesNotExist:
                 raise Exception(f"User with ID {otp_validation['user_id']} not found")

@@ -138,6 +138,10 @@
             <i class="fas fa-check-double icon"></i>
             <span>Compliance Approval</span>
           </div>
+          <div class="menu-item" @click="navigate('/compliance/organizational-controls')" :class="{'active': isActive('/compliance/organizational-controls')}">
+            <i class="fas fa-sitemap icon"></i>
+            <span>Organizational Controls</span>
+          </div>
         </div>
 
         <!-- 2. Compliance Creation -->
