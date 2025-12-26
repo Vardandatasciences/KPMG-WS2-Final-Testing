@@ -455,11 +455,14 @@ def get_sections_by_user(request, userid):
         
         # Extract data from consolidated structure
         sections = data.get('sections', [])
-        framework_info = data.get('framework_info', {})
+        framework_info = data.get('framework_info', {}) or {}
         summary = data.get('summary', {})
         
-        # Get framework name
-        framework_name = framework_info.get('framework_name', 'Uploaded Framework')
+        # Get framework name (handle None case)
+        if framework_info and isinstance(framework_info, dict):
+            framework_name = framework_info.get('framework_name', 'Uploaded Framework')
+        else:
+            framework_name = 'Uploaded Framework'
         
         print(f"[SUCCESS] Loaded from framework_data.json: {summary}")
         
