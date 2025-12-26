@@ -432,7 +432,8 @@ from .routes.DataAnalysis.aiDataAnalysis import (
     get_ai_privacy_analysis,
     get_privacy_dashboard_metrics,
     get_privacy_compliance_report,
-    export_privacy_report
+    export_privacy_report,
+    get_module_ai_analysis
 )
 
 
@@ -2820,6 +2821,7 @@ urlpatterns = [
     path('privacy-dashboard-metrics/', get_privacy_dashboard_metrics, name='privacy-dashboard-metrics'),
     path('privacy-compliance-report/', get_privacy_compliance_report, name='privacy-compliance-report'),
     path('export-privacy-report/', export_privacy_report, name='export-privacy-report'),
+    path('module-ai-analysis/', get_module_ai_analysis, name='module-ai-analysis'),
 
     # ========================================================================
 

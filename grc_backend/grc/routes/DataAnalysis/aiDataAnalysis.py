@@ -936,6 +936,317 @@ def generate_pdf_report(report_data):
     return buffer
 
 
+def generate_module_ai_analysis(module_name, module_data, module_metrics, framework_id=None):
+    """
+    Generate AI-powered analysis for a specific module.
+    Returns recommendations to improve scores and detects miscategorized columns.
+    """
+    # Prepare module-specific data for AI
+    module_summary = {
+        'module_name': module_name,
+        'total_records': module_data.get('total_records', 0),
+        'total_fields': module_data.get('total_fields', 0),
+        'records_with_inventory': module_data.get('records_with_inventory', 0),
+        'personal_count': module_data.get('personal_count', 0),
+        'regular_count': module_data.get('regular_count', 0),
+        'confidential_count': module_data.get('confidential_count', 0),
+        'personal_percentage': module_data.get('personal_percentage', 0),
+        'regular_percentage': module_data.get('regular_percentage', 0),
+        'confidential_percentage': module_data.get('confidential_percentage', 0),
+        'maturity_score': module_metrics.get('maturity', 0),
+        'minimization_score': module_metrics.get('minimization', 0),
+        'coverage_score': module_metrics.get('coverage', 0),
+        'field_classifications': {}
+    }
+    
+    # Add all field classifications for miscategorization analysis
+    if 'all_fields' in module_data and module_data['all_fields']:
+        # Include all fields, not just top 50, for thorough analysis
+        module_summary['field_classifications'] = {
+            field_name: {
+                'classification': field_info['classification'],
+                'count': field_info['count']
+            }
+            for field_name, field_info in module_data['all_fields'].items()
+        }
+    
+    prompt = f"""Analyze the following module-level privacy and data protection metrics for a GRC (Governance, Risk & Compliance) system.
+
+MODULE DATA:
+{json.dumps(module_summary, indent=2)}
+
+Your task is to:
+1. Provide specific, actionable recommendations to improve the module's maturity score, minimization score, and coverage score
+2. Identify miscategorized data fields by analyzing field names and their current classifications
+3. Prioritize recommendations by impact and feasibility
+
+For field miscategorization analysis, carefully review each field name in field_classifications and determine if its classification (personal, regular, or confidential) is appropriate based on:
+- Field name patterns (e.g., fields containing "email", "phone", "ssn", "address", "name", "id", "dob", "birth", "salary", "credit", "card" are typically personal data)
+- Fields containing "secret", "password", "key", "token", "api", "auth" are typically confidential
+- Industry standards and privacy regulations (GDPR, CCPA, HIPAA)
+- Context of the module where the field appears
+
+Please provide a JSON response with the following structure:
+{{
+    "recommendations": [
+        {{
+            "priority": "high|medium|low",
+            "category": "maturity|minimization|coverage|data_inventory|governance",
+            "title": "Specific recommendation title",
+            "description": "Detailed recommendation description with actionable steps",
+            "impact": "Expected impact on score (e.g., 'Can improve maturity score by 10-15 points')",
+            "feasibility": "high|medium|low",
+            "estimated_score_improvement": {{
+                "maturity": 0-20,
+                "minimization": 0-20,
+                "coverage": 0-20
+            }}
+        }}
+    ],
+    "miscategorizations": [
+        {{
+            "field_name": "field_name",
+            "current_classification": "personal|regular|confidential",
+            "suggested_classification": "personal|regular|confidential",
+            "confidence": "high|medium|low",
+            "reason": "Detailed explanation of why this field may be miscategorized based on field name patterns and privacy regulations",
+            "risk_level": "low|medium|high|critical",
+            "recommendation": "Specific action to take (e.g., 'Reclassify this field as personal data to comply with GDPR')"
+        }}
+    ],
+    "score_analysis": {{
+        "maturity_analysis": "Detailed analysis of why maturity score is at current level and how to improve it",
+        "minimization_analysis": "Detailed analysis of minimization score and recommendations",
+        "coverage_analysis": "Analysis of data inventory coverage and how to improve it"
+    }},
+    "priority_actions": [
+        "Top 3 most important actions to take immediately"
+    ]
+}}
+
+Focus on:
+1. Specific, actionable recommendations that can directly improve scores
+2. Field-level miscategorization detection (CRITICAL - analyze ALL fields in field_classifications)
+3. Prioritization by impact and compliance risk
+4. Clear explanations of why fields may be miscategorized
+"""
+    
+    try:
+        ai_response = _call_openai_api(prompt, temperature=0.3, max_tokens=4000)
+        
+        # Ensure required fields exist
+        if 'recommendations' not in ai_response:
+            ai_response['recommendations'] = []
+        if 'miscategorizations' not in ai_response:
+            ai_response['miscategorizations'] = []
+        if 'score_analysis' not in ai_response:
+            ai_response['score_analysis'] = {
+                'maturity_analysis': 'Analysis unavailable',
+                'minimization_analysis': 'Analysis unavailable',
+                'coverage_analysis': 'Analysis unavailable'
+            }
+        if 'priority_actions' not in ai_response:
+            ai_response['priority_actions'] = []
+        
+        return ai_response
+    except Exception as e:
+        logger.error(f"Error generating module AI analysis: {str(e)}")
+        return {
+            'error': f"Failed to generate AI analysis: {str(e)}",
+            'recommendations': [],
+            'miscategorizations': [],
+            'score_analysis': {
+                'maturity_analysis': 'AI analysis unavailable',
+                'minimization_analysis': 'AI analysis unavailable',
+                'coverage_analysis': 'AI analysis unavailable'
+            },
+            'priority_actions': []
+        }
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_module_ai_analysis(request):
+    """
+    Get AI-powered analysis for a specific module.
+    Returns:
+    - Recommendations to improve maturity, minimization, and coverage scores
+    - Detected miscategorized columns with suggested reclassifications
+    - Score analysis and priority actions
+    """
+    try:
+        module_name = request.query_params.get('module_name', None)
+        framework_id = request.query_params.get('framework_id', None)
+        
+        if not module_name:
+            return Response({
+                'status': 'error',
+                'message': 'module_name parameter is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Normalize module name
+        module_name = module_name.lower().strip()
+        
+        # Map module names to model classes
+        module_map = {
+            'policy': Policy,
+            'compliance': Compliance,
+            'audit': Audit,
+            'incident': Incident,
+            'risk': Risk,
+            'risk_instance': RiskInstance,
+            'event': Event
+        }
+        
+        if module_name not in module_map:
+            return Response({
+                'status': 'error',
+                'message': f'Invalid module name. Valid modules: {", ".join(module_map.keys())}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Build filter query
+        filter_query = Q()
+        if framework_id and framework_id != 'all' and framework_id != 'null':
+            try:
+                framework_id = int(framework_id)
+                filter_query = Q(FrameworkId=framework_id)
+            except (ValueError, TypeError):
+                pass
+        
+        # Collect module-specific data
+        model_class = module_map[module_name]
+        queryset = model_class.objects.filter(filter_query)
+        
+        module_data = {
+            'name': module_name,
+            'total_records': queryset.count(),
+            'total_fields': 0,
+            'personal_count': 0,
+            'regular_count': 0,
+            'confidential_count': 0,
+            'records_with_inventory': 0,
+            'all_fields': {}
+        }
+        
+        # Process data inventory
+        for record in queryset:
+            data_inventory = getattr(record, 'data_inventory', None)
+            if data_inventory:
+                if isinstance(data_inventory, str):
+                    try:
+                        data_inventory = json.loads(data_inventory)
+                    except json.JSONDecodeError:
+                        continue
+                
+                if isinstance(data_inventory, dict):
+                    module_data['records_with_inventory'] += 1
+                    module_data['total_fields'] += len(data_inventory)
+                    
+                    for field_name, field_type in data_inventory.items():
+                        if isinstance(field_type, str):
+                            field_type_lower = field_type.lower()
+                            
+                            # Store field with its classification
+                            if field_name not in module_data['all_fields']:
+                                module_data['all_fields'][field_name] = {
+                                    'classification': field_type_lower,
+                                    'count': 0
+                                }
+                            module_data['all_fields'][field_name]['count'] += 1
+                            
+                            # Count by type
+                            if field_type_lower == 'personal':
+                                module_data['personal_count'] += 1
+                            elif field_type_lower == 'regular':
+                                module_data['regular_count'] += 1
+                            elif field_type_lower == 'confidential':
+                                module_data['confidential_count'] += 1
+        
+        # Calculate percentages
+        total_module_fields = module_data['personal_count'] + module_data['regular_count'] + module_data['confidential_count']
+        if total_module_fields > 0:
+            module_data['personal_percentage'] = round((module_data['personal_count'] / total_module_fields) * 100, 2)
+            module_data['regular_percentage'] = round((module_data['regular_count'] / total_module_fields) * 100, 2)
+            module_data['confidential_percentage'] = round((module_data['confidential_count'] / total_module_fields) * 100, 2)
+        else:
+            module_data['personal_percentage'] = 0
+            module_data['regular_percentage'] = 0
+            module_data['confidential_percentage'] = 0
+        
+        # Calculate module metrics
+        if module_data['records_with_inventory'] > 0:
+            module_total = module_data['personal_count'] + module_data['regular_count'] + module_data['confidential_count']
+            if module_total > 0:
+                module_sensitive = module_data['personal_count'] + module_data['confidential_count']
+                module_minimization = max(0, 100 - ((module_sensitive / module_total) * 100))
+                module_coverage = (module_data['records_with_inventory'] / module_data['total_records'] * 100) if module_data['total_records'] > 0 else 0
+                module_maturity = (module_coverage * 0.5) + (module_minimization * 0.5)
+            else:
+                module_minimization = 0
+                module_maturity = 0
+                module_coverage = 0
+        else:
+            module_minimization = 0
+            module_maturity = 0
+            module_coverage = 0
+        
+        module_metrics = {
+            'maturity': round(module_maturity, 2),
+            'minimization': round(module_minimization, 2),
+            'coverage': round(module_coverage, 2)
+        }
+        
+        # Generate AI analysis
+        logger.info(f"Generating AI analysis for module: {module_name}")
+        try:
+            ai_analysis = generate_module_ai_analysis(module_name, module_data, module_metrics, framework_id)
+        except Exception as ai_error:
+            logger.error(f"AI analysis generation failed: {str(ai_error)}")
+            ai_analysis = {
+                'error': f"AI analysis failed: {str(ai_error)}",
+                'recommendations': [],
+                'miscategorizations': [],
+                'score_analysis': {
+                    'maturity_analysis': 'AI analysis unavailable',
+                    'minimization_analysis': 'AI analysis unavailable',
+                    'coverage_analysis': 'AI analysis unavailable'
+                },
+                'priority_actions': []
+            }
+        
+        # Compile response
+        response_data = {
+            'module_name': module_name,
+            'module_data': {
+                'total_records': module_data['total_records'],
+                'total_fields': module_data['total_fields'],
+                'records_with_inventory': module_data['records_with_inventory'],
+                'personal_count': module_data['personal_count'],
+                'regular_count': module_data['regular_count'],
+                'confidential_count': module_data['confidential_count'],
+                'personal_percentage': module_data['personal_percentage'],
+                'regular_percentage': module_data['regular_percentage'],
+                'confidential_percentage': module_data['confidential_percentage']
+            },
+            'module_metrics': module_metrics,
+            'ai_analysis': ai_analysis,
+            'generated_at': datetime.now().isoformat(),
+            'framework_id': framework_id
+        }
+        
+        return Response({
+            'status': 'success',
+            'data': response_data
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        logger.error(f"Error in module AI analysis: {str(e)}")
+        return Response({
+            'status': 'error',
+            'message': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def export_privacy_report(request):

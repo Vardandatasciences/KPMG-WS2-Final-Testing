@@ -122,6 +122,8 @@
           v-for="(module, moduleName) in modules"
           :key="moduleName"
           class="module-card"
+          :class="{ 'module-card-selected': selectedModule === moduleName }"
+          @click="selectModule(moduleName)"
         >
           <div class="module-header">
             <h2 class="module-title">
@@ -255,10 +257,6 @@
                       stroke-dashoffset="0"
                       transform="rotate(-90 50 50)"
                       class="chart-segment personal-segment"
-                      @mouseenter="showTooltip($event, 'personal', module.columns?.personal || [])"
-                      @mouseleave="hideTooltip"
-                      @mousemove="updateTooltipPosition($event)"
-                      style="cursor: pointer;"
                     />
                     <circle
                       v-if="module.regular > 0"
@@ -272,10 +270,6 @@
                       :stroke-dashoffset="-(module.personal * 2.387)"
                       transform="rotate(-90 50 50)"
                       class="chart-segment regular-segment"
-                      @mouseenter="showTooltip($event, 'regular', module.columns?.regular || [])"
-                      @mouseleave="hideTooltip"
-                      @mousemove="updateTooltipPosition($event)"
-                      style="cursor: pointer;"
                     />
                     <circle
                       v-if="module.confidential > 0"
@@ -289,10 +283,6 @@
                       :stroke-dashoffset="-(module.personal + module.regular) * 2.387"
                       transform="rotate(-90 50 50)"
                       class="chart-segment confidential-segment"
-                      @mouseenter="showTooltip($event, 'confidential', module.columns?.confidential || [])"
-                      @mouseleave="hideTooltip"
-                      @mousemove="updateTooltipPosition($event)"
-                      style="cursor: pointer;"
                     />
                   </svg>
                   <div class="pie-center">
@@ -300,33 +290,6 @@
                     <span class="pie-label">Fields</span>
                   </div>
                 </div>
-                <!-- Tooltip -->
-                <transition name="tooltip-fade">
-                  <div
-                    v-if="tooltip.visible"
-                    class="chart-tooltip"
-                    :style="{ top: tooltip.y + 'px', left: tooltip.x + 'px' }"
-                  >
-                  <div class="tooltip-header">
-                    <i :class="getCategoryIcon(tooltip.category)"></i>
-                    {{ tooltip.category }} Data
-                  </div>
-                  <div class="tooltip-content">
-                    <div v-if="tooltip.columns && tooltip.columns.length > 0" class="tooltip-columns">
-                      <div class="tooltip-subtitle">Column Headers:</div>
-                      <div
-                        v-for="(column, index) in tooltip.columns"
-                        :key="index"
-                        class="tooltip-column-item"
-                      >
-                        <i class="fas fa-chevron-right"></i>
-                        {{ column }}
-                      </div>
-                    </div>
-                    <div v-else class="tooltip-empty">No columns found</div>
-                  </div>
-                  </div>
-                </transition>
               </div>
             </div>
 
@@ -348,6 +311,234 @@
           </div>
         </div>
       </div>
+
+      <!-- Detailed Module Report -->
+      <div v-if="selectedModule" class="module-report-section">
+        <div class="report-header">
+          <h2 class="report-title">
+            <i :class="getModuleIcon(selectedModule)"></i>
+            {{ formatModuleName(selectedModule) }} - Detailed Report
+          </h2>
+          <button @click="closeReport" class="close-report-btn">
+            <i class="fas fa-times"></i>
+            Close
+          </button>
+        </div>
+
+        <div class="report-content">
+          <!-- Data Classification Columns -->
+          <div class="report-section">
+            <h3 class="report-section-title">
+              <i class="fas fa-columns"></i>
+              Data Classification Columns
+            </h3>
+            <div class="columns-grid">
+              <div class="column-category" v-if="selectedModuleData.columns?.personal?.length > 0">
+                <div class="column-category-header personal">
+                  <i class="fas fa-user-shield"></i>
+                  <span>Personal Data ({{ selectedModuleData.columns.personal.length }} columns)</span>
+                </div>
+                <div class="column-list">
+                  <div
+                    v-for="(column, index) in selectedModuleData.columns.personal"
+                    :key="index"
+                    class="column-item"
+                  >
+                    <i class="fas fa-chevron-right"></i>
+                    {{ column }}
+                  </div>
+                </div>
+              </div>
+
+              <div class="column-category" v-if="selectedModuleData.columns?.regular?.length > 0">
+                <div class="column-category-header regular">
+                  <i class="fas fa-file-alt"></i>
+                  <span>Regular Data ({{ selectedModuleData.columns.regular.length }} columns)</span>
+                </div>
+                <div class="column-list">
+                  <div
+                    v-for="(column, index) in selectedModuleData.columns.regular"
+                    :key="index"
+                    class="column-item"
+                  >
+                    <i class="fas fa-chevron-right"></i>
+                    {{ column }}
+                  </div>
+                </div>
+              </div>
+
+              <div class="column-category" v-if="selectedModuleData.columns?.confidential?.length > 0">
+                <div class="column-category-header confidential">
+                  <i class="fas fa-lock"></i>
+                  <span>Confidential Data ({{ selectedModuleData.columns.confidential.length }} columns)</span>
+                </div>
+                <div class="column-list">
+                  <div
+                    v-for="(column, index) in selectedModuleData.columns.confidential"
+                    :key="index"
+                    class="column-item"
+                  >
+                    <i class="fas fa-chevron-right"></i>
+                    {{ column }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- AI Privacy Metrics -->
+          <div class="report-section">
+            <h3 class="report-section-title">
+              <i class="fas fa-robot"></i>
+              AI Privacy Metrics
+            </h3>
+            <div class="ai-metrics-grid">
+              <div class="ai-metric-card">
+                <div class="ai-metric-icon maturity">
+                  <i class="fas fa-chart-line"></i>
+                </div>
+                <div class="ai-metric-content">
+                  <h4>Maturity Score</h4>
+                  <p class="ai-metric-value">
+                    {{ moduleAiMetrics.maturity != null ? moduleAiMetrics.maturity : 'N/A' }}
+                    <span v-if="moduleAiMetrics.maturity != null">/ 100</span>
+                  </p>
+                  <p class="ai-metric-description">
+                    Measures overall privacy maturity based on data inventory coverage and classification quality
+                  </p>
+                </div>
+              </div>
+
+              <div class="ai-metric-card">
+                <div class="ai-metric-icon minimization">
+                  <i class="fas fa-compress-arrows-alt"></i>
+                </div>
+                <div class="ai-metric-content">
+                  <h4>Minimization Score</h4>
+                  <p class="ai-metric-value">
+                    {{ moduleAiMetrics.minimization != null ? moduleAiMetrics.minimization : 'N/A' }}
+                    <span v-if="moduleAiMetrics.minimization != null">/ 100</span>
+                  </p>
+                  <p class="ai-metric-description">
+                    Higher score indicates better data minimization (less sensitive data relative to regular data)
+                  </p>
+                </div>
+              </div>
+
+              <div class="ai-metric-card">
+                <div class="ai-metric-icon coverage">
+                  <i class="fas fa-database"></i>
+                </div>
+                <div class="ai-metric-content">
+                  <h4>Coverage Score</h4>
+                  <p class="ai-metric-value">
+                    {{ moduleAiMetrics.coverage != null ? moduleAiMetrics.coverage : 'N/A' }}
+                    <span v-if="moduleAiMetrics.coverage != null">%</span>
+                  </p>
+                  <p class="ai-metric-description">
+                    Percentage of records in this module with data inventory configured
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <!-- AI Recommendations to Improve Scores -->
+            <div v-if="moduleRecommendations.length > 0" class="ai-recommendations-section">
+              <h4 class="recommendations-title">
+                <i class="fas fa-lightbulb"></i>
+                AI Recommendations to Improve Scores
+              </h4>
+              <div class="recommendations-list">
+                <div
+                  v-for="(rec, index) in moduleRecommendations"
+                  :key="index"
+                  :class="['recommendation-card', getPriorityClass(rec.priority)]"
+                >
+                  <div class="recommendation-header">
+                    <div class="recommendation-priority-badge" :class="getPriorityClass(rec.priority)">
+                      <i :class="rec.priority === 'high' || rec.priority === 'critical' ? 'fas fa-exclamation-circle' : 'fas fa-info-circle'"></i>
+                      {{ rec.priority?.toUpperCase() || 'MEDIUM' }} PRIORITY
+                    </div>
+                    <span class="recommendation-category">{{ rec.category?.replace('_', ' ') || 'General' }}</span>
+                  </div>
+                  <h5 class="recommendation-title">{{ rec.title }}</h5>
+                  <p class="recommendation-description">{{ rec.description }}</p>
+                  <div v-if="rec.impact" class="recommendation-impact">
+                    <i class="fas fa-chart-line"></i>
+                    <strong>Expected Impact:</strong> {{ rec.impact }}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Miscategorized Columns -->
+            <div v-if="moduleMiscategorizations.length > 0" class="miscategorizations-section">
+              <h4 class="miscategorizations-title">
+                <i class="fas fa-exclamation-triangle"></i>
+                Miscategorized Columns Detected
+                <span class="miscat-count-badge">{{ moduleMiscategorizations.length }}</span>
+              </h4>
+              <p class="miscategorizations-description">
+                AI analysis has identified potential miscategorizations in this module. Review and update these field classifications to improve accuracy and compliance.
+              </p>
+              <div class="miscategorizations-list">
+                <div
+                  v-for="(miscat, index) in moduleMiscategorizations"
+                  :key="index"
+                  :class="['miscat-card', getRiskClass(miscat.risk_level)]"
+                >
+                  <div class="miscat-header">
+                    <div class="miscat-field-name">
+                      <i class="fas fa-tag"></i>
+                      <strong>{{ miscat.field_name }}</strong>
+                    </div>
+                    <div class="miscat-risk-badge" :class="getRiskClass(miscat.risk_level)">
+                      {{ miscat.risk_level?.toUpperCase() || 'MEDIUM' }} RISK
+                    </div>
+                  </div>
+                  <div class="miscat-classification-change">
+                    <div class="classification-badge current" :style="{ backgroundColor: getClassificationColor(miscat.current_classification) + '20', color: getClassificationColor(miscat.current_classification), borderColor: getClassificationColor(miscat.current_classification) }">
+                      <i class="fas fa-arrow-right"></i>
+                      Current: {{ miscat.current_classification?.toUpperCase() || 'UNKNOWN' }}
+                    </div>
+                    <i class="fas fa-arrow-right classification-arrow"></i>
+                    <div class="classification-badge suggested" :style="{ backgroundColor: getClassificationColor(miscat.suggested_classification) + '20', color: getClassificationColor(miscat.suggested_classification), borderColor: getClassificationColor(miscat.suggested_classification) }">
+                      <i class="fas fa-check-circle"></i>
+                      Suggested: {{ miscat.suggested_classification?.toUpperCase() || 'UNKNOWN' }}
+                    </div>
+                  </div>
+                  <div class="miscat-details">
+                    <div class="miscat-reason">
+                      <i class="fas fa-info-circle"></i>
+                      <strong>Reason:</strong> {{ miscat.reason }}
+                    </div>
+                    <div v-if="miscat.recommendation" class="miscat-recommendation">
+                      <i class="fas fa-lightbulb"></i>
+                      <strong>Action:</strong> {{ miscat.recommendation }}
+                    </div>
+                    <div v-if="miscat.confidence" class="miscat-confidence">
+                      <i class="fas fa-certificate"></i>
+                      <strong>Confidence:</strong> {{ miscat.confidence?.toUpperCase() || 'MEDIUM' }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Loading State -->
+            <div v-if="loadingModuleAI" class="loading-ai-analysis">
+              <div class="spinner-small"></div>
+              <p>Analyzing module with AI...</p>
+            </div>
+
+            <!-- No AI Data Message -->
+            <div v-if="!loadingModuleAI && moduleRecommendations.length === 0 && moduleMiscategorizations.length === 0 && moduleAiMetrics.maturity != null" class="no-ai-data-message">
+              <i class="fas fa-info-circle"></i>
+              <p>No specific AI recommendations or miscategorizations found for this module. The current classification appears to be accurate.</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -358,6 +549,7 @@ import axios from 'axios'
 import { API_ENDPOINTS, API_BASE_URL } from '../../config/api.js'
 import './dataAnalysis.css'
 import aiPrivacyService from '@/services/aiPrivacyService' // NEW: reuse AI privacy metrics
+import moduleAiAnalysisService from '@/services/moduleAiAnalysisService' // NEW: reuse module AI analysis
 
 export default {
   name: 'DataAnalysis',
@@ -368,13 +560,15 @@ export default {
     const frameworks = ref([])
     const loadingFrameworks = ref(false)
     const selectedFrameworkId = ref('all')
-    const tooltip = ref({
-      visible: false,
-      category: '',
-      columns: [],
-      x: 0,
-      y: 0
+    const selectedModule = ref(null)
+    const moduleAiMetrics = ref({
+      maturity: null,
+      minimization: null,
+      coverage: null
     })
+    const moduleRecommendations = ref([])
+    const moduleMiscategorizations = ref([])
+    const loadingModuleAI = ref(false)
     const privacyMetrics = ref({
       maturity_score: 0,
       minimization_score: 0,
@@ -383,6 +577,19 @@ export default {
 
     const modules = computed(() => {
       return data.value || {}
+    })
+
+    const selectedModuleData = computed(() => {
+      if (!selectedModule.value || !modules.value[selectedModule.value]) {
+        return {
+          columns: {
+            personal: [],
+            regular: [],
+            confidential: []
+          }
+        }
+      }
+      return modules.value[selectedModule.value]
     })
 
     const overallStats = computed(() => {
@@ -513,65 +720,133 @@ export default {
       }
     }
 
+    const selectModule = async (moduleName) => {
+      selectedModule.value = moduleName
+      loadingModuleAI.value = true
+      
+      // Fetch module-level AI metrics
+      try {
+        let frameworkId = selectedFrameworkId.value
+        if (frameworkId === 'all' || frameworkId === null || frameworkId === undefined) {
+          frameworkId = null
+        }
+
+        // Get AI analysis data (use cache if available)
+        let aiData = null
+        if (aiPrivacyService.hasValidCache(frameworkId)) {
+          aiData = aiPrivacyService.getAnalysis(frameworkId)
+        } else {
+          aiData = await aiPrivacyService.fetchAnalysis(frameworkId)
+        }
+
+        // Extract module-level metrics
+        if (aiData?.metrics?.module_scores?.[moduleName]) {
+          const moduleScores = aiData.metrics.module_scores[moduleName]
+          moduleAiMetrics.value = {
+            maturity: moduleScores.maturity || null,
+            minimization: moduleScores.minimization || null,
+            coverage: moduleScores.coverage || null
+          }
+        } else {
+          // Reset if no module scores available
+          moduleAiMetrics.value = {
+            maturity: null,
+            minimization: null,
+            coverage: null
+          }
+        }
+
+        // Fetch module-specific AI analysis (recommendations and miscategorizations)
+        // First try to use cached data from the service
+        try {
+          if (moduleAiAnalysisService.hasValidCache(moduleName, frameworkId)) {
+            console.log(`[DataAnalysis] Using cached module AI analysis for ${moduleName}`)
+            const cachedData = moduleAiAnalysisService.getModuleAnalysis(moduleName, frameworkId)
+            if (cachedData?.ai_analysis) {
+              const aiAnalysis = cachedData.ai_analysis
+              moduleRecommendations.value = aiAnalysis.recommendations || []
+              moduleMiscategorizations.value = aiAnalysis.miscategorizations || []
+            } else {
+              moduleRecommendations.value = []
+              moduleMiscategorizations.value = []
+            }
+          } else {
+            // If no cache, fetch from API via service
+            console.log(`[DataAnalysis] No cached module AI analysis for ${moduleName}, fetching from API...`)
+            const moduleData = await moduleAiAnalysisService.fetchModuleAnalysis(moduleName, frameworkId)
+            if (moduleData?.ai_analysis) {
+              const aiAnalysis = moduleData.ai_analysis
+              moduleRecommendations.value = aiAnalysis.recommendations || []
+              moduleMiscategorizations.value = aiAnalysis.miscategorizations || []
+            } else {
+              moduleRecommendations.value = []
+              moduleMiscategorizations.value = []
+            }
+          }
+        } catch (aiErr) {
+          console.error('Error fetching module AI analysis:', aiErr)
+          moduleRecommendations.value = []
+          moduleMiscategorizations.value = []
+        }
+      } catch (err) {
+        console.error('Error fetching module AI metrics:', err)
+        moduleAiMetrics.value = {
+          maturity: null,
+          minimization: null,
+          coverage: null
+        }
+        moduleRecommendations.value = []
+        moduleMiscategorizations.value = []
+      } finally {
+        loadingModuleAI.value = false
+      }
+    }
+
+    const closeReport = () => {
+      selectedModule.value = null
+      moduleAiMetrics.value = {
+        maturity: null,
+        minimization: null,
+        coverage: null
+      }
+      moduleRecommendations.value = []
+      moduleMiscategorizations.value = []
+    }
+
+    const getPriorityClass = (priority) => {
+      const priorityMap = {
+        'high': 'priority-high',
+        'medium': 'priority-medium',
+        'low': 'priority-low',
+        'critical': 'priority-critical'
+      }
+      return priorityMap[priority?.toLowerCase()] || 'priority-medium'
+    }
+
+    const getRiskClass = (riskLevel) => {
+      const riskMap = {
+        'critical': 'risk-critical',
+        'high': 'risk-high',
+        'medium': 'risk-medium',
+        'low': 'risk-low'
+      }
+      return riskMap[riskLevel?.toLowerCase()] || 'risk-medium'
+    }
+
+    const getClassificationColor = (classification) => {
+      const colorMap = {
+        'personal': '#66BB6A',
+        'regular': '#64B5F6',
+        'confidential': '#E57373'
+      }
+      return colorMap[classification?.toLowerCase()] || '#999'
+    }
+
     const onFrameworkChange = () => {
       fetchData()
       fetchPrivacyMetrics()
     }
 
-    let tooltipTimeout = null
-    let positionUpdateFrame = null
-
-    const showTooltip = (event, category, columns) => {
-      // Clear any pending hide timeout
-      if (tooltipTimeout) {
-        clearTimeout(tooltipTimeout)
-        tooltipTimeout = null
-      }
-      
-      // Cancel any pending position update
-      if (positionUpdateFrame) {
-        cancelAnimationFrame(positionUpdateFrame)
-        positionUpdateFrame = null
-      }
-      
-      tooltip.value = {
-        visible: true,
-        category: category.charAt(0).toUpperCase() + category.slice(1),
-        columns: columns,
-        x: event.clientX,
-        y: event.clientY
-      }
-    }
-
-    const updateTooltipPosition = (event) => {
-      if (tooltip.value.visible) {
-        // Use requestAnimationFrame for smooth position updates
-        if (positionUpdateFrame) {
-          cancelAnimationFrame(positionUpdateFrame)
-        }
-        positionUpdateFrame = requestAnimationFrame(() => {
-          tooltip.value.x = event.clientX
-          tooltip.value.y = event.clientY
-          positionUpdateFrame = null
-        })
-      }
-    }
-
-    const hideTooltip = () => {
-      // Cancel any pending position updates
-      if (positionUpdateFrame) {
-        cancelAnimationFrame(positionUpdateFrame)
-        positionUpdateFrame = null
-      }
-      // Add small delay to prevent flickering when moving between segments
-      if (tooltipTimeout) {
-        clearTimeout(tooltipTimeout)
-      }
-      tooltipTimeout = setTimeout(() => {
-        tooltip.value.visible = false
-        tooltipTimeout = null
-      }, 150)
-    }
 
     const getCategoryIcon = (category) => {
       const icons = {
@@ -618,14 +893,21 @@ export default {
       frameworks,
       loadingFrameworks,
       selectedFrameworkId,
-      tooltip,
+      selectedModule,
+      selectedModuleData,
+      moduleAiMetrics,
+      moduleRecommendations,
+      moduleMiscategorizations,
+      loadingModuleAI,
       privacyMetrics,
       fetchData,
       fetchFrameworks,
       onFrameworkChange,
-      showTooltip,
-      updateTooltipPosition,
-      hideTooltip,
+      selectModule,
+      closeReport,
+      getPriorityClass,
+      getRiskClass,
+      getClassificationColor,
       getCategoryIcon,
       formatModuleName,
       getModuleIcon
