@@ -200,8 +200,7 @@ def _call_ollama_api(prompt, audit_id=None, document_id=None, model_type='compli
     model = getattr(settings, 'OLLAMA_MODEL', 'llama3.1:8b')
     temperature = getattr(settings, 'OLLAMA_TEMPERATURE', 0.1)
     max_tokens = getattr(settings, 'OLLAMA_MAX_TOKENS', 800)
-    # Cap timeout at 180 seconds (3 minutes) to prevent excessive waits and HTTP timeouts
-    timeout = min(getattr(settings, 'OLLAMA_TIMEOUT', 120), 180)
+    timeout = getattr(settings, 'OLLAMA_TIMEOUT', 120)
     
     logger.info(f"🤖 Calling Ollama at {base_url} with model: {model}, temperature: {temperature}")
     
@@ -585,13 +584,34 @@ class AIAuditDocumentUploadView(View):
                                 import traceback
                                 logger.warning(f"❌ Error details: {traceback.format_exc()}")
                         
-                        # STEP 3: Also ensure the uploaded document is in the processing list (if it's not already there)
+                        # STEP 3: Only add uploaded document if it has matched compliances (relevant documents only)
                         uploaded_doc_in_list = any(op_id == file_operation_id for op_id, _ in all_relevant_documents_to_process)
                         if not uploaded_doc_in_list:
-                            # Add the uploaded document with its matched compliances (if any were found)
-                            logger.info(f"📋 Adding uploaded document (file_operation_id={file_operation_id}) to processing list")
-                            # We'll use the file info we already fetched, but add it to the list for processing
-                            all_relevant_documents_to_process.append((file_operation_id, []))  # Empty compliances means it will be processed but might not have matches yet
+                            # Check if uploaded document has matched compliances from database
+                            try:
+                                cursor.execute("""
+                                    SELECT matched_compliances
+                                    FROM document_audit_relevance
+                                    WHERE file_operation_id = %s AND audit_id = %s
+                                    LIMIT 1
+                                """, [int(file_operation_id), int(audit_id) if str(audit_id).isdigit() else audit_id])
+                                relevance_row = cursor.fetchone()
+                                if relevance_row and relevance_row[0]:
+                                    try:
+                                        matched_compliances_for_uploaded = json.loads(relevance_row[0]) if isinstance(relevance_row[0], str) else relevance_row[0]
+                                        if matched_compliances_for_uploaded and len(matched_compliances_for_uploaded) > 0:
+                                            all_relevant_documents_to_process.append((file_operation_id, matched_compliances_for_uploaded))
+                                            logger.info(f"✅ Added uploaded document (file_operation_id={file_operation_id}) with {len(matched_compliances_for_uploaded)} matched compliances")
+                                        else:
+                                            logger.info(f"⏭️ Skipping uploaded document (file_operation_id={file_operation_id}) - no matched compliances (not relevant)")
+                                    except Exception as e:
+                                        logger.warning(f"⚠️ Could not parse matched_compliances: {e}")
+                                        logger.info(f"⏭️ Skipping uploaded document (file_operation_id={file_operation_id}) - invalid relevance data")
+                                else:
+                                    logger.info(f"⏭️ Skipping uploaded document (file_operation_id={file_operation_id}) - no relevance found (not relevant)")
+                            except Exception as e:
+                                logger.warning(f"⚠️ Error checking relevance for uploaded document: {e}")
+                                logger.info(f"⏭️ Skipping uploaded document (file_operation_id={file_operation_id}) - cannot verify relevance")
                         
                         # STEP 4: Log what documents we found
                         logger.info(f"🔄 Found {len(all_relevant_documents_to_process)} relevant document(s) to process from JSON:")
@@ -906,17 +926,118 @@ class AIAuditDocumentUploadView(View):
                 
                 logger.info(f"✅✅✅ Processed ALL {len(all_relevant_documents_to_process)} relevant document(s) from JSON - created {len(all_created_document_ids)} total record(s)")
                 
-                # If we processed all documents from JSON, return early (skip single document processing)
+                # AUTOMATIC COMPLIANCE CHECK FOR DOCUMENT HANDLING UPLOADS (JSON batch processing)
+                # When documents are processed from JSON (Document Handling), automatically trigger compliance checks
                 if len(all_created_document_ids) > 0:
+                    logger.info(f"🔄 Document Handling batch upload detected - checking if automatic compliance check needed for {len(all_created_document_ids)} mapping(s)")
+                    
+                    # Get the first document's info to check if already completed
+                    primary_document_id = all_created_document_ids[0]
+                    with connection.cursor() as cursor:
+                        cursor.execute("""
+                            SELECT document_name, file_size, external_source
+                            FROM ai_audit_data
+                            WHERE id = %s AND audit_id = %s
+                            LIMIT 1
+                        """, [primary_document_id, int(audit_id) if str(audit_id).isdigit() else audit_id])
+                        doc_info = cursor.fetchone()
+                        
+                        if doc_info:
+                            doc_name, doc_size, doc_external_source = doc_info
+                            
+                            # Check if this file (by name + size) is already completed for this audit
+                            cursor.execute("""
+                                SELECT COUNT(*) FROM ai_audit_data 
+                                WHERE document_name = %s
+                                  AND file_size = %s
+                                  AND audit_id = %s
+                                  AND ai_processing_status = 'completed'
+                                  AND (external_source = 'evidence_attachment' OR external_source IS NULL)
+                            """, [doc_name, doc_size, int(audit_id) if str(audit_id).isdigit() else audit_id])
+                            count_result = cursor.fetchone()
+                            completed_count = count_result[0] if count_result else 0
+                            
+                            if completed_count > 0:
+                                logger.info(f"⏭️ Skipping automatic compliance check - File '{doc_name}' (size: {doc_size}) is already completed for audit {audit_id}")
+                                # Update the newly created records to 'completed' status to match existing ones
+                                try:
+                                    placeholders = ",".join(["%s"] * len(all_created_document_ids))
+                                    cursor.execute(f"""
+                                        UPDATE ai_audit_data 
+                                        SET ai_processing_status = 'completed',
+                                            updated_at = NOW()
+                                        WHERE id IN ({placeholders})
+                                          AND audit_id = %s
+                                    """, all_created_document_ids + [int(audit_id) if str(audit_id).isdigit() else audit_id])
+                                    updated_count = cursor.rowcount
+                                    logger.info(f"✅ Updated {updated_count} newly created record(s) to 'completed' status to match existing completed file")
+                                except Exception as update_err:
+                                    logger.warning(f"⚠️ Could not update new records to completed status: {update_err}")
+                            else:
+                                logger.info(f"🚀 Documents are new/not audited - will automatically trigger compliance checks for {len(all_created_document_ids)} mapping(s)")
+                                
+                                # Trigger compliance checks asynchronously (don't block the upload response)
+                                import threading
+                                def auto_check_compliance():
+                                    try:
+                                        logger.info(f"🚀 Starting automatic compliance checks for Document Handling batch upload")
+                                        
+                                        # Call compliance check for the primary document (which will check all mappings for that file)
+                                        # The check_document_compliance function handles all mappings for a file group
+                                        try:
+                                            logger.info(f"🔍 Auto-checking compliance for primary document_id={primary_document_id}")
+                                            
+                                            # Create a minimal request object for the compliance check
+                                            from django.test import RequestFactory
+                                            factory = RequestFactory()
+                                            check_request = factory.post(f'/api/ai-audit/{audit_id}/documents/{primary_document_id}/check/')
+                                            
+                                            # Copy authentication from original request
+                                            if 'HTTP_AUTHORIZATION' in request.META:
+                                                check_request.META['HTTP_AUTHORIZATION'] = request.META['HTTP_AUTHORIZATION']
+                                            
+                                            # Set request data (empty - will use all compliances from mappings)
+                                            check_request.data = {}
+                                            
+                                            # Call the compliance check function directly
+                                            from rest_framework.response import Response as DRFResponse
+                                            result = check_document_compliance(check_request, audit_id, primary_document_id)
+                                            
+                                            if isinstance(result, DRFResponse):
+                                                if result.status_code == 200:
+                                                    logger.info(f"✅ Automatic compliance check completed successfully for document_id={primary_document_id}")
+                                                else:
+                                                    logger.warning(f"⚠️ Automatic compliance check returned status {result.status_code}")
+                                            else:
+                                                logger.info(f"ℹ️ Compliance check triggered for document_id={primary_document_id}")
+                                                
+                                        except Exception as check_err:
+                                            logger.warning(f"⚠️ Could not auto-check document_id={primary_document_id}: {check_err}")
+                                            import traceback
+                                            logger.warning(traceback.format_exc())
+                                        
+                                        logger.info(f"✅ Automatic compliance checks completed for Document Handling batch upload")
+                                    except Exception as auto_err:
+                                        logger.error(f"❌ Error in automatic compliance check: {auto_err}")
+                                        import traceback
+                                        logger.error(traceback.format_exc())
+                                
+                                # Start background thread for automatic compliance checks
+                                auto_check_thread = threading.Thread(target=auto_check_compliance, daemon=True)
+                                auto_check_thread.start()
+                                logger.info(f"🚀 Started background thread for automatic compliance checks")
+                    
+                    # Return early (skip single document processing)
                     return JsonResponse({
                         'success': True,
-                        'document_id': all_created_document_ids[0],
+                        'document_id': primary_document_id,
                         'document_ids': all_created_document_ids,
                         'file_name': 'multiple_documents',
                         'file_size': 0,
                         'file_type': 'multiple',
                         'mappings_count': len(all_created_document_ids),
-                        'message': f'Processed {len(all_relevant_documents_to_process)} relevant document(s) from JSON with {len(all_created_document_ids)} total mapping(s)'
+                        'message': f'Processed {len(all_relevant_documents_to_process)} relevant document(s) from JSON with {len(all_created_document_ids)} total mapping(s)' + 
+                                  (' - Automatic compliance check started' if doc_external_source == 'evidence_attachment' else '')
                     })
             
             # Store ONLY in ai_audit_data table (it has everything we need)
@@ -1207,6 +1328,100 @@ class AIAuditDocumentUploadView(View):
             # Return the first document_id as primary, and list of all created IDs
             primary_document_id = created_document_ids[0] if created_document_ids else None
             
+            # AUTOMATIC COMPLIANCE CHECK FOR DOCUMENT HANDLING UPLOADS
+            # When documents are uploaded from Document Handling (evidence_attachment),
+            # automatically trigger compliance checks in the background
+            # BUT ONLY if document is new and not already audited
+            if external_source == 'evidence_attachment' and created_document_ids:
+                logger.info(f"🔄 Document Handling upload detected - checking if automatic compliance check needed for {len(created_document_ids)} mapping(s)")
+                
+                # Check if document is already audited (status = 'completed') FOR THIS SPECIFIC AUDIT
+                # Important: Check by file identity (document_name + file_size) not just new IDs
+                # Same file uploaded again should not be re-audited if already completed
+                with connection.cursor() as cursor:
+                    # Check if this file (by name + size) is already completed for this audit
+                    cursor.execute("""
+                            SELECT COUNT(*) FROM ai_audit_data 
+                        WHERE document_name = %s
+                          AND file_size = %s
+                              AND audit_id = %s
+                              AND ai_processing_status = 'completed'
+                          AND (external_source = 'evidence_attachment' OR external_source IS NULL)
+                    """, [file_name, file_size, int(audit_id) if str(audit_id).isdigit() else audit_id])
+                    count_result = cursor.fetchone()
+                    completed_count = count_result[0] if count_result else 0
+                
+                if completed_count > 0:
+                    logger.info(f"⏭️ Skipping automatic compliance check - File '{file_name}' (size: {file_size}) is already completed for audit {audit_id}")
+                    # Update the newly created records to 'completed' status to match existing ones
+                    try:
+                        with connection.cursor() as cursor:
+                            placeholders = ",".join(["%s"] * len(created_document_ids))
+                            cursor.execute(f"""
+                                UPDATE ai_audit_data 
+                                SET ai_processing_status = 'completed',
+                                    updated_at = NOW()
+                                WHERE id IN ({placeholders})
+                                  AND audit_id = %s
+                            """, created_document_ids + [int(audit_id) if str(audit_id).isdigit() else audit_id])
+                            updated_count = cursor.rowcount
+                            logger.info(f"✅ Updated {updated_count} newly created record(s) to 'completed' status to match existing completed file")
+                    except Exception as update_err:
+                        logger.warning(f"⚠️ Could not update new records to completed status: {update_err}")
+                else:
+                    logger.info(f"🚀 Document is new/not audited - will automatically trigger compliance checks for {len(created_document_ids)} mapping(s)")
+                    
+                    # Trigger compliance checks asynchronously (don't block the upload response)
+                    import threading
+                    def auto_check_compliance():
+                        try:
+                            logger.info(f"🚀 Starting automatic compliance checks for Document Handling upload")
+                            
+                            # Call compliance check for the primary document (which will check all mappings for that file)
+                            # The check_document_compliance function handles all mappings for a file group
+                            try:
+                                logger.info(f"🔍 Auto-checking compliance for primary document_id={primary_document_id}")
+                                
+                                # Create a minimal request object for the compliance check
+                                from django.test import RequestFactory
+                                factory = RequestFactory()
+                                check_request = factory.post(f'/api/ai-audit/{audit_id}/documents/{primary_document_id}/check/')
+                                
+                                # Copy authentication from original request
+                                if 'HTTP_AUTHORIZATION' in request.META:
+                                    check_request.META['HTTP_AUTHORIZATION'] = request.META['HTTP_AUTHORIZATION']
+                                
+                                # Set request data (empty - will use all compliances from mappings)
+                                check_request.data = {}
+                                
+                                # Call the compliance check function directly
+                                from rest_framework.response import Response as DRFResponse
+                                result = check_document_compliance(check_request, audit_id, primary_document_id)
+                                
+                                if isinstance(result, DRFResponse):
+                                    if result.status_code == 200:
+                                        logger.info(f"✅ Automatic compliance check completed successfully for document_id={primary_document_id}")
+                                    else:
+                                        logger.warning(f"⚠️ Automatic compliance check returned status {result.status_code}")
+                                else:
+                                    logger.info(f"ℹ️ Compliance check triggered for document_id={primary_document_id}")
+                                    
+                            except Exception as check_err:
+                                logger.warning(f"⚠️ Could not auto-check document_id={primary_document_id}: {check_err}")
+                                import traceback
+                                logger.warning(traceback.format_exc())
+                            
+                            logger.info(f"✅ Automatic compliance checks completed for Document Handling upload")
+                        except Exception as auto_err:
+                            logger.error(f"❌ Error in automatic compliance check: {auto_err}")
+                            import traceback
+                            logger.error(traceback.format_exc())
+                    
+                    # Start background thread for automatic compliance checks
+                    auto_check_thread = threading.Thread(target=auto_check_compliance, daemon=True)
+                    auto_check_thread.start()
+                    logger.info(f"🚀 Started background thread for automatic compliance checks")
+            
             return JsonResponse({
                 'success': True,
                 'document_id': primary_document_id,  # Primary document ID
@@ -1215,7 +1430,8 @@ class AIAuditDocumentUploadView(View):
                 'file_size': file_size,
                 'file_type': mime_type,
                 'mappings_count': len(created_document_ids),
-                'message': f'File uploaded successfully with {len(created_document_ids)} mapping(s)'
+                'message': f'File uploaded successfully with {len(created_document_ids)} mapping(s)' + 
+                          (' - Automatic compliance check started' if external_source == 'evidence_attachment' else '')
             })
             
         except Exception as e:
@@ -1516,17 +1732,36 @@ class AIAuditDocumentsView(View):
                 framework_row = cursor.fetchone()
                 if framework_row:
                     framework_id = framework_row[0]
-                cursor.execute("""
-                    SELECT id, document_id, document_name, document_type, file_size, 
-                        created_at, upload_status, ai_processing_status, 
-                        external_source, external_id, mime_type, document_path,
-                        compliance_status, confidence_score, compliance_analyses,
-                        processing_completed_at, policy_id, subpolicy_id
-                    FROM ai_audit_data 
-                    WHERE audit_id = %s 
-                      AND (external_source != 'database_record' AND document_type != 'db_record')
-                    ORDER BY created_at DESC
-                """, [converted_audit_id])
+                # Try to select compliance_id, but handle if column doesn't exist
+                try:
+                    cursor.execute("""
+                        SELECT id, document_id, document_name, document_type, file_size, 
+                            created_at, upload_status, ai_processing_status, 
+                            external_source, external_id, mime_type, document_path,
+                            compliance_status, confidence_score, compliance_analyses,
+                            processing_completed_at, policy_id, subpolicy_id, compliance_id
+                        FROM ai_audit_data 
+                        WHERE audit_id = %s 
+                          AND (external_source != 'database_record' AND document_type != 'db_record')
+                        ORDER BY created_at DESC
+                    """, [converted_audit_id])
+                except Exception as compliance_id_err:
+                    # If compliance_id column doesn't exist, select without it
+                    if 'compliance_id' in str(compliance_id_err).lower() or 'Unknown column' in str(compliance_id_err):
+                        logger.warning(f"⚠️ compliance_id column not found in ai_audit_data table, selecting without it")
+                        cursor.execute("""
+                            SELECT id, document_id, document_name, document_type, file_size, 
+                                created_at, upload_status, ai_processing_status, 
+                                external_source, external_id, mime_type, document_path,
+                                compliance_status, confidence_score, compliance_analyses,
+                                processing_completed_at, policy_id, subpolicy_id
+                            FROM ai_audit_data 
+                            WHERE audit_id = %s 
+                              AND (external_source != 'database_record' AND document_type != 'db_record')
+                            ORDER BY created_at DESC
+                        """, [converted_audit_id])
+                    else:
+                        raise
                 
                 rows = cursor.fetchall()
                 columns = [col[0] for col in cursor.description]
@@ -1622,6 +1857,7 @@ class AIAuditDocumentsView(View):
                         'processing_completed_at': doc_dict.get('processing_completed_at').isoformat() if doc_dict.get('processing_completed_at') else None,
                         'policy_id': doc_dict.get('policy_id'),
                         'subpolicy_id': doc_dict.get('subpolicy_id'),
+                        'compliance_id': doc_dict.get('compliance_id') if 'compliance_id' in doc_dict else None,  # Add compliance_id if column exists
                         # Use document-specific policy/sub-policy names
                         'policy_name': final_policy_name,
                         'subpolicy_name': final_subpolicy_name,
@@ -2184,9 +2420,10 @@ def _get_policy_requirements(policy_id: int, subpolicy_id: int = None):
                     """
                     SELECT c.ComplianceId, c.ComplianceTitle, c.ComplianceItemDescription,
                            c.ComplianceType, c.Criticality, c.MandatoryOptional,
-                           sp.SubPolicyId, sp.SubPolicyName
+                           sp.SubPolicyId, sp.SubPolicyName, p.PolicyId, p.PolicyName
                     FROM compliance c
                     JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
+                    JOIN policies p ON sp.PolicyId = p.PolicyId
                     WHERE sp.SubPolicyId = %s
                     """,
                     [int(subpolicy_id)]
@@ -2196,9 +2433,10 @@ def _get_policy_requirements(policy_id: int, subpolicy_id: int = None):
                 """
                 SELECT c.ComplianceId, c.ComplianceTitle, c.ComplianceItemDescription,
                        c.ComplianceType, c.Criticality, c.MandatoryOptional,
-                       sp.SubPolicyId, sp.SubPolicyName
+                       sp.SubPolicyId, sp.SubPolicyName, p.PolicyId, p.PolicyName
                 FROM compliance c
                 JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
+                JOIN policies p ON sp.PolicyId = p.PolicyId
                 WHERE sp.PolicyId = %s
                 """,
                 [int(policy_id)]
@@ -2247,7 +2485,9 @@ def _get_policy_requirements(policy_id: int, subpolicy_id: int = None):
                     'risk': r[4] or 'Medium',
                     'mandatory': (r[5] or '').lower() == 'mandatory',
                     'subpolicy_id': r[6],
-                    'subpolicy_name': r[7]
+                    'subpolicy_name': r[7],
+                    'policy_id': r[8],
+                    'policy_name': r[9]
                 })
             return reqs
     except Exception as e:
@@ -2255,38 +2495,59 @@ def _get_policy_requirements(policy_id: int, subpolicy_id: int = None):
         return []
 
 
-def _ai_score_requirements_with_openai(document_text: str, requirements: list, schema: dict = None, audit_id=None, document_id=None):
+def _ai_score_requirements_with_openai(document_text: str, requirements: list, schema: dict = None, audit_id=None, document_id=None, audit_context=None):
     """Call OpenAI in batches to score requirements against text."""
     import requests, json, re
     
     results = []
-    from django.conf import settings
-    actual_timeout = min(getattr(settings, 'OLLAMA_TIMEOUT', 120), 180)
-    logger.info(f"🔍 Processing {len(requirements)} requirements sequentially with {actual_timeout}s timeout each")
+    logger.info(f"🔍 Processing {len(requirements)} requirements sequentially with 600s timeout each")
     
     # Process requirements sequentially
     for i, req in enumerate(requirements):
         global_idx = i + 1
         logger.info(f"🔍 Processing requirement {global_idx}: {req.get('title', 'Requirement')}")
-        batch_results = _process_single_requirement_batch(document_text, [req], global_idx, audit_id, document_id)
+        batch_results = _process_single_requirement_batch(document_text, [req], global_idx, audit_id, document_id, audit_context=audit_context)
         results.extend(batch_results)
         logger.info(f"✅ Completed requirement {global_idx}")
     
     return results
 
-def _process_single_requirement_batch(document_text: str, batch: list, global_idx: int, audit_id=None, document_id=None):
+def _process_single_requirement_batch(document_text: str, batch: list, global_idx: int, audit_id=None, document_id=None, audit_context=None):
     """Process a single requirement batch"""
     import json, re
-    from django.conf import settings
     
     req = batch[0]  # Single requirement
     logger.info("🤖 Using unified AI API for compliance checking")
+    logger.info(f"⏱️ Processing requirement {global_idx} with 600s timeout (10 minutes)...")
     
-    # Use actual timeout from settings (default 120s, but allow override)
-    actual_timeout = getattr(settings, 'OLLAMA_TIMEOUT', 120)
-    # Cap at 180 seconds max to prevent long waits
-    actual_timeout = min(actual_timeout, 180)
-    logger.info(f"⏱️ Processing requirement {global_idx} with {actual_timeout}s timeout...")
+    # Build audit context section for prompt - Enhanced with clear audit purpose
+    audit_context_section = ""
+    if audit_context:
+        audit_context_section = "\n=== AUDIT CONTEXT (How This Audit Works) ===\n"
+        audit_context_section += "This is a compliance audit that verifies whether the organization meets specific regulatory and policy requirements.\n\n"
+        
+        if audit_context.get('title'):
+            audit_context_section += f"AUDIT PURPOSE: {audit_context['title']}\n"
+        if audit_context.get('objective'):
+            audit_context_section += f"WHAT WE ARE CHECKING: {audit_context['objective']}\n"
+        if audit_context.get('scope'):
+            audit_context_section += f"AUDIT SCOPE: {audit_context['scope']}\n"
+        if audit_context.get('business_unit'):
+            audit_context_section += f"BUSINESS UNIT UNDER AUDIT: {audit_context['business_unit']}\n"
+        if audit_context.get('audit_type'):
+            audit_context_section += f"AUDIT TYPE: {audit_context['audit_type']}\n"
+        if audit_context.get('due_date'):
+            audit_context_section += f"DUE DATE: {audit_context['due_date']}\n"
+        
+        # CRITICAL: Include policy and subpolicy information for relevance checking
+        if audit_context.get('policy_name'):
+            audit_context_section += f"\nPOLICY BEING AUDITED: {audit_context['policy_name']}\n"
+        if audit_context.get('subpolicy_name'):
+            audit_context_section += f"SUB-POLICY BEING AUDITED: {audit_context['subpolicy_name']}\n"
+        
+        audit_context_section += "\nYOUR TASK: Analyze the uploaded document to determine if it provides evidence that the organization complies with the requirement below.\n"
+        audit_context_section += "If the document is NOT about this policy/subpolicy or requirement topic, it is IRRELEVANT.\n"
+        audit_context_section += "==========================================\n\n"
     
     # Detect if this is combined evidence (document + database)
     is_combined_evidence = "=== DOCUMENT EVIDENCE" in document_text and "=== DATABASE EVIDENCE" in document_text
@@ -2340,66 +2601,136 @@ REQUIRED OUTPUT FOR "missing" ARRAY:
     
     # Note: Examples are shown in the prompt format section, but AI must provide ACTUAL analysis results
     
-    # Create advanced prompt for single requirement
-    prompt = f"""You are an expert GRC compliance auditor with deep knowledge of regulatory frameworks. 
+    # Build dynamic requirement description from actual database data
+    req_title = req.get('title', 'Requirement')
+    req_desc = req.get('description', req_title)
+    req_text = f"{req_title}" + (f"\n{req_desc}" if req_desc and req_desc != req_title else "")
+    
+    # Get policy/subpolicy from requirement data (from database) or audit context
+    policy_name = req.get('policy_name') or audit_context.get('policy_name', 'N/A') if audit_context else 'N/A'
+    subpolicy_name = req.get('subpolicy_name') or audit_context.get('subpolicy_name', 'N/A') if audit_context else 'N/A'
+    
+    # Build missing elements template - AI will analyze what data is required for THIS AUDIT
+    audit_objective_text = audit_context.get('objective', '') if audit_context else ''
+    audit_scope_text = audit_context.get('scope', '') if audit_context else ''
+    
+    # Template without instruction text - AI will fill with actual analysis
+    missing_template_str = f'["NO EVIDENCE FOUND: The document is not relevant to this compliance requirement.", "REQUIREMENT NEEDS: {req_desc}", "DOCUMENT IS ABOUT: [AI will analyze and describe what the document actually contains]", "DATA REQUIRED FOR THIS AUDIT: [AI will analyze what specific data/evidence is needed based on audit objective, scope, requirement, and policy context]", "EXPECTED DOCUMENT TYPE: [AI will determine what type of document/data would provide evidence]", "WHAT IS NEEDED: [AI will specify what document, data, or evidence is needed to prove compliance]", "POLICY CONTEXT: This requirement is part of Policy \'{policy_name}\' / Sub-Policy \'{subpolicy_name}\' - the document must relate to this policy area"]'
+    
+    # Create enhanced prompt with clear audit process explanation
+    prompt = f"""You are a GRC compliance auditor performing an audit. Your job is to analyze whether the uploaded document provides evidence that the organization meets the compliance requirement.
 
-CRITICAL: You MUST perform a REAL audit by actually READING and ANALYZING the evidence data provided below. Do NOT generate generic examples, placeholder text, or assumptions. You MUST base your analysis on the ACTUAL content provided.
+{audit_context_section if audit_context else ''}=== COMPLIANCE REQUIREMENT TO CHECK ===
+{req_text}
 
+=== UPLOADED DOCUMENT CONTENT ===
 {evidence_section_label}:
 {document_text}
 
-COMPLIANCE REQUIREMENT:
-{global_idx}. {req.get('title','Requirement')}
-Description: {req.get('description', 'No description provided')}
+=== HOW TO PERFORM THIS AUDIT ===
 
-AUDIT PROCESS - YOU MUST FOLLOW THESE STEPS:
-1. READ the {evidence_section_label.lower()} section above carefully
-2. IDENTIFY specific evidence that relates to the compliance requirement
-3. EXTRACT actual text excerpts, data values, or findings from the provided content
-4. COMPARE the requirement against the actual evidence found
-5. IDENTIFY what is present and what is missing based on your analysis of the actual data
+STEP 1: RELEVANCE CHECK (MUST DO FIRST):
+   - CRITICAL: This audit is about: {audit_context.get('title', 'N/A') if audit_context else 'N/A'}
+   - CRITICAL: This audit's objective is: {audit_objective_text if audit_context and audit_context.get('objective') else 'N/A'}
+   - CRITICAL: This audit's scope is: {audit_scope_text if audit_context and audit_context.get('scope') else 'N/A'}
+   - The requirement being checked: "{req_desc}"
+   - The document content provided above
+   
+   RELEVANCE QUESTIONS (ALL must be YES for document to be relevant):
+   1. Is the document about the SAME TOPIC as the requirement "{req_desc}"?
+   2. Is the document related to Policy "{policy_name}" / Sub-Policy "{subpolicy_name}"?
+   3. Does the document relate to THIS AUDIT's objective: {audit_objective_text if audit_context and audit_context.get('objective') else 'N/A'}?
+   4. Does the document fall within THIS AUDIT's scope: {audit_scope_text if audit_context and audit_context.get('scope') else 'N/A'}?
+   5. Would this document help prove compliance for THIS SPECIFIC AUDIT (not just any audit)?
+   
+   IF ANY ANSWER IS NO → Document is IRRELEVANT:
+   → Set evidence = []
+   → Set compliance_status = 'NON_COMPLIANT'
+   → Set compliance_score = 0.0-0.2
+   → Set missing = {missing_template_str}
+   → STOP HERE - do not proceed to Step 2
 
-ADVANCED ANALYSIS TASK:
-1. **Relevance Assessment**: How relevant is this requirement to the evidence provided?
+STEP 2: EVIDENCE EXTRACTION (ONLY IF RELEVANT):
+   - Remember: This audit is checking: {audit_objective_text if audit_context and audit_context.get('objective') else 'N/A'}
+   - Requirement asks for: "{req_desc}"
+   - Search document for text/data that directly addresses this requirement
+   - Evidence MUST match requirement topic EXACTLY
+   - Evidence MUST be relevant to the audit objective and scope
+   - If document mentions requirement topic but doesn't provide evidence → evidence = []
+   - Extract actual quotes, numbers, or facts from document
 
-2. **Evidence Detection** (REQUIRED): 
-   {"MANDATORY: You MUST extract evidence from BOTH the DOCUMENT section AND the DATABASE section. Read each section carefully and extract at least 2-3 specific evidence items from each section. Provide concrete evidence snippets - actual text excerpts from documents, actual data values from database records, specific policy statements, or concrete findings. Do not use placeholder text or generic statements." if is_combined_evidence else "Find ALL specific evidence that demonstrates compliance."}
+STEP 3: COMPLIANCE VERIFICATION (ONLY IF EVIDENCE FOUND):
+   - Remember: This audit objective is: {audit_objective_text if audit_context and audit_context.get('objective') else 'N/A'}
+   - Does the evidence show the organization MEETS the requirement?
+   - Check: Are ALL aspects of the requirement addressed?
+   - Check: Is the evidence complete and sufficient?
+   - Check: Does evidence demonstrate actual compliance (not just intent)?
+   - Check: Does the evidence align with what the audit objective is checking?
+   - ANALYZE: How does each piece of evidence relate to the requirement AND the audit objective?
+   - ANALYZE: What does the evidence prove about compliance in the context of this audit?
 
-3. **Gap Analysis** (REQUIRED): 
-   {"MANDATORY: Compare the compliance requirement against BOTH document evidence AND database evidence. Identify what is missing: Is it documented but not implemented? Is it implemented but not documented? Is it completely missing from both? Provide specific, concrete missing elements. If nothing is missing, return empty array []." if is_combined_evidence else "Identify ALL missing elements that would be needed for full compliance."}
+STEP 4: AUDIT CONCLUSION & REASONING (REQUIRED):
+   - Explain HOW you performed this audit (what you checked, what you found)
+   - Explain WHY you determined the compliance status:
+     * If COMPLIANT: Explain how the evidence demonstrates full compliance with all aspects of the requirement
+     * If PARTIALLY_COMPLIANT: Explain what evidence was found and what specific gaps remain
+     * If NON_COMPLIANT: Explain why the evidence is insufficient or missing
+   - Provide clear reasoning that connects the evidence to the requirement
 
-4. **Compliance Scoring**: Determine compliance level based on evidence quality and completeness
-   {"(evaluate both design intent from documents AND operational implementation from database - both must be present for full compliance)" if is_combined_evidence else ""}
+=== COMPLIANCE STATUS DECISION ===
+- COMPLIANT: Document is relevant + Strong evidence found + All requirement aspects met + Evidence clearly demonstrates compliance
+- PARTIALLY_COMPLIANT: Document is relevant + Some evidence found + But specific gaps exist + Not all requirement aspects met
+- NON_COMPLIANT: Document is irrelevant OR No evidence found OR Evidence doesn't show compliance OR Evidence is insufficient
 
-5. **Risk Assessment**: Evaluate the risk level of any compliance gaps
+=== EVIDENCE RULES ===
+- Only include evidence if it directly matches the requirement topic
+- Extract actual text, numbers, or data from the document
+- Do NOT include generic statements or unrelated content
+- If no relevant evidence: evidence = [], missing = {missing_template_str}
 
-{evidence_instruction}
+=== MISSING ELEMENTS RULES ===
+If evidence = [] (no evidence found):
+   - missing MUST include ALL 7 items from the template below - DO NOT skip any field
+   - The missing array MUST have exactly these 7 items (in this order):
+     1. "NO EVIDENCE FOUND: The document is not relevant to this compliance requirement."
+     2. "REQUIREMENT NEEDS: {req_desc}"
+     3. "DOCUMENT IS ABOUT: [YOUR ANALYSIS - describe what the document actually contains]"
+     4. "DATA REQUIRED FOR THIS AUDIT: [YOUR ANALYSIS - what specific data/evidence is needed]"
+     5. "EXPECTED DOCUMENT TYPE: [YOUR ANALYSIS - what type of document/data would provide evidence]"
+     6. "WHAT IS NEEDED: [YOUR ANALYSIS - what document, data, or evidence is needed to prove compliance]"
+     7. "POLICY CONTEXT: This requirement is part of Policy '{policy_name}' / Sub-Policy '{subpolicy_name}' - the document must relate to this policy area"
+   
+   - CRITICAL: When filling in the missing array, you MUST REPLACE ALL bracketed placeholders with ACTUAL ANALYSIS
+   - DO NOT include square brackets [] or placeholder text in your output
+   - DO NOT skip any of the 7 required fields
+   - Each field must contain actual analysis, not instruction text
+   
+   - For "DOCUMENT IS ABOUT": 
+     * Read the document content provided above
+     * Analyze what the document actually contains
+     * Describe the topic, purpose, and content specifically
+   
+   - For "DATA REQUIRED FOR THIS AUDIT": 
+     * Consider the Audit Objective: {audit_objective_text if audit_context and audit_context.get('objective') else 'N/A'}
+     * Consider the Audit Scope: {audit_scope_text if audit_context and audit_context.get('scope') else 'N/A'}
+     * Consider the Requirement: "{req_desc}"
+     * Consider the Policy Context: Policy "{policy_name}" / Sub-Policy "{subpolicy_name}"
+     * Analyze and specify: What specific data points, metrics, records, measurements, or evidence would prove compliance?
+     
+   - For "EXPECTED DOCUMENT TYPE": Analyze and determine what type of document/data would provide evidence for this requirement
+   - For "WHAT IS NEEDED": Analyze and specify what document, data, or evidence is needed to prove compliance
+   - Be specific and detailed in your analysis for ALL fields
+   - Reference the policy/subpolicy context: Policy "{policy_name}" / Sub-Policy "{subpolicy_name}"
 
-COMPLIANCE LEVELS:
-- **COMPLIANT**: Strong evidence exists, all key elements present, low risk
-- **PARTIALLY_COMPLIANT**: Some evidence exists, but gaps or weaknesses identified, medium risk
-- **NON_COMPLIANT**: Little to no evidence, major gaps present, high risk
+If evidence found but incomplete:
+   - List specific gaps: What parts of requirement are missing?
+   - What additional data points or evidence would be needed?
+   - What specific actions, measurements, or data are missing?
 
-REQUIRED JSON OUTPUT FORMAT:
-CRITICAL: You MUST analyze the ACTUAL DATA provided above. Your analysis MUST be based on what you actually READ in the evidence section, not on assumptions or generic knowledge.
+=== OUTPUT FORMAT ===
+Return ONLY valid JSON (no markdown, no explanations, no code blocks).
 
-RULES FOR "evidence" ARRAY:
-- ONLY include evidence that you can actually FIND in the provided {evidence_section_label.lower()} section above
-- Extract REAL text excerpts, actual data values, or specific findings from the content
-- If you find evidence, quote it or summarize it accurately
-- If you find NO evidence, return an empty array []
-- Do NOT include placeholder text like "Evidence shows compliance" or "Document indicates requirement is met"
-- Do NOT make up evidence that is not in the provided content
-
-RULES FOR "missing" ARRAY:
-- ONLY identify gaps that you can actually DETERMINE by comparing the requirement against the provided evidence
-- Be SPECIFIC about what is missing based on your actual analysis
-- If the requirement is fully met by the evidence, return an empty array []
-- Do NOT include placeholder text like "Requirement X may be missing" or generic statements
-- Do NOT assume what might be missing - only state what you can actually determine is missing from the provided evidence
-
-All values (compliance_status, compliance_score, evidence, missing) MUST reflect your ACTUAL analysis of the real data provided, not generic assumptions.
-
+JSON Structure:
 {{
   "analysis": [{{
     "index": {global_idx},
@@ -2409,68 +2740,59 @@ All values (compliance_status, compliance_score, evidence, missing) MUST reflect
     "compliance_score": 0.0-1.0,
     "risk_level": "LOW|MEDIUM|HIGH",
     "confidence": 0.0-1.0,
-    "evidence": [
-      "Actual evidence text found in the provided content",
-      "Real evidence snippets from document or database"
-    ],
-    "missing": [
-      "Specific missing elements identified from your analysis",
-      "Concrete gaps found in the evidence"
-    ],
-    "strengths": [
-      "What the document does well for this requirement"
-    ],
-    "weaknesses": [
-      "Areas that need improvement"
-    ],
-    "recommendations": [
-      "Specific actionable recommendations"
-    ]
+    "evidence": ["actual text quotes from document that prove compliance"],
+    "missing": ["MUST include ALL 7 fields from template if no evidence: NO EVIDENCE FOUND, REQUIREMENT NEEDS, DOCUMENT IS ABOUT, DATA REQUIRED FOR THIS AUDIT, EXPECTED DOCUMENT TYPE, WHAT IS NEEDED, POLICY CONTEXT"],
+    "strengths": ["HOW AUDIT WAS PERFORMED: Explain the audit process - what you checked, what evidence you found, and how it relates to the requirement. REASON FOR STATUS: Explain why this is COMPLIANT/PARTIALLY_COMPLIANT/NON_COMPLIANT - what evidence supports this conclusion"],
+    "weaknesses": ["What specific aspects of the requirement are not met or are missing. Explain what gaps exist and why they prevent full compliance"],
+    "recommendations": ["Actionable recommendations to improve compliance, based on the specific gaps found during this audit"]
   }}]
 }}
 
-ANALYSIS CRITERIA - YOU MUST:
-- READ and ANALYZE the actual {evidence_section_label.lower()} content provided above
-- Look for specific policies, procedures, controls, metrics, or documentation THAT ARE ACTUALLY IN THE PROVIDED DATA
-- Consider both explicit statements and implied compliance through practices FOUND IN THE EVIDENCE
-- Evaluate the completeness and quality of evidence BASED ON WHAT YOU ACTUALLY READ
-- Assess whether controls are properly implemented and documented BASED ON THE ACTUAL EVIDENCE PROVIDED
-- Use regulatory context and industry best practices as background knowledge, but BASE YOUR ANALYSIS ON THE ACTUAL DATA PROVIDED
+CRITICAL OUTPUT RULES:
+- If document is IRRELEVANT: 
+  * evidence = []
+  * missing = {missing_template_str}
+  * compliance_status = 'NON_COMPLIANT'
+  * strengths = ["AUDIT PROCESS: Document was analyzed for relevance to requirement '{req_desc}'. REASON: Document is about [topic] which is not related to requirement '{req_desc}' or Policy '{policy_name}'. Therefore, no evidence can be found and status is NON_COMPLIANT."]
 
-FINAL CRITICAL REMINDER:
-- You are performing a REAL audit of REAL data provided in the {evidence_section_label.lower()} section above
-- Your analysis MUST be based on actually READING and UNDERSTANDING the evidence content
-- Do NOT generate responses based on assumptions about what compliance "should" look like
-- Do NOT create placeholder or example evidence that isn't in the provided data
-- Do NOT include generic statements that could apply to any compliance check
-- ONLY include evidence and missing elements that you can specifically identify from the ACTUAL DATA PROVIDED
-- If you cannot find specific evidence in the provided data, say so explicitly (empty arrays or appropriate status)
+- If document is RELEVANT but no evidence: 
+  * evidence = []
+  * missing = specific gaps
+  * compliance_status = 'NON_COMPLIANT'
+  * strengths = ["AUDIT PROCESS: Document was analyzed and found relevant to requirement '{req_desc}'. However, no specific evidence was found that demonstrates compliance. REASON: Document mentions the topic but does not provide the required data/evidence to prove compliance."]
 
-CRITICAL JSON FORMAT REQUIREMENT:
-YOU MUST RETURN ONLY VALID JSON. DO NOT include any explanatory text, markdown formatting, or additional comments.
-DO NOT start with "Here is the analysis" or any other text.
-DO NOT use markdown formatting like **bold** or bullet points.
-START YOUR RESPONSE DIRECTLY WITH {{ (opening curly brace)
-END YOUR RESPONSE DIRECTLY WITH }} (closing curly brace)
-YOUR ENTIRE RESPONSE MUST BE VALID JSON - NOTHING ELSE.
+- If evidence found: 
+  * evidence = [actual quotes from document]
+  * missing = specific gaps only (if any)
+  * strengths = ["AUDIT PROCESS: [Explain how you performed the audit - what you checked, what evidence you found]. REASON FOR [COMPLIANT/PARTIALLY_COMPLIANT]: [Explain why the evidence supports this status - how each piece of evidence relates to the requirement and what it proves]"]
+  * weaknesses = [specific gaps if PARTIALLY_COMPLIANT, or empty if COMPLIANT]
 
-VALID RESPONSE FORMAT (START WITH THIS):
-{{
-  "analysis": [{{
-    "index": {global_idx},
-    ...
-  }}]
-}}
+- relevance: 0.0-0.3 if irrelevant, 0.4-0.7 if partially relevant, 0.8-1.0 if highly relevant
+- compliance_score: 0.0-0.3 if non-compliant, 0.4-0.7 if partially compliant, 0.8-1.0 if compliant
 
-INVALID FORMATS (DO NOT USE THESE):
-- "Here is the analysis:" followed by JSON
-- Markdown formatting with ** or bullets
-- Explanatory text before or after JSON
-- Any text outside the JSON structure
+CRITICAL: When filling the "missing" array:
+- You MUST include ALL 7 required fields - DO NOT skip any field
+- You MUST REPLACE all bracketed placeholders with ACTUAL ANALYSIS
+- The missing array MUST contain exactly 7 items:
+  1. NO EVIDENCE FOUND message
+  2. REQUIREMENT NEEDS with the requirement text
+  3. DOCUMENT IS ABOUT with your analysis
+  4. DATA REQUIRED FOR THIS AUDIT with your analysis
+  5. EXPECTED DOCUMENT TYPE with your analysis
+  6. WHAT IS NEEDED with your analysis
+  7. POLICY CONTEXT message
+- For "DOCUMENT IS ABOUT": Analyze the document content and describe what it actually contains
+- For "DATA REQUIRED FOR THIS AUDIT": Analyze what specific data/evidence is needed based on the audit objective, scope, requirement, and policy context - provide actual analysis
+- For "EXPECTED DOCUMENT TYPE": Determine and specify the actual document type needed
+- For "WHAT IS NEEDED": Specify what actual document, data, or evidence is needed
+- DO NOT include square brackets [], instruction text, or placeholder text
+- DO NOT skip any of the 7 required fields - ALL must be present
 
-Base your response ENTIRELY on the ACTUAL DATA provided in the {evidence_section_label.lower()} section.
+REQUIRED: The "strengths" field MUST explain:
+1. HOW the audit was performed (what was checked, what evidence was found)
+2. WHY the compliance status was determined (reasoning connecting evidence to requirement)
 
-START YOUR RESPONSE NOW (JSON ONLY):"""
+Return JSON now:"""
     
     # Use unified AI API call
     data = call_ai_api(prompt, audit_id, document_id, 'compliance')
@@ -3332,9 +3654,10 @@ def _check_document_compliance_internal(audit_id, document_id, user_id=None, sel
                         f"""
                         SELECT c.ComplianceId, c.ComplianceTitle, c.ComplianceItemDescription,
                                c.ComplianceType, c.Criticality, c.MandatoryOptional,
-                               sp.SubPolicyId, sp.SubPolicyName
+                               sp.SubPolicyId, sp.SubPolicyName, p.PolicyId, p.PolicyName
                         FROM compliance c
                         JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
+                        JOIN policies p ON sp.PolicyId = p.PolicyId
                         WHERE c.ComplianceId IN ({placeholders})
                         """,
                         list(selected_compliance_ids)
@@ -3357,7 +3680,9 @@ def _check_document_compliance_internal(audit_id, document_id, user_id=None, sel
                         'risk': r[4] or 'Medium',
                         'mandatory': (r[5] or '').lower() == 'mandatory',
                         'subpolicy_id': r[6],
-                        'subpolicy_name': r[7]
+                        'subpolicy_name': r[7],
+                        'policy_id': r[8],
+                        'policy_name': r[9]
                     })
             except Exception as e:
                 logger.error(f"❌ Error loading requirements: {e}")
@@ -3629,6 +3954,33 @@ def check_document_compliance(request, audit_id, document_id):
         
         logger.info(f"🔍 Compliance check request from user: {user_id}")
         
+        # Fetch audit metadata for context-aware analysis
+        audit_title = None
+        audit_objective = None
+        audit_scope = None
+        audit_business_unit = None
+        audit_type = None
+        audit_due_date = None
+        
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT Title, Objective, Scope, BusinessUnit, AuditType, DueDate
+                FROM audit
+                WHERE AuditId = %s
+                """,
+                [int(audit_id) if str(audit_id).isdigit() else audit_id]
+            )
+            audit_row = cursor.fetchone()
+            if audit_row:
+                audit_title = audit_row[0] or None
+                audit_objective = audit_row[1] or None
+                audit_scope = audit_row[2] or None
+                audit_business_unit = audit_row[3] or None
+                audit_type = audit_row[4] or None
+                audit_due_date = audit_row[5] or None
+                logger.info(f"📋 Audit context: Title='{audit_title}', Objective='{audit_objective[:100] if audit_objective else None}...', Scope='{audit_scope[:100] if audit_scope else None}...'")
+        
         # Lookup document path, mime, and policy mapping from ai_audit_data table
         with connection.cursor() as cursor:
             cursor.execute(
@@ -3647,6 +3999,37 @@ def check_document_compliance(request, audit_id, document_id):
             if not row:
                 return Response({'success': False, 'error': 'Document not found'}, status=status.HTTP_404_NOT_FOUND)
             doc_path, doc_type, policy_id, subpolicy_id, external_source, external_id, document_name, file_size = row
+            logger.info(f"📋 Document lookup: external_source={external_source}, external_id={external_id} (type: {type(external_id)}), document_name={document_name}, file_size={file_size}")
+        
+        # TESTING: Only allow audit_id 426 for Document Handling uploads
+        if external_source == 'evidence_attachment' and str(audit_id) != '426':
+            return Response({
+                'success': False,
+                'error': f'Testing mode: Only audit_id 426 is allowed for Document Handling uploads. Requested audit_id: {audit_id}'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        # Fetch policy and subpolicy names for audit context
+        policy_name = None
+        subpolicy_name = None
+        if policy_id:
+            with connection.cursor() as cursor:
+                try:
+                    cursor.execute("SELECT PolicyName FROM policies WHERE PolicyId = %s", [int(policy_id)])
+                    policy_row = cursor.fetchone()
+                    if policy_row:
+                        policy_name = policy_row[0]
+                except Exception as e:
+                    logger.warning(f"⚠️ Could not fetch policy name: {e}")
+        
+        if subpolicy_id:
+            with connection.cursor() as cursor:
+                try:
+                    cursor.execute("SELECT SubPolicyName FROM subpolicies WHERE SubPolicyId = %s", [int(subpolicy_id)])
+                    subpolicy_row = cursor.fetchone()
+                    if subpolicy_row:
+                        subpolicy_name = subpolicy_row[0]
+                except Exception as e:
+                    logger.warning(f"⚠️ Could not fetch subpolicy name: {e}")
 
         # Handle file path - check if it's S3 or local
         if external_source in ['s3', 'evidence_attachment'] and external_id:
@@ -3987,45 +4370,74 @@ def check_document_compliance(request, audit_id, document_id):
         # =============================
         # CHECK FOR COMBINED EVIDENCE
         # =============================
-        # If both document and database evidence exist for the same compliances,
-        # automatically use combined evidence approach (one judgment per requirement)
-        compliance_ids_to_check = [r['compliance_id'] for r in requirements]
+        # IMPORTANT: For manually uploaded documents (external_source='manual'), 
+        # DO NOT use combined evidence - only check the uploaded document itself.
+        # Combined evidence should only be used for documents from Document Handling
+        # that have database evidence for the same compliances.
+        use_combined_evidence = False
         
-        with connection.cursor() as cursor:
-            # Check if database evidence exists for any of these compliances
-            placeholders = ",".join(["%s"] * len(compliance_ids_to_check))
-            cursor.execute(
-                f"""
-                SELECT COUNT(DISTINCT d.document_id) as db_evidence_count
-                FROM ai_audit_data d
-                WHERE d.audit_id = %s
-                  AND (d.external_source = 'database_record' OR d.document_type = 'db_record')
-                  AND (
-                      (d.policy_id = %s AND d.subpolicy_id = %s)
-                      OR EXISTS (
-                          SELECT 1 FROM compliance c
-                          WHERE c.ComplianceId IN ({placeholders})
-                            AND c.SubPolicyId = d.subpolicy_id
+        if external_source != 'manual':
+            # If both document and database evidence exist for the same compliances,
+            # automatically use combined evidence approach (one judgment per requirement)
+            compliance_ids_to_check = [r['compliance_id'] for r in requirements]
+            
+            with connection.cursor() as cursor:
+                # Check if database evidence exists for any of these compliances
+                placeholders = ",".join(["%s"] * len(compliance_ids_to_check))
+                cursor.execute(
+                    f"""
+                    SELECT COUNT(DISTINCT d.document_id) as db_evidence_count
+                    FROM ai_audit_data d
+                    WHERE d.audit_id = %s
+                      AND (d.external_source = 'database_record' OR d.document_type = 'db_record')
+                      AND (
+                          (d.policy_id = %s AND d.subpolicy_id = %s)
+                          OR EXISTS (
+                              SELECT 1 FROM compliance c
+                              WHERE c.ComplianceId IN ({placeholders})
+                                AND c.SubPolicyId = d.subpolicy_id
+                          )
                       )
-                  )
-                """,
-                [int(audit_id), policy_id, subpolicy_id] + compliance_ids_to_check
-            )
-            db_evidence_result = cursor.fetchone()
-            db_evidence_count = db_evidence_result[0] if db_evidence_result else 0
+                    """,
+                    [int(audit_id), policy_id, subpolicy_id] + compliance_ids_to_check
+                )
+                db_evidence_result = cursor.fetchone()
+                db_evidence_count = db_evidence_result[0] if db_evidence_result else 0
+            
+            # If database evidence exists, use combined approach
+            if db_evidence_count > 0:
+                use_combined_evidence = True
+                logger.info(f"🔍 Both document and database evidence found ({db_evidence_count} DB records). Using combined evidence approach.")
+            else:
+                logger.info(f"🔍 Only document evidence found. Using document-only compliance check.")
+        else:
+            logger.info(f"🔍 Manually uploaded document (external_source='manual'). Using document-only compliance check (no combined evidence).")
         
         # If database evidence exists, use combined approach
-        if db_evidence_count > 0:
-            logger.info(f"🔍 Both document and database evidence found ({db_evidence_count} DB records). Using combined evidence approach.")
+        if use_combined_evidence:
             
             # Call internal combined evidence function
             from ...rbac.utils import RBACUtils
             user_id = RBACUtils.get_user_id_from_request(request)
             
+            # Pass audit context to combined evidence function
+            audit_context = {
+                'title': audit_title,
+                'objective': audit_objective,
+                'scope': audit_scope,
+                'business_unit': audit_business_unit,
+                'audit_type': audit_type,
+                'due_date': audit_due_date,
+                'policy_id': policy_id,
+                'policy_name': policy_name,
+                'subpolicy_id': subpolicy_id,
+                'subpolicy_name': subpolicy_name
+            }
             result = _check_compliance_with_combined_evidence_internal(
                 audit_id=audit_id,
                 compliance_ids=compliance_ids_to_check,
-                user_id=user_id
+                user_id=user_id,
+                audit_context=audit_context
             )
             
             # Convert dict result to Response
@@ -4042,8 +4454,20 @@ def check_document_compliance(request, audit_id, document_id):
         # Deterministic signals from schema/sample
         signals = _compute_basic_signals(inferred_schema)
 
-        # AI scoring
-        analyses = _ai_score_requirements_with_openai(text, requirements, schema=inferred_schema, audit_id=audit_id, document_id=document_id)
+        # AI scoring with audit context
+        audit_context = {
+            'title': audit_title,
+            'objective': audit_objective,
+            'scope': audit_scope,
+            'business_unit': audit_business_unit,
+            'audit_type': audit_type,
+            'due_date': audit_due_date,
+            'policy_id': policy_id,
+            'policy_name': policy_name,
+            'subpolicy_id': subpolicy_id,
+            'subpolicy_name': subpolicy_name
+        }
+        analyses = _ai_score_requirements_with_openai(text, requirements, schema=inferred_schema, audit_id=audit_id, document_id=document_id, audit_context=audit_context)
         logger.info(f"🔍 Analyses type: {type(analyses)}, length: {len(analyses) if analyses else 0}")
         if analyses:
             logger.info(f"🔍 First analysis item type: {type(analyses[0])}, content: {analyses[0]}")
@@ -4090,11 +4514,22 @@ def check_document_compliance(request, audit_id, document_id):
                 if external_source in ['evidence_attachment', 's3'] and external_id:
                     # Documents coming from Document Handling or S3 reuse the same
                     # external_id for all mappings of the physical file.
-                    where_clause = "WHERE audit_id = %s AND external_id = %s"
-                    where_params = [int(audit_id), external_id]
-                    logger.info(
-                        f"🔄 Updating all ai_audit_data rows for audit_id={audit_id}, external_id={external_id}"
-                    )
+                    # Convert external_id to string to ensure type matching works
+                    external_id_str = str(external_id) if external_id else None
+                    # Use external_id as primary match, but also include document_name + file_size as fallback
+                    # to ensure we catch all mappings even if external_id doesn't match exactly
+                    if document_name and file_size:
+                        where_clause = "WHERE audit_id = %s AND external_source = %s AND (external_id = %s OR external_id = %s OR (document_name = %s AND file_size = %s))"
+                        where_params = [int(audit_id), external_source, external_id, external_id_str, document_name, file_size]
+                        logger.info(
+                            f"🔄 Updating all ai_audit_data rows for audit_id={audit_id}, external_source={external_source}, external_id={external_id}/{external_id_str} OR (document_name={document_name}, file_size={file_size})"
+                        )
+                    else:
+                        where_clause = "WHERE audit_id = %s AND external_source = %s AND (external_id = %s OR external_id = %s)"
+                        where_params = [int(audit_id), external_source, external_id, external_id_str]
+                        logger.info(
+                            f"🔄 Updating all ai_audit_data rows for audit_id={audit_id}, external_source={external_source}, external_id={external_id}/{external_id_str}"
+                        )
                 elif doc_path:
                     # Manually uploaded AI‑audit documents create one ai_audit_data
                     # row per mapping but share the same document_path.
@@ -4105,12 +4540,21 @@ def check_document_compliance(request, audit_id, document_id):
                     logger.info(
                         f"🔄 Updating all ai_audit_data rows for audit_id={audit_id}, document_path={doc_path}"
                     )
+                elif document_name and file_size:
+                    # Fallback for manually uploaded documents: match by document_name + file_size
+                    # This ensures all mappings for the same physical file are updated
+                    # Include 'manual' external_source explicitly to catch manually uploaded documents
+                    where_clause = "WHERE audit_id = %s AND document_name = %s AND file_size = %s AND (external_source IS NULL OR external_source = 'manual' OR external_source NOT IN ('evidence_attachment', 's3', 'database_record'))"
+                    where_params = [int(audit_id), document_name, file_size]
+                    logger.info(
+                        f"🔄 Updating all ai_audit_data rows for audit_id={audit_id}, document_name={document_name}, file_size={file_size} (manually uploaded document)"
+                    )
                 else:
-                    # Fallback: update just this specific document record
+                    # Final fallback: update just this specific document record
                     where_clause = "WHERE document_id = %s AND audit_id = %s"
                     where_params = [int(document_id), int(audit_id)]
                     logger.info(
-                        f"🔄 Updating single ai_audit_data row for document_id={document_id}, audit_id={audit_id}"
+                        f"🔄 Updating single ai_audit_data row for document_id={document_id}, audit_id={audit_id} (fallback)"
                     )
 
                 update_sql = f"""
@@ -4144,9 +4588,42 @@ def check_document_compliance(request, audit_id, document_id):
                 rows_updated = cursor.rowcount
                 logger.info(f"✅ Updated {rows_updated} record(s) for document {document_id} in ai_audit_data table")
                 
-                # If no rows were updated, the document doesn't exist - this shouldn't happen but log it
+                # If no rows were updated, try fallback matching by document_name + file_size for document handling uploads
+                if rows_updated == 0 and external_source in ['evidence_attachment', 's3'] and document_name and file_size:
+                    logger.warning(f"⚠️ No rows updated with external_id match, trying fallback match by document_name + file_size")
+                    cursor.execute("""
+                        UPDATE ai_audit_data 
+                        SET ai_processing_status = 'completed',
+                            compliance_status = %s,
+                            confidence_score = %s,
+                            compliance_analyses = %s,
+                            processing_completed_at = NOW(),
+                            FrameworkId = %s
+                        WHERE audit_id = %s 
+                          AND external_source = %s
+                          AND document_name = %s 
+                          AND file_size = %s
+                    """, [
+                        status_label,
+                        float(confidence),
+                        json.dumps({
+                            "compliance_status": status_label,
+                            "confidence_score": float(confidence),
+                            "compliance_analyses": analyses,
+                            "processed_at": datetime.now().isoformat(),
+                        }),
+                        framework_id,
+                        int(audit_id),
+                        external_source,
+                        document_name,
+                        file_size
+                    ])
+                    rows_updated = cursor.rowcount
+                    logger.info(f"✅ Fallback update: Updated {rows_updated} record(s) for document_name={document_name}, file_size={file_size}")
+                
+                # If still no rows were updated, log a warning
                 if rows_updated == 0:
-                    logger.warning(f"⚠️ No existing record found for document_id={document_id}, audit_id={audit_id}. Document may need to be uploaded first.")
+                    logger.warning(f"⚠️ No existing record found for document_id={document_id}, audit_id={audit_id}, external_source={external_source}, external_id={external_id}. Document may need to be uploaded first.")
                         # Save to lastchecklistitemverified for standard compliance tracking
                 try:
                     save_ai_compliance_to_checklist(
@@ -4195,7 +4672,7 @@ def check_document_compliance(request, audit_id, document_id):
             logger.info(f"🗑️ Additional cleanup - removed {len(cleaned_temp_files)} temporary files")
 
 
-def _check_compliance_with_combined_evidence_internal(audit_id, compliance_ids, user_id=None, primary_document_id=None):
+def _check_compliance_with_combined_evidence_internal(audit_id, compliance_ids, user_id=None, primary_document_id=None, audit_context=None):
     """
     Internal function to check compliance with combined evidence (documents + database).
     This can be called from both API endpoints and background processing.
@@ -4205,6 +4682,7 @@ def _check_compliance_with_combined_evidence_internal(audit_id, compliance_ids, 
         compliance_ids: List of compliance IDs to check
         user_id: Optional user ID
         primary_document_id: Optional document_id that triggered this check (used to update status)
+        audit_context: Optional audit context dict (if not provided, will be fetched from database)
     
     Returns: dict with 'success', 'results', etc.
     """
@@ -4236,13 +4714,82 @@ def _check_compliance_with_combined_evidence_internal(audit_id, compliance_ids, 
     try:
         logger.info(f"🔍 Combined evidence check for audit {audit_id}, compliances: {compliance_ids}")
         
-        # Get audit framework
+        # Get audit framework and metadata
+        audit_title = None
+        audit_objective = None
+        audit_scope = None
+        audit_business_unit = None
+        audit_type = None
+        audit_due_date = None
+        
         with connection.cursor() as cursor:
-            cursor.execute("SELECT FrameworkId, PolicyId, SubPolicyId FROM audit WHERE AuditId = %s", [int(audit_id)])
+            cursor.execute("SELECT FrameworkId, PolicyId, SubPolicyId, Title, Objective, Scope, BusinessUnit, AuditType, DueDate FROM audit WHERE AuditId = %s", [int(audit_id)])
             audit_row = cursor.fetchone()
             if not audit_row:
                 return {'success': False, 'error': 'Audit not found'}
             framework_id, policy_id, subpolicy_id = audit_row[0], audit_row[1], audit_row[2]
+            if len(audit_row) > 3:
+                audit_title = audit_row[3] or None
+                audit_objective = audit_row[4] or None
+                audit_scope = audit_row[5] or None
+                audit_business_unit = audit_row[6] or None
+                audit_type = audit_row[7] or None
+                audit_due_date = audit_row[8] or None
+        
+        # Fetch policy and subpolicy names if not in audit_context
+        policy_name = None
+        subpolicy_name = None
+        if policy_id:
+            with connection.cursor() as cursor:
+                try:
+                    cursor.execute("SELECT PolicyName FROM policies WHERE PolicyId = %s", [int(policy_id)])
+                    policy_row = cursor.fetchone()
+                    if policy_row:
+                        policy_name = policy_row[0]
+                except Exception as e:
+                    logger.warning(f"⚠️ Could not fetch policy name: {e}")
+        
+        if subpolicy_id:
+            with connection.cursor() as cursor:
+                try:
+                    cursor.execute("SELECT SubPolicyName FROM subpolicies WHERE SubPolicyId = %s", [int(subpolicy_id)])
+                    subpolicy_row = cursor.fetchone()
+                    if subpolicy_row:
+                        subpolicy_name = subpolicy_row[0]
+                except Exception as e:
+                    logger.warning(f"⚠️ Could not fetch subpolicy name: {e}")
+        
+        # Use provided audit_context or build from fetched data
+        if audit_context is None:
+            audit_context = {
+                'title': audit_title,
+                'objective': audit_objective,
+                'scope': audit_scope,
+                'business_unit': audit_business_unit,
+                'audit_type': audit_type,
+                'due_date': audit_due_date,
+                'policy_id': policy_id,
+                'policy_name': policy_name,
+                'subpolicy_id': subpolicy_id,
+                'subpolicy_name': subpolicy_name
+            }
+        else:
+            # Ensure policy/subpolicy info is in audit_context even if it was provided
+            if not audit_context.get('policy_name') and policy_name:
+                audit_context['policy_name'] = policy_name
+            if not audit_context.get('subpolicy_name') and subpolicy_name:
+                audit_context['subpolicy_name'] = subpolicy_name
+            if not audit_context.get('policy_id') and policy_id:
+                audit_context['policy_id'] = policy_id
+            if not audit_context.get('subpolicy_id') and subpolicy_id:
+                audit_context['subpolicy_id'] = subpolicy_id
+            # Also ensure audit metadata is present
+            if not audit_context.get('title') and audit_title:
+                audit_context['title'] = audit_title
+            if not audit_context.get('objective') and audit_objective:
+                audit_context['objective'] = audit_objective
+            if not audit_context.get('scope') and audit_scope:
+                audit_context['scope'] = audit_scope
         
         # Load compliance requirements
         with connection.cursor() as cursor:
@@ -4731,7 +5278,8 @@ def _check_compliance_with_combined_evidence_internal(audit_id, compliance_ids, 
                 single_req_batch,
                 schema=None,
                 audit_id=audit_id,
-                document_id=None  # No single document_id since we're combining evidence
+                document_id=None,  # No single document_id since we're combining evidence
+                audit_context=audit_context
             )
             
             if not analyses or len(analyses) == 0:
@@ -4809,7 +5357,55 @@ def _check_compliance_with_combined_evidence_internal(audit_id, compliance_ids, 
                             # Update ALL documents that were part of the combined check
                             # This ensures all documents show the same combined analysis result
                             # AND they all have the same combined_check_group_id so frontend can group them
+                            # For manually uploaded documents, also update all mappings that share the same document_path or document_name+file_size
+                            
+                            # First, get document_path and document_name+file_size for the documents being updated
+                            # so we can also update other mappings for the same physical file
                             placeholders = ','.join(['%s'] * len(documents_to_update))
+                            cursor.execute(f"""
+                                SELECT DISTINCT document_path, document_name, file_size
+                                FROM ai_audit_data
+                                WHERE document_id IN ({placeholders})
+                                  AND audit_id = %s
+                            """, [*documents_to_update, int(audit_id)])
+                            
+                            file_identifiers = cursor.fetchall()
+                            
+                            # Build WHERE clause to match:
+                            # 1. The specific document IDs
+                            # 2. All records with the same document_path (for manually uploaded)
+                            # 3. All records with the same document_name + file_size (fallback for manually uploaded)
+                            where_conditions = [f"document_id IN ({placeholders})"]
+                            where_params = list(documents_to_update)
+                            
+                            # Collect unique document_paths and document_name+file_size pairs
+                            doc_paths_to_match = set()
+                            doc_name_size_pairs = set()
+                            
+                            for doc_path, doc_name, doc_size in file_identifiers:
+                                if doc_path:
+                                    doc_paths_to_match.add(doc_path)
+                                elif doc_name and doc_size:
+                                    doc_name_size_pairs.add((doc_name, doc_size))
+                            
+                            # Add conditions for document_path matches
+                            if doc_paths_to_match:
+                                path_placeholders = ','.join(['%s'] * len(doc_paths_to_match))
+                                where_conditions.append(f"document_path IN ({path_placeholders})")
+                                where_params.extend(list(doc_paths_to_match))
+                            
+                            # Add conditions for document_name + file_size matches (for manually uploaded without document_path)
+                            if doc_name_size_pairs:
+                                name_size_conditions = []
+                                for doc_name, doc_size in doc_name_size_pairs:
+                                    name_size_conditions.append("(document_name = %s AND file_size = %s)")
+                                    where_params.extend([doc_name, doc_size])
+                                if name_size_conditions:
+                                    where_conditions.append("(" + " OR ".join(name_size_conditions) + " AND (external_source IS NULL OR external_source NOT IN ('evidence_attachment', 's3', 'database_record')))")
+                            
+                            # Combine all conditions with OR
+                            where_clause = "(" + " OR ".join(where_conditions) + ")"
+                            
                             cursor.execute(f"""
                                 UPDATE ai_audit_data 
                                 SET ai_processing_status = 'completed',
@@ -4817,14 +5413,14 @@ def _check_compliance_with_combined_evidence_internal(audit_id, compliance_ids, 
                                     confidence_score = %s,
                                     compliance_analyses = %s,
                                     processing_completed_at = NOW()
-                                WHERE document_id IN ({placeholders})
+                                WHERE {where_clause}
                                   AND audit_id = %s
                                   AND (external_source != 'database_record' AND document_type != 'db_record')
                             """, [
                                 status_label,
                                 float(confidence),
                                 combined_analysis_json,
-                                *documents_to_update,
+                                *where_params,
                                 int(audit_id)
                             ])
                             updated_count = cursor.rowcount

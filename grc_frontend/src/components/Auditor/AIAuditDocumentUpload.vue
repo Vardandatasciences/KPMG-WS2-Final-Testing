@@ -686,9 +686,9 @@
               >
                 <i class="fas fa-trash"></i> Delete
               </button>
-              <!-- Show Check button only if NOT all completed -->
+             <!-- Show Check button only if no completed mappings yet AND not showing Details button -->
               <button 
-                v-if="!areAllMappingsCompleted(fileGroup)"
+                v-if="!areAllMappingsCompleted(fileGroup) && !shouldShowDetailsButton(fileGroup)"
                 @click="checkDocumentCompliance(null, fileGroup)" 
                 class="btn btn-sm btn-primary" 
                 :disabled="isCheckingAnyMapping(fileGroup)"
@@ -697,12 +697,12 @@
                 <i v-else class="fas fa-robot"></i>
                 {{ isCheckingAnyMapping(fileGroup) ? 'Checking...' : 'Check' }}
               </button>
-              <!-- Show Details button when all mappings are completed -->
+              <!-- Show Details button as soon as at least one mapping is completed (replaces Check button) -->
               <!-- For combined checks, only show button on the primary fileGroup -->
               <button 
                 v-if="shouldShowDetailsButton(fileGroup)" 
                 @click="showAllMappingsDetails(fileGroup)" 
-                class="btn btn-sm btn-outline"
+                class="btn btn-sm btn-primary"
                 :title="isPartOfCombinedCheckGroup(fileGroup) ? `Combined check with ${getCombinedCheckGroup(fileGroup).length} document(s)` : getMappingsTooltip(fileGroup)"
               >
                 <i class="fas fa-list"></i> Details
@@ -1437,26 +1437,150 @@ export default {
       
       // Combine analyses from all completed mappings
       const allAnalyses = []
-      completedMappings.forEach(m => {
+      console.log('🔍 Extracting analyses from completed mappings:', completedMappings.length)
+      
+      completedMappings.forEach((m, idx) => {
+        console.log(`🔍 Processing mapping ${idx + 1}/${completedMappings.length}:`, {
+          mapping_display: m.mapping_display,
+          has_compliance_analyses: !!m.compliance_analyses,
+          compliance_analyses_type: typeof m.compliance_analyses,
+          compliance_analyses_is_array: Array.isArray(m.compliance_analyses),
+          compliance_analyses_keys: m.compliance_analyses && typeof m.compliance_analyses === 'object' ? Object.keys(m.compliance_analyses) : null,
+          FULL_COMPLIANCE_ANALYSES: JSON.stringify(m.compliance_analyses, null, 2) // Dump full structure
+        })
+        
         let analyses = m.compliance_analyses
-        if (!analyses) return
+        if (!analyses) {
+          console.warn(`⚠️ Mapping ${m.mapping_display} has no compliance_analyses`)
+          return
+        }
+        
         // Handle JSON string
         if (typeof analyses === 'string') {
           try {
             analyses = JSON.parse(analyses)
+            console.log(`✅ Parsed JSON string for mapping ${m.mapping_display}`, {
+              type: typeof analyses,
+              is_array: Array.isArray(analyses),
+              keys: typeof analyses === 'object' && !Array.isArray(analyses) ? Object.keys(analyses) : null
+            })
           } catch (err) {
             console.warn('Failed to parse compliance_analyses string for mapping', m.mapping_display, err)
             analyses = null
+            return
           }
         }
+        
         // Handle object with compliance_analyses or analyses key
-        // (compliance_analyses can be stored as {analyses: [...], ...metadata} or {compliance_analyses: [...]})
+        // Backend stores: {compliance_status, confidence_score, compliance_analyses: [...], processed_at}
+        // Frontend wraps it: {analyses: [...], ...metadata} or {compliance_analyses: [...]}
         if (analyses && typeof analyses === 'object' && !Array.isArray(analyses)) {
-          // Try both 'analyses' (new structure) and 'compliance_analyses' (old structure)
-          analyses = analyses.analyses || analyses.compliance_analyses || analyses
+          console.log(`🔍 analyses is object, checking for nested arrays:`, {
+            has_analyses_key: !!analyses.analyses,
+            has_compliance_analyses_key: !!analyses.compliance_analyses,
+            keys: Object.keys(analyses),
+            analyses_type: analyses.analyses ? typeof analyses.analyses : null,
+            analyses_is_array: analyses.analyses ? Array.isArray(analyses.analyses) : null,
+            compliance_analyses_type: analyses.compliance_analyses ? typeof analyses.compliance_analyses : null,
+            compliance_analyses_is_array: analyses.compliance_analyses ? Array.isArray(analyses.compliance_analyses) : null
+          })
+          
+          // Priority order for extraction - try ALL possible paths:
+          // 1. analyses.analyses (frontend wrapped structure)
+          // 2. analyses.compliance_analyses (backend structure)
+          // 3. Check if any key contains an array
+          let extracted = false
+          
+          if (analyses.analyses && Array.isArray(analyses.analyses)) {
+            analyses = analyses.analyses
+            console.log(`✅ Extracted from analyses.analyses (${analyses.length} items)`)
+            extracted = true
+          } else if (analyses.compliance_analyses && Array.isArray(analyses.compliance_analyses)) {
+            analyses = analyses.compliance_analyses
+            console.log(`✅ Extracted from analyses.compliance_analyses (${analyses.length} items)`)
+            extracted = true
+          } else {
+            // Try one more level deep in case of double nesting
+            if (analyses.analyses && typeof analyses.analyses === 'object' && !Array.isArray(analyses.analyses)) {
+              if (analyses.analyses.analyses && Array.isArray(analyses.analyses.analyses)) {
+                analyses = analyses.analyses.analyses
+                console.log(`✅ Extracted from nested analyses.analyses.analyses (${analyses.length} items)`)
+                extracted = true
+              } else if (analyses.analyses.compliance_analyses && Array.isArray(analyses.analyses.compliance_analyses)) {
+                analyses = analyses.analyses.compliance_analyses
+                console.log(`✅ Extracted from nested analyses.analyses.compliance_analyses (${analyses.length} items)`)
+                extracted = true
+              }
+            }
+            
+            if (!extracted && analyses.compliance_analyses && typeof analyses.compliance_analyses === 'object' && !Array.isArray(analyses.compliance_analyses)) {
+              if (analyses.compliance_analyses.analyses && Array.isArray(analyses.compliance_analyses.analyses)) {
+                analyses = analyses.compliance_analyses.analyses
+                console.log(`✅ Extracted from nested analyses.compliance_analyses.analyses (${analyses.length} items)`)
+                extracted = true
+              } else if (analyses.compliance_analyses.compliance_analyses && Array.isArray(analyses.compliance_analyses.compliance_analyses)) {
+                analyses = analyses.compliance_analyses.compliance_analyses
+                console.log(`✅ Extracted from nested analyses.compliance_analyses.compliance_analyses (${analyses.length} items)`)
+                extracted = true
+              }
+            }
+            
+            // Last resort: search ALL keys for arrays
+            if (!extracted) {
+              console.log(`🔍 Searching all keys for array values...`)
+              for (const key of Object.keys(analyses)) {
+                const value = analyses[key]
+                if (Array.isArray(value) && value.length > 0) {
+                  console.log(`✅ Found array in key "${key}" with ${value.length} items`)
+                  analyses = value
+                  extracted = true
+                  break
+                } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                  // Check nested object for arrays
+                  for (const nestedKey of Object.keys(value)) {
+                    if (Array.isArray(value[nestedKey]) && value[nestedKey].length > 0) {
+                      console.log(`✅ Found array in nested key "${key}.${nestedKey}" with ${value[nestedKey].length} items`)
+                      analyses = value[nestedKey]
+                      extracted = true
+                      break
+                    }
+                  }
+                  if (extracted) break
+                }
+              }
+            }
+            
+            if (!extracted) {
+              console.warn(`⚠️ Could not extract array from object structure for mapping ${m.mapping_display}`, {
+                structure: JSON.stringify(analyses, null, 2)
+              })
+              analyses = null
+            }
+          }
         }
-        if (!Array.isArray(analyses)) return
-        analyses.forEach(a => {
+        
+        if (!analyses) {
+          console.warn(`⚠️ No analyses extracted for mapping ${m.mapping_display}`)
+          return
+        }
+        
+        if (!Array.isArray(analyses)) {
+          console.warn(`⚠️ Analyses is not an array for mapping ${m.mapping_display}:`, typeof analyses, analyses)
+          // Try to convert single object to array
+          if (typeof analyses === 'object' && analyses !== null) {
+            analyses = [analyses]
+            console.log(`✅ Converted single object to array for mapping ${m.mapping_display}`)
+          } else {
+            console.warn(`⚠️ Cannot convert to array, skipping mapping ${m.mapping_display}`)
+            return
+          }
+        }
+        
+        console.log(`✅ Found ${analyses.length} analyses for mapping ${m.mapping_display}`, {
+          first_analysis_keys: analyses.length > 0 && typeof analyses[0] === 'object' ? Object.keys(analyses[0]) : null
+        })
+        
+        analyses.forEach((a) => {
           allAnalyses.push({
             ...a,
             // Add mapping context so UI can show which mapping this belongs to
@@ -1466,11 +1590,8 @@ export default {
           })
         })
       })
-      if (allAnalyses.length === 0) {
-        this.$popup?.warning('No analysis results available for completed mappings.')
-        return
-      }
       
+      console.log(`✅ Total analyses extracted: ${allAnalyses.length} from ${completedMappings.length} mapping(s)`)
       // Build document name that indicates combined check if applicable
       let displayName = fileGroup.document_name
       if (isCombinedCheck) {
@@ -1483,6 +1604,7 @@ export default {
         }
       }
       
+      // Show details even if no analyses - the UI will display a message
       const combinedDetails = {
         document_name: displayName,
         document_type: fileGroup.document_type,
@@ -1497,9 +1619,22 @@ export default {
         mappings: completedMappings,
         compliance_status: this.aggregateComplianceStatus(completedMappings),
         confidence_score: this.aggregateConfidenceScore(completedMappings),
-        compliance_analyses: allAnalyses
+        compliance_analyses: allAnalyses.length > 0 ? allAnalyses : [] // Always provide array, even if empty
       }
+      
+      console.log('🔍 Showing details for fileGroup:', {
+        document_name: displayName,
+        mappings_count: completedMappings.length,
+        analyses_count: allAnalyses.length,
+        has_analyses: allAnalyses.length > 0
+      })
+      
       this.showDocumentDetails(combinedDetails)
+      
+      // Show a warning if no analyses, but still display the details view
+      if (allAnalyses.length === 0) {
+        this.$popup?.warning('No analysis results available for completed mappings. Showing document details anyway.')
+      }
     },
     // Show details popup for additional evidence
     showDatabaseRecordDetails(recordGroup) {
@@ -2759,7 +2894,9 @@ export default {
           })
         }
 
-        const response = await api.get(`/api/ai-audit/${auditId}/documents/`)
+        const response = await api.get(`/api/ai-audit/${auditId}/documents/`, {
+          timeout: 30000 // 30 second timeout to prevent hanging
+        })
         console.log('📋 Documents response:', response.data)
         console.log('📋 Response success:', response.data.success)
         console.log('📋 Response documents array length:', response.data.documents?.length || 0)
@@ -2918,7 +3055,9 @@ export default {
             }
             
             const group = fileGroups.get(fileKey)
-            const mappingKey = `${d.policy_id || 'none'}-${d.subpolicy_id || 'none'}`
+            // Include compliance_id in mapping key to handle multiple compliances under same policy/subpolicy
+            // This ensures each compliance gets its own mapping entry
+            const mappingKey = `${d.policy_id || 'none'}-${d.subpolicy_id || 'none'}-${d.compliance_id || 'none'}`
             const existing = group.mappingsMap.get(mappingKey)
             
             // Prefer the "best" record for this mapping:
@@ -3013,20 +3152,38 @@ export default {
               }
 
               // Find all compliances that belong to this policy/sub-policy mapping
-              let compliancesForMapping = this.availableCompliances.filter(c => {
-                // First check if there's a direct compliance_id match (from mapping)
-                if (d.compliance_id && c.compliance_id === d.compliance_id) {
-                  return true
+              // CRITICAL: If compliance_id is stored in database (from manual upload), use it directly
+              let compliancesForMapping = []
+              let complianceIdsForMapping = []
+              
+              // First priority: Use compliance_id from database if it exists (manually uploaded documents)
+              if (d.compliance_id) {
+                const directCompliance = this.availableCompliances.find(c => c.compliance_id === d.compliance_id)
+                if (directCompliance) {
+                  compliancesForMapping = [directCompliance]
+                  complianceIdsForMapping = [d.compliance_id]
+                  console.log(`✅ Using direct compliance_id ${d.compliance_id} from database for mapping ${d.policy_id}-${d.subpolicy_id}`)
+                } else {
+                  // Compliance not found in availableCompliances, but still use the ID
+                  complianceIdsForMapping = [d.compliance_id]
+                  console.log(`⚠️ compliance_id ${d.compliance_id} from database not found in availableCompliances, but will use it anyway`)
                 }
-                // Otherwise match by policy/subpolicy
-                const matchesPolicy = !d.policy_id || c.policy_id === d.policy_id
-                const matchesSubpolicy = !d.subpolicy_id || c.subpolicy_id === d.subpolicy_id
-                const isSelected =
-                  !this.selectedComplianceIds || this.selectedComplianceIds.length === 0
-                    ? true
-                    : this.selectedComplianceIds.includes(c.compliance_id)
-                return matchesPolicy && matchesSubpolicy && isSelected
-              })
+              }
+              
+              // Second priority: If no direct compliance_id, match by policy/subpolicy
+              if (compliancesForMapping.length === 0) {
+                compliancesForMapping = this.availableCompliances.filter(c => {
+                  // Match by policy/subpolicy
+                  const matchesPolicy = !d.policy_id || c.policy_id === d.policy_id
+                  const matchesSubpolicy = !d.subpolicy_id || c.subpolicy_id === d.subpolicy_id
+                  const isSelected =
+                    !this.selectedComplianceIds || this.selectedComplianceIds.length === 0
+                      ? true
+                      : this.selectedComplianceIds.includes(c.compliance_id)
+                  return matchesPolicy && matchesSubpolicy && isSelected
+                })
+                complianceIdsForMapping = compliancesForMapping.map(c => c.compliance_id)
+              }
 
               // If no currently selected compliances match but we have historical
               // analyses, fall back to the compliance IDs present in the analyses
@@ -3099,13 +3256,18 @@ export default {
               }
               // Removed "compliances loading..." message - just show the mapping without compliance names if not loaded yet
               
+              // Use complianceIdsForMapping if we have it (from direct compliance_id), otherwise use from compliancesForMapping
+              const finalComplianceIds = complianceIdsForMapping.length > 0 
+                ? complianceIdsForMapping 
+                : compliancesForMapping.map(c => c.compliance_id)
+              
               mappings.push({
                 ...d,
                 mapping_display: mappingDisplay,
-                mapping_key: `${d.policy_id || 'none'}-${d.subpolicy_id || 'none'}`,
+                mapping_key: `${d.policy_id || 'none'}-${d.subpolicy_id || 'none'}-${d.compliance_id || 'none'}`, // Include compliance_id to keep separate mappings
                 compliance_names: complianceNames,
-                compliance_ids: compliancesForMapping.map(c => c.compliance_id),
-                compliance_count: complianceNames.length
+                compliance_ids: finalComplianceIds, // Use the compliance IDs we determined
+                compliance_count: complianceNames.length > 0 ? complianceNames.length : finalComplianceIds.length
               })
             })
             
@@ -3171,18 +3333,41 @@ export default {
               mappings_count: fileGroup.mappings.length,
               mappings: fileGroup.mappings.map(m => ({
                 mapping: m.mapping_display,
-                status: m.processing_status,
-                has_analyses: !!m.compliance_analyses
+                status: m.processing_status || m.ai_processing_status,
+                has_analyses: !!m.compliance_analyses,
+                shouldShowDetails: this.shouldShowDetailsButton(fileGroup)
               }))
             })
+          })
+          
+          // Force Vue reactivity update to ensure UI reflects status changes
+          this.$nextTick(() => {
+            this.$forceUpdate()
           })
         } else {
           console.warn('📋 Failed to load documents:', response.data.error)
           this.uploadedDocuments = []
         }
+        
+        // Start polling for status updates if there are documents that might be processing
+        // This ensures Details button appears as soon as documents are completed
+        this.startStatusPolling()
       } catch (error) {
         console.error('Error loading uploaded documents:', error)
+        if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+          console.error('⏱️ Request timed out - API may be slow or unresponsive')
+          this.$popup?.error('Request timed out while loading documents. Please try refreshing the page.')
+        } else if (error.response) {
+          console.error('API Error:', error.response.status, error.response.data)
+          this.$popup?.error(`Failed to load documents: ${error.response.data?.error || error.response.statusText || 'Unknown error'}`)
+        } else {
+          console.error('Network or other error:', error.message)
+          this.$popup?.error(`Failed to load documents: ${error.message || 'Network error'}`)
+        }
         this.uploadedDocuments = []
+        
+        // Start polling even on error, in case documents are being processed
+        this.startStatusPolling()
       }
     },
     
@@ -3852,7 +4037,11 @@ export default {
       if (!fileGroup || !fileGroup.mappings || fileGroup.mappings.length === 0) {
         return false
       }
-      return fileGroup.mappings.every(m => m.processing_status === 'completed')
+      // Check both processing_status and ai_processing_status for compatibility
+      return fileGroup.mappings.every(m => {
+        const status = m.processing_status || m.ai_processing_status || 'pending'
+        return status === 'completed'
+      })
     },
     
     // Check if database evidence is part of a combined check (should not show Details button)
@@ -3893,20 +4082,68 @@ export default {
     },
     
     // Check if this fileGroup should show the Details button
+    // Show Details button as soon as at least one mapping is completed (don't wait for all)
     // Only show Details button for the FIRST fileGroup in a combined check group
     shouldShowDetailsButton(fileGroup) {
-      if (!this.areAllMappingsCompleted(fileGroup)) {
-        return false // Don't show if not completed
+      if (!fileGroup || !fileGroup.mappings || fileGroup.mappings.length === 0) {
+        console.log('🔍 shouldShowDetailsButton: No mappings', fileGroup)
+        return false // No mappings, don't show
       }
+      
+      // Check if at least one mapping is completed (changed from "all mappings")
+      // Check both processing_status and ai_processing_status fields
+      const completedMappings = fileGroup.mappings.filter(m => {
+        const status = m.processing_status || m.ai_processing_status || 'pending'
+        const isCompleted = status === 'completed'
+        if (isCompleted) {
+          console.log('✅ Found completed mapping:', {
+            mapping: m.mapping_display,
+            status: status,
+            hasAnalyses: !!m.compliance_analyses
+          })
+        }
+        return isCompleted
+      })
+      
+      if (completedMappings.length === 0) {
+        console.log('🔍 shouldShowDetailsButton: No completed mappings yet', {
+          mappings: fileGroup.mappings.map(m => ({
+            display: m.mapping_display,
+            status: m.processing_status || m.ai_processing_status
+          }))
+        })
+        return false // Don't show if no mappings are completed
+      }
+      
+      console.log('🔍 shouldShowDetailsButton: Found completed mappings, checking analyses...', {
+        completedCount: completedMappings.length,
+        totalCount: fileGroup.mappings.length
+      })
+      
+      // If at least one mapping is completed, ALWAYS show the button
+      // Don't wait for analyses to be loaded - if status is 'completed', show the button
+      // The showAllMappingsDetails function will handle the case where analyses are missing
+      // This ensures the button appears immediately when processing completes
+      console.log('✅ shouldShowDetailsButton: Showing Details button for completed mappings', {
+        completedCount: completedMappings.length,
+        totalMappingsCount: fileGroup.mappings.length,
+        completedMappings: completedMappings.map(m => ({
+          display: m.mapping_display,
+          status: m.processing_status || m.ai_processing_status,
+          hasAnalyses: !!m.compliance_analyses
+        }))
+      })
       
       // If not part of a combined check, show the button
       if (!this.isPartOfCombinedCheckGroup(fileGroup)) {
+        console.log('✅ shouldShowDetailsButton: Showing Details button (not part of combined check)')
         return true
       }
       
       // If part of a combined check, only show button for the first fileGroup in the group
       const combinedGroup = this.getCombinedCheckGroup(fileGroup)
       if (combinedGroup.length <= 1) {
+        console.log('✅ shouldShowDetailsButton: Showing Details button (only one in group)')
         return true // Only one fileGroup in group, show button
       }
       
@@ -3924,7 +4161,13 @@ export default {
       })
       
       // Show button only for the first (lowest document_id) fileGroup
-      return sortedGroup[0] === fileGroup || sortedGroup[0].document_id === fileGroup.document_id
+      const shouldShow = sortedGroup[0] === fileGroup || sortedGroup[0].document_id === fileGroup.document_id
+      console.log('🔍 shouldShowDetailsButton: Combined check group', {
+        shouldShow,
+        isFirst: sortedGroup[0] === fileGroup,
+        groupSize: combinedGroup.length
+      })
+      return shouldShow
     },
     
     // Helper: get tooltip text showing all mappings
@@ -4147,11 +4390,52 @@ export default {
     },
     
     startStatusPolling() {
-      // Disable continuous polling for now to prevent log spam
-      console.log('🛑 Status polling disabled to prevent log spam')
-      // this.pollingInterval = setInterval(() => {
-      //   this.loadAIStatus()
-      // }, 10000)
+      // Clear any existing polling interval
+      if (this.pollingInterval) {
+        clearInterval(this.pollingInterval)
+      }
+      
+      // Track if we've seen any processing documents to continue polling for a bit after completion
+      let hasSeenProcessingDocs = false
+      let consecutiveNoProcessingCount = 0
+      
+      // Poll for document status updates every 5 seconds
+      // This ensures Details button appears as soon as documents are completed
+      this.pollingInterval = setInterval(() => {
+        // Check if we have documents that might be processing
+        const hasProcessingDocs = this.uploadedDocuments.some(fg => 
+          fg.mappings && fg.mappings.some(m => {
+            const status = m.processing_status || m.ai_processing_status || 'pending'
+            return status === 'processing' || status === 'pending'
+          })
+        )
+        
+        if (hasProcessingDocs) {
+          hasSeenProcessingDocs = true
+          consecutiveNoProcessingCount = 0
+          console.log('🔄 Polling for document status updates (processing documents found)...')
+          this.loadUploadedDocuments().catch(err => {
+            console.warn('⚠️ Error during status polling:', err)
+          })
+        } else if (hasSeenProcessingDocs && consecutiveNoProcessingCount < 3) {
+          // Continue polling for 3 more cycles (15 seconds) after processing stops
+          // This ensures the UI has time to update with completed status
+          consecutiveNoProcessingCount++
+          console.log(`🔄 Polling for document status updates (post-processing check ${consecutiveNoProcessingCount}/3)...`)
+          this.loadUploadedDocuments().catch(err => {
+            console.warn('⚠️ Error during status polling:', err)
+          })
+        } else if (consecutiveNoProcessingCount >= 3) {
+          // Stop polling after 3 cycles with no processing docs
+          console.log('✅ All documents completed, stopping status polling')
+          if (this.pollingInterval) {
+            clearInterval(this.pollingInterval)
+            this.pollingInterval = null
+          }
+        }
+      }, 5000) // Poll every 5 seconds
+      
+      console.log('✅ Status polling enabled (5 second interval)')
     },
     
     
@@ -4447,19 +4731,43 @@ export default {
           const mappingComplianceMap = new Map() // Map compliance_id -> mapping for later assignment
           let primaryDocumentId = null
           
+          console.log(`🔍 Collecting compliance IDs from ${fileGroup.mappings.length} mapping(s)`)
+          
           for (const mapping of fileGroup.mappings) {
+            console.log(`🔍 Mapping: ${mapping.mapping_display}`, {
+              has_compliance_ids: !!mapping.compliance_ids,
+              compliance_ids: mapping.compliance_ids,
+              compliance_id_from_db: mapping.compliance_id, // Direct from database
+              document_id: mapping.document_id
+            })
+            
+            // First, check if mapping has direct compliance_id from database (manually uploaded)
+            if (mapping.compliance_id && !allComplianceIds.has(mapping.compliance_id)) {
+              allComplianceIds.add(mapping.compliance_id)
+              if (!mappingComplianceMap.has(mapping.compliance_id)) {
+                mappingComplianceMap.set(mapping.compliance_id, [])
+              }
+              mappingComplianceMap.get(mapping.compliance_id).push(mapping)
+              console.log(`✅ Added compliance_id ${mapping.compliance_id} from database record`)
+            }
+            
+            // Also check compliance_ids array (for multiple compliances or Document Handling uploads)
             if (mapping.compliance_ids && Array.isArray(mapping.compliance_ids)) {
               mapping.compliance_ids.forEach(compId => {
-                allComplianceIds.add(compId)
-                if (!mappingComplianceMap.has(compId)) {
-                  mappingComplianceMap.set(compId, [])
+                if (!allComplianceIds.has(compId)) {
+                  allComplianceIds.add(compId)
+                  if (!mappingComplianceMap.has(compId)) {
+                    mappingComplianceMap.set(compId, [])
+                  }
+                  mappingComplianceMap.get(compId).push(mapping)
+                  console.log(`✅ Added compliance_id ${compId} from compliance_ids array`)
                 }
-                mappingComplianceMap.get(compId).push(mapping)
               })
-              // Use the first mapping's document_id as the primary one
-              if (!primaryDocumentId && mapping.document_id) {
-                primaryDocumentId = mapping.document_id
-              }
+            }
+            
+            // Use the first mapping's document_id as the primary one
+            if (!primaryDocumentId && mapping.document_id) {
+              primaryDocumentId = mapping.document_id
             }
           }
           
@@ -4517,15 +4825,60 @@ export default {
               // Clear checking flags
               fileGroup.mappings.forEach(m => { m._checking = false })
               
-              // Force Vue reactivity update
+              // Force Vue reactivity update immediately
               this.$forceUpdate()
               
               this.$popup?.success(`Compliance checked successfully for "${fileGroup.document_name}" - ${allComplianceIds.size} compliance requirement(s) analyzed across ${fileGroup.mappings.length} mapping(s)`)
               
-              // Reload documents to get updated status from backend (with a small delay to ensure backend has updated)
-              setTimeout(async () => {
-                await this.loadUploadedDocuments()
-              }, 500)
+              // Reload documents to get updated status from backend (with delay to ensure backend has updated)
+              // Use multiple reload attempts to ensure status is correctly reflected
+              const reloadWithRetry = async (attempt = 1, maxAttempts = 3) => {
+                try {
+                  await this.loadUploadedDocuments()
+                  // After reload, verify that mappings are marked as completed
+                  const reloadedFileGroup = this.uploadedDocuments.find(fg => 
+                    fg.document_name === fileGroup.document_name && 
+                    fg.file_size === fileGroup.file_size
+                  )
+                  if (reloadedFileGroup) {
+                    console.log(`🔍 After reload (attempt ${attempt}) - mappings status:`, reloadedFileGroup.mappings.map(m => ({
+                      mapping: m.mapping_display,
+                      status: m.processing_status,
+                      has_analyses: !!m.compliance_analyses
+                    })))
+                    const allCompleted = reloadedFileGroup.mappings.every(m => m.processing_status === 'completed')
+                    console.log(`🔍 All mappings completed? ${allCompleted}`)
+                    
+                    // If not all completed and we have retries left, try again
+                    if (!allCompleted && attempt < maxAttempts) {
+                      console.log(`⚠️ Not all mappings completed, retrying reload in ${attempt * 500}ms...`)
+                      setTimeout(() => reloadWithRetry(attempt + 1, maxAttempts), attempt * 500)
+                    } else if (!allCompleted) {
+                      console.warn('⚠️ Some mappings are not marked as completed after all reload attempts. This may prevent Details button from showing.')
+                      // Force update status locally as fallback
+                      reloadedFileGroup.mappings.forEach(m => {
+                        if (m.processing_status !== 'completed') {
+                          m.processing_status = 'completed'
+                        }
+                      })
+                      this.$forceUpdate()
+                    }
+                  }
+                } catch (err) {
+                  console.error('Error reloading documents:', err)
+                  // Don't retry on timeout errors - they indicate a bigger problem
+                  if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+                    console.error('⏱️ Timeout error during reload - stopping retries')
+                    return
+                  }
+                  if (attempt < maxAttempts) {
+                    setTimeout(() => reloadWithRetry(attempt + 1, maxAttempts), attempt * 500)
+                  }
+                }
+              }
+              
+              // Start reload after a short delay
+              setTimeout(() => reloadWithRetry(), 1500) // Start with 1.5 second delay
             } else {
               const errorMsg = res.data?.error || 'Unknown error'
               this.$popup?.error(`Failed to check compliance for "${fileGroup.document_name}". ${errorMsg}`)
@@ -4564,9 +4917,43 @@ export default {
           doc.compliance_status = res.data.status || doc.compliance_status
           doc.confidence_score = res.data.confidence ?? doc.confidence_score
           doc.compliance_analyses = res.data.analyses || doc.compliance_analyses
+          
+          // Force Vue reactivity update immediately
+          this.$forceUpdate()
+          
           this.$popup?.success(`Compliance checked for "${fileGroup.document_name}" - ${doc.mapping_display}`)
-          // Reload documents to get updated status
-          await this.loadUploadedDocuments()
+          
+          // Reload documents to get updated status from backend (with retry logic)
+          const reloadWithRetry = async (attempt = 1, maxAttempts = 3) => {
+            try {
+              await this.loadUploadedDocuments()
+              // Verify the mapping is marked as completed
+              const reloadedFileGroup = this.uploadedDocuments.find(fg => 
+                fg.document_name === fileGroup.document_name && 
+                fg.file_size === fileGroup.file_size
+              )
+              if (reloadedFileGroup) {
+                const reloadedMapping = reloadedFileGroup.mappings.find(m => 
+                  m.policy_id === doc.policy_id && m.subpolicy_id === doc.subpolicy_id
+                )
+                if (reloadedMapping && reloadedMapping.processing_status !== 'completed' && attempt < maxAttempts) {
+                  console.log(`⚠️ Mapping not completed after reload, retrying in ${attempt * 500}ms...`)
+                  setTimeout(() => reloadWithRetry(attempt + 1, maxAttempts), attempt * 500)
+                } else if (reloadedMapping && reloadedMapping.processing_status !== 'completed') {
+                  // Force update as fallback
+                  reloadedMapping.processing_status = 'completed'
+                  this.$forceUpdate()
+                }
+              }
+            } catch (err) {
+              console.error('Error reloading documents:', err)
+              if (attempt < maxAttempts) {
+                setTimeout(() => reloadWithRetry(attempt + 1, maxAttempts), attempt * 500)
+              }
+            }
+          }
+          
+          setTimeout(() => reloadWithRetry(), 1500)
         } else {
           const msg = res.data?.error || 'Compliance check failed'
           console.warn('🧪 Check failed:', msg)

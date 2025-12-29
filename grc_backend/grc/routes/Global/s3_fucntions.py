@@ -189,11 +189,6 @@ class RenderS3Client:
         self.api_base_url = api_base_url.rstrip('/')
         self.db_pool = None
         
-        # Track last trigger time for each audit_id to prevent connection pool exhaustion
-        # Key: audit_id, Value: timestamp of last trigger
-        self._last_trigger_time = {}
-        self._trigger_lock = threading.Lock()
-        
         # Initialize MySQL connection if config provided
         if mysql_config:
             self._setup_mysql_database(mysql_config)
@@ -2227,7 +2222,7 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
         try:
             # Get ALL audits in framework that are not completed (matching dropdown logic)
             # This includes AI, Internal, External, Regular, Self-Audit types
-            # FILTER: Only process audits 426 and 427
+            # FILTER: Only process audit 426 (testing mode)
             query = """
             SELECT a.AuditId as audit_id, a.FrameworkId, a.PolicyId, a.SubPolicyId,
                    a.Title as audit_title, a.Objective as audit_objective, a.Scope as audit_scope,
@@ -2239,7 +2234,7 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
             LEFT JOIN subpolicies sp ON a.SubPolicyId = sp.SubPolicyId
             WHERE a.FrameworkId = %s
               AND (a.Status != 'Completed' OR a.Status IS NULL)
-              AND a.AuditId IN (426, 427)
+              AND a.AuditId = 426
             ORDER BY a.AuditId DESC
             """
             cursor.execute(query, (framework_id,))
@@ -2508,26 +2503,9 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
             audit_id = data.get("audit_id")
             framework_id = data.get("framework_id")
             
-            # Trigger audit re-processing when JSON is updated (with debouncing to prevent connection pool exhaustion)
+            # Trigger audit re-processing when JSON is updated
             if audit_id and framework_id:
                 try:
-                    import time
-                    current_time = time.time()
-                    audit_id_key = str(audit_id)
-                    
-                    # Debounce: Only trigger if last trigger was more than 5 seconds ago
-                    # This prevents hundreds of threads from being created when updating many records
-                    should_trigger = False
-                    with self._trigger_lock:
-                        last_trigger = self._last_trigger_time.get(audit_id_key, 0)
-                        if current_time - last_trigger >= 5.0:  # 5 second debounce
-                            should_trigger = True
-                            self._last_trigger_time[audit_id_key] = current_time
-                    
-                    if not should_trigger:
-                        # Skip triggering - too soon since last trigger (but JSON was already saved above)
-                        return
-                    
                     # Run in background thread to avoid blocking JSON save
                     def trigger_processing():
                         try:

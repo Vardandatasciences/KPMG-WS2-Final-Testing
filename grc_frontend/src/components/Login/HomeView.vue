@@ -1374,9 +1374,27 @@ const riskCount = ref(0);
 const currentFrameworkContent = computed(() => {
   console.log('🔄 currentFrameworkContent computed - selectedFrameworkId:', selectedFrameworkId.value);
   
-  // Get the selected framework object to access the name
-  const selectedFramework = approvedFrameworks.value.find(f => f.FrameworkId === selectedFrameworkId.value);
-  const frameworkName = selectedFramework?.FrameworkName || selectedFrameworkId.value;
+  // Priority 1: Get framework name from homepage API response (most reliable)
+  let frameworkName = homepageData.value?.framework?.name;
+  
+  // Priority 2: Get from approvedFrameworks array
+  if (!frameworkName) {
+    const selectedFramework = approvedFrameworks.value.find(f => f.FrameworkId === selectedFrameworkId.value);
+    frameworkName = selectedFramework?.FrameworkName;
+  }
+  
+  // Priority 3: Fall back to selectedFrameworkId only if it's a string name (not numeric ID)
+  // If it's numeric, we don't want to use it as the name
+  if (!frameworkName) {
+    const idValue = selectedFrameworkId.value;
+    // Only use as name if it's not a pure number (like "336")
+    if (idValue && idValue !== 'all' && isNaN(Number(idValue))) {
+      frameworkName = idValue;
+    } else {
+      // If it's a numeric ID, use a generic fallback
+      frameworkName = 'Framework';
+    }
+  }
   
   console.log('📝 Using framework name for content lookup:', frameworkName);
   return getFrameworkContent(frameworkName);
@@ -1422,7 +1440,8 @@ const heroStats = computed(() => {
   }
   
   // Handle specific framework case (or null/undefined selectedFrameworkId - use dynamic data anyway)
-  const frameworkName = currentFrameworkContent.value?.frameworkName || 'Framework';
+  // Get framework name - prioritize from API response, then from currentFrameworkContent
+  const frameworkName = homepageData.value?.framework?.name || currentFrameworkContent.value?.frameworkName || 'Framework';
   
   // Calculate compliance percentage
   const totalCompliances = stats.totalCompliancesAll || stats.totalCompliances || 0;
@@ -1456,10 +1475,12 @@ const heroStats = computed(() => {
 
 // Preview card data - Always use dynamic API data, never fallback to static
 const previewCard = computed(() => {
+  // Get framework name - prioritize from API response, then from currentFrameworkContent
+  let frameworkName = homepageData.value?.framework?.name || currentFrameworkContent.value?.frameworkName || 'Framework';
+  
   // Only use dynamic homepage data - no fallback to static content
   if (!homepageData.value?.hero?.previewMetrics) {
     // Return empty/default values if no data available yet
-    const frameworkName = currentFrameworkContent.value?.frameworkName || 'Framework';
     return {
       title: `${frameworkName} Implementation Progress`,
       percentage: '0%',
@@ -1472,7 +1493,6 @@ const previewCard = computed(() => {
   
   const previewMetricsData = homepageData.value.hero.previewMetrics;
   const stats = homepageData.value.hero.stats;
-  const frameworkName = currentFrameworkContent.value?.frameworkName || 'Framework';
   
   // Use compliance percentage from previewMetrics if available, otherwise calculate from stats
   const compliancePercentage = previewMetricsData.compliancePercentage !== undefined

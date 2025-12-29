@@ -1,0 +1,22 @@
+{
+  "framework_metadata": {
+    "framework_name": "Payment Card Industry Data Security Standard (PCI DSS)",
+    "current_version": "4.0",
+    "framework_description": "The Payment Card Industry Data Security Standard (PCI DSS) is a set of security standards designed to ensure that all companies that accept, process, store or transmit credit card information maintain a secure environment. PCI DSS applies to all entities involved in payment card processing including merchants, processors, acquirers, issuers, and service providers.",
+    "category": "Financial Security and Compliance",
+    "start_date": "2022-03-31",
+    "end_date": null,
+    "identifier_prefix": "PCI-DSS"
+  },
+  "extraction_summary": {
+    "total_sections_processed": 21,
+    "total_policies": 21,
+    "total_subpolicies": 63,
+    "policy_type_distribution": {
+      "Security": 8,
+      "Compliance": 13
+    },
+    "api_calls_made": 21,
+    "extraction_date": "2025-12-26T13:54:11.223537"
+  }
+}
