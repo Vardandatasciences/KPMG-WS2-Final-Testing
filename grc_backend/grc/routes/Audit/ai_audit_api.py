@@ -19,6 +19,7 @@ from docx.oxml.shared import OxmlElement, qn
 from django.http import JsonResponse, FileResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
+from django.utils import timezone
 from django.views import View
 from django.core.files.storage import default_storage
 from django.conf import settings
@@ -34,6 +35,7 @@ from rest_framework.response import Response
 from ...rbac.permissions import AuditConductPermission, AuditReviewPermission
 from ...rbac.decorators import audit_conduct_required
 from ...authentication import verify_jwt_token
+from .audit_views import create_audit_version
 
 # DRF Session auth variant that skips CSRF enforcement for API clients
 class CsrfExemptSessionAuthentication(SessionAuthentication):
@@ -1417,10 +1419,34 @@ class AIAuditDocumentUploadView(View):
                             import traceback
                             logger.error(traceback.format_exc())
                     
+                    # Update audit status to "Work In Progress" when auto-check starts
+                    try:
+                        from ...models import Audit
+                        audit_obj = Audit.objects.get(AuditId=int(audit_id) if str(audit_id).isdigit() else audit_id)
+                        if audit_obj.Status == 'Yet to Start':
+                            audit_obj.Status = 'Work In Progress'
+                            audit_obj.save()
+                            logger.info(f"✅ Updated audit {audit_id} status to 'Work In Progress' (auto-check started)")
+                    except Exception as status_err:
+                        logger.warning(f"⚠️ Could not update audit status: {status_err}")
+                    
                     # Start background thread for automatic compliance checks
                     auto_check_thread = threading.Thread(target=auto_check_compliance, daemon=True)
                     auto_check_thread.start()
                     logger.info(f"🚀 Started background thread for automatic compliance checks")
+            
+            # Update audit status to "Work In Progress" for manual uploads as well
+            # (when documents are uploaded through AI audit upload page)
+            if external_source == 'manual' and created_document_ids:
+                try:
+                    from ...models import Audit
+                    audit_obj = Audit.objects.get(AuditId=int(audit_id) if str(audit_id).isdigit() else audit_id)
+                    if audit_obj.Status == 'Yet to Start':
+                        audit_obj.Status = 'Work In Progress'
+                        audit_obj.save()
+                        logger.info(f"✅ Updated audit {audit_id} status to 'Work In Progress' (manual document upload)")
+                except Exception as status_err:
+                    logger.warning(f"⚠️ Could not update audit status for manual upload: {status_err}")
             
             return JsonResponse({
                 'success': True,
@@ -1523,7 +1549,18 @@ def save_ai_compliance_to_checklist(audit_id, document_id, analyses, user_id, fr
            
             saved_count = 0
             updated_count = 0
-           
+            
+            # Check if this is an AI audit (only check once, not per compliance)
+            cursor.execute("SELECT AuditType, Auditor FROM audit WHERE AuditId = %s", [int(audit_id) if str(audit_id).isdigit() else audit_id])
+            audit_info = cursor.fetchone()
+            is_ai_audit = audit_info and audit_info[0] == 'A' if audit_info else False
+            auditor_id = audit_info[1] if audit_info and audit_info[1] else numeric_user_id
+            
+            # Get AssignedDate from audit (for creating new findings)
+            cursor.execute("SELECT AssignedDate FROM audit WHERE AuditId = %s", [int(audit_id) if str(audit_id).isdigit() else audit_id])
+            assigned_date_result = cursor.fetchone()
+            assigned_date = assigned_date_result[0] if assigned_date_result and assigned_date_result[0] else timezone.now()
+            
             # Process each compliance requirement result
             for analysis in analyses_list:
                 if not isinstance(analysis, dict):
@@ -1694,7 +1731,336 @@ def save_ai_compliance_to_checklist(audit_id, document_id, analyses, user_id, fr
                     logger.info(
                         f"✅ Updated existing lastchecklistitemverified for compliance {compliance_id} (Complied={complied_value})"
                     )
-       
+                
+                # For AI audits, also create/update audit findings when compliance check completes
+                try:
+                    if is_ai_audit:
+                        # Get compliance description from database
+                        cursor.execute("""
+                            SELECT ComplianceItemDescription, ComplianceTitle 
+                            FROM compliance 
+                            WHERE ComplianceId = %s
+                        """, [compliance_id])
+                        compliance_row = cursor.fetchone()
+                        compliance_description = ''
+                        if compliance_row:
+                            compliance_description = compliance_row[0] or compliance_row[1] or f"Compliance ID {compliance_id}"
+                        else:
+                            compliance_description = f"Compliance ID {compliance_id}"
+                        
+                        # Get audit context for AI generation
+                        audit_context_data = None
+                        try:
+                            cursor.execute("""
+                                SELECT Title, Objective, Scope, BusinessUnit, AuditType, DueDate
+                                FROM audit 
+                                WHERE AuditId = %s
+                            """, [int(audit_id) if str(audit_id).isdigit() else audit_id])
+                            audit_row = cursor.fetchone()
+                            if audit_row:
+                                audit_context_data = {
+                                    'title': audit_row[0] or '',
+                                    'objective': audit_row[1] or '',
+                                    'scope': audit_row[2] or '',
+                                    'business_unit': audit_row[3] or '',
+                                    'audit_type': audit_row[4] or '',
+                                    'due_date': str(audit_row[5]) if audit_row[5] else ''
+                                }
+                        except Exception as ctx_err:
+                            logger.warning(f"⚠️ Could not fetch audit context: {ctx_err}")
+                        
+                        # Generate comprehensive audit finding fields using AI
+                        logger.info(f"🤖 Generating comprehensive audit finding fields for compliance {compliance_id} using AI...")
+                        try:
+                            comprehensive_fields = generate_comprehensive_audit_finding_fields(
+                                analysis=analysis,
+                                compliance_description=compliance_description,
+                                audit_context=audit_context_data
+                            )
+                            logger.info(f"✅ AI generation completed for compliance {compliance_id}. Fields: {list(comprehensive_fields.keys())}")
+                        except Exception as ai_gen_err:
+                            logger.error(f"❌ AI generation failed for compliance {compliance_id}: {ai_gen_err}")
+                            import traceback
+                            logger.error(f"❌ AI generation traceback: {traceback.format_exc()}")
+                            # Use fallback - extract from analysis directly
+                            comprehensive_fields = {
+                                "HowToVerify": ' | '.join(str(s) for s in analysis.get('strengths', [])[:3]) if isinstance(analysis.get('strengths'), list) else '',
+                                "Impact": ' | '.join(str(w) for w in analysis.get('weaknesses', [])[:3]) if isinstance(analysis.get('weaknesses'), list) else '',
+                                "Recommendation": ' | '.join(str(r) for r in analysis.get('recommendations', [])[:5]) if isinstance(analysis.get('recommendations'), list) else '',
+                                "DetailsOfFinding": f"Status: {analysis.get('compliance_status', 'UNKNOWN')}, Score: {analysis.get('compliance_score', 0):.2f}",
+                                "MajorMinor": "major" if analysis.get('risk_level', '').upper() == 'HIGH' or analysis.get('compliance_score', 0) < 0.4 else "minor",
+                                "SeverityRating": int(max(0, min(10, (1.0 - analysis.get('compliance_score', 0.5)) * 10))),
+                                "PredictiveRisks": json.dumps({"risk_level": analysis.get('risk_level', 'MEDIUM'), "compliance_score": analysis.get('compliance_score', 0)}),
+                                "CorrectiveActions": json.dumps({"recommendations": analysis.get('recommendations', [])[:5]}),
+                                "UnderlyingCause": ' | '.join(str(w) for w in analysis.get('weaknesses', [])[:3]) if isinstance(analysis.get('weaknesses'), list) else '',
+                                "WhyToVerify": analysis.get('strengths', [])[0] if isinstance(analysis.get('strengths'), list) and len(analysis.get('strengths', [])) > 0 else '',
+                                "WhatToVerify": ' | '.join(str(m) for m in analysis.get('missing', [])[:3]) if isinstance(analysis.get('missing'), list) else '',
+                                "SuggestedActionPlan": ' | '.join(str(r) for r in analysis.get('recommendations', [])[:5]) if isinstance(analysis.get('recommendations'), list) else ''
+                            }
+                            logger.info(f"✅ Using fallback fields for compliance {compliance_id}")
+                        
+                        # Extract evidence from analysis
+                        evidence_text = ''
+                        if 'evidence' in analysis:
+                            evidence = analysis['evidence']
+                            if isinstance(evidence, str):
+                                evidence_text = evidence
+                            elif isinstance(evidence, list):
+                                evidence_text = ' | '.join(str(e) for e in evidence[:10])
+                            elif isinstance(evidence, dict):
+                                evidence_text = str(evidence)
+                        elif 'evidence_found' in analysis:
+                            evidence_text = str(analysis['evidence_found'])
+                        if len(evidence_text) > 2000:
+                            evidence_text = evidence_text[:1997] + "..."
+                        
+                        # Use AI-generated fields - ensure all are strings, not dicts/lists
+                        def safe_string(value, max_len=2000):
+                            """Convert value to string safely, handling dicts/lists"""
+                            if value is None:
+                                return ''
+                            if isinstance(value, (dict, list)):
+                                # Convert to JSON string
+                                json_str = json.dumps(value)
+                                return json_str[:max_len] if len(json_str) > max_len else json_str
+                            elif isinstance(value, str):
+                                return value[:max_len] if len(value) > max_len else value
+                            else:
+                                return str(value)[:max_len] if len(str(value)) > max_len else str(value)
+                        
+                        how_to_verify = safe_string(comprehensive_fields.get('HowToVerify'))
+                        impact = safe_string(comprehensive_fields.get('Impact'))
+                        recommendation = safe_string(comprehensive_fields.get('Recommendation'))
+                        details_of_finding = safe_string(comprehensive_fields.get('DetailsOfFinding'))
+                        # MajorMinor must be 'major' or 'minor' (not '0', '1', '2')
+                        major_minor_raw = comprehensive_fields.get('MajorMinor')
+                        if major_minor_raw:
+                            major_minor_str = str(major_minor_raw).lower().strip()
+                            # Convert old numeric values to text
+                            if major_minor_str in ['0', '1', '2']:
+                                if major_minor_str == '1':
+                                    major_minor = 'major'
+                                elif major_minor_str == '0':
+                                    major_minor = 'minor'
+                                else:
+                                    major_minor = 'minor'  # Default for '2' (Not Applicable)
+                            elif major_minor_str in ['major', 'minor']:
+                                major_minor = major_minor_str
+                            else:
+                                # Try to infer from risk level or compliance score
+                                risk_level = analysis.get('risk_level', '').upper()
+                                compliance_score = analysis.get('compliance_score', 0.5)
+                                if risk_level == 'HIGH' or compliance_score < 0.4:
+                                    major_minor = 'major'
+                                else:
+                                    major_minor = 'minor'
+                        else:
+                            # Infer from risk level or compliance score
+                            risk_level = analysis.get('risk_level', '').upper()
+                            compliance_score = analysis.get('compliance_score', 0.5)
+                            if risk_level == 'HIGH' or compliance_score < 0.4:
+                                major_minor = 'major'
+                            else:
+                                major_minor = 'minor'
+                        
+                        # SeverityRating must be INT (0-10) or None
+                        severity_rating_raw = comprehensive_fields.get('SeverityRating')
+                        if severity_rating_raw is not None:
+                            try:
+                                severity_rating = float(severity_rating_raw)
+                                # Convert from 0-100 scale to 0-10 scale if needed
+                                if severity_rating > 10:
+                                    severity_rating = severity_rating / 10.0
+                                # Ensure it's within valid range (0-10)
+                                severity_rating = int(max(0, min(10, severity_rating)))
+                            except (ValueError, TypeError):
+                                # If conversion fails, calculate from compliance_score
+                                compliance_score = analysis.get('compliance_score', 0.5)
+                                severity_rating = int(max(0, min(10, (1.0 - compliance_score) * 10)))
+                        else:
+                            # Calculate from compliance_score if not provided
+                            compliance_score = analysis.get('compliance_score', 0.5)
+                            severity_rating = int(max(0, min(10, (1.0 - compliance_score) * 10)))
+                        underlying_cause = safe_string(comprehensive_fields.get('UnderlyingCause'))
+                        why_to_verify = safe_string(comprehensive_fields.get('WhyToVerify'))
+                        what_to_verify = safe_string(comprehensive_fields.get('WhatToVerify'))
+                        suggested_action_plan = safe_string(comprehensive_fields.get('SuggestedActionPlan'))
+                        
+                        # Ensure JSON fields are properly formatted as strings
+                        # Convert dict/list to JSON string if needed
+                        predictive_risks_raw = comprehensive_fields.get('PredictiveRisks')
+                        if predictive_risks_raw is not None:
+                            if isinstance(predictive_risks_raw, (dict, list)):
+                                predictive_risks = json.dumps(predictive_risks_raw)
+                            elif isinstance(predictive_risks_raw, str):
+                                predictive_risks = predictive_risks_raw
+                            else:
+                                predictive_risks = json.dumps(str(predictive_risks_raw))
+                        else:
+                            predictive_risks = None
+                        
+                        corrective_actions_raw = comprehensive_fields.get('CorrectiveActions')
+                        if corrective_actions_raw is not None:
+                            if isinstance(corrective_actions_raw, (dict, list)):
+                                corrective_actions = json.dumps(corrective_actions_raw)
+                            elif isinstance(corrective_actions_raw, str):
+                                corrective_actions = corrective_actions_raw
+                            else:
+                                corrective_actions = json.dumps(str(corrective_actions_raw))
+                        else:
+                            corrective_actions = None
+                        
+                        # Final safety check - ensure NO dicts/lists are passed to SQL
+                        # Convert any remaining dicts/lists to JSON strings
+                        def ensure_string_for_sql(value):
+                            """Final check to ensure value is a string (or None) for SQL"""
+                            if value is None:
+                                return None
+                            if isinstance(value, (dict, list)):
+                                return json.dumps(value)
+                            return str(value) if not isinstance(value, str) else value
+                        
+                        # Re-check all fields one more time
+                        how_to_verify = ensure_string_for_sql(how_to_verify) or ''
+                        impact = ensure_string_for_sql(impact) or ''
+                        recommendation = ensure_string_for_sql(recommendation) or ''
+                        details_of_finding = ensure_string_for_sql(details_of_finding) or ''
+                        underlying_cause = ensure_string_for_sql(underlying_cause) or ''
+                        why_to_verify = ensure_string_for_sql(why_to_verify) or ''
+                        what_to_verify = ensure_string_for_sql(what_to_verify) or ''
+                        suggested_action_plan = ensure_string_for_sql(suggested_action_plan) or ''
+                        evidence_text = ensure_string_for_sql(evidence_text) or ''
+                        comments = ensure_string_for_sql(comments) or ''
+                        
+                        logger.info(f"✅ JSON fields formatted - PredictiveRisks type: {type(predictive_risks)}, CorrectiveActions type: {type(corrective_actions)}")
+                        logger.info(f"✅ All fields converted to strings - Recommendation type: {type(recommendation)}, Impact type: {type(impact)}")
+                        
+                        # Check if audit finding already exists
+                        cursor.execute("""
+                            SELECT AuditFindingsId FROM audit_findings 
+                            WHERE AuditId = %s AND ComplianceId = %s
+                        """, [int(audit_id) if str(audit_id).isdigit() else audit_id, compliance_id])
+                        
+                        existing_finding = cursor.fetchone()
+                        
+                        # Map complied_value to Check field
+                        # 0 = Not Compliant, 1 = Partially Compliant, 2 = Fully Compliant
+                        # Ensure check_value is always numeric string ('0', '1', or '2')
+                        if isinstance(complied_value, str):
+                            # If it's already a string, ensure it's a valid numeric value
+                            if complied_value in ['0', '1', '2', '3']:
+                                check_value = complied_value
+                            elif complied_value.upper() in ['NON_COMPLIANT', 'NOT_COMPLIANT', 'NOT COMPLIANT']:
+                                check_value = '0'
+                            elif complied_value.upper() in ['PARTIALLY_COMPLIANT', 'PARTIALLY COMPLIANT']:
+                                check_value = '1'
+                            elif complied_value.upper() in ['COMPLIANT', 'FULLY_COMPLIANT', 'FULLY COMPLIANT']:
+                                check_value = '2'
+                            else:
+                                # Fallback: try to convert to int and back to string
+                                try:
+                                    int_val = int(float(complied_value))
+                                    check_value = str(max(0, min(3, int_val)))  # Clamp between 0-3
+                                except (ValueError, TypeError):
+                                    check_value = '0'  # Default to Not Compliant
+                        elif isinstance(complied_value, (int, float)):
+                            # If it's a number, convert to string and clamp
+                            int_val = int(complied_value)
+                            check_value = str(max(0, min(3, int_val)))  # Clamp between 0-3
+                        else:
+                            # Unknown type, default to Not Compliant
+                            logger.warning(f"⚠️ Unknown complied_value type: {type(complied_value)}, value: {complied_value}. Defaulting to '0'")
+                            check_value = '0'
+                        
+                        # Final validation: ensure check_value is exactly '0', '1', '2', or '3'
+                        if check_value not in ['0', '1', '2', '3']:
+                            logger.error(f"❌ Invalid check_value '{check_value}' for compliance {compliance_id}. Defaulting to '0'")
+                            check_value = '0'
+                        
+                        if existing_finding:
+                            # Update existing finding with ALL fields
+                            cursor.execute("""
+                                UPDATE audit_findings
+                                SET `Check` = %s,
+                                    Comments = %s,
+                                    Evidence = %s,
+                                    HowToVerify = %s,
+                                    Impact = %s,
+                                    Recommendation = %s,
+                                    DetailsOfFinding = %s,
+                                    MajorMinor = %s,
+                                    SeverityRating = %s,
+                                    PredictiveRisks = %s,
+                                    CorrectiveActions = %s,
+                                    UnderlyingCause = %s,
+                                    WhyToVerify = %s,
+                                    WhatToVerify = %s,
+                                    SuggestedActionPlan = %s,
+                                    CheckedDate = NOW()
+                                WHERE AuditId = %s AND ComplianceId = %s
+                            """, [
+                                check_value,
+                                comments[:1000] if len(comments) > 1000 else comments,
+                                evidence_text,
+                                how_to_verify,
+                                impact,
+                                recommendation,
+                                details_of_finding,
+                                major_minor,
+                                severity_rating,
+                                predictive_risks,
+                                corrective_actions,
+                                underlying_cause,
+                                why_to_verify,
+                                what_to_verify,
+                                suggested_action_plan,
+                                int(audit_id) if str(audit_id).isdigit() else audit_id,
+                                compliance_id
+                            ])
+                            logger.info(f"✅ Updated audit finding (ID: {existing_finding[0]}) for compliance {compliance_id} with ALL AI-generated fields")
+                        else:
+                            # Create new finding with ALL fields
+                            cursor.execute("""
+                                INSERT INTO audit_findings (
+                                    AuditId, ComplianceId, UserId, Evidence, 
+                                    `Check`, Comments, MajorMinor, AssignedDate, FrameworkId, ReviewRejected,
+                                    HowToVerify, Impact, Recommendation, DetailsOfFinding,
+                                    SeverityRating, PredictiveRisks, CorrectiveActions,
+                                    UnderlyingCause, WhyToVerify, WhatToVerify, SuggestedActionPlan,
+                                    CheckedDate
+                                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                            """, [
+                                int(audit_id) if str(audit_id).isdigit() else audit_id,
+                                compliance_id,
+                                auditor_id,
+                                evidence_text,
+                                check_value,
+                                comments[:1000] if len(comments) > 1000 else comments,
+                                major_minor,
+                                assigned_date,
+                                framework_id,
+                                0,  # ReviewRejected
+                                how_to_verify,
+                                impact,
+                                recommendation,
+                                details_of_finding,
+                                severity_rating,
+                                predictive_risks,
+                                corrective_actions,
+                                underlying_cause,
+                                why_to_verify,
+                                what_to_verify,
+                                suggested_action_plan
+                            ])
+                            finding_id = cursor.lastrowid
+                            logger.info(f"✅ Created audit finding (ID: {finding_id}) for compliance {compliance_id} with ALL AI-generated fields")
+                            logger.info(f"✅ Inserted values - Check: {check_value}, MajorMinor: {major_minor}, SeverityRating: {severity_rating}")
+                except Exception as finding_err:
+                    import traceback
+                    logger.error(f"❌ Error creating/updating audit finding for compliance {compliance_id} in audit {audit_id}: {finding_err}")
+                    logger.error(f"❌ Traceback: {traceback.format_exc()}")
+                    # Don't re-raise - continue with other compliances
+        
         logger.info(f"✅ Saved AI compliance results: {saved_count} inserted, {updated_count} updated in lastchecklistitemverified")
        
     except Exception as e:
@@ -2404,6 +2770,210 @@ def extract_text_from_txt(file_path):
     except Exception as e:
         logger.error(f"TXT extraction error: {e}")
         return f"TXT extraction failed: {str(e)}"
+
+
+def generate_comprehensive_audit_finding_fields(analysis, compliance_description, audit_context=None):
+    """
+    Generate comprehensive audit finding fields using AI based on compliance analysis results.
+    
+    Args:
+        analysis: The compliance analysis result dict containing evidence, strengths, weaknesses, etc.
+        compliance_description: The compliance requirement description
+        audit_context: Optional audit context (objective, scope, etc.)
+    
+    Returns:
+        dict: Comprehensive audit finding fields
+    """
+    try:
+        # Extract key information from analysis
+        evidence = analysis.get('evidence', [])
+        strengths = analysis.get('strengths', [])
+        weaknesses = analysis.get('weaknesses', [])
+        missing = analysis.get('missing', [])
+        recommendations = analysis.get('recommendations', [])
+        compliance_status = analysis.get('compliance_status', 'UNKNOWN')
+        compliance_score = analysis.get('compliance_score', 0.0)
+        risk_level = analysis.get('risk_level', 'MEDIUM')
+        
+        # Build context for AI prompt
+        evidence_text = ' | '.join(str(e) for e in evidence[:10]) if isinstance(evidence, list) else str(evidence)
+        strengths_text = ' | '.join(str(s) for s in strengths[:5]) if isinstance(strengths, list) else str(strengths)
+        weaknesses_text = ' | '.join(str(w) for w in weaknesses[:5]) if isinstance(weaknesses, list) else str(weaknesses)
+        missing_text = ' | '.join(str(m) for m in missing[:7]) if isinstance(missing, list) else str(missing)
+        recommendations_text = ' | '.join(str(r) for r in recommendations[:5]) if isinstance(recommendations, list) else str(recommendations)
+        
+        audit_objective = audit_context.get('objective', 'N/A') if audit_context else 'N/A'
+        audit_scope = audit_context.get('scope', 'N/A') if audit_context else 'N/A'
+        
+        # Create comprehensive AI prompt
+        prompt = f"""You are an expert GRC auditor. Based on the compliance analysis results below, generate comprehensive audit finding fields.
+
+=== COMPLIANCE REQUIREMENT ===
+{compliance_description}
+
+=== AUDIT CONTEXT ===
+Audit Objective: {audit_objective}
+Audit Scope: {audit_scope}
+Compliance Status: {compliance_status}
+Compliance Score: {compliance_score:.2f}
+Risk Level: {risk_level}
+
+=== ANALYSIS RESULTS ===
+Evidence Found: {evidence_text[:1000] if len(evidence_text) > 1000 else evidence_text}
+Strengths: {strengths_text[:1000] if len(strengths_text) > 1000 else strengths_text}
+Weaknesses: {weaknesses_text[:1000] if len(weaknesses_text) > 1000 else weaknesses_text}
+Missing Elements: {missing_text[:1000] if len(missing_text) > 1000 else missing_text}
+Recommendations: {recommendations_text[:1000] if len(recommendations_text) > 1000 else recommendations_text}
+
+=== YOUR TASK ===
+Generate comprehensive audit finding fields in JSON format. Return ONLY valid JSON (no markdown, no explanations).
+
+Required fields:
+1. **HowToVerify**: Step-by-step instructions on how to verify this compliance requirement. Include specific methods, tools, or procedures.
+2. **Impact**: Detailed description of the business impact if this compliance requirement is not met. Include financial, operational, reputational, and regulatory impacts.
+3. **Recommendation**: Actionable recommendations to improve compliance. Be specific and prioritized.
+4. **DetailsOfFinding**: Comprehensive details of the audit finding. Combine strengths, weaknesses, and missing elements into a cohesive narrative.
+5. **MajorMinor**: Determine if this is a "major" or "minor" finding based on risk level and compliance score.
+6. **SeverityRating**: Numeric severity rating from 0-10 based on compliance score and risk level (0 = no risk, 10 = critical risk).
+7. **PredictiveRisks**: JSON object containing identified risks, their likelihood, and potential impact.
+8. **CorrectiveActions**: JSON object containing prioritized corrective actions with timelines and responsible parties.
+9. **UnderlyingCause**: Root cause analysis explaining why the compliance gap exists.
+10. **WhyToVerify**: Explanation of why this requirement needs to be verified and its importance.
+11. **WhatToVerify**: Specific items, processes, or controls that need to be verified.
+12. **SuggestedActionPlan**: Detailed action plan with steps, timelines, and milestones to achieve compliance.
+
+Return JSON in this exact format:
+{{
+    "HowToVerify": "Step-by-step verification instructions...",
+    "Impact": "Detailed business impact description...",
+    "Recommendation": "Actionable recommendations...",
+    "DetailsOfFinding": "Comprehensive finding details...",
+    "MajorMinor": "major",
+    "SeverityRating": 7,
+    "PredictiveRisks": {{
+        "identified_risks": ["Risk 1", "Risk 2"],
+        "risk_level": "HIGH",
+        "likelihood": 0.7,
+        "impact": "High financial and regulatory impact"
+    }},
+    "CorrectiveActions": {{
+        "actions": [
+            {{"action": "Action 1", "priority": "High", "timeline": "30 days", "responsible": "IT Team"}},
+            {{"action": "Action 2", "priority": "Medium", "timeline": "60 days", "responsible": "Compliance Team"}}
+        ],
+        "estimated_completion": "90 days"
+    }},
+    "UnderlyingCause": "Root cause analysis...",
+    "WhyToVerify": "Explanation of why verification is needed...",
+    "WhatToVerify": "Specific items to verify...",
+    "SuggestedActionPlan": "Detailed action plan with steps and timelines..."
+}}
+
+CRITICAL RULES:
+- All fields MUST be filled with actual, specific content - NO placeholders or generic text
+- Base your analysis on the provided evidence, strengths, weaknesses, and missing elements
+- MajorMinor: "major" for Major (HIGH risk, score < 0.4), "minor" for Minor (MEDIUM/LOW risk, score >= 0.4)
+- SeverityRating: 0-10 scale (0 = no risk, 10 = critical risk). Calculate as: (1.0 - compliance_score) * 10
+- PredictiveRisks and CorrectiveActions must be valid JSON objects
+- Be specific and actionable in all recommendations and action plans
+- Consider the audit objective and scope when generating fields
+
+Return JSON now:"""
+        
+        # Call AI API
+        logger.info(f"🤖 Generating comprehensive audit finding fields for compliance: {compliance_description[:50]}...")
+        logger.info(f"🤖 Prompt length: {len(prompt)} characters")
+        try:
+            ai_response = call_ai_api(prompt, None, None, 'analysis')
+            logger.info(f"✅ AI API call completed. Response length: {len(ai_response) if ai_response else 0}")
+        except Exception as api_err:
+            logger.error(f"❌ AI API call failed: {api_err}")
+            import traceback
+            logger.error(f"❌ AI API traceback: {traceback.format_exc()}")
+            raise
+        
+        # Parse JSON response
+        import re
+        cleaned_response = ai_response.strip() if ai_response else ""
+        
+        # Remove markdown code blocks if present
+        code_block_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', cleaned_response, re.DOTALL)
+        if code_block_match:
+            cleaned_response = code_block_match.group(1)
+        
+        # Find first JSON object
+        json_start = cleaned_response.find('{')
+        if json_start >= 0:
+            cleaned_response = cleaned_response[json_start:]
+            # Find matching closing brace
+            brace_count = 0
+            json_end = -1
+            for i, char in enumerate(cleaned_response):
+                if char == '{':
+                    brace_count += 1
+                elif char == '}':
+                    brace_count -= 1
+                    if brace_count == 0:
+                        json_end = i + 1
+                        break
+            if json_end > 0:
+                cleaned_response = cleaned_response[:json_end]
+        
+        # Parse JSON with better error handling and recovery
+        try:
+            finding_fields = json.loads(cleaned_response)
+            logger.info(f"✅ Successfully generated comprehensive audit finding fields. Keys: {list(finding_fields.keys())}")
+            return finding_fields
+        except json.JSONDecodeError as json_err:
+            logger.error(f"❌ JSON parsing failed: {json_err}")
+            logger.error(f"❌ Response content (first 1000 chars): {cleaned_response[:1000]}")
+            logger.error(f"❌ Response content (last 500 chars): {cleaned_response[-500:]}")
+            
+            # Try to fix truncated JSON by finding the last complete field
+            try:
+                # Look for the last complete key-value pair before the error
+                # Try to extract valid JSON up to the error point
+                error_pos = json_err.pos if hasattr(json_err, 'pos') else len(cleaned_response)
+                # Try to find a valid JSON object before the error
+                truncated_json = cleaned_response[:error_pos]
+                # Try to close any open strings/objects
+                if truncated_json.count('{') > truncated_json.count('}'):
+                    # Add missing closing braces
+                    missing_braces = truncated_json.count('{') - truncated_json.count('}')
+                    truncated_json += '}' * missing_braces
+                # Try to close any open strings
+                if truncated_json.count('"') % 2 != 0:
+                    truncated_json = truncated_json.rstrip().rstrip('"') + '"'
+                    if truncated_json.count('{') > truncated_json.count('}'):
+                        truncated_json += '}'
+                
+                finding_fields = json.loads(truncated_json)
+                logger.info(f"✅ Fixed truncated JSON by closing structures. Keys: {list(finding_fields.keys())}")
+                return finding_fields
+            except:
+                logger.error(f"❌ Could not fix JSON, using fallback fields")
+                raise
+        
+    except Exception as e:
+        logger.error(f"❌ Error generating comprehensive audit finding fields: {e}")
+        import traceback
+        logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        
+        # Return fallback fields if AI generation fails
+        return {
+            "HowToVerify": "Review evidence and verify compliance against requirement",
+            "Impact": "Non-compliance may result in regulatory penalties and operational risks",
+            "Recommendation": "Address identified gaps and strengthen controls",
+            "DetailsOfFinding": f"Compliance status: {compliance_status}. Score: {compliance_score:.2f}",
+            "MajorMinor": "major" if risk_level == "HIGH" or compliance_score < 0.4 else "minor",
+            "SeverityRating": int(max(0, min(10, (1.0 - compliance_score) * 10))),
+            "PredictiveRisks": json.dumps({"risk_level": risk_level, "compliance_score": compliance_score}),
+            "CorrectiveActions": json.dumps({"recommendations": recommendations[:5] if isinstance(recommendations, list) else []}),
+            "UnderlyingCause": ' | '.join(str(w) for w in weaknesses[:3]) if isinstance(weaknesses, list) and weaknesses else "Root cause analysis needed",
+            "WhyToVerify": "Verification ensures compliance with regulatory requirements",
+            "WhatToVerify": compliance_description,
+            "SuggestedActionPlan": ' | '.join(str(r) for r in recommendations[:5]) if isinstance(recommendations, list) and recommendations else "Action plan needed"
+        }
 
 
 # =============================
@@ -3846,6 +4416,101 @@ def _check_document_compliance_internal(audit_id, document_id, user_id=None, sel
                 rows_updated = cursor.rowcount
                 logger.info(f"✅ Updated {rows_updated} record(s) for document {document_id}")
                 
+                # Check if all documents for this audit are completed, and update audit status accordingly
+                try:
+                    # Check if this is an AI audit
+                    cursor.execute("SELECT AuditType, Status FROM audit WHERE AuditId = %s", [int(audit_id) if str(audit_id).isdigit() else audit_id])
+                    audit_info = cursor.fetchone()
+                    
+                    if audit_info and audit_info[0] == 'A':  # AI Audit
+                        # Count total documents and completed documents for this audit
+                        cursor.execute("""
+                            SELECT 
+                                COUNT(*) as total,
+                                SUM(CASE WHEN ai_processing_status = 'completed' THEN 1 ELSE 0 END) as completed,
+                                SUM(CASE WHEN ai_processing_status = 'failed' THEN 1 ELSE 0 END) as failed
+                            FROM ai_audit_data 
+                            WHERE audit_id = %s
+                        """, [int(audit_id) if str(audit_id).isdigit() else audit_id])
+                        
+                        doc_stats = cursor.fetchone()
+                        total_docs = doc_stats[0] if doc_stats else 0
+                        completed_docs = doc_stats[1] if doc_stats else 0
+                        failed_docs = doc_stats[2] if doc_stats else 0
+                        
+                        logger.info(f"📊 Audit {audit_id} document status: total={total_docs}, completed={completed_docs}, failed={failed_docs}")
+                        
+                        # Update audit status if all documents are processed (completed or failed)
+                        if total_docs > 0 and (completed_docs + failed_docs) == total_docs:
+                            # All documents processed - update audit status to "Under review" (not "Completed" yet - needs reviewer approval)
+                            from ...models import Audit
+                            try:
+                                audit_obj = Audit.objects.get(AuditId=int(audit_id) if str(audit_id).isdigit() else audit_id)
+                                current_status = audit_obj.Status
+                                logger.info(f"🔍 Current audit status: '{current_status}'")
+                                
+                                if audit_obj.Status not in ['Under review', 'Completed']:
+                                    # Get auditor user_id for creating audit_version (extract integer ID from User object if needed)
+                                    auditor_id = audit_obj.Auditor if hasattr(audit_obj, 'Auditor') and audit_obj.Auditor else None
+                                    if not auditor_id:
+                                        cursor.execute("SELECT Auditor FROM audit WHERE AuditId = %s", [int(audit_id) if str(audit_id).isdigit() else audit_id])
+                                        auditor_row = cursor.fetchone()
+                                        auditor_id = auditor_row[0] if auditor_row and auditor_row[0] else None
+                                    
+                                    # Extract integer ID if auditor_id is a User object
+                                    if auditor_id:
+                                        if hasattr(auditor_id, 'UserId'):
+                                            auditor_id = auditor_id.UserId
+                                        elif hasattr(auditor_id, 'id'):
+                                            auditor_id = auditor_id.id
+                                        elif hasattr(auditor_id, 'pk'):
+                                            auditor_id = auditor_id.pk
+                                        elif not isinstance(auditor_id, int):
+                                            try:
+                                                auditor_id = int(auditor_id)
+                                            except (ValueError, TypeError):
+                                                auditor_id = None
+                                    
+                                    audit_obj.Status = 'Under review'
+                                    audit_obj.ReviewStartDate = timezone.now()
+                                    audit_obj.save()
+                                    logger.info(f"✅ Updated AI audit {audit_id} status from '{current_status}' to 'Under review' (all {total_docs} documents processed, ready for reviewer)")
+                                    
+                                    # Automatically create audit_version with all AI-generated findings
+                                    try:
+                                        from .audit_views import create_audit_version
+                                        if auditor_id:
+                                            version_result = create_audit_version(audit_id, auditor_id)
+                                            logger.info(f"✅ Automatically created audit_version for AI audit {audit_id} (document handling): {version_result}")
+                                        else:
+                                            logger.warning(f"⚠️ Could not create audit_version for audit {audit_id}: No auditor_id found")
+                                    except Exception as version_err:
+                                        logger.error(f"❌ Failed to create audit_version automatically (document handling): {version_err}")
+                                        import traceback
+                                        logger.error(f"Traceback: {traceback.format_exc()}")
+                                    
+                                    # Create incidents for non-compliant and partially compliant findings
+                                    try:
+                                        from .reviewing import create_incidents_for_findings
+                                        logger.info(f"🔍 Creating incidents for non-compliant findings in AI audit {audit_id}")
+                                        create_incidents_for_findings(int(audit_id) if str(audit_id).isdigit() else audit_id)
+                                        logger.info(f"✅ Successfully created incidents for AI audit {audit_id}")
+                                    except Exception as incident_err:
+                                        logger.error(f"❌ Failed to create incidents for AI audit {audit_id}: {incident_err}")
+                                        import traceback
+                                        logger.error(f"Traceback: {traceback.format_exc()}")
+                                else:
+                                    logger.info(f"ℹ️ Audit {audit_id} already in status '{current_status}', skipping status update")
+                            except Exception as audit_update_err:
+                                logger.error(f"❌ Failed to update audit status: {audit_update_err}")
+                                import traceback
+                                logger.error(f"Traceback: {traceback.format_exc()}")
+                                raise  # Re-raise to be caught by outer except
+                except Exception as status_check_err:
+                    logger.error(f"⚠️ Could not check/update audit completion status: {status_check_err}")
+                    import traceback
+                    logger.error(f"Traceback: {traceback.format_exc()}")
+                
                 # Save to lastchecklistitemverified
                 try:
                     save_ai_compliance_to_checklist(
@@ -4639,10 +5304,76 @@ def check_document_compliance(request, audit_id, document_id):
                 except Exception as e:
                     logger.warning(f"⚠️ Could not save to lastchecklistitemverified: {e}")
                     # Don't fail the whole request if this fails
+                
+                # Check if all documents are processed and update audit status to "Under review" for AI audits
+                try:
+                    cursor.execute("SELECT AuditType, Status FROM audit WHERE AuditId = %s", [int(audit_id) if str(audit_id).isdigit() else audit_id])
+                    audit_info = cursor.fetchone()
+                    
+                    if audit_info and audit_info[0] == 'A':  # AI Audit
+                        cursor.execute("""
+                            SELECT 
+                                COUNT(*) as total,
+                                SUM(CASE WHEN ai_processing_status = 'completed' THEN 1 ELSE 0 END) as completed,
+                                SUM(CASE WHEN ai_processing_status = 'failed' THEN 1 ELSE 0 END) as failed
+                            FROM ai_audit_data 
+                            WHERE audit_id = %s
+                        """, [int(audit_id) if str(audit_id).isdigit() else audit_id])
+                        
+                        doc_stats = cursor.fetchone()
+                        total_docs = doc_stats[0] if doc_stats else 0
+                        completed_docs = doc_stats[1] if doc_stats else 0
+                        failed_docs = doc_stats[2] if doc_stats else 0
+                        
+                        if total_docs > 0 and (completed_docs + failed_docs) == total_docs:
+                            from ...models import Audit
+                            audit_obj = Audit.objects.get(AuditId=int(audit_id) if str(audit_id).isdigit() else audit_id)
+                            if audit_obj.Status not in ['Under review', 'Completed']:
+                                # Get auditor user_id for creating audit_version (extract integer ID from User object if needed)
+                                auditor_id = audit_obj.Auditor if hasattr(audit_obj, 'Auditor') and audit_obj.Auditor else None
+                                if not auditor_id:
+                                    cursor.execute("SELECT Auditor FROM audit WHERE AuditId = %s", [int(audit_id) if str(audit_id).isdigit() else audit_id])
+                                    auditor_row = cursor.fetchone()
+                                    auditor_id = auditor_row[0] if auditor_row and auditor_row[0] else None
+                                
+                                # Extract integer ID if auditor_id is a User object
+                                if auditor_id:
+                                    if hasattr(auditor_id, 'UserId'):
+                                        auditor_id = auditor_id.UserId
+                                    elif hasattr(auditor_id, 'id'):
+                                        auditor_id = auditor_id.id
+                                    elif hasattr(auditor_id, 'pk'):
+                                        auditor_id = auditor_id.pk
+                                    elif not isinstance(auditor_id, int):
+                                        try:
+                                            auditor_id = int(auditor_id)
+                                        except (ValueError, TypeError):
+                                            auditor_id = None
+                                
+                                audit_obj.Status = 'Under review'
+                                audit_obj.ReviewStartDate = timezone.now()
+                                audit_obj.save()
+                                logger.info(f"✅ Updated AI audit {audit_id} status to 'Under review' after single document check (all {total_docs} documents processed)")
+                                
+                                # Automatically create audit_version with all AI-generated findings
+                                try:
+                                    from .audit_views import create_audit_version
+                                    if auditor_id:
+                                        version_result = create_audit_version(audit_id, auditor_id)
+                                        logger.info(f"✅ Automatically created audit_version for AI audit {audit_id} (single document check): {version_result}")
+                                    else:
+                                        logger.warning(f"⚠️ Could not create audit_version for audit {audit_id}: No auditor_id found")
+                                except Exception as version_err:
+                                    logger.error(f"❌ Failed to create audit_version automatically (single document check): {version_err}")
+                                    import traceback
+                                    logger.error(f"Traceback: {traceback.format_exc()}")
+                except Exception as status_check_err:
+                    logger.warning(f"⚠️ Could not check/update audit completion status after single document check: {status_check_err}")
+                    
         except Exception as e:
             logger.warning(f"ℹ️ Could not persist compliance results for doc {document_id}: {e}")
  
- 
+
         return Response({
             'success': True,
             'document_id': int(document_id),
@@ -5633,9 +6364,14 @@ def check_all_documents_compliance(request, audit_id):
                 compliance_ids=all_compliance_ids,
                 user_id=user_id
             )
-            
-            # Convert dict result to Response
+
+            # If combined check succeeded, try to move AI audit into "Under review"
             if result.get('success'):
+                try:
+                    status_update = check_and_update_ai_audit_status(audit_id)
+                    logger.info(f"🔁 Bulk check: status update result for audit {audit_id}: {status_update}")
+                except Exception as status_err:
+                    logger.error(f"⚠️ Bulk check: could not update audit status after combined evidence check: {status_err}")
                 return Response(result, status=status.HTTP_200_OK)
             else:
                 return Response(result, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -5674,6 +6410,12 @@ def check_all_documents_compliance(request, audit_id):
                 s = r.get('status')
                 if s in summary:
                     summary[s] += 1
+            # After individual document checks, also try to move AI audit into "Under review"
+            try:
+                status_update = check_and_update_ai_audit_status(audit_id)
+                logger.info(f"🔁 Bulk doc-by-doc check: status update result for audit {audit_id}: {status_update}")
+            except Exception as status_err:
+                logger.error(f"⚠️ Bulk doc-by-doc check: could not update audit status after checks: {status_err}")
 
             return Response({
                 'success': True,
@@ -7481,3 +8223,117 @@ def get_relevant_documents_for_audit(request, audit_id):
             'success': False,
             'error': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+def check_and_update_ai_audit_status(audit_id):
+    """
+    Helper function to check if all documents for an AI audit are processed,
+    and update the audit status to 'Under review' if all are done.
+    
+    Returns: dict with 'updated': bool, 'status': str, 'message': str
+    """
+    try:
+        with connection.cursor() as cursor:
+            # Check if this is an AI audit
+            cursor.execute("SELECT AuditType, Status FROM audit WHERE AuditId = %s", [int(audit_id) if str(audit_id).isdigit() else audit_id])
+            audit_info = cursor.fetchone()
+            
+            if not audit_info:
+                return {'updated': False, 'status': None, 'message': f'Audit {audit_id} not found'}
+            
+            audit_type, current_status = audit_info
+            
+            if audit_type != 'A':  # Not an AI audit
+                return {'updated': False, 'status': current_status, 'message': f'Audit {audit_id} is not an AI audit (type: {audit_type})'}
+            
+            # Count total documents and completed documents for this audit
+            cursor.execute("""
+                SELECT 
+                    COUNT(*) as total,
+                    SUM(CASE WHEN ai_processing_status = 'completed' THEN 1 ELSE 0 END) as completed,
+                    SUM(CASE WHEN ai_processing_status = 'failed' THEN 1 ELSE 0 END) as failed
+                FROM ai_audit_data 
+                WHERE audit_id = %s
+            """, [int(audit_id) if str(audit_id).isdigit() else audit_id])
+            
+            doc_stats = cursor.fetchone()
+            total_docs = doc_stats[0] if doc_stats else 0
+            completed_docs = doc_stats[1] if doc_stats else 0
+            failed_docs = doc_stats[2] if doc_stats else 0
+            
+            logger.info(f"📊 Manual status check for audit {audit_id}: total={total_docs}, completed={completed_docs}, failed={failed_docs}, current_status='{current_status}'")
+            
+            # Update audit status if all documents are processed (completed or failed)
+            if total_docs > 0 and (completed_docs + failed_docs) == total_docs:
+                # All documents processed - update audit status to "Under review" if not already
+                if current_status not in ['Under review', 'Completed']:
+                    from ...models import Audit
+                    audit_obj = Audit.objects.get(AuditId=int(audit_id) if str(audit_id).isdigit() else audit_id)
+                    
+                    # Get auditor user_id for creating audit_version (extract integer ID from User object if needed)
+                    auditor_id = audit_obj.Auditor if hasattr(audit_obj, 'Auditor') and audit_obj.Auditor else None
+                    if not auditor_id:
+                        # Fallback: try to get from audit table directly
+                        cursor.execute("SELECT Auditor FROM audit WHERE AuditId = %s", [int(audit_id) if str(audit_id).isdigit() else audit_id])
+                        auditor_row = cursor.fetchone()
+                        auditor_id = auditor_row[0] if auditor_row and auditor_row[0] else None
+                    
+                    # Extract integer ID if auditor_id is a User object
+                    if auditor_id:
+                        if hasattr(auditor_id, 'UserId'):
+                            auditor_id = auditor_id.UserId
+                        elif hasattr(auditor_id, 'id'):
+                            auditor_id = auditor_id.id
+                        elif hasattr(auditor_id, 'pk'):
+                            auditor_id = auditor_id.pk
+                        elif not isinstance(auditor_id, int):
+                            try:
+                                auditor_id = int(auditor_id)
+                            except (ValueError, TypeError):
+                                auditor_id = None
+                    
+                    # Update audit status
+                    audit_obj.Status = 'Under review'
+                    audit_obj.ReviewStartDate = timezone.now()
+                    audit_obj.save()
+                    logger.info(f"✅ Updated AI audit {audit_id} status from '{current_status}' to 'Under review'")
+                    
+                    # Automatically create audit_version with all AI-generated findings
+                    try:
+                        from .audit_views import create_audit_version
+                        if auditor_id:
+                            version_result = create_audit_version(audit_id, auditor_id)
+                            logger.info(f"✅ Automatically created audit_version for AI audit {audit_id}: {version_result}")
+                        else:
+                            logger.warning(f"⚠️ Could not create audit_version for audit {audit_id}: No auditor_id found")
+                    except Exception as version_err:
+                        logger.error(f"❌ Failed to create audit_version automatically: {version_err}")
+                        import traceback
+                        logger.error(f"Traceback: {traceback.format_exc()}")
+                        # Don't fail the whole operation if version creation fails
+                    
+                    return {
+                        'updated': True,
+                        'status': 'Under review',
+                        'message': f'Status updated from "{current_status}" to "Under review" (all {total_docs} documents processed). Audit version created automatically.'
+                    }
+                else:
+                    return {
+                        'updated': False,
+                        'status': current_status,
+                        'message': f'All documents processed, but status is already "{current_status}"'
+                    }
+            else:
+                remaining = total_docs - (completed_docs + failed_docs)
+                return {
+                    'updated': False,
+                    'status': current_status,
+                    'message': f'Not all documents processed yet: {remaining} remaining (completed: {completed_docs}, failed: {failed_docs}, total: {total_docs})'
+                }
+    except Exception as e:
+        logger.error(f"❌ Error checking/updating audit status: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return {'updated': False, 'status': None, 'message': f'Error: {str(e)}'}
+
+

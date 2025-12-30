@@ -4479,58 +4479,15 @@ name: 'VV',
             await this.fetchPreviousFrameworkData();
           }
           
-          // Check if framework name has been changed
+          // Note: Removed strict name change validation
+          // Versioning is allowed with any changes, not just name changes
+          // Excluded policies are automatically skipped as they are filtered out
           
-          // Check if any policy names have been changed
-          const unchangedPolicies = this.policyTabs
-            .filter(policy => !policy.exclude && !String(policy.id).startsWith('new-'))
-            .filter(policy => {
-              const previousPolicy = this.previousFrameworkData.policies?.find(
-                p => p.PolicyId.toString() === policy.id.toString()
-              );
-              return previousPolicy && policy.name === previousPolicy.PolicyName;
-            });
-            
-          if (unchangedPolicies.length > 0) {
-            const policyNames = unchangedPolicies.map(p => p.name).join(', ');
+          // Check if there are any included policies (at least one policy should be included)
+          const includedPolicies = this.policyTabs.filter(policy => !policy.exclude);
+          if (includedPolicies.length === 0) {
             PopupService.error(
-              `You must change the names of all policies when creating a new version. Unchanged policies: ${policyNames}`,
-              'Version Error'
-            );
-            this.loading = false;
-            return;
-          }
-          
-          // Check if any subpolicy names have been changed
-          let hasUnchangedSubpolicies = false;
-          let unchangedSubpolicyNames = [];
-          
-          for (const policy of this.policyTabs.filter(p => !p.exclude)) {
-            if (String(policy.id).startsWith('new-')) continue; // Skip new policies
-            
-            const previousPolicy = this.previousFrameworkData.policies?.find(
-              p => p.PolicyId.toString() === policy.id.toString()
-            );
-            
-            if (!previousPolicy) continue;
-            
-            for (const subpolicy of policy.subPolicies.filter(sp => !sp.exclude)) {
-              if (String(subpolicy.id).startsWith('new-')) continue; // Skip new subpolicies
-              
-              const previousSubpolicy = previousPolicy.subpolicies?.find(
-                sp => sp.SubPolicyId.toString() === subpolicy.id.toString()
-              );
-              
-              if (previousSubpolicy && subpolicy.name === previousSubpolicy.SubPolicyName) {
-                hasUnchangedSubpolicies = true;
-                unchangedSubpolicyNames.push(`${policy.name} > ${subpolicy.name}`);
-              }
-            }
-          }
-          
-          if (hasUnchangedSubpolicies) {
-            PopupService.error(
-              `You must change the names of all subpolicies when creating a new version. Unchanged subpolicies: ${unchangedSubpolicyNames.join(', ')}`,
+              'At least one policy must be included in the version.',
               'Version Error'
             );
             this.loading = false;
@@ -4545,36 +4502,10 @@ name: 'VV',
             await this.fetchPreviousPolicyData();
           }
           
-          // Check if policy name has been changed
-          if (this.previousPolicyData && 
-              this.policyTabs[0].name === this.previousPolicyData.PolicyName) {
-            PopupService.error(
-              'You must change the policy name when creating a new version.',
-              'Version Error'
-            );
-            this.loading = false;
-            return;
-          }
-          
-          // Check if any subpolicy names have been changed
-          const unchangedSubpolicies = this.policyTabs[0].subPolicies
-            .filter(subpolicy => !subpolicy.exclude && !String(subpolicy.id).startsWith('new-'))
-            .filter(subpolicy => {
-              const previousSubpolicy = this.previousPolicyData.subpolicies?.find(
-                sp => sp.SubPolicyId.toString() === subpolicy.id.toString()
-              );
-              return previousSubpolicy && subpolicy.name === previousSubpolicy.SubPolicyName;
-            });
-            
-          if (unchangedSubpolicies.length > 0) {
-            const subpolicyNames = unchangedSubpolicies.map(sp => sp.name).join(', ');
-            PopupService.error(
-              `You must change the names of all subpolicies when creating a new version. Unchanged subpolicies: ${subpolicyNames}`,
-              'Version Error'
-            );
-            this.loading = false;
-            return;
-          }
+          // Note: Removed strict name change validation
+          // Versioning is allowed with any changes, not just name changes
+          // Excluded subpolicies are automatically skipped - they can keep the same name
+          // Any change to the policy or its included subpolicies is sufficient for versioning
           
           await this.submitPolicyVersion();
         }

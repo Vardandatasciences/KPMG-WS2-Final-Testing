@@ -5736,6 +5736,10 @@ def submit_incident_assessment(request):
         framework_id = incident.FrameworkId if incident.FrameworkId else None
         print(f"DEBUG: Using FrameworkId: {framework_id} for user incident assessment submission")
         
+        # Get ReviewerId from the incident to store in approval table
+        reviewer_id = incident.ReviewerId
+        print(f"DEBUG: Storing ReviewerId: {reviewer_id} in incident_approval table for incident {incident_id}")
+        
         # Import Framework model at function scope
         from grc.models import Framework
         
@@ -5753,6 +5757,7 @@ def submit_incident_assessment(request):
         approval_entry = IncidentApproval.objects.create(
             IncidentId=incident_id,
             AssigneeId=str(user_id),
+            ReviewerId=str(reviewer_id) if reviewer_id else None,
             Date=datetime.datetime.now(),
             version=user_version,
             ExtractedInfo=assessment_data,
@@ -6392,6 +6397,10 @@ def submit_audit_finding_assessment(request):
         framework_id = incident.FrameworkId if incident.FrameworkId else None
         print(f"DEBUG: Using FrameworkId: {framework_id} for user audit finding assessment submission")
         
+        # Get ReviewerId from the incident to store in approval table
+        reviewer_id = incident.ReviewerId
+        print(f"DEBUG: Storing ReviewerId: {reviewer_id} in incident_approval table for audit finding incident {incident_id}")
+        
         # Import Framework model at function scope
         from grc.models import Framework
         
@@ -6409,6 +6418,7 @@ def submit_audit_finding_assessment(request):
         approval_entry = IncidentApproval.objects.create(
             IncidentId=incident_id,
             AssigneeId=str(user_id),
+            ReviewerId=str(reviewer_id) if reviewer_id else None,
             Date=datetime.datetime.now(),
             version=user_version,
             ExtractedInfo=assessment_data,

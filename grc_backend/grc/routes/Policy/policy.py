@@ -5593,35 +5593,264 @@ def all_policies_get_framework_version_policies(request, version_id):
         framework_version = get_object_or_404(FrameworkVersion, VersionId=version_id)
         framework = framework_version.FrameworkId
         
-        # Get policies for this framework
-        policies = Policy.objects.filter(
-            FrameworkId=framework, 
-            CurrentVersion=framework_version.Version
+        # Get ALL policies for this framework (regardless of CurrentVersion)
+        # This ensures we show all policies that belong to the framework
+        policies = Policy.objects.filter(FrameworkId=framework)
+        
+        # Get ALL PolicyVersions for ALL policies in this framework
+        # This is important because versions can be linked across different Policy records
+        all_framework_policy_versions = PolicyVersion.objects.filter(
+            PolicyId__in=policies.values_list('PolicyId', flat=True)
         )
         
-        policies_data = []
+        # Build a map of all versions by VersionId for quick lookup
+        all_versions_map = {v.VersionId: v for v in all_framework_policy_versions}
+        
+        print(f"DEBUG: Found {len(all_framework_policy_versions)} total policy versions for framework {framework.FrameworkId}")
+        for v in all_framework_policy_versions:
+            print(f"  - VersionId: {v.VersionId}, PolicyId: {v.PolicyId.PolicyId}, Version: {v.Version}, PreviousVersionId: {v.PreviousVersionId}")
+        
+        # Find which versions are referenced as PreviousVersionId (to identify root versions)
+        referenced_version_ids = set()
+        for version in all_framework_policy_versions:
+            if version.PreviousVersionId:
+                referenced_version_ids.add(version.PreviousVersionId)
+        
+        # Group versions by their root policy
+        # A root policy is the policy that contains the root version (version not referenced by others)
+        policy_groups = {}  # key: root_policy_id, value: {policy_data, root_versions}
+        
+        # First, identify root versions (versions not referenced by any other version)
+        root_versions = [v for v in all_framework_policy_versions if v.VersionId not in referenced_version_ids]
+        
+        # If no root versions found (all versions are in a chain), find ones without PreviousVersionId
+        if not root_versions:
+            root_versions = [v for v in all_framework_policy_versions if not v.PreviousVersionId]
+        
+        # If still no root versions, use the first version as root
+        if not root_versions and all_framework_policy_versions:
+            root_versions = [list(all_framework_policy_versions)[0]]
+        
+        # Build a map to track which policies are children (their versions are all children of other policies)
+        policy_ids_with_only_children = set()
+        
+        # For each policy, check if ALL its versions are children
         for policy in policies:
-            policy_data = {
-                'id': policy.PolicyId,
-                'name': policy.PolicyName,
-                'category': policy.Department,
-                'status': policy.Status,
-                'description': policy.PolicyDescription,
-                'versions': []
+            policy_versions = PolicyVersion.objects.filter(PolicyId=policy)
+            if policy_versions.exists():
+                all_are_children = all(
+                    v.PreviousVersionId is not None and v.PreviousVersionId in all_versions_map
+                    for v in policy_versions
+                )
+                if all_are_children:
+                    policy_ids_with_only_children.add(policy.PolicyId)
+                    print(f"DEBUG: Policy {policy.PolicyId} ({policy.PolicyName}) has ONLY child versions - will be hidden")
+        
+        # Group root versions by their PolicyId
+        # Only include policies that are NOT in the "only children" set
+        print(f"DEBUG: Found {len(root_versions)} root versions")
+        for root_version in root_versions:
+            root_policy_id = root_version.PolicyId.PolicyId
+            
+            # Skip if this policy only has child versions (should be hidden)
+            if root_policy_id in policy_ids_with_only_children:
+                print(f"DEBUG: Skipping root version {root_version.VersionId} from Policy {root_policy_id} - policy has only children")
+                continue
+                
+            print(f"DEBUG: Root version {root_version.VersionId} (v{root_version.Version}) belongs to Policy {root_policy_id}")
+            if root_policy_id not in policy_groups:
+                root_policy = root_version.PolicyId
+                policy_groups[root_policy_id] = {
+                    'policy_data': {
+                        'id': root_policy.PolicyId,
+                        'name': root_policy.PolicyName,
+                        'category': root_policy.Department,
+                        'status': root_policy.Status,
+                        'description': root_policy.PolicyDescription,
+                        'type': root_policy.PolicyType or 'External',
+                        'versions': []
+                    },
+                    'root_versions': []
+                }
+            policy_groups[root_policy_id]['root_versions'].append(root_version)
+        
+        # Helper function to find all versions linked to a root version (following PreviousVersionId chain)
+        def find_all_linked_versions(root_version_id, visited=None):
+            if visited is None:
+                visited = set()
+            if root_version_id in visited:
+                return []
+            visited.add(root_version_id)
+            
+            linked = []
+            # Find all versions that have this version as their PreviousVersionId
+            for version in all_framework_policy_versions:
+                if version.PreviousVersionId == root_version_id:
+                    linked.append(version)
+                    # Recursively find versions linked to this one
+                    linked.extend(find_all_linked_versions(version.VersionId, visited))
+            return linked
+        
+        # Helper function to build version hierarchy recursively
+        # This function recursively builds the entire version tree, handling all levels (v1 -> v2 -> v3 -> ...)
+        def build_version_tree(version, all_versions_list, depth=0):
+            indent = "  " * depth
+            version_data = {
+                'id': version.VersionId,
+                'name': f"v{version.Version}",
+                'version': version.Version,
+                'previous_version_id': version.PreviousVersionId,
+                'previous_version_name': None,
+                'child_versions': [],
+                'subpolicies': []
             }
             
-            # Get versions for this policy
-            policy_versions = PolicyVersion.objects.filter(PolicyId=policy)
+            # Get previous version name if available
+            if version.PreviousVersionId and version.PreviousVersionId in all_versions_map:
+                prev_version = all_versions_map[version.PreviousVersionId]
+                version_data['previous_version_name'] = f"{prev_version.PolicyName} v{prev_version.Version}" if prev_version.PolicyName else f"v{prev_version.Version}"
+            
+            # Find child versions (versions that have this version as their PreviousVersionId)
+            # Search across ALL framework versions, not just versions of the same policy
+            # This ensures we find children regardless of which Policy they belong to
+            child_versions = [v for v in all_versions_list if v.PreviousVersionId == version.VersionId]
+            
+            if child_versions:
+                children_info = [f"v{c.Version} (Policy {c.PolicyId.PolicyId}, VersionId {c.VersionId})" for c in child_versions]
+                print(f"{indent}DEBUG: Version {version.VersionId} (v{version.Version}) has {len(child_versions)} children: {children_info}")
+            
+            # Recursively build children - this handles ALL levels of nesting (v1 -> v2 -> v3 -> ...)
+            if child_versions:
+                # Sort children by version number
+                child_versions.sort(key=lambda x: float(x.Version) if x.Version.replace('.', '').isdigit() else 0)
+                # Recursive call - each child will also find its own children
+                version_data['child_versions'] = [build_version_tree(child, all_versions_list, depth + 1) for child in child_versions]
+                print(f"{indent}DEBUG: Version {version.VersionId} (v{version.Version}) - built {len(version_data['child_versions'])} child version trees")
+            
+            return version_data
+        
+        # Build version list for each policy group
+        # Show ALL versions as separate items (like frameworks), not nested
+        policies_data = []
+        for root_policy_id, group_data in policy_groups.items():
+            policy_data = group_data['policy_data']
+            root_versions_list = group_data['root_versions']
+            
+            # Find ALL versions linked to this policy's root versions (following PreviousVersionId chain)
+            # This includes versions from other policies that are children of this policy's versions
+            all_linked_version_ids = set()
+            for root_version in root_versions_list:
+                all_linked_version_ids.add(root_version.VersionId)
+                # Follow the chain forward (find all children)
+                linked = find_all_linked_versions(root_version.VersionId)
+                for v in linked:
+                    all_linked_version_ids.add(v.VersionId)
+            
+            # Get all versions that belong to this policy OR are linked to this policy's versions
+            versions_to_include = []
+            for version in all_framework_policy_versions:
+                # Include if:
+                # 1. It belongs to this policy, OR
+                # 2. It's linked to this policy's versions (is a child of any version in this policy)
+                if (version.PolicyId.PolicyId == root_policy_id) or (version.VersionId in all_linked_version_ids):
+                    versions_to_include.append(version)
+            
+            # Build version data for all versions (as separate items, not nested)
             versions_data = []
-            for version in policy_versions:
-                versions_data.append({
+            for version in versions_to_include:
+                version_data = {
                     'id': version.VersionId,
                     'name': f"v{version.Version}",
-                    'version': version.Version
-                })
+                    'version': version.Version,
+                    'previous_version_id': version.PreviousVersionId,
+                    'previous_version_name': None,
+                    'child_versions': [],  # Empty - we're showing all versions as separate items
+                    'subpolicies': []
+                }
+                
+                # Get previous version name if available
+                if version.PreviousVersionId and version.PreviousVersionId in all_versions_map:
+                    prev_version = all_versions_map[version.PreviousVersionId]
+                    version_data['previous_version_name'] = f"{prev_version.PolicyName} v{prev_version.Version}" if prev_version.PolicyName else f"v{prev_version.Version}"
+                
+                versions_data.append(version_data)
+            
+            # Sort versions by version number
+            versions_data.sort(key=lambda x: float(x['version']) if x['version'].replace('.', '').isdigit() else 0)
             
             policy_data['versions'] = versions_data
             policies_data.append(policy_data)
+            print(f"DEBUG: Added policy {root_policy_id} with {len(versions_data)} version(s) as separate items")
+        
+        # Track which policies we've already added
+        policies_with_versions = set(pg['policy_data']['id'] for pg in policy_groups.values())
+        
+        # For remaining policies, check if they should be shown or hidden
+        for policy in policies:
+            if policy.PolicyId not in policies_with_versions:
+                policy_versions = PolicyVersion.objects.filter(PolicyId=policy)
+                if policy_versions.exists():
+                    # Check if ALL versions of this policy are children of other policies' versions
+                    # This means their PreviousVersionId points to versions from OTHER policies
+                    all_are_children = all(
+                        v.PreviousVersionId is not None and v.PreviousVersionId in all_versions_map
+                        for v in policy_versions
+                    )
+                    if all_are_children:
+                        print(f"DEBUG: Policy {policy.PolicyId} ({policy.PolicyName}) has ONLY child versions - HIDING this policy")
+                        print(f"DEBUG:   All {len(policy_versions)} version(s) are children of other policies")
+                        for v in policy_versions:
+                            if v.PreviousVersionId:
+                                parent_version = all_versions_map.get(v.PreviousVersionId)
+                                if parent_version:
+                                    print(f"DEBUG:     - v{v.Version} (VersionId {v.VersionId}) is child of v{parent_version.Version} (Policy {parent_version.PolicyId.PolicyId})")
+                        print(f"DEBUG:   Its versions will appear nested under their parent policies")
+                        # Don't add this policy - its versions are already nested under parent policies
+                        continue
+                    
+                    # This policy has at least one version that is NOT a child
+                    # Find root versions for this policy
+                    policy_versions_list = list(policy_versions)
+                    policy_root_versions = [v for v in policy_versions_list if v.VersionId not in referenced_version_ids]
+                    if not policy_root_versions:
+                        policy_root_versions = [v for v in policy_versions_list if not v.PreviousVersionId]
+                    if not policy_root_versions:
+                        policy_root_versions = [policy_versions_list[0]] if policy_versions_list else []
+                    
+                    print(f"DEBUG: Policy {policy.PolicyId} ({policy.PolicyName}) has {len(policy_root_versions)} root version(s) - adding to list")
+                    
+                    # Build version tree for this policy
+                    versions_data = []
+                    for root_version in policy_root_versions:
+                        versions_data.append(build_version_tree(root_version, list(all_framework_policy_versions)))
+                    
+                    versions_data.sort(key=lambda x: float(x['version']) if x['version'].replace('.', '').isdigit() else 0)
+                    
+                    policies_data.append({
+                        'id': policy.PolicyId,
+                        'name': policy.PolicyName,
+                        'category': policy.Department,
+                        'status': policy.Status,
+                        'description': policy.PolicyDescription,
+                        'type': policy.PolicyType or 'External',
+                        'versions': versions_data
+                    })
+                else:
+                    # This policy has no versions at all
+                    print(f"DEBUG: Policy {policy.PolicyId} ({policy.PolicyName}) has NO versions - adding with empty versions array")
+                    policies_data.append({
+                        'id': policy.PolicyId,
+                        'name': policy.PolicyName,
+                        'category': policy.Department,
+                        'status': policy.Status,
+                        'description': policy.PolicyDescription,
+                        'type': policy.PolicyType or 'External',
+                        'versions': []
+                    })
+        
+        print(f"DEBUG: Final result: {len(policies_data)} policies will be returned")
+        for p in policies_data:
+            print(f"  - Policy {p['id']}: {p['name']} with {len(p['versions'])} root version(s)")
         
         # Log successful all policies framework version policies retrieval
         send_log(

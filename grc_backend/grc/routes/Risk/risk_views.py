@@ -2443,23 +2443,9 @@ def get_reviewer_tasks(request, user_id):
         # Using raw SQL query to fetch from approval table
         from django.db import connection
         with connection.cursor() as cursor:
-            # Try a simpler query first to see if there's any data
-            try:
-                cursor.execute("""
-                    SELECT COUNT(*) FROM grc.risk_approval 
-                    WHERE ApproverId = %s
-                """, [user_id])
-                count = cursor.fetchone()[0]
-                
-                if count == 0:
-                    print(f"No reviewer tasks found for user {user_id}")
-                    return Response([])
-            except Exception as e:
-                print(f"Error in count query: {e}")
-                # Continue even if count query fails
-                
-            # Modified query to get only the latest version for each risk - simplified for compatibility
-            # Now with framework filtering
+            reviewer_tasks = []
+            
+            # First, get tasks from risk_approval table (for risks that have been submitted for review)
             try:
                 query = f"""
                     WITH latest_versions AS (
@@ -2480,7 +2466,6 @@ def get_reviewer_tasks(request, user_id):
                 """
                 cursor.execute(query, params)
                 columns = [col[0] for col in cursor.description]
-                reviewer_tasks = []
                 
                 # Process each row - only include tasks with valid data
                 for row in cursor.fetchall():
@@ -2505,13 +2490,73 @@ def get_reviewer_tasks(request, user_id):
                     
                     reviewer_tasks.append(row_dict)
             except Exception as e:
-                print(f"Error in main reviewer query: {e}")
-                return Response([])  # Return empty list on error
+                print(f"Error in risk_approval query: {e}")
+                # Continue to check risk_instance table even if this fails
+            
+            # Second, get risks assigned as reviewer from risk_instance table that don't have approval records yet
+            # This handles cases where reviewer is assigned but risk hasn't been submitted for review
+            try:
+                # Build query to find risks assigned to this reviewer but not yet in risk_approval
+                # Use NOT EXISTS to avoid duplicates and SQL injection issues
+                instance_query = f"""
+                    SELECT ri.RiskInstanceId, 
+                           NULL as ExtractedInfo,
+                           ri.UserId,
+                           ri.ReviewerId as ApproverId,
+                           NULL as version,
+                           ri.RiskDescription, 
+                           ri.Criticality, 
+                           ri.Category, 
+                           ri.RiskStatus, 
+                           ri.RiskPriority,
+                           r.FrameworkId
+                    FROM grc.risk_instance ri
+                    LEFT JOIN grc.risk r ON ri.RiskId = r.RiskId
+                    WHERE ri.ReviewerId = %(approver_id)s
+                    AND NOT EXISTS (
+                        SELECT 1 FROM grc.risk_approval ra 
+                        WHERE ra.RiskInstanceId = ri.RiskInstanceId 
+                        AND ra.ApproverId = %(approver_id)s
+                    )
+                    {framework_where}
+                """
+                cursor.execute(instance_query, params)
+                columns = [col[0] for col in cursor.description]
+                
+                # Process each row - only include tasks with valid data
+                for row in cursor.fetchall():
+                    row_dict = dict(zip(columns, row))
+                    
+                    # Skip tasks with missing essential data (don't add to response)
+                    # Check if essential fields have valid data
+                    has_description = row_dict.get('RiskDescription') and row_dict['RiskDescription'] not in [None, '', 'Unknown']
+                    has_criticality = row_dict.get('Criticality') and row_dict['Criticality'] not in [None, '', 'Unknown']
+                    
+                    # Only include tasks that have at least description and criticality
+                    if not (has_description and has_criticality):
+                        continue  # Skip this task - don't include it in the response
+                    
+                    # Set defaults for optional fields only (not essential ones)
+                    if 'Category' in row_dict and row_dict['Category'] is None:
+                        row_dict['Category'] = ''  # Empty string instead of 'Unknown'
+                    if 'RiskStatus' in row_dict and row_dict['RiskStatus'] is None:
+                        row_dict['RiskStatus'] = ''
+                    if 'RiskPriority' in row_dict and row_dict['RiskPriority'] is None:
+                        row_dict['RiskPriority'] = ''
+                    
+                    reviewer_tasks.append(row_dict)
+            except Exception as e:
+                print(f"Error in risk_instance query: {e}")
+                # Continue even if this query fails
         
         # After fetching reviewer_tasks
         for task in reviewer_tasks:
             risk_id = task['RiskInstanceId']
-            current_version = task['version']
+            current_version = task.get('version')
+            # Skip PreviousVersion logic if version is None (risks not yet submitted)
+            if current_version is None:
+                task['PreviousVersion'] = None
+                continue
             # Only for user versions (U2, U3, ...)
             if current_version.startswith('U'):
                 try:

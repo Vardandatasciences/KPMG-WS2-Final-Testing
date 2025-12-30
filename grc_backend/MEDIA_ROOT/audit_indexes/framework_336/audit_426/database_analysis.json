@@ -1,7 +1,7 @@
 {
   "framework_id": 336,
   "audit_id": 426,
-  "last_updated": "2025-12-26T13:28:24.042209",
+  "last_updated": "2025-12-30T11:40:55.018923",
   "documents": {},
   "database_data": {
     "policies": [
@@ -143,6 +143,27 @@
         "matched_compliances": [
           {
             "ComplianceId": 3186
+          }
+        ]
+      },
+      {
+        "table_name": "policies",
+        "record_id": 3829,
+        "analyzed_at": "2025-12-30T11:40:54.734865",
+        "relevance_score": 0.8,
+        "relevance_reason": "The policy is related to liquidity risk management, which is covered by several compliance requirements.",
+        "matched_policies": [
+          {
+            "PolicyId": 3829
+          }
+        ],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          {
+            "ComplianceId": 1784
+          },
+          {
+            "ComplianceId": 1794
           }
         ]
       }
@@ -416,6 +437,25 @@
           }
         ],
         "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 5412,
+        "analyzed_at": "2025-12-30T11:40:54.761182",
+        "relevance_score": 1.0,
+        "relevance_reason": "The database record provides evidence for the Liquidity Coverage Ratio (LCR) Compliance requirement.",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 5412,
+            "SubPolicyName": "Liquidity Coverage Ratio (LCR) Compliance v2"
+          }
+        ],
+        "matched_compliances": [
+          {
+            "ComplianceId": 1784
+          }
+        ]
       }
     ],
     "compliances": [
@@ -1187,6 +1227,115 @@
         "matched_compliances": [
           1792
         ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 2254,
+        "analyzed_at": "2025-12-30T11:40:54.791458",
+        "relevance_score": 0.8,
+        "relevance_reason": "The database record mentions macro stress test results, which is relevant to ComplianceId:1788",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1788
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 2255,
+        "analyzed_at": "2025-12-30T11:40:54.820839",
+        "relevance_score": 1.0,
+        "relevance_reason": "The database record provides evidence for compliance with Basel III requirements for Macroeconomic Stress Testing.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1788
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 2256,
+        "analyzed_at": "2025-12-30T11:40:54.837901",
+        "relevance_score": 0.8,
+        "relevance_reason": "The database record is relevant to the audit as it provides evidence for a compliance requirement.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1788
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 2257,
+        "analyzed_at": "2025-12-30T11:40:54.870271",
+        "relevance_score": 0.5,
+        "relevance_reason": "The database record mentions macro stress test results, which is relevant to compliance requirement [ComplianceId:1788] Macroeconomic Stress Testing Compliance.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1788
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 2258,
+        "analyzed_at": "2025-12-30T11:40:54.895558",
+        "relevance_score": 0.8,
+        "relevance_reason": "The database record provides evidence related to the compliance requirement for Macroeconomic Stress Testing.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1788
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 2259,
+        "analyzed_at": "2025-12-30T11:40:54.915767",
+        "relevance_score": 0.8,
+        "relevance_reason": "The audit finding is related to the NSFR Compliance requirement (ComplianceId:1785)",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1785
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 2260,
+        "analyzed_at": "2025-12-30T11:40:54.944739",
+        "relevance_score": 0.8,
+        "relevance_reason": "Audit finding is related to Basel III NSFR requirement",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1795
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 2271,
+        "analyzed_at": "2025-12-30T11:40:54.977243",
+        "relevance_score": 0.8,
+        "relevance_reason": "The database record provides evidence related to Basel III – Macroeconomic Stress Testing Audit, specifically compliance with the requirement for annual submission of macro stress test results.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1788
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 2272,
+        "analyzed_at": "2025-12-30T11:40:55.005005",
+        "relevance_score": 1.0,
+        "relevance_reason": "The database record is directly related to the compliance requirement 'Macroeconomic Stress Testing Compliance' (ComplianceId: 1788) and its sub-requirement 'Macroeconomic Stress Testing Supervisory Reporting Compliance' (ComplianceId: 1798).",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1788,
+          1798
+        ]
       }
     ],
     "incidents": [
@@ -1249,6 +1398,18 @@
         "matched_subpolicies": [],
         "matched_compliances": [
           1786
+        ]
+      },
+      {
+        "table_name": "incidents",
+        "record_id": 1515,
+        "analyzed_at": "2025-12-30T11:40:55.018923",
+        "relevance_score": 0.8,
+        "relevance_reason": "The database record is related to the Basel III – Macroeconomic Stress Testing Audit and specifically mentions 'Macroeconomic Stress Testing Compliance' (ComplianceId:1788) which is a relevant requirement.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1788
         ]
       }
     ],
