@@ -264,7 +264,7 @@ const submitReviewComment = async () => {
     }
 
     // Make API call to save the review comment
-    const response = await http.put(`/api/bcpdrp/questionnaires/${selectedQuestionnaireId.value}/review/`, reviewData)
+    const response = await http.put(`/bcpdrp/questionnaires/${selectedQuestionnaireId.value}/review/`, reviewData)
 
     console.log('Review comment saved successfully:', response.data)
     

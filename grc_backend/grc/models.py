@@ -1096,6 +1096,42 @@ class RiskAssignment(models.Model):
     
     class Meta:
         db_table = 'risk_assignments'
+
+
+class RiskAssessment(models.Model):
+    """
+    Tracks async risk document processing jobs.
+    Used for background processing with AI microservice.
+    """
+    STATUS_PROCESSING = 'processing'
+    STATUS_COMPLETED = 'completed'
+    STATUS_FAILED = 'failed'
+    STATUS_PENDING = 'pending'
+    
+    STATUS_CHOICES = [
+        (STATUS_PROCESSING, 'Processing'),
+        (STATUS_COMPLETED, 'Completed'),
+        (STATUS_FAILED, 'Failed'),
+        (STATUS_PENDING, 'Pending'),
+    ]
+    
+    job_id = models.CharField(max_length=255, unique=True, primary_key=True)
+    document_url = models.URLField(max_length=500, null=True, blank=True)  # S3 URL
+    filename = models.CharField(max_length=255)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    uploaded_by = models.IntegerField(null=True, blank=True)  # User ID
+    organization_id = models.IntegerField(null=True, blank=True)
+    error_message = models.TextField(null=True, blank=True)
+    processing_metadata = models.JSONField(null=True, blank=True)  # Compression stats, etc.
+    
+    class Meta:
+        db_table = 'risk_assessments'
+        ordering = ['-uploaded_at']
+    
+    def __str__(self):
+        return f"RiskAssessment {self.job_id} - {self.status}"
     
     def __str__(self):
         return f"Risk {self.risk.RiskId} assigned to {self.assigned_to.UserName}"
@@ -3122,7 +3158,6 @@ class MfaEmailChallenge(models.Model):
         import secrets
         import string
         return ''.join(secrets.choice(string.digits) for _ in range(6))
-
     @classmethod
     def hash_otp(cls, otp):
         """Hash OTP using SHA-256"""

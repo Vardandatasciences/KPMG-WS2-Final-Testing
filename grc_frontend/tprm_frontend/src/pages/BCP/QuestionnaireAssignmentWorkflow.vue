@@ -531,7 +531,7 @@ const fetchPlans = async () => {
   isLoadingPlans.value = true
   try {
     console.log('Fetching plans from API endpoint: /api/bcpdrp/plans/')
-    const response = await http.get('/api/bcpdrp/plans/')
+    const response = await http.get('/bcpdrp/plans/')
     console.log('API response data:', response)
     
     const plansData = response.data?.plans || response.data || []
@@ -593,7 +593,7 @@ const submitQuestionnaireAssignment = async () => {
     console.log('Submitting questionnaire assignment:', assignmentForm.value)
     
     // Make API call to create assignment
-    const response = await http.post('/api/bcpdrp/questionnaires/assign/', {
+    const response = await http.post('/bcpdrp/questionnaires/assign/', {
       plan_id: parseInt(assignmentForm.value.plan_id),
       questionnaire_id: parseInt(assignmentForm.value.questionnaire_id),
       assigned_to_user_id: parseInt(assignmentForm.value.assigned_to_user_id),

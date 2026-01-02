@@ -341,6 +341,7 @@
 <script>
 import axios from 'axios';
 import { API_ENDPOINTS } from '../../config/api.js';
+import { compressFile, shouldCompressFile } from '../../utils/fileCompression.js';
 
 export default {
   name: 'RiskAIDocumentUpload',
@@ -475,12 +476,44 @@ export default {
       this.currentStep = 'processing';
       this.processingProgress = 0;
       this.currentProcessingStep = 1;
+      this.processingStatus = 'Preparing document...';
+      this.saveProcessingState();
+
+      let fileToUpload = this.selectedFile;
+      let compressionMetadata = null;
+
+      // Compress file if beneficial
+      if (shouldCompressFile(this.selectedFile)) {
+        try {
+          this.processingStatus = 'Compressing document...';
+          this.saveProcessingState();
+          
+          const result = await compressFile(this.selectedFile);
+          fileToUpload = result.compressedFile;
+          compressionMetadata = {
+            original_size: result.originalSize,
+            compressed_size: result.compressedSize,
+            ratio: result.compressionRatio
+          };
+          
+          console.log(`✅ Compression complete: ${result.compressionRatio}% reduction`);
+        } catch (error) {
+          console.warn('⚠️ Compression failed, uploading original file:', error);
+          // Continue with original file if compression fails
+        }
+      }
+
       this.processingStatus = 'Uploading document...';
       this.saveProcessingState();
 
       const formData = new FormData();
-      formData.append('file', this.selectedFile);
+      formData.append('file', fileToUpload);
       formData.append('user_id', localStorage.getItem('user_id') || '1');
+      
+      // Include compression metadata if available
+      if (compressionMetadata) {
+        formData.append('compression_metadata', JSON.stringify(compressionMetadata));
+      }
 
       try {
         this.updateProgress(20, 'Document uploaded successfully...');

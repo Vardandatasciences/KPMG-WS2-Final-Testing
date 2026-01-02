@@ -2909,7 +2909,7 @@ name: 'VV',
     async fetchCurrentUser() {
       try {
         console.log('=== DEBUG fetchCurrentUser ===');
-      const response = await axios.get(`${API_BASE_URL_FULL}/user-role/`)
+      const response = await axiosInstance.get('/api/user-role/')
       console.log('API response:', response.data);
       
       if (response.data.success) {
@@ -3259,7 +3259,7 @@ name: 'VV',
   // Add new methods for policy type/category handling
   async fetchPolicyData() {
     try {
-      const response = await axios.get(`${API_BASE_URL_FULL}/policy-categories/`)
+      const response = await axiosInstance.get('/api/policy-categories/')
       this.policyData = response.data
       
       // Extract unique policy types
@@ -3621,7 +3621,7 @@ name: 'VV',
     async fetchEntities() {
       try {
         this.loading = true
-        const response = await axios.get(`${API_BASE_URL_FULL}/entities/`)
+        const response = await axiosInstance.get('/api/entities/')
         console.log('Raw entities response:', response.data)
         
         if (response.data.entities) {
@@ -4747,7 +4747,7 @@ name: 'VV',
               frameworkId: this.selectedFramework
             };
             console.log('Saving policy category with framework:', combinationWithFramework);
-            await axios.post(`${API_BASE_URL}/api/policy-categories/save/`, combinationWithFramework);
+            await axiosInstance.post('/api/policy-categories/save/', combinationWithFramework);
           }
           
           // Refresh policy categories after saving

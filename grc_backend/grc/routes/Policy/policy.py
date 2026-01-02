@@ -4789,7 +4789,7 @@ def list_users(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 @api_view(['GET'])
-@permission_classes([PolicyViewPermission])
+@permission_classes([])  # No permission required - public endpoint (also skipped in middleware)
 def get_framework_explorer_data(request):
     """
     API endpoint for the Framework Explorer page
@@ -9703,7 +9703,7 @@ def deactivate_previous_version_policies(policy_id):
         return 0
 
 @api_view(['GET'])
-@permission_classes([PolicyViewPermission])
+@permission_classes([])  # No permission required - public endpoint (also skipped in middleware)
 def get_policy_categories(request):
     try:
         categories = PolicyCategory.objects.all()
@@ -9863,7 +9863,7 @@ def save_policy_category(request):
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
-@permission_classes([PolicyViewPermission])
+@permission_classes([])  # No permission required - public endpoint (also skipped in middleware)
 def get_entities(request):
     """
     Get all entities for the multi-select dropdown

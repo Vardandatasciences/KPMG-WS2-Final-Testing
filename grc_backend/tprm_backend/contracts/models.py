@@ -757,7 +757,10 @@ class ContractAmendment(models.Model):
                 last_name = user.last_name or ""
                 full_name = f"{first_name} {last_name}".strip()
                 return full_name if full_name else user.username
-            except User.DoesNotExist:
+            except ImportError:
+                return f"User {self.approved_by} (not found)"
+            except Exception as e:
+                # Handle User.DoesNotExist or any other exception
                 return f"User {self.approved_by} (not found)"
         return None
     
@@ -771,7 +774,10 @@ class ContractAmendment(models.Model):
                 last_name = user.last_name or ""
                 full_name = f"{first_name} {last_name}".strip()
                 return full_name if full_name else user.username
-            except User.DoesNotExist:
+            except ImportError:
+                return f"User {self.initiated_by} (not found)"
+            except Exception as e:
+                # Handle User.DoesNotExist or any other exception
                 return f"User {self.initiated_by} (not found)"
         return None
     
@@ -901,7 +907,10 @@ class ContractRenewal(models.Model):
                 last_name = user.last_name or ""
                 full_name = f"{first_name} {last_name}".strip()
                 return full_name if full_name else user.username
-            except User.DoesNotExist:
+            except ImportError:
+                return f"User {self.initiated_by} (not found)"
+            except Exception as e:
+                # Handle User.DoesNotExist or any other exception
                 return f"User {self.initiated_by} (not found)"
         return None
     
@@ -915,7 +924,10 @@ class ContractRenewal(models.Model):
                 last_name = user.last_name or ""
                 full_name = f"{first_name} {last_name}".strip()
                 return full_name if full_name else user.username
-            except User.DoesNotExist:
+            except ImportError:
+                return f"User {self.decided_by} (not found)"
+            except Exception as e:
+                # Handle User.DoesNotExist or any other exception
                 return f"User {self.decided_by} (not found)"
         return None
     

@@ -721,7 +721,7 @@ async function handleSubmit() {
 
   try {
     submitting.value = true
-    const { data } = await apiClient.post('/api/bcpdrp/questionnaire-templates/save/', payload)
+    const { data } = await apiClient.post('/bcpdrp/questionnaire-templates/save/', payload)
     
     const responseData = data?.data || data
     const questionsCreated = responseData?.questions_created || 0

@@ -600,7 +600,7 @@ import { PopupService } from '@/modules/popus/popupService'
 import PopupModal from '@/modules/popus/PopupModal.vue'
 import CustomDropdown from '@/components/CustomDropdown.vue'
 import CreateAcknowledgementModal from './CreateAcknowledgementModal.vue'
-import { API_ENDPOINTS } from '@/config/api.js'
+import { API_ENDPOINTS, API_BASE_URL, axiosInstance } from '@/config/api.js'
 
 // Add view state
 const currentView = ref('list') // 'list' or 'card'
@@ -876,7 +876,7 @@ const fetchFrameworks = async () => {
       params.entity = selectedEntity.value
     }
 
-    const response = await axios.get(API_ENDPOINTS.FRAMEWORK_EXPLORER, { params })
+    const response = await axiosInstance.get(API_ENDPOINTS.FRAMEWORK_EXPLORER.replace(API_ENDPOINTS.API_BASE_URL || '', ''), { params })
     frameworks.value = response.data.frameworks || []
     summary.value = response.data.summary || {
       active_frameworks: 0,
@@ -915,7 +915,7 @@ const fetchFrameworks = async () => {
 // Fetch entities from API
 const fetchEntities = async () => {
   try {
-    const response = await axios.get(API_ENDPOINTS.ENTITIES)
+    const response = await axiosInstance.get(API_ENDPOINTS.ENTITIES.replace(API_ENDPOINTS.API_BASE_URL || '', ''))
     entities.value = response.data.entities || []
   } catch (error) {
     console.error('Error fetching entities:', error)
@@ -1228,7 +1228,7 @@ const togglePolicyStatus = async (policy, versionId, frameworkId) => {
         // Get current user ID to exclude from reviewer list
         const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || ''
         // Fetch reviewers filtered by RBAC permissions (ApprovePolicy) for policy module
-        const response = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+        const response = await axiosInstance.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION.replace(API_ENDPOINTS.API_BASE_URL || '', ''), {
           params: {
             module: 'policy',
             current_user_id: currentUserId
@@ -1396,7 +1396,7 @@ const toggleStatus = async (fw) => {
         // Get current user ID to exclude from reviewer list
         const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || ''
         // Fetch reviewers filtered by RBAC permissions (ApproveFramework) for framework module
-        const reviewersResponse = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+        const reviewersResponse = await axiosInstance.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION.replace(API_BASE_URL || '', ''), {
           params: {
             module: 'framework',
             current_user_id: currentUserId

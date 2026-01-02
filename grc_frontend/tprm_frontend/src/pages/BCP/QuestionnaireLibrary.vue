@@ -586,7 +586,7 @@ const fetchQuestionnaireDetails = async (questionnaireId) => {
 const fetchPlans = async () => {
   try {
     console.log('Fetching plans for assignment dropdown...')
-    const response = await http.get('/api/bcpdrp/plans/')
+    const response = await http.get('/bcpdrp/plans/')
     console.log('Plans API Response:', response)
     
     // Extract plans from response
@@ -605,7 +605,7 @@ const fetchPlans = async () => {
 const fetchUsers = async () => {
   try {
     console.log('Fetching users from rbac_tprm table...')
-    const response = await http.get('/api/bcpdrp/users/')
+    const response = await http.get('/bcpdrp/users/')
     console.log('Users API Response:', response)
     
     // Extract users from response
@@ -723,7 +723,7 @@ const submitAssignment = async () => {
     console.log('Submitting assignment:', assignmentForm.value)
     
     // Make API call to create assignment
-    const response = await http.post('/api/bcpdrp/questionnaires/assign/', {
+    const response = await http.post('/bcpdrp/questionnaires/assign/', {
       plan_id: parseInt(assignmentForm.value.plan_id),
       questionnaire_id: parseInt(assignmentForm.value.questionnaire_id),
       assigned_to_user_id: parseInt(assignmentForm.value.assigned_to_user_id),

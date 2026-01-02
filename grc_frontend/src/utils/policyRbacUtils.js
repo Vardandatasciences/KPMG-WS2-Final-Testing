@@ -7,6 +7,7 @@
 import { PopupService } from '@/modules/popup/popupService';
 import { SessionUtils } from './accessUtils';
 import axios from 'axios';
+import { API_BASE_URL } from '@/config/api.js';
 
 // RBAC State Management
 let rbacState = {
@@ -97,26 +98,27 @@ export const PolicyRbacUtils = {
    */
   async fetchUserPermissions() {
     try {
+      // Get JWT token from localStorage
+      const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+      
+      // Add Authorization header if token exists
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       // First try the specific API endpoint
       try {
-        const response = await axios.get('http://15.207.108.158:8000/api/user-permissions/', {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-            'Content-Type': 'application/json'
-          }
-        });
+        const response = await axios.get(`${API_BASE_URL}/api/user-permissions/`, { headers });
         console.log('[POLICY_RBAC] Permissions fetched:', response.data);
         return response.data;
       } catch (specificError) {
         console.warn('[POLICY_RBAC] Specific permissions endpoint failed, trying fallback:', specificError);
         
         // Fallback to the debug endpoint
-        const fallbackResponse = await axios.get('http://15.207.108.158:8000/api/debug-permissions/', {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-            'Content-Type': 'application/json'
-          }
-        });
+        const fallbackResponse = await axios.get(`${API_BASE_URL}/api/debug-permissions/`, { headers });
         console.log('[POLICY_RBAC] Permissions fetched from fallback:', fallbackResponse.data);
         return fallbackResponse.data;
       }
@@ -135,26 +137,27 @@ export const PolicyRbacUtils = {
    */
   async fetchUserRole() {
     try {
+      // Get JWT token from localStorage
+      const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+      
+      // Add Authorization header if token exists
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       // First try the specific API endpoint
       try {
-        const response = await axios.get('http://15.207.108.158:8000/api/user-role/', {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-            'Content-Type': 'application/json'
-          }
-        });
+        const response = await axios.get(`${API_BASE_URL}/api/user-role/`, { headers });
         console.log('[POLICY_RBAC] Role fetched:', response.data);
         return response.data;
       } catch (specificError) {
         console.warn('[POLICY_RBAC] Specific role endpoint failed, trying fallback:', specificError);
         
         // Fallback to the debug endpoint
-        const fallbackResponse = await axios.get('http://15.207.108.158:8000/api/debug-user-permissions/', {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-            'Content-Type': 'application/json'
-          }
-        });
+        const fallbackResponse = await axios.get(`${API_BASE_URL}/api/debug-user-permissions/`, { headers });
         console.log('[POLICY_RBAC] Role fetched from fallback:', fallbackResponse.data);
         
         // Extract role information from debug data

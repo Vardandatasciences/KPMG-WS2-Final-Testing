@@ -12,7 +12,7 @@ export const questionnaireApi = {
     if (params.owner && params.owner !== 'ALL') queryParams.append('owner', params.owner)
     
     const queryString = queryParams.toString()
-    const url = queryString ? `/api/bcpdrp/questionnaires/?${queryString}` : '/api/bcpdrp/questionnaires/'
+    const url = queryString ? `/bcpdrp/questionnaires/?${queryString}` : '/bcpdrp/questionnaires/'
     
     console.log('API Call - URL:', url)
     console.log('API Call - Params:', params)
@@ -25,23 +25,23 @@ export const questionnaireApi = {
 
   // Get detailed questionnaire information
   async getQuestionnaireDetail(questionnaireId) {
-    return await http.get(`/api/bcpdrp/questionnaires/${questionnaireId}/`)
+    return await http.get(`/bcpdrp/questionnaires/${questionnaireId}/`)
   },
 
 
   // Create new questionnaire
   async createQuestionnaire(data) {
-    return await http.post('/api/bcpdrp/questionnaires/', data)
+    return await http.post('/bcpdrp/questionnaires/', data)
   },
 
   // Update questionnaire
   async updateQuestionnaire(questionnaireId, data) {
-    return await http.patch(`/api/bcpdrp/questionnaires/${questionnaireId}/`, data)
+    return await http.patch(`/bcpdrp/questionnaires/${questionnaireId}/`, data)
   },
 
   // Delete questionnaire
   async deleteQuestionnaire(questionnaireId) {
-    return await http.delete(`/api/bcpdrp/questionnaires/${questionnaireId}/`)
+    return await http.delete(`/bcpdrp/questionnaires/${questionnaireId}/`)
   }
 }
 

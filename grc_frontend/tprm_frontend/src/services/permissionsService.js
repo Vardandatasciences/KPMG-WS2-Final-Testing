@@ -2,7 +2,7 @@
  * Permissions Service for RBAC checks
  * Handles permission verification before showing pages
  */
-import { getTprmApiBaseUrl, getApiOrigin } from '@/utils/backendEnv'
+import { getTprmApiBaseUrl } from '@/utils/backendEnv'
 
 const API_BASE_URL = getTprmApiBaseUrl()
 
@@ -12,106 +12,6 @@ const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
 // Debug: Log the API URL being used
 console.log('[PermissionsService] Using API Base URL:', API_BASE_URL)
-
-// Token refresh helper
-const refreshToken = async () => {
-  try {
-    const refreshTokenValue = localStorage.getItem('refresh_token')
-    if (!refreshTokenValue) {
-      console.warn('[PermissionsService] No refresh token available')
-      return false
-    }
-    
-    const apiOrigin = getApiOrigin() || 'https://grc-tprm.vardaands.com'
-    const refreshUrl = `${apiOrigin}/api/jwt/refresh/`
-    
-    console.log('[PermissionsService] Attempting to refresh token...')
-    const refreshResponse = await fetch(refreshUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ refresh_token: refreshTokenValue })
-    })
-    
-    if (refreshResponse.ok) {
-      const data = await refreshResponse.json()
-      if (data.access_token) {
-        localStorage.setItem('session_token', data.access_token)
-        localStorage.setItem('access_token', data.access_token)
-        if (data.refresh_token) {
-          localStorage.setItem('refresh_token', data.refresh_token)
-        }
-        console.log('[PermissionsService] ✅ Token refreshed successfully')
-        return true
-      }
-    }
-    
-    // If refresh failed, check the error message
-    const errorData = await refreshResponse.json().catch(() => ({}))
-    const errorMessage = errorData.message || 'Token refresh failed'
-    console.warn('[PermissionsService] ❌ Token refresh failed:', refreshResponse.status, errorMessage)
-    
-    // If session was invalidated (user logged in elsewhere), clear tokens and redirect
-    if (refreshResponse.status === 401 && errorMessage.includes('Session invalidated')) {
-      console.warn('[PermissionsService] Session invalidated - clearing tokens and redirecting to login')
-      localStorage.removeItem('session_token')
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('refresh_token')
-      localStorage.removeItem('current_user')
-      permissionCache.clear()
-      
-      // NO REDIRECT - Let pages handle errors themselves
-      console.log('[PermissionsService] Session invalidated - pages will handle this')
-    }
-    
-    return false
-  } catch (error) {
-    console.error('[PermissionsService] ❌ Token refresh error:', error)
-    return false
-  }
-}
-
-// Helper to make authenticated fetch with token refresh retry
-const authenticatedFetch = async (url, options = {}) => {
-  const token = localStorage.getItem('session_token')
-  if (!token) {
-    throw new Error('No session token found')
-  }
-  
-  // First attempt
-  let response = await fetch(url, {
-    ...options,
-    headers: {
-      ...options.headers,
-      'Authorization': `Bearer ${token}`
-    }
-  })
-  
-  // If 401, try to refresh token and retry
-  if (response.status === 401) {
-    console.log('[PermissionsService] 401 Unauthorized, attempting token refresh...')
-    const refreshed = await refreshToken()
-    
-    if (refreshed) {
-      // Retry with new token
-      const newToken = localStorage.getItem('session_token')
-      response = await fetch(url, {
-        ...options,
-        headers: {
-          ...options.headers,
-          'Authorization': `Bearer ${newToken}`
-        }
-      })
-    } else {
-      // Refresh failed, clear cache and return 401 response
-      console.warn('[PermissionsService] Token refresh failed, clearing permission cache')
-      permissionCache.clear()
-    }
-  }
-  
-  return response
-}
 
 class PermissionsService {
   /**
@@ -123,10 +23,10 @@ class PermissionsService {
     const user = this.getCurrentUser()
     console.log('[PermissionsService] Checking SLA permission:', permission, 'for user:', user)
     
-    // Support multiple user ID field formats: 'id', 'userid', 'UserId', 'user_id', 'userId'
-    const userId = user?.userid || user?.id || user?.UserId || user?.user_id || user?.userId
+    // Support both 'id' and 'userid' fields
+    const userId = user?.userid || user?.id
     if (!user || !userId) {
-      console.warn('[PermissionsService] No user or user ID found. Available fields:', user ? Object.keys(user) : 'no user object')
+      console.warn('[PermissionsService] No user or user.id/userid found')
       return false
     }
 
@@ -140,11 +40,20 @@ class PermissionsService {
     }
 
     try {
-      const url = `${API_BASE_URL}/rbac/sla/?permission_type=${permission}`
+      const token = localStorage.getItem('session_token')
+      if (!token) {
+        console.warn('[PermissionsService] No session token found')
+        return false
+      }
+
+      const url = `${API_BASE_URL}/api/rbac/sla/?permission_type=${permission}`
       console.log('[PermissionsService] Fetching permission from:', url)
 
-      const response = await authenticatedFetch(url, {
-        method: 'GET'
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       })
 
       console.log('[PermissionsService] Response status:', response.status)
@@ -184,10 +93,9 @@ class PermissionsService {
     const user = this.getCurrentUser()
     console.log('[PermissionsService] Checking Contract permission:', permission, 'for user:', user)
     
-    // Support multiple user ID field formats: 'id', 'userid', 'UserId', 'user_id', 'userId'
-    const userId = user?.userid || user?.id || user?.UserId || user?.user_id || user?.userId
+    const userId = user?.userid || user?.id
     if (!user || !userId) {
-      console.warn('[PermissionsService] No user or user ID found. Available fields:', user ? Object.keys(user) : 'no user object')
+      console.warn('[PermissionsService] No user or user.id/userid found')
       return false
     }
 
@@ -200,11 +108,20 @@ class PermissionsService {
     }
 
     try {
-      const url = `${API_BASE_URL}/rbac/contract/?permission_type=${permission}`
+      const token = localStorage.getItem('session_token')
+      if (!token) {
+        console.warn('[PermissionsService] No session token found')
+        return false
+      }
+
+      const url = `${API_BASE_URL}/api/rbac/contract/?permission_type=${permission}`
       console.log('[PermissionsService] Fetching Contract permission from:', url)
 
-      const response = await authenticatedFetch(url, {
-        method: 'GET'
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       })
 
       console.log('[PermissionsService] Contract permission response status:', response.status)
@@ -241,10 +158,10 @@ class PermissionsService {
     const user = this.getCurrentUser()
     console.log('[PermissionsService] Checking RFP permission:', permission, 'for user:', user)
     
-    // Support multiple user ID field formats: 'id', 'userid', 'UserId', 'user_id', 'userId'
-    const userId = user?.userid || user?.id || user?.UserId || user?.user_id || user?.userId
+    // Support both 'id' and 'userid' fields
+    const userId = user?.userid || user?.id
     if (!user || !userId) {
-      console.warn('[PermissionsService] No user or user ID found. Available fields:', user ? Object.keys(user) : 'no user object')
+      console.warn('[PermissionsService] No user or user.id/userid found')
       return false
     }
 
@@ -258,11 +175,20 @@ class PermissionsService {
     }
 
     try {
-      const url = `${API_BASE_URL}/rbac/rfp/?permission_type=${permission}`
+      const token = localStorage.getItem('session_token')
+      if (!token) {
+        console.warn('[PermissionsService] No session token found')
+        return false
+      }
+
+      const url = `${API_BASE_URL}/api/rbac/rfp/?permission_type=${permission}`
       console.log('[PermissionsService] Fetching RFP permission from:', url)
 
-      const response = await authenticatedFetch(url, {
-        method: 'GET'
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       })
 
       console.log('[PermissionsService] Response status:', response.status)
@@ -281,28 +207,14 @@ class PermissionsService {
         console.log('[PermissionsService] RFP Permission check result:', permission, '=', hasPermission)
         return hasPermission
       } else {
-        // If 401 (Unauthorized), token is expired/invalid - throw special error to trigger login redirect
-        if (response.status === 401) {
-          const errorText = await response.text()
-          console.error('[PermissionsService] RFP Permission check failed: Token expired/invalid (401)')
-          const error = new Error('Token expired')
-          error.status = 401
-          error.isTokenExpired = true
-          throw error
-        }
-        
-        // If API fails with other status, return false (deny access)
+        // If API fails, return false (deny access)
         const errorText = await response.text()
         console.error('[PermissionsService] RFP Permission check API failed:', response.status, errorText)
         return false
       }
     } catch (error) {
       console.error('[PermissionsService] Error checking RFP permission:', error)
-      // If it's a token expiration error, re-throw it so router guard can handle it
-      if (error.isTokenExpired || error.status === 401 || error.message?.includes('Token expired')) {
-        throw error
-      }
-      // On other errors, deny access for security
+      // On error, deny access for security
       return false
     }
   }
@@ -430,7 +342,7 @@ class PermissionsService {
    */
   getUserId() {
     const user = this.getCurrentUser()
-    return user?.userid || user?.id || user?.UserId || user?.user_id || user?.userId || null
+    return user?.userid || user?.id || null
   }
 
   /**
@@ -490,10 +402,10 @@ class PermissionsService {
     const user = this.getCurrentUser()
     console.log('[PermissionsService] Checking Vendor permission:', permission, 'for user:', user)
     
-    // Support multiple user ID field formats: 'id', 'userid', 'UserId', 'user_id', 'userId'
-    const userId = user?.userid || user?.id || user?.UserId || user?.user_id || user?.userId
+    // Support both 'id' and 'userid' fields
+    const userId = user?.userid || user?.id
     if (!user || !userId) {
-      console.warn('[PermissionsService] No user or user ID found. Available fields:', user ? Object.keys(user) : 'no user object')
+      console.warn('[PermissionsService] No user or user.id/userid found')
       return false
     }
 
@@ -507,11 +419,20 @@ class PermissionsService {
     }
 
     try {
-      const url = `${API_BASE_URL}/rbac/vendor/?permission_type=${permission}`
+      const token = localStorage.getItem('session_token')
+      if (!token) {
+        console.warn('[PermissionsService] No session token found')
+        return false
+      }
+
+      const url = `${API_BASE_URL}/api/rbac/vendor/?permission_type=${permission}`
       console.log('[PermissionsService] Fetching Vendor permission from:', url)
 
-      const response = await authenticatedFetch(url, {
-        method: 'GET'
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       })
 
       console.log('[PermissionsService] Response status:', response.status)

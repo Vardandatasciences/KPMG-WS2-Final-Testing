@@ -1223,11 +1223,11 @@ class VendorKPICategoriesAPIView(APIView):
                 'total_categories': len(categories),
                 'average_score': round(sum(cat['score'] for cat in categories) / len(categories), 1) if categories else 0,
                 'top_performing_category': max(categories, key=lambda x: x['score'])['name'] if categories else None,
-                    'needs_attention_category': min(categories, key=lambda x: x['score'])['name'] if categories else None
-                }
-                
-                logger.info(f"Returning KPI categories: {len(categories)} categories")
-                return Response(response_data, status=status.HTTP_200_OK)
+                'needs_attention_category': min(categories, key=lambda x: x['score'])['name'] if categories else None
+            }
+            
+            logger.info(f"Returning KPI categories: {len(categories)} categories")
+            return Response(response_data, status=status.HTTP_200_OK)
                 
         except Exception as e:
             logger.error(f"Error in VendorKPICategoriesAPIView: {str(e)}")

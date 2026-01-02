@@ -55,6 +55,7 @@ urlpatterns = [
     # SLA Management APIs
     path('api/slas/', include('slas.urls')),
     path('api/v1/sla-dashboard/', include('slas.urls')),
+    path('api/tprm/v1/sla-dashboard/', include('slas.urls')),  # TPRM API prefix for frontend compatibility
     
     
     # Audit Management APIs

@@ -632,7 +632,7 @@ const routes = [
     name: 'FrameworkExplorer',
     component: FrameworkExplorer
   },
-  {
+    {
     path: '/domains',
     name: 'Domains',
     component: () => import('../components/Login/domian.vue'),
@@ -1072,32 +1072,10 @@ const routes = [
     meta: { requiresAuth: true }
   },
   // Catch-all route - redirect to home if logged in, login if not
-  // NOTE: TPRM routes (/tprm/*) are matched above, so this won't catch them
   {
     path: '/:pathMatch(.*)*',
     name: 'NotFound',
     redirect: (to) => {
-      // CRITICAL: Never redirect if we're already on or navigating to a TPRM route
-      // This prevents redirect loops when TPRM iframe navigates
-      if (to.path.startsWith('/tprm')) {
-        console.log('🔄 Catch-all: Already on TPRM route, no redirect needed:', to.path)
-        return false // Don't redirect - let the route match normally
-      }
-      
-      // If this looks like a TPRM route pattern (without /tprm prefix),
-      // redirect to /tprm/{path} - but only if we're not already there
-      if (to.path.startsWith('/rfp-') || 
-          to.path.startsWith('/vendor-') || 
-          to.path.startsWith('/contract') ||
-          to.path.startsWith('/sla') ||
-          to.path.startsWith('/bcp') ||
-          to.path.startsWith('/submit')) {
-        const tprmPath = `/tprm${to.path}`
-        console.log('🔄 Catch-all: TPRM route pattern detected, redirecting to:', tprmPath)
-        return tprmPath
-      }
-      
-      // For all other unknown routes, redirect to home or login
       const isLoggedIn = localStorage.getItem('is_logged_in') === 'true'
       console.log('🔄 Catch-all route triggered for:', to.path, 'Logged in:', isLoggedIn)
       return isLoggedIn ? '/home' : '/login'
@@ -1153,21 +1131,13 @@ router.beforeEach(async (to, from, next) => {
     isAuthenticated: isAuthenticated
   })
  
-  // CRITICAL: TPRM routes should always be allowed - they handle auth themselves
-  // Don't redirect TPRM routes - let the iframe handle authentication
-  if (to.path.startsWith('/tprm')) {
-    console.log('🔐 TPRM route detected - allowing navigation (no redirects)')
-    next()
-    return
-  }
-  
   // If route requires authentication and user is not authenticated
   if (to.meta.requiresAuth && !isAuthenticated) {
     console.log('🚫 Access denied - redirecting to login')
     next('/login')
     return
   }
-  
+ 
   // If user is authenticated and trying to access login page, redirect to home
   if (isAuthenticated && to.path === '/login') {
     console.log('🔄 User already authenticated - redirecting to home')

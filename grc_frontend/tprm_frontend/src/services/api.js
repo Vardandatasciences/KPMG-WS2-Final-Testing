@@ -1647,13 +1647,13 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-      if (error.response?.status === 401) {
+    if (error.response?.status === 401) {
         // Token expired or invalid - NO REDIRECT, pages will handle this
-        localStorage.removeItem('session_token')
-        localStorage.removeItem('current_user')
+      localStorage.removeItem('session_token')
+      localStorage.removeItem('current_user')
         console.log('[Axios Interceptor] 401 Unauthorized - NO REDIRECT, pages will handle this')
         // NO REDIRECT - Let pages handle errors themselves
-      } else if (error.response?.status === 403) {
+    } else if (error.response?.status === 403) {
       // Permission denied - RBAC check failed - NO REDIRECT
       const errorMessage = error.response?.data?.error || error.response?.data?.message || 'You do not have permission to access this resource.'
       const errorCode = error.response?.data?.code || '403'

@@ -1568,7 +1568,7 @@ const saveExtractedData = async () => {
     
     // Update plan status to OCR_COMPLETED and navigate to Step 2
     try {
-      await http.patch(`/api/bcpdrp/ocr/plans/${selectedPlan.value.plan_id}/status/`, {
+      await http.patch(`/bcpdrp/ocr/plans/${selectedPlan.value.plan_id}/status/`, {
         status: 'OCR_COMPLETED'
       })
       

@@ -973,8 +973,11 @@ class GlobalSearchViewSet(viewsets.ViewSet):
         """
         try:
             from django.apps import apps
+            import logging
+            logger = logging.getLogger(__name__)
             
             # Get all models that have these fields
+            models_with_filters = {}
             try:
                 models_with_filters = {
                     'vendor': apps.get_model('vendor_core', 'Vendors'),
@@ -985,7 +988,7 @@ class GlobalSearchViewSet(viewsets.ViewSet):
                     'bcp_drp_evaluations': apps.get_model('bcpdrp', 'Evaluation'),
                 }
             except Exception as e:
-                print(f"Error loading models for filter options: {e}")
+                logger.warning(f"Error loading models for filter options: {e}")
                 models_with_filters = {}
             
             filter_options = {
@@ -996,24 +999,26 @@ class GlobalSearchViewSet(viewsets.ViewSet):
             
             # Collect all unique values from each model
             for model_name, model in models_with_filters.items():
+                if model is None:
+                    continue
                 try:
                     # Get status values
                     if hasattr(model, 'status'):
                         status_values = model.objects.values_list('status', flat=True).distinct()
-                        filter_options['status'].update(status_values)
+                        filter_options['status'].update([v for v in status_values if v])
                     
                     # Get category values
                     if hasattr(model, 'category'):
                         category_values = model.objects.values_list('category', flat=True).distinct()
-                        filter_options['category'].update(category_values)
+                        filter_options['category'].update([v for v in category_values if v])
                     
                     # Get risk_level values
                     if hasattr(model, 'risk_level'):
                         risk_level_values = model.objects.values_list('risk_level', flat=True).distinct()
-                        filter_options['risk_level'].update(risk_level_values)
+                        filter_options['risk_level'].update([v for v in risk_level_values if v])
                         
                 except Exception as e:
-                    print(f"Error getting filter options from {model_name}: {e}")
+                    logger.warning(f"Error getting filter options from {model_name}: {e}")
                     continue
             
             # Convert sets to sorted lists
@@ -1026,6 +1031,9 @@ class GlobalSearchViewSet(viewsets.ViewSet):
             return Response(response_data, status=status.HTTP_200_OK)
             
         except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to get filter options: {str(e)}", exc_info=True)
             return Response(
                 {'error': f'Failed to get filter options: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

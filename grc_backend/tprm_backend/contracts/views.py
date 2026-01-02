@@ -103,8 +103,19 @@ class JWTAuthentication(BaseAuthentication):
                     # Add is_authenticated attribute for DRF compatibility
                     user.is_authenticated = True
                     return (user, token)
-                except (User.DoesNotExist, ImportError):
-                    # If User model doesn't exist or user not found, create a mock user
+                except ImportError:
+                    # If User model import fails, create a mock user
+                    logger.warning(f"User model import failed, creating mock user for user_id: {user_id}")
+                    class MockUser:
+                        def __init__(self, user_id):
+                            self.userid = user_id
+                            self.username = f"user_{user_id}"
+                            self.is_authenticated = True
+                    
+                    return (MockUser(user_id), token)
+                except Exception as e:
+                    # If User model doesn't exist or other error, create a mock user
+                    logger.warning(f"User {user_id} not found or error: {e}, creating mock user")
                     class MockUser:
                         def __init__(self, user_id):
                             self.userid = user_id
@@ -235,7 +246,11 @@ class RateLimiter:
     @staticmethod
     def is_rate_limited(request, limit=100, window=3600):
         """Check if request is rate limited"""
-        user_id = getattr(request.user, 'id', None)
+        # Try to get user_id from various possible attributes
+        user_id = None
+        if hasattr(request, 'user') and request.user:
+            user_id = getattr(request.user, 'id', None) or getattr(request.user, 'userid', None) or getattr(request.user, 'user_id', None)
+        
         if not user_id:
             return False
         
@@ -310,8 +325,14 @@ def simple_login(request):
                     'message': 'Invalid username or password'
                 }, status=status.HTTP_401_UNAUTHORIZED)
                 
-        except User.DoesNotExist:
-            logger.warning(f"User not found: {username}")
+        except ImportError:
+            logger.warning(f"User model not found")
+            return Response({
+                'success': False,
+                'message': 'Authentication service unavailable'
+            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except Exception as e:
+            logger.warning(f"User not found or error: {username}, {str(e)}")
             return Response({
                 'success': False,
                 'message': 'Invalid username or password'
@@ -368,7 +389,7 @@ def contract_list(request):
             }, status=429)
         
         # Get user_id from request
-        from rbac.tprm_utils import RBACTPRMUtils
+        from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
         user_id = RBACTPRMUtils.get_user_id_from_request(request)
         
         # Check if user is a vendor and get vendor info
@@ -471,7 +492,9 @@ def contract_list(request):
         })
         
     except Exception as e:
+        import traceback
         logger.error(f"Contract list error: {str(e)}")
+        logger.error(f"Contract list traceback: {traceback.format_exc()}")
         return Response({
             'success': False,
             'error': 'Failed to retrieve contracts',
@@ -487,7 +510,7 @@ def contract_detail(request, contract_id):
     """Get contract details by ID"""
     try:
         # Get user_id from request
-        from rbac.tprm_utils import RBACTPRMUtils
+        from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
         user_id = RBACTPRMUtils.get_user_id_from_request(request)
         
         # Check if user is a vendor and get vendor info
@@ -537,7 +560,7 @@ def contract_comprehensive_detail(request, contract_id):
         logger.info(f"Starting comprehensive contract detail fetch for contract_id: {contract_id}")
         
         # Get user_id from request
-        from rbac.tprm_utils import RBACTPRMUtils
+        from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
         user_id = RBACTPRMUtils.get_user_id_from_request(request)
         
         # Check if user is a vendor and get vendor info
@@ -767,14 +790,18 @@ def contract_create(request):
                         from mfa_auth.models import User
                         assignee_user = User.objects.get(userid=contract.legal_reviewer)
                         approval_data['assignee_name'] = f"{assignee_user.first_name} {assignee_user.last_name}".strip() or assignee_user.username
-                    except User.DoesNotExist:
+                    except ImportError:
+                        pass
+                    except Exception as e:
                         pass
                 elif contract.contract_owner:
                     try:
                         from mfa_auth.models import User
                         assignee_user = User.objects.get(userid=contract.contract_owner)
                         approval_data['assignee_name'] = f"{assignee_user.first_name} {assignee_user.last_name}".strip() or assignee_user.username
-                    except User.DoesNotExist:
+                    except ImportError:
+                        pass
+                    except Exception as e:
                         pass
                 
                 # Create the approval
@@ -2400,7 +2427,7 @@ def vendor_list(request):
             }, status=429)
         
         # Get user_id from request
-        from rbac.tprm_utils import RBACTPRMUtils
+        from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
         user_id = RBACTPRMUtils.get_user_id_from_request(request)
         
         # Check if user is a vendor and get vendor info
@@ -2601,7 +2628,7 @@ def vendor_stats(request):
             }, status=429)
         
         # Get user_id from request
-        from rbac.tprm_utils import RBACTPRMUtils
+        from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
         user_id = RBACTPRMUtils.get_user_id_from_request(request)
         
         # Check if user is a vendor and get vendor info
@@ -2844,7 +2871,7 @@ def contract_renewals_list(request):
             }, status=429)
         
         # Get user_id from request
-        from rbac.tprm_utils import RBACTPRMUtils
+        from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
         user_id = RBACTPRMUtils.get_user_id_from_request(request)
         
         # Check if user is a vendor and get vendor info
@@ -2943,7 +2970,9 @@ def contract_renewals_list(request):
         })
         
     except Exception as e:
+        import traceback
         logger.error(f"Contract renewals list error: {str(e)}")
+        logger.error(f"Contract renewals list traceback: {traceback.format_exc()}")
         return Response({
             'success': False,
             'error': 'Failed to retrieve contract renewals',
@@ -3082,7 +3111,7 @@ def contract_renewal_detail(request, renewal_id):
             }, status=429)
         
         # Get user_id from request
-        from rbac.tprm_utils import RBACTPRMUtils
+        from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
         user_id = RBACTPRMUtils.get_user_id_from_request(request)
         
         # Check if user is a vendor and get vendor info
@@ -3970,35 +3999,44 @@ def users_list(request):
             }, status=429)
         
         # Get all users from custom User model
-        from mfa_auth.models import User
-        users = User.objects.all().order_by('userid')
-        
-        logger.info(f"Found {users.count()} users in database")
-        
-        # Convert to list and add display name
-        users_list = []
-        for user in users:
-            full_name = f"{user.first_name} {user.last_name}".strip()
-            display_name = full_name if full_name else user.username
+        try:
+            from mfa_auth.models import User
+            users = User.objects.all().order_by('userid')
             
-            user_data = {
-                'user_id': user.userid,  # Use userid as primary key
-                'username': user.username,
-                'display_name': display_name,
-                'role': 'user'  # Default role since RBAC is removed
-            }
-            users_list.append(user_data)
-            logger.info(f"User: {user_data}")
-        
-        logger.info(f"Returning {len(users_list)} users to frontend")
-        
-        return Response({
-            'success': True,
-            'data': users_list
-        })
+            logger.info(f"Found {users.count()} users in database")
+            
+            # Convert to list and add display name
+            users_list = []
+            for user in users:
+                full_name = f"{user.first_name} {user.last_name}".strip()
+                display_name = full_name if full_name else user.username
+                
+                user_data = {
+                    'user_id': user.userid,  # Use userid as primary key
+                    'username': user.username,
+                    'display_name': display_name,
+                    'role': 'user'  # Default role since RBAC is removed
+                }
+                users_list.append(user_data)
+                logger.info(f"User: {user_data}")
+            
+            logger.info(f"Returning {len(users_list)} users to frontend")
+            
+            return Response({
+                'success': True,
+                'data': users_list
+            })
+        except ImportError:
+            logger.warning("User model not found, returning empty list")
+            return Response({
+                'success': True,
+                'data': []
+            })
         
     except Exception as e:
+        import traceback
         logger.error(f"Users list error: {str(e)}")
+        logger.error(f"Users list traceback: {traceback.format_exc()}")
         return Response({
             'success': False,
             'error': 'Failed to retrieve users',
@@ -4021,35 +4059,44 @@ def legal_reviewers_list(request):
             }, status=429)
         
         # Get all users from custom User model (since RBAC is removed, all users can be legal reviewers)
-        from mfa_auth.models import User
-        users = User.objects.all().order_by('userid')
-        
-        logger.info(f"Found {users.count()} users for legal reviewers")
-        
-        # Convert to list and add display name
-        users_list = []
-        for user in users:
-            full_name = f"{user.first_name} {user.last_name}".strip()
-            display_name = full_name if full_name else user.username
+        try:
+            from mfa_auth.models import User
+            users = User.objects.all().order_by('userid')
             
-            user_data = {
-                'user_id': user.userid,  # Use userid as primary key
-                'username': user.username,
-                'display_name': display_name,
-                'role': 'legal_reviewer'  # All users can be legal reviewers since RBAC is removed
-            }
-            users_list.append(user_data)
-            logger.info(f"Legal Reviewer: {user_data}")
-        
-        logger.info(f"Returning {len(users_list)} legal reviewers to frontend")
-        
-        return Response({
-            'success': True,
-            'data': users_list
-        })
+            logger.info(f"Found {users.count()} users for legal reviewers")
+            
+            # Convert to list and add display name
+            users_list = []
+            for user in users:
+                full_name = f"{user.first_name} {user.last_name}".strip()
+                display_name = full_name if full_name else user.username
+                
+                user_data = {
+                    'user_id': user.userid,  # Use userid as primary key
+                    'username': user.username,
+                    'display_name': display_name,
+                    'role': 'legal_reviewer'  # All users can be legal reviewers since RBAC is removed
+                }
+                users_list.append(user_data)
+                logger.info(f"Legal Reviewer: {user_data}")
+            
+            logger.info(f"Returning {len(users_list)} legal reviewers to frontend")
+            
+            return Response({
+                'success': True,
+                'data': users_list
+            })
+        except ImportError:
+            logger.warning("User model not found, returning empty list")
+            return Response({
+                'success': True,
+                'data': []
+            })
         
     except Exception as e:
+        import traceback
         logger.error(f"Legal reviewers list error: {str(e)}")
+        logger.error(f"Legal reviewers list traceback: {traceback.format_exc()}")
         return Response({
             'success': False,
             'error': 'Failed to retrieve legal reviewers',
@@ -4072,54 +4119,63 @@ def approval_users_list(request):
             }, status=429)
         
         # Import required models
-        from mfa_auth.models import User
-        from rbac.models import RBACTPRM
-        from rbac.tprm_utils import RBACTPRMUtils
-        
-        # Get all active users (filter by is_active_raw which can be 'Y', 'YES', '1', 'TRUE')
-        all_users = User.objects.filter(
-            is_active_raw__in=['Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true']
-        ).order_by('userid')
-        
-        logger.info(f"Found {all_users.count()} active users in database")
-        
-        # Filter users who have ApproveContract or ReviewContract permission
-        users_with_permission = []
-        for user in all_users:
-            user_id = user.userid
+        try:
+            from mfa_auth.models import User
+            from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
             
-            # Check if user has ApproveContract permission
-            has_approve_permission = RBACTPRMUtils.check_contract_permission(user_id, 'ApproveContract')
+            # Get all active users (filter by is_active_raw which can be 'Y', 'YES', '1', 'TRUE')
+            all_users = User.objects.filter(
+                is_active_raw__in=['Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true']
+            ).order_by('userid')
             
-            # Check if user has ReviewContract permission (if it exists in the model)
-            # Note: ReviewContract may not exist in the current model, but we check for it anyway
-            # If it doesn't exist, check_contract_permission will return False
-            has_review_permission = RBACTPRMUtils.check_contract_permission(user_id, 'ReviewContract')
+            logger.info(f"Found {all_users.count()} active users in database")
             
-            # Include user if they have either ApproveContract or ReviewContract permission
-            if has_approve_permission or has_review_permission:
-                full_name = f"{user.first_name} {user.last_name}".strip()
-                display_name = full_name if full_name else user.username
+            # Filter users who have ApproveContract or ReviewContract permission
+            users_with_permission = []
+            for user in all_users:
+                user_id = user.userid
                 
-                user_data = {
-                    'user_id': user_id,
-                    'username': user.username,
-                    'display_name': display_name,
-                    'role': 'approver'
-                }
-                users_with_permission.append(user_data)
-                logger.info(f"User with ApproveContract permission: {user_data}")
-        
-        logger.info(f"Returning {len(users_with_permission)} users with ApproveContract permission to frontend")
-        
-        return Response({
-            'success': True,
-            'data': users_with_permission,
-            'count': len(users_with_permission)
-        })
+                # Check if user has ApproveContract permission
+                has_approve_permission = RBACTPRMUtils.check_contract_permission(user_id, 'ApproveContract')
+                
+                # Check if user has ReviewContract permission (if it exists in the model)
+                # Note: ReviewContract may not exist in the current model, but we check for it anyway
+                # If it doesn't exist, check_contract_permission will return False
+                has_review_permission = RBACTPRMUtils.check_contract_permission(user_id, 'ReviewContract')
+                
+                # Include user if they have either ApproveContract or ReviewContract permission
+                if has_approve_permission or has_review_permission:
+                    full_name = f"{user.first_name} {user.last_name}".strip()
+                    display_name = full_name if full_name else user.username
+                    
+                    user_data = {
+                        'user_id': user_id,
+                        'username': user.username,
+                        'display_name': display_name,
+                        'role': 'approver'
+                    }
+                    users_with_permission.append(user_data)
+                    logger.info(f"User with ApproveContract permission: {user_data}")
+            
+            logger.info(f"Returning {len(users_with_permission)} users with ApproveContract permission to frontend")
+            
+            return Response({
+                'success': True,
+                'data': users_with_permission,
+                'count': len(users_with_permission)
+            })
+        except ImportError as e:
+            logger.warning(f"User model not found: {str(e)}, returning empty list")
+            return Response({
+                'success': True,
+                'data': [],
+                'count': 0
+            })
         
     except Exception as e:
+        import traceback
         logger.error(f"Approval users list error: {str(e)}")
+        logger.error(f"Approval users list traceback: {traceback.format_exc()}")
         return Response({
             'success': False,
             'error': 'Failed to retrieve approval users',
@@ -4156,7 +4212,7 @@ def subcontracts_list(request, parent_contract_id):
         ).select_related('vendor').order_by('created_at')
         
         # Check if the current user is a vendor
-        from rbac.tprm_utils import RBACTPRMUtils
+        from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
         user_id = RBACTPRMUtils.get_user_id_from_request(request)
         is_vendor = False
         

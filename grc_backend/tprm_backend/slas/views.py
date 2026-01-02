@@ -99,8 +99,19 @@ class JWTAuthentication(BaseAuthentication):
                     # Add is_authenticated attribute for DRF compatibility
                     user.is_authenticated = True
                     return (user, token)
-                except (User.DoesNotExist, ImportError):
-                    # If User model doesn't exist or user not found, create a mock user
+                except ImportError:
+                    # If User model import fails, create a mock user
+                    logger.warning(f"User model import failed, creating mock user for user_id: {user_id}")
+                    class MockUser:
+                        def __init__(self, user_id):
+                            self.userid = user_id
+                            self.username = f"user_{user_id}"
+                            self.is_authenticated = True
+                    
+                    return (MockUser(user_id), token)
+                except Exception as e:
+                    # If User model doesn't exist or other error, create a mock user
+                    logger.warning(f"User {user_id} not found or error: {e}, creating mock user")
                     class MockUser:
                         def __init__(self, user_id):
                             self.userid = user_id

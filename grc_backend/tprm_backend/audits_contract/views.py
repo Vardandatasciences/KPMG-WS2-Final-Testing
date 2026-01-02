@@ -126,7 +126,7 @@ class PerformContractAuditPermission(BasePermission):
             return False
         
         # Check PerformContractAudit permission
-        from rbac.tprm_utils import RBACTPRMUtils
+        from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
         has_permission = RBACTPRMUtils.check_contract_permission(user_id, 'PerformContractAudit')
         
         if not has_permission:
@@ -156,8 +156,19 @@ class JWTAuthentication(BaseAuthentication):
                     # Add is_authenticated attribute for DRF compatibility
                     user.is_authenticated = True
                     return (user, token)
-                except (User.DoesNotExist, ImportError):
-                    # If User model doesn't exist or user not found, create a mock user
+                except ImportError:
+                    # If User model import fails, create a mock user
+                    logger.warning(f"User model import failed, creating mock user for user_id: {user_id}")
+                    class MockUser:
+                        def __init__(self, user_id):
+                            self.userid = user_id
+                            self.username = f"user_{user_id}"
+                            self.is_authenticated = True
+                    
+                    return (MockUser(user_id), token)
+                except Exception as e:
+                    # If User model doesn't exist or other error, create a mock user
+                    logger.warning(f"User {user_id} not found or error: {e}, creating mock user")
                     class MockUser:
                         def __init__(self, user_id):
                             self.userid = user_id
@@ -1161,7 +1172,7 @@ def templates_by_term(request):
         # If we can't get user ID from request.user, try JWT token directly
         if not current_user_id:
             try:
-                from rbac.tprm_utils import RBACTPRMUtils
+                from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
                 current_user_id = RBACTPRMUtils.get_user_id_from_request(request)
             except Exception as e:
                 logger.warning(f"Could not extract user_id from request: {e}")
@@ -1415,7 +1426,7 @@ def available_users(request):
     try:
         # Import required models
         from mfa_auth.models import User
-        from rbac.tprm_utils import RBACTPRMUtils
+        from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
         
         # Get all active users (filter by is_active_raw which can be 'Y', 'YES', '1', 'TRUE')
         all_users = User.objects.filter(

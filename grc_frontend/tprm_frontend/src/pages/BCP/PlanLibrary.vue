@@ -902,7 +902,7 @@ const fetchStrategies = async () => {
     if (filters.value.criticality && filters.value.criticality !== 'all') params.append('criticality', filters.value.criticality)
     
     const queryString = params.toString()
-    const url = queryString ? `/api/bcpdrp/strategies/?${queryString}` : '/api/bcpdrp/strategies/'
+    const url = queryString ? `/bcpdrp/strategies/?${queryString}` : '/bcpdrp/strategies/'
     
     const response = await http.get(url)
     strategies.value = response.data.strategies || []
@@ -953,7 +953,7 @@ const fetchPlans = async () => {
     if (filters.value.criticality && filters.value.criticality !== 'all') params.append('criticality', filters.value.criticality)
     
     const queryString = params.toString()
-    const url = queryString ? `/api/bcpdrp/plans/?${queryString}` : '/api/bcpdrp/plans/'
+    const url = queryString ? `/bcpdrp/plans/?${queryString}` : '/bcpdrp/plans/'
     
     const response = await http.get(url)
     plans.value = response.data.plans || []
@@ -1052,7 +1052,7 @@ const fetchPlanDetails = async (planId: number) => {
   planDetailError.value = null
   
   try {
-    const response = await http.get(`/api/bcpdrp/plans/${planId}/comprehensive/`)
+    const response = await http.get(`/bcpdrp/plans/${planId}/comprehensive/`)
     planDetailData.value = response.data
     showPlanDetail.value = true
   } catch (err) {
