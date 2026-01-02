@@ -1,0 +1,1576 @@
+{
+  "framework_id": 336,
+  "audit_id": 426,
+  "last_updated": "2025-12-25T13:35:17.689604",
+  "documents": {},
+  "database_data": {
+    "policies": [
+      {
+        "table_name": "policies",
+        "record_id": 1209,
+        "analyzed_at": "2025-12-25T13:35:15.000792",
+        "relevance_score": 0.8,
+        "relevance_reason": "Policy provides evidence for capital adequacy requirements and risk management practices.",
+        "matched_policies": [
+          {
+            "PolicyId": 1209
+          }
+        ],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          {
+            "ComplianceId": 1792
+          }
+        ]
+      },
+      {
+        "table_name": "policies",
+        "record_id": 1210,
+        "analyzed_at": "2025-12-25T13:35:15.013625",
+        "relevance_score": 0.8,
+        "relevance_reason": "The policy is related to liquidity risk management, which is a compliance requirement in Basel III.",
+        "matched_policies": [
+          {
+            "PolicyId": 1210
+          }
+        ],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          {
+            "ComplianceId": 1784
+          },
+          {
+            "ComplianceId": 1794
+          }
+        ]
+      },
+      {
+        "table_name": "policies",
+        "record_id": 1211,
+        "analyzed_at": "2025-12-25T13:35:15.025205",
+        "relevance_score": 0.8,
+        "relevance_reason": "The Leverage Ratio Policy (PolicyId: 1211) is directly related to ComplianceId:1786, which requires maintaining a leverage ratio of at least 3%",
+        "matched_policies": [
+          {
+            "PolicyId": 1211,
+            "PolicyName": "Leverage Ratio Policy"
+          }
+        ],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1786
+        ]
+      },
+      {
+        "table_name": "policies",
+        "record_id": 1212,
+        "analyzed_at": "2025-12-25T13:35:15.041394",
+        "relevance_score": 0.5,
+        "relevance_reason": "The policy is related to risk disclosure and transparency, which is relevant to some Basel III compliance requirements.",
+        "matched_policies": [
+          {
+            "PolicyId": 1212
+          }
+        ],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "policies",
+        "record_id": 1213,
+        "analyzed_at": "2025-12-25T13:35:15.056746",
+        "relevance_score": 0.8,
+        "relevance_reason": "The policy describes stress testing and scenario analysis for macroeconomic and portfolio risks, which is relevant to several compliance requirements.",
+        "matched_policies": [
+          {
+            "PolicyId": 1213
+          }
+        ],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1788,
+          1790,
+          1799
+        ]
+      },
+      {
+        "table_name": "policies",
+        "record_id": 1214,
+        "analyzed_at": "2025-12-25T13:35:15.070534",
+        "relevance_score": 0.8,
+        "relevance_reason": "Policy provides standards for measuring, monitoring, and mitigating counterparty credit risk arising from derivative exposures",
+        "matched_policies": [
+          {
+            "PolicyId": 1214
+          }
+        ],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          {
+            "ComplianceId": 1789
+          }
+        ]
+      },
+      {
+        "table_name": "policies",
+        "record_id": 1215,
+        "analyzed_at": "2025-12-25T13:35:15.083522",
+        "relevance_score": 0.8,
+        "relevance_reason": "Policy governs capital adequacy for market risk exposures as per Basel III, which is relevant to several compliance requirements",
+        "matched_policies": [
+          {
+            "PolicyId": 1215
+          }
+        ],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          {
+            "ComplianceId": 1783
+          }
+        ]
+      },
+      {
+        "table_name": "policies",
+        "record_id": 1245,
+        "analyzed_at": "2025-12-25T13:35:15.095930",
+        "relevance_score": 0.8,
+        "relevance_reason": "Policy describes Capital Conservation Buffer, which is related to Basel III requirements",
+        "matched_policies": [
+          {
+            "PolicyId": 1245
+          }
+        ],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          {
+            "ComplianceId": 1792
+          },
+          {
+            "ComplianceId": 1784
+          }
+        ]
+      },
+      {
+        "table_name": "policies",
+        "record_id": 1251,
+        "analyzed_at": "2025-12-25T13:35:15.108474",
+        "relevance_score": 0.8,
+        "relevance_reason": "Policy is related to capital adequacy and risk management, which are relevant to several compliance requirements",
+        "matched_policies": [
+          {
+            "PolicyId": 1251
+          }
+        ],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1782,
+          1792,
+          3186
+        ]
+      }
+    ],
+    "subpolicies": [
+      {
+        "table_name": "subpolicies",
+        "record_id": 1291,
+        "analyzed_at": "2025-12-25T13:35:15.120683",
+        "relevance_score": 0.8,
+        "relevance_reason": "The database record provides evidence for credit risk capital requirement compliance.",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 1291,
+            "SubPolicyName": "Credit Risk Capital Requirement"
+          }
+        ],
+        "matched_compliances": [
+          {
+            "ComplianceId": 1782
+          },
+          {
+            "ComplianceId": 1792
+          },
+          {
+            "ComplianceId": 3186
+          }
+        ]
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 1292,
+        "analyzed_at": "2025-12-25T13:35:15.132455",
+        "relevance_score": 0.8,
+        "relevance_reason": "The database record provides evidence for the Market & Operational Risk Capital Compliance requirement.",
+        "matched_policies": [
+          {
+            "PolicyId": 1209
+          }
+        ],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 1292
+          }
+        ],
+        "matched_compliances": [
+          {
+            "ComplianceId": 1783
+          }
+        ]
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 1293,
+        "analyzed_at": "2025-12-25T13:35:15.145356",
+        "relevance_score": 1.0,
+        "relevance_reason": "The database record is directly related to the Liquidity Coverage Ratio (LCR) Compliance requirement.",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 1293,
+            "SubPolicyName": "Liquidity Coverage Ratio (LCR) Compliance"
+          }
+        ],
+        "matched_compliances": [
+          {
+            "ComplianceId": 1784
+          }
+        ]
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 1294,
+        "analyzed_at": "2025-12-25T13:35:15.158569",
+        "relevance_score": 1.0,
+        "relevance_reason": "This database record is directly related to the Net Stable Funding Ratio (NSFR) Compliance requirement.",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 1294,
+            "SubPolicyName": "Net Stable Funding Ratio (NSFR) Compliance"
+          }
+        ],
+        "matched_compliances": [
+          {
+            "ComplianceId": 1795
+          },
+          {
+            "ComplianceId": 1785
+          }
+        ]
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 1295,
+        "analyzed_at": "2025-12-25T13:35:15.188629",
+        "relevance_score": 1.0,
+        "relevance_reason": "The database record provides evidence for a specific compliance requirement.",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 1295
+          }
+        ],
+        "matched_compliances": [
+          {
+            "ComplianceId": 1786
+          }
+        ]
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 1296,
+        "analyzed_at": "2025-12-25T13:35:15.240559",
+        "relevance_score": 0.8,
+        "relevance_reason": "Pillar 3 Disclosure Compliance is a relevant requirement for this audit.",
+        "matched_policies": [
+          {
+            "PolicyId": 1212
+          }
+        ],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 1296,
+            "SubPolicyName": "Pillar 3 Disclosure Compliance"
+          }
+        ],
+        "matched_compliances": [
+          {
+            "ComplianceId": 1797
+          }
+        ]
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 1297,
+        "analyzed_at": "2025-12-25T13:35:15.298749",
+        "relevance_score": 0.8,
+        "relevance_reason": "The database record is related to Macroeconomic Stress Testing, which is a compliance requirement.",
+        "matched_policies": [
+          {
+            "PolicyId": 1213
+          }
+        ],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 1297,
+            "SubPolicyName": "Macroeconomic Stress Testing"
+          }
+        ],
+        "matched_compliances": [
+          {
+            "ComplianceId": 1788
+          },
+          {
+            "ComplianceId": 1798
+          }
+        ]
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 1298,
+        "analyzed_at": "2025-12-25T13:35:15.327586",
+        "relevance_score": 1.0,
+        "relevance_reason": "This database record is directly related to the Portfolio & Credit Stress Testing compliance requirement.",
+        "matched_policies": [
+          "1213"
+        ],
+        "matched_subpolicies": [
+          "1298"
+        ],
+        "matched_compliances": [
+          "1790"
+        ]
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 1299,
+        "analyzed_at": "2025-12-25T13:35:15.388429",
+        "relevance_score": 0.8,
+        "relevance_reason": "The database record provides evidence for the Derivative Exposure Measurement policy, which is related to ComplianceId:1789",
+        "matched_policies": [
+          {
+            "PolicyId": 1214
+          }
+        ],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 1299,
+            "SubPolicyName": "Derivative Exposure Measurement"
+          }
+        ],
+        "matched_compliances": [
+          {
+            "ComplianceId": 1789
+          }
+        ]
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 1300,
+        "analyzed_at": "2025-12-25T13:35:15.432662",
+        "relevance_score": 0.5,
+        "relevance_reason": "The database record provides evidence for a specific collateral and margin requirement policy.",
+        "matched_policies": [
+          {
+            "PolicyId": 1214
+          }
+        ],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 1300
+          }
+        ],
+        "matched_compliances": [
+          {
+            "ComplianceId": 1791
+          }
+        ]
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 1301,
+        "analyzed_at": "2025-12-25T13:35:15.483781",
+        "relevance_score": 0.5,
+        "relevance_reason": "The database record is related to risk management, but not directly to the compliance requirements listed.",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 1301
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 1344,
+        "analyzed_at": "2025-12-25T13:35:15.520625",
+        "relevance_score": 0.5,
+        "relevance_reason": "The database record is related to capital distribution, which is a part of the Basel III requirements.",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 1344,
+            "SubPolicyName": "Capital Distribution Restriction Sub-Policy"
+          }
+        ],
+        "matched_compliances": []
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 1354,
+        "analyzed_at": "2025-12-25T13:35:15.544601",
+        "relevance_score": 0.8,
+        "relevance_reason": "The database record is relevant to the audit as it deals with credit risk capital requirements, which are covered by several compliance requirements.",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 1354,
+            "SubPolicyName": "Credit Risk Capital Requirements"
+          }
+        ],
+        "matched_compliances": [
+          {
+            "ComplianceId": 1782
+          },
+          {
+            "ComplianceId": 1792
+          },
+          {
+            "ComplianceId": 3186
+          }
+        ]
+      },
+      {
+        "table_name": "subpolicies",
+        "record_id": 1355,
+        "analyzed_at": "2025-12-25T13:35:15.580029",
+        "relevance_score": 0.8,
+        "relevance_reason": "The database record is related to risk management and capital requirements, which are relevant to several compliance requirements.",
+        "matched_policies": [
+          {
+            "PolicyId": 1251
+          }
+        ],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 1355
+          }
+        ],
+        "matched_compliances": [
+          {
+            "ComplianceId": 1783
+          }
+        ]
+      }
+    ],
+    "compliances": [
+      {
+        "table_name": "compliances",
+        "record_id": 1782,
+        "analyzed_at": "2025-12-25T13:35:15.609597",
+        "relevance_score": 1.0,
+        "relevance_reason": "This database record is directly related to Credit Risk Capital Adequacy Compliance (ComplianceId: 1782)",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 1291
+          }
+        ],
+        "matched_compliances": [
+          {
+            "ComplianceId": 1782
+          }
+        ]
+      },
+      {
+        "table_name": "compliances",
+        "record_id": 1792,
+        "analyzed_at": "2025-12-25T13:35:15.638993",
+        "relevance_score": 0.9,
+        "relevance_reason": "Database record provides evidence for Credit Risk Capital Adequacy Compliance (ComplianceId: 1792)",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 1291
+          }
+        ],
+        "matched_compliances": [
+          {
+            "ComplianceId": 1792
+          }
+        ]
+      },
+      {
+        "table_name": "compliances",
+        "record_id": 3186,
+        "analyzed_at": "2025-12-25T13:35:15.658901",
+        "relevance_score": 0.8,
+        "relevance_reason": "Database record is related to credit risk capital adequacy compliance, which is a requirement in the audit scope.",
+        "matched_policies": [
+          {
+            "PolicyId": 1209
+          }
+        ],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 1291
+          }
+        ],
+        "matched_compliances": [
+          3186
+        ]
+      },
+      {
+        "table_name": "compliances",
+        "record_id": 1783,
+        "analyzed_at": "2025-12-25T13:35:15.673969",
+        "relevance_score": 0.8,
+        "relevance_reason": "The database record provides evidence for Market & Operational Risk Capital Compliance, which is related to Basel III requirements.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1783
+        ]
+      },
+      {
+        "table_name": "compliances",
+        "record_id": 1793,
+        "analyzed_at": "2025-12-25T13:35:15.704124",
+        "relevance_score": 1.0,
+        "relevance_reason": "The database record is directly related to the compliance requirement 'Operational Risk Scenario Analysis Compliance' with ComplianceId: 1793.",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 1292
+          }
+        ],
+        "matched_compliances": [
+          {
+            "ComplianceId": 1793
+          }
+        ]
+      },
+      {
+        "table_name": "compliances",
+        "record_id": 1784,
+        "analyzed_at": "2025-12-25T13:35:15.735929",
+        "relevance_score": 1.0,
+        "relevance_reason": "The database record provides evidence for the Liquidity Coverage Ratio Compliance requirement.",
+        "matched_policies": [
+          {
+            "PolicyId": 1210
+          }
+        ],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 1293
+          }
+        ],
+        "matched_compliances": [
+          {
+            "ComplianceId": 1784
+          }
+        ]
+      },
+      {
+        "table_name": "compliances",
+        "record_id": 1794,
+        "analyzed_at": "2025-12-25T13:35:15.761048",
+        "relevance_score": 1.0,
+        "relevance_reason": "Database record directly relates to Liquidity Coverage Ratio Stress Testing & Reporting Compliance",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1794
+        ]
+      },
+      {
+        "table_name": "compliances",
+        "record_id": 1785,
+        "analyzed_at": "2025-12-25T13:35:15.781399",
+        "relevance_score": 1.0,
+        "relevance_reason": "The database record provides evidence for NSFR Compliance (ComplianceId: 1785)",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 1294
+          }
+        ],
+        "matched_compliances": [
+          {
+            "ComplianceId": 1785
+          }
+        ]
+      },
+      {
+        "table_name": "compliances",
+        "record_id": 1795,
+        "analyzed_at": "2025-12-25T13:35:15.806914",
+        "relevance_score": 1.0,
+        "relevance_reason": "The database record provides evidence for Net Stable Funding Ratio Compliance (ComplianceId:1795)",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1795
+        ]
+      },
+      {
+        "table_name": "compliances",
+        "record_id": 1786,
+        "analyzed_at": "2025-12-25T13:35:15.824573",
+        "relevance_score": 1.0,
+        "relevance_reason": "This database record directly addresses Leverage Ratio Compliance (ComplianceId: 1786)",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1786
+        ]
+      },
+      {
+        "table_name": "compliances",
+        "record_id": 1796,
+        "analyzed_at": "2025-12-25T13:35:15.839416",
+        "relevance_score": 1.0,
+        "relevance_reason": "The database record is directly related to Leverage Ratio Stress Testing & Reporting Compliance (ComplianceId:1796)",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1796
+        ]
+      },
+      {
+        "table_name": "compliances",
+        "record_id": 1787,
+        "analyzed_at": "2025-12-25T13:35:15.857508",
+        "relevance_score": 1.0,
+        "relevance_reason": "This database record is directly related to a Basel III compliance requirement.",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 1296
+          }
+        ],
+        "matched_compliances": [
+          {
+            "ComplianceId": 1787
+          }
+        ]
+      },
+      {
+        "table_name": "compliances",
+        "record_id": 1797,
+        "analyzed_at": "2025-12-25T13:35:15.875428",
+        "relevance_score": 1.0,
+        "relevance_reason": "The database record is directly related to the compliance requirement 'Pillar 3 Internal Validation & Audit Compliance' with ComplianceId: 1797.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1797
+        ]
+      },
+      {
+        "table_name": "compliances",
+        "record_id": 1788,
+        "analyzed_at": "2025-12-25T13:35:15.898266",
+        "relevance_score": 1.0,
+        "relevance_reason": "Database record provides evidence for Macroeconomic Stress Testing Compliance",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1788
+        ]
+      },
+      {
+        "table_name": "compliances",
+        "record_id": 1798,
+        "analyzed_at": "2025-12-25T13:35:15.914818",
+        "relevance_score": 1.0,
+        "relevance_reason": "The database record is directly related to the compliance requirement with ComplianceId: 1788 and 1798.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1788,
+          1798
+        ]
+      },
+      {
+        "table_name": "compliances",
+        "record_id": 1790,
+        "analyzed_at": "2025-12-25T13:35:15.932343",
+        "relevance_score": 1.0,
+        "relevance_reason": "This database record is directly related to the Basel III – Macroeconomic Stress Testing Audit and specifically addresses Portfolio & Credit Stress Testing Compliance.",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 1298
+          }
+        ],
+        "matched_compliances": [
+          {
+            "ComplianceId": 1790
+          }
+        ]
+      },
+      {
+        "table_name": "compliances",
+        "record_id": 1799,
+        "analyzed_at": "2025-12-25T13:35:15.947516",
+        "relevance_score": 1.0,
+        "relevance_reason": "Database record directly references a compliance requirement.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1799
+        ]
+      },
+      {
+        "table_name": "compliances",
+        "record_id": 1789,
+        "analyzed_at": "2025-12-25T13:35:15.962077",
+        "relevance_score": 1.0,
+        "relevance_reason": "Database record provides evidence for Counterparty Credit Risk Derivative Exposure Compliance",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1791
+        ]
+      },
+      {
+        "table_name": "compliances",
+        "record_id": 1800,
+        "analyzed_at": "2025-12-25T13:35:15.976973",
+        "relevance_score": 0.8,
+        "relevance_reason": "The database record is related to derivative exposure measurement models, which is relevant to ComplianceId:1789 and ComplianceId:1800.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1800
+        ]
+      },
+      {
+        "table_name": "compliances",
+        "record_id": 1791,
+        "analyzed_at": "2025-12-25T13:35:16.000631",
+        "relevance_score": 1.0,
+        "relevance_reason": "The database record provides evidence for the Collateral & Margin Requirements Compliance (ComplianceId:1791)",
+        "matched_policies": [],
+        "matched_subpolicies": [
+          {
+            "PolicyId": 1214
+          }
+        ],
+        "matched_compliances": [
+          {
+            "ComplianceId": 1791
+          }
+        ]
+      },
+      {
+        "table_name": "compliances",
+        "record_id": 1801,
+        "analyzed_at": "2025-12-25T13:35:16.018488",
+        "relevance_score": 1.0,
+        "relevance_reason": "The database record is directly related to the Collateral Valuation & Dispute Resolution Compliance requirement.",
+        "matched_policies": [
+          {
+            "PolicyId": 1214
+          }
+        ],
+        "matched_subpolicies": [
+          {
+            "SubPolicyId": 1300
+          }
+        ],
+        "matched_compliances": [
+          {
+            "ComplianceId": 1801
+          }
+        ]
+      }
+    ],
+    "audit_findings": [
+      {
+        "table_name": "audit_findings",
+        "record_id": 684,
+        "analyzed_at": "2025-12-25T13:35:16.041206",
+        "relevance_score": 0.8,
+        "relevance_reason": "The audit finding is related to credit risk capital adequacy compliance, which is a requirement under Basel III.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1782
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 685,
+        "analyzed_at": "2025-12-25T13:35:16.061563",
+        "relevance_score": 0.7,
+        "relevance_reason": "The audit finding is related to credit risk capital adequacy compliance, which is a specific requirement.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1792
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 686,
+        "analyzed_at": "2025-12-25T13:35:16.085338",
+        "relevance_score": 0.8,
+        "relevance_reason": "The audit finding is related to credit risk capital adequacy compliance, which is a specific requirement in the list of compliance requirements.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1782,
+          1792
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 687,
+        "analyzed_at": "2025-12-25T13:35:16.104656",
+        "relevance_score": 0.8,
+        "relevance_reason": "The database record provides evidence for the 'Operational Risk Scenario Analysis Compliance' requirement.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1793
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 688,
+        "analyzed_at": "2025-12-25T13:35:16.125568",
+        "relevance_score": 0.8,
+        "relevance_reason": "The audit finding is related to credit risk capital adequacy compliance, which is one of the requirements listed.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1782
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 689,
+        "analyzed_at": "2025-12-25T13:35:16.146900",
+        "relevance_score": 1.0,
+        "relevance_reason": "The audit finding is related to Basel III credit risk capital adequacy compliance.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1792
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 690,
+        "analyzed_at": "2025-12-25T13:35:16.165267",
+        "relevance_score": 0.8,
+        "relevance_reason": "AuditFindingsId: 690 is related to credit risk capital adequacy compliance",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1783
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 691,
+        "analyzed_at": "2025-12-25T13:35:16.184865",
+        "relevance_score": 0.8,
+        "relevance_reason": "AuditFindingsId: 691 is related to Basel III requirements and internal Stress Testing & Risk Management Policy.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1793
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 692,
+        "analyzed_at": "2025-12-25T13:35:16.203337",
+        "relevance_score": 0.8,
+        "relevance_reason": "The database record provides evidence of non-compliance with the Liquidity Coverage Ratio Compliance requirement.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1784
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 693,
+        "analyzed_at": "2025-12-25T13:35:16.224699",
+        "relevance_score": 0.8,
+        "relevance_reason": "The database record provides evidence of non-compliance with Basel III requirements for liquidity coverage ratio stress testing.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1794
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 694,
+        "analyzed_at": "2025-12-25T13:35:16.243213",
+        "relevance_score": 0.8,
+        "relevance_reason": "The database record provides evidence of non-compliance with the NSFR requirement.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1785
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 695,
+        "analyzed_at": "2025-12-25T13:35:16.264233",
+        "relevance_score": 0.8,
+        "relevance_reason": "The database record provides evidence for the bank's NSFR calculation not meeting the required threshold, which is related to Basel III requirements.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1795
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 696,
+        "analyzed_at": "2025-12-25T13:35:16.283881",
+        "relevance_score": 1.0,
+        "relevance_reason": "Database record is directly related to Liquidity Coverage Ratio Compliance (ComplianceId:1784)",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1784
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 697,
+        "analyzed_at": "2025-12-25T13:35:16.302817",
+        "relevance_score": 0.8,
+        "relevance_reason": "The audit finding is related to the Liquidity Coverage Ratio Stress Testing & Reporting Compliance (ComplianceId:1794)",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1794
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 698,
+        "analyzed_at": "2025-12-25T13:35:16.323130",
+        "relevance_score": 0.8,
+        "relevance_reason": "Compliance with Basel III requirements for available stable funding (ASF) to meet required stable funding (RSF)",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1785
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 699,
+        "analyzed_at": "2025-12-25T13:35:16.341866",
+        "relevance_score": 0.5,
+        "relevance_reason": "Audit record is related to Basel III requirements, but does not provide direct evidence for any specific compliance requirement.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1795
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 700,
+        "analyzed_at": "2025-12-25T13:35:16.359636",
+        "relevance_score": 1.0,
+        "relevance_reason": "The audit finding is related to credit risk capital adequacy compliance.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1782
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 701,
+        "analyzed_at": "2025-12-25T13:35:16.382195",
+        "relevance_score": 1.0,
+        "relevance_reason": "The audit finding is related to the compliance requirement for credit risk capital adequacy.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1792
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 702,
+        "analyzed_at": "2025-12-25T13:35:16.399275",
+        "relevance_score": 0.5,
+        "relevance_reason": "The audit finding is related to leverage ratio compliance, but does not provide direct evidence for other requirements.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1786
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 703,
+        "analyzed_at": "2025-12-25T13:35:16.417031",
+        "relevance_score": 1.0,
+        "relevance_reason": "The audit finding is directly related to the Basel III – Macroeconomic Stress Testing Audit objective and scope.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1796
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 704,
+        "analyzed_at": "2025-12-25T13:35:16.434525",
+        "relevance_score": 1.0,
+        "relevance_reason": "The audit finding is related to the Leverage Ratio Compliance (ComplianceId: 1786)",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1786
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 705,
+        "analyzed_at": "2025-12-25T13:35:16.450944",
+        "relevance_score": 1.0,
+        "relevance_reason": "The audit finding is related to the Basel III – Macroeconomic Stress Testing Audit and specifically addresses Leverage Ratio Stress Testing & Reporting Compliance.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1796
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 736,
+        "analyzed_at": "2025-12-25T13:35:16.469467",
+        "relevance_score": 0.8,
+        "relevance_reason": "The audit finding is related to credit risk capital adequacy compliance, which is one of the Basel III requirements.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1782
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 737,
+        "analyzed_at": "2025-12-25T13:35:16.491479",
+        "relevance_score": 1.0,
+        "relevance_reason": "The audit finding is directly related to the Basel III credit risk capital adequacy compliance requirement.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1792
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 786,
+        "analyzed_at": "2025-12-25T13:35:16.512404",
+        "relevance_score": 1.0,
+        "relevance_reason": "The audit finding is related to Macroeconomic Stress Testing Compliance (ComplianceId:1788).",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1788
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 787,
+        "analyzed_at": "2025-12-25T13:35:16.532879",
+        "relevance_score": 0.8,
+        "relevance_reason": "The audit finding is related to the Macroeconomic Stress Testing Compliance requirement.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1788
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 788,
+        "analyzed_at": "2025-12-25T13:35:16.552633",
+        "relevance_score": 1.0,
+        "relevance_reason": "The audit finding is directly related to Macroeconomic Stress Testing Compliance (ComplianceId: 1788)",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1788
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 789,
+        "analyzed_at": "2025-12-25T13:35:16.570366",
+        "relevance_score": 1.0,
+        "relevance_reason": "The audit finding is related to Macroeconomic Stress Testing Compliance (ComplianceId: 1788) and Supervisory Reporting Compliance (ComplianceId: 1798)",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1788,
+          1798
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 1206,
+        "analyzed_at": "2025-12-25T13:35:16.588144",
+        "relevance_score": 0.8,
+        "relevance_reason": "The audit finding is related to Pillar 3 Public Disclosure Compliance, which is one of the compliance requirements listed.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1787
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 1207,
+        "analyzed_at": "2025-12-25T13:35:16.606310",
+        "relevance_score": 1.0,
+        "relevance_reason": "The database record provides evidence for compliance with Counterparty Credit Risk Derivative Exposure Compliance (ComplianceId: 1789).",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          {
+            "id": 1789
+          }
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 1424,
+        "analyzed_at": "2025-12-25T13:35:16.624696",
+        "relevance_score": 0.8,
+        "relevance_reason": "The audit finding is related to credit risk capital adequacy compliance, which is a key requirement in the Basel III framework.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1782
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 1425,
+        "analyzed_at": "2025-12-25T13:35:16.640988",
+        "relevance_score": 1.0,
+        "relevance_reason": "The audit finding is related to credit risk capital adequacy compliance.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1792
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 1860,
+        "analyzed_at": "2025-12-25T13:35:16.658865",
+        "relevance_score": 0.8,
+        "relevance_reason": "The audit finding is related to credit risk capital adequacy compliance, which is a key requirement in Basel III.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1782
+        ]
+      },
+      {
+        "table_name": "audit_findings",
+        "record_id": 1861,
+        "analyzed_at": "2025-12-25T13:35:16.673673",
+        "relevance_score": 1.0,
+        "relevance_reason": "Database record is directly related to Basel III – Macroeconomic Stress Testing Audit and ComplianceId:1792",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1792
+        ]
+      }
+    ],
+    "incidents": [
+      {
+        "table_name": "incidents",
+        "record_id": 326,
+        "analyzed_at": "2025-12-25T13:35:16.691734",
+        "relevance_score": 0.8,
+        "relevance_reason": "The incident is related to credit risk capital adequacy calculation, which is a compliance requirement.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1792
+        ]
+      },
+      {
+        "table_name": "incidents",
+        "record_id": 327,
+        "analyzed_at": "2025-12-25T13:35:16.709428",
+        "relevance_score": 0.8,
+        "relevance_reason": "Incident related to insufficient capital buffers for market and operational risks, which is relevant to Market & Operational Risk Capital Compliance (ComplianceId:1783)",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1783
+        ]
+      },
+      {
+        "table_name": "incidents",
+        "record_id": 328,
+        "analyzed_at": "2025-12-25T13:35:16.731677",
+        "relevance_score": 0.8,
+        "relevance_reason": "Incident related to insufficient liquidity coverage for net cash outflows, which is relevant to Liquidity Coverage Ratio Compliance (ComplianceId:1784)",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1784
+        ]
+      },
+      {
+        "table_name": "incidents",
+        "record_id": 329,
+        "analyzed_at": "2025-12-25T13:35:16.750821",
+        "relevance_score": 0.8,
+        "relevance_reason": "Incident related to failure in meeting the Net Stable Funding Ratio requirement.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1795
+        ]
+      },
+      {
+        "table_name": "incidents",
+        "record_id": 330,
+        "analyzed_at": "2025-12-25T13:35:16.769091",
+        "relevance_score": 0.8,
+        "relevance_reason": "Incident related to Leverage Ratio Compliance",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1786
+        ]
+      }
+    ],
+    "risks": [
+      {
+        "table_name": "risks",
+        "record_id": 365,
+        "analyzed_at": "2025-12-25T13:35:16.789335",
+        "relevance_score": 0.5,
+        "relevance_reason": "RiskDescription mentions Market & Operational Risk Capital Compliance, which is relevant to ComplianceId:1783",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1783
+        ]
+      },
+      {
+        "table_name": "risks",
+        "record_id": 366,
+        "analyzed_at": "2025-12-25T13:35:16.808446",
+        "relevance_score": 0.8,
+        "relevance_reason": "RiskDescription mentions inaccurate RWA calculation, which is related to Credit Risk Capital Adequacy Compliance",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1782,
+          1792,
+          3186
+        ]
+      },
+      {
+        "table_name": "risks",
+        "record_id": 367,
+        "analyzed_at": "2025-12-25T13:35:16.827628",
+        "relevance_score": 0.8,
+        "relevance_reason": "Risk is related to capital adequacy, which is a compliance requirement.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          "1783"
+        ]
+      },
+      {
+        "table_name": "risks",
+        "record_id": 368,
+        "analyzed_at": "2025-12-25T13:35:16.875729",
+        "relevance_score": 0.8,
+        "relevance_reason": "The database record is related to the Liquidity Coverage Ratio Compliance requirement.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1784
+        ]
+      },
+      {
+        "table_name": "risks",
+        "record_id": 369,
+        "analyzed_at": "2025-12-25T13:35:16.914501",
+        "relevance_score": 0.8,
+        "relevance_reason": "The database record describes a risk related to Net Stable Funding Ratio, which is one of the compliance requirements listed.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1795
+        ]
+      },
+      {
+        "table_name": "risks",
+        "record_id": 370,
+        "analyzed_at": "2025-12-25T13:35:16.957828",
+        "relevance_score": 0.8,
+        "relevance_reason": "The database record is relevant to the audit as it describes a risk related to leverage ratio compliance.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1786
+        ]
+      },
+      {
+        "table_name": "risks",
+        "record_id": 371,
+        "analyzed_at": "2025-12-25T13:35:17.005976",
+        "relevance_score": 0.5,
+        "relevance_reason": "The risk is related to Pillar 3 public disclosure, but the specific compliance requirement is not clearly mentioned.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1797
+        ]
+      },
+      {
+        "table_name": "risks",
+        "record_id": 372,
+        "analyzed_at": "2025-12-25T13:35:17.096179",
+        "relevance_score": 0.8,
+        "relevance_reason": "The risk is related to macroeconomic stress testing, which is a specific compliance requirement.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          "1788",
+          "1798"
+        ]
+      },
+      {
+        "table_name": "risks",
+        "record_id": 373,
+        "analyzed_at": "2025-12-25T13:35:17.149290",
+        "relevance_score": 0.8,
+        "relevance_reason": "The database record provides evidence of a risk related to counterparty credit risk derivative exposure, which is relevant to ComplianceId:1789 Counterparty Credit Risk Derivative Exposure Compliance.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1791
+        ]
+      },
+      {
+        "table_name": "risks",
+        "record_id": 374,
+        "analyzed_at": "2025-12-25T13:35:17.171187",
+        "relevance_score": 0.8,
+        "relevance_reason": "The risk is related to credit portfolio stress testing, which is a compliance requirement.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1790
+        ]
+      },
+      {
+        "table_name": "risks",
+        "record_id": 375,
+        "analyzed_at": "2025-12-25T13:35:17.213842",
+        "relevance_score": 0.8,
+        "relevance_reason": "RiskDescription mentions inadequate margining and collateral management, exposing the bank to counterparty defaults.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1791
+        ]
+      },
+      {
+        "table_name": "risks",
+        "record_id": 376,
+        "analyzed_at": "2025-12-25T13:35:17.240632",
+        "relevance_score": 0.8,
+        "relevance_reason": "The database record describes a credit risk capital adequacy compliance incident, which is related to ComplianceId:1782 and ComplianceId:1792.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1782,
+          1792
+        ]
+      },
+      {
+        "table_name": "risks",
+        "record_id": 377,
+        "analyzed_at": "2025-12-25T13:35:17.320005",
+        "relevance_score": 0.8,
+        "relevance_reason": "The risk is related to operational risk scenario analysis, which is a compliance requirement.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1783
+        ]
+      },
+      {
+        "table_name": "risks",
+        "record_id": 378,
+        "analyzed_at": "2025-12-25T13:35:17.352848",
+        "relevance_score": 0.8,
+        "relevance_reason": "The risk record describes a failure to properly report liquidity stress test results, which is related to Leverage Ratio Stress Testing & Reporting Compliance (ComplianceId:1796)",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1796
+        ]
+      },
+      {
+        "table_name": "risks",
+        "record_id": 379,
+        "analyzed_at": "2025-12-25T13:35:17.370536",
+        "relevance_score": 0.8,
+        "relevance_reason": "RiskDescription mentions NSFR Compliance Risk, which is related to Basel III requirements.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1795
+        ]
+      },
+      {
+        "table_name": "risks",
+        "record_id": 380,
+        "analyzed_at": "2025-12-25T13:35:17.390387",
+        "relevance_score": 0.8,
+        "relevance_reason": "The risk record is related to the Leverage Ratio Stress Testing & Reporting Compliance requirement.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1796
+        ]
+      },
+      {
+        "table_name": "risks",
+        "record_id": 381,
+        "analyzed_at": "2025-12-25T13:35:17.465287",
+        "relevance_score": 0.5,
+        "relevance_reason": "The risk record is related to Pillar 3 reporting, which is a compliance requirement.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1797
+        ]
+      },
+      {
+        "table_name": "risks",
+        "record_id": 382,
+        "analyzed_at": "2025-12-25T13:35:17.534484",
+        "relevance_score": 0.8,
+        "relevance_reason": "The risk record is related to macroeconomic stress testing, which is a key requirement in the audit scope.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          "1788",
+          "1798"
+        ]
+      },
+      {
+        "table_name": "risks",
+        "record_id": 383,
+        "analyzed_at": "2025-12-25T13:35:17.559479",
+        "relevance_score": 0.8,
+        "relevance_reason": "The risk record mentions stress testing and concentration risks, which are relevant to Basel III requirements.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1799
+        ]
+      },
+      {
+        "table_name": "risks",
+        "record_id": 384,
+        "analyzed_at": "2025-12-25T13:35:17.584150",
+        "relevance_score": 0.8,
+        "relevance_reason": "The risk record is related to derivative exposure backtesting and validation, which is a compliance requirement.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1800
+        ]
+      },
+      {
+        "table_name": "risks",
+        "record_id": 385,
+        "analyzed_at": "2025-12-25T13:35:17.606311",
+        "relevance_score": 0.8,
+        "relevance_reason": "The risk record is related to collateral valuation and dispute resolution, which is a compliance requirement.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1801
+        ]
+      },
+      {
+        "table_name": "risks",
+        "record_id": 391,
+        "analyzed_at": "2025-12-25T13:35:17.626625",
+        "relevance_score": 0.0,
+        "relevance_reason": "No compliance requirements matched",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": []
+      }
+    ],
+    "events": [
+      {
+        "table_name": "events",
+        "record_id": 119,
+        "analyzed_at": "2025-12-25T13:35:17.646682",
+        "relevance_score": 0.5,
+        "relevance_reason": "The database record is related to capital and governance, which are relevant to some Basel III requirements.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          1783
+        ]
+      },
+      {
+        "table_name": "events",
+        "record_id": 129,
+        "analyzed_at": "2025-12-25T13:35:17.666673",
+        "relevance_score": 0.2,
+        "relevance_reason": "The event title 'Loan Management' suggests a potential relevance to credit risk capital adequacy compliance, but the details are not provided.",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          "1792",
+          "1786"
+        ]
+      },
+      {
+        "table_name": "events",
+        "record_id": 1260,
+        "analyzed_at": "2025-12-25T13:35:17.689589",
+        "relevance_score": 0.5,
+        "relevance_reason": "No direct evidence, but might be related to macroeconomic stress testing",
+        "matched_policies": [],
+        "matched_subpolicies": [],
+        "matched_compliances": [
+          "1788"
+        ]
+      }
+    ]
+  }
+}

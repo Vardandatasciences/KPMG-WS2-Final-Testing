@@ -46,7 +46,7 @@
               >
                 <div class="option-content">
                   <div class="option-header">
-                    <span class="option-title">{{ audit.title || audit.policy || 'Audit' }}</span>
+                    <span class="option-title">{{ audit.title || 'Audit' }}</span>
                     <span class="option-id">ID: {{ audit.audit_id }}</span>
                   </div>
                   <div class="option-meta">
@@ -89,30 +89,325 @@
       </div>
     </div>
 
-    <!-- Document Upload Section -->
-    <div v-if="hasSelectedAudit" class="upload-section">
-      <h3>Upload Documents</h3>
-      <p class="upload-description">
-        Upload documents related to the selected policy. AI will analyze these documents 
-        and map them to compliance requirements.
-      </p>
-
-      <!-- Assigned Policy/Sub-policy Display -->
-      <div class="policy-selection">
-        <label>Assigned Policy/Sub-policy</label>
-        <div class="policy-display">
-          <div class="policy-info">
-            <div class="policy-item">
-              <span class="policy-label">Policy:</span>
-              <span class="policy-value">{{ selectedPolicyName }}</span>
+    <!-- Suggested Documents Section - Hidden since we now do automatic processing -->
+    <div v-if="false && hasSelectedAudit" class="suggested-documents-container">
+      <div class="suggested-documents-header" @click="toggleSuggestedDocuments">
+        <div class="header-left">
+          <div>
+            <h3>Suggested Documents</h3>
+            <p class="header-subtitle">
+              {{ relevantDocuments.length }} document{{ relevantDocuments.length !== 1 ? 's' : '' }} found based on AI analysis
+            </p>
+          </div>
+        </div>
+        <div class="header-right">
+          <span v-if="selectedRelevantDocuments.length > 0" class="selection-count">
+            {{ selectedRelevantDocuments.length }} selected
+          </span>
+          <i class="fas fa-chevron-down expand-icon" :class="{ 'expanded': showSuggestedDocuments }"></i>
+        </div>
+      </div>
+      
+      <div v-show="showSuggestedDocuments" class="suggested-documents-content">
+        <div v-if="isLoadingRelevantDocuments" class="loading-state">
+          <i class="fas fa-spinner fa-spin"></i>
+          <span>Loading relevant documents...</span>
+        </div>
+        
+        <div v-else-if="relevantDocuments.length > 0" class="documents-grid">
+          <div class="documents-actions-bar">
+            <div class="action-buttons-left">
+              <button 
+                @click="uploadSelectedRelevantDocuments" 
+                class="btn btn-primary"
+                :disabled="selectedRelevantDocuments.length === 0 || isUploadingRelevantDocuments"
+                :title="selectedRelevantDocuments.length === 0 ? 'Please select at least one document' : 'Click to upload selected documents'"
+              >
+                <i class="fas" :class="isUploadingRelevantDocuments ? 'fa-spinner fa-spin' : 'fa-upload'"></i>
+                {{ isUploadingRelevantDocuments ? 'Uploading...' : `Upload Selected (${selectedRelevantDocuments.length})` }}
+              </button>
+              <button 
+                @click="selectAllRelevantDocuments" 
+                class="btn btn-outline"
+                v-if="selectedRelevantDocuments.length < relevantDocuments.length"
+              >
+                <i class="fas fa-check-square"></i>
+                Select All
+              </button>
+              <button 
+                @click="deselectAllRelevantDocuments" 
+                class="btn btn-outline"
+                v-if="selectedRelevantDocuments.length > 0"
+              >
+                <i class="fas fa-square"></i>
+                Deselect All
+              </button>
             </div>
-            <div class="policy-item">
-              <span class="policy-label">Sub-policy:</span>
-              <span class="policy-value">{{ selectedSubPolicyName }}</span>
+            <div class="action-instructions">
+              <p><strong>How it works:</strong> 
+                <span v-if="selectedRelevantDocuments.length === 0">
+                  Select documents using checkboxes, then click "Upload Selected" to add them to this audit. Each document shows which policies, sub-policies, and compliances it's relevant for based on AI analysis.
+                </span>
+                <span v-else>
+                  Ready to upload! Click "Upload Selected" to add {{ selectedRelevantDocuments.length }} document(s) to this audit. The documents will appear in your uploaded documents list below. Each document's relevance to specific policies, sub-policies, and compliances is shown in the document details.
+                </span>
+              </p>
+            </div>
+          </div>
+          
+          <div class="document-cards-grid">
+            <div 
+              class="document-card" 
+              v-for="doc in relevantDocuments" 
+              :key="doc.file_operation_id"
+              :class="{ 'selected': selectedRelevantDocuments.includes(doc.file_operation_id) }"
+            >
+              <div class="card-checkbox-wrapper">
+                <input 
+                  type="checkbox" 
+                  :id="'doc-checkbox-' + doc.file_operation_id"
+                  :value="doc.file_operation_id"
+                  :checked="selectedRelevantDocuments.includes(doc.file_operation_id)"
+                  @change="toggleRelevantDocumentSelection(doc.file_operation_id)"
+                  @click.stop
+                />
+                <label :for="'doc-checkbox-' + doc.file_operation_id" class="checkbox-label"></label>
+              </div>
+              
+              <div class="card-content" @click="toggleDocumentDetails(doc.file_operation_id)">
+                <div class="card-header">
+              <div class="file-icon-wrapper">
+                <i class="fas file-icon" :class="getFileIcon(doc.file_type)"></i>
+              </div>
+                  <div class="file-info">
+                    <h4 class="file-name" :title="doc.file_name || doc.original_name">
+                      {{ (doc.file_name || doc.original_name).substring(0, 50) }}{{ (doc.file_name || doc.original_name).length > 50 ? '...' : '' }}
+                    </h4>
+                    <div class="file-meta">
+                      <span class="file-type">{{ doc.file_type }}</span>
+                      <span class="file-size">{{ formatFileSize(doc.file_size) }}</span>
+                      <span class="file-date">{{ formatDate(doc.created_at) }}</span>
+                    </div>
+                  </div>
+                  <div class="relevance-score">
+                    <span class="relevance-badge" :class="getRelevanceClass(doc.relevance_score)">
+                      {{ Math.round(doc.relevance_score * 100) }}%
+                    </span>
+                  </div>
+                </div>
+                
+                <div v-if="expandedDocumentId === doc.file_operation_id" class="card-details">
+                  <div class="detail-section" v-if="doc.summary">
+                    <h5><i class="fas fa-align-left"></i> Document Overview</h5>
+                    <p>{{ doc.summary }}</p>
+                  </div>
+                  
+                  <div class="detail-section relevance-reason" v-if="doc.relevance_reason">
+                    <h5><i class="fas fa-info-circle"></i> Why relevant</h5>
+                    <p>{{ doc.relevance_reason }}</p>
+                  </div>
+                  
+                  <div class="detail-section matched-items" v-if="(doc.matched_policies_with_names && doc.matched_policies_with_names.length > 0) || 
+                                                                 (doc.matched_subpolicies_with_names && doc.matched_subpolicies_with_names.length > 0) || 
+                                                                 (doc.matched_compliances_with_names && doc.matched_compliances_with_names.length > 0)">
+                    <h5><i class="fas fa-link"></i> Matched Framework Elements</h5>
+                    <div v-if="doc.matched_policies_with_names && doc.matched_policies_with_names.length > 0" class="matched-group">
+                      <strong><i class="fas fa-shield-alt"></i> Policies:</strong>
+                      <div class="tags-container">
+                        <span class="matched-tag" v-for="policy in doc.matched_policies_with_names" :key="'policy-' + policy.id">
+                          {{ policy.name }} <span class="tag-id">(ID: {{ policy.id }})</span>
+                        </span>
+                      </div>
+                    </div>
+                    <div v-if="doc.matched_subpolicies_with_names && doc.matched_subpolicies_with_names.length > 0" class="matched-group">
+                      <strong><i class="fas fa-list"></i> Subpolicies:</strong>
+                      <div class="tags-container">
+                        <span class="matched-tag" v-for="subpolicy in doc.matched_subpolicies_with_names" :key="'subpolicy-' + subpolicy.id">
+                          {{ subpolicy.name }} <span class="tag-id">(ID: {{ subpolicy.id }})</span>
+                        </span>
+                      </div>
+                    </div>
+                    <div v-if="doc.matched_compliances_with_names && doc.matched_compliances_with_names.length > 0" class="matched-group">
+                      <strong><i class="fas fa-check-circle"></i> Compliances:</strong>
+                      <div class="tags-container">
+                        <span class="matched-tag" v-for="compliance in doc.matched_compliances_with_names" :key="'compliance-' + compliance.id">
+                          {{ compliance.name }} <span class="tag-id">(ID: {{ compliance.id }})</span>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="card-footer">
+                  <button class="btn btn-outline btn-sm" @click.stop="toggleDocumentDetails(doc.file_operation_id)">
+                    <i class="fas" :class="expandedDocumentId === doc.file_operation_id ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                    {{ expandedDocumentId === doc.file_operation_id ? 'Hide Details' : 'View Details' }}
+                  </button>
+                  <a :href="doc.s3_url" target="_blank" class="btn btn-outline btn-sm" @click.stop>
+                    <i class="fas fa-download"></i>
+                    Download
+                  </a>
+                </div>
+              </div>
             </div>
           </div>
         </div>
         
+        <div v-else class="no-documents-message">
+          <i class="fas fa-inbox"></i>
+          <p>No relevant documents found</p>
+          <span>{{ relevantDocumentsMessage || 'Upload documents in Document Handling to see AI-suggested documents here.' }}</span>
+          <div v-if="relevantDocumentsStats" class="stats-info" style="margin-top: 10px; font-size: 0.85em; color: #666; padding: 8px; background: #f5f5f5; border-radius: 4px;">
+            <div v-if="relevantDocumentsStats.total_files_in_framework > 0" style="margin: 4px 0;">
+              📊 {{ relevantDocumentsStats.total_files_in_framework }} document(s) in Document Handling for this framework
+            </div>
+            <div v-if="relevantDocumentsStats.completed_files_in_framework > 0" style="margin: 4px 0;">
+              ✅ {{ relevantDocumentsStats.completed_files_in_framework }} completed
+            </div>
+            <div v-if="relevantDocumentsStats.documents_analyzed_for_audit > 0" style="margin: 4px 0;">
+              🔍 {{ relevantDocumentsStats.documents_analyzed_for_audit }} analyzed for this audit
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Document Upload Section -->
+    <div v-if="hasSelectedAudit" class="upload-section">
+      <h3>Documents Used for Audit</h3>
+      <p class="upload-description">
+        Documents automatically processed for this audit. Documents uploaded via Document Handling are automatically analyzed and linked to this audit when relevant.
+      </p>
+
+      <!-- Multi-select for Policies / Sub-policies / Compliances -->
+      <!-- Show whenever an audit is selected; inner lists handle empty states -->
+      <div class="multi-mapping-container" v-if="hasSelectedAudit">
+          <h4 class="multi-mapping-title">Select scope for this AI audit upload (Optional)</h4>
+          <p class="multi-mapping-help">
+            <strong>Optional:</strong> Choose one or more <strong>policies</strong>, their <strong>sub‑policies</strong> and specific
+            <strong>compliances</strong> to explicitly map uploaded documents. If not selected, AI will automatically analyze 
+            document relevance to all framework elements. Documents will show which policies, sub-policies, and compliances 
+            they're relevant for based on AI analysis.
+          </p>
+
+          <div class="multi-mapping-columns">
+            <!-- Policies column -->
+            <div class="multi-column">
+              <div class="multi-column-header">
+                <span>Policies in this framework</span>
+                <label class="select-all-label">
+                  <input
+                    type="checkbox"
+                    :checked="allPoliciesSelected"
+                    @change="toggleSelectAllPolicies"
+                  />
+                  <span>Select all</span>
+                </label>
+              </div>
+              <div class="multi-column-list">
+                <label
+                  v-for="policy in auditHierarchyPolicies"
+                  :key="policy.policy_id"
+                  class="multi-checkbox-row"
+                >
+                  <input
+                    type="checkbox"
+                    :value="policy.policy_id"
+                    v-model="selectedPolicyIdsMulti"
+                    @change="onPolicyMultiChange(policy.policy_id)"
+                  />
+                  <span class="multi-checkbox-label">{{ policy.policy_name }}</span>
+                </label>
+                <div v-if="!auditHierarchyPolicies.length" class="empty-text">
+                  No policies found for this audit.
+                </div>
+              </div>
+            </div>
+
+            <!-- Sub‑policies column -->
+            <div class="multi-column">
+              <div class="multi-column-header">
+                <span>Sub‑policies</span>
+                <label class="select-all-label">
+                  <input
+                    type="checkbox"
+                    :checked="allSubpoliciesSelected"
+                    @change="toggleSelectAllSubpolicies"
+                    :disabled="!availableSubpolicies.length"
+                  />
+                  <span>Select all</span>
+                </label>
+              </div>
+              <div class="multi-column-list">
+                <label
+                  v-for="sub in availableSubpolicies"
+                  :key="sub.subpolicy_id"
+                  class="multi-checkbox-row"
+                >
+                  <input
+                    type="checkbox"
+                    :value="sub.subpolicy_id"
+                    v-model="selectedSubpolicyIdsMulti"
+                    @change="onSubpolicyMultiChange(sub.subpolicy_id, sub.policy_id)"
+                  />
+                  <span class="multi-checkbox-label">
+                    {{ sub.subpolicy_name }}
+                    <span class="multi-subpolicy-policy">({{ sub.policy_name }})</span>
+                  </span>
+                </label>
+                <div v-if="!availableSubpolicies.length" class="empty-text">
+                  Select at least one policy to see its sub‑policies.
+                </div>
+              </div>
+            </div>
+
+            <!-- Compliances column -->
+            <div class="multi-column">
+              <div class="multi-column-header">
+                <span>Compliances</span>
+                <label class="select-all-label">
+                  <input
+                    type="checkbox"
+                    :checked="allCompliancesSelected"
+                    @change="toggleSelectAllCompliances"
+                    :disabled="!availableCompliances.length"
+                  />
+                  <span>Select all</span>
+                </label>
+              </div>
+              <div class="multi-column-list">
+                <label
+                  v-for="comp in availableCompliances"
+                  :key="comp.compliance_id"
+                  class="multi-checkbox-row"
+                >
+                  <input
+                    type="checkbox"
+                    :value="comp.compliance_id"
+                    v-model="selectedComplianceIds"
+                  />
+                  <span class="multi-checkbox-label">
+                    {{ comp.description || comp.compliance_title || ('Compliance ' + comp.compliance_id) }}
+                    <span class="multi-subpolicy-policy">
+                      ({{ comp.policy_name }} › {{ comp.subpolicy_name }})
+                    </span>
+                  </span>
+                </label>
+                <div v-if="!availableCompliances.length" class="empty-text">
+                  Select at least one policy or sub‑policy to see compliances.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <p class="multi-mapping-summary">
+            <strong>Current selection:</strong>
+            {{ selectedPolicyIdsMulti.length }} policies,
+            {{ selectedSubpolicyIdsMulti.length }} sub‑policies,
+            {{ selectedComplianceIds.length }} compliances.
+          </p>
+        </div>
+
         <!-- Compliance Requirements Display (disabled) -->
         <div class="compliance-requirements" v-if="false">
           <h4>Compliance Requirements</h4>
@@ -139,7 +434,6 @@
             </p>
           </div>
         </div>
-      </div>
 
       <!-- File Upload Area -->
       <div class="file-upload-area" @click="triggerFileUpload" @dragover.prevent @drop.prevent="handleDrop">
@@ -190,7 +484,7 @@
       <div class="upload-actions">
         <button 
           @click="uploadFiles" 
-          :disabled="selectedFiles.length === 0 || uploading || !hasRequiredMapping"
+          :disabled="selectedFiles.length === 0 || uploading"
           class="btn btn-primary upload-btn"
           @mousedown="console.log('🔍 Upload button mousedown')"
         >
@@ -287,56 +581,117 @@
       </div>
     </div>
 
-    <!-- Uploaded Documents List -->
-    <div v-if="uploadedDocuments.length > 0" class="uploaded-documents">
-      <h3>Uploaded Documents</h3>
+    <!-- Uploaded Documents List: Physical Documents -->
+    <div v-if="fileDocuments.length > 0" class="uploaded-documents">
+      <div class="uploaded-documents-header">
+        <h3>Documents Used for Audit</h3>
+        <div style="display: flex; gap: 8px;">
+          <button
+            class="btn btn-sm btn-danger"
+            @click="deleteAllDocuments"
+            :disabled="bulkDeleting || fileDocuments.length === 0"
+          >
+            <i class="fas fa-trash"></i>
+            {{ bulkDeleting ? 'Deleting...' : 'Delete All' }}
+          </button>
+          <button
+            class="btn btn-sm btn-primary"
+            @click="checkAllDocumentsCompliance"
+            :disabled="bulkChecking || fileDocuments.length === 0"
+          >
+            <i class="fas fa-robot"></i>
+            {{ bulkChecking ? 'Checking all...' : 'Check All' }}
+          </button>
+        </div>
+      </div>
       <div class="documents-grid">
-        <div v-for="doc in uploadedDocuments" :key="doc.document_id" class="document-card">
+        <div v-for="(fileGroup, fileIndex) in fileDocuments" :key="fileIndex" class="document-card">
           <div class="document-content">
             <div class="document-main">
               <i class="fas fa-file document-icon"></i>
               <div class="document-info">
-                <h4>{{ doc.document_name }}</h4>
+                <h4 :title="fileGroup.document_name">{{ fileGroup.document_name }}</h4>
                 <p class="document-meta">
-                  {{ formatFileSize(doc.file_size) }} • {{ doc.uploaded_date }}
+                  {{ formatFileSize(fileGroup.file_size) }} • {{ fileGroup.uploaded_date }}
                 </p>
               </div>
             </div>
             
             <div class="document-type">
-              <span><strong>Type:</strong> {{ doc.document_type }}</span>
-              <div v-if="doc.mapped_policy || doc.mapped_subpolicy" style="font-size:12px;color:#6c757d;">
-                <div v-if="doc.mapped_policy"><strong>Policy:</strong> {{ doc.mapped_policy }}</div>
-                <div v-if="doc.mapped_subpolicy"><strong>Sub-policy:</strong> {{ doc.mapped_subpolicy }}</div>
-              </div>
-              <div v-else style="font-size:12px;color:#a94442;">
-                Unmapped
+              <span><strong>Type:</strong> {{ fileGroup.document_type }}</span>
+            </div>
+            
+            <!-- Mappings Display (Always show all) -->
+            <div class="mappings-list">
+              <label style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px; color: #495057;">
+                Mappings ({{ fileGroup.mappings.length }}):
+              </label>
+              <div class="mappings-badges">
+                <span 
+                  v-for="(mapping, mapIndex) in fileGroup.mappings" 
+                  :key="mapIndex" 
+                  class="mapping-badge"
+                  :title="mapping.mapping_display"
+                >
+                  {{ mapping.mapping_display }}
+                </span>
               </div>
             </div>
             
+            <!-- Show aggregated status for all mappings -->
             <div class="document-status">
-              <span :class="['status-badge', doc.processing_status]">
-                {{ doc.processing_status }}
+              <span v-if="areAllMappingsCompleted(fileGroup)" class="status-badge completed">
+                COMPLETED
               </span>
-              <span v-if="doc.compliance_status" :class="['status-badge', 'compliance', doc.compliance_status]" style="margin-left:6px;">
-                {{ doc.compliance_status }} <span v-if="doc.confidence_score">({{ Math.round((doc.confidence_score||0)*100) }}%)</span>
+              <span v-else-if="fileGroup.mappings.some(m => m.processing_status === 'processing')" class="status-badge processing">
+                PROCESSING
+              </span>
+              <span v-else class="status-badge pending">
+                PENDING
+              </span>
+              <span 
+                v-if="areAllMappingsCompleted(fileGroup) && getAggregatedComplianceStatus(fileGroup)" 
+                :class="['status-badge', 'compliance', getAggregatedComplianceStatus(fileGroup).toLowerCase()]" 
+                style="margin-left:6px;"
+              >
+                {{ getAggregatedComplianceStatus(fileGroup).toUpperCase() }}
+                <span v-if="getAggregatedConfidenceScore(fileGroup)">
+                  ({{ Math.round(getAggregatedConfidenceScore(fileGroup) * 100) }}%)
+                </span>
               </span>
             </div>
             
             <div class="document-actions">
-              <!-- <button @click="viewDocument(doc)" class="btn btn-sm btn-outline">
-                <i class="fas fa-eye"></i> View
-              </button> -->
-              <button @click="deleteDocument(doc.document_id)" class="btn btn-sm btn-danger">
+              <button 
+                v-if="fileGroup.document_id" 
+                @click="deleteDocument(fileGroup.document_id)" 
+                class="btn btn-sm btn-danger"
+              >
                 <i class="fas fa-trash"></i> Delete
               </button>
-              <button @click="checkDocumentCompliance(doc)" class="btn btn-sm btn-primary" :disabled="doc._checking === true">
-                <i v-if="doc._checking" class="fas fa-spinner fa-spin"></i>
+             <!-- Show Check button only if no completed mappings yet AND not showing Details button -->
+              <button 
+                v-if="!areAllMappingsCompleted(fileGroup) && !shouldShowDetailsButton(fileGroup)"
+                @click="checkDocumentCompliance(null, fileGroup)" 
+                class="btn btn-sm btn-primary" 
+                :disabled="isCheckingAnyMapping(fileGroup)"
+              >
+                <i v-if="isCheckingAnyMapping(fileGroup)" class="fas fa-spinner fa-spin"></i>
                 <i v-else class="fas fa-robot"></i>
-                {{ doc._checking ? 'Checking...' : 'Check' }}
+                {{ isCheckingAnyMapping(fileGroup) ? 'Checking...' : 'Check' }}
               </button>
-              <button v-if="doc.compliance_analyses && doc.compliance_analyses.length" @click="showDocumentDetails(doc)" class="btn btn-sm btn-outline">
+              <!-- Show Details button as soon as at least one mapping is completed (replaces Check button) -->
+              <!-- For combined checks, only show button on the primary fileGroup -->
+              <button 
+                v-if="shouldShowDetailsButton(fileGroup)" 
+                @click="showAllMappingsDetails(fileGroup)" 
+                class="btn btn-sm btn-primary"
+                :title="isPartOfCombinedCheckGroup(fileGroup) ? `Combined check with ${getCombinedCheckGroup(fileGroup).length} document(s)` : getMappingsTooltip(fileGroup)"
+              >
                 <i class="fas fa-list"></i> Details
+                <span v-if="isPartOfCombinedCheckGroup(fileGroup)" class="combined-badge">
+                  ({{ getCombinedCheckGroup(fileGroup).length }} docs)
+                </span>
               </button>
             </div>
             
@@ -345,6 +700,8 @@
       </div>
       </div>
     </div>
+
+    <!-- Additional Evidence List - REMOVED per user request -->
 
     <!-- AI Processing Status (disabled) -->
     <div v-if="false && hasSelectedAudit && processingStatus" class="ai-processing-status">
@@ -483,13 +840,28 @@
             <i class="fas fa-file-alt"></i>
             <span>Document: {{ selectedDocumentForDetails.document_name }}</span>
           </div>
-          <div class="summary-item" v-if="selectedDocumentForDetails.mapped_policy">
-            <i class="fas fa-gavel"></i>
-            <span>Policy: {{ selectedDocumentForDetails.mapped_policy }}</span>
+          <div v-if="selectedDocumentForDetails.isCombinedCheck && selectedDocumentForDetails.combinedDocuments" class="summary-item" style="background-color: #e3f2fd; padding: 8px; border-radius: 4px; margin-top: 8px;">
+            <i class="fas fa-link"></i>
+            <strong>Combined Check:</strong> This analysis includes evidence from {{ selectedDocumentForDetails.combinedDocuments.length }} document(s):
+            <ul style="margin: 4px 0 0 20px; padding: 0;">
+              <li v-for="(doc, idx) in selectedDocumentForDetails.combinedDocuments" :key="idx" style="margin: 2px 0;">
+                {{ doc.document_name }}
+              </li>
+            </ul>
           </div>
-          <div class="summary-item" v-if="selectedDocumentForDetails.mapped_subpolicy">
-            <i class="fas fa-list"></i>
-            <span>Sub-policy: {{ selectedDocumentForDetails.mapped_subpolicy }}</span>
+          <div v-if="selectedDocumentForDetails.isAllMappings" class="summary-item">
+            <i class="fas fa-layer-group"></i>
+            <span>{{ selectedDocumentForDetails.mappings?.length || 0 }} Mapping(s) Analyzed</span>
+          </div>
+          <div v-else>
+            <div class="summary-item" v-if="selectedDocumentForDetails.mapped_policy">
+              <i class="fas fa-gavel"></i>
+              <span>Policy: {{ selectedDocumentForDetails.mapped_policy }}</span>
+            </div>
+            <div class="summary-item" v-if="selectedDocumentForDetails.mapped_subpolicy">
+              <i class="fas fa-list"></i>
+              <span>Sub-policy: {{ selectedDocumentForDetails.mapped_subpolicy }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -505,6 +877,9 @@
           <div v-for="(analysis, idx) in selectedDocumentForDetails.compliance_analyses" :key="idx" class="requirement-card">
             <div class="requirement-header">
               <div class="requirement-number">
+                <div v-if="selectedDocumentForDetails.isAllMappings && analysis.mapping_display" class="mapping-context" style="font-size: 0.85em; color: #666; margin-bottom: 4px;">
+                  <i class="fas fa-link"></i> {{ analysis.mapping_display }}
+                </div>
                 <span class="req-idx">{{ analysis.requirement_title || `Requirement ${analysis.index}` }}</span>
                 <div class="compliance-status">
                   <div class="meter-label">Compliance</div>
@@ -520,10 +895,6 @@
             
             <!-- Evidence Section -->
             <div v-if="analysis.evidence && analysis.evidence.length" class="evidence-section">
-              <div class="section-header">
-                <i class="fas fa-check-circle text-success"></i>
-                <span>Evidence Found</span>
-              </div>
               <div class="evidence-list">
                 <div v-for="(evidence, eIdx) in analysis.evidence" :key="eIdx" class="evidence-item">
                   <span>{{ typeof evidence === 'string' ? evidence : ((evidence && (evidence.text || evidence.reason)) || JSON.stringify(evidence)) }}</span>
@@ -600,11 +971,16 @@ export default {
       },
       selectedPolicyName: 'Not Specified',
       selectedSubPolicyName: 'Not Specified',
+      // Legacy single-select fields (kept for backward compatibility)
       policies: [],
       subpolicies: [],
       selectedPolicyId: '',
       selectedSubPolicyId: '',
       complianceRequirements: [],
+      // New multi-select hierarchy based on audit scope
+      auditHierarchyPolicies: [],        // [{ policy_id, policy_name, subpolicies: [...] }]
+      selectedPolicyIdsMulti: [],        // [policy_id, ...]
+      selectedSubpolicyIdsMulti: [],     // [subpolicy_id, ...]
       selectedFiles: [],
       uploadedDocuments: [],
       uploading: false,
@@ -626,10 +1002,125 @@ export default {
       auditLoadError: '',
       selectedDocumentForDetails: null,
       isDropdownOpen: false,
-      searchQuery: ''
+      searchQuery: '',
+      bulkChecking: false,
+      relevantDocuments: [], // Documents from file_operations relevant to this audit
+      selectedRelevantDocuments: [], // Checked relevant documents to upload
+      isLoadingRelevantDocuments: false,
+      isUploadingRelevantDocuments: false, // Loading state for upload
+      showSuggestedDocuments: true, // Whether to show suggested documents section
+      relevantDocumentsMessage: null, // Message explaining why no documents found
+      relevantDocumentsStats: null, // Statistics about documents in framework
+      expandedDocumentId: null, // Which document details are expanded
+      bulkDeletingDatabase: false,
+      bulkDeleting: false  // For deleting all documents
     }
   },
   computed: {
+    // Physical files (S3 documents)
+    fileDocuments() {
+      return this.uploadedDocuments.filter(
+        d => d.external_source !== 'database_record' && d.document_type !== 'db_record'
+      )
+    },
+    // Additional evidence items
+    databaseEvidence() {
+      return this.uploadedDocuments
+        .filter(d => {
+          // Only include database evidence items
+          if (d.external_source !== 'database_record' && d.document_type !== 'db_record') {
+            return false
+          }
+          
+          // Exclude items that are part of a combined check (they're shown with the document instead)
+          // Check the part_of_combined_check flag that we preserved during document loading
+          if (d.part_of_combined_check === true) {
+            console.log('🚫 Filtering out database evidence that is part of combined check:', d.document_id, d.document_name)
+            return false
+          }
+          
+          // Fallback: Also check compliance_analyses in case the flag wasn't preserved
+          if (d.compliance_analyses) {
+            try {
+              let analyses = d.compliance_analyses
+              if (typeof analyses === 'string') {
+                analyses = JSON.parse(analyses)
+              }
+              // Check for part_of_combined_check flag in the analyses object
+              if (analyses && typeof analyses === 'object' && analyses.part_of_combined_check === true) {
+                console.log('🚫 Filtering out database evidence (fallback check):', d.document_id, d.document_name)
+                return false
+              }
+            } catch (e) {
+              // If parsing fails, include the item (safer to show than hide)
+            }
+          }
+          
+          return true
+        })
+        .map(d => {
+          // Determine if this DB record has at least one real mapping
+          // (policy/subpolicy/compliance). If not, we hide it completely.
+          let hasRealMapping = false
+
+          if (Array.isArray(d.mappings) && d.mappings.length > 0) {
+            hasRealMapping = d.mappings.some(m => {
+              const hasIds = (m.policy_id && m.subpolicy_id) || m.compliance_count > 0
+              const label = (m.mapping_display || '').toLowerCase()
+              const notUnmapped = label && !label.startsWith('unmapped')
+              return hasIds || notUnmapped
+            })
+          } else if (d.mapped_policy || d.mapped_subpolicy) {
+            hasRealMapping = true
+          }
+
+          if (!hasRealMapping) {
+            // Skip completely: do not show unmapped DB records
+            return null
+          }
+
+          // Preserve all mappings with their processing_status and other fields
+          const preservedMappings = Array.isArray(d.mappings) && d.mappings.length > 0
+            ? d.mappings.map(m => ({
+                display: m.mapping_display || m.display || 'Unknown mapping',
+                mapping_display: m.mapping_display || m.display,
+                processing_status: m.processing_status || d.processing_status || 'pending',
+                compliance_status: m.compliance_status || d.compliance_status || null,
+                confidence_score: m.confidence_score || d.confidence_score || null,
+                compliance_analyses: m.compliance_analyses || d.compliance_analyses || null,
+                policy_id: m.policy_id || d.policy_id,
+                subpolicy_id: m.subpolicy_id || d.subpolicy_id,
+                mapped_policy: m.mapped_policy || d.mapped_policy,
+                mapped_subpolicy: m.mapped_subpolicy || d.mapped_subpolicy
+              }))
+            : [{
+                display: d.mapped_policy && d.mapped_subpolicy 
+                  ? `${d.mapped_policy} → ${d.mapped_subpolicy}`
+                  : d.mapped_policy || d.mapped_subpolicy || 'Database mapping',
+                mapping_display: d.mapped_policy && d.mapped_subpolicy 
+                  ? `${d.mapped_policy} → ${d.mapped_subpolicy}`
+                  : d.mapped_policy || d.mapped_subpolicy || 'Database mapping',
+                processing_status: d.processing_status || 'pending',
+                compliance_status: d.compliance_status || null,
+                confidence_score: d.confidence_score || null,
+                compliance_analyses: d.compliance_analyses || null,
+                policy_id: d.policy_id,
+                subpolicy_id: d.subpolicy_id,
+                mapped_policy: d.mapped_policy,
+                mapped_subpolicy: d.mapped_subpolicy
+              }]
+
+          return {
+            document_id: d.document_id,
+            document_name: d.document_name || 'Evidence',
+            uploaded_date: d.uploaded_date,
+            record_source: d.external_source || 'database_record',
+            processing_status: d.processing_status || 'pending',
+            mappings: preservedMappings
+          }
+        })
+        .filter(Boolean)
+    },
     currentAuditId() {
       // Priority: selected dropdown audit > route params > props > fallback
       return this.selectedExistingAuditId || this.auditId || this.$route.params.auditId || this.$route.query.auditId || '1092'
@@ -639,8 +1130,72 @@ export default {
       return this.hasUserConfirmedSelection === true
     },
     hasRequiredMapping() {
-      // Must have either policy or subpolicy ID selected
-      return Boolean(this.selectedPolicyId || this.selectedSubPolicyId)
+      // Require at least one policy, subpolicy or compliance for upload
+      return (
+        this.selectedPolicyIdsMulti.length > 0 ||
+        this.selectedSubpolicyIdsMulti.length > 0 ||
+        (this.selectedComplianceIds && this.selectedComplianceIds.length > 0)
+      )
+    },
+    // Flattened helpers for the hierarchy
+    availableSubpolicies() {
+      // All subpolicies under the selected policies
+      const map = []
+      this.auditHierarchyPolicies.forEach(policy => {
+        if (this.selectedPolicyIdsMulti.includes(policy.policy_id)) {
+          (policy.subpolicies || []).forEach(sp => {
+            map.push({
+              policy_id: policy.policy_id,
+              policy_name: policy.policy_name,
+              subpolicy_id: sp.subpolicy_id,
+              subpolicy_name: sp.subpolicy_name
+            })
+          })
+        }
+      })
+      return map
+    },
+    availableCompliances() {
+      // All compliances under the selected subpolicies (or, if none, under selected policies)
+      const selectedSubSet = new Set(this.selectedSubpolicyIdsMulti)
+      const selectedPolicySet = new Set(this.selectedPolicyIdsMulti)
+      const result = []
+
+      this.auditHierarchyPolicies.forEach(policy => {
+        const policySelected = selectedPolicySet.has(policy.policy_id)
+        ;(policy.subpolicies || []).forEach(sp => {
+          const subSelected =
+            selectedSubSet.size > 0
+              ? selectedSubSet.has(sp.subpolicy_id)
+              : policySelected
+          if (!subSelected) return
+          ;(sp.compliances || []).forEach(c => {
+            result.push({
+              ...c,
+              policy_id: policy.policy_id,
+              policy_name: policy.policy_name,
+              subpolicy_id: sp.subpolicy_id,
+              subpolicy_name: sp.subpolicy_name,
+              compliance_id: c.compliance_id || c.ComplianceId
+            })
+          })
+        })
+      })
+      return result
+    },
+    allPoliciesSelected() {
+      return (
+        this.auditHierarchyPolicies.length > 0 &&
+        this.selectedPolicyIdsMulti.length === this.auditHierarchyPolicies.length
+      )
+    },
+    allSubpoliciesSelected() {
+      const subs = this.availableSubpolicies
+      return subs.length > 0 && this.selectedSubpolicyIdsMulti.length === subs.length
+    },
+    allCompliancesSelected() {
+      const comps = this.availableCompliances
+      return comps.length > 0 && this.selectedComplianceIds.length === comps.length
     },
     filteredAudits() {
       if (!this.searchQuery) {
@@ -656,6 +1211,32 @@ export default {
                auditId.includes(searchLower) || 
                dueDate.includes(searchLower)
       })
+    }
+  },
+  watch: {
+    selectedPolicyIdsMulti: {
+      handler() {
+        if (this.hasSelectedAudit) {
+          this.loadRelevantDocuments()
+        }
+      },
+      deep: true
+    },
+    selectedSubpolicyIdsMulti: {
+      handler() {
+        if (this.hasSelectedAudit) {
+          this.loadRelevantDocuments()
+        }
+      },
+      deep: true
+    },
+    selectedComplianceIds: {
+      handler() {
+        if (this.hasSelectedAudit) {
+          this.loadRelevantDocuments()
+        }
+      },
+      deep: true
     }
   },
   mounted() {
@@ -709,7 +1290,7 @@ export default {
     getSelectedAuditTitle() {
       const selectedAudit = this.availableAIAudits.find(a => a.audit_id === this.selectedExistingAuditId)
       if (selectedAudit) {
-        return selectedAudit.title || selectedAudit.policy || 'Audit'
+        return selectedAudit.title || 'Audit'
       }
       return 'Select Assigned AI Audit...'
     },
@@ -732,8 +1313,54 @@ export default {
       try {
         const auditId = this.currentAuditId
         if (!auditId) return
+        
+        // Build list of document_ids to include in the report based on current UI selection
+        const selectedIds = new Set()
+        
+        // If a specific mapping was opened in the Details view, prioritise that
+        if (this.selectedDocumentForDetails) {
+          // If showing all mappings details, include all their document_ids
+          if (this.selectedDocumentForDetails.isAllMappings && this.selectedDocumentForDetails.mappings) {
+            this.selectedDocumentForDetails.mappings.forEach(m => {
+              if (m.document_id) {
+                selectedIds.add(m.document_id)
+              }
+            })
+          } else if (this.selectedDocumentForDetails.document_id) {
+            // Single mapping details
+            selectedIds.add(this.selectedDocumentForDetails.document_id)
+          }
+        }
+        
+        if (selectedIds.size === 0 && this.uploadedDocuments && this.uploadedDocuments.length > 0) {
+          // Otherwise, include all completed mappings currently visible in the UI
+          this.uploadedDocuments.forEach(fileGroup => {
+            if (!fileGroup || !fileGroup.mappings) return
+            
+            // If "All Mappings" is selected for this file, include all its completed mappings
+            if (this.isAllMappingsSelected(fileGroup)) {
+              fileGroup.mappings.forEach(m => {
+                if (m.processing_status === 'completed' && m.document_id) {
+                  selectedIds.add(m.document_id)
+                }
+              })
+            } else {
+              // Only include the currently selected mapping if it is completed
+              const mapping = this.getSelectedMapping(fileGroup)
+              if (mapping && mapping.processing_status === 'completed' && mapping.document_id) {
+                selectedIds.add(mapping.document_id)
+              }
+            }
+          })
+        }
+        
+        const params = {}
+        if (selectedIds.size > 0) {
+          params.document_ids = Array.from(selectedIds).join(',')
+        }
+        
         const url = `/api/ai-audit/${auditId}/download-report/`
-        const response = await api.get(url, { responseType: 'blob' })
+        const response = await api.get(url, { responseType: 'blob', params })
         const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
         const link = document.createElement('a')
         const fileURL = window.URL.createObjectURL(blob)
@@ -769,6 +1396,423 @@ export default {
           })
         }
       })
+    },
+    // Show combined details for ALL mappings of a file group
+    showAllMappingsDetails(fileGroup) {
+      if (!fileGroup || !fileGroup.mappings || fileGroup.mappings.length === 0) {
+        this.$popup?.warning('No mappings available for this document.')
+        return
+      }
+      // Only consider completed mappings
+      const completedMappings = fileGroup.mappings.filter(
+        m => m.processing_status === 'completed'
+      )
+      if (completedMappings.length === 0) {
+        this.$popup?.warning('Please run compliance check for all mappings before viewing details.')
+        return
+      }
+      
+      // Check if this is part of a combined check with other documents
+      const combinedGroup = this.isPartOfCombinedCheckGroup(fileGroup) 
+        ? this.getCombinedCheckGroup(fileGroup) 
+        : [fileGroup]
+      const isCombinedCheck = combinedGroup.length > 1
+      
+      // Combine analyses from all completed mappings
+      const allAnalyses = []
+      console.log('🔍 Extracting analyses from completed mappings:', completedMappings.length)
+      
+      completedMappings.forEach((m, idx) => {
+        console.log(`🔍 Processing mapping ${idx + 1}/${completedMappings.length}:`, {
+          mapping_display: m.mapping_display,
+          has_compliance_analyses: !!m.compliance_analyses,
+          compliance_analyses_type: typeof m.compliance_analyses,
+          compliance_analyses_is_array: Array.isArray(m.compliance_analyses),
+          compliance_analyses_keys: m.compliance_analyses && typeof m.compliance_analyses === 'object' ? Object.keys(m.compliance_analyses) : null,
+          FULL_COMPLIANCE_ANALYSES: JSON.stringify(m.compliance_analyses, null, 2) // Dump full structure
+        })
+        
+        let analyses = m.compliance_analyses
+        if (!analyses) {
+          console.warn(`⚠️ Mapping ${m.mapping_display} has no compliance_analyses`)
+          return
+        }
+        
+        // Handle JSON string
+        if (typeof analyses === 'string') {
+          try {
+            analyses = JSON.parse(analyses)
+            console.log(`✅ Parsed JSON string for mapping ${m.mapping_display}`, {
+              type: typeof analyses,
+              is_array: Array.isArray(analyses),
+              keys: typeof analyses === 'object' && !Array.isArray(analyses) ? Object.keys(analyses) : null
+            })
+          } catch (err) {
+            console.warn('Failed to parse compliance_analyses string for mapping', m.mapping_display, err)
+            analyses = null
+            return
+          }
+        }
+        
+        // Handle object with compliance_analyses or analyses key
+        // Backend stores: {compliance_status, confidence_score, compliance_analyses: [...], processed_at}
+        // Frontend wraps it: {analyses: [...], ...metadata} or {compliance_analyses: [...]}
+        if (analyses && typeof analyses === 'object' && !Array.isArray(analyses)) {
+          console.log(`🔍 analyses is object, checking for nested arrays:`, {
+            has_analyses_key: !!analyses.analyses,
+            has_compliance_analyses_key: !!analyses.compliance_analyses,
+            keys: Object.keys(analyses),
+            analyses_type: analyses.analyses ? typeof analyses.analyses : null,
+            analyses_is_array: analyses.analyses ? Array.isArray(analyses.analyses) : null,
+            compliance_analyses_type: analyses.compliance_analyses ? typeof analyses.compliance_analyses : null,
+            compliance_analyses_is_array: analyses.compliance_analyses ? Array.isArray(analyses.compliance_analyses) : null
+          })
+          
+          // Priority order for extraction - try ALL possible paths:
+          // 1. analyses.analyses (frontend wrapped structure)
+          // 2. analyses.compliance_analyses (backend structure)
+          // 3. Check if any key contains an array
+          let extracted = false
+          
+          if (analyses.analyses && Array.isArray(analyses.analyses)) {
+            analyses = analyses.analyses
+            console.log(`✅ Extracted from analyses.analyses (${analyses.length} items)`)
+            extracted = true
+          } else if (analyses.compliance_analyses && Array.isArray(analyses.compliance_analyses)) {
+            analyses = analyses.compliance_analyses
+            console.log(`✅ Extracted from analyses.compliance_analyses (${analyses.length} items)`)
+            extracted = true
+          } else {
+            // Try one more level deep in case of double nesting
+            if (analyses.analyses && typeof analyses.analyses === 'object' && !Array.isArray(analyses.analyses)) {
+              if (analyses.analyses.analyses && Array.isArray(analyses.analyses.analyses)) {
+                analyses = analyses.analyses.analyses
+                console.log(`✅ Extracted from nested analyses.analyses.analyses (${analyses.length} items)`)
+                extracted = true
+              } else if (analyses.analyses.compliance_analyses && Array.isArray(analyses.analyses.compliance_analyses)) {
+                analyses = analyses.analyses.compliance_analyses
+                console.log(`✅ Extracted from nested analyses.analyses.compliance_analyses (${analyses.length} items)`)
+                extracted = true
+              }
+            }
+            
+            if (!extracted && analyses.compliance_analyses && typeof analyses.compliance_analyses === 'object' && !Array.isArray(analyses.compliance_analyses)) {
+              if (analyses.compliance_analyses.analyses && Array.isArray(analyses.compliance_analyses.analyses)) {
+                analyses = analyses.compliance_analyses.analyses
+                console.log(`✅ Extracted from nested analyses.compliance_analyses.analyses (${analyses.length} items)`)
+                extracted = true
+              } else if (analyses.compliance_analyses.compliance_analyses && Array.isArray(analyses.compliance_analyses.compliance_analyses)) {
+                analyses = analyses.compliance_analyses.compliance_analyses
+                console.log(`✅ Extracted from nested analyses.compliance_analyses.compliance_analyses (${analyses.length} items)`)
+                extracted = true
+              }
+            }
+            
+            // Last resort: search ALL keys for arrays
+            if (!extracted) {
+              console.log(`🔍 Searching all keys for array values...`)
+              for (const key of Object.keys(analyses)) {
+                const value = analyses[key]
+                if (Array.isArray(value) && value.length > 0) {
+                  console.log(`✅ Found array in key "${key}" with ${value.length} items`)
+                  analyses = value
+                  extracted = true
+                  break
+                } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                  // Check nested object for arrays
+                  for (const nestedKey of Object.keys(value)) {
+                    if (Array.isArray(value[nestedKey]) && value[nestedKey].length > 0) {
+                      console.log(`✅ Found array in nested key "${key}.${nestedKey}" with ${value[nestedKey].length} items`)
+                      analyses = value[nestedKey]
+                      extracted = true
+                      break
+                    }
+                  }
+                  if (extracted) break
+                }
+              }
+            }
+            
+            if (!extracted) {
+              console.warn(`⚠️ Could not extract array from object structure for mapping ${m.mapping_display}`, {
+                structure: JSON.stringify(analyses, null, 2)
+              })
+              analyses = null
+            }
+          }
+        }
+        
+        if (!analyses) {
+          console.warn(`⚠️ No analyses extracted for mapping ${m.mapping_display}`)
+          return
+        }
+        
+        if (!Array.isArray(analyses)) {
+          console.warn(`⚠️ Analyses is not an array for mapping ${m.mapping_display}:`, typeof analyses, analyses)
+          // Try to convert single object to array
+          if (typeof analyses === 'object' && analyses !== null) {
+            analyses = [analyses]
+            console.log(`✅ Converted single object to array for mapping ${m.mapping_display}`)
+          } else {
+            console.warn(`⚠️ Cannot convert to array, skipping mapping ${m.mapping_display}`)
+            return
+          }
+        }
+        
+        console.log(`✅ Found ${analyses.length} analyses for mapping ${m.mapping_display}`, {
+          first_analysis_keys: analyses.length > 0 && typeof analyses[0] === 'object' ? Object.keys(analyses[0]) : null
+        })
+        
+        analyses.forEach((a) => {
+          allAnalyses.push({
+            ...a,
+            // Add mapping context so UI can show which mapping this belongs to
+            mapping_display: m.mapping_display,
+            mapping_policy: m.mapped_policy,
+            mapping_subpolicy: m.mapped_subpolicy
+          })
+        })
+      })
+      
+      console.log(`✅ Total analyses extracted: ${allAnalyses.length} from ${completedMappings.length} mapping(s)`)
+      // Build document name that indicates combined check if applicable
+      let displayName = fileGroup.document_name
+      if (isCombinedCheck) {
+        const otherDocNames = combinedGroup
+          .filter(fg => fg !== fileGroup)
+          .map(fg => fg.document_name)
+          .filter(name => name)
+        if (otherDocNames.length > 0) {
+          displayName = `${fileGroup.document_name} + ${otherDocNames.length} other document(s)`
+        }
+      }
+      
+      // Show details even if no analyses - the UI will display a message
+      const combinedDetails = {
+        document_name: displayName,
+        document_type: fileGroup.document_type,
+        file_size: fileGroup.file_size,
+        uploaded_date: fileGroup.uploaded_date,
+        isAllMappings: true,
+        isCombinedCheck: isCombinedCheck, // Flag to indicate this is a combined check
+        combinedDocuments: isCombinedCheck ? combinedGroup.map(fg => ({
+          document_name: fg.document_name,
+          document_id: fg.document_id
+        })) : null, // List of all documents in the combined check
+        mappings: completedMappings,
+        compliance_status: this.aggregateComplianceStatus(completedMappings),
+        confidence_score: this.aggregateConfidenceScore(completedMappings),
+        compliance_analyses: allAnalyses.length > 0 ? allAnalyses : [] // Always provide array, even if empty
+      }
+      
+      console.log('🔍 Showing details for fileGroup:', {
+        document_name: displayName,
+        mappings_count: completedMappings.length,
+        analyses_count: allAnalyses.length,
+        has_analyses: allAnalyses.length > 0
+      })
+      
+      this.showDocumentDetails(combinedDetails)
+      
+      // Show a warning if no analyses, but still display the details view
+      if (allAnalyses.length === 0) {
+        this.$popup?.warning('No analysis results available for completed mappings. Showing document details anyway.')
+      }
+    },
+    // Show details popup for additional evidence
+    showDatabaseRecordDetails(recordGroup) {
+      if (!recordGroup || !Array.isArray(recordGroup.mappings) || recordGroup.mappings.length === 0) {
+        this.$popup?.warning('No mappings available for this item.')
+        return
+      }
+      
+      // Only consider completed mappings (same as documents)
+      const completedMappings = recordGroup.mappings.filter(
+        m => m.processing_status === 'completed'
+      )
+      
+      if (completedMappings.length === 0) {
+        this.$popup?.warning('Please run compliance check before viewing details.')
+        return
+      }
+
+      const allAnalyses = []
+      completedMappings.forEach(m => {
+        let analyses = m.compliance_analyses
+        if (!analyses) return
+        if (typeof analyses === 'string') {
+          try {
+            analyses = JSON.parse(analyses)
+          } catch (err) {
+            console.warn('Failed to parse compliance_analyses string for mapping', m.display || m.mapping_display, err)
+            analyses = null
+          }
+        }
+        // Handle object with compliance_analyses or analyses key
+        // (compliance_analyses can be stored as {analyses: [...], ...metadata} or {compliance_analyses: [...]})
+        if (analyses && typeof analyses === 'object' && !Array.isArray(analyses)) {
+          // Try both 'analyses' (new structure) and 'compliance_analyses' (old structure)
+          analyses = analyses.analyses || analyses.compliance_analyses || analyses
+        }
+        if (!Array.isArray(analyses)) return
+        analyses.forEach(a => {
+          allAnalyses.push({
+            ...a,
+            mapping_display: m.mapping_display || m.display,
+          })
+        })
+      })
+
+      if (allAnalyses.length === 0) {
+        this.$popup?.warning('No analysis details are available for this item yet.')
+        return
+      }
+
+      const combinedDetails = {
+        document_name: recordGroup.document_name,
+        document_type: recordGroup.record_source || 'database_record',
+        file_size: null,
+        uploaded_date: recordGroup.uploaded_date,
+        isAllMappings: true,
+        mappings: completedMappings,
+        compliance_status: this.aggregateComplianceStatus(completedMappings),
+        confidence_score: this.aggregateConfidenceScore(completedMappings),
+        compliance_analyses: allAnalyses
+      }
+      this.showDocumentDetails(combinedDetails)
+    },
+    async loadAuditHierarchy() {
+      try {
+        const auditId = this.currentAuditId
+        if (!auditId || auditId === 'Unknown') {
+          return
+        }
+        console.log('📚 Loading compliance hierarchy (framework-wide) for audit:', auditId)
+
+        // Always build from framework using framework_id (show all policies in framework,
+        // not just those already used in this audit)
+        let hierarchyPolicies = []
+
+        // Get framework_id from auditInfo (already loaded in loadAuditInfo)
+        const frameworkId = this.auditInfo.framework_id
+        console.log('📚 auditInfo object:', this.auditInfo)
+        console.log('📚 Using framework_id from auditInfo:', frameworkId)
+        console.log('📚 Framework name:', this.auditInfo.framework)
+
+        // Validate frameworkId early
+        if (!frameworkId || (typeof frameworkId !== 'number' && isNaN(parseInt(frameworkId)))) {
+          console.warn('⚠️ No valid framework_id available on auditInfo; cannot build policy list')
+          this.auditHierarchyPolicies = []
+          return
+        }
+
+        const fwId = parseInt(frameworkId)
+        if (!fwId) {
+          console.warn('⚠️ Parsed framework_id is invalid:', frameworkId)
+          this.auditHierarchyPolicies = []
+          return
+        }
+
+        // Use tree / framework endpoints to build full hierarchy for this framework
+        try {
+            console.log('📚 Building hierarchy from framework_id:', fwId, '(type:', typeof fwId, ')')
+          // Try tree endpoint first
+          let policiesResp
+          let policies = []
+          try {
+            policiesResp = await api.get(`/api/tree/frameworks/${fwId}/policies/`, { timeout: 20000 })
+            policies = policiesResp.data?.data || policiesResp.data || []
+            console.log('📚 Found', policies.length, 'policies from tree endpoint for framework', fwId)
+          } catch (treeError) {
+            console.warn('⚠️ Tree endpoint failed, trying fallback endpoint:', treeError.message)
+            // Fallback to simpler endpoint
+            try {
+              policiesResp = await api.get(`/api/frameworks/${fwId}/get-policies/`, { timeout: 20000 })
+              policies = Array.isArray(policiesResp.data) ? policiesResp.data : []
+              console.log('📚 Found', policies.length, 'policies from fallback endpoint for framework', fwId)
+            } catch (fallbackError) {
+              console.error('❌ Both endpoints failed:', fallbackError.message)
+              throw fallbackError
+            }
+          }
+
+          // Build hierarchy: for each policy, get subpolicies, then compliances
+          hierarchyPolicies = await Promise.all(
+            policies.map(async (policy) => {
+                  const policyId = policy.PolicyId || policy.policy_id || policy.id
+                  if (!policyId) return null
+
+                  try {
+                    // Get subpolicies for this policy
+                    const subpoliciesResp = await api.get(`/api/tree/policies/${policyId}/subpolicies/`, { timeout: 15000 })
+                    const subpoliciesData = subpoliciesResp.data?.data || subpoliciesResp.data || []
+                    
+                    // For each subpolicy, get compliances
+                    const subpolicies = await Promise.all(
+                      subpoliciesData.map(async (subpolicy) => {
+                        const subpolicyId = subpolicy.SubPolicyId || subpolicy.subpolicy_id || subpolicy.id
+                        if (!subpolicyId) return null
+
+                        try {
+                          const compliancesResp = await api.get(`/api/tree/subpolicies/${subpolicyId}/compliances/`, { timeout: 15000 })
+                          const compliancesData = compliancesResp.data?.data || compliancesResp.data || []
+                          
+                          return {
+                            subpolicy_id: subpolicyId,
+                            subpolicy_name: subpolicy.SubPolicyName || subpolicy.subpolicy_name || subpolicy.name,
+                            compliances: compliancesData.map(c => ({
+                              compliance_id: c.ComplianceId || c.compliance_id || c.id,
+                              compliance_title: c.ComplianceTitle || c.compliance_title || c.title || c.ComplianceItemDescription,
+                              compliance_description: c.ComplianceItemDescription || c.compliance_description || c.description,
+                              Criticality: c.Criticality || c.criticality
+                            }))
+                          }
+                        } catch (e) {
+                          console.warn(`⚠️ Could not load compliances for subpolicy ${subpolicyId}:`, e)
+                          return {
+                            subpolicy_id: subpolicyId,
+                            subpolicy_name: subpolicy.SubPolicyName || subpolicy.subpolicy_name || subpolicy.name,
+                            compliances: []
+                          }
+                        }
+                      })
+                    )
+
+                    return {
+                      policy_id: policyId,
+                      policy_name: policy.PolicyName || policy.policy_name || policy.name,
+                      subpolicies: subpolicies.filter(sp => sp !== null)
+                    }
+                  } catch (e) {
+                    console.warn(`⚠️ Could not load subpolicies for policy ${policyId}:`, e)
+                    return {
+                      policy_id: policyId,
+                      policy_name: policy.PolicyName || policy.policy_name || policy.name,
+                      subpolicies: []
+                    }
+                  }
+                })
+              )
+
+              hierarchyPolicies = hierarchyPolicies.filter(p => p !== null)
+              console.log('📚 Built hierarchy from framework tree. Policies:', hierarchyPolicies.length)
+          console.log('📚 Built hierarchy from framework tree. Policies:', hierarchyPolicies.length)
+        } catch (e) {
+          console.error('❌ Error building hierarchy from framework tree/framework endpoints:', e)
+        }
+
+        this.auditHierarchyPolicies = hierarchyPolicies
+        console.log('📚 Final hierarchy policies count:', this.auditHierarchyPolicies.length)
+
+        // Restore any saved selections for this audit
+        if (this.auditHierarchyPolicies.length) {
+          this.restoreSelectionsForAudit()
+        }
+      } catch (error) {
+        console.error('❌ Error loading audit/framework compliance hierarchy:', error)
+        console.error('Error details:', error.response?.data || error.message)
+        this.auditHierarchyPolicies = []
+      }
     },
     async loadAvailableAudits() {
       try {
@@ -847,14 +1891,17 @@ export default {
         this.availableAudits = deduped
         // Do not filter by audit type because some AI audits may be stored as 'I'.
         // Show all assigned audits and indicate type in the label.
-        this.availableAIAudits = this.availableAudits.map(a => ({
-          audit_id: a.audit_id || a.AuditId || a.id,
-          title: a.title || a.Title || null,
-          policy: a.policy || a.Policy || a.title || a.Title || 'Audit',
-          duedate: a.duedate || a.due_date || a.DueDate || null,
-          framework: a.framework || a.FrameworkName || null,
-          audit_type: (a.audit_type || a.AuditType || '').toString().toUpperCase() || 'UNKNOWN'
-        })).sort((a) => (a.audit_type === 'A' ? -1 : 1))
+        this.availableAIAudits = this.availableAudits.map(a => {
+          const title = (a.title || a.Title || '').toString().trim()
+          return {
+            audit_id: a.audit_id || a.AuditId || a.id,
+            title: title || 'Audit',
+            policy: a.policy || a.Policy || title || 'Audit',
+            duedate: a.duedate || a.due_date || a.DueDate || null,
+            framework: a.framework || a.FrameworkName || null,
+            audit_type: (a.audit_type || a.AuditType || '').toString().toUpperCase() || 'UNKNOWN'
+          }
+        }).sort((a) => (a.audit_type === 'A' ? -1 : 1))
         console.log('🔍 Loaded AI audits:', this.availableAIAudits)
       } catch (e) {
         console.error('Error loading assigned audits:', e)
@@ -879,6 +1926,10 @@ export default {
       this.auditInfo = {}
       this.selectedPolicyName = ''
       this.selectedSubPolicyName = ''
+      this.auditHierarchyPolicies = []
+      this.selectedPolicyIdsMulti = []
+      this.selectedSubpolicyIdsMulti = []
+      this.selectedComplianceIds = []
       this.uploadedDocuments = []
       this.processingStatus = 'idle'
       this.processingResults = []
@@ -886,9 +1937,56 @@ export default {
       // Now that user selected, mark confirmed and load data for the chosen audit inline
       this.hasUserConfirmedSelection = true
       this.$nextTick(async () => {
-        await this.loadAuditInfo()
-        await this.loadPolicies()
-        await this.loadUploadedDocuments()
+        console.log('🔄 Starting to load audit data...')
+        
+        // Load audit info first (this gives us framework_id)
+        try {
+          await this.loadAuditInfo()
+          console.log('✅ loadAuditInfo completed, framework_id:', this.auditInfo.framework_id)
+        } catch (e) {
+          console.error('❌ Error in loadAuditInfo:', e)
+        }
+        
+        // Load hierarchy immediately after audit info (don't wait for policies)
+        // This uses framework_id directly, so it doesn't need the slow /api/policies/ call
+        try {
+          console.log('🔄 About to call loadAuditHierarchy...')
+          await this.loadAuditHierarchy()
+          console.log('✅ loadAuditHierarchy completed, policies count:', this.auditHierarchyPolicies.length)
+        } catch (e) {
+          console.error('❌ Error in loadAuditHierarchy:', e)
+          console.error('Error details:', e.response?.data || e.message)
+        }
+        
+        // Load policies in background (for other features, but don't block on it)
+        try {
+          await Promise.race([
+            this.loadPolicies(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+          ])
+          console.log('✅ loadPolicies completed')
+        } catch (e) {
+          console.warn('⚠️ loadPolicies timed out or failed (non-critical):', e.message)
+        }
+        
+        // Load uploaded documents
+        try {
+          await this.loadUploadedDocuments()
+          console.log('✅ loadUploadedDocuments completed')
+        } catch (e) {
+          console.error('❌ Error in loadUploadedDocuments:', e)
+        }
+        
+        // Load relevant documents from file_operations
+        // DISABLED: No longer needed since we do automatic processing
+        // Documents are automatically linked when uploaded via Document Handling
+        // try {
+        //   await this.loadRelevantDocuments()
+        //   console.log('✅ loadRelevantDocuments completed')
+        // } catch (e) {
+        //   console.error('❌ Error in loadRelevantDocuments:', e)
+        // }
+        
         this.startStatusPolling()
       })
     },
@@ -913,6 +2011,7 @@ export default {
         console.log('🔍 Policy from API:', response.data?.policy_name)
         console.log('🔍 Sub-policy from API:', response.data?.subpolicy_name)
         console.log('🔍 Framework from API:', response.data?.framework_name)
+        console.log('🔍 Framework ID from API:', response.data?.framework_id)
         
         if (response.data && !response.data.error) {
           // Extract actual audit data from the API response
@@ -920,9 +2019,11 @@ export default {
             title: response.data.title || `Audit ${auditId}`,
             type: 'AI Audit', // Since this is the AI audit upload page
             framework: response.data.framework_name || 'Framework Not Set',
+            framework_id: response.data.framework_id || null,
             policy: response.data.policy_name || 'Not Specified',
             subpolicy: response.data.subpolicy_name || 'Not Specified'
           }
+          console.log('✅ Stored auditInfo with framework_id:', this.auditInfo.framework_id)
           
           // Pre-populate the selected policy and sub-policy
           this.selectedPolicyName = response.data.policy_name || 'Not Specified'
@@ -931,26 +2032,26 @@ export default {
           console.log('✅ Updated selectedPolicyName to:', this.selectedPolicyName)
           console.log('✅ Updated selectedSubPolicyName to:', this.selectedSubPolicyName)
           
-          // Load compliance requirements using policy and sub-policy names
-          console.log('🔍 Loading compliance by policy and sub-policy names')
-          console.log('🔍 Policy:', response.data.policy_name, 'Sub-policy:', response.data.subpolicy_name)
-          await this.loadComplianceByPolicyNames(response.data.policy_name, response.data.subpolicy_name)
+          // Load compliance requirements in background (non-blocking, don't await)
+          // This is for the old single-policy display, not needed for multi-select hierarchy
+          console.log('🔍 Loading compliance by policy and sub-policy names (non-blocking)')
+          this.loadComplianceByPolicyNames(response.data.policy_name, response.data.subpolicy_name).catch(e => {
+            console.warn('⚠️ loadComplianceByPolicyNames failed (non-critical):', e.message)
+          })
 
-          // Also resolve and store IDs for mapping enforcement
-          try {
-            const policyId = await this.findPolicyIdByName(this.selectedPolicyName)
+          // Also resolve and store IDs for mapping enforcement (non-blocking)
+          this.findPolicyIdByName(this.selectedPolicyName).then(policyId => {
             if (policyId) {
               this.selectedPolicyId = policyId
               // Attempt to resolve subpolicy under this policy
-              try {
-                const spRes = await api.get(`/api/compliance/policies/${policyId}/subpolicies/`)
+              api.get(`/api/compliance/policies/${policyId}/subpolicies/`).then(spRes => {
                 const sp = spRes.data?.subpolicies?.find(sp => sp.SubPolicyName?.toLowerCase() === this.selectedSubPolicyName?.toLowerCase())
                 if (sp) this.selectedSubPolicyId = sp.SubPolicyId || sp.id
-              } catch (e) { /* ignore */ }
+              }).catch(() => { /* ignore */ })
             }
-          } catch (e) {
-            console.log('ℹ️ Could not auto-resolve policy/subpolicy IDs')
-          }
+          }).catch(e => {
+            console.log('ℹ️ Could not auto-resolve policy/subpolicy IDs (non-critical)', e)
+          })
         } else {
           // Fallback data if API returns error
           console.warn('❌ API returned error or no data for audit', auditId)
@@ -977,6 +2078,134 @@ export default {
         }
         this.selectedPolicyName = 'Not Specified'
         this.selectedSubPolicyName = 'Not Specified'
+      }
+    },
+    // ----- Multi-select helpers -----
+    toggleSelectAllPolicies() {
+      if (this.allPoliciesSelected) {
+        this.selectedPolicyIdsMulti = []
+        this.selectedSubpolicyIdsMulti = []
+        this.selectedComplianceIds = []
+      } else {
+        this.selectedPolicyIdsMulti = this.auditHierarchyPolicies.map(
+          p => p.policy_id
+        )
+        // When selecting all policies, also select all subpolicies and compliances
+        const allSubIds = []
+        const allCompIds = []
+        this.auditHierarchyPolicies.forEach(p => {
+          (p.subpolicies || []).forEach(sp => {
+            allSubIds.push(sp.subpolicy_id)
+            const compliances = sp.compliances || []
+            compliances.forEach(c => {
+              allCompIds.push(c.compliance_id || c.ComplianceId)
+            })
+          })
+        })
+        this.selectedSubpolicyIdsMulti = Array.from(new Set(allSubIds))
+        this.selectedComplianceIds = Array.from(new Set(allCompIds))
+      }
+      this.saveSelectionsForAudit()
+    },
+    toggleSelectAllSubpolicies() {
+      const subs = this.availableSubpolicies
+      if (!subs.length) return
+      if (this.allSubpoliciesSelected) {
+        this.selectedSubpolicyIdsMulti = []
+        // Do not clear policies; user might still want them
+      } else {
+        this.selectedSubpolicyIdsMulti = subs.map(s => s.subpolicy_id)
+      }
+      this.saveSelectionsForAudit()
+    },
+    toggleSelectAllCompliances() {
+      const comps = this.availableCompliances
+      if (!comps.length) return
+      if (this.allCompliancesSelected) {
+        this.selectedComplianceIds = []
+      } else {
+        this.selectedComplianceIds = comps.map(c => c.compliance_id)
+      }
+      this.saveSelectionsForAudit()
+    },
+    onPolicyMultiChange(changedPolicyId) {
+      const isSelected = this.selectedPolicyIdsMulti.includes(changedPolicyId)
+      if (!isSelected) {
+        // If policy deselected, also remove its subpolicies and compliances
+        const subIdsToRemove = []
+        const compIdsToRemove = []
+        const policy = this.auditHierarchyPolicies.find(
+          p => p.policy_id === changedPolicyId
+        )
+        if (policy) {
+          (policy.subpolicies || []).forEach(sp => {
+            subIdsToRemove.push(sp.subpolicy_id)
+            const compliances = sp.compliances || []
+            compliances.forEach(c => {
+              compIdsToRemove.push(c.compliance_id || c.ComplianceId)
+            })
+          })
+        }
+        this.selectedSubpolicyIdsMulti = this.selectedSubpolicyIdsMulti.filter(
+          id => !subIdsToRemove.includes(id)
+        )
+        this.selectedComplianceIds = this.selectedComplianceIds.filter(
+          id => !compIdsToRemove.includes(id)
+        )
+      }
+      this.saveSelectionsForAudit()
+    },
+    onSubpolicyMultiChange(subpolicyId, policyId) {
+      const isSelected = this.selectedSubpolicyIdsMulti.includes(subpolicyId)
+      if (!isSelected) {
+        // If subpolicy deselected, also remove its compliances
+        const policy = this.auditHierarchyPolicies.find(
+          p => p.policy_id === policyId
+        )
+        if (policy) {
+          const sub = (policy.subpolicies || []).find(
+            sp => sp.subpolicy_id === subpolicyId
+          )
+          if (sub && sub.compliances) {
+            const compIds = sub.compliances.map(
+              c => c.compliance_id || c.ComplianceId
+            )
+            this.selectedComplianceIds = this.selectedComplianceIds.filter(
+              id => !compIds.includes(id)
+            )
+          }
+        }
+      }
+      this.saveSelectionsForAudit()
+    },
+    saveSelectionsForAudit() {
+      try {
+        const auditId = this.currentAuditId
+        if (!auditId || auditId === 'Unknown') return
+        const key = `aiAuditSelections:${auditId}`
+        const payload = {
+          policies: this.selectedPolicyIdsMulti,
+          subpolicies: this.selectedSubpolicyIdsMulti,
+          compliances: this.selectedComplianceIds
+        }
+        window.localStorage.setItem(key, JSON.stringify(payload))
+      } catch (e) {
+        console.warn('Could not persist AI audit selections:', e)
+      }
+    },
+    restoreSelectionsForAudit() {
+      try {
+        const auditId = this.currentAuditId
+        if (!auditId || auditId === 'Unknown') return
+        const key = `aiAuditSelections:${auditId}`
+        const raw = window.localStorage.getItem(key)
+        if (!raw) return
+        const parsed = JSON.parse(raw)
+        this.selectedPolicyIdsMulti = parsed.policies || []
+        this.selectedSubpolicyIdsMulti = parsed.subpolicies || []
+        this.selectedComplianceIds = parsed.compliances || []
+      } catch (e) {
+        console.warn('Could not restore AI audit selections:', e)
       }
     },
     
@@ -1401,6 +2630,33 @@ export default {
       return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
     },
     
+    formatDate(dateString) {
+      if (!dateString) return 'N/A'
+      try {
+        const date = new Date(dateString)
+        return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+      } catch (e) {
+        return dateString
+      }
+    },
+    
+    getFileIcon(fileType) {
+      if (!fileType) return 'fa-file'
+      const type = fileType.toLowerCase()
+      if (type === 'pdf') return 'fa-file-pdf'
+      if (type === 'xlsx' || type === 'xls') return 'fa-file-excel'
+      if (type === 'doc' || type === 'docx') return 'fa-file-word'
+      if (type === 'txt') return 'fa-file-alt'
+      if (type === 'csv') return 'fa-file-csv'
+      return 'fa-file'
+    },
+    
+    getRelevanceClass(score) {
+      if (score >= 0.8) return 'relevance-high'
+      if (score >= 0.6) return 'relevance-medium'
+      return 'relevance-low'
+    },
+    
     async uploadFiles() {
       // Check consent before proceeding with audit document upload
       try {
@@ -1428,6 +2684,87 @@ export default {
         console.warn('No files selected')
         return
       }
+
+      // Note: Uploading without explicit policy/subpolicy selection is allowed.
+      // The AI will analyze the document and determine relevance to all framework elements.
+
+      // Build mapping combinations that actually have selected compliances
+      const mappingPairs = []
+
+      // If user selected compliances, derive mappings from those (primary driver)
+      if (this.selectedComplianceIds && this.selectedComplianceIds.length > 0) {
+        const selectedSet = new Set(this.selectedComplianceIds)
+        const seen = new Map() // Use Map to track compliances per mapping
+
+        this.availableCompliances.forEach(c => {
+          if (!selectedSet.has(c.compliance_id)) return
+          const key = `${c.policy_id || ''}-${c.subpolicy_id || ''}`
+          
+          if (!seen.has(key)) {
+            seen.set(key, {
+              policy_id: c.policy_id || '',
+              subpolicy_id: c.subpolicy_id || '',
+              compliance_ids: [],
+              compliance_names: []
+            })
+          }
+          // Track all compliances for this mapping
+          const mapping = seen.get(key)
+          mapping.compliance_ids.push(c.compliance_id)
+          // Get compliance name if available
+          const complianceName = c.compliance_name || c.ComplianceName || `Compliance ${c.compliance_id}`
+          mapping.compliance_names.push(complianceName)
+        })
+        
+        // Convert to array - NO DEDUPLICATION, show all mappings
+        mappingPairs.push(...Array.from(seen.values()).map(m => ({
+          policy_id: m.policy_id,
+          subpolicy_id: m.subpolicy_id,
+          compliance_ids: m.compliance_ids,
+          compliance_names: m.compliance_names,
+          compliance_count: m.compliance_ids.length
+        })))
+        
+        console.log(`📊 Created ${mappingPairs.length} unique mappings from ${this.selectedComplianceIds.length} selected compliances`)
+        mappingPairs.forEach((mp, idx) => {
+          console.log(`  Mapping ${idx + 1}: policy_id=${mp.policy_id}, subpolicy_id=${mp.subpolicy_id}, compliances=${mp.compliance_count}:`, mp.compliance_names)
+        })
+      } else {
+        // Fallback: derive mappings from selected policies/sub‑policies only
+        const selectedPolicySet = new Set(this.selectedPolicyIdsMulti)
+        const selectedSubSet = new Set(this.selectedSubpolicyIdsMulti)
+
+        this.auditHierarchyPolicies.forEach(policy => {
+          if (!selectedPolicySet.has(policy.policy_id)) return
+          const subpolicies = policy.subpolicies || []
+          const selectedSubsForPolicy = subpolicies.filter(sp =>
+            selectedSubSet.size > 0
+              ? selectedSubSet.has(sp.subpolicy_id)
+              : true
+          )
+
+          if (selectedSubsForPolicy.length === 0) {
+            // Policy selected without any specific sub‑policy
+            mappingPairs.push({
+              policy_id: policy.policy_id,
+              subpolicy_id: ''
+            })
+          } else {
+            selectedSubsForPolicy.forEach(sp => {
+              mappingPairs.push({
+                policy_id: policy.policy_id,
+                subpolicy_id: sp.subpolicy_id
+              })
+            })
+          }
+        })
+      }
+
+      // Allow upload even without explicit mappings - AI will analyze document relevance
+      // If no mappings selected, send empty array - backend will handle it
+      if (!mappingPairs.length) {
+        console.log('⚠️ No explicit mappings selected - uploading without mappings. AI will analyze document relevance.')
+      }
       
       const auditId = this.currentAuditId
       console.log('🔍 Current audit ID for upload:', auditId)
@@ -1445,36 +2782,52 @@ export default {
       
       this.uploading = true
       this.uploadProgress = 0
-      const totalFiles = this.selectedFiles.length
       
       try {
+        const totalFiles = this.selectedFiles.length
+        let completedFiles = 0
+
+        // Upload each file ONCE with all mappings
         for (let i = 0; i < this.selectedFiles.length; i++) {
           const file = this.selectedFiles[i]
           const formData = new FormData()
-          
+
+          // Append file once
           formData.append('file', file)
-          formData.append('policy_id', this.selectedPolicyId || '')
-          formData.append('subpolicy_id', this.selectedSubPolicyId || '')
           formData.append('document_type', 'evidence')
           formData.append('external_source', 'manual')
           
+          // Append all mappings as JSON array
+          formData.append('mappings', JSON.stringify(mappingPairs))
+
           const response = await api.post(
             `/api/ai-audit/${auditId}/upload-document/`,
             formData,
             {
               headers: { 'Content-Type': 'multipart/form-data' },
-              onUploadProgress: (progressEvent) => {
-                const fileProgress = (progressEvent.loaded / progressEvent.total) * 100
-                this.uploadProgress = Math.round(((i + fileProgress / 100) / this.selectedFiles.length) * 100)
+              onUploadProgress: progressEvent => {
+                const singleFileProgress =
+                  (progressEvent.loaded / progressEvent.total) || 0
+                const overallProgress =
+                  ((completedFiles + singleFileProgress) / totalFiles) * 100
+                this.uploadProgress = Math.round(overallProgress)
               }
             }
           )
-          
+
           if (response.data.success) {
-            this.$popup?.success(`File "${file.name}" uploaded successfully`)
+            const mappingsCount = response.data.mappings_count || mappingPairs.length
+            this.$popup?.success(
+              `File "${file.name}" uploaded successfully with ${mappingsCount} mapping(s)`
+            )
           }
+
+          completedFiles += 1
+          this.uploadProgress = Math.round(
+            (completedFiles / totalFiles) * 100
+          )
         }
-        
+
         this.selectedFiles = []
         this.uploadProgress = 100
         await this.loadUploadedDocuments()
@@ -1511,37 +2864,1340 @@ export default {
           return
         }
         console.log('📋 Loading documents for audit:', auditId)
-        const response = await api.get(`/api/ai-audit/${auditId}/documents/`)
+        console.log('📋 Current uploadedDocuments count before load:', this.uploadedDocuments.length)
+
+        // Preserve currently selected mapping per file (by file + mapping key)
+        const previousSelections = new Map()
+        if (Array.isArray(this.uploadedDocuments) && this.uploadedDocuments.length > 0) {
+          this.uploadedDocuments.forEach(fileGroup => {
+            if (!fileGroup || !fileGroup.mappings || fileGroup.mappings.length === 0) return
+            const fileKey = `${fileGroup.document_name || ''}|${fileGroup.file_size || 0}`
+            const selectedIdx = parseInt(fileGroup.selectedMappingIndex ?? 0) || 0
+            const selectedMapping = fileGroup.mappings[selectedIdx] || fileGroup.mappings[0]
+            if (!selectedMapping) return
+            const mappingKey = selectedMapping.mapping_key || `${selectedMapping.policy_id || 'none'}-${selectedMapping.subpolicy_id || 'none'}`
+            previousSelections.set(`${fileKey}::${mappingKey}`, true)
+          })
+        }
+
+        const response = await api.get(`/api/ai-audit/${auditId}/documents/`, {
+          timeout: 30000 // 30 second timeout to prevent hanging
+        })
         console.log('📋 Documents response:', response.data)
         console.log('📋 Response success:', response.data.success)
-        console.log('📋 Response documents array:', response.data.documents)
+        console.log('📋 Response documents array length:', response.data.documents?.length || 0)
         console.log('📋 Raw response status:', response.status)
         if (response.data.success) {
           // Map API response fields to component expected fields
-          this.uploadedDocuments = response.data.documents.map(doc => ({
-            document_id: doc.document_id,
-            document_name: doc.file_name,
-            file_size: doc.file_size,
-            uploaded_date: doc.uploaded_date,
-            document_type: doc.file_type,
-            processing_status: doc.processing_status || 'pending',
-            upload_status: doc.upload_status || 'uploaded',
-            mapped_policy: doc.policy_name || doc.mapped_policy || null,
-            mapped_subpolicy: doc.subpolicy_name || doc.mapped_subpolicy || null,
-            compliance_status: doc.compliance_status || null,
-            confidence_score: doc.confidence_score || null,
-            compliance_analyses: doc.compliance_analyses || null
-          }))
-          console.log('📋 Loaded documents:', this.uploadedDocuments.length)
-          console.log('📋 Document details:', this.uploadedDocuments)
+          const mappedDocs = response.data.documents.map(doc => {
+            // Preserve root-level metadata from compliance_analyses BEFORE transforming it
+            // (e.g., part_of_combined_check flag that gets lost when converting to array)
+            let compliance_analyses_metadata = {}
+            let compliance_analyses = doc.compliance_analyses || null
+            
+            if (compliance_analyses) {
+              // Handle both string (JSON) and object formats
+              if (typeof compliance_analyses === 'string') {
+                try {
+                  compliance_analyses = JSON.parse(compliance_analyses)
+                } catch (e) {
+                  console.warn('Failed to parse compliance_analyses:', e)
+                  compliance_analyses = null
+                }
+              }
+              
+              // If it's an object (not an array), preserve metadata flags before transformation
+              if (compliance_analyses && typeof compliance_analyses === 'object' && !Array.isArray(compliance_analyses)) {
+                // Extract metadata flags like part_of_combined_check, combined_with_document_id, etc.
+                compliance_analyses_metadata = {
+                  part_of_combined_check: compliance_analyses.part_of_combined_check,
+                  combined_with_document_id: compliance_analyses.combined_with_document_id,
+                  combined_compliance_id: compliance_analyses.combined_compliance_id
+                }
+                
+                // If it's an object with a 'compliance_analyses' key, extract it
+                compliance_analyses = compliance_analyses.compliance_analyses || compliance_analyses
+              }
+              
+              // Ensure it's an array for compatibility with existing code
+              if (compliance_analyses && !Array.isArray(compliance_analyses)) {
+                compliance_analyses = [compliance_analyses]
+              }
+            }
+            
+            // Preserve the original compliance_analyses object (with metadata) for filtering purposes
+            // Store metadata in the root-level object for the filter to access
+            const compliance_analyses_with_metadata = compliance_analyses ? {
+              ...compliance_analyses_metadata,
+              analyses: compliance_analyses
+            } : (Object.keys(compliance_analyses_metadata).length > 0 ? compliance_analyses_metadata : null)
+            
+            return {
+              document_id: doc.document_id,
+              // For DB evidence, backend only has document_name; for files it has file_name
+              document_name: doc.file_name || doc.document_name,
+              file_size: doc.file_size,
+              uploaded_date: doc.uploaded_date,
+              document_type: doc.file_type,
+              external_source: doc.external_source || null,
+              external_id: doc.external_id || null,  // Add external_id for grouping by s3_key/stored_name
+              processing_status: doc.ai_processing_status || doc.processing_status || 'pending',
+              upload_status: doc.upload_status || 'uploaded',
+              mapped_policy: doc.policy_name || doc.mapped_policy || null,
+              mapped_subpolicy: doc.subpolicy_name || doc.mapped_subpolicy || null,
+              compliance_status: doc.compliance_status || null,
+              confidence_score: doc.confidence_score || null,
+              compliance_analyses: compliance_analyses_with_metadata || compliance_analyses,
+              // Store the combined check flag separately so it's not lost during transformation
+              part_of_combined_check: compliance_analyses_metadata.part_of_combined_check === true,
+              // Keep raw ids for potential future use
+              policy_id: doc.policy_id || null,
+              subpolicy_id: doc.subpolicy_id || null
+            }
+          })
+
+          // Group documents by external_id (s3_key/stored_name) + file_size to handle cases where
+          // the same physical file is uploaded with different module selections (which changes document_name).
+          // Fallback to document_name + file_size if external_id is not available.
+          // IMPORTANT: We deduplicate mappings by (policy_id, subpolicy_id) so that
+          // the dropdown structure stays the same before and after checks, even if
+          // multiple DB rows exist for the same mapping (e.g. old runs or 'Document' rows).
+          const fileGroups = new Map()
+          
+          mappedDocs.forEach(d => {
+            // CRITICAL: Group same files uploaded with different modules
+            // PROBLEM: When same file is uploaded multiple times, each upload gets a NEW external_id (file_operation_id)
+            // So external_id="1947", external_id="2006", external_id="1976" are all the SAME file but different uploads
+            // SOLUTION: Normalize document_name to remove module-specific parts and use that for grouping
+            
+            let groupingKey = ''
+            
+            // Step 1: ALWAYS normalize document_name to remove module-specific parts
+            // CRITICAL: external_id changes with each upload (1947, 2006, 1976 for same file)
+            // So we MUST use normalized document_name, NOT external_id, for grouping
+            if (d.document_name) {
+              let normalizedName = d.document_name
+              
+              // Remove module-specific parts: _policy_, _audit_, _incident_, etc.
+              // Pattern: ..._framework_MODULE_... → ..._framework_...
+              normalizedName = normalizedName.replace(/_(policy|audit|incident|compliance|risk)_/gi, '_')
+              
+              // Extract stable part: everything after "basel_iii_framework" or "framework"
+              // Example: "document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx"
+              // After removing _policy_: "document_handling_20251224_basel_iii_framework_baseliii_leverageratio_rawdata_1.xlsx"
+              // Match extracts: "basel_iii_framework_baseliii_leverageratio_rawdata_1.xlsx"
+              const frameworkMatch = normalizedName.match(/(?:basel_iii_framework|framework)[^/]*$/i)
+              if (frameworkMatch && frameworkMatch[0]) {
+                groupingKey = frameworkMatch[0]
+              } else {
+                // Fallback: use normalized name (with module parts removed)
+                // This still groups files better than using external_id
+                groupingKey = normalizedName
+              }
+              
+              // IMPORTANT: groupingKey is now set from normalized document_name
+              // Do NOT overwrite it with external_id below!
+            }
+            
+            // DO NOT use external_id for grouping - it changes with each upload!
+            // Only use external_id if document_name is completely missing AND groupingKey is still empty
+            
+            // Step 2: Only use external_id if document_name is completely missing
+            // DO NOT use external_id if document_name exists - it changes with each upload!
+            if (!groupingKey && !d.document_name && d.external_id && d.external_id.trim()) {
+              groupingKey = d.external_id.trim()
+            }
+            
+            // Step 3: Final fallback
+            if (!groupingKey) {
+              groupingKey = d.document_name || `doc_${d.document_id || 'unknown'}`
+            }
+            
+            // Group by normalized key + file size (same file = same size)
+            // This ensures same files with different external_ids are grouped together
+            const fileKey = `${groupingKey}|${d.file_size || 0}`
+            
+            // Debug logging for grouping
+            if (mappedDocs.length > 1) {
+              const normalizedFromName = d.document_name ? (() => {
+                let n = d.document_name.replace(/_(policy|audit|incident|compliance|risk)_/gi, '_')
+                const m = n.match(/(?:basel_iii_framework|framework)[^/]*$/i)
+                return m ? m[0] : n
+              })() : 'N/A'
+              console.log(`📋 Grouping: name="${d.document_name}", external_id="${d.external_id || 'NULL'}", normalized_from_name="${normalizedFromName}", final_key="${groupingKey}", size=${d.file_size}, fileKey="${fileKey}"`)
+            }
+            
+            if (!fileGroups.has(fileKey)) {
+              fileGroups.set(fileKey, {
+                document_name: d.document_name,
+                file_size: d.file_size,
+                uploaded_date: d.uploaded_date,
+                document_type: d.document_type,
+                external_source: d.external_source || null,
+                // mappingsMap: Map<policy-subpolicy key, bestDoc>
+                mappingsMap: new Map()
+              })
+              console.log(`📦 Created new fileGroup for fileKey: "${fileKey}"`)
+            }
+            
+            const group = fileGroups.get(fileKey)
+            // Include compliance_id in mapping key to handle multiple compliances under same policy/subpolicy
+            // This ensures each compliance gets its own mapping entry
+            const mappingKey = `${d.policy_id || 'none'}-${d.subpolicy_id || 'none'}-${d.compliance_id || 'none'}`
+            const existing = group.mappingsMap.get(mappingKey)
+            
+            // Prefer the "best" record for this mapping:
+            // 1) completed over pending/processing
+            // 2) record with analyses over one without
+            // 3) If same status and analyses, prefer the newer record (higher document_id) to avoid mixing old mappings
+            // 4) otherwise keep the first one we saw
+            let bestDoc = d
+            if (existing) {
+              const weight = status => {
+                if (status === 'completed') return 2
+                if (status === 'processing') return 1
+                return 0 // pending / unknown
+              }
+              const existingStatus = existing.processing_status || 'pending'
+              const newStatus = d.processing_status || 'pending'
+              const existingWeight = weight(existingStatus)
+              const newWeight = weight(newStatus)
+              
+              if (existingWeight > newWeight) {
+                bestDoc = existing
+              } else if (existingWeight === newWeight) {
+                // Check if analyses exist (handle both array and object formats)
+                const getAnalysesCount = (analyses) => {
+                  if (!analyses) return 0
+                  if (Array.isArray(analyses)) return analyses.length
+                  if (typeof analyses === 'object') {
+                    // Handle both 'analyses' (new structure) and 'compliance_analyses' (old structure)
+                    const analysesArray = analyses.analyses || analyses.compliance_analyses
+                    return Array.isArray(analysesArray) ? analysesArray.length : 0
+                  }
+                  return 0
+                }
+                const existingHasAnalyses = getAnalysesCount(existing.compliance_analyses) > 0
+                const newHasAnalyses = getAnalysesCount(d.compliance_analyses) > 0
+                
+                if (existingHasAnalyses && !newHasAnalyses) {
+                  bestDoc = existing
+                } else if (!existingHasAnalyses && newHasAnalyses) {
+                  bestDoc = d
+                } else {
+                  // If both have same status and analyses, prefer the newer record (higher document_id)
+                  // This ensures we use the most recently checked/updated mapping
+                  bestDoc = (d.document_id > (existing.document_id || 0)) ? d : existing
+                }
+              }
+            }
+            
+            group.mappingsMap.set(mappingKey, bestDoc)
+          })
+          
+          // Convert to array format for display
+          const previousCount = this.uploadedDocuments.length
+          console.log(`📊 Grouping complete: ${fileGroups.size} unique file(s) from ${mappedDocs.length} document record(s)`)
+          fileGroups.forEach((group, fileKey) => {
+            console.log(`  - fileKey: "${fileKey}" has ${group.mappingsMap.size} mapping(s)`)
+          })
+          this.uploadedDocuments = Array.from(fileGroups.entries()).map(([fileKey, group]) => {
+            // Get document_id from first mapping (or first doc that created this group)
+            let document_id = null
+            if (group.mappingsMap.size > 0) {
+              const firstMapping = Array.from(group.mappingsMap.values())[0]
+              document_id = firstMapping.document_id
+            }
+            
+            const mappings = []
+            group.mappingsMap.forEach(d => {
+              // Store document_id if not already set
+              if (!document_id && d.document_id) {
+                document_id = d.document_id
+              }
+              
+              // Build mapping display string
+              const mappingParts = []
+              if (d.mapped_policy) {
+                mappingParts.push(d.mapped_policy)
+              }
+              if (d.mapped_subpolicy) {
+                mappingParts.push(d.mapped_subpolicy)
+              }
+              
+              // Determine if this mapping already has stored analyses/results
+              let hasExistingAnalyses = false
+              if (d.compliance_analyses) {
+                if (Array.isArray(d.compliance_analyses)) {
+                  hasExistingAnalyses = d.compliance_analyses.length > 0
+                } else if (typeof d.compliance_analyses === 'object') {
+                  // Handle both 'analyses' (new structure) and 'compliance_analyses' (old structure)
+                  const analysesArray = d.compliance_analyses.analyses || d.compliance_analyses.compliance_analyses
+                  hasExistingAnalyses = Array.isArray(analysesArray) && analysesArray.length > 0
+                }
+              }
+
+              // Find all compliances that belong to this policy/sub-policy mapping
+              // CRITICAL: If compliance_id is stored in database (from manual upload), use it directly
+              let compliancesForMapping = []
+              let complianceIdsForMapping = []
+              
+              // First priority: Use compliance_id from database if it exists (manually uploaded documents)
+              if (d.compliance_id) {
+                const directCompliance = this.availableCompliances.find(c => c.compliance_id === d.compliance_id)
+                if (directCompliance) {
+                  compliancesForMapping = [directCompliance]
+                  complianceIdsForMapping = [d.compliance_id]
+                  console.log(`✅ Using direct compliance_id ${d.compliance_id} from database for mapping ${d.policy_id}-${d.subpolicy_id}`)
+                } else {
+                  // Compliance not found in availableCompliances, but still use the ID
+                  complianceIdsForMapping = [d.compliance_id]
+                  console.log(`⚠️ compliance_id ${d.compliance_id} from database not found in availableCompliances, but will use it anyway`)
+                }
+              }
+              
+              // Second priority: If no direct compliance_id, match by policy/subpolicy
+              if (compliancesForMapping.length === 0) {
+                compliancesForMapping = this.availableCompliances.filter(c => {
+                  // Match by policy/subpolicy
+                  const matchesPolicy = !d.policy_id || c.policy_id === d.policy_id
+                  const matchesSubpolicy = !d.subpolicy_id || c.subpolicy_id === d.subpolicy_id
+                  const isSelected =
+                    !this.selectedComplianceIds || this.selectedComplianceIds.length === 0
+                      ? true
+                      : this.selectedComplianceIds.includes(c.compliance_id)
+                  return matchesPolicy && matchesSubpolicy && isSelected
+                })
+                complianceIdsForMapping = compliancesForMapping.map(c => c.compliance_id)
+              }
+
+              // If no currently selected compliances match but we have historical
+              // analyses, fall back to the compliance IDs present in the analyses
+              if ((!compliancesForMapping || compliancesForMapping.length === 0) && hasExistingAnalyses) {
+                let analysisList = []
+                if (Array.isArray(d.compliance_analyses)) {
+                  analysisList = d.compliance_analyses
+                } else if (typeof d.compliance_analyses === 'object') {
+                  // Handle both 'analyses' (new structure) and 'compliance_analyses' (old structure)
+                  analysisList = d.compliance_analyses.analyses || d.compliance_analyses.compliance_analyses || []
+                }
+                const analysisIds = Array.from(
+                  new Set(
+                    (analysisList || [])
+                      .map(a => a && a.compliance_id)
+                      .filter(id => id != null)
+                  )
+                )
+                if (analysisIds.length > 0) {
+                  compliancesForMapping = this.availableCompliances.filter(c =>
+                    analysisIds.includes(c.compliance_id)
+                  )
+                }
+              }
+
+              // Final guard: if there are still no compliances AND no analyses,
+              // this is a brand‑new unmapped combination for file uploads.
+              // BUT we want to show it if:
+              // 1. It's database evidence (always show)
+              // 2. It's pending/processing (auto-processing might still be running)
+              // 3. It has a policy/subpolicy mapping (even without compliances)
+              // 4. It has policy_id or subpolicy_id set (mapping exists in database)
+              if ((!compliancesForMapping || compliancesForMapping.length === 0) && !hasExistingAnalyses) {
+                if (d.external_source !== 'database_record' && d.document_type !== 'db_record') {
+                  // For documents: only hide if it's completed with no mappings
+                  // Show if pending/processing (auto-processing might still be running)
+                  const status = d.processing_status || 'pending'
+                  const hasPolicyMapping = d.policy_id || d.subpolicy_id || d.mapped_policy || d.mapped_subpolicy
+                  
+                  // IMPORTANT: Always show if policy_id or subpolicy_id exists (mapping was created)
+                  // This ensures documents with mappings from auto-processing are visible
+                  if (hasPolicyMapping) {
+                    // Has mapping - always show it, even if compliances aren't loaded yet
+                    // Don't return, continue to create the mapping entry
+                  } else if (status === 'completed') {
+                    // Only hide completed documents with no policy/subpolicy mapping
+                    return
+                  }
+                  // Otherwise show it (pending/processing)
+                }
+              }
+              
+              const complianceNames = compliancesForMapping.map(c => 
+                c.compliance_name || c.ComplianceName || `Compliance ${c.compliance_id}`
+              )
+              
+              let mappingDisplay = mappingParts.length > 0 
+                ? `${mappingParts.join(' → ')}`
+                : 'Unmapped'
+              
+              // Add compliance count/names to display
+              if (complianceNames.length > 0) {
+                if (complianceNames.length <= 3) {
+                  // Show all compliance names if 3 or fewer
+                  mappingDisplay += ` (${complianceNames.join(', ')})`
+                } else {
+                  // Show count if more than 3
+                  mappingDisplay += ` (${complianceNames.length} compliances: ${complianceNames.slice(0, 2).join(', ')}, ...)`
+                }
+              }
+              // Removed "compliances loading..." message - just show the mapping without compliance names if not loaded yet
+              
+              // Use complianceIdsForMapping if we have it (from direct compliance_id), otherwise use from compliancesForMapping
+              const finalComplianceIds = complianceIdsForMapping.length > 0 
+                ? complianceIdsForMapping 
+                : compliancesForMapping.map(c => c.compliance_id)
+              
+              mappings.push({
+                ...d,
+                mapping_display: mappingDisplay,
+                mapping_key: `${d.policy_id || 'none'}-${d.subpolicy_id || 'none'}-${d.compliance_id || 'none'}`, // Include compliance_id to keep separate mappings
+                compliance_names: complianceNames,
+                compliance_ids: finalComplianceIds, // Use the compliance IDs we determined
+                compliance_count: complianceNames.length > 0 ? complianceNames.length : finalComplianceIds.length
+              })
+            })
+            
+            // Work out which mapping should be selected for this file
+            let selectedMappingIndex = 0
+            mappings.forEach((m, idx) => {
+              const key = `${fileKey}::${m.mapping_key || `${m.policy_id || 'none'}-${m.subpolicy_id || 'none'}`}`
+              if (previousSelections.has(key) && selectedMappingIndex === 0) {
+                selectedMappingIndex = idx
+              }
+            })
+
+            // Extract combined_check_group_id from mappings if they're part of a combined check
+            // The combined_check_group_id is stored at the top level of compliance_analyses JSON object
+            let combinedCheckGroupId = null
+            let combinedWithDocumentIds = null
+            for (const mapping of mappings) {
+              if (mapping.compliance_analyses) {
+                try {
+                  let analyses = mapping.compliance_analyses
+                  if (typeof analyses === 'string') {
+                    analyses = JSON.parse(analyses)
+                  }
+                  // The combined_check_group_id is stored at the top level of the compliance_analyses object
+                  // Structure: { combined_check_group_id: "...", combined_with_document_ids: [...], compliance_analyses: [...] }
+                  if (typeof analyses === 'object' && !Array.isArray(analyses)) {
+                    if (analyses.combined_check_group_id) {
+                      combinedCheckGroupId = analyses.combined_check_group_id
+                      combinedWithDocumentIds = analyses.combined_with_document_ids || []
+                      break // Found it, no need to check other mappings
+                    }
+                  }
+                } catch (e) {
+                  // Ignore parsing errors
+                  console.warn('Failed to parse compliance_analyses for combined check group ID:', e)
+                }
+              }
+            }
+            
+            return {
+              document_id: document_id, // Store document_id at fileGroup level for delete button
+              document_name: group.document_name,
+              file_size: group.file_size,
+              uploaded_date: group.uploaded_date,
+              document_type: group.document_type,
+              mappings,
+              // Keep previously selected mapping if possible, otherwise default to first
+              selectedMappingIndex,
+              _expanded: false, // For expandable view
+              combinedCheckGroupId, // ID for grouping documents that were combined in the same check
+              combinedWithDocumentIds // List of document IDs that were combined together
+            }
+          })
+          console.log('📋 Loaded files (grouped):', this.uploadedDocuments.length)
+          console.log('📋 Previous count:', previousCount, '→ New count:', this.uploadedDocuments.length)
+          if (this.uploadedDocuments.length > previousCount) {
+            console.log('⚠️ NEW FILES DETECTED! Files appeared after reload:', this.uploadedDocuments.length - previousCount)
+          }
+          console.log('📋 File groups:', this.uploadedDocuments)
+          // Debug mappings for each file
+          this.uploadedDocuments.forEach((fileGroup, idx) => {
+            console.log(`📋 File ${idx + 1} (${fileGroup.document_name}):`, {
+              mappings_count: fileGroup.mappings.length,
+              mappings: fileGroup.mappings.map(m => ({
+                mapping: m.mapping_display,
+                status: m.processing_status || m.ai_processing_status,
+                has_analyses: !!m.compliance_analyses,
+                shouldShowDetails: this.shouldShowDetailsButton(fileGroup)
+              }))
+            })
+          })
+          
+          // Force Vue reactivity update to ensure UI reflects status changes
+          this.$nextTick(() => {
+            this.$forceUpdate()
+          })
         } else {
           console.warn('📋 Failed to load documents:', response.data.error)
           this.uploadedDocuments = []
         }
+        
+        // Start polling for status updates if there are documents that might be processing
+        // This ensures Details button appears as soon as documents are completed
+        this.startStatusPolling()
       } catch (error) {
         console.error('Error loading uploaded documents:', error)
+        if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+          console.error('⏱️ Request timed out - API may be slow or unresponsive')
+          this.$popup?.error('Request timed out while loading documents. Please try refreshing the page.')
+        } else if (error.response) {
+          console.error('API Error:', error.response.status, error.response.data)
+          this.$popup?.error(`Failed to load documents: ${error.response.data?.error || error.response.statusText || 'Unknown error'}`)
+        } else {
+          console.error('Network or other error:', error.message)
+          this.$popup?.error(`Failed to load documents: ${error.message || 'Network error'}`)
+        }
         this.uploadedDocuments = []
+        
+        // Start polling even on error, in case documents are being processed
+        this.startStatusPolling()
       }
+    },
+    
+    async loadRelevantDocuments() {
+      try {
+        const auditId = this.currentAuditId
+        if (!auditId || auditId === 'Unknown') {
+          console.warn('No valid audit ID, skipping relevant documents load')
+          this.relevantDocuments = []
+          return
+        }
+        
+        this.isLoadingRelevantDocuments = true
+        console.log('📋 Loading relevant documents for audit:', auditId)
+        
+        // Build query parameters based on selected policies/subpolicies/compliances
+        const params = {}
+        if (this.selectedPolicyIdsMulti.length > 0) {
+          params.policy_ids = this.selectedPolicyIdsMulti.join(',')
+        }
+        if (this.selectedSubpolicyIdsMulti.length > 0) {
+          params.subpolicy_ids = this.selectedSubpolicyIdsMulti.join(',')
+        }
+        if (this.selectedComplianceIds.length > 0) {
+          params.compliance_ids = this.selectedComplianceIds.join(',')
+        }
+        
+        const response = await api.get(`/api/ai-audit/${auditId}/relevant-documents/`, { params })
+        console.log('📋 Relevant documents response:', response.data)
+        
+        if (response.data.success) {
+          this.relevantDocuments = response.data.documents || []
+          this.relevantDocumentsMessage = response.data.message || null
+          this.relevantDocumentsStats = response.data.stats || null
+          console.log('✅ Loaded', this.relevantDocuments.length, 'relevant documents')
+          if (response.data.message) {
+            console.log('📋 Message:', response.data.message)
+          }
+          if (response.data.stats) {
+            console.log('📊 Stats:', response.data.stats)
+          }
+        } else {
+          console.warn('📋 Failed to load relevant documents:', response.data.error)
+          this.relevantDocuments = []
+          this.relevantDocumentsMessage = response.data.error || null
+          this.relevantDocumentsStats = null
+        }
+      } catch (error) {
+        console.error('Error loading relevant documents:', error)
+        this.relevantDocuments = []
+      } finally {
+        this.isLoadingRelevantDocuments = false
+      }
+    },
+    
+    toggleRelevantDocumentSelection(fileOperationId) {
+      console.log('🔘 Toggling document selection:', fileOperationId)
+      console.log('🔘 Current selectedRelevantDocuments:', this.selectedRelevantDocuments)
+      const index = this.selectedRelevantDocuments.indexOf(fileOperationId)
+      const isSelecting = index === -1
+      
+      if (isSelecting) {
+        // Adding document to selection - auto-select its relevant policies/subpolicies/compliances
+        this.selectedRelevantDocuments.push(fileOperationId)
+        console.log('   ✅ Added to selection') 
+        
+        // Find the document and auto-select its matched policies/subpolicies/compliances
+        const doc = this.relevantDocuments.find(d => d.file_operation_id === fileOperationId)
+        if (!doc) {
+          console.warn('   ⚠️ Document not found in relevantDocuments array')
+          console.warn('   ⚠️ Available documents:', this.relevantDocuments.map(d => d.file_operation_id))
+          return
+        }
+        
+        console.log('   📄 Document found:', doc.file_name || doc.original_name)
+        console.log('   📄 Full document data:', doc)
+        console.log('   📄 Matched policies (raw):', doc.matched_policies)
+        console.log('   📄 Matched policies (with names):', doc.matched_policies_with_names)
+        console.log('   📄 Matched subpolicies (raw):', doc.matched_subpolicies)
+        console.log('   📄 Matched subpolicies (with names):', doc.matched_subpolicies_with_names)
+        console.log('   📄 Matched compliances (raw):', doc.matched_compliances)
+        console.log('   📄 Matched compliances (with names):', doc.matched_compliances_with_names)
+        console.log('   📄 Current selectedPolicyIdsMulti before:', this.selectedPolicyIdsMulti)
+        console.log('   📄 Current selectedSubpolicyIdsMulti before:', this.selectedSubpolicyIdsMulti)
+        console.log('   📄 Current selectedComplianceIds before:', this.selectedComplianceIds)
+          
+          // Auto-select matched policies
+          const matchedPolicies = doc.matched_policies_with_names || doc.matched_policies || []
+          let addedPolicies = 0
+          
+          // Get available policy IDs from hierarchy to ensure we only select valid ones
+          const availablePolicyIds = this.auditHierarchyPolicies.map(p => {
+            const pid = p.policy_id
+            return typeof pid === 'string' ? parseInt(pid, 10) : pid
+          })
+          console.log('   📋 Available policy IDs in hierarchy:', availablePolicyIds)
+          
+          matchedPolicies.forEach(p => {
+            // Handle both object format {id: X, name: Y} and direct ID format
+            let policyId = typeof p === 'object' ? (p.id || p.policy_id) : p
+            // Convert to number for consistent comparison
+            policyId = typeof policyId === 'string' ? parseInt(policyId, 10) : policyId
+            
+            if (policyId && !isNaN(policyId)) {
+              // Check if this policy ID exists in the hierarchy
+              if (!availablePolicyIds.includes(policyId)) {
+                console.warn(`   ⚠️ Policy ID ${policyId} not found in hierarchy, skipping`)
+                return
+              }
+              
+              // Check if already selected - compare both as numbers and strings
+              const isAlreadySelected = this.selectedPolicyIdsMulti.some(id => {
+                const idNum = typeof id === 'string' ? parseInt(id, 10) : id
+                return idNum === policyId
+              })
+              
+              if (!isAlreadySelected) {
+                // Match the type used in the hierarchy (check first policy in hierarchy)
+                const hierarchyPolicyId = this.auditHierarchyPolicies[0]?.policy_id
+                const targetType = typeof hierarchyPolicyId
+                const valueToAdd = targetType === 'string' ? String(policyId) : policyId
+                
+                this.selectedPolicyIdsMulti.push(valueToAdd)
+                addedPolicies++
+                console.log(`   ➕ Added policy ID: ${valueToAdd} (type: ${typeof valueToAdd})`)
+              } else {
+                console.log(`   ✓ Policy ID ${policyId} already selected`)
+              }
+            }
+          })
+          console.log(`   ✅ Added ${addedPolicies} policies (total: ${this.selectedPolicyIdsMulti.length})`)
+          
+          // Auto-select matched subpolicies
+          const matchedSubpolicies = doc.matched_subpolicies_with_names || doc.matched_subpolicies || []
+          let addedSubpolicies = 0
+          
+          // Get available subpolicy IDs from hierarchy
+          const availableSubpolicyIds = []
+          this.auditHierarchyPolicies.forEach(policy => {
+            (policy.subpolicies || []).forEach(sp => {
+              const spid = sp.subpolicy_id
+              const spidNum = typeof spid === 'string' ? parseInt(spid, 10) : spid
+              if (spidNum && !availableSubpolicyIds.includes(spidNum)) {
+                availableSubpolicyIds.push(spidNum)
+              }
+            })
+          })
+          console.log('   📋 Available subpolicy IDs in hierarchy:', availableSubpolicyIds)
+          
+          matchedSubpolicies.forEach(sp => {
+            let subpolicyId = typeof sp === 'object' ? (sp.id || sp.subpolicy_id) : sp
+            subpolicyId = typeof subpolicyId === 'string' ? parseInt(subpolicyId, 10) : subpolicyId
+            
+            if (subpolicyId && !isNaN(subpolicyId)) {
+              // Check if this subpolicy ID exists in the hierarchy
+              if (!availableSubpolicyIds.includes(subpolicyId)) {
+                console.warn(`   ⚠️ Subpolicy ID ${subpolicyId} not found in hierarchy, skipping`)
+                return
+              }
+              
+              const isAlreadySelected = this.selectedSubpolicyIdsMulti.some(id => {
+                const idNum = typeof id === 'string' ? parseInt(id, 10) : id
+                return idNum === subpolicyId
+              })
+              
+              if (!isAlreadySelected) {
+                // Match the type used in the hierarchy
+                const hierarchySubpolicyId = this.auditHierarchyPolicies[0]?.subpolicies?.[0]?.subpolicy_id
+                const targetType = hierarchySubpolicyId ? typeof hierarchySubpolicyId : 'number'
+                const valueToAdd = targetType === 'string' ? String(subpolicyId) : subpolicyId
+                
+                this.selectedSubpolicyIdsMulti.push(valueToAdd)
+                addedSubpolicies++
+                console.log(`   ➕ Added subpolicy ID: ${valueToAdd} (type: ${typeof valueToAdd})`)
+              } else {
+                console.log(`   ✓ Subpolicy ID ${subpolicyId} already selected`)
+              }
+            }
+          })
+          console.log(`   ✅ Added ${addedSubpolicies} subpolicies (total: ${this.selectedSubpolicyIdsMulti.length})`)
+          
+          // Auto-select matched compliances
+          // Also auto-select their parent subpolicies and policies
+          const matchedCompliances = doc.matched_compliances_with_names || doc.matched_compliances || []
+          let addedCompliances = 0
+          const subpolicyIdsToAdd = new Set() // Track subpolicy IDs to add
+          const policyIdsToAdd = new Set() // Track policy IDs to add
+          
+          // Get all available compliances with their parent relationships
+          // Note: availableCompliances requires selected policies/subpolicies, so we'll search the hierarchy directly
+          matchedCompliances.forEach(c => {
+            let complianceId = typeof c === 'object' ? (c.id || c.compliance_id) : c
+            complianceId = typeof complianceId === 'string' ? parseInt(complianceId, 10) : complianceId
+            
+            if (complianceId && !isNaN(complianceId)) {
+              const isAlreadySelected = this.selectedComplianceIds.some(id => {
+                const idNum = typeof id === 'string' ? parseInt(id, 10) : id
+                return idNum === complianceId
+              })
+              
+              if (!isAlreadySelected) {
+                const existingType = this.selectedComplianceIds.length > 0 ? typeof this.selectedComplianceIds[0] : 'number'
+                const valueToAdd = existingType === 'string' ? String(complianceId) : complianceId
+                this.selectedComplianceIds.push(valueToAdd)
+                addedCompliances++
+                console.log(`   ➕ Added compliance ID: ${valueToAdd}`)
+                
+                // Get parent subpolicy and policy IDs directly from compliance data
+                // Backend now includes subpolicy_id and policy_id in matched_compliances_with_names
+                const subpolicyId = typeof c === 'object' ? (c.subpolicy_id || c.SubPolicyId) : null
+                const policyId = typeof c === 'object' ? (c.policy_id || c.PolicyId) : null
+                
+                if (subpolicyId) {
+                  const spIdNum = typeof subpolicyId === 'string' ? parseInt(subpolicyId, 10) : subpolicyId
+                  if (spIdNum && !isNaN(spIdNum)) {
+                    subpolicyIdsToAdd.add(spIdNum)
+                    console.log(`   📍 Found parent subpolicy ${spIdNum} for compliance ${complianceId} (from compliance data)`)
+                  }
+                }
+                
+                if (policyId) {
+                  const pIdNum = typeof policyId === 'string' ? parseInt(policyId, 10) : policyId
+                  if (pIdNum && !isNaN(pIdNum)) {
+                    policyIdsToAdd.add(pIdNum)
+                    console.log(`   📍 Found parent policy ${pIdNum} for compliance ${complianceId} (from compliance data)`)
+                  }
+                }
+                
+                // Fallback: if not in compliance data, search hierarchy
+                if (!subpolicyId || !policyId) {
+                  console.warn(`   ⚠️ Compliance ${complianceId} missing parent IDs, searching hierarchy...`)
+                  let found = false
+                  for (const policy of this.auditHierarchyPolicies) {
+                    for (const sp of (policy.subpolicies || [])) {
+                      for (const comp of (sp.compliances || [])) {
+                        const compId = comp.compliance_id || comp.ComplianceId
+                        const compIdNum = typeof compId === 'string' ? parseInt(compId, 10) : compId
+                        if (compIdNum === complianceId) {
+                          const spId = sp.subpolicy_id
+                          const spIdNum = typeof spId === 'string' ? parseInt(spId, 10) : spId
+                          const pId = policy.policy_id
+                          const pIdNum = typeof pId === 'string' ? parseInt(pId, 10) : pId
+                          
+                          if (spIdNum && !isNaN(spIdNum) && !subpolicyIdsToAdd.has(spIdNum)) {
+                            subpolicyIdsToAdd.add(spIdNum)
+                            console.log(`   📍 Found parent subpolicy ${spIdNum} for compliance ${complianceId} (from hierarchy)`)
+                          }
+                          if (pIdNum && !isNaN(pIdNum) && !policyIdsToAdd.has(pIdNum)) {
+                            policyIdsToAdd.add(pIdNum)
+                            console.log(`   📍 Found parent policy ${pIdNum} for compliance ${complianceId} (from hierarchy)`)
+                          }
+                          found = true
+                          break
+                        }
+                      }
+                      if (found) break
+                    }
+                    if (found) break
+                  }
+                  
+                  if (!found) {
+                    console.warn(`   ⚠️ Could not find compliance ${complianceId} in hierarchy`)
+                  }
+                }
+              }
+            }
+          })
+          console.log(`   ✅ Added ${addedCompliances} compliances (total: ${this.selectedComplianceIds.length})`)
+          
+          // Auto-select parent subpolicies for selected compliances
+          let addedSubpoliciesFromCompliances = 0
+          subpolicyIdsToAdd.forEach(subpolicyIdNum => {
+            const isAlreadySelected = this.selectedSubpolicyIdsMulti.some(id => {
+              const idNum = typeof id === 'string' ? parseInt(id, 10) : id
+              return idNum === subpolicyIdNum
+            })
+            
+            if (!isAlreadySelected) {
+              // Find the subpolicy in hierarchy to get its type
+              let hierarchySubpolicy = null
+              for (const policy of this.auditHierarchyPolicies) {
+                for (const sp of (policy.subpolicies || [])) {
+                  const spId = sp.subpolicy_id
+                  const spIdNum = typeof spId === 'string' ? parseInt(spId, 10) : spId
+                  if (spIdNum === subpolicyIdNum) {
+                    hierarchySubpolicy = sp
+                    break
+                  }
+                }
+                if (hierarchySubpolicy) break
+              }
+              
+              const targetType = hierarchySubpolicy?.subpolicy_id ? typeof hierarchySubpolicy.subpolicy_id : 'number'
+              const valueToAdd = targetType === 'string' ? String(subpolicyIdNum) : subpolicyIdNum
+              this.selectedSubpolicyIdsMulti.push(valueToAdd)
+              addedSubpoliciesFromCompliances++
+              console.log(`   ➕ Added subpolicy ID ${valueToAdd} (parent of selected compliance)`)
+            }
+          })
+          if (addedSubpoliciesFromCompliances > 0) {
+            console.log(`   ✅ Added ${addedSubpoliciesFromCompliances} subpolicies from compliances`)
+          }
+          
+          // Auto-select parent policies for selected subpolicies
+          let addedPoliciesFromSubpolicies = 0
+          policyIdsToAdd.forEach(policyIdNum => {
+            const isAlreadySelected = this.selectedPolicyIdsMulti.some(id => {
+              const idNum = typeof id === 'string' ? parseInt(id, 10) : id
+              return idNum === policyIdNum
+            })
+            
+            if (!isAlreadySelected) {
+              // Find the policy in hierarchy to get its type
+              const hierarchyPolicy = this.auditHierarchyPolicies.find(p => {
+                const pId = p.policy_id
+                const pIdNum = typeof pId === 'string' ? parseInt(pId, 10) : pId
+                return pIdNum === policyIdNum
+              })
+              
+              const targetType = hierarchyPolicy?.policy_id ? typeof hierarchyPolicy.policy_id : 'number'
+              const valueToAdd = targetType === 'string' ? String(policyIdNum) : policyIdNum
+              this.selectedPolicyIdsMulti.push(valueToAdd)
+              addedPoliciesFromSubpolicies++
+              console.log(`   ➕ Added policy ID ${valueToAdd} (parent of selected compliance)`)
+            }
+          })
+          if (addedPoliciesFromSubpolicies > 0) {
+            console.log(`   ✅ Added ${addedPoliciesFromSubpolicies} policies from compliances`)
+          }
+          
+          console.log('   📋 Final selected policies:', this.selectedPolicyIdsMulti)
+          console.log('   📋 Final selected subpolicies:', this.selectedSubpolicyIdsMulti)
+          console.log('   📋 Final selected compliances:', this.selectedComplianceIds)
+          
+          // Force Vue to detect the array changes by reassigning
+          // In Vue 3, reactivity is automatic, so we just reassign the arrays
+          this.selectedPolicyIdsMulti = [...this.selectedPolicyIdsMulti]
+          this.selectedSubpolicyIdsMulti = [...this.selectedSubpolicyIdsMulti]
+          this.selectedComplianceIds = [...this.selectedComplianceIds]
+          
+          // Use nextTick to ensure Vue has processed the changes
+          this.$nextTick(() => {
+            console.log('   📋 After nextTick - selected policies:', this.selectedPolicyIdsMulti)
+            console.log('   📋 After nextTick - selected subpolicies:', this.selectedSubpolicyIdsMulti)
+            console.log('   📋 After nextTick - selected compliances:', this.selectedComplianceIds)
+            
+            // Verify the policy IDs exist in the hierarchy
+            const availablePolicyIds = this.auditHierarchyPolicies.map(p => {
+              const pid = p.policy_id
+              return typeof pid === 'string' ? parseInt(pid, 10) : pid
+            })
+            console.log('   📋 Available policy IDs in hierarchy:', availablePolicyIds)
+            const selectedPolicyIdsNums = this.selectedPolicyIdsMulti.map(id => typeof id === 'string' ? parseInt(id, 10) : id)
+            const matchedPolicyIds = selectedPolicyIdsNums.filter(id => availablePolicyIds.includes(id))
+            console.log('   📋 Matched policy IDs:', matchedPolicyIds)
+            
+            if (matchedPolicyIds.length !== this.selectedPolicyIdsMulti.length) {
+              console.warn('   ⚠️ Some policy IDs are not in the hierarchy!')
+              console.warn('   ⚠️ Selected:', this.selectedPolicyIdsMulti)
+              console.warn('   ⚠️ Available:', availablePolicyIds)
+            }
+          })
+          
+          // Force Vue reactivity update
+          this.$forceUpdate()
+          
+          // Save selections
+          this.saveSelectionsForAudit()
+          
+          // Log to verify the checkboxes should reflect changes now
+          console.log('   ✅ Arrays updated, checkboxes should reflect changes now')
+      } else {
+        // Removing document from selection
+        this.selectedRelevantDocuments.splice(index, 1)
+        console.log('   ✅ Removed from selection')
+        
+        // Optionally: unselect policies/subpolicies/compliances if no other selected documents use them
+        // For now, we'll keep them selected (user can manually deselect if needed)
+      }
+      console.log('   📋 Selected documents:', this.selectedRelevantDocuments)
+    },
+    
+    toggleSuggestedDocuments() {
+      this.showSuggestedDocuments = !this.showSuggestedDocuments
+    },
+    
+    toggleDocumentDetails(fileOperationId) {
+      if (this.expandedDocumentId === fileOperationId) {
+        this.expandedDocumentId = null
+      } else {
+        this.expandedDocumentId = fileOperationId
+      }
+    },
+    
+    selectAllRelevantDocuments() {
+      this.selectedRelevantDocuments = this.relevantDocuments.map(doc => doc.file_operation_id)
+      
+      // Auto-select all policies/subpolicies/compliances from all selected documents
+      const allPolicyIds = new Set()
+      const allSubpolicyIds = new Set()
+      const allComplianceIds = new Set()
+      
+      this.relevantDocuments.forEach(doc => {
+        // Collect policies
+        const matchedPolicies = doc.matched_policies_with_names || doc.matched_policies || []
+        matchedPolicies.forEach(p => {
+          const policyId = typeof p === 'object' ? (p.id || p.policy_id) : p
+          const policyIdNum = typeof policyId === 'string' ? parseInt(policyId, 10) : policyId
+          if (policyIdNum && !isNaN(policyIdNum)) {
+            allPolicyIds.add(policyIdNum)
+          }
+        })
+        
+        // Collect subpolicies
+        const matchedSubpolicies = doc.matched_subpolicies_with_names || doc.matched_subpolicies || []
+        matchedSubpolicies.forEach(sp => {
+          const subpolicyId = typeof sp === 'object' ? (sp.id || sp.subpolicy_id) : sp
+          const subpolicyIdNum = typeof subpolicyId === 'string' ? parseInt(subpolicyId, 10) : subpolicyId
+          if (subpolicyIdNum && !isNaN(subpolicyIdNum)) {
+            allSubpolicyIds.add(subpolicyIdNum)
+          }
+        })
+        
+        // Collect compliances and their parent subpolicies/policies
+        const matchedCompliances = doc.matched_compliances_with_names || doc.matched_compliances || []
+        matchedCompliances.forEach(c => {
+          const complianceId = typeof c === 'object' ? (c.id || c.compliance_id) : c
+          const complianceIdNum = typeof complianceId === 'string' ? parseInt(complianceId, 10) : complianceId
+          if (complianceIdNum && !isNaN(complianceIdNum)) {
+            allComplianceIds.add(complianceIdNum)
+            
+            // Get parent subpolicy and policy IDs directly from compliance data
+            const subpolicyId = typeof c === 'object' ? (c.subpolicy_id || c.SubPolicyId) : null
+            const policyId = typeof c === 'object' ? (c.policy_id || c.PolicyId) : null
+            
+            if (subpolicyId) {
+              const spIdNum = typeof subpolicyId === 'string' ? parseInt(subpolicyId, 10) : subpolicyId
+              if (spIdNum && !isNaN(spIdNum)) {
+                allSubpolicyIds.add(spIdNum)
+              }
+            }
+            
+            if (policyId) {
+              const pIdNum = typeof policyId === 'string' ? parseInt(policyId, 10) : policyId
+              if (pIdNum && !isNaN(pIdNum)) {
+                allPolicyIds.add(pIdNum)
+              }
+            }
+          }
+        })
+      })
+      
+      // Convert Sets to Arrays, matching the type used in the hierarchy
+      const hierarchyPolicyId = this.auditHierarchyPolicies[0]?.policy_id
+      const targetPolicyType = hierarchyPolicyId ? typeof hierarchyPolicyId : 'number'
+      
+      const hierarchySubpolicyId = this.auditHierarchyPolicies[0]?.subpolicies?.[0]?.subpolicy_id
+      const targetSubpolicyType = hierarchySubpolicyId ? typeof hierarchySubpolicyId : 'number'
+      
+      const hierarchyComplianceId = this.auditHierarchyPolicies[0]?.subpolicies?.[0]?.compliances?.[0]?.compliance_id
+      const targetComplianceType = hierarchyComplianceId ? typeof hierarchyComplianceId : 'number'
+      
+      this.selectedPolicyIdsMulti = Array.from(allPolicyIds).map(id => 
+        targetPolicyType === 'string' ? String(id) : id
+      )
+      this.selectedSubpolicyIdsMulti = Array.from(allSubpolicyIds).map(id => 
+        targetSubpolicyType === 'string' ? String(id) : id
+      )
+      this.selectedComplianceIds = Array.from(allComplianceIds).map(id => 
+        targetComplianceType === 'string' ? String(id) : id
+      )
+      
+      // Force Vue reactivity update
+      this.$forceUpdate()
+      
+      console.log('📋 Auto-selected all policies:', this.selectedPolicyIdsMulti)
+      console.log('📋 Auto-selected all subpolicies:', this.selectedSubpolicyIdsMulti)
+      console.log('📋 Auto-selected all compliances:', this.selectedComplianceIds)
+      
+      this.saveSelectionsForAudit()
+    },
+    
+    deselectAllRelevantDocuments() {
+      this.selectedRelevantDocuments = []
+      // Note: We don't auto-deselect policies/subpolicies/compliances here
+      // User may want to keep them selected for other purposes
+    },
+    
+    async uploadSelectedRelevantDocuments() {
+      console.log('🔘 uploadSelectedRelevantDocuments called')
+      console.log('🔘 Selected documents:', this.selectedRelevantDocuments)
+      console.log('🔘 Has required mapping:', this.hasRequiredMapping)
+      console.log('🔘 Selected policies:', this.selectedPolicyIdsMulti)
+      console.log('🔘 Selected subpolicies:', this.selectedSubpolicyIdsMulti)
+      console.log('🔘 Selected compliances:', this.selectedComplianceIds)
+      
+      if (this.selectedRelevantDocuments.length === 0) {
+        console.log('❌ No documents selected')
+        this.$popup?.warning('Please select at least one document to upload')
+        return
+      }
+      
+      // Note: Uploading without explicit policy/subpolicy selection is allowed.
+      // The documents already have AI-analyzed relevance to policies/subpolicies/compliances.
+      
+      console.log('✅ Starting upload process...')
+      this.isUploadingRelevantDocuments = true
+      
+      try {
+        const auditId = this.currentAuditId
+        if (!auditId || auditId === 'Unknown') {
+          throw new Error('No audit selected. Please select an audit first.')
+        }
+        
+        const selectedDocs = this.relevantDocuments.filter(doc => 
+          this.selectedRelevantDocuments.includes(doc.file_operation_id)
+        )
+        
+        console.log('📤 Uploading', selectedDocs.length, 'relevant documents to audit', auditId)
+        console.log('📤 Selected documents:', selectedDocs.map(d => ({ id: d.file_operation_id, name: d.file_name })))
+        
+        // Build mapping pairs (same logic as regular upload)
+        const mappingPairs = []
+        
+        if (this.selectedComplianceIds && this.selectedComplianceIds.length > 0) {
+          const selectedSet = new Set(this.selectedComplianceIds)
+          const seen = new Map()
+          
+          this.availableCompliances.forEach(c => {
+            if (!selectedSet.has(c.compliance_id)) return
+            const key = `${c.policy_id || ''}-${c.subpolicy_id || ''}`
+            
+            if (!seen.has(key)) {
+              seen.set(key, {
+                policy_id: c.policy_id || '',
+                subpolicy_id: c.subpolicy_id || '',
+                compliance_ids: [],
+                compliance_names: []
+              })
+            }
+            const mapping = seen.get(key)
+            mapping.compliance_ids.push(c.compliance_id)
+            const complianceName = c.compliance_name || c.ComplianceName || `Compliance ${c.compliance_id}`
+            mapping.compliance_names.push(complianceName)
+          })
+          
+          mappingPairs.push(...Array.from(seen.values()).map(m => ({
+            policy_id: m.policy_id,
+            subpolicy_id: m.subpolicy_id,
+            compliance_ids: m.compliance_ids
+          })))
+        } else {
+          const selectedPolicySet = new Set(this.selectedPolicyIdsMulti)
+          const selectedSubSet = new Set(this.selectedSubpolicyIdsMulti)
+          
+          this.auditHierarchyPolicies.forEach(policy => {
+            if (!selectedPolicySet.has(policy.policy_id)) return
+            const subpolicies = policy.subpolicies || []
+            const selectedSubsForPolicy = subpolicies.filter(sp =>
+              selectedSubSet.size > 0 ? selectedSubSet.has(sp.subpolicy_id) : true
+            )
+            
+            if (selectedSubsForPolicy.length === 0) {
+              mappingPairs.push({
+                policy_id: policy.policy_id,
+                subpolicy_id: ''
+              })
+            } else {
+              selectedSubsForPolicy.forEach(sp => {
+                mappingPairs.push({
+                  policy_id: policy.policy_id,
+                  subpolicy_id: sp.subpolicy_id
+                })
+              })
+            }
+          })
+        }
+        
+        console.log('📤 Mapping pairs:', mappingPairs)
+        
+        // Allow upload even without explicit mappings - documents already have AI-analyzed relevance
+        // If no mappings selected, use empty array - the document's AI-analyzed relevance will be used
+        if (mappingPairs.length === 0) {
+          console.log('⚠️ No explicit mappings selected - using document\'s AI-analyzed relevance instead.')
+        }
+        
+        // For each selected document, upload it to the audit
+        // If no explicit mappings, send empty array - backend will use document's AI-analyzed relevance
+        const uploadPromises = selectedDocs.map(async (doc) => {
+          const formData = new FormData()
+          formData.append('file_operation_id', doc.file_operation_id)
+          
+          // Use explicit mappings if provided, otherwise send empty array
+          // Backend will use the document's existing AI-analyzed relevance from document_audit_relevance table
+          formData.append('mappings', JSON.stringify(mappingPairs))
+          
+          console.log(`📤 Uploading document ${doc.file_operation_id} with mappings:`, mappingPairs.length > 0 ? mappingPairs : 'empty (using AI-analyzed relevance)')
+          
+          const response = await api.post(`/api/ai-audit/${auditId}/upload-document/`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          })
+          
+          console.log(`✅ Document ${doc.file_operation_id} uploaded successfully:`, response.data)
+          return response
+        })
+        
+        const results = await Promise.all(uploadPromises)
+        console.log('✅ All documents uploaded successfully:', results.length)
+        
+        this.$popup?.success(`Successfully uploaded ${selectedDocs.length} document(s) to audit`)
+        
+        // Clear selections and reload
+        this.selectedRelevantDocuments = []
+        await this.loadUploadedDocuments()
+        await this.loadRelevantDocuments()
+        
+      } catch (error) {
+        console.error('❌ Error uploading relevant documents:', error)
+        console.error('❌ Error details:', {
+          message: error.message,
+          response: error.response?.data,
+          status: error.response?.status
+        })
+        
+        let errorMessage = 'Failed to upload documents. '
+        if (error.response?.data?.error) {
+          errorMessage += error.response.data.error
+        } else if (error.response?.data?.message) {
+          errorMessage += error.response.data.message
+        } else if (error.message) {
+          errorMessage += error.message
+        } else {
+          errorMessage += 'Please try again.'
+        }
+        
+        this.$popup?.error(errorMessage)
+      } finally {
+        this.isUploadingRelevantDocuments = false
+      }
+    },
+    
+    getSelectedMapping(fileGroup) {
+      if (!fileGroup || !fileGroup.mappings || fileGroup.mappings.length === 0) {
+        return null
+      }
+      const index = fileGroup.selectedMappingIndex
+      // -1 means "All" selected
+      if (index === -1 || index === '-1') {
+        return null // Return null to indicate "All"
+      }
+      const numIndex = parseInt(index) || 0
+      return fileGroup.mappings[numIndex] || fileGroup.mappings[0]
+    },
+    
+    isAllMappingsSelected(fileGroup) {
+      const index = fileGroup.selectedMappingIndex
+      return index === -1 || index === '-1'
+    },
+    
+    isCheckingAnyMapping(fileGroup) {
+      if (!fileGroup || !fileGroup.mappings) return false
+      return fileGroup.mappings.some(m => m._checking === true)
+    },
+    
+    // Helper: check if all mappings for a file are completed
+    areAllMappingsCompleted(fileGroup) {
+      if (!fileGroup || !fileGroup.mappings || fileGroup.mappings.length === 0) {
+        return false
+      }
+      // Check both processing_status and ai_processing_status for compatibility
+      return fileGroup.mappings.every(m => {
+        const status = m.processing_status || m.ai_processing_status || 'pending'
+        return status === 'completed'
+      })
+    },
+    
+    // Check if database evidence is part of a combined check (should not show Details button)
+    isPartOfCombinedCheck(recordGroup) {
+      if (!recordGroup || !recordGroup.mappings || !recordGroup.mappings.length) {
+        return false
+      }
+      // Check if any mapping has the combined check flag
+      return recordGroup.mappings.some(m => {
+        if (m.compliance_analyses) {
+          try {
+            const analyses = typeof m.compliance_analyses === 'string' 
+              ? JSON.parse(m.compliance_analyses) 
+              : m.compliance_analyses
+            return analyses?.part_of_combined_check === true
+          } catch (e) {
+            return false
+          }
+        }
+        return false
+      })
+    },
+    
+    // Check if a fileGroup is part of a combined check (has combinedCheckGroupId)
+    isPartOfCombinedCheckGroup(fileGroup) {
+      return !!(fileGroup && fileGroup.combinedCheckGroupId)
+    },
+    
+    // Get all fileGroups that share the same combined check group ID
+    getCombinedCheckGroup(fileGroup) {
+      if (!fileGroup || !fileGroup.combinedCheckGroupId) {
+        return [fileGroup] // Return single fileGroup if not part of combined check
+      }
+      // Find all fileGroups with the same combinedCheckGroupId
+      return this.uploadedDocuments.filter(fg => 
+        fg.combinedCheckGroupId === fileGroup.combinedCheckGroupId
+      )
+    },
+    
+    // Check if this fileGroup should show the Details button
+    // Show Details button as soon as at least one mapping is completed (don't wait for all)
+    // Only show Details button for the FIRST fileGroup in a combined check group
+    shouldShowDetailsButton(fileGroup) {
+      if (!fileGroup || !fileGroup.mappings || fileGroup.mappings.length === 0) {
+        console.log('🔍 shouldShowDetailsButton: No mappings', fileGroup)
+        return false // No mappings, don't show
+      }
+      
+      // Check if at least one mapping is completed (changed from "all mappings")
+      // Check both processing_status and ai_processing_status fields
+      const completedMappings = fileGroup.mappings.filter(m => {
+        const status = m.processing_status || m.ai_processing_status || 'pending'
+        const isCompleted = status === 'completed'
+        if (isCompleted) {
+          console.log('✅ Found completed mapping:', {
+            mapping: m.mapping_display,
+            status: status,
+            hasAnalyses: !!m.compliance_analyses
+          })
+        }
+        return isCompleted
+      })
+      
+      if (completedMappings.length === 0) {
+        console.log('🔍 shouldShowDetailsButton: No completed mappings yet', {
+          mappings: fileGroup.mappings.map(m => ({
+            display: m.mapping_display,
+            status: m.processing_status || m.ai_processing_status
+          }))
+        })
+        return false // Don't show if no mappings are completed
+      }
+      
+      console.log('🔍 shouldShowDetailsButton: Found completed mappings, checking analyses...', {
+        completedCount: completedMappings.length,
+        totalCount: fileGroup.mappings.length
+      })
+      
+      // If at least one mapping is completed, ALWAYS show the button
+      // Don't wait for analyses to be loaded - if status is 'completed', show the button
+      // The showAllMappingsDetails function will handle the case where analyses are missing
+      // This ensures the button appears immediately when processing completes
+      console.log('✅ shouldShowDetailsButton: Showing Details button for completed mappings', {
+        completedCount: completedMappings.length,
+        totalMappingsCount: fileGroup.mappings.length,
+        completedMappings: completedMappings.map(m => ({
+          display: m.mapping_display,
+          status: m.processing_status || m.ai_processing_status,
+          hasAnalyses: !!m.compliance_analyses
+        }))
+      })
+      
+      // If not part of a combined check, show the button
+      if (!this.isPartOfCombinedCheckGroup(fileGroup)) {
+        console.log('✅ shouldShowDetailsButton: Showing Details button (not part of combined check)')
+        return true
+      }
+      
+      // If part of a combined check, only show button for the first fileGroup in the group
+      const combinedGroup = this.getCombinedCheckGroup(fileGroup)
+      if (combinedGroup.length <= 1) {
+        console.log('✅ shouldShowDetailsButton: Showing Details button (only one in group)')
+        return true // Only one fileGroup in group, show button
+      }
+      
+      // Find the index of this fileGroup in the combined group
+      // Use document_id or document_name to determine "first" (lowest document_id or alphabetically first name)
+      const sortedGroup = [...combinedGroup].sort((a, b) => {
+        // Sort by document_id if available, otherwise by document_name
+        if (a.document_id && b.document_id) {
+          return a.document_id - b.document_id
+        }
+        if (a.document_name && b.document_name) {
+          return a.document_name.localeCompare(b.document_name)
+        }
+        return 0
+      })
+      
+      // Show button only for the first (lowest document_id) fileGroup
+      const shouldShow = sortedGroup[0] === fileGroup || sortedGroup[0].document_id === fileGroup.document_id
+      console.log('🔍 shouldShowDetailsButton: Combined check group', {
+        shouldShow,
+        isFirst: sortedGroup[0] === fileGroup,
+        groupSize: combinedGroup.length
+      })
+      return shouldShow
+    },
+    
+    // Helper: get tooltip text showing all mappings
+    getMappingsTooltip(fileGroup) {
+      if (!fileGroup || !fileGroup.mappings || fileGroup.mappings.length === 0) {
+        return 'No mappings available'
+      }
+      const mappingTexts = fileGroup.mappings.map((m, idx) => {
+        return `${idx + 1}. ${m.mapping_display || 'Unknown mapping'}`
+      })
+      return `Mappings:\n${mappingTexts.join('\n')}`
+    },
+    
+    // Get aggregated compliance status for all mappings
+    getAggregatedComplianceStatus(fileGroup) {
+      if (!fileGroup || !fileGroup.mappings) return null
+      return this.aggregateComplianceStatus(fileGroup.mappings)
+    },
+    
+    // Get aggregated confidence score for all mappings
+    getAggregatedConfidenceScore(fileGroup) {
+      if (!fileGroup || !fileGroup.mappings) return 0
+      return this.aggregateConfidenceScore(fileGroup.mappings)
+    },
+    
+    // Aggregate overall compliance status across multiple mappings
+    aggregateComplianceStatus(mappings) {
+      const completed = (mappings || []).filter(m => m.processing_status === 'completed')
+      if (completed.length === 0) return null
+      const statuses = completed.map(m => m.compliance_status || 'unknown')
+      if (statuses.some(s => s === 'non_compliant')) return 'non_compliant'
+      if (statuses.some(s => s === 'partially_compliant')) return 'partially_compliant'
+      if (statuses.every(s => s === 'compliant')) return 'compliant'
+      return 'partially_compliant'
+    },
+    
+    // Average confidence score across multiple mappings
+    aggregateConfidenceScore(mappings) {
+      const completed = (mappings || []).filter(
+        m => m.processing_status === 'completed' && m.confidence_score != null
+      )
+      if (completed.length === 0) return 0
+      const sum = completed.reduce((acc, m) => acc + (Number(m.confidence_score) || 0), 0)
+      return sum / completed.length
     },
     
     async startAIProcessing() {
@@ -1720,11 +4376,86 @@ export default {
     },
     
     startStatusPolling() {
-      // Disable continuous polling for now to prevent log spam
-      console.log('🛑 Status polling disabled to prevent log spam')
-      // this.pollingInterval = setInterval(() => {
-      //   this.loadAIStatus()
-      // }, 10000)
+      // Clear any existing polling interval
+      if (this.pollingInterval) {
+        clearInterval(this.pollingInterval)
+      }
+      
+      // Track if we've seen any processing documents to continue polling for a bit after completion
+      let hasSeenProcessingDocs = false
+      let consecutiveCompletedCount = 0
+      const MAX_CONSECUTIVE_COMPLETED = 3 // Stop after 3 consecutive checks showing all completed
+      
+      // Poll for document status updates every 5 seconds
+      // This ensures Details button appears as soon as documents are completed
+      this.pollingInterval = setInterval(() => {
+        // If no documents at all, stop polling immediately
+        if (!this.uploadedDocuments || this.uploadedDocuments.length === 0) {
+          console.log('✅ No documents found, stopping status polling')
+          if (this.pollingInterval) {
+            clearInterval(this.pollingInterval)
+            this.pollingInterval = null
+          }
+          return
+        }
+        
+        // Check if we have documents that might be processing
+        const hasProcessingDocs = this.uploadedDocuments.some(fg => 
+          fg.mappings && fg.mappings.some(m => {
+            const status = m.processing_status || m.ai_processing_status || 'pending'
+            return status === 'processing' || status === 'pending'
+          })
+        )
+        
+        // Check if all documents are completed
+        const allCompleted = this.uploadedDocuments.every(fg => 
+          this.areAllMappingsCompleted(fg)
+        )
+        
+        if (hasProcessingDocs) {
+          // Still have processing documents, continue polling
+          hasSeenProcessingDocs = true
+          consecutiveCompletedCount = 0
+          console.log('🔄 Polling for document status updates (processing documents found)...')
+          this.loadUploadedDocuments().catch(err => {
+            console.warn('⚠️ Error during status polling:', err)
+          })
+        } else if (allCompleted) {
+          // All documents are completed
+          consecutiveCompletedCount++
+          console.log(`✅ All documents completed (check ${consecutiveCompletedCount}/${MAX_CONSECUTIVE_COMPLETED})...`)
+          
+          if (consecutiveCompletedCount >= MAX_CONSECUTIVE_COMPLETED) {
+            // Stop polling after confirming all are completed for 3 cycles
+            console.log('✅ All documents confirmed completed, stopping status polling')
+            if (this.pollingInterval) {
+              clearInterval(this.pollingInterval)
+              this.pollingInterval = null
+            }
+          } else {
+            // Do one final refresh to ensure UI is up to date
+            this.loadUploadedDocuments().catch(err => {
+              console.warn('⚠️ Error during final status polling:', err)
+            })
+          }
+        } else if (hasSeenProcessingDocs) {
+          // Had processing docs before, but now none are processing and not all are completed
+          // This shouldn't happen normally, but continue polling just in case
+          console.log('🔄 Polling for document status updates (transition state)...')
+          this.loadUploadedDocuments().catch(err => {
+            console.warn('⚠️ Error during status polling:', err)
+          })
+        } else {
+          // No processing docs and never had any - stop immediately
+          console.log('✅ No processing documents found, stopping status polling')
+          if (this.pollingInterval) {
+            clearInterval(this.pollingInterval)
+            this.pollingInterval = null
+          }
+        }
+      }, 5000) // Poll every 5 seconds
+      
+      console.log('✅ Status polling enabled (5 second interval)')
     },
     
     
@@ -1746,7 +4477,9 @@ export default {
             return
           }
           
-          const response = await api.delete(`/api/ai-audit/${auditId}/documents/${documentId}/`)
+          const response = await api.delete(`/api/ai-audit/${auditId}/documents/${documentId}/`, {
+            timeout: 60000 // 60 seconds timeout for delete operations (may need to delete multiple records)
+          })
           
           if (response.data.success) {
             console.log('✅ Document deleted successfully')
@@ -1761,14 +4494,126 @@ export default {
         } catch (error) {
           console.error('❌ Error deleting document:', error)
           
-          if (error.response?.status === 404) {
+          // Handle timeout specifically
+          if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+            this.$popup?.error('Delete operation timed out. The document may still be deleted. Please refresh the page.')
+            // Try to reload anyway in case the delete succeeded
+            setTimeout(() => {
+              this.loadUploadedDocuments()
+            }, 1000)
+          } else if (error.response?.status === 404) {
             this.$popup?.error('Document not found or already deleted.')
+            // Reload to refresh the list
+            await this.loadUploadedDocuments()
           } else if (error.response?.status === 401) {
             this.$popup?.error('Authentication required. Please log in again.')
           } else {
             this.$popup?.error(`Delete failed: ${error.response?.data?.error || error.message}`)
           }
         }
+      }
+    },
+
+    async deleteAllDatabaseEvidence() {
+      if (!confirm('Are you sure you want to delete all additional evidence for this audit?')) {
+        return
+      }
+
+      try {
+        this.bulkDeletingDatabase = true
+
+        const auditId = this.currentAuditId
+        if (!auditId || auditId === 'Unknown') {
+          this.$popup?.error('No valid audit ID. Please refresh the page.')
+          this.bulkDeletingDatabase = false
+          return
+        }
+
+        console.log('🗑️ Bulk deleting all additional evidence for audit:', auditId)
+        const response = await api.delete(`/api/ai-audit/${auditId}/documents/delete-all/`, {
+          params: { type: 'database' }
+        })
+
+        if (response.data.success) {
+          console.log('✅ Bulk delete successful', response.data)
+          this.$popup?.success('All additional evidence deleted for this audit.')
+          await this.loadUploadedDocuments()
+        } else {
+          console.error('❌ Bulk delete failed:', response.data.error)
+          this.$popup?.error(`Delete failed: ${response.data.error}`)
+        }
+      } catch (error) {
+        console.error('❌ Error bulk deleting additional evidence:', error)
+        this.$popup?.error(`Delete failed: ${error.response?.data?.error || error.message}`)
+      } finally {
+        this.bulkDeletingDatabase = false
+      }
+    },
+
+    async deleteAllDocuments() {
+      if (!confirm('Are you sure you want to delete ALL documents for this audit? This action cannot be undone.')) {
+        return
+      }
+
+      try {
+        this.bulkDeleting = true
+
+        const auditId = this.currentAuditId
+        if (!auditId || auditId === 'Unknown') {
+          this.$popup?.error('No valid audit ID. Please refresh the page.')
+          this.bulkDeleting = false
+          return
+        }
+
+        console.log('🗑️ Bulk deleting all documents for audit:', auditId)
+        
+        // Delete all document records (not database records) for this audit
+        // Get all document IDs first
+        const documentIds = []
+        this.fileDocuments.forEach(fileGroup => {
+          if (fileGroup.mappings && fileGroup.mappings.length > 0) {
+            fileGroup.mappings.forEach(mapping => {
+              if (mapping.document_id && !documentIds.includes(mapping.document_id)) {
+                documentIds.push(mapping.document_id)
+              }
+            })
+          }
+        })
+
+        if (documentIds.length === 0) {
+          this.$popup?.info('No documents to delete.')
+          this.bulkDeleting = false
+          return
+        }
+
+        // Delete each document
+        let deletedCount = 0
+        let failedCount = 0
+        for (const docId of documentIds) {
+          try {
+            const response = await api.delete(`/api/ai-audit/${auditId}/documents/${docId}/`)
+            if (response.data.success) {
+              deletedCount++
+            } else {
+              failedCount++
+            }
+          } catch (error) {
+            console.error(`❌ Error deleting document ${docId}:`, error)
+            failedCount++
+          }
+        }
+
+        if (deletedCount > 0) {
+          this.$popup?.success(`Successfully deleted ${deletedCount} document(s).${failedCount > 0 ? ` ${failedCount} failed.` : ''}`)
+          await this.loadRelevantDocuments()  // Reload documents list
+        } else {
+          this.$popup?.error(`Failed to delete documents. ${failedCount} error(s).`)
+        }
+      } catch (error) {
+        console.error('❌ Error bulk deleting documents:', error)
+        this.$popup?.error(`Delete failed: ${error.response?.data?.error || error.message}`)
+      } finally {
+        this.bulkDeleting = false
       }
     },
     
@@ -1885,18 +4730,250 @@ export default {
       }
     }
     ,
-    async checkDocumentCompliance(doc) {
+    async checkDocumentCompliance(doc, fileGroup) {
       try {
-        doc._checking = true
         const auditId = this.currentAuditId
-        console.log('🧪 Checking compliance:', { auditId, document_id: doc.document_id })
-        const res = await api.post(`/api/ai-audit/${auditId}/documents/${doc.document_id}/check/`)
+        
+        if (!fileGroup || !fileGroup.mappings || fileGroup.mappings.length === 0) {
+          this.$popup?.error(`No mappings found for "${fileGroup?.document_name || 'document'}". Please ensure the document has been uploaded and mapped to policies/sub-policies.`)
+          return
+        }
+        
+        // If "All" is selected (doc is null), check all mappings
+        if (!doc || this.isAllMappingsSelected(fileGroup)) {
+          console.log('🧪 Checking compliance for ALL mappings of file:', fileGroup.document_name)
+          
+          // Mark all mappings as checking
+          fileGroup.mappings.forEach(m => { m._checking = true })
+          
+          // Collect ALL compliance IDs from ALL mappings
+          const allComplianceIds = new Set()
+          const mappingComplianceMap = new Map() // Map compliance_id -> mapping for later assignment
+          let primaryDocumentId = null
+          
+          console.log(`🔍 Collecting compliance IDs from ${fileGroup.mappings.length} mapping(s)`)
+          
+          for (const mapping of fileGroup.mappings) {
+            console.log(`🔍 Mapping: ${mapping.mapping_display}`, {
+              has_compliance_ids: !!mapping.compliance_ids,
+              compliance_ids: mapping.compliance_ids,
+              compliance_id_from_db: mapping.compliance_id, // Direct from database
+              document_id: mapping.document_id
+            })
+            
+            // First, check if mapping has direct compliance_id from database (manually uploaded)
+            if (mapping.compliance_id && !allComplianceIds.has(mapping.compliance_id)) {
+              allComplianceIds.add(mapping.compliance_id)
+              if (!mappingComplianceMap.has(mapping.compliance_id)) {
+                mappingComplianceMap.set(mapping.compliance_id, [])
+              }
+              mappingComplianceMap.get(mapping.compliance_id).push(mapping)
+              console.log(`✅ Added compliance_id ${mapping.compliance_id} from database record`)
+            }
+            
+            // Also check compliance_ids array (for multiple compliances or Document Handling uploads)
+            if (mapping.compliance_ids && Array.isArray(mapping.compliance_ids)) {
+              mapping.compliance_ids.forEach(compId => {
+                if (!allComplianceIds.has(compId)) {
+                  allComplianceIds.add(compId)
+                  if (!mappingComplianceMap.has(compId)) {
+                    mappingComplianceMap.set(compId, [])
+                  }
+                  mappingComplianceMap.get(compId).push(mapping)
+                  console.log(`✅ Added compliance_id ${compId} from compliance_ids array`)
+                }
+              })
+            }
+            
+            // Use the first mapping's document_id as the primary one
+            if (!primaryDocumentId && mapping.document_id) {
+              primaryDocumentId = mapping.document_id
+            }
+          }
+          
+          console.log(`🧪 Found ${allComplianceIds.size} unique compliance IDs across ${fileGroup.mappings.length} mapping(s):`, Array.from(allComplianceIds))
+          
+          if (allComplianceIds.size === 0) {
+            this.$popup?.error(`No compliance IDs found in any mapping for "${fileGroup.document_name}". Please ensure mappings have compliance requirements.`)
+            fileGroup.mappings.forEach(m => { m._checking = false })
+            return
+          }
+          
+          // Use the first mapping's document_id (they should all be the same for the same file)
+          const documentIdToUse = primaryDocumentId || fileGroup.mappings[0]?.document_id
+          if (!documentIdToUse) {
+            this.$popup?.error(`No document ID found for "${fileGroup.document_name}".`)
+            fileGroup.mappings.forEach(m => { m._checking = false })
+            return
+          }
+          
+          try {
+            // Make ONE API call with ALL compliance IDs
+            const payload = {
+              selected_compliance_ids: Array.from(allComplianceIds)
+            }
+            console.log(`🧪 Checking ALL mappings with ${allComplianceIds.size} compliance IDs:`, payload.selected_compliance_ids)
+            
+            const res = await api.post(
+              `/api/ai-audit/${auditId}/documents/${documentIdToUse}/check/`,
+              payload,
+              { timeout: 600000 } // 10 minutes timeout for compliance checks (can take longer for multiple compliances)
+            )
+            console.log('🧪 Check response for all mappings:', res.status, res.data)
+            
+            if (res.data && res.data.success) {
+              // Update all mappings with the results
+              const analyses = res.data.analyses || []
+              
+              // Group analyses by compliance_id and update corresponding mappings
+              for (const mapping of fileGroup.mappings) {
+                mapping.processing_status = 'completed'
+                mapping.compliance_status = res.data.status || mapping.compliance_status
+                mapping.confidence_score = res.data.confidence ?? mapping.confidence_score
+                
+                // Filter analyses for this mapping's compliance IDs
+                const mappingAnalyses = analyses.filter(a => 
+                  mapping.compliance_ids && mapping.compliance_ids.includes(a.compliance_id)
+                )
+                if (mappingAnalyses.length > 0) {
+                  mapping.compliance_analyses = mappingAnalyses
+                } else {
+                  mapping.compliance_analyses = analyses // Fallback: use all analyses
+                }
+              }
+              
+              // Clear checking flags
+              fileGroup.mappings.forEach(m => { m._checking = false })
+              
+              // Force Vue reactivity update immediately
+              this.$forceUpdate()
+              
+              this.$popup?.success(`Compliance checked successfully for "${fileGroup.document_name}" - ${allComplianceIds.size} compliance requirement(s) analyzed across ${fileGroup.mappings.length} mapping(s)`)
+              
+              // Reload documents to get updated status from backend (with delay to ensure backend has updated)
+              // Use multiple reload attempts to ensure status is correctly reflected
+              const reloadWithRetry = async (attempt = 1, maxAttempts = 3) => {
+                try {
+                  await this.loadUploadedDocuments()
+                  // After reload, verify that mappings are marked as completed
+                  const reloadedFileGroup = this.uploadedDocuments.find(fg => 
+                    fg.document_name === fileGroup.document_name && 
+                    fg.file_size === fileGroup.file_size
+                  )
+                  if (reloadedFileGroup) {
+                    console.log(`🔍 After reload (attempt ${attempt}) - mappings status:`, reloadedFileGroup.mappings.map(m => ({
+                      mapping: m.mapping_display,
+                      status: m.processing_status,
+                      has_analyses: !!m.compliance_analyses
+                    })))
+                    const allCompleted = reloadedFileGroup.mappings.every(m => m.processing_status === 'completed')
+                    console.log(`🔍 All mappings completed? ${allCompleted}`)
+                    
+                    // If not all completed and we have retries left, try again
+                    if (!allCompleted && attempt < maxAttempts) {
+                      console.log(`⚠️ Not all mappings completed, retrying reload in ${attempt * 500}ms...`)
+                      setTimeout(() => reloadWithRetry(attempt + 1, maxAttempts), attempt * 500)
+                    } else if (!allCompleted) {
+                      console.warn('⚠️ Some mappings are not marked as completed after all reload attempts. This may prevent Details button from showing.')
+                      // Force update status locally as fallback
+                      reloadedFileGroup.mappings.forEach(m => {
+                        if (m.processing_status !== 'completed') {
+                          m.processing_status = 'completed'
+                        }
+                      })
+                      this.$forceUpdate()
+                    }
+                  }
+                } catch (err) {
+                  console.error('Error reloading documents:', err)
+                  // Don't retry on timeout errors - they indicate a bigger problem
+                  if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+                    console.error('⏱️ Timeout error during reload - stopping retries')
+                    return
+                  }
+                  if (attempt < maxAttempts) {
+                    setTimeout(() => reloadWithRetry(attempt + 1, maxAttempts), attempt * 500)
+                  }
+                }
+              }
+              
+              // Start reload after a short delay
+              setTimeout(() => reloadWithRetry(), 1500) // Start with 1.5 second delay
+            } else {
+              const errorMsg = res.data?.error || 'Unknown error'
+              this.$popup?.error(`Failed to check compliance for "${fileGroup.document_name}". ${errorMsg}`)
+            }
+          } catch (err) {
+            const errorMsg = err.response?.data?.error || err.message || 'Network error'
+            console.error('🧪 Error checking all mappings:', err)
+            this.$popup?.error(`Failed to check compliance for "${fileGroup.document_name}". ${errorMsg}`)
+          } finally {
+            fileGroup.mappings.forEach(m => { m._checking = false })
+          }
+          return
+        }
+        
+        // Single mapping selected - check only this mapping with its compliances
+        doc._checking = true
+        console.log('🧪 Checking compliance for mapping:', doc.mapping_display)
+
+        const payload = {}
+        // Only send compliances for THIS specific mapping
+        if (doc.compliance_ids && doc.compliance_ids.length > 0) {
+          payload.selected_compliance_ids = doc.compliance_ids
+          console.log(`🧪 Selected compliance IDs for this mapping: ${doc.compliance_ids.length} compliance(s)`, doc.compliance_ids)
+        }
+
+        // Check this single document record (allow long-running AI job)
+        const res = await api.post(
+          `/api/ai-audit/${auditId}/documents/${doc.document_id}/check/`,
+          payload,
+          { timeout: 600000 } // 10 minutes
+        )
         console.log('🧪 Check response:', res.status, res.data)
+        
         if (res.data && res.data.success) {
-          doc.compliance_status = res.data.status
-          doc.confidence_score = res.data.confidence
-          doc.compliance_analyses = res.data.analyses
-          this.$popup?.success(`Compliance checked for "${doc.document_name}"`)
+          doc.processing_status = 'completed'
+          doc.compliance_status = res.data.status || doc.compliance_status
+          doc.confidence_score = res.data.confidence ?? doc.confidence_score
+          doc.compliance_analyses = res.data.analyses || doc.compliance_analyses
+          
+          // Force Vue reactivity update immediately
+          this.$forceUpdate()
+          
+          this.$popup?.success(`Compliance checked for "${fileGroup.document_name}" - ${doc.mapping_display}`)
+          
+          // Reload documents to get updated status from backend (with retry logic)
+          const reloadWithRetry = async (attempt = 1, maxAttempts = 3) => {
+            try {
+              await this.loadUploadedDocuments()
+              // Verify the mapping is marked as completed
+              const reloadedFileGroup = this.uploadedDocuments.find(fg => 
+                fg.document_name === fileGroup.document_name && 
+                fg.file_size === fileGroup.file_size
+              )
+              if (reloadedFileGroup) {
+                const reloadedMapping = reloadedFileGroup.mappings.find(m => 
+                  m.policy_id === doc.policy_id && m.subpolicy_id === doc.subpolicy_id
+                )
+                if (reloadedMapping && reloadedMapping.processing_status !== 'completed' && attempt < maxAttempts) {
+                  console.log(`⚠️ Mapping not completed after reload, retrying in ${attempt * 500}ms...`)
+                  setTimeout(() => reloadWithRetry(attempt + 1, maxAttempts), attempt * 500)
+                } else if (reloadedMapping && reloadedMapping.processing_status !== 'completed') {
+                  // Force update as fallback
+                  reloadedMapping.processing_status = 'completed'
+                  this.$forceUpdate()
+                }
+              }
+            } catch (err) {
+              console.error('Error reloading documents:', err)
+              if (attempt < maxAttempts) {
+                setTimeout(() => reloadWithRetry(attempt + 1, maxAttempts), attempt * 500)
+              }
+            }
+          }
+          
+          setTimeout(() => reloadWithRetry(), 1500)
         } else {
           const msg = res.data?.error || 'Compliance check failed'
           console.warn('🧪 Check failed:', msg)
@@ -1908,12 +4985,228 @@ export default {
         console.error('🧪 Compliance check error:', { status, data, message: e?.message })
         this.$popup?.error(data?.error || e?.message || 'Compliance check error')
       } finally {
-        doc._checking = false
+        // Clear checking flags
+        if (doc) {
+          doc._checking = false
+        } else if (fileGroup && fileGroup.mappings) {
+          fileGroup.mappings.forEach(m => { m._checking = false })
+        }
+      }
+    },
+    async checkAllDocumentsCompliance() {
+      try {
+        const auditId = this.currentAuditId
+        if (!auditId || auditId === 'Unknown') {
+          this.$popup?.error('No valid audit ID. Please refresh the page.')
+          return
+        }
+        if (this.uploadedDocuments.length === 0) {
+          this.$popup?.error('No uploaded documents to check.')
+          return
+        }
+
+        this.bulkChecking = true
+        console.log('🧪 Checking compliance for ALL mappings in ALL files:', auditId)
+
+        let successCount = 0
+        let totalMappings = 0
+
+        // Run checks sequentially for each file and each mapping
+        for (const fileGroup of this.uploadedDocuments) {
+          for (const mapping of fileGroup.mappings) {
+            try {
+              // Skip mappings that are already completed and have analyses
+              if (
+                mapping.processing_status === 'completed' &&
+                (mapping.compliance_analyses && mapping.compliance_analyses.length)
+              ) {
+                console.log(
+                  '🧪 Skipping already completed mapping:',
+                  mapping.mapping_display
+                )
+                continue
+              }
+
+              totalMappings += 1
+              
+              // Build payload with ONLY compliances for THIS specific mapping
+              const payload = {}
+              if (mapping.compliance_ids && mapping.compliance_ids.length > 0) {
+                payload.selected_compliance_ids = mapping.compliance_ids
+                console.log(`🧪 Checking mapping "${mapping.mapping_display}" with ${mapping.compliance_ids.length} compliance(s)`)
+              }
+              
+              const res = await api.post(
+                `/api/ai-audit/${auditId}/documents/${mapping.document_id}/check/`,
+                payload,
+                { timeout: 600000 } // 10 minutes per mapping
+              )
+              console.log('🧪 Bulk check response:', mapping.document_id, res.status, res.data)
+
+              if (res.data && res.data.success) {
+                successCount += 1
+                // Update the mapping object with the result
+                mapping.processing_status = 'completed'
+                mapping.compliance_status = res.data.status || mapping.compliance_status
+                mapping.confidence_score = res.data.confidence ?? mapping.confidence_score
+                mapping.compliance_analyses = res.data.analyses || mapping.compliance_analyses
+              } else {
+                mapping.processing_status = mapping.processing_status || 'pending'
+              }
+            } catch (err) {
+              const status = err?.response?.status
+              const data = err?.response?.data
+              console.error('🧪 Bulk compliance check error:', {
+                document_id: mapping.document_id,
+                status,
+                data,
+                message: err?.message
+              })
+              // Continue with other mappings even if one fails
+              mapping.processing_status = mapping.processing_status || 'pending'
+            }
+          }
+        }
+
+        this.$popup?.success(`Compliance checked for ${successCount}/${totalMappings} mapping(s).`)
+        
+        // Reload documents to get the latest status from backend
+        await this.loadUploadedDocuments()
+      } finally {
+        this.bulkChecking = false
       }
     }
   }
 }
 </script>
+
+<style scoped>
+.multi-mapping-container {
+  margin-top: 24px;
+  padding: 20px 24px;
+  border-radius: 12px;
+  border: 1px solid #e0e0e0;
+  background: #f9fafb;
+}
+
+.multi-mapping-title {
+  margin: 0 0 4px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2933;
+}
+
+.multi-mapping-help {
+  margin: 0 0 16px 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.multi-mapping-columns {
+  display: grid;
+  grid-template-columns: 1.1fr 1.2fr 1.2fr;
+  gap: 16px;
+}
+
+.multi-column {
+  background: #ffffff;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  padding: 12px 14px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  max-height: 220px;
+  display: flex;
+  flex-direction: column;
+}
+
+.multi-column-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.multi-column-header span {
+  white-space: nowrap;
+}
+
+.select-all-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #2563eb;
+  cursor: pointer;
+}
+
+.select-all-label input {
+  margin: 0;
+}
+
+.multi-column-list {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.multi-checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 12px;
+  color: #374151;
+  padding: 4px 2px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.multi-checkbox-row:hover {
+  background: #f3f4f6;
+}
+
+.multi-checkbox-row input {
+  margin-top: 2px;
+}
+
+.multi-checkbox-label {
+  line-height: 1.35;
+}
+
+.multi-subpolicy-policy {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.empty-text {
+  font-size: 12px;
+  color: #9ca3af;
+  padding: 4px 0;
+}
+
+.multi-mapping-summary {
+  margin-top: 12px;
+  font-size: 12px;
+  color: #4b5563;
+}
+
+@media (max-width: 1200px) {
+  .multi-mapping-columns {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .multi-mapping-columns {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
 
 <style scoped>
 @import './AssignAudit.css';
@@ -2274,6 +5567,554 @@ export default {
   font-size: 14px;
 }
 
+
+/* Suggested Documents Container - System Style */
+.suggested-documents-container {
+  margin-top: 30px;
+  margin-bottom: 2rem;
+  width: 100%;
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+  overflow: hidden;
+}
+
+.suggested-documents-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e5e7eb;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  user-select: none;
+}
+
+.suggested-documents-header:hover {
+  background: #e9ecef;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.suggested-documents-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.header-subtitle {
+  margin: 4px 0 0 0;
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 400;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.selection-count {
+  background: #4f7cff;
+  color: white;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.expand-icon {
+  font-size: 16px;
+  color: #6b7280;
+  transition: transform 0.3s ease;
+}
+
+.expand-icon.expanded {
+  transform: rotate(180deg);
+}
+
+.suggested-documents-content {
+  padding: 20px;
+  background: #ffffff;
+}
+
+/* Legacy class for backward compatibility */
+.relevant-documents-section {
+  margin-top: 30px;
+  margin-bottom: 2rem;
+  width: 100%;
+  padding: 25px;
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.relevant-documents-section h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #2c3e50;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.section-description {
+  color: #6c757d;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px;
+  color: #6c757d;
+}
+
+.relevant-documents-list {
+  margin-top: 20px;
+}
+
+.relevant-documents-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 15px;
+}
+
+.relevant-document-item {
+  display: flex;
+  gap: 15px;
+  padding: 15px;
+  margin-bottom: 15px;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.relevant-document-item:hover {
+  background: #e9ecef;
+  border-color: #dee2e6;
+}
+
+.document-checkbox {
+  display: flex;
+  align-items: flex-start;
+  padding-top: 5px;
+}
+
+.document-checkbox input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: #007bff;
+  flex-shrink: 0;
+}
+
+.document-info {
+  flex: 1;
+}
+
+.document-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.document-header h4 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.relevance-badge {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.relevance-badge.relevance-high {
+  background: #d4edda;
+  color: #155724;
+}
+
+.relevance-badge.relevance-medium {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.relevance-badge.relevance-low {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.document-meta {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: #6c757d;
+}
+
+.document-meta span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.document-summary {
+  margin-bottom: 10px;
+  color: #495057;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.document-reason {
+  margin-bottom: 10px;
+  padding: 10px;
+  background: #e7f3ff;
+  border-left: 3px solid #007bff;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #004085;
+}
+
+.document-reason strong {
+  display: block;
+  margin-bottom: 5px;
+}
+
+.matched-items {
+  margin-top: 10px;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+}
+
+.matched-section {
+  margin-bottom: 10px;
+}
+
+.matched-section:last-child {
+  margin-bottom: 0;
+}
+
+.matched-section strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #495057;
+  font-size: 13px;
+}
+
+.matched-section strong i {
+  margin-right: 6px;
+  color: #007bff;
+}
+
+.matched-tag {
+  display: inline-block;
+  padding: 5px 12px;
+  margin: 4px 4px 4px 0;
+  background: #ffffff;
+  border: 1px solid #dee2e6;
+  border-radius: 16px;
+  font-size: 12px;
+  color: #495057;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.no-relevant-documents {
+  padding: 40px;
+  text-align: center;
+  color: #6c757d;
+  font-size: 14px;
+}
+
+.no-relevant-documents i {
+  font-size: 24px;
+  margin-bottom: 10px;
+  display: block;
+  color: #adb5bd;
+}
+
+/* Document Actions Bar */
+.documents-actions-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.action-buttons-left {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.action-buttons-left .btn {
+  min-width: 150px;
+}
+
+.action-instructions {
+  background: #f8f9fa;
+  padding: 12px;
+  border-radius: 6px;
+  border-left: 3px solid #4f7cff;
+}
+
+.action-instructions p {
+  margin: 0;
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.5;
+}
+
+.action-instructions strong {
+  color: #2c3e50;
+}
+
+.documents-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.document-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 20px;
+}
+
+.document-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  transition: all 0.2s ease;
+  position: relative;
+  cursor: pointer;
+}
+
+.document-card:hover {
+  border-color: #4f7cff;
+  box-shadow: 0 2px 4px rgba(79, 124, 255, 0.1);
+}
+
+.document-card.selected {
+  border-color: #4f7cff;
+  background: #f8f9ff;
+  box-shadow: 0 2px 4px rgba(79, 124, 255, 0.15);
+}
+
+.card-checkbox-wrapper {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 10;
+}
+
+.card-checkbox-wrapper input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: #4f7cff;
+}
+
+.card-content {
+  padding-right: 40px;
+}
+
+.card-header {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.file-icon-wrapper {
+  width: 40px;
+  height: 40px;
+  background: #f3f4f6;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid #e5e7eb;
+}
+
+.file-icon {
+  font-size: 20px;
+  color: #4f7cff;
+}
+
+.file-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.file-name {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.file-meta span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.relevance-score {
+  display: flex;
+  align-items: flex-start;
+}
+
+.card-details {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.detail-section {
+  margin-bottom: 16px;
+}
+
+.detail-section:last-child {
+  margin-bottom: 0;
+}
+
+.detail-section h5 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.detail-section h5 i {
+  color: #4f7cff;
+  font-size: 14px;
+}
+
+.detail-section p {
+  margin: 0;
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.6;
+}
+
+.relevance-reason {
+  background: #f8f9fa;
+  padding: 12px;
+  border-radius: 6px;
+  border-left: 3px solid #4f7cff;
+}
+
+.matched-group {
+  margin-bottom: 12px;
+}
+
+.matched-group:last-child {
+  margin-bottom: 0;
+}
+
+.matched-group strong {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.matched-group strong i {
+  color: #4f7cff;
+  font-size: 12px;
+}
+
+.tags-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.matched-tag .tag-id {
+  color: #9ca3af;
+  font-size: 11px;
+}
+
+.card-footer {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.card-footer .btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.no-documents-message {
+  text-align: center;
+  padding: 60px 20px;
+  color: #6b7280;
+}
+
+.no-documents-message i {
+  font-size: 48px;
+  color: #d1d5db;
+  margin-bottom: 16px;
+  display: block;
+}
+
+.no-documents-message p {
+  margin: 8px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.no-documents-message span {
+  font-size: 14px;
+  color: #6b7280;
+}
 
 .upload-section {
   margin-bottom: 2rem;
@@ -2673,7 +6514,16 @@ export default {
 .uploaded-documents {
   margin-bottom: 2rem;
   padding-bottom: 1.5rem;
- 
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+.uploaded-documents-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
 }
 
 .documents-grid {
@@ -2681,14 +6531,19 @@ export default {
   flex-direction: column;
   gap: 12px;
   margin-top: 20px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .document-card {
   background: white;
   border: 1px solid #e5e7eb;
   border-radius: 6px;
-  padding: 12px 16px;
+  padding: 16px;
   transition: all 0.3s ease;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: visible;
 }
 
 .document-card:hover {
@@ -2698,16 +6553,17 @@ export default {
 
 .document-content {
   display: flex;
-  align-items: center;
-  gap: 20px;
+  flex-direction: column;
+  gap: 12px;
   width: 100%;
 }
 
 .document-main {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
-  flex: 1;
+  width: 100%;
+  box-sizing: border-box;
   min-width: 0;
 }
 
@@ -2715,11 +6571,17 @@ export default {
   font-size: 20px;
   color: #6b7280;
   flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .document-info {
-  min-width: 0;
   flex: 1;
+  min-width: 0;
+  overflow: visible;
+  word-wrap: break-word;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .document-info h4 {
@@ -2727,30 +6589,39 @@ export default {
   margin: 0 0 4px 0;
   font-size: 14px;
   font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  line-height: 1.4;
+  max-width: 100%;
 }
 
 .document-meta {
   color: #6c757d;
   font-size: 11px;
   margin: 0;
-  white-space: nowrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+  line-height: 1.4;
 }
 
 .document-type {
-  flex-shrink: 0;
-  min-width: 120px;
+  width: 100%;
+  margin-top: 4px;
 }
 
 .document-type span {
   font-size: 12px;
   color: #6c757d;
+  word-break: break-word;
 }
 
 .document-status {
-  flex-shrink: 0;
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
 }
 
 .status-badge {
@@ -2784,13 +6655,75 @@ export default {
 
 .document-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
   gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+  box-sizing: border-box;
+}
+
+.document-actions .btn {
   flex-shrink: 0;
+  margin: 0;
 }
 
 .btn-sm {
   padding: 6px 12px;
   font-size: 12px;
+  white-space: nowrap;
+  min-width: fit-content;
+}
+
+.mapping-selector {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.mapping-dropdown {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 13px;
+  background-color: white;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+.mapping-dropdown option {
+  white-space: normal;
+  word-break: break-word;
+  padding: 4px;
+  overflow: visible;
+}
+
+.mappings-list {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.mappings-badges {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.mapping-badge {
+  display: inline-block;
+  padding: 6px 10px;
+  background-color: #e9ecef;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #495057;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  line-height: 1.4;
 }
 
 .ai-processing-status {
@@ -3702,6 +7635,7 @@ export default {
   font-size: 24px;
   color: #adb5bd;
 }
+
 
 /* Responsive Design */
 @media (min-width: 1200px) {

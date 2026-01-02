@@ -392,8 +392,9 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import { useStore } from 'vuex';
 import { axiosInstance } from '@/config/api.js';
 import { API_ENDPOINTS } from '../../config/api.js';
 import '@fortawesome/fontawesome-free/css/all.min.css';
@@ -410,6 +411,7 @@ export default {
   },
   setup() {
     const router = useRouter();
+    const store = useStore();
     const findings = ref([]);
     const loading = ref(false);
     const isQuickLoading = ref(false);
@@ -802,10 +804,10 @@ export default {
           timeout: 5000
         };
         
-        // Apply framework filter if selected
+        // Apply framework filter if selected - ensure it's an integer
         if (selectedFramework.value) {
-          params.framework_id = selectedFramework.value;
-          console.log('🔍 Applying framework filter to audit findings:', selectedFramework.value);
+          params.framework_id = parseInt(selectedFramework.value);
+          console.log('🔍 Applying framework filter to audit findings:', params.framework_id, typeof params.framework_id);
         } else {
           console.log('ℹ️ Loading audit findings for all frameworks');
         }
@@ -848,10 +850,26 @@ export default {
         
         const response = await Promise.race([fetchPromise, timeoutPromise]);
         
+        console.log('📥 [AuditFindings] API Response:', {
+          success: response.data?.success,
+          dataLength: response.data?.data?.length || 0,
+          summary: response.data?.summary,
+          fullResponse: response.data
+        });
+        
         if (response.data && response.data.success) {
           findings.value = response.data.data || [];
           summary.value = response.data.summary || {};
           console.log('✅ Loaded', findings.value.length, 'audit findings from API');
+          console.log('📊 Summary:', summary.value);
+          
+          // If we have framework filter but no results, log warning
+          if (selectedFramework.value && findings.value.length === 0) {
+            console.warn(`⚠️ Framework filter active (${selectedFramework.value}) but no audit findings returned. This might mean:`);
+            console.warn('  1. No audit findings exist for this framework');
+            console.warn('  2. The backend filter might not be matching correctly');
+            console.warn('  3. Check if audit findings have ComplianceId or FrameworkId set correctly');
+          }
           
           // Cache the results if no filters
           if (!hasFilters && findings.value.length > 0) {
@@ -859,6 +877,7 @@ export default {
             console.log('💾 Cached audit findings for future use');
           }
         } else {
+          console.error('❌ API response indicates failure:', response.data);
           throw new Error(response.data?.message || 'Failed to load audit finding incidents');
         }
       } catch (err) {
@@ -1353,28 +1372,69 @@ export default {
     const fetchSelectedFramework = async () => {
       try {
         console.log('🔍 Fetching selected framework from home page for audit findings...');
+        
+        // First check Vuex store (from homepage selection)
+        if (store && store.state && store.state.framework) {
+          const storeFrameworkId = store.state.framework.selectedFrameworkId;
+          if (storeFrameworkId && storeFrameworkId !== 'all') {
+            const frameworkId = parseInt(storeFrameworkId);
+            if (frameworkId) {
+              selectedFramework.value = frameworkId;
+              console.log('✅ Set selected framework ID from Vuex store:', selectedFramework.value);
+              return;
+            }
+          }
+        }
+        
+        // Then check API
         const response = await axiosInstance.get(API_ENDPOINTS.FRAMEWORK_GET_SELECTED);
         console.log('✅ Selected framework API response:', response.data);
         
         if (response.data && response.data.frameworkId) {
-          selectedFramework.value = response.data.frameworkId;
+          const frameworkId = parseInt(response.data.frameworkId);
+          selectedFramework.value = frameworkId || '';
           console.log('✅ Set selected framework ID for audit findings:', selectedFramework.value);
         } else {
           console.log('⚠️ No framework selected or frameworkId not found in response');
           // Try localStorage fallback
           const storedFrameworkId = localStorage.getItem('selectedFrameworkId') || localStorage.getItem('frameworkId');
-          if (storedFrameworkId) {
-            selectedFramework.value = storedFrameworkId;
+          if (storedFrameworkId && storedFrameworkId !== 'null' && storedFrameworkId !== 'all') {
+            selectedFramework.value = parseInt(storedFrameworkId);
             console.log('✅ Using framework ID from localStorage:', selectedFramework.value);
+          } else {
+            selectedFramework.value = '';
           }
         }
       } catch (error) {
         console.warn('⚠️ Could not fetch selected framework:', error);
         // Try localStorage fallback
         const storedFrameworkId = localStorage.getItem('selectedFrameworkId') || localStorage.getItem('frameworkId');
-        if (storedFrameworkId) {
-          selectedFramework.value = storedFrameworkId;
+        if (storedFrameworkId && storedFrameworkId !== 'null' && storedFrameworkId !== 'all') {
+          selectedFramework.value = parseInt(storedFrameworkId);
           console.log('✅ Using framework ID from localStorage as fallback:', selectedFramework.value);
+        } else {
+          selectedFramework.value = '';
+        }
+      }
+    };
+    
+    // Handle storage changes (framework changes from homepage)
+    const handleStorageChange = (event) => {
+      if (event.key === 'selectedFrameworkId' || event.key === 'frameworkId') {
+        console.log('🔄 Framework changed in localStorage:', event.newValue);
+        if (event.newValue && event.newValue !== 'null' && event.newValue !== 'all') {
+          const frameworkId = parseInt(event.newValue);
+          if (frameworkId && frameworkId !== selectedFramework.value) {
+            console.log(`🔄 Framework changed from ${selectedFramework.value} to ${frameworkId} - refreshing audit findings`);
+            selectedFramework.value = frameworkId;
+            fetchData();
+          }
+        } else if (!event.newValue || event.newValue === 'null' || event.newValue === 'all') {
+          if (selectedFramework.value !== '') {
+            console.log('🔄 Framework cleared in localStorage - showing all frameworks');
+            selectedFramework.value = '';
+            fetchData();
+          }
         }
       }
     };
@@ -1615,10 +1675,47 @@ export default {
       
       // Fetch frameworks and selected framework first
       await fetchFrameworks();
+      const previousFramework = selectedFramework.value;
       await fetchSelectedFramework();
+      
+      // Also check Vuex store for framework selection (from homepage) - this takes priority
+      if (store && store.state && store.state.framework) {
+        const storeFrameworkId = store.state.framework.selectedFrameworkId;
+        if (storeFrameworkId && storeFrameworkId !== 'all') {
+          const frameworkId = parseInt(storeFrameworkId);
+          if (frameworkId && frameworkId !== selectedFramework.value) {
+            console.log('🔄 Found framework in Vuex store:', frameworkId, '- updating selectedFramework');
+            selectedFramework.value = frameworkId;
+          }
+        } else if (!storeFrameworkId || storeFrameworkId === 'all') {
+          // Framework cleared in store
+          if (selectedFramework.value !== '') {
+            console.log('🔄 Framework cleared in Vuex store - showing all frameworks');
+            selectedFramework.value = '';
+          }
+        }
+      }
+      
+      // Also check localStorage as a fallback (in case Vuex isn't available)
+      const localStorageFrameworkId = localStorage.getItem('selectedFrameworkId') || localStorage.getItem('frameworkId');
+      if (localStorageFrameworkId && localStorageFrameworkId !== 'null' && localStorageFrameworkId !== 'all') {
+        const frameworkId = parseInt(localStorageFrameworkId);
+        if (frameworkId && frameworkId !== selectedFramework.value) {
+          console.log('🔄 Found framework in localStorage:', frameworkId, '- updating selectedFramework');
+          selectedFramework.value = frameworkId;
+        }
+      }
+      
+      // If framework changed, refresh data
+      if (previousFramework !== selectedFramework.value) {
+        console.log(`🔄 Framework changed from ${previousFramework} to ${selectedFramework.value} - will refresh audit findings`);
+      }
       
       // Then fetch audit findings data (will use cache if available)
       fetchData();
+      
+      // Listen for storage events to detect framework changes from other tabs/pages
+      window.addEventListener('storage', handleStorageChange);
       
       // Load supporting data from cache or API
       const cachedUsers = incidentService.getData('incidentUsers');
@@ -1660,9 +1757,33 @@ export default {
       }, 100);
     });
 
+    // Watch for Vuex store framework changes
+    watch(
+      () => store?.state?.framework?.selectedFrameworkId,
+      (newFrameworkId) => {
+        console.log('🔄 Framework changed in Vuex store:', newFrameworkId);
+        if (newFrameworkId && newFrameworkId !== 'all') {
+          const frameworkId = parseInt(newFrameworkId);
+          if (frameworkId && frameworkId !== selectedFramework.value) {
+            console.log(`🔄 Framework changed from ${selectedFramework.value} to ${frameworkId} - refreshing audit findings`);
+            selectedFramework.value = frameworkId;
+            fetchData();
+          }
+        } else if (!newFrameworkId || newFrameworkId === 'all') {
+          if (selectedFramework.value !== '') {
+            console.log('🔄 Framework cleared in Vuex store - showing all frameworks');
+            selectedFramework.value = '';
+            fetchData();
+          }
+        }
+      },
+      { immediate: false }
+    );
+    
     // Cleanup on unmount
     onUnmounted(() => {
       document.removeEventListener('click', handleClickOutside);
+      window.removeEventListener('storage', handleStorageChange);
     });
     
     return {
@@ -1733,6 +1854,7 @@ export default {
       fetchCategories,
       fetchFrameworks,
       fetchSelectedFramework,
+      handleStorageChange,
       loadCurrentUser,
       applyFilters,
       filterByStatus,

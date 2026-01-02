@@ -338,7 +338,7 @@ def assign_default_rbac_permissions_for_google_sso(user):
     """
     try:
         # Get user's default framework - use first available if user doesn't have one
-        framework = user.FrameworkId
+        framework = getattr(user, 'FrameworkId', None)
         if not framework:
             from .models import Framework
             framework = Framework.objects.first()
@@ -570,12 +570,12 @@ def generate_jwt_tokens(user, login_time=None, session_token=None):
         logger.error(f"Error generating JWT tokens: {str(e)}")
         raise
 
-def verify_jwt_token(token, check_session=True):
+def verify_jwt_token(token, check_session=False):
     """Verify and decode JWT token
     
     Args:
         token: JWT token string
-        check_session: If True, also validates session token (multi-session management)
+        check_session: If True, also validates session token (multi-session management) - DISABLED
     """
     try:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
@@ -1042,21 +1042,13 @@ def jwt_login(request):
         # Login activities are logged to grc_logs instead
         
         # ========================================
-        # MULTI-SESSION MANAGEMENT - INVALIDATE PREVIOUS SESSION
+        # MULTI-SESSION MANAGEMENT - DISABLED
         # ========================================
-        # Invalidate any existing session for this user (force logout from other locations)
-        _invalidate_user_session(user.UserId)
+        # Session token validation disabled to prevent constant logouts
+        # Users can now stay logged in across multiple locations
         
-        # Generate a new session token for this login
-        session_token = str(uuid.uuid4())
-        
-        # Store the new session token in cache
-        _set_user_session_token(user.UserId, session_token)
-        
-        logger.info(f"🔐 New session token generated for user {user.UserName} (ID: {user.UserId}): {session_token}")
-        
-        # Generate JWT tokens with the new session token
-        tokens = generate_jwt_tokens(user, session_token=session_token)
+        # Generate JWT tokens without session token enforcement
+        tokens = generate_jwt_tokens(user)
         
         # Store user info in session for compatibility with consistent naming
         import time
@@ -1226,6 +1218,7 @@ def jwt_refresh(request):
                 import time
                 old_login_time = time.time()  # Fallback for old tokens without login_time
             
+<<<<<<< HEAD
             # Preserve session token from old token (for multi-session management)
             # This ensures the same session continues after token refresh
             old_session_token = refresh.get('jti')
@@ -1248,10 +1241,21 @@ def jwt_refresh(request):
                 old_session_token = str(uuid.uuid4())
                 _set_user_session_token(user_id, old_session_token)
                 logger.debug(f"Generated new session token for user {user_id} during refresh (backward compatibility)")
+=======
+            # Session token validation disabled - allow token refresh without session checking
+            # old_session_token = refresh.get('jti')
+            # if old_session_token:
+            #     if not _is_session_token_valid(user_id, old_session_token):
+            #         logger.warning(f"Session token invalid during refresh for user {user_id} - user logged in elsewhere")
+            #         return Response({
+            #             'status': 'error',
+            #             'message': 'Session invalidated. Please log in again.'
+            #         }, status=status.HTTP_401_UNAUTHORIZED)
+>>>>>>> 53a3632080f71940a0722ec61a9533392b5182d3
             
-            # Generate new tokens with preserved login_time and session_token (before blacklisting old token)
+            # Generate new tokens with preserved login_time (before blacklisting old token)
             # This ensures we have valid tokens even if blacklisting fails
-            tokens = generate_jwt_tokens(user, login_time=old_login_time, session_token=old_session_token)
+            tokens = generate_jwt_tokens(user, login_time=old_login_time)
             
             # IMPORTANT: Blacklist the old refresh token AFTER generating new tokens
             # This prevents token reuse while ensuring we have new tokens ready
@@ -2529,14 +2533,22 @@ def google_oauth_callback(request):
                     'message': 'No license key assigned to this user. Please contact your administrator.'
                 }, status=status.HTTP_403_FORBIDDEN)
         
-        # Generate JWT tokens
+        # ========================================
+        # MULTI-SESSION MANAGEMENT - DISABLED
+        # ========================================
+        # Session token validation disabled to prevent constant logouts
+        # Users can now stay logged in across multiple locations
+        
+        # Generate JWT tokens without session token enforcement
         tokens = generate_jwt_tokens(user)
         
         # Store user info in session
+        import time
         request.session['user_id'] = user.UserId
         request.session['username'] = user.UserName
         request.session['grc_user_id'] = user.UserId
         request.session['grc_username'] = user.UserName
+        request.session['session_created_at'] = time.time()  # Store session creation time for timeout check
         
         if 'grc_framework_selected' not in request.session:
             request.session['grc_framework_selected'] = None

@@ -542,9 +542,67 @@ export default {
         );
       }
       
-      // Apply framework filter
+      // Apply framework filter - check FrameworkId field (handle null, undefined, empty string)
       if (this.selectedFramework) {
-        result = result.filter(inc => inc.framework_id == this.selectedFramework);
+        const frameworkId = parseInt(this.selectedFramework);
+        const beforeCount = result.length;
+        
+        // Debug: Log sample incident to see available fields
+        if (beforeCount > 0 && beforeCount <= 5) {
+          const sampleInc = result[0];
+          console.log('🔍 Sample incident for framework filtering:', {
+            IncidentId: sampleInc.IncidentId,
+            FrameworkId: sampleInc.FrameworkId,
+            framework_id: sampleInc.framework_id,
+            'FrameworkId type': typeof sampleInc.FrameworkId,
+            'framework_id type': typeof sampleInc.framework_id,
+            allKeys: Object.keys(sampleInc).filter(k => k.toLowerCase().includes('framework'))
+          });
+        }
+        
+        result = result.filter(inc => {
+          // Check FrameworkId field (direct field from model - case sensitive)
+          let incFrameworkId = null;
+          if (inc.FrameworkId !== null && inc.FrameworkId !== undefined && inc.FrameworkId !== '') {
+            const parsed = parseInt(inc.FrameworkId);
+            if (!isNaN(parsed)) {
+              incFrameworkId = parsed;
+            }
+          }
+          
+          // Check framework_id field (lowercase, from compliance relationship)
+          let incFrameworkIdLower = null;
+          if (inc.framework_id !== null && inc.framework_id !== undefined && inc.framework_id !== '') {
+            const parsed = parseInt(inc.framework_id);
+            if (!isNaN(parsed)) {
+              incFrameworkIdLower = parsed;
+            }
+          }
+          
+          // Match if either field matches
+          const matches = incFrameworkId === frameworkId || incFrameworkIdLower === frameworkId;
+          
+          return matches;
+        });
+        console.log(`🔍 Framework filter applied: ${beforeCount} → ${result.length} incidents (frameworkId: ${frameworkId})`);
+        
+        // Debug: If no matches, log first few incidents' framework values
+        if (result.length === 0 && beforeCount > 0 && beforeCount <= 10) {
+          console.warn('⚠️ No incidents matched framework filter. Sample framework values:', 
+            result.slice(0, 5).map(inc => ({
+              id: inc.IncidentId,
+              FrameworkId: inc.FrameworkId,
+              framework_id: inc.framework_id
+            }))
+          );
+          console.warn('⚠️ First 3 incidents framework values:', 
+            result.slice(0, 3).map(inc => ({
+              id: inc.IncidentId,
+              FrameworkId: inc.FrameworkId,
+              framework_id: inc.framework_id
+            }))
+          );
+        }
       }
       
       // Apply status filter
@@ -599,6 +657,27 @@ export default {
         console.log('All incident IDs:', newIncidents.map(inc => inc.IncidentId));
       },
       deep: true
+    },
+    // Watch for framework changes from homepage/localStorage
+    '$store.state.framework.selectedFrameworkId': {
+      handler(newFrameworkId) {
+        console.log('🔄 Framework changed in Vuex store:', newFrameworkId);
+        if (newFrameworkId && newFrameworkId !== 'all') {
+          const frameworkId = parseInt(newFrameworkId);
+          if (frameworkId !== this.selectedFramework) {
+            console.log(`🔄 Framework changed from ${this.selectedFramework} to ${frameworkId} - refreshing incidents`);
+            this.selectedFramework = frameworkId;
+            this.fetchIncidents();
+          }
+        } else if (!newFrameworkId || newFrameworkId === 'all') {
+          if (this.selectedFramework !== '') {
+            console.log('🔄 Framework cleared - showing all frameworks');
+            this.selectedFramework = '';
+            this.fetchIncidents();
+          }
+        }
+      },
+      immediate: false
     }
   },
   async mounted() {
@@ -672,17 +751,59 @@ export default {
       });
     }
     
+    // ALWAYS fetch frameworks and selected framework first (needed for filtering)
+    await this.fetchFrameworks();
+    const previousFramework = this.selectedFramework;
+    await this.fetchSelectedFramework();
+    
+    // Also check Vuex store for framework selection (from homepage) - this takes priority
+    if (this.$store && this.$store.state && this.$store.state.framework) {
+      const storeFrameworkId = this.$store.state.framework.selectedFrameworkId;
+      if (storeFrameworkId && storeFrameworkId !== 'all') {
+        const frameworkId = parseInt(storeFrameworkId);
+        if (frameworkId && frameworkId !== this.selectedFramework) {
+          console.log('🔄 Found framework in Vuex store:', frameworkId, '- updating selectedFramework');
+          this.selectedFramework = frameworkId;
+        }
+      } else if (!storeFrameworkId || storeFrameworkId === 'all') {
+        // Framework cleared in store
+        if (this.selectedFramework !== '') {
+          console.log('🔄 Framework cleared in Vuex store - showing all frameworks');
+          this.selectedFramework = '';
+        }
+      }
+    }
+    
+    // Also check localStorage as a fallback (in case Vuex isn't available)
+    const localStorageFrameworkId = localStorage.getItem('selectedFrameworkId') || localStorage.getItem('frameworkId');
+    if (localStorageFrameworkId && localStorageFrameworkId !== 'null' && localStorageFrameworkId !== 'all') {
+      const frameworkId = parseInt(localStorageFrameworkId);
+      if (frameworkId && frameworkId !== this.selectedFramework) {
+        console.log('🔄 Found framework in localStorage:', frameworkId, '- updating selectedFramework');
+        this.selectedFramework = frameworkId;
+      }
+    }
+    
+    // If framework changed, refresh incidents
+    if (previousFramework !== this.selectedFramework) {
+      console.log(`🔄 Framework changed from ${previousFramework} to ${this.selectedFramework} - will refresh incidents`);
+    }
+    
     if (hasStoredData) {
       const incidentsCount = incidentService.getData('incidents')?.length || 0;
       console.log(`📦 [Incident.vue] Loading ${incidentsCount} incidents from storage...`);
       // Load stored data immediately
       await this.loadFromStoredData();
       console.log(`✅ [Incident.vue] Loaded from storage. Displaying ${this.incidents.length} incidents.`);
+      
+      // If framework filter is active, refresh from API to ensure accurate filtering
+      if (this.selectedFramework) {
+        console.log('🔄 Framework filter active - refreshing incidents from API for accurate filtering');
+        this.fetchIncidents();
+      }
     } else {
       console.warn('⚠️ [Incident.vue] No stored data available after waiting. Fetching from API...');
       // Fallback to API calls ONLY if no stored data exists
-      await this.fetchFrameworks();
-      await this.fetchSelectedFramework();
       // Don't call fetchIncidents() here - it will check stored data first
       // Only call if truly no data exists
       const finalCheck = incidentService.getData('incidents');
@@ -693,9 +814,12 @@ export default {
         console.log('✅ [Incident.vue] Found stored data after all - loading from storage');
         await this.loadFromStoredData();
       }
+    }
     this.fetchBusinessUnits();
     this.fetchBusinessCategories();
-    }
+    
+    // Listen for storage events to detect framework changes from other tabs/pages
+    window.addEventListener('storage', this.handleStorageChange);
     
     // Ensure the main document scrolls to see all checklist data
     document.documentElement.style.overflow = 'auto';
@@ -1804,8 +1928,9 @@ export default {
           lastFetchTime: incidentService.getAllData().lastFetchTime
         });
         
-        // If we have stored data, ALWAYS use it - filter locally, don't call API!
-        if (hasStoredData) {
+        // If we have stored data AND no framework filter, use it with local filtering
+        // If framework filter is active, use API for accurate filtering (framework data might not be in stored data)
+        if (hasStoredData && !this.selectedFramework) {
           console.log('✅ [fetchIncidents] Using stored incidents from session - NO API CALL!');
           
           // Apply filters/search to stored data locally (client-side filtering)
@@ -1825,12 +1950,8 @@ export default {
             );
           }
           
-          // Apply framework filter
-          if (this.selectedFramework) {
-            filteredIncidents = filteredIncidents.filter(inc => 
-              inc.framework_id == this.selectedFramework
-            );
-          }
+          // Note: Framework filter is handled by API call when selectedFramework is set
+          // This block only runs when !this.selectedFramework
           
           // Apply status filter
           if (this.selectedStatus) {
@@ -1883,8 +2004,14 @@ export default {
           return; // EXIT - Don't call API!
         }
         
-        // Only call API if NO stored data exists (shouldn't happen after login!)
-        console.warn('⚠️ [fetchIncidents] No stored data found - calling API (this should not happen after login!)');
+        // Call API if:
+        // 1. No stored data exists, OR
+        // 2. Framework filter is active (for accurate filtering)
+        if (!hasStoredData) {
+          console.warn('⚠️ [fetchIncidents] No stored data found - calling API (this should not happen after login!)');
+        } else if (this.selectedFramework) {
+          console.log('🔍 [fetchIncidents] Framework filter active - using API for accurate filtering');
+        }
         
         // Debug authentication
         const token = localStorage.getItem('access_token');
@@ -1912,8 +2039,8 @@ export default {
 
         // Add filter parameters
         if (this.selectedFramework) {
-          params.framework_id = this.selectedFramework;
-          console.log('Adding framework filter:', this.selectedFramework);
+          params.framework_id = parseInt(this.selectedFramework);
+          console.log('Adding framework filter:', params.framework_id, typeof params.framework_id);
         }
         if (this.selectedPolicy) {
           params.policy_id = this.selectedPolicy;
@@ -2143,12 +2270,35 @@ export default {
     async fetchFrameworks() {
       try {
         const response = await axiosInstance.get(API_ENDPOINTS.COMPLIANCE_ALL_POLICIES_FRAMEWORKS);
+        let allFrameworks = [];
+        
         if (response.data && Array.isArray(response.data)) {
-          this.frameworks = response.data;
+          allFrameworks = response.data;
+        } else if (response.data && response.data.frameworks && Array.isArray(response.data.frameworks)) {
+          allFrameworks = response.data.frameworks;
+        } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+          allFrameworks = response.data.data;
         } else {
-          this.frameworks = [];
+          allFrameworks = [];
         }
-        console.log('Fetched frameworks:', this.frameworks);
+        
+        // Filter to show only active frameworks (ActiveInactive === 'Active')
+        // The API returns frameworks with 'status' field containing ActiveInactive value
+        this.frameworks = allFrameworks.filter(fw => {
+          // Check various possible field names for active status
+          // API returns 'status' field with ActiveInactive value ('Active' or 'Inactive')
+          const activeStatus = fw.status || fw.Status || fw.ActiveInactive || fw.activeInactive || '';
+          const isActive = activeStatus === 'Active' || activeStatus === 'active' || activeStatus === 'ACTIVE';
+          
+          if (!isActive) {
+            console.log(`🔍 Filtered out inactive framework: ${fw.name || fw.id} (status: ${activeStatus})`);
+          }
+          
+          return isActive;
+        });
+        
+        console.log(`Fetched frameworks: ${allFrameworks.length} total, ${this.frameworks.length} active`);
+        console.log('Active frameworks:', this.frameworks);
       } catch (error) {
         console.error('Error fetching frameworks:', error);
         this.frameworks = [];
@@ -2470,6 +2620,11 @@ export default {
     },
     async onFrameworkChange() {
       console.log('Framework changed to:', this.selectedFramework);
+      // Ensure selectedFramework is a number (from dropdown it might be a string)
+      if (this.selectedFramework) {
+        this.selectedFramework = parseInt(this.selectedFramework);
+      }
+      console.log('Framework after type conversion:', this.selectedFramework, typeof this.selectedFramework);
       this.selectedPolicy = '';
       this.selectedSubPolicy = '';
       this.policies = [];
@@ -2532,6 +2687,26 @@ export default {
       }
       
       this.fetchIncidents();
+    },
+    handleStorageChange(event) {
+      // Listen for framework changes in localStorage (from homepage)
+      if (event.key === 'selectedFrameworkId' || event.key === 'frameworkId') {
+        console.log('🔄 Framework changed in localStorage:', event.newValue);
+        if (event.newValue && event.newValue !== 'null' && event.newValue !== 'all') {
+          const frameworkId = parseInt(event.newValue);
+          if (frameworkId && frameworkId !== this.selectedFramework) {
+            console.log(`🔄 Framework changed from ${this.selectedFramework} to ${frameworkId} - refreshing incidents`);
+            this.selectedFramework = frameworkId;
+            this.fetchIncidents();
+          }
+        } else if (!event.newValue || event.newValue === 'null' || event.newValue === 'all') {
+          if (this.selectedFramework !== '') {
+            console.log('🔄 Framework cleared in localStorage - showing all frameworks');
+            this.selectedFramework = '';
+            this.fetchIncidents();
+          }
+        }
+      }
     },
   }
 }

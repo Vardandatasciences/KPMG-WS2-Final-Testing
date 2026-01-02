@@ -1,0 +1,1220 @@
+[
+  {
+    "section_info": {
+      "title": "Introduction: Protecting Cardholder Data with PCI Security Standards",
+      "level": 1,
+      "start_page": 3,
+      "end_page": 3,
+      "folder_path": "001-Introduction_Protecting_Cardholder_Data"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Payment Card Industry Data Security Standard (PCI DSS)",
+        "current_version": "4.0",
+        "framework_description": "The Payment Card Industry Data Security Standard (PCI DSS) is a set of security standards designed to ensure that all companies that accept, process, store or transmit credit card information maintain a secure environment. PCI DSS applies to all entities involved in payment card processing including merchants, processors, acquirers, issuers, and service providers.",
+        "category": "Financial Security and Compliance",
+        "start_date": "2022-03-31",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "PCI-DSS-SEC-001",
+          "policy_title": "Cardholder Data Protection Policy",
+          "policy_description": "Establishes requirements for protecting cardholder data throughout the payment card processing ecosystem to mitigate risks of financial fraud and data breaches.",
+          "policy_text": "It is imperative that you use standard security procedures and technologies to thwart theft of cardholder data. Merchant-based vulnerabilities may appear almost anywhere in the card-processing ecosystem including point-of-sale devices, mobile devices, personal computers or servers, wireless hotspots, web shopping applications, paper-based storage systems, and the transmission of cardholder data to service providers.",
+          "scope": "This policy applies to all merchants, service providers, and acquirers involved in payment card transactions. It encompasses all systems, applications, and processes that handle cardholder data, including point-of-sale systems, e-commerce platforms, and data storage solutions.",
+          "objective": "The primary objective of this policy is to ensure the protection of cardholder data from unauthorized access and theft, thereby maintaining consumer trust and compliance with PCI DSS requirements. Specific objectives include: (1) identifying and mitigating vulnerabilities in the card-processing ecosystem; (2) ensuring secure handling and transmission of cardholder data; (3) promoting awareness of security standards among all stakeholders.",
+          "policy_type": "Security",
+          "policy_category": "Data Protection",
+          "policy_subcategory": "Cardholder Data Security",
+          "subpolicies": [
+            {
+              "subpolicy_id": "PCI-DSS-SEC-001.01",
+              "subpolicy_title": "Vulnerability Management Requirements",
+              "subpolicy_description": "Establishes requirements for identifying and managing vulnerabilities in systems that process cardholder data.",
+              "subpolicy_text": "Merchants must regularly assess their systems for vulnerabilities and implement appropriate security measures to mitigate identified risks.",
+              "control": "WHAT: Conduct regular vulnerability assessments and implement security patches. WHO: IT Security team and system administrators. WHEN: At least quarterly and after any significant system changes. HOW: Use automated scanning tools and manual reviews. WHERE: All systems involved in cardholder data processing."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-SEC-001.02",
+              "subpolicy_title": "Secure Transmission of Cardholder Data",
+              "subpolicy_description": "Defines requirements for securely transmitting cardholder data to prevent interception and unauthorized access.",
+              "subpolicy_text": "All cardholder data transmitted over networks must be encrypted using strong encryption protocols.",
+              "control": "WHAT: Encrypt cardholder data during transmission. WHO: IT Security team and network administrators. WHEN: Continuously during data transmission. HOW: Use TLS 1.2 or higher for all network communications. WHERE: All network paths that transmit cardholder data."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-SEC-001.03",
+              "subpolicy_title": "Access Control for Cardholder Data",
+              "subpolicy_description": "Establishes access control measures to ensure that only authorized personnel can access cardholder data.",
+              "subpolicy_text": "Access to cardholder data must be restricted based on the principle of least privilege.",
+              "control": "WHAT: Implement role-based access controls for systems handling cardholder data. WHO: IT Security team and access management personnel. WHEN: At the time of user account creation and during periodic access reviews. HOW: Use access control lists and role definitions. WHERE: All systems and applications that store or process cardholder data."
+            }
+          ]
+        }
+      ],
+      "document_type": "standard",
+      "confidence": 0.95
+    }
+  },
+  {
+    "section_info": {
+      "title": "Overview of PCI Requirements",
+      "level": 1,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "002-Overview_of_PCI_Requirements"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Payment Card Industry Data Security Standard (PCI DSS)",
+        "current_version": "4.0",
+        "framework_description": "The Payment Card Industry Data Security Standard (PCI DSS) is a set of security standards designed to ensure that all companies that accept, process, store or transmit credit card information maintain a secure environment. PCI DSS applies to all entities involved in payment card processing including merchants, processors, acquirers, issuers, and service providers.",
+        "category": "Financial Security and Compliance",
+        "start_date": "2022-03-31",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "PCI-DSS-COMP-002",
+          "policy_title": "PCI DSS Compliance Policy",
+          "policy_description": "Establishes requirements for ongoing compliance with the Payment Card Industry Data Security Standard (PCI DSS) to protect cardholder data.",
+          "policy_text": "This policy outlines the three ongoing steps for adhering to PCI DSS: Assess, Repair, and Report.",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in payment card processing, including merchants, service providers, and payment processors.",
+          "objective": "The primary objective of this policy is to ensure continuous compliance with PCI DSS requirements, thereby protecting cardholder data and maintaining the integrity of payment card transactions.",
+          "policy_type": "Compliance",
+          "policy_category": "Financial Security",
+          "policy_subcategory": "Payment Card Industry Standards",
+          "subpolicies": [
+            {
+              "subpolicy_id": "PCI-DSS-COMP-002.01",
+              "subpolicy_title": "Assessment of Cardholder Data",
+              "subpolicy_description": "Identifying all locations of cardholder data and taking an inventory of IT assets and business processes for payment card processing.",
+              "subpolicy_text": "Conduct a thorough assessment to identify and document all locations where cardholder data is stored, processed, or transmitted.",
+              "control": "WHAT: Identify and inventory all locations of cardholder data. WHO: IT Security team and compliance officers. WHEN: Annually or whenever significant changes occur. HOW: Use data discovery tools and manual audits. WHERE: All systems and networks involved in payment processing."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-COMP-002.02",
+              "subpolicy_title": "Vulnerability Repair Procedures",
+              "subpolicy_description": "Fixing identified vulnerabilities and securely removing unnecessary cardholder data storage.",
+              "subpolicy_text": "Implement procedures to address vulnerabilities and ensure secure handling of cardholder data.",
+              "control": "WHAT: Remediate identified vulnerabilities and remove unnecessary cardholder data. WHO: IT Security team and system administrators. WHEN: Immediately upon identification of vulnerabilities. HOW: Apply patches, update configurations, and securely delete data. WHERE: All systems that store or process cardholder data."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-COMP-002.03",
+              "subpolicy_title": "Compliance Reporting",
+              "subpolicy_description": "Documenting assessment and remediation details, and submitting compliance reports to relevant entities.",
+              "subpolicy_text": "Ensure that all compliance documentation is accurate and submitted to the acquiring bank and card brands.",
+              "control": "WHAT: Document compliance assessment and remediation efforts. WHO: Compliance officers and IT Security team. WHEN: After each assessment cycle and remediation effort. HOW: Generate compliance reports and submit to relevant stakeholders. WHERE: All documentation systems and reporting tools."
+            }
+          ]
+        }
+      ],
+      "document_type": "guideline",
+      "confidence": 0.93
+    }
+  },
+  {
+    "section_info": {
+      "title": "The PCI Data Security Standard",
+      "level": 2,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "002-Overview_of_PCI_Requirements\\001-The_PCI_Data_Security_Standard"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Payment Card Industry Data Security Standard (PCI DSS)",
+        "current_version": "4.0",
+        "framework_description": "The Payment Card Industry Data Security Standard (PCI DSS) is a set of security standards designed to ensure that all companies that accept, process, store or transmit credit card information maintain a secure environment. PCI DSS applies to all entities involved in payment card processing including merchants, processors, acquirers, issuers, and service providers.",
+        "category": "Financial Security and Compliance",
+        "start_date": "2022-03-31",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "PCI-DSS-SEC-003",
+          "policy_title": "PCI DSS Compliance Policy",
+          "policy_description": "Establishes requirements for ongoing compliance with the Payment Card Industry Data Security Standard (PCI DSS) to protect cardholder data.",
+          "policy_text": "The PCI DSS requires ongoing assessment, repair, and reporting to ensure the security of cardholder data. Organizations must identify all locations of cardholder data, take inventory of IT assets, analyze vulnerabilities, fix identified vulnerabilities, securely remove unnecessary cardholder data, and document compliance efforts.",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in payment card processing, including merchants, service providers, and payment processors. It encompasses all information systems, networks, applications, and associated infrastructure components that handle cardholder data.",
+          "objective": "The primary objective of this policy is to ensure continuous compliance with PCI DSS requirements, thereby protecting cardholder data from unauthorized access and breaches. Specific objectives include: (1) identifying and mitigating vulnerabilities; (2) ensuring secure handling of cardholder data; (3) maintaining accurate documentation of compliance efforts.",
+          "policy_type": "Security",
+          "policy_category": "Compliance",
+          "policy_subcategory": "Payment Card Industry Data Security",
+          "subpolicies": [
+            {
+              "subpolicy_id": "PCI-DSS-SEC-003.01",
+              "subpolicy_title": "Assessment of Cardholder Data Locations",
+              "subpolicy_description": "Organizations must identify all locations where cardholder data is stored, processed, or transmitted.",
+              "subpolicy_text": "Conduct a thorough assessment to locate all instances of cardholder data across systems and processes.",
+              "control": "WHAT: Identify all locations of cardholder data. WHO: IT Security team and compliance officers. WHEN: Annually or whenever significant changes occur. HOW: Use data discovery tools and manual audits. WHERE: All systems and applications that handle payment card transactions."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-SEC-003.02",
+              "subpolicy_title": "Vulnerability Management and Remediation",
+              "subpolicy_description": "Organizations must repair identified vulnerabilities and securely remove unnecessary cardholder data.",
+              "subpolicy_text": "Implement a process for fixing vulnerabilities and ensuring that only necessary cardholder data is retained.",
+              "control": "WHAT: Fix identified vulnerabilities and remove unnecessary cardholder data. WHO: IT Security team and system administrators. WHEN: As soon as vulnerabilities are identified. HOW: Apply patches, update configurations, and securely delete data. WHERE: All systems that store or process cardholder data."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-SEC-003.03",
+              "subpolicy_title": "Compliance Reporting",
+              "subpolicy_description": "Organizations must document assessment and remediation details and submit compliance reports to relevant entities.",
+              "subpolicy_text": "Maintain accurate records of compliance efforts and submit necessary reports to acquiring banks and card brands.",
+              "control": "WHAT: Document compliance activities and submit reports. WHO: Compliance officers and IT Security team. WHEN: After each assessment and remediation cycle. HOW: Generate compliance reports and submit them electronically. WHERE: To acquiring banks and card brands involved in payment processing."
+            }
+          ]
+        }
+      ],
+      "document_type": "standard",
+      "confidence": 0.95
+    }
+  },
+  {
+    "section_info": {
+      "title": "Security Controls and Processes for PCI DSS Requirements",
+      "level": 1,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "003-Security_Controls_and_Processes_for_PCI"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Payment Card Industry Data Security Standard (PCI DSS)",
+        "current_version": "4.0",
+        "framework_description": "The Payment Card Industry Data Security Standard (PCI DSS) is a set of security standards designed to ensure that all companies that accept, process, store or transmit credit card information maintain a secure environment. PCI DSS applies to all entities involved in payment card processing including merchants, processors, acquirers, issuers, and service providers.",
+        "category": "Financial Security and Compliance",
+        "start_date": "2022-03-31",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "PCI-DSS-COMP-004",
+          "policy_title": "PCI DSS Compliance Process Policy",
+          "policy_description": "Establishes the requirements for ongoing compliance with PCI DSS, including assessment, remediation, and reporting processes.",
+          "policy_text": "The PCI DSS compliance process involves three ongoing steps: Assess, Repair, and Report. Organizations must identify all locations of cardholder data, inventory IT assets and business processes for payment card processing, analyze vulnerabilities, fix identified vulnerabilities, securely remove unnecessary cardholder data storage, and document assessment and remediation details.",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in payment card processing and compliance with PCI DSS. It encompasses all entities that store, process, or transmit cardholder data, including merchants, service providers, and payment processors.",
+          "objective": "The primary objective of this policy is to ensure continuous compliance with PCI DSS requirements, thereby protecting cardholder data and maintaining the integrity of payment card transactions. Specific objectives include: (1) identifying and mitigating vulnerabilities; (2) ensuring secure handling of cardholder data; (3) maintaining accurate compliance documentation.",
+          "policy_type": "Compliance",
+          "policy_category": "Financial Security",
+          "policy_subcategory": "PCI DSS Compliance",
+          "subpolicies": [
+            {
+              "subpolicy_id": "PCI-DSS-COMP-004.01",
+              "subpolicy_title": "Assessment of Cardholder Data Locations",
+              "subpolicy_description": "Identifies all locations where cardholder data is stored, processed, or transmitted.",
+              "subpolicy_text": "Organizations must conduct a thorough assessment to identify all locations of cardholder data within their systems.",
+              "control": "WHAT: Identify all locations of cardholder data. WHO: Compliance team and IT Security team. WHEN: Annually or whenever significant changes occur. HOW: Conduct data discovery scans and manual reviews. WHERE: All systems and applications that handle payment card data."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-COMP-004.02",
+              "subpolicy_title": "Remediation of Vulnerabilities",
+              "subpolicy_description": "Fixes identified vulnerabilities and securely removes unnecessary cardholder data storage.",
+              "subpolicy_text": "Organizations must implement processes to remediate vulnerabilities and ensure that unnecessary cardholder data is securely deleted.",
+              "control": "WHAT: Remediate identified vulnerabilities and remove unnecessary data. WHO: IT Security team and system administrators. WHEN: As soon as vulnerabilities are identified. HOW: Apply patches, update configurations, and securely delete data. WHERE: All systems that store or process cardholder data."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-COMP-004.03",
+              "subpolicy_title": "Compliance Reporting",
+              "subpolicy_description": "Documents assessment and remediation details and submits compliance reports to relevant entities.",
+              "subpolicy_text": "Organizations must maintain documentation of their compliance efforts and submit reports to acquiring banks and card brands.",
+              "control": "WHAT: Document compliance efforts and submit reports. WHO: Compliance team and management. WHEN: After each assessment and remediation cycle. HOW: Compile reports detailing assessment findings and remediation actions. WHERE: All relevant compliance documentation repositories."
+            }
+          ]
+        }
+      ],
+      "document_type": "guideline",
+      "confidence": 0.93
+    }
+  },
+  {
+    "section_info": {
+      "title": "Build and Maintain a Secure Network and Systems",
+      "level": 2,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "003-Security_Controls_and_Processes_for_PCI\\001-Build_and_Maintain_a_Secure_Network_and"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Payment Card Industry Data Security Standard (PCI DSS)",
+        "current_version": "4.0",
+        "framework_description": "The Payment Card Industry Data Security Standard (PCI DSS) is a set of security standards designed to ensure that all companies that accept, process, store or transmit credit card information maintain a secure environment. PCI DSS applies to all entities involved in payment card processing including merchants, processors, acquirers, issuers, and service providers.",
+        "category": "Financial Security and Compliance",
+        "start_date": "2022-03-31",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "PCI-DSS-SEC-005",
+          "policy_title": "Secure Network and Systems Policy",
+          "policy_description": "Establishes requirements for building and maintaining a secure network and systems to protect cardholder data and ensure compliance with PCI DSS.",
+          "policy_text": "Organizations must assess, repair, and report on their network and systems to ensure the security of cardholder data. This includes identifying all locations of cardholder data, taking an inventory of IT assets, analyzing vulnerabilities, fixing identified vulnerabilities, securely removing unnecessary cardholder data, and documenting compliance.",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in payment card processing and the handling of cardholder data. It encompasses all information systems, networks, applications, databases, and associated infrastructure components.",
+          "objective": "The primary objective of this policy is to ensure the ongoing security of cardholder data through continuous assessment, remediation, and reporting processes. Specific objectives include: (1) identifying and mitigating vulnerabilities; (2) ensuring compliance with PCI DSS; (3) protecting organizational assets from unauthorized access and data breaches.",
+          "policy_type": "Security",
+          "policy_category": "Network Security",
+          "policy_subcategory": "Data Protection and Compliance",
+          "subpolicies": [
+            {
+              "subpolicy_id": "PCI-DSS-SEC-005.01",
+              "subpolicy_title": "Assessment of Cardholder Data Locations",
+              "subpolicy_description": "Organizations must identify all locations where cardholder data is stored, processed, or transmitted.",
+              "subpolicy_text": "Conduct a thorough assessment to locate all instances of cardholder data within the organization.",
+              "control": "WHAT: Identify all locations of cardholder data. WHO: IT Security team and data management personnel. WHEN: Annually or whenever significant changes occur. HOW: Use data discovery tools and manual audits. WHERE: All systems and applications that handle cardholder data."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-SEC-005.02",
+              "subpolicy_title": "Vulnerability Management and Remediation",
+              "subpolicy_description": "Organizations must repair identified vulnerabilities and implement secure business processes.",
+              "subpolicy_text": "Fix vulnerabilities and ensure that unnecessary cardholder data storage is securely removed.",
+              "control": "WHAT: Remediate identified vulnerabilities and remove unnecessary data. WHO: IT Security team and system administrators. WHEN: As soon as vulnerabilities are identified. HOW: Apply patches, update configurations, and securely delete data. WHERE: All systems and applications that store or process cardholder data."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-SEC-005.03",
+              "subpolicy_title": "Compliance Reporting",
+              "subpolicy_description": "Organizations must document assessment and remediation details and submit compliance reports.",
+              "subpolicy_text": "Document all assessment and remediation activities and submit reports to the acquiring bank and card brands.",
+              "control": "WHAT: Document compliance activities and submit reports. WHO: Compliance team and IT Security team. WHEN: After each assessment and remediation cycle. HOW: Generate compliance reports and submit to relevant stakeholders. WHERE: All systems and processes involved in payment card processing."
+            }
+          ]
+        }
+      ],
+      "document_type": "guideline",
+      "confidence": 0.93
+    }
+  },
+  {
+    "section_info": {
+      "title": "Protect Cardholder Data",
+      "level": 2,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "003-Security_Controls_and_Processes_for_PCI\\002-Protect_Cardholder_Data"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Payment Card Industry Data Security Standard (PCI DSS)",
+        "current_version": "4.0",
+        "framework_description": "The Payment Card Industry Data Security Standard (PCI DSS) is a set of security standards designed to ensure that all companies that accept, process, store or transmit credit card information maintain a secure environment. PCI DSS applies to all entities involved in payment card processing including merchants, processors, acquirers, issuers, and service providers.",
+        "category": "Financial Security and Compliance",
+        "start_date": "2022-03-31",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "PCI-DSS-SEC-006",
+          "policy_title": "Cardholder Data Protection Policy",
+          "policy_description": "Establishes requirements for the protection of cardholder data throughout its lifecycle to prevent unauthorized access and data breaches.",
+          "policy_text": "This policy outlines the ongoing steps for adhering to PCI DSS: Assess, Repair, and Report. Organizations must identify all locations of cardholder data, take inventory of IT assets, analyze vulnerabilities, fix identified vulnerabilities, securely remove unnecessary cardholder data storage, and document compliance.",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in payment card processing. It encompasses all information systems, networks, applications, databases, and associated infrastructure components that handle cardholder data.",
+          "objective": "The primary objective of this policy is to ensure the security and integrity of cardholder data by establishing clear guidelines for assessment, remediation, and reporting. Specific objectives include: (1) identifying and mitigating vulnerabilities; (2) ensuring compliance with PCI DSS; (3) protecting cardholder data from unauthorized access.",
+          "policy_type": "Security",
+          "policy_category": "Data Protection",
+          "policy_subcategory": "Cardholder Data Security",
+          "subpolicies": [
+            {
+              "subpolicy_id": "PCI-DSS-SEC-006.01",
+              "subpolicy_title": "Cardholder Data Assessment Procedures",
+              "subpolicy_description": "Procedures for assessing all locations of cardholder data and identifying vulnerabilities.",
+              "subpolicy_text": "Organizations must conduct regular assessments to identify all locations of cardholder data and analyze vulnerabilities.",
+              "control": "WHAT: Conduct assessments to identify cardholder data locations and vulnerabilities. WHO: IT Security team and compliance officers. WHEN: At least annually and after any significant changes. HOW: Use vulnerability scanning tools and manual reviews. WHERE: All systems and networks that process or store cardholder data."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-SEC-006.02",
+              "subpolicy_title": "Vulnerability Remediation Procedures",
+              "subpolicy_description": "Procedures for fixing identified vulnerabilities and securely removing unnecessary cardholder data.",
+              "subpolicy_text": "Organizations must implement processes to remediate identified vulnerabilities and securely delete unnecessary cardholder data.",
+              "control": "WHAT: Fix identified vulnerabilities and remove unnecessary cardholder data. WHO: IT Security team and system administrators. WHEN: Immediately upon identification of vulnerabilities. HOW: Apply patches, update configurations, and securely delete data. WHERE: All systems and applications that handle cardholder data."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-SEC-006.03",
+              "subpolicy_title": "Compliance Reporting Procedures",
+              "subpolicy_description": "Procedures for documenting assessment and remediation details and submitting compliance reports.",
+              "subpolicy_text": "Organizations must document all assessment and remediation activities and submit compliance reports to relevant stakeholders.",
+              "control": "WHAT: Document assessments and remediation activities, and prepare compliance reports. WHO: Compliance officers and IT Security team. WHEN: After each assessment and remediation cycle. HOW: Use compliance reporting tools and templates. WHERE: All documentation systems and compliance management platforms."
+            }
+          ]
+        }
+      ],
+      "document_type": "standard",
+      "confidence": 0.93
+    }
+  },
+  {
+    "section_info": {
+      "title": "Maintain a Vulnerability Management Program",
+      "level": 2,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "003-Security_Controls_and_Processes_for_PCI\\003-Maintain_a_Vulnerability_Management_Prog"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Payment Card Industry Data Security Standard (PCI DSS)",
+        "current_version": "4.0",
+        "framework_description": "The Payment Card Industry Data Security Standard (PCI DSS) is a set of security standards designed to ensure that all companies that accept, process, store or transmit credit card information maintain a secure environment. PCI DSS applies to all entities involved in payment card processing including merchants, processors, acquirers, issuers, and service providers.",
+        "category": "Financial Security and Compliance",
+        "start_date": "2022-03-31",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "PCI-DSS-SEC-007",
+          "policy_title": "Vulnerability Management Policy",
+          "policy_description": "Establishes requirements for maintaining a vulnerability management program to protect cardholder data and ensure compliance with PCI DSS.",
+          "policy_text": "This policy outlines the ongoing steps for adhering to PCI DSS: Assess, Repair, and Report. Organizations must identify all locations of cardholder data, inventory IT assets, analyze vulnerabilities, fix identified vulnerabilities, securely remove unnecessary cardholder data, and document compliance.",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in payment card processing and cardholder data management. It encompasses all IT assets, networks, applications, and third-party service providers that interact with cardholder data.",
+          "objective": "The primary objective of this policy is to ensure that all vulnerabilities are identified and remediated in a timely manner to protect cardholder data and maintain compliance with PCI DSS. Specific objectives include: (1) identifying and assessing vulnerabilities; (2) implementing remediation measures; (3) documenting compliance efforts.",
+          "policy_type": "Security",
+          "policy_category": "Vulnerability Management",
+          "policy_subcategory": "Risk Assessment and Remediation",
+          "subpolicies": [
+            {
+              "subpolicy_id": "PCI-DSS-SEC-007.01",
+              "subpolicy_title": "Vulnerability Assessment Procedures",
+              "subpolicy_description": "Establishes procedures for identifying and assessing vulnerabilities in the cardholder data environment.",
+              "subpolicy_text": "Organizations must conduct regular vulnerability assessments to identify all locations of cardholder data and analyze IT assets for vulnerabilities.",
+              "control": "WHAT: Conduct vulnerability assessments. WHO: IT Security team. WHEN: At least quarterly and after any significant changes to the environment. HOW: Use automated scanning tools and manual reviews. WHERE: All systems and networks that store, process, or transmit cardholder data."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-SEC-007.02",
+              "subpolicy_title": "Vulnerability Remediation Procedures",
+              "subpolicy_description": "Defines the process for fixing identified vulnerabilities and securely removing unnecessary cardholder data.",
+              "subpolicy_text": "Organizations must implement remediation measures for identified vulnerabilities and ensure unnecessary cardholder data is securely removed.",
+              "control": "WHAT: Remediate identified vulnerabilities and remove unnecessary data. WHO: IT Security team and system administrators. WHEN: Immediately upon identification of vulnerabilities. HOW: Apply patches, configuration changes, and data deletion procedures. WHERE: All systems and applications that store or process cardholder data."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-SEC-007.03",
+              "subpolicy_title": "Compliance Reporting Procedures",
+              "subpolicy_description": "Outlines the requirements for documenting assessment and remediation details and submitting compliance reports.",
+              "subpolicy_text": "Organizations must document all vulnerability assessments and remediation efforts and submit compliance reports to the acquiring bank and card brands.",
+              "control": "WHAT: Document assessments and remediation efforts. WHO: IT Security team and compliance officers. WHEN: After each assessment and remediation cycle. HOW: Use compliance reporting tools and templates. WHERE: All documentation must be stored securely and made available for audits."
+            }
+          ]
+        }
+      ],
+      "document_type": "guideline",
+      "confidence": 0.95
+    }
+  },
+  {
+    "section_info": {
+      "title": "Implement Strong Access Control Measures",
+      "level": 2,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "003-Security_Controls_and_Processes_for_PCI\\004-Implement_Strong_Access_Control_Measures"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Payment Card Industry Data Security Standard (PCI DSS)",
+        "current_version": "4.0",
+        "framework_description": "The Payment Card Industry Data Security Standard (PCI DSS) is a set of security standards designed to ensure that all companies that accept, process, store or transmit credit card information maintain a secure environment. PCI DSS applies to all entities involved in payment card processing including merchants, processors, acquirers, issuers, and service providers.",
+        "category": "Financial Security and Compliance",
+        "start_date": "2022-03-31",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "PCI-DSS-SEC-008",
+          "policy_title": "Access Control Measures Policy",
+          "policy_description": "Establishes requirements for implementing strong access control measures to protect cardholder data and ensure compliance with PCI DSS.",
+          "policy_text": "This policy mandates the implementation of strong access control measures to safeguard cardholder data, including assessing, repairing, and reporting vulnerabilities.",
+          "scope": "This policy applies to all personnel, systems, and processes involved in the storage, processing, or transmission of cardholder data within the organization. It encompasses all IT assets, business processes, and third-party service providers.",
+          "objective": "The primary objective of this policy is to ensure that all access to cardholder data is controlled and monitored, thereby protecting sensitive information from unauthorized access and ensuring compliance with PCI DSS requirements.",
+          "policy_type": "Security",
+          "policy_category": "Access Control",
+          "policy_subcategory": "Data Protection",
+          "subpolicies": [
+            {
+              "subpolicy_id": "PCI-DSS-SEC-008.01",
+              "subpolicy_title": "Assessment of Cardholder Data Locations",
+              "subpolicy_description": "Identify all locations where cardholder data is stored, processed, or transmitted.",
+              "subpolicy_text": "Conduct a thorough assessment to identify and document all locations of cardholder data within the organization.",
+              "control": "WHAT: Identify and inventory all locations of cardholder data. WHO: IT Security team and data management personnel. WHEN: Annually and whenever new systems are introduced. HOW: Use data discovery tools and manual audits. WHERE: All organizational systems and databases that handle cardholder data."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-SEC-008.02",
+              "subpolicy_title": "Vulnerability Repair Procedures",
+              "subpolicy_description": "Establish procedures for repairing identified vulnerabilities in systems that handle cardholder data.",
+              "subpolicy_text": "Implement a structured process for fixing vulnerabilities, including securely removing unnecessary cardholder data storage.",
+              "control": "WHAT: Fix identified vulnerabilities and remove unnecessary data. WHO: IT Security team and system administrators. WHEN: Immediately upon identification of vulnerabilities. HOW: Follow established remediation protocols and secure data deletion methods. WHERE: All systems that store or process cardholder data."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-SEC-008.03",
+              "subpolicy_title": "Compliance Reporting",
+              "subpolicy_description": "Document assessment and remediation details and submit compliance reports to relevant entities.",
+              "subpolicy_text": "Ensure that all assessment and remediation activities are documented and compliance reports are submitted to the acquiring bank and card brands.",
+              "control": "WHAT: Document all compliance activities and submit reports. WHO: Compliance team and IT Security team. WHEN: After each assessment and remediation cycle. HOW: Use compliance reporting tools and templates. WHERE: All relevant compliance documentation repositories."
+            }
+          ]
+        }
+      ],
+      "document_type": "guideline",
+      "confidence": 0.93
+    }
+  },
+  {
+    "section_info": {
+      "title": "Regularly Monitor and Test Networks",
+      "level": 2,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "003-Security_Controls_and_Processes_for_PCI\\005-Regularly_Monitor_and_Test_Networks"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Payment Card Industry Data Security Standard (PCI DSS)",
+        "current_version": "4.0",
+        "framework_description": "The Payment Card Industry Data Security Standard (PCI DSS) is a set of security standards designed to ensure that all companies that accept, process, store or transmit credit card information maintain a secure environment. PCI DSS applies to all entities involved in payment card processing including merchants, processors, acquirers, issuers, and service providers.",
+        "category": "Financial Security and Compliance",
+        "start_date": "2022-03-31",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "PCI-DSS-SEC-009",
+          "policy_title": "Network Monitoring and Testing Policy",
+          "policy_description": "Establishes requirements for the regular monitoring and testing of networks to ensure the security of cardholder data and compliance with PCI DSS.",
+          "policy_text": "Regularly monitor and test networks to identify vulnerabilities and ensure the security of cardholder data. This includes assessing all locations of cardholder data, repairing identified vulnerabilities, and reporting compliance details.",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in the storage, processing, or transmission of cardholder data. The scope encompasses all networks, systems, applications, and infrastructure components that interact with payment card transactions.",
+          "objective": "The primary objective of this policy is to ensure continuous compliance with PCI DSS by implementing effective monitoring and testing procedures. Specific objectives include: (1) identifying and mitigating vulnerabilities; (2) ensuring the integrity and security of cardholder data; (3) maintaining compliance with PCI DSS requirements.",
+          "policy_type": "Security",
+          "policy_category": "Network Security",
+          "policy_subcategory": "Monitoring and Testing",
+          "subpolicies": [
+            {
+              "subpolicy_id": "PCI-DSS-SEC-009.01",
+              "subpolicy_title": "Vulnerability Assessment Procedures",
+              "subpolicy_description": "Conduct regular assessments to identify vulnerabilities in the network and systems handling cardholder data.",
+              "subpolicy_text": "Regularly assess all locations of cardholder data and IT assets for vulnerabilities.",
+              "control": "WHAT: Conduct vulnerability assessments. WHO: IT Security team. WHEN: At least quarterly and after any significant changes to the network. HOW: Use automated scanning tools and manual testing methods. WHERE: All systems and networks that store, process, or transmit cardholder data."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-SEC-009.02",
+              "subpolicy_title": "Remediation of Identified Vulnerabilities",
+              "subpolicy_description": "Implement procedures to repair identified vulnerabilities and securely remove unnecessary cardholder data storage.",
+              "subpolicy_text": "Fix identified vulnerabilities and remove unnecessary cardholder data storage.",
+              "control": "WHAT: Remediate vulnerabilities and remove unnecessary data. WHO: IT Security team and system administrators. WHEN: Immediately upon identification of vulnerabilities. HOW: Apply patches, update configurations, and securely delete data. WHERE: All systems and applications that handle cardholder data."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-SEC-009.03",
+              "subpolicy_title": "Compliance Reporting Procedures",
+              "subpolicy_description": "Document assessment and remediation details and submit compliance reports to relevant stakeholders.",
+              "subpolicy_text": "Document and report compliance details to the acquiring bank and card brands.",
+              "control": "WHAT: Prepare and submit compliance reports. WHO: Compliance team and IT Security team. WHEN: After each assessment and remediation cycle. HOW: Compile assessment results and remediation actions into a report. WHERE: To the acquiring bank and card brands involved in payment processing."
+            }
+          ]
+        }
+      ],
+      "document_type": "standard",
+      "confidence": 0.93
+    }
+  },
+  {
+    "section_info": {
+      "title": "Maintain an Information Security Policy",
+      "level": 2,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "003-Security_Controls_and_Processes_for_PCI\\006-Maintain_an_Information_Security_Policy"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Payment Card Industry Data Security Standard (PCI DSS)",
+        "current_version": "4.0",
+        "framework_description": "The Payment Card Industry Data Security Standard (PCI DSS) is a set of security standards designed to ensure that all companies that accept, process, store or transmit credit card information maintain a secure environment. PCI DSS applies to all entities involved in payment card processing including merchants, processors, acquirers, issuers, and service providers.",
+        "category": "Financial Security and Compliance",
+        "start_date": "2022-03-31",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "PCI-DSS-SEC-010",
+          "policy_title": "Information Security Policy Maintenance",
+          "policy_description": "Establishes requirements for maintaining an information security policy to protect payment card transaction environments and ensure compliance with PCI DSS.",
+          "policy_text": "This policy outlines the ongoing steps for adhering to PCI DSS: Assess, Repair, and Report. Organizations must identify all locations of cardholder data, take inventory of IT assets and business processes, fix identified vulnerabilities, securely remove unnecessary cardholder data, and document compliance efforts.",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in payment card processing and data security. It encompasses all entities that store, process, or transmit cardholder data, including merchants, service providers, and payment processors.",
+          "objective": "The primary objective of this policy is to ensure continuous compliance with PCI DSS by establishing a structured approach to assessing, repairing, and reporting on the security of cardholder data. Specific objectives include: (1) identifying and mitigating vulnerabilities; (2) ensuring the secure handling of cardholder data; (3) maintaining compliance documentation for audits.",
+          "policy_type": "Security",
+          "policy_category": "Compliance",
+          "policy_subcategory": "Information Security Management",
+          "subpolicies": [
+            {
+              "subpolicy_id": "PCI-DSS-SEC-010.01",
+              "subpolicy_title": "Assessment of Cardholder Data Locations",
+              "subpolicy_description": "Organizations must regularly assess and identify all locations where cardholder data is stored, processed, or transmitted.",
+              "subpolicy_text": "Conduct assessments to identify all locations of cardholder data and maintain an inventory of IT assets and business processes.",
+              "control": "WHAT: Identify and document all locations of cardholder data. WHO: IT Security team and compliance officers. WHEN: At least annually or whenever significant changes occur. HOW: Use automated scanning tools and manual reviews. WHERE: All systems and networks involved in payment card processing."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-SEC-010.02",
+              "subpolicy_title": "Vulnerability Repair and Data Removal",
+              "subpolicy_description": "Organizations must repair identified vulnerabilities and securely remove unnecessary cardholder data.",
+              "subpolicy_text": "Fix vulnerabilities and ensure that any unnecessary cardholder data storage is securely removed.",
+              "control": "WHAT: Remediate vulnerabilities and remove unnecessary cardholder data. WHO: IT Security team and system administrators. WHEN: Immediately upon identification of vulnerabilities. HOW: Apply patches, updates, and data sanitization techniques. WHERE: All systems that store or process cardholder data."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-SEC-010.03",
+              "subpolicy_title": "Compliance Reporting",
+              "subpolicy_description": "Organizations must document assessment and remediation details and submit compliance reports to relevant entities.",
+              "subpolicy_text": "Document all assessment and remediation activities and prepare compliance reports for submission.",
+              "control": "WHAT: Document compliance activities and prepare reports. WHO: Compliance officers and IT Security team. WHEN: After each assessment and remediation cycle. HOW: Use compliance management tools and templates. WHERE: All documentation systems used for compliance reporting."
+            }
+          ]
+        }
+      ],
+      "document_type": "guideline",
+      "confidence": 0.93
+    }
+  },
+  {
+    "section_info": {
+      "title": "Compensating Controls for PCI DSS Requirements",
+      "level": 2,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "003-Security_Controls_and_Processes_for_PCI\\007-Compensating_Controls_for_PCI_DSS_Requir"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Payment Card Industry Data Security Standard (PCI DSS)",
+        "current_version": "4.0",
+        "framework_description": "The Payment Card Industry Data Security Standard (PCI DSS) is a set of security standards designed to ensure that all companies that accept, process, store or transmit credit card information maintain a secure environment. PCI DSS applies to all entities involved in payment card processing including merchants, processors, acquirers, issuers, and service providers.",
+        "category": "Financial Security and Compliance",
+        "start_date": "2022-03-31",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "PCI-DSS-COMP-011",
+          "policy_title": "PCI DSS Compliance Process Policy",
+          "policy_description": "Establishes the requirements for ongoing compliance with PCI DSS, including assessment, repair, and reporting of vulnerabilities related to cardholder data.",
+          "policy_text": "This policy outlines the three ongoing steps for adhering to PCI DSS: Assess, Repair, and Report.",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in payment card processing and handling cardholder data. It encompasses all IT assets, business processes, and third-party service providers that interact with cardholder data.",
+          "objective": "The primary objective of this policy is to ensure continuous compliance with PCI DSS requirements, thereby protecting cardholder data and minimizing the risk of data breaches. Specific objectives include: (1) identifying and mitigating vulnerabilities; (2) ensuring secure handling of cardholder data; (3) maintaining accurate documentation for compliance reporting.",
+          "policy_type": "Compliance",
+          "policy_category": "Financial Security",
+          "policy_subcategory": "PCI DSS Compliance",
+          "subpolicies": [
+            {
+              "subpolicy_id": "PCI-DSS-COMP-011.01",
+              "subpolicy_title": "Assessment of Cardholder Data Locations",
+              "subpolicy_description": "Identifies all locations of cardholder data and assesses vulnerabilities.",
+              "subpolicy_text": "Conduct a comprehensive assessment to identify all locations where cardholder data is stored, processed, or transmitted.",
+              "control": "WHAT: Identify and document all locations of cardholder data. WHO: IT Security team and compliance officers. WHEN: Annually and whenever significant changes occur. HOW: Use automated scanning tools and manual reviews. WHERE: All systems and networks involved in payment card processing."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-COMP-011.02",
+              "subpolicy_title": "Vulnerability Repair Procedures",
+              "subpolicy_description": "Outlines the process for repairing identified vulnerabilities and securely removing unnecessary cardholder data.",
+              "subpolicy_text": "Implement procedures to fix identified vulnerabilities and ensure secure removal of unnecessary cardholder data.",
+              "control": "WHAT: Repair vulnerabilities and remove unnecessary data. WHO: IT Security team and system administrators. WHEN: Immediately upon identification of vulnerabilities. HOW: Apply patches, update configurations, and securely delete data. WHERE: All systems that store or process cardholder data."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-COMP-011.03",
+              "subpolicy_title": "Compliance Reporting Requirements",
+              "subpolicy_description": "Documents assessment and remediation details, and outlines the reporting process to acquiring banks and card brands.",
+              "subpolicy_text": "Maintain documentation of compliance assessments and remediation efforts, and submit reports to relevant stakeholders.",
+              "control": "WHAT: Document compliance activities and submit reports. WHO: Compliance officers and IT Security team. WHEN: After each assessment and remediation cycle. HOW: Generate compliance reports and submit to acquiring banks and card brands. WHERE: All relevant compliance documentation repositories."
+            }
+          ]
+        }
+      ],
+      "document_type": "guideline",
+      "confidence": 0.93
+    }
+  },
+  {
+    "section_info": {
+      "title": "How to Comply with PCI DSS",
+      "level": 1,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "004-How_to_Comply_with_PCI_DSS"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Payment Card Industry Data Security Standard (PCI DSS)",
+        "current_version": "4.0",
+        "framework_description": "The Payment Card Industry Data Security Standard (PCI DSS) is a set of security standards designed to ensure that all companies that accept, process, store or transmit credit card information maintain a secure environment. PCI DSS applies to all entities involved in payment card processing including merchants, processors, acquirers, issuers, and service providers.",
+        "category": "Financial Security and Compliance",
+        "start_date": "2022-03-31",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "PCI-DSS-COMP-012",
+          "policy_title": "PCI DSS Compliance Policy",
+          "policy_description": "Establishes requirements for ongoing compliance with the Payment Card Industry Data Security Standard (PCI DSS) to protect cardholder data.",
+          "policy_text": "This policy outlines the steps for complying with PCI DSS: Assess, Repair, and Report. Organizations must identify all locations of cardholder data, take inventory of IT assets, analyze vulnerabilities, fix identified vulnerabilities, securely remove unnecessary cardholder data, and document compliance reports.",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in payment card processing. It encompasses all entities that store, process, or transmit cardholder data, including merchants, service providers, and payment processors.",
+          "objective": "The primary objective of this policy is to ensure continuous compliance with PCI DSS, thereby protecting cardholder data and maintaining the integrity of payment card transactions. Specific objectives include: (1) identifying and mitigating vulnerabilities; (2) ensuring secure handling of cardholder data; (3) maintaining accurate documentation for compliance reporting.",
+          "policy_type": "Compliance",
+          "policy_category": "Financial Security",
+          "policy_subcategory": "PCI DSS Compliance",
+          "subpolicies": [
+            {
+              "subpolicy_id": "PCI-DSS-COMP-012.01",
+              "subpolicy_title": "Assessment of Cardholder Data Locations",
+              "subpolicy_description": "Identify all locations where cardholder data is stored, processed, or transmitted.",
+              "subpolicy_text": "Organizations must conduct a thorough assessment to locate all instances of cardholder data within their systems.",
+              "control": "WHAT: Identify and document all locations of cardholder data. WHO: IT Security team and compliance officers. WHEN: Annually or whenever significant changes occur. HOW: Use data discovery tools and manual audits. WHERE: All systems, applications, and databases handling cardholder data."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-COMP-012.02",
+              "subpolicy_title": "Vulnerability Management and Repair",
+              "subpolicy_description": "Fix identified vulnerabilities and securely remove unnecessary cardholder data storage.",
+              "subpolicy_text": "Organizations must implement a vulnerability management program to address and remediate security weaknesses.",
+              "control": "WHAT: Identify, prioritize, and remediate vulnerabilities. WHO: IT Security team and system administrators. WHEN: Continuously, with reviews quarterly. HOW: Use vulnerability scanning tools and patch management processes. WHERE: All systems and applications that process cardholder data."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-COMP-012.03",
+              "subpolicy_title": "Compliance Reporting",
+              "subpolicy_description": "Document assessment and remediation details, and submit compliance reports to relevant stakeholders.",
+              "subpolicy_text": "Organizations must maintain accurate records of compliance activities and submit reports as required.",
+              "control": "WHAT: Document compliance activities and submit reports. WHO: Compliance officers and IT Security team. WHEN: After each assessment and remediation cycle. HOW: Use compliance management tools and templates. WHERE: All documentation repositories and reporting systems."
+            }
+          ]
+        }
+      ],
+      "document_type": "guideline",
+      "confidence": 0.93
+    }
+  },
+  {
+    "section_info": {
+      "title": "Choosing a Qualified Security Assessor",
+      "level": 2,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "004-How_to_Comply_with_PCI_DSS\\001-Choosing_a_Qualified_Security_Assessor"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Payment Card Industry Data Security Standard (PCI DSS)",
+        "current_version": "4.0",
+        "framework_description": "The Payment Card Industry Data Security Standard (PCI DSS) is a set of security standards designed to ensure that all companies that accept, process, store or transmit credit card information maintain a secure environment. PCI DSS applies to all entities involved in payment card processing including merchants, processors, acquirers, issuers, and service providers.",
+        "category": "Financial Security and Compliance",
+        "start_date": "2022-03-31",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "PCI-DSS-COMP-013",
+          "policy_title": "Qualified Security Assessor Selection Policy",
+          "policy_description": "Establishes requirements for selecting a Qualified Security Assessor (QSA) to ensure compliance with PCI DSS standards.",
+          "policy_text": "Organizations must select a Qualified Security Assessor (QSA) to assist in the PCI DSS compliance process. The QSA must be certified and have a proven track record in assessing payment card environments.",
+          "scope": "This policy applies to all organizational units involved in payment card processing, including merchants, service providers, and any entity that handles cardholder data.",
+          "objective": "The primary objective of this policy is to ensure that organizations select qualified professionals to assess their compliance with PCI DSS, thereby enhancing the security of cardholder data.",
+          "policy_type": "Compliance",
+          "policy_category": "Security Assessment",
+          "policy_subcategory": "Qualified Security Assessor Selection",
+          "subpolicies": [
+            {
+              "subpolicy_id": "PCI-DSS-COMP-013.01",
+              "subpolicy_title": "QSA Certification Verification",
+              "subpolicy_description": "Ensure that the selected QSA is certified and recognized by the PCI Security Standards Council.",
+              "subpolicy_text": "Organizations must verify the certification status of the QSA before engagement.",
+              "control": "WHAT: Verify QSA certification. WHO: Compliance officer or designated personnel. WHEN: Prior to engaging the QSA. HOW: Check the PCI Security Standards Council's official list of certified QSAs. WHERE: Organizational compliance records."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-COMP-013.02",
+              "subpolicy_title": "QSA Experience Assessment",
+              "subpolicy_description": "Evaluate the experience and track record of the QSA in assessing payment card environments.",
+              "subpolicy_text": "Organizations must assess the QSA's previous engagements and success in similar environments.",
+              "control": "WHAT: Review QSA's past performance and client references. WHO: Compliance officer and procurement team. WHEN: During the selection process. HOW: Conduct interviews and request case studies. WHERE: Organizational procurement documentation."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-COMP-013.03",
+              "subpolicy_title": "Ongoing QSA Engagement Review",
+              "subpolicy_description": "Regularly review the performance of the engaged QSA to ensure continued compliance and effectiveness.",
+              "subpolicy_text": "Organizations must conduct periodic reviews of the QSA's performance and compliance with PCI DSS requirements.",
+              "control": "WHAT: Conduct performance reviews of the QSA. WHO: Compliance officer and management team. WHEN: Annually or after significant changes in the payment environment. HOW: Use performance metrics and feedback from internal stakeholders. WHERE: Organizational compliance review records."
+            }
+          ]
+        }
+      ],
+      "document_type": "guideline",
+      "confidence": 0.93
+    }
+  },
+  {
+    "section_info": {
+      "title": "Choosing an Approved Scanning Vendor",
+      "level": 2,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "004-How_to_Comply_with_PCI_DSS\\002-Choosing_an_Approved_Scanning_Vendor"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Payment Card Industry Data Security Standard (PCI DSS)",
+        "current_version": "4.0",
+        "framework_description": "The Payment Card Industry Data Security Standard (PCI DSS) is a set of security standards designed to ensure that all companies that accept, process, store or transmit credit card information maintain a secure environment. PCI DSS applies to all entities involved in payment card processing including merchants, processors, acquirers, issuers, and service providers.",
+        "category": "Financial Security and Compliance",
+        "start_date": "2022-03-31",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "PCI-DSS-COMP-014",
+          "policy_title": "Approved Scanning Vendor Selection Policy",
+          "policy_description": "Establishes requirements for selecting and engaging approved scanning vendors to ensure compliance with PCI DSS standards.",
+          "policy_text": "Organizations must choose approved scanning vendors to assess their payment card transaction environment and ensure compliance with PCI DSS requirements.",
+          "scope": "This policy applies to all organizational units involved in payment card processing, including merchants, service providers, and any third-party vendors engaged in scanning and assessment activities.",
+          "objective": "The primary objective of this policy is to ensure that organizations select qualified scanning vendors that adhere to PCI DSS standards, thereby protecting cardholder data and maintaining compliance. Specific objectives include: (1) ensuring the integrity of the scanning process; (2) identifying and remediating vulnerabilities; (3) maintaining ongoing compliance with PCI DSS.",
+          "policy_type": "Compliance",
+          "policy_category": "Vendor Management",
+          "policy_subcategory": "Scanning and Assessment",
+          "subpolicies": [
+            {
+              "subpolicy_id": "PCI-DSS-COMP-014.01",
+              "subpolicy_title": "Vendor Assessment Requirements",
+              "subpolicy_description": "All approved scanning vendors must be assessed for their qualifications and compliance with PCI DSS.",
+              "subpolicy_text": "Organizations must conduct a thorough assessment of potential scanning vendors to ensure they meet PCI DSS requirements.",
+              "control": "WHAT: Assess vendor qualifications and compliance with PCI DSS. WHO: Compliance team and IT Security team. WHEN: Prior to vendor engagement and annually thereafter. HOW: Review vendor certifications, compliance reports, and conduct interviews. WHERE: All vendor engagement processes."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-COMP-014.02",
+              "subpolicy_title": "Ongoing Compliance Monitoring",
+              "subpolicy_description": "Organizations must monitor the ongoing compliance of approved scanning vendors.",
+              "subpolicy_text": "Regular monitoring of approved scanning vendors is required to ensure they continue to meet PCI DSS standards.",
+              "control": "WHAT: Monitor vendor compliance status and performance. WHO: Compliance team and IT Security team. WHEN: Quarterly reviews and after any significant changes in vendor operations. HOW: Review compliance reports and conduct performance evaluations. WHERE: All vendor management processes."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-COMP-014.03",
+              "subpolicy_title": "Documentation and Reporting",
+              "subpolicy_description": "All assessment and remediation activities must be documented and reported to relevant stakeholders.",
+              "subpolicy_text": "Organizations must maintain documentation of all assessments and remediation efforts related to approved scanning vendors.",
+              "control": "WHAT: Document all assessment and remediation activities. WHO: Compliance team and IT Security team. WHEN: Immediately after assessments and remediation actions. HOW: Use standardized reporting templates and maintain records in a secure repository. WHERE: All compliance documentation systems."
+            }
+          ]
+        }
+      ],
+      "document_type": "guideline",
+      "confidence": 0.93
+    }
+  },
+  {
+    "section_info": {
+      "title": "Scope of PCI DSS Requirements",
+      "level": 2,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "004-How_to_Comply_with_PCI_DSS\\003-Scope_of_PCI_DSS_Requirements"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Payment Card Industry Data Security Standard (PCI DSS)",
+        "current_version": "4.0",
+        "framework_description": "The Payment Card Industry Data Security Standard (PCI DSS) is a set of security standards designed to ensure that all companies that accept, process, store or transmit credit card information maintain a secure environment. PCI DSS applies to all entities involved in payment card processing including merchants, processors, acquirers, issuers, and service providers.",
+        "category": "Financial Security and Compliance",
+        "start_date": "2022-03-31",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "PCI-DSS-COMP-015",
+          "policy_title": "PCI DSS Compliance Policy",
+          "policy_description": "Establishes requirements for ongoing compliance with the Payment Card Industry Data Security Standard (PCI DSS) to protect cardholder data.",
+          "policy_text": "This policy outlines the three ongoing steps for adhering to PCI DSS: Assess, Repair, and Report.",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in payment card processing, including merchants, service providers, and payment processors.",
+          "objective": "The primary objective of this policy is to ensure continuous compliance with PCI DSS requirements, thereby protecting cardholder data and maintaining the integrity of payment card transactions.",
+          "policy_type": "Compliance",
+          "policy_category": "Financial Security",
+          "policy_subcategory": "Payment Card Security",
+          "subpolicies": [
+            {
+              "subpolicy_id": "PCI-DSS-COMP-015.01",
+              "subpolicy_title": "Assessment of Cardholder Data Locations",
+              "subpolicy_description": "Identify all locations of cardholder data and take an inventory of IT assets and business processes.",
+              "subpolicy_text": "Conduct a thorough assessment to identify and document all locations where cardholder data is stored, processed, or transmitted.",
+              "control": "WHAT: Identify and inventory all locations of cardholder data. WHO: IT Security team and compliance officers. WHEN: Annually or whenever there are changes in the environment. HOW: Use data discovery tools and manual audits. WHERE: All systems and networks involved in payment processing."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-COMP-015.02",
+              "subpolicy_title": "Vulnerability Repair and Data Removal",
+              "subpolicy_description": "Fix identified vulnerabilities and securely remove unnecessary cardholder data storage.",
+              "subpolicy_text": "Implement processes to address vulnerabilities and ensure that only necessary cardholder data is retained.",
+              "control": "WHAT: Repair vulnerabilities and remove unnecessary cardholder data. WHO: IT Security team and data management personnel. WHEN: Immediately upon identification of vulnerabilities. HOW: Apply patches, update configurations, and securely delete data. WHERE: All systems that store or process cardholder data."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-COMP-015.03",
+              "subpolicy_title": "Compliance Reporting",
+              "subpolicy_description": "Document assessment and remediation details, and submit compliance reports to relevant stakeholders.",
+              "subpolicy_text": "Maintain records of compliance activities and submit reports to acquiring banks and card brands.",
+              "control": "WHAT: Document compliance activities and submit reports. WHO: Compliance officers and IT Security team. WHEN: After each assessment and remediation cycle. HOW: Generate compliance reports and submit them electronically. WHERE: To acquiring banks and card brands."
+            }
+          ]
+        }
+      ],
+      "document_type": "guideline",
+      "confidence": 0.93
+    }
+  },
+  {
+    "section_info": {
+      "title": "Using the Self-Assessment Questionnaire",
+      "level": 2,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "004-How_to_Comply_with_PCI_DSS\\004-Using_the_Self-Assessment_Questionnaire"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Payment Card Industry Data Security Standard (PCI DSS)",
+        "current_version": "4.0",
+        "framework_description": "The Payment Card Industry Data Security Standard (PCI DSS) is a set of security standards designed to ensure that all companies that accept, process, store or transmit credit card information maintain a secure environment. PCI DSS applies to all entities involved in payment card processing including merchants, processors, acquirers, issuers, and service providers.",
+        "category": "Financial Security and Compliance",
+        "start_date": "2022-03-31",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "PCI-DSS-COMP-016",
+          "policy_title": "PCI DSS Compliance Process Policy",
+          "policy_description": "Establishes the requirements for ongoing compliance with PCI DSS through assessment, remediation, and reporting of cardholder data security.",
+          "policy_text": "This policy outlines the three ongoing steps for adhering to PCI DSS: Assess, Repair, and Report.",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in payment card processing and handling cardholder data. It encompasses all employees, contractors, vendors, and third-party service providers who have access to cardholder data.",
+          "objective": "The primary objective of this policy is to ensure continuous compliance with PCI DSS standards, thereby protecting cardholder data and minimizing the risk of data breaches. Specific objectives include: (1) identifying and securing all locations of cardholder data; (2) remediating vulnerabilities; (3) documenting compliance efforts.",
+          "policy_type": "Compliance",
+          "policy_category": "Payment Card Security",
+          "policy_subcategory": "PCI DSS Compliance",
+          "subpolicies": [
+            {
+              "subpolicy_id": "PCI-DSS-COMP-016.01",
+              "subpolicy_title": "Cardholder Data Assessment",
+              "subpolicy_description": "Identify all locations of cardholder data and inventory IT assets involved in payment processing.",
+              "subpolicy_text": "Conduct a thorough assessment to locate and inventory all cardholder data and related IT assets.",
+              "control": "WHAT: Identify and inventory all locations of cardholder data. WHO: IT Security team and compliance officers. WHEN: Annually or upon significant changes to the environment. HOW: Use automated tools and manual reviews to locate cardholder data. WHERE: All systems and applications that process, store, or transmit cardholder data."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-COMP-016.02",
+              "subpolicy_title": "Vulnerability Remediation",
+              "subpolicy_description": "Fix identified vulnerabilities and securely remove unnecessary cardholder data storage.",
+              "subpolicy_text": "Implement processes to remediate vulnerabilities and ensure secure handling of cardholder data.",
+              "control": "WHAT: Remediate identified vulnerabilities and remove unnecessary cardholder data. WHO: IT Security team and system administrators. WHEN: As soon as vulnerabilities are identified. HOW: Apply patches, update configurations, and securely delete data. WHERE: All systems that store or process cardholder data."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-COMP-016.03",
+              "subpolicy_title": "Compliance Reporting",
+              "subpolicy_description": "Document assessment and remediation details, and submit compliance reports to relevant entities.",
+              "subpolicy_text": "Ensure that all compliance efforts are documented and reported to the acquiring bank and card brands.",
+              "control": "WHAT: Document compliance assessment and remediation efforts. WHO: Compliance officers and IT Security team. WHEN: After each assessment and remediation cycle. HOW: Generate compliance reports and submit them to the acquiring bank and card brands. WHERE: All relevant compliance documentation systems."
+            }
+          ]
+        }
+      ],
+      "document_type": "guideline",
+      "confidence": 0.93
+    }
+  },
+  {
+    "section_info": {
+      "title": "Reporting",
+      "level": 2,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "004-How_to_Comply_with_PCI_DSS\\005-Reporting"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Payment Card Industry Data Security Standard (PCI DSS)",
+        "current_version": "4.0",
+        "framework_description": "The Payment Card Industry Data Security Standard (PCI DSS) is a set of security standards designed to ensure that all companies that accept, process, store or transmit credit card information maintain a secure environment. PCI DSS applies to all entities involved in payment card processing including merchants, processors, acquirers, issuers, and service providers.",
+        "category": "Financial Security and Compliance",
+        "start_date": "2022-03-31",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "PCI-DSS-COMP-017",
+          "policy_title": "PCI DSS Compliance Reporting Policy",
+          "policy_description": "Establishes requirements for documenting assessment and remediation details related to PCI DSS compliance and reporting to relevant stakeholders.",
+          "policy_text": "Documenting assessment and remediation details, and submitting compliance reports to the acquiring bank and card brands you do business with (or other requesting entity if you’re a service provider).",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in payment card processing and compliance reporting. It encompasses all employees, contractors, and third-party service providers who handle cardholder data.",
+          "objective": "The primary objective of this policy is to ensure that all compliance reporting related to PCI DSS is conducted accurately and timely, thereby maintaining the integrity of the payment card transaction environment. Specific objectives include: (1) ensuring compliance with PCI DSS requirements; (2) maintaining transparency with stakeholders; (3) facilitating continuous improvement in security practices.",
+          "policy_type": "Compliance",
+          "policy_category": "Reporting and Documentation",
+          "policy_subcategory": "PCI DSS Compliance Reporting",
+          "subpolicies": [
+            {
+              "subpolicy_id": "PCI-DSS-COMP-017.01",
+              "subpolicy_title": "Assessment Documentation Requirements",
+              "subpolicy_description": "All assessments of cardholder data locations and vulnerabilities must be documented thoroughly.",
+              "subpolicy_text": "Identify all locations of cardholder data, take an inventory of IT assets and business processes for payment card processing, and analyze them for vulnerabilities.",
+              "control": "WHAT: Document all assessment findings and vulnerabilities. WHO: Compliance team and IT Security team. WHEN: At the completion of each assessment cycle. HOW: Use standardized assessment templates and tools. WHERE: All systems and processes involved in payment card processing."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-COMP-017.02",
+              "subpolicy_title": "Remediation Process Documentation",
+              "subpolicy_description": "All remediation actions taken to address identified vulnerabilities must be documented.",
+              "subpolicy_text": "Fix identified vulnerabilities, securely remove unnecessary cardholder data storage, and implement secure business processes.",
+              "control": "WHAT: Document all remediation actions and changes made. WHO: IT Security team and Compliance team. WHEN: Immediately after remediation actions are completed. HOW: Use incident tracking systems and change management logs. WHERE: All systems and processes involved in payment card processing."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-COMP-017.03",
+              "subpolicy_title": "Compliance Reporting Procedures",
+              "subpolicy_description": "Establish procedures for submitting compliance reports to acquiring banks and card brands.",
+              "subpolicy_text": "Submit compliance reports to the acquiring bank and card brands you do business with, or other requesting entities if you’re a service provider.",
+              "control": "WHAT: Prepare and submit compliance reports. WHO: Compliance team. WHEN: Annually or as required by stakeholders. HOW: Use compliance reporting tools and templates. WHERE: All relevant compliance reporting channels."
+            }
+          ]
+        }
+      ],
+      "document_type": "guideline",
+      "confidence": 0.93
+    }
+  },
+  {
+    "section_info": {
+      "title": "Implementing PCI DSS into Business-as-Usual Processes",
+      "level": 2,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "004-How_to_Comply_with_PCI_DSS\\006-Implementing_PCI_DSS_into_Business-as-Us"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Payment Card Industry Data Security Standard (PCI DSS)",
+        "current_version": "4.0",
+        "framework_description": "The Payment Card Industry Data Security Standard (PCI DSS) is a set of security standards designed to ensure that all companies that accept, process, store or transmit credit card information maintain a secure environment. PCI DSS applies to all entities involved in payment card processing including merchants, processors, acquirers, issuers, and service providers.",
+        "category": "Financial Security and Compliance",
+        "start_date": "2022-03-31",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "PCI-DSS-COMP-018",
+          "policy_title": "PCI DSS Implementation Policy",
+          "policy_description": "Establishes requirements for integrating PCI DSS compliance into business-as-usual processes to ensure ongoing protection of cardholder data.",
+          "policy_text": "This policy outlines the steps for assessing, repairing, and reporting on PCI DSS compliance as part of regular business operations.",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in payment card processing, including merchants, service providers, and payment processors.",
+          "objective": "The primary objective of this policy is to ensure that PCI DSS compliance is maintained as a continuous process, protecting cardholder data and minimizing vulnerabilities. Specific objectives include: (1) identifying and inventorying all locations of cardholder data; (2) repairing identified vulnerabilities; (3) documenting compliance efforts and reporting to relevant stakeholders.",
+          "policy_type": "Compliance",
+          "policy_category": "Financial Security",
+          "policy_subcategory": "PCI DSS Compliance",
+          "subpolicies": [
+            {
+              "subpolicy_id": "PCI-DSS-COMP-018.01",
+              "subpolicy_title": "Cardholder Data Assessment",
+              "subpolicy_description": "Regularly assess and inventory all locations of cardholder data to identify vulnerabilities.",
+              "subpolicy_text": "Conduct assessments to identify all locations of cardholder data and analyze IT assets and business processes for vulnerabilities.",
+              "control": "WHAT: Identify and inventory all locations of cardholder data. WHO: IT Security team and compliance officers. WHEN: Annually and after any significant changes to the environment. HOW: Use automated scanning tools and manual reviews. WHERE: All systems and processes that handle cardholder data."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-COMP-018.02",
+              "subpolicy_title": "Vulnerability Repair Process",
+              "subpolicy_description": "Implement a process for repairing identified vulnerabilities and securely managing cardholder data.",
+              "subpolicy_text": "Fix identified vulnerabilities and securely remove unnecessary cardholder data storage.",
+              "control": "WHAT: Repair vulnerabilities and manage cardholder data securely. WHO: IT Security team and data management personnel. WHEN: As soon as vulnerabilities are identified. HOW: Apply patches, update configurations, and remove unnecessary data. WHERE: All systems that store or process cardholder data."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-COMP-018.03",
+              "subpolicy_title": "Compliance Reporting",
+              "subpolicy_description": "Document assessment and remediation details and submit compliance reports to relevant entities.",
+              "subpolicy_text": "Maintain documentation of compliance efforts and submit reports to acquiring banks and card brands.",
+              "control": "WHAT: Document compliance assessments and remediation actions. WHO: Compliance officers and IT Security team. WHEN: After each assessment and remediation cycle. HOW: Generate compliance reports and submit to stakeholders. WHERE: All documentation systems and reporting tools."
+            }
+          ]
+        }
+      ],
+      "document_type": "guideline",
+      "confidence": 0.93
+    }
+  },
+  {
+    "section_info": {
+      "title": "Web Resources",
+      "level": 1,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "005-Web_Resources"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Payment Card Industry Data Security Standard (PCI DSS)",
+        "current_version": "4.0",
+        "framework_description": "The Payment Card Industry Data Security Standard (PCI DSS) is a set of security standards designed to ensure that all companies that accept, process, store or transmit credit card information maintain a secure environment. PCI DSS applies to all entities involved in payment card processing including merchants, processors, acquirers, issuers, and service providers.",
+        "category": "Financial Security and Compliance",
+        "start_date": "2022-03-31",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "PCI-DSS-COMP-019",
+          "policy_title": "PCI DSS Compliance Process Policy",
+          "policy_description": "Establishes the ongoing process for assessing, repairing, and reporting compliance with PCI DSS requirements to protect cardholder data.",
+          "policy_text": "The PCI DSS compliance process involves three ongoing steps: Assess, Repair, and Report. Organizations must identify all locations of cardholder data, inventory IT assets and business processes, analyze vulnerabilities, fix identified vulnerabilities, securely remove unnecessary cardholder data, and document assessment and remediation details for compliance reporting.",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in payment card processing and handling cardholder data. It encompasses all merchants, service providers, and any entities that store, process, or transmit cardholder data.",
+          "objective": "The primary objective of this policy is to ensure continuous compliance with PCI DSS requirements, thereby protecting cardholder data and minimizing the risk of data breaches. Specific objectives include: (1) identifying and mitigating vulnerabilities; (2) ensuring secure handling of cardholder data; (3) maintaining accurate compliance documentation.",
+          "policy_type": "Compliance",
+          "policy_category": "Financial Security",
+          "policy_subcategory": "Payment Card Security",
+          "subpolicies": [
+            {
+              "subpolicy_id": "PCI-DSS-COMP-019.01",
+              "subpolicy_title": "Cardholder Data Assessment Requirements",
+              "subpolicy_description": "Establishes requirements for identifying and assessing locations of cardholder data.",
+              "subpolicy_text": "Organizations must conduct a thorough assessment to identify all locations of cardholder data and inventory IT assets involved in payment processing.",
+              "control": "WHAT: Identify and inventory all locations of cardholder data. WHO: IT Security team and compliance officers. WHEN: Annually and whenever significant changes occur. HOW: Use data discovery tools and manual reviews. WHERE: All systems and applications that handle cardholder data."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-COMP-019.02",
+              "subpolicy_title": "Vulnerability Repair Procedures",
+              "subpolicy_description": "Defines procedures for repairing identified vulnerabilities in the payment card processing environment.",
+              "subpolicy_text": "Organizations must implement processes to fix identified vulnerabilities and securely remove unnecessary cardholder data storage.",
+              "control": "WHAT: Repair identified vulnerabilities and remove unnecessary data. WHO: IT Security team and system administrators. WHEN: Immediately upon identification of vulnerabilities. HOW: Apply patches, update configurations, and securely delete data. WHERE: All systems and applications involved in payment processing."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-COMP-019.03",
+              "subpolicy_title": "Compliance Reporting Requirements",
+              "subpolicy_description": "Establishes requirements for documenting and reporting compliance with PCI DSS.",
+              "subpolicy_text": "Organizations must document assessment and remediation details and submit compliance reports to the acquiring bank and card brands.",
+              "control": "WHAT: Document compliance assessment and remediation efforts. WHO: Compliance officers and IT Security team. WHEN: After each assessment and remediation cycle. HOW: Generate compliance reports and submit to relevant parties. WHERE: All documentation systems and reporting platforms."
+            }
+          ]
+        }
+      ],
+      "document_type": "guideline",
+      "confidence": 0.93
+    }
+  },
+  {
+    "section_info": {
+      "title": "About the PCI Security Standards Council",
+      "level": 1,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "006-About_the_PCI_Security_Standards_Council"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Payment Card Industry Data Security Standard (PCI DSS)",
+        "current_version": "4.0",
+        "framework_description": "The Payment Card Industry Data Security Standard (PCI DSS) is a set of security standards designed to ensure that all companies that accept, process, store or transmit credit card information maintain a secure environment. PCI DSS applies to all entities involved in payment card processing including merchants, processors, acquirers, issuers, and service providers.",
+        "category": "Financial Security and Compliance",
+        "start_date": "2022-03-31",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "PCI-DSS-COMP-020",
+          "policy_title": "PCI DSS Compliance Process Policy",
+          "policy_description": "Establishes the requirements for ongoing compliance with the PCI DSS, including assessment, remediation, and reporting of cardholder data security.",
+          "policy_text": "The PCI DSS compliance process consists of three ongoing steps: Assess, Repair, and Report. Organizations must identify all locations of cardholder data, inventory IT assets and business processes for payment card processing, and analyze them for vulnerabilities. Identified vulnerabilities must be fixed, unnecessary cardholder data storage securely removed, and secure business processes implemented. Compliance reports must be documented and submitted to the acquiring bank and card brands.",
+          "scope": "This policy applies to all entities that store, process, or transmit cardholder data, including merchants, payment processors, service providers, and any other organizations involved in payment card transactions.",
+          "objective": "The primary objective of this policy is to ensure continuous compliance with PCI DSS requirements, thereby protecting cardholder data and maintaining the integrity of payment card transactions. Specific objectives include: (1) identifying and mitigating vulnerabilities; (2) ensuring secure handling of cardholder data; (3) maintaining accurate compliance documentation.",
+          "policy_type": "Compliance",
+          "policy_category": "Financial Security",
+          "policy_subcategory": "PCI DSS Compliance",
+          "subpolicies": [
+            {
+              "subpolicy_id": "PCI-DSS-COMP-020.01",
+              "subpolicy_title": "Assessment of Cardholder Data Locations",
+              "subpolicy_description": "Organizations must assess and identify all locations where cardholder data is stored, processed, or transmitted.",
+              "subpolicy_text": "Conduct a thorough assessment to identify all locations of cardholder data within the organization.",
+              "control": "WHAT: Identify all locations of cardholder data. WHO: Compliance team and IT Security team. WHEN: Annually and whenever changes occur. HOW: Use data discovery tools and manual audits. WHERE: All systems, applications, and databases that handle cardholder data."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-COMP-020.02",
+              "subpolicy_title": "Remediation of Vulnerabilities",
+              "subpolicy_description": "Organizations must repair identified vulnerabilities and implement secure business processes.",
+              "subpolicy_text": "Fix all identified vulnerabilities and securely remove unnecessary cardholder data storage.",
+              "control": "WHAT: Remediate vulnerabilities and remove unnecessary data. WHO: IT Security team and system administrators. WHEN: Immediately upon identification of vulnerabilities. HOW: Apply patches, update configurations, and remove data as per data retention policies. WHERE: All systems and applications that store or process cardholder data."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-COMP-020.03",
+              "subpolicy_title": "Compliance Reporting",
+              "subpolicy_description": "Organizations must document assessment and remediation details and submit compliance reports.",
+              "subpolicy_text": "Document all assessment findings and remediation actions, and submit compliance reports to the acquiring bank and card brands.",
+              "control": "WHAT: Document compliance activities and submit reports. WHO: Compliance team and management. WHEN: Annually and upon request. HOW: Prepare compliance reports based on assessment findings and remediation actions. WHERE: All documentation systems and reporting tools used for compliance."
+            }
+          ]
+        }
+      ],
+      "document_type": "guideline",
+      "confidence": 0.93
+    }
+  },
+  {
+    "section_info": {
+      "title": "Report, p.",
+      "level": 3,
+      "start_page": 4,
+      "end_page": 4,
+      "folder_path": "006-About_the_PCI_Security_Standards_Council\\001-Report_p"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "Payment Card Industry Data Security Standard (PCI DSS)",
+        "current_version": "4.0",
+        "framework_description": "The Payment Card Industry Data Security Standard (PCI DSS) is a set of security standards designed to ensure that all companies that accept, process, store or transmit credit card information maintain a secure environment. PCI DSS applies to all entities involved in payment card processing including merchants, processors, acquirers, issuers, and service providers.",
+        "category": "Financial Security and Compliance",
+        "start_date": "2022-03-31",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "PCI-DSS-COMP-021",
+          "policy_title": "PCI DSS Compliance Policy",
+          "policy_description": "Establishes requirements for ongoing compliance with the Payment Card Industry Data Security Standard (PCI DSS) to protect cardholder data.",
+          "policy_text": "This policy outlines the three ongoing steps for adhering to PCI DSS: Assess, Repair, and Report.",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in payment card processing, including merchants, service providers, and payment processors.",
+          "objective": "The primary objective of this policy is to ensure continuous compliance with PCI DSS requirements, thereby protecting cardholder data and maintaining the integrity of payment card transactions.",
+          "policy_type": "Compliance",
+          "policy_category": "Financial Security",
+          "policy_subcategory": "PCI DSS Compliance",
+          "subpolicies": [
+            {
+              "subpolicy_id": "PCI-DSS-COMP-021.01",
+              "subpolicy_title": "Assessment of Cardholder Data Locations",
+              "subpolicy_description": "Identify all locations of cardholder data and inventory IT assets and business processes for payment card processing.",
+              "subpolicy_text": "Conduct a thorough assessment to identify all locations where cardholder data is stored, processed, or transmitted.",
+              "control": "WHAT: Identify and document all locations of cardholder data. WHO: IT Security team and compliance officers. WHEN: Annually or whenever significant changes occur. HOW: Use data discovery tools and manual audits. WHERE: All systems and networks involved in payment card processing."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-COMP-021.02",
+              "subpolicy_title": "Vulnerability Repair Procedures",
+              "subpolicy_description": "Fix identified vulnerabilities and securely remove unnecessary cardholder data storage.",
+              "subpolicy_text": "Implement procedures to address vulnerabilities and ensure secure business processes.",
+              "control": "WHAT: Remediate identified vulnerabilities and remove unnecessary cardholder data. WHO: IT Security team and system administrators. WHEN: Immediately upon identification of vulnerabilities. HOW: Apply patches, update configurations, and remove unnecessary data. WHERE: All systems and applications that handle cardholder data."
+            },
+            {
+              "subpolicy_id": "PCI-DSS-COMP-021.03",
+              "subpolicy_title": "Compliance Reporting",
+              "subpolicy_description": "Document assessment and remediation details, and submit compliance reports to the acquiring bank and card brands.",
+              "subpolicy_text": "Maintain documentation of compliance efforts and submit required reports to relevant entities.",
+              "control": "WHAT: Document compliance activities and submit reports. WHO: Compliance officers and IT Security team. WHEN: After each assessment and remediation cycle. HOW: Compile reports and submit to acquiring banks and card brands. WHERE: All relevant compliance reporting channels."
+            }
+          ]
+        }
+      ],
+      "document_type": "guideline",
+      "confidence": 0.93
+    }
+  }
+]

@@ -508,11 +508,11 @@
       <!-- TPRM Section -->
       <div class="menu-item" @click="navigate('/tprm/global-search')" :class="{'active': isActive('/tprm/global-search')}">
         <i class="fas fa-search icon"></i>
-        <span>Global Search</span>
+        <span v-if="!isCollapsed" class="bold-text">Global Search</span>
       </div>
       <div class="menu-item" @click="navigate('/tprm/questionnaire-templates')" :class="{'active': isActive('/tprm/questionnaire-templates')}">
         <i class="fas fa-clipboard-check icon"></i>
-        <span>Questionnaire Templates</span>
+        <span v-if="!isCollapsed" class="bold-text">Questionnaire Templates</span>
       </div>
 
       <div @click="toggleSubmenu('rfpManagement')" class="menu-item has-submenu" :class="{'expanded': openMenus.rfpManagement}">
@@ -932,7 +932,7 @@
       <!-- Notifications Tab -->
       <div @click="navigate('/notifications')" class="notification-menu-item">
         <i class="fas fa-bell icon bell-theme"></i>
-        <span v-if="!isCollapsed">Notifications</span>
+        <span v-if="!isCollapsed" class="bold-text">Notifications</span>
         <span v-if="unreadCount > 0" class="notification-badge">{{ unreadCount }}</span>
         <audio ref="notifAudio" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" preload="auto"></audio>
       </div>
@@ -940,7 +940,7 @@
       <!-- System Logs Tab -->
       <div @click="navigate('/system-logs')" class="system-logs-menu-item" :class="{'active': isActive('/system-logs')}">
         <i class="fas fa-file-alt icon"></i>
-        <span v-if="!isCollapsed">System Logs</span>
+        <span v-if="!isCollapsed" class="bold-text">System Logs</span>
       </div>
 
 <!-- Help Section -->
@@ -977,7 +977,7 @@
        </div>      <!-- User Profile -->
       <div class="bottom-profile" @click="navigate('/user-profile')">
         <i class="fas fa-user icon"></i>
-        <span v-if="!isCollapsed">{{ username }}</span>
+        <span v-if="!isCollapsed" class="bold-text">{{ username }}</span>
       </div>
       
       <!-- RBAC Test -->

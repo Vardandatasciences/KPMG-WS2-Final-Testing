@@ -1,0 +1,991 @@
+{
+  "framework_id": 336,
+  "audit_id": 296,
+  "last_updated": "2025-12-25T16:12:06.001376",
+  "documents": [
+    {
+      "operation_id": 2400,
+      "s3_key": "radha.sharma_1766649229601_umj94d_document_handling_20251225_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766649229601_umj94d_document_handling_20251225_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T15:52:18.302879",
+      "relevance_score": 0.75,
+      "relevance_reason": "The document provides a comprehensive view of banks' capital adequacy under various stress testing scenarios, which indirectly addresses some compliance requirements related to Basel III's liquidity risk standards.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 2394,
+      "s3_key": "radha.sharma_1766648759267_2cuxsa_document_handling_20251225_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766648759267_2cuxsa_document_handling_20251225_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T15:52:37.309007",
+      "relevance_score": 0.65,
+      "relevance_reason": "The document provides a stress testing report for several banks, which indirectly addresses some compliance requirements related to liquidity risk management and capital adequacy.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": [
+        1794
+      ]
+    },
+    {
+      "operation_id": 2371,
+      "s3_key": "radha.sharma_1766647604294_6ov35b_document_handling_20251225_basel_iii_framework_policy_partially_compliant_dataset_1.xlsx",
+      "stored_name": "radha.sharma_1766647604294_6ov35b_document_handling_20251225_basel_iii_framework_policy_partially_compliant_dataset_1.xlsx",
+      "analyzed_at": "2025-12-25T15:52:56.817119",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive overview of the financial institution's capital, assets, and leverage ratio, which directly addresses the audit's objective to ensure compliance with Basel III's liquidity risk standards. Although it does not explicitly mention specific policies or subpolicies, it highlights potential risks to the institution's financial stability due to non-compliance with the leverage ratio threshold.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 2323,
+      "s3_key": "radha.sharma_1766645094760_yppebs_document_handling_20251225_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766645094760_yppebs_document_handling_20251225_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T15:53:18.274009",
+      "relevance_score": 0.7,
+      "relevance_reason": "The document provides stress test results for several banks, which indirectly addresses some compliance requirements related to liquidity risk management and leverage ratio monitoring.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 2280,
+      "s3_key": "radha.sharma_1766642366212_piifst_document_handling_20251225_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766642366212_piifst_document_handling_20251225_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T15:53:37.130470",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive overview of stress testing results for several banks, including capital adequacy and leverage ratios under various scenarios. While it does not directly address any specific policies or subpolicies assigned to this audit, it indirectly addresses some compliance requirements related to liquidity risk management.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 2237,
+      "s3_key": "radha.sharma_1766641632884_vgu1tr_document_handling_20251225_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766641632884_vgu1tr_document_handling_20251225_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T15:53:56.168378",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which indirectly addresses some compliance requirements related to liquidity risk management and capital adequacy. Although it does not explicitly address all compliance requirements, it provides relevant information that can be used to inform regulatory decisions or risk management strategies.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 2236,
+      "s3_key": "radha.sharma_1766641343901_pqbcnz_document_handling_20251225_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766641343901_pqbcnz_document_handling_20251225_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T15:54:14.403123",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which indirectly addresses the audit's objective of ensuring liquidity risk management compliance with Basel III standards. Although it does not directly address all framework elements, it highlights the importance of regular stress testing to ensure financial stability under various market conditions.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 2217,
+      "s3_key": "radha.sharma_1766640110369_4ay5ee_document_handling_20251225_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766640110369_4ay5ee_document_handling_20251225_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T15:54:29.661417",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which indirectly addresses compliance with Basel III's liquidity risk standards. Although it does not directly address all framework elements, it highlights the importance of regular stress testing to ensure financial stability.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 2165,
+      "s3_key": "radha.sharma_1766636925097_lnz3nn_document_handling_20251225_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766636925097_lnz3nn_document_handling_20251225_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T15:54:41.271373",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress test report for several banks, which indirectly addresses some compliance requirements related to liquidity risk management and capital adequacy. However, it does not directly address any of the policies, subpolicies, or compliance requirements listed in the framework.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 2125,
+      "s3_key": "radha.sharma_1766577846128_mxhiqs_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766577846128_mxhiqs_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T15:54:52.958325",
+      "relevance_score": 0.65,
+      "relevance_reason": "Document provides information on stress testing and scenario analysis, but does not directly address any specific policies, subpolicies, or compliance requirements listed in the framework.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 2124,
+      "s3_key": "radha.sharma_1766577616869_x6419w_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766577616869_x6419w_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T15:55:08.063997",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document appears to be a stress testing report for several banks, which is relevant to the audit's objective of ensuring compliance with Basel III's liquidity risk standards. Although it does not directly address all framework elements, it provides insights into capital adequacy and leverage ratios, which are important aspects of liquidity risk management.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 2044,
+      "s3_key": "radha.sharma_1766575922070_l9vjbz_document_handling_20251224_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766575922070_l9vjbz_document_handling_20251224_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T15:55:29.889709",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress test report for several banks, which indirectly addresses some compliance requirements related to liquidity risk management and capital adequacy. Although it does not directly address all framework elements, it provides valuable insights into the financial health of the banks under review.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 2038,
+      "s3_key": "radha.sharma_1766575249092_aefzet_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766575249092_aefzet_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T15:55:49.066446",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which directly addresses compliance requirements related to liquidity risk management under Basel III standards. Specifically, it highlights potential vulnerabilities in the banks' financial positions, particularly under severe market conditions.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 2029,
+      "s3_key": "radha.sharma_1766574905749_7wogvf_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766574905749_7wogvf_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T15:56:00.633317",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which is relevant to the audit's objective of ensuring compliance with Basel III's liquidity risk standards. Although it does not directly address all framework elements, it addresses some key aspects related to liquidity risk management and capital adequacy.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 2023,
+      "s3_key": "radha.sharma_1766574190462_2q0ahz_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766574190462_2q0ahz_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T15:56:13.050887",
+      "relevance_score": 0.75,
+      "relevance_reason": "The document provides a stress test report for several banks, which addresses some of the liquidity risk management requirements under Basel III.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": [
+        1794,
+        1801
+      ]
+    },
+    {
+      "operation_id": 2006,
+      "s3_key": "radha.sharma_1766572641288_wlcllg_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766572641288_wlcllg_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T15:56:30.704890",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive stress testing report for multiple banks, highlighting areas of improvement in risk management practices. Although it does not directly address the audit's objective of ensuring compliance with Basel III's liquidity risk standards, it indirectly supports the audit by providing insights into the banks' capital adequacy and leverage ratios under various stress scenarios.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 2000,
+      "s3_key": "radha.sharma_1766570120951_cjrxsd_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766570120951_cjrxsd_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T15:56:49.549384",
+      "relevance_score": 0.65,
+      "relevance_reason": "The document provides a stress testing report for several banks, but does not directly address most of the policies, subpolicies, or compliance requirements listed in the framework.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1993,
+      "s3_key": "radha.sharma_1766569741122_fcuvl0_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766569741122_fcuvl0_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T15:57:06.855279",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which addresses liquidity risk management and capital adequacy requirements. Although it does not directly address all compliance requirements listed in the framework, it provides relevant information on bank resilience under various stress scenarios.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1985,
+      "s3_key": "radha.sharma_1766565120801_fnn3bi_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766565120801_fnn3bi_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T15:57:25.873668",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which indirectly addresses the Liquidity Risk Management Policy Compliance Audit's objective of ensuring compliance with Basel III's liquidity risk standards. Although it does not directly address specific policies or subpolicies, it provides information on capital adequacy under various scenarios, including market shocks and economic downturns.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1976,
+      "s3_key": "radha.sharma_1766564805278_y4f1w7_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766564805278_y4f1w7_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T15:57:45.650610",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which is relevant to the audit's objective of ensuring liquidity risk management compliance with Basel III standards. However, it does not directly address any specific policies or subpolicies assigned to this audit. It does provide some information on liquidity risk management, but it is not a comprehensive framework for managing liquidity risk.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1947,
+      "s3_key": "radha.sharma_1766564309858_klctc8_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766564309858_klctc8_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T15:58:03.183241",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive stress testing report for several banks, which indirectly addresses some of the compliance requirements related to liquidity risk management and capital adequacy.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1940,
+      "s3_key": "radha.sharma_1766564008135_qya55o_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766564008135_qya55o_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T15:58:16.688499",
+      "relevance_score": 0.75,
+      "relevance_reason": "Document provides a stress testing report for several banks, indirectly addressing some compliance requirements related to Liquidity Coverage Ratio and Macroeconomic Stress Testing.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1931,
+      "s3_key": "radha.sharma_1766563468347_l2ypnw_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766563468347_l2ypnw_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T15:58:32.009593",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which directly addresses compliance requirements related to liquidity risk management under Basel III. Specifically, it assesses their resilience under various stress scenarios and identifies potential vulnerabilities that need to be addressed by senior management.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1920,
+      "s3_key": "radha.sharma_1766561966069_n0ee4q_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766561966069_n0ee4q_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T15:58:53.602148",
+      "relevance_score": 0.65,
+      "relevance_reason": "Document provides information on stress testing and liquidity risk management, but its relevance is limited due to its focus on a specific scenario-based stress test report rather than addressing compliance requirements directly.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": [
+        1791
+      ]
+    },
+    {
+      "operation_id": 1915,
+      "s3_key": "radha.sharma_1766561596452_sed362_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766561596452_sed362_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T15:59:10.049447",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which indirectly addresses some of the compliance requirements related to liquidity risk management and capital adequacy. However, it does not explicitly address any specific policies or subpolicies.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1910,
+      "s3_key": "radha.sharma_1766561245538_uxl69v_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766561245538_uxl69v_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T15:59:26.018631",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive stress testing report for several banks, which indirectly addresses some of the liquidity risk management requirements outlined in the Basel III Framework. Although it does not directly address all framework elements, it provides valuable insights into the banks' ability to withstand various stress scenarios.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1905,
+      "s3_key": "radha.sharma_1766559503049_hxd86e_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766559503049_hxd86e_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T15:59:37.843700",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for multiple banks, which addresses some aspects of liquidity risk management and capital adequacy. Although it does not directly address all compliance requirements listed in the framework, it indirectly supports the audit's objective by providing insights into bank stability under various scenarios.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1900,
+      "s3_key": "radha.sharma_1766559194370_4ljoww_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766559194370_4ljoww_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T15:59:49.702358",
+      "relevance_score": 0.75,
+      "relevance_reason": "The document provides a stress testing report for several banks, which indirectly addresses some of the compliance requirements related to liquidity risk management and capital adequacy.",
+      "matched_policies": [
+        1210
+      ],
+      "matched_subpolicies": [],
+      "matched_compliances": [
+        1784,
+        1791
+      ]
+    },
+    {
+      "operation_id": 1893,
+      "s3_key": "radha.sharma_1766558860040_65066o_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766558860040_65066o_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:00:05.365641",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive overview of stress testing results for several banks, highlighting potential vulnerabilities and areas for improvement. While it does not directly address all compliance requirements listed in the Basel III Framework, it indirectly supports the audit's objective by providing insight into liquidity risk management practices.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1888,
+      "s3_key": "radha.sharma_1766558323426_lfd73d_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766558323426_lfd73d_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:00:19.699800",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which indirectly addresses some of the compliance requirements related to liquidity risk management and capital adequacy. Although it does not directly address all framework elements, it provides relevant information that can be used to support the audit's objective.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1882,
+      "s3_key": "radha.sharma_1766558089305_3mw1j3_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766558089305_3mw1j3_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:00:38.813330",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The stress testing report provides a comprehensive analysis of each bank's capital adequacy under various scenarios, which addresses the audit's objective of ensuring compliance with Basel III's liquidity risk standards. Although it does not explicitly address all framework elements, it indirectly supports the audit by providing insights into the banks' liquidity risk management practices.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1877,
+      "s3_key": "radha.sharma_1766557916453_vqedbf_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766557916453_vqedbf_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:00:52.234107",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for various banks, which is relevant to the audit's objective of ensuring liquidity risk management compliance with Basel III standards. Although it does not directly address all framework elements, it addresses some key compliance requirements related to liquidity risk management.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1872,
+      "s3_key": "radha.sharma_1766557684102_1wj6ml_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766557684102_1wj6ml_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:01:03.028866",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive stress testing report for several banks, which addresses some of the liquidity risk management requirements under Basel III. Although it does not directly address all the policies, subpolicies, and compliance requirements listed above, it indirectly supports the audit's objective by providing insights into capital adequacy under various scenarios.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1867,
+      "s3_key": "radha.sharma_1766557186277_wkqqvb_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766557186277_wkqqvb_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:01:14.435016",
+      "relevance_score": 0.75,
+      "relevance_reason": "Document provides a stress testing report that indirectly addresses some compliance requirements related to liquidity risk management and capital adequacy.",
+      "matched_policies": [
+        1209,
+        1210
+      ],
+      "matched_subpolicies": [],
+      "matched_compliances": [
+        1791,
+        1789
+      ]
+    },
+    {
+      "operation_id": 1866,
+      "s3_key": "radha.sharma_1766557085318_lhb62j_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766557085318_lhb62j_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:01:32.191999",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive stress testing report for several banks, which indirectly addresses some of the compliance requirements related to liquidity risk management and capital adequacy. However, it does not directly address any specific policies or subpolicies.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1865,
+      "s3_key": "radha.sharma_1766556642445_86mmo6_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766556642445_86mmo6_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:01:49.448281",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive view of banks' capital adequacy under various stress testing scenarios, which addresses the audit's objective to ensure compliance with Basel III liquidity risk standards. Although it does not explicitly mention any specific policies or subpolicies, it indirectly relates to several compliance requirements.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1860,
+      "s3_key": "radha.sharma_1766555488190_1j8b93_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766555488190_1j8b93_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:02:07.596024",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which indirectly addresses some compliance requirements related to liquidity risk management and capital adequacy. However, it does not directly address most of the policies, subpolicies, or compliance requirements listed in the framework.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1855,
+      "s3_key": "radha.sharma_1766555183889_eug2bs_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766555183889_eug2bs_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:02:24.007313",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which partially addresses the audit's objective of ensuring compliance with Basel III liquidity risk standards. Although it does not directly address all framework elements, it touches upon some relevant aspects such as capital adequacy and leverage ratios.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1850,
+      "s3_key": "radha.sharma_1766554101078_5yknnt_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766554101078_5yknnt_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:02:35.281341",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive overview of stress test results for several banks, which indirectly addresses some compliance requirements related to liquidity risk management and capital adequacy. However, it does not explicitly address any specific policies, subpolicies, or compliance requirements listed in the framework.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1845,
+      "s3_key": "radha.sharma_1766553735053_plc46t_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766553735053_plc46t_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:02:46.839204",
+      "relevance_score": 0.75,
+      "relevance_reason": "The document provides a stress testing report for several banks, which indirectly addresses some compliance requirements related to liquidity risk management and capital adequacy.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": [
+        1791
+      ]
+    },
+    {
+      "operation_id": 1841,
+      "s3_key": "radha.sharma_1766553164508_gkohf8_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766553164508_gkohf8_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:03:03.416635",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive stress testing report for several banks, which indirectly addresses some of the audit's objectives and scope. Although it does not directly address all the policies, subpolicies, or compliance requirements listed above, it does provide relevant information on liquidity risk management, capital adequacy, and leverage ratio, which are important aspects of the Basel III framework.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1838,
+      "s3_key": "radha.sharma_1766551839937_5go6jv_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766551839937_5go6jv_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:03:13.298619",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive stress testing report for several banks, which indirectly addresses some compliance requirements related to liquidity risk management and capital adequacy. Although it does not explicitly mention specific policies or subpolicies, it provides relevant information on bank performance under various economic scenarios.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1835,
+      "s3_key": "radha.sharma_1766551180571_m3b2od_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766551180571_m3b2od_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:03:23.696770",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which directly addresses compliance requirements related to liquidity risk management and capital adequacy under various scenarios. Specifically, it highlights potential capital adequacy issues for several banks, which aligns with the audit's objective of ensuring compliance with Basel III's liquidity risk standards.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1832,
+      "s3_key": "radha.sharma_1766550911417_dibrhk_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766550911417_dibrhk_document_handling_20251224_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:03:34.056899",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive overview of liquidity risk management, which directly addresses the audit's objective and scope. It covers various aspects of Basel III requirements, including Liquidity Coverage Ratio (LCR) and Net Stable Funding Ratio (NSFR). Although it does not explicitly mention specific policies or subpolicies, its content is relevant to several compliance requirements.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1828,
+      "s3_key": "radha.sharma_1766550184241_fpv1vk_document_handling_20251224_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766550184241_fpv1vk_document_handling_20251224_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:03:47.589459",
+      "relevance_score": 0.85,
+      "relevance_reason": "Document provides relevant information on liquidity risk management, specifically addressing LCR and NSFR compliance requirements, which are crucial to the audit's objective.",
+      "matched_policies": [
+        1210
+      ],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1825,
+      "s3_key": "radha.sharma_1766491668057_am97vr_document_handling_20251223_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766491668057_am97vr_document_handling_20251223_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:04:04.021589",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive stress testing report for several banks, which addresses some of the compliance requirements related to liquidity risk management and capital adequacy. Although it does not directly address all framework elements, it provides relevant information that can be used to support the audit's objective.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1822,
+      "s3_key": "radha.sharma_1766491077771_9ii7qs_document_handling_20251223_basel_iii_framework_incident_compliant_dataset_3_1.xlsx",
+      "stored_name": "radha.sharma_1766491077771_9ii7qs_document_handling_20251223_basel_iii_framework_incident_compliant_dataset_3_1.xlsx",
+      "analyzed_at": "2025-12-25T16:04:22.004573",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides an analysis of Tier 1 capital, total assets, leverage ratio, and compliance status for a financial institution, which is relevant to the audit's objective of ensuring compliance with Basel III liquidity risk standards. Although it does not directly address all framework elements, it addresses some compliance requirements that are related to liquidity risk management.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1818,
+      "s3_key": "radha.sharma_1766490004583_bgm6c6_document_handling_20251223_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766490004583_bgm6c6_document_handling_20251223_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:04:40.489412",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive stress testing report for several banks, which indirectly addresses some of the audit's objectives and scope. Although it does not directly address all the policies, subpolicies, or compliance requirements listed above, it provides valuable information on capital adequacy under various scenarios.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1815,
+      "s3_key": "radha.sharma_1766489046919_c7kqnn_document_handling_20251223_basel_iii_framework_audit_compliant_dataset_1_1.xlsx",
+      "stored_name": "radha.sharma_1766489046919_c7kqnn_document_handling_20251223_basel_iii_framework_audit_compliant_dataset_1_1.xlsx",
+      "analyzed_at": "2025-12-25T16:04:52.076445",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a detailed breakdown of stress test impact on Tier 1 capital, total assets, leverage ratio, and compliance status, which directly addresses several compliance requirements related to liquidity risk management.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1812,
+      "s3_key": "radha.sharma_1766488567445_uu9ut7_document_handling_20251223_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766488567445_uu9ut7_document_handling_20251223_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:05:02.260660",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive overview of each bank's financial health during the specified period, highlighting potential stress points for each bank under different scenarios (MarketShock, Severe, Economic Downturn). Although it does not explicitly address specific compliance requirements or policies, it indirectly relates to the audit's objective by providing insights into liquidity risk management. The document addresses some aspects of Basel III framework elements, but not directly.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1808,
+      "s3_key": "radha.sharma_1766488146976_j6q1jf_document_handling_20251223_basel_iii_framework_audit_compliant_dataset_1_1.xlsx",
+      "stored_name": "radha.sharma_1766488146976_j6q1jf_document_handling_20251223_basel_iii_framework_audit_compliant_dataset_1_1.xlsx",
+      "analyzed_at": "2025-12-25T16:05:13.060975",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a structured summary and critical findings related to Tier 1 Capital, Total Assets, Leverage Ratio, and Stress Test Impact Report submissions. It highlights potential compliance concerns and suggests further review to ensure adherence to regulatory requirements. Although it does not directly address the audit's objective of ensuring Basel III liquidity risk standards compliance, it indirectly addresses some relevant framework elements.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1806,
+      "s3_key": "radha.sharma_1766486902747_t9vdht_document_handling_20251223_basel_iii_framework_incident_compliant_dataset_1_1.xlsx",
+      "stored_name": "radha.sharma_1766486902747_t9vdht_document_handling_20251223_basel_iii_framework_incident_compliant_dataset_1_1.xlsx",
+      "analyzed_at": "2025-12-25T16:05:21.804884",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress test impact report submission for Tier 1 capital, total assets, leverage ratio, and compliance status, which directly addresses the audit's objective of ensuring liquidity risk management policy compliance. Specifically, it highlights instances of non-compliance with the leverage ratio threshold, indicating potential risks to financial stability.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1804,
+      "s3_key": "radha.sharma_1766486702390_6vp4n0_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766486702390_6vp4n0_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:05:31.714432",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which indirectly addresses some of the compliance requirements related to liquidity risk management and capital adequacy. Although it does not directly address all the policies, subpolicies, or compliance requirements listed above, it provides relevant information that can be used to support the audit's objective.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1802,
+      "s3_key": "radha.sharma_1766486250573_g4awao_document_handling_20251223_basel_iii_framework_incident_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766486250573_g4awao_document_handling_20251223_basel_iii_framework_incident_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:05:44.682428",
+      "relevance_score": 0.75,
+      "relevance_reason": "The document provides a stress testing report that addresses some compliance requirements related to liquidity risk management and capital adequacy.",
+      "matched_policies": [
+        1209,
+        1210
+      ],
+      "matched_subpolicies": [],
+      "matched_compliances": [
+        1791
+      ]
+    },
+    {
+      "operation_id": 1800,
+      "s3_key": "radha.sharma_1766485428403_zvzmd1_document_handling_20251223_basel_iii_framework_audit_compliant_dataset_1_1.xlsx",
+      "stored_name": "radha.sharma_1766485428403_zvzmd1_document_handling_20251223_basel_iii_framework_audit_compliant_dataset_1_1.xlsx",
+      "analyzed_at": "2025-12-25T16:05:56.431355",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress test impact report for a financial institution, which directly addresses compliance requirements related to liquidity risk management. Specifically, it highlights instances where the leverage ratio exceeds the threshold of 0.04, indicating potential non-compliance with regulatory requirements.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1798,
+      "s3_key": "radha.sharma_1766484031168_9bir0t_document_handling_20251223_basel_iii_framework_audit_compliant_only_dataset_1.xlsx",
+      "stored_name": "radha.sharma_1766484031168_9bir0t_document_handling_20251223_basel_iii_framework_audit_compliant_only_dataset_1.xlsx",
+      "analyzed_at": "2025-12-25T16:06:09.834106",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a snapshot of Tier 1 Capital, Total Assets, and Leverage Ratios for multiple entities, which indirectly addresses some compliance requirements related to liquidity risk management. However, it does not explicitly address any specific policies, subpolicies, or compliance requirements listed in the framework.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1796,
+      "s3_key": "radha.sharma_1766483700467_938lrw_document_handling_20251223_basel_iii_framework_audit_compliant_dataset_1_1.xlsx",
+      "stored_name": "radha.sharma_1766483700467_938lrw_document_handling_20251223_basel_iii_framework_audit_compliant_dataset_1_1.xlsx",
+      "analyzed_at": "2025-12-25T16:06:19.727636",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides information on Tier 1 Capital, Total Assets, Leverage Ratio, and Compliance Status for various entities. Although it does not directly address all the policies, subpolicies, or compliance requirements listed above, it indirectly relates to some of them.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1794,
+      "s3_key": "radha.sharma_1766482698986_wprpnb_document_handling_20251223_basel_iii_framework_policy_compliant_dataset_1_1.xlsx",
+      "stored_name": "radha.sharma_1766482698986_wprpnb_document_handling_20251223_basel_iii_framework_policy_compliant_dataset_1_1.xlsx",
+      "analyzed_at": "2025-12-25T16:06:31.849260",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive overview of Tier 1 Capital, Total Assets, and Leverage Ratios for various entities, which is relevant to the audit's objective of ensuring compliance with Basel III's liquidity risk standards. Although it does not directly address all framework elements, it addresses some compliance requirements related to leverage ratio and liquidity coverage ratio.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1792,
+      "s3_key": "radha.sharma_1766482094520_v1cqw3_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766482094520_v1cqw3_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:06:41.282402",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for multiple banks, which indirectly addresses the Liquidity Risk Management Policy and its related compliance requirements. Although it does not directly address other policies or subpolicies, it provides insights into liquidity risk management practices that can be useful in assessing compliance.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1790,
+      "s3_key": "radha.sharma_1766480005370_so9vhy_document_handling_20251223_basel_iii_framework_policy_compliant_only_dataset_1.xlsx",
+      "stored_name": "radha.sharma_1766480005370_so9vhy_document_handling_20251223_basel_iii_framework_policy_compliant_only_dataset_1.xlsx",
+      "analyzed_at": "2025-12-25T16:06:51.463281",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress test impact report submission for Tier 1 capital, total assets, leverage ratio, and compliance status, which indirectly addresses some of the audit's framework requirements. Although it does not directly address all the policies, subpolicies, or compliance requirements listed above, it highlights instances where the leverage ratio exceeds the threshold of 0.04, indicating non-compliance in certain scenarios.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1787,
+      "s3_key": "radha.sharma_1766479894974_0gq7cr_document_handling_20251223_basel_iii_framework_incident_compliant_dataset_3_1.xlsx",
+      "stored_name": "radha.sharma_1766479894974_0gq7cr_document_handling_20251223_basel_iii_framework_incident_compliant_dataset_3_1.xlsx",
+      "analyzed_at": "2025-12-25T16:06:59.147830",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress test impact report for a financial institution, assessing its leverage ratio compliance status as of specific dates. Although it does not explicitly address all framework elements, it addresses some critical compliance requirements related to liquidity risk management.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1785,
+      "s3_key": "radha.sharma_1766479755111_johhc0_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766479755111_johhc0_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:07:08.884486",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The stress testing report provides detailed information on banks' ability to withstand various stress scenarios, which directly addresses compliance requirements related to liquidity risk management and leverage ratio. Although it does not explicitly mention specific policies or subpolicies, it indirectly supports the audit's objective by providing evidence of the banks' resilience under adverse conditions.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1783,
+      "s3_key": "radha.sharma_1766479496524_8x4ayo_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766479496524_8x4ayo_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:07:21.303458",
+      "relevance_score": 0.7,
+      "relevance_reason": "The document provides a comprehensive stress testing report for several banks, which indirectly addresses some of the compliance requirements related to liquidity risk management and capital adequacy.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1781,
+      "s3_key": "radha.sharma_1766478622731_fk4xxz_document_handling_20251223_basel_iii_framework_risk_compliant_dataset_1_1.xlsx",
+      "stored_name": "radha.sharma_1766478622731_fk4xxz_document_handling_20251223_basel_iii_framework_risk_compliant_dataset_1_1.xlsx",
+      "analyzed_at": "2025-12-25T16:07:39.502456",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive overview of financial institution data, including Tier 1 capital, total assets, leverage ratio, and compliance status. Although it does not explicitly state critical findings or recommendations, it highlights institutions failing to meet the leverage ratio threshold, which may require further analysis and action. This information is relevant to the audit's objective of ensuring liquidity risk management policy compliance.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1777,
+      "s3_key": "radha.sharma_1766478301669_4pua46_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766478301669_4pua46_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:08:00.666533",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive view of banks' financial health under different stress scenarios, which indirectly addresses some compliance requirements related to liquidity risk management and capital adequacy. However, it does not explicitly address any specific policies, subpolicies, or compliance requirements listed in the framework.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1758,
+      "s3_key": "radha.sharma_1766475998808_9msfis_document_handling_20251223_basel_iii_framework_incident_compliant_dataset_1_1.xlsx",
+      "stored_name": "radha.sharma_1766475998808_9msfis_document_handling_20251223_basel_iii_framework_incident_compliant_dataset_1_1.xlsx",
+      "analyzed_at": "2025-12-25T16:08:20.320330",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress test impact report submission for a financial institution, which directly addresses compliance requirements related to liquidity risk management. Specifically, it highlights instances where the leverage ratio exceeds the threshold of 0.04, indicating potential non-compliance with Basel III's Liquidity Coverage Ratio (LCR) and Net Stable Funding Ratio (NSFR). This document is highly relevant as it provides evidence and information needed to fulfill the audit's objective.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1757,
+      "s3_key": "radha.sharma_1766475824986_3gw0ey_document_handling_20251223_basel_iii_framework_incident_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766475824986_3gw0ey_document_handling_20251223_basel_iii_framework_incident_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:08:31.950075",
+      "relevance_score": 0.65,
+      "relevance_reason": "The document provides a stress testing report for several banks, which indirectly addresses some compliance requirements related to liquidity risk management and capital adequacy.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": [
+        1794
+      ]
+    },
+    {
+      "operation_id": 1756,
+      "s3_key": "radha.sharma_1766475644921_4yu6yf_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766475644921_4yu6yf_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:08:49.762816",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress test report for several banks, which addresses some aspects of liquidity risk management, but does not directly address the audit's objective of ensuring compliance with Basel III's liquidity risk standards.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1755,
+      "s3_key": "radha.sharma_1766472780942_qyof38_document_handling_20251223_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766472780942_qyof38_document_handling_20251223_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:08:59.614049",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a stress testing report for several banks, which addresses some aspects of liquidity risk management and capital adequacy. Although it does not directly address all compliance requirements listed in the framework, it provides relevant information on bank's leverage ratios, stress test results, and potential capital adequacy concerns.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1739,
+      "s3_key": "radha.sharma_1766471068427_gvadzy_document_handling_20251223_basel_iii_framework_audit_partially_compliant_dataset_1.xlsx",
+      "stored_name": "radha.sharma_1766471068427_gvadzy_document_handling_20251223_basel_iii_framework_audit_partially_compliant_dataset_1.xlsx",
+      "analyzed_at": "2025-12-25T16:09:11.416032",
+      "relevance_score": 0.65,
+      "relevance_reason": "Document provides financial information and compliance status, indirectly supporting the audit's objective of ensuring liquidity risk management compliance with Basel III standards.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1720,
+      "s3_key": "radha.sharma_1766470693860_jhxkqp_document_handling_20251223_basel_iii_framework_incident_compliant_dataset_1_1.xlsx",
+      "stored_name": "radha.sharma_1766470693860_jhxkqp_document_handling_20251223_basel_iii_framework_incident_compliant_dataset_1_1.xlsx",
+      "analyzed_at": "2025-12-25T16:09:22.576521",
+      "relevance_score": 0.7,
+      "relevance_reason": "Document provides information on leverage ratios and LCR, which are relevant to the audit scope.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1705,
+      "s3_key": "radha.sharma_1766470449342_b4f247_document_handling_20251223_basel_iii_framework_incident_compliant_dataset_3_1.xlsx",
+      "stored_name": "radha.sharma_1766470449342_b4f247_document_handling_20251223_basel_iii_framework_incident_compliant_dataset_3_1.xlsx",
+      "analyzed_at": "2025-12-25T16:09:35.104936",
+      "relevance_score": 0.9,
+      "relevance_reason": "Document provides a compliance assessment of Tier 1 Capital, Total Assets, and Leverage Ratios against a specified threshold, directly addressing several compliance requirements related to liquidity risk management.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1680,
+      "s3_key": "radha.sharma_1766470321157_i4glim_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766470321157_i4glim_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:09:45.214250",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides stress test results for multiple banks, assessing their Tier 1 capital, total exposure, leverage ratio, and response to stress scenarios. Although it does not directly address the audit's objective of ensuring compliance with Basel III's liquidity risk standards, it indirectly supports the audit by providing insights into bank resilience under stress scenarios.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1656,
+      "s3_key": "radha.sharma_1766470144483_4lo25f_document_handling_20251223_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766470144483_4lo25f_document_handling_20251223_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:09:55.634284",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides detailed stress test results for multiple banks, evaluating Tier 1 capital, total exposure, leverage ratios, and stress scenarios. While it does not directly address the audit's objective of ensuring Basel III liquidity risk standards compliance, it indirectly supports the audit by providing relevant data on bank performance under different stress scenarios.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1649,
+      "s3_key": "radha.sharma_1766469957613_ok3idq_document_handling_20251223_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766469957613_ok3idq_document_handling_20251223_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:10:06.489606",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides stress test results for multiple banks, assessing Tier 1 capital, total exposure, leverage ratios, and responses to stress scenarios. While it does not directly address the audit's objective of ensuring compliance with Basel III liquidity risk standards, it indirectly addresses some related concepts, such as liquidity coverage ratio (LCR) and net stable funding ratio (NSFR). The document also provides insights into banks' resilience under different stress scenarios, which may be relevant to the audit.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1631,
+      "s3_key": "radha.sharma_1766469591702_e90n6q_document_handling_20251223_basel_iii_framework_policy_compliant_only_dataset_1.xlsx",
+      "stored_name": "radha.sharma_1766469591702_e90n6q_document_handling_20251223_basel_iii_framework_policy_compliant_only_dataset_1.xlsx",
+      "analyzed_at": "2025-12-25T16:10:17.038028",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a comprehensive compliance assessment of Tier 1 Capital, Total Assets, and Leverage Ratios against specified thresholds, with submission dates and compliance statuses included. It highlights areas needing improvement to meet regulatory requirements, making it relevant for conducting this audit.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1601,
+      "s3_key": "radha.sharma_1766468725205_t18lac_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766468725205_t18lac_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:10:29.154105",
+      "relevance_score": 0.75,
+      "relevance_reason": "Document provides stress test results for multiple banks and addresses compliance requirements related to liquidity risk management.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": [
+        1784,
+        1791
+      ]
+    },
+    {
+      "operation_id": 1577,
+      "s3_key": "radha.sharma_1766467817930_89fro2_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766467817930_89fro2_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:10:39.338532",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides stress test results for multiple banks, detailing their Tier 1 capital, total exposure, leverage ratios, and stress scenarios. This information is relevant to the audit's objective of ensuring compliance with Basel III's liquidity risk standards. Specifically, the document addresses the Liquidity Coverage Ratio (LCR) and Net Stable Funding Ratio (NSFR), which are critical components of the audit scope.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1544,
+      "s3_key": "radha.sharma_1766467617383_8vi0tw_document_handling_20251223_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766467617383_8vi0tw_document_handling_20251223_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:10:50.518871",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides stress test results for multiple banks, including Tier 1 capital, total exposure, leverage ratios, and submission dates to the regulator. Although it does not directly address the audit's objective of ensuring liquidity risk management compliance with Basel III standards, it indirectly supports the audit by providing relevant data on bank resilience under various stress scenarios.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1516,
+      "s3_key": "radha.sharma_1766467401501_mp5fzb_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766467401501_mp5fzb_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:11:04.149236",
+      "relevance_score": 0.85,
+      "relevance_reason": "Document provides stress test results that indirectly address Capital Adequacy Policy and Liquidity Risk Management Policy, and directly addresses Macroeconomic Stress Testing, NSFR Compliance, and Collateral & Margin Requirements Compliance.",
+      "matched_policies": [
+        1209,
+        1210
+      ],
+      "matched_subpolicies": [],
+      "matched_compliances": [
+        1791
+      ]
+    },
+    {
+      "operation_id": 1515,
+      "s3_key": "radha.sharma_1766467228312_3jmrg3_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766467228312_3jmrg3_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:11:12.568601",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides stress test results for multiple banks, including Tier 1 capital, total exposure, leverage ratios, and stress scenarios, which indirectly addresses some compliance requirements related to liquidity risk management.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1514,
+      "s3_key": "radha.sharma_1766466808025_bo68li_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766466808025_bo68li_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:11:23.457594",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides stress test results for multiple banks, evaluating Tier 1 capital, total exposure, leverage ratios, and stress scenarios. Although it does not directly address the audit's objective of ensuring liquidity risk management policy compliance, it indirectly addresses some related framework elements.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1511,
+      "s3_key": "radha.sharma_1766466405143_g1phz5_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766466405143_g1phz5_document_handling_20251223_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:11:33.738996",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides stress test results for multiple banks, evaluating Tier 1 capital, total exposure, leverage ratios, and stress scenarios. While it does not directly address the audit's objective of ensuring compliance with Basel III's liquidity risk standards, it indirectly addresses some related framework elements.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1510,
+      "s3_key": "radha.sharma_1766404975553_wn4xtt_document_handling_20251222_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766404975553_wn4xtt_document_handling_20251222_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:11:43.498191",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides stress test results for multiple banks, assessing Tier 1 capital, total exposure, leverage ratios, and stress scenarios. Although it does not directly address all compliance requirements, it indirectly supports the audit's objective by providing insights into liquidity risk management practices.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1509,
+      "s3_key": "radha.sharma_1766404872131_bx3jss_document_handling_20251222_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766404872131_bx3jss_document_handling_20251222_basel_iii_framework_policy_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:11:54.893564",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document presents stress test results for multiple banks, which is relevant to the Liquidity Risk Management Policy Compliance Audit. Although it does not directly address all compliance requirements listed in the framework, it provides insights into liquidity risk management practices and capital adequacy. Specifically, it addresses the Liquidity Coverage Ratio (LCR) and Net Stable Funding Ratio (NSFR) compliance requirements.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1508,
+      "s3_key": "radha.sharma_1766404680135_anhcsa_document_handling_20251222_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "stored_name": "radha.sharma_1766404680135_anhcsa_document_handling_20251222_basel_iii_framework_audit_baseliii_leverageratio_rawdata_1.xlsx",
+      "analyzed_at": "2025-12-25T16:12:06.001359",
+      "relevance_score": 0.65,
+      "relevance_reason": "The document provides stress test results for multiple banks, which indirectly addresses some compliance requirements related to liquidity risk management and capital adequacy.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    }
+  ],
+  "database_data": []
+}

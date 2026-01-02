@@ -223,6 +223,7 @@ def get_all_audits(request):
             query = f"""
                 SELECT 
                     a.AuditId as audit_id,
+                    a.Title as title,
                     f.FrameworkName as framework,
                     p.PolicyName as policy,
                     COALESCE(sp.SubPolicyName, 
@@ -258,7 +259,7 @@ def get_all_audits(request):
                 WHERE 1=1
                     {where_clause}
                 GROUP BY 
-                    a.AuditId, f.FrameworkName, p.PolicyName, sp.SubPolicyName, 
+                    a.AuditId, a.Title, f.FrameworkName, p.PolicyName, sp.SubPolicyName, 
                     auditor_user.UserName, a.DueDate, a.Frequency, reviewer_user.UserName, a.AuditType
                 ORDER BY 
                     a.AuditId DESC
@@ -330,6 +331,7 @@ def get_all_audits_public(request):
             cursor.execute("""
                 SELECT 
                     a.AuditId as audit_id,
+                    a.Title as title,
                     f.FrameworkName as framework,
                     p.PolicyName as policy,
                     sp.SubPolicyName as subpolicy,
@@ -358,7 +360,7 @@ def get_all_audits_public(request):
                 LEFT JOIN 
                     audit_findings af ON a.AuditId = af.AuditId
                 GROUP BY 
-                    a.AuditId, f.FrameworkName, p.PolicyName, sp.SubPolicyName, 
+                    a.AuditId, a.Title, f.FrameworkName, p.PolicyName, sp.SubPolicyName, 
                     auditor_user.UserName, a.DueDate, a.Frequency, reviewer_user.UserName, a.AuditType
                 ORDER BY 
                     a.AuditId DESC
@@ -446,6 +448,7 @@ def get_my_audits(request):
             query = f"""
                 SELECT 
                     a.AuditId as audit_id,
+                    a.Title as title,
                     f.FrameworkName as framework,
                     p.PolicyName as policy,
                     COALESCE(sp.SubPolicyName, 
@@ -488,7 +491,7 @@ def get_my_audits(request):
                     a.auditor = %(user_id)s
                     {where_clause}
                 GROUP BY 
-                    a.AuditId, f.FrameworkName, p.PolicyName, sp.SubPolicyName, 
+                    a.AuditId, a.Title, f.FrameworkName, p.PolicyName, sp.SubPolicyName, 
                     a.DueDate, a.Frequency, reviewer_user.UserName, a.AuditType, assignee_user.UserName, a.Status, a.CompletionDate, a.Reports, a.BusinessUnit
                 ORDER BY 
                     a.DueDate ASC
@@ -805,6 +808,25 @@ def create_audit_version(audit_id, user_id, custom_version=None):
     try:
         print(f"DEBUG: Creating audit version for audit_id: {audit_id}, user_id: {user_id}")
         
+        # Extract user ID if user_id is a User object
+        if hasattr(user_id, 'UserId'):
+            user_id_int = user_id.UserId
+        elif hasattr(user_id, 'id'):
+            user_id_int = user_id.id
+        elif hasattr(user_id, 'pk'):
+            user_id_int = user_id.pk
+        elif isinstance(user_id, int):
+            user_id_int = user_id
+        else:
+            # Try to convert to int
+            try:
+                user_id_int = int(user_id)
+            except (ValueError, TypeError):
+                print(f"WARNING: Could not extract user ID from {user_id}, using None")
+                user_id_int = None
+        
+        print(f"DEBUG: Extracted user_id: {user_id_int} (from {type(user_id)})")
+        
         # Always get the next version number instead of using fixed version
         next_version = get_next_version_number(audit_id, "A")
         version = next_version if custom_version is None else custom_version
@@ -820,7 +842,7 @@ def create_audit_version(audit_id, user_id, custom_version=None):
         # Add metadata
         audit_data['__metadata__'] = {
             'version_date': timezone.now().strftime("%Y-%m-%d %H:%M:%S"),
-            'auditor_id': user_id,
+            'auditor_id': user_id_int,  # Use integer ID, not User object
             'version_type': 'Auditor'
         }
         
@@ -850,7 +872,7 @@ def create_audit_version(audit_id, user_id, custom_version=None):
                 INSERT INTO audit_version (AuditId, Version, {data_column}, UserId, Date, FrameworkId) 
                 VALUES (%s, %s, %s, %s, %s, %s)
                 """,
-                [audit_id, version, json_data, user_id, datetime.datetime.now(), framework_id]
+                [audit_id, version, json_data, user_id_int, datetime.datetime.now(), framework_id]  # Use integer ID
             )
             
         print(f"DEBUG: Created new audit version {version} for audit {audit_id}")
@@ -1728,11 +1750,11 @@ def update_audit_finding(request, compliance_id):
         if 'compliance_status' in request.data:
             compliance_status = request.data['compliance_status']
             if compliance_status == 'Fully Compliant':
-                finding.Check = '2'  # Completed
+                finding.Check = '2'  # Fully Compliant
             elif compliance_status == 'Partially Compliant':
-                finding.Check = '1'  # In Progress
+                finding.Check = '1'  # Partially Compliant
             elif compliance_status == 'Not Compliant':
-                finding.Check = '0'  # Not Started
+                finding.Check = '0'  # Not Compliant
             elif compliance_status == 'Not Applicable':
                 finding.Check = '3'  # Not Applicable
         
@@ -1874,7 +1896,21 @@ def get_audit_findings_json(audit_id, overall_comments=None):
                     af.Impact,
                     af.Recommendation,
                     af.DetailsOfFinding,
-                    af.MajorMinor
+                    af.MajorMinor,
+                    af.SeverityRating,
+                    af.PredictiveRisks,
+                    af.CorrectiveActions,
+                    af.UnderlyingCause, 
+                    af.WhyToVerify,
+                    af.WhatToVerify,
+                    af.SuggestedActionPlan,
+                    af.MitigationDate,
+                    af.ResponsibleForPlan,
+                    af.ReAudit,
+                    af.ReAuditDate,
+                    af.ReviewStatus,
+                    af.ReviewComments,
+                    af.ReviewDate
                 FROM 
                     audit_findings af
                 JOIN
@@ -1915,6 +1951,25 @@ def get_audit_findings_json(audit_id, overall_comments=None):
                 else:
                     criticality = 'Minor'
                 
+                # Parse JSON fields if they exist
+                predictive_risks = row[11] if len(row) > 11 and row[11] else None
+                corrective_actions = row[12] if len(row) > 12 and row[12] else None
+                
+                # Try to parse JSON strings
+                try:
+                    if predictive_risks and isinstance(predictive_risks, str):
+                        import json
+                        predictive_risks = json.loads(predictive_risks)
+                except:
+                    predictive_risks = None
+                
+                try:
+                    if corrective_actions and isinstance(corrective_actions, str):
+                        import json
+                        corrective_actions = json.loads(corrective_actions)
+                except:
+                    corrective_actions = None
+                
                 findings_data[compliance_id] = {
                     'description': row[1],
                     'status': check_value,
@@ -1927,9 +1982,21 @@ def get_audit_findings_json(audit_id, overall_comments=None):
                     'details_of_finding': row[8] or '',
                     'major_minor': major_minor,
                     'criticality': criticality,
+                    'severity_rating': row[10] if len(row) > 10 and row[10] is not None else None,
+                    'predictive_risks': predictive_risks,
+                    'corrective_actions': corrective_actions,
+                    'underlying_cause': row[13] if len(row) > 13 and row[13] else '',
+                    'why_to_verify': row[14] if len(row) > 14 and row[14] else '',
+                    'what_to_verify': row[15] if len(row) > 15 and row[15] else '',
+                    'suggested_action_plan': row[16] if len(row) > 16 and row[16] else '',
+                    'mitigation_date': str(row[17]) if len(row) > 17 and row[17] else None,
+                    'responsible_for_plan': row[18] if len(row) > 18 and row[18] else '',
+                    're_audit': row[19] if len(row) > 19 and row[19] else 0,
+                    're_audit_date': str(row[20]) if len(row) > 20 and row[20] else None,
                     # Add consistent review fields to A versions
-                    'review_status': 'In Review',
-                    'review_comments': '',
+                    'review_status': row[21] if len(row) > 21 and row[21] else 'In Review',
+                    'review_comments': row[22] if len(row) > 22 and row[22] else '',
+                    'review_date': str(row[23]) if len(row) > 23 and row[23] else None,
                     'reviewer_comments': '',
                     'accept_reject': '0'  # 0=In Review, 1=Accept, 2=Reject
                 }
@@ -2286,6 +2353,7 @@ def get_my_reviews(request):
             # Build SQL query based on available columns
             select_fields = [
                 "a.AuditId as audit_id",
+                "a.Title as title",
                 "f.FrameworkName as framework",
                 "p.PolicyName as policy",
                 "COALESCE(sp.SubPolicyName, (SELECT GROUP_CONCAT(sp2.SubPolicyName SEPARATOR ', ') FROM subpolicies sp2 WHERE sp2.PolicyId = a.PolicyId LIMIT 1)) as subpolicy",
@@ -2336,7 +2404,7 @@ def get_my_reviews(request):
             
             # Group by fields without ReviewDate and ReviewComments
             group_by_fields = [
-                "a.AuditId", "f.FrameworkName", "p.PolicyName", "sp.SubPolicyName", "a.BusinessUnit",
+                "a.AuditId", "a.Title", "f.FrameworkName", "p.PolicyName", "sp.SubPolicyName", "a.BusinessUnit",
                 "a.DueDate", "a.Frequency", "auditor_user.UserName", "auditor_user.UserId", "a.AuditType",
                 "assignee_user.UserName", "a.Status", "a.CompletionDate"
             ]
@@ -2749,8 +2817,8 @@ def submit_audit_findings(request, audit_id):
         updated_findings = 0
         
         for finding in findings:
-            if finding.Check != '2':  # If not already marked as completed
-                finding.Check = '2'  # Mark as completed
+            if finding.Check != '2':  # If not already marked as Fully Compliant
+                finding.Check = '2'  # Mark as Fully Compliant
                 finding.CheckedDate = timezone.now()
                 finding.save()
                 updated_findings += 1
@@ -2975,7 +3043,7 @@ def allocate_policy(request):
                         ComplianceId=compliance,
                         UserId_id=auditor_id,
                         Evidence='',
-                        Check='0',  # 0 = Yet to Start
+                        Check='0',  # 0 = Not Compliant
                         Comments='',
                         MajorMinor=major_minor,  # Set initial MajorMinor value
                         AssignedDate=assigned_date,  # Use the same AssignedDate as the audit
@@ -4208,11 +4276,11 @@ def save_review_progress(request, audit_id):
                                 compliance_status = compliance_data.get('compliance_status', '')
                                
                                 # Map compliance_status to Check value
-                                check_value = '0'  # Default: Not Started (Not Compliant)
+                                check_value = '0'  # Default: Not Compliant
                                 if compliance_status == 'Fully Compliant':
-                                    check_value = '2'  # Completed
+                                    check_value = '2'  # Fully Compliant
                                 elif compliance_status == 'Partially Compliant':
-                                    check_value = '1'  # In Progress
+                                    check_value = '1'  # Partially Compliant
                                 elif compliance_status == 'Not Applicable':
                                     check_value = '3'  # Not Applicable
                                

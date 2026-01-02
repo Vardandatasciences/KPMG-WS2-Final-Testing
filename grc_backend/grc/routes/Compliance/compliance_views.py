@@ -4599,11 +4599,9 @@ def all_policies_get_framework_version_policies(request, version_id):
         framework_version = get_object_or_404(FrameworkVersion, VersionId=version_id)
         framework = framework_version.FrameworkId
        
-        # Get policies for this framework
-        policies = Policy.objects.filter(
-            Framework=framework,
-            CurrentVersion=framework_version.Version
-        )
+        # Get ALL policies for this framework (regardless of CurrentVersion)
+        # This ensures we show all policies that belong to the framework
+        policies = Policy.objects.filter(FrameworkId=framework)
        
         policies_data = []
         for policy in policies:
@@ -4616,8 +4614,9 @@ def all_policies_get_framework_version_policies(request, version_id):
                 'versions': []
             }
            
-            # Get versions for this policy
-            policy_versions = PolicyVersion.objects.filter(PolicyId=policy)
+            # Get ALL versions for this policy
+            # This allows showing all versions of a policy when viewing any framework version
+            policy_versions = PolicyVersion.objects.filter(PolicyId=policy).order_by('Version')
             versions_data = []
             for version in policy_versions:
                 versions_data.append({

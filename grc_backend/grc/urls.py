@@ -1955,7 +1955,9 @@ incident_urlpatterns = [
     path('ai-audit/<str:audit_id>/status/', AIAuditStatusView.as_view(), name='api-get-ai-audit-status'),
 
     path('ai-audit/<str:audit_id>/documents/<int:document_id>/check/', ai_audit_api.check_document_compliance, name='api-check-document-compliance'),
-
+    path('ai-audit/<str:audit_id>/check-combined-evidence/', ai_audit_api.check_compliance_with_combined_evidence, name='api-check-combined-evidence'),
+ 
+ 
     path('ai-audit/<str:audit_id>/check-all/', ai_audit_api.check_all_documents_compliance, name='api-check-all-documents-compliance'),
 
     path('ai-audit/<str:audit_id>/start-processing/', ai_audit_api.start_ai_audit_processing_api, name='api-start-ai-audit-processing'),
@@ -1966,6 +1968,15 @@ incident_urlpatterns = [
 
     path('ai-audit/<str:audit_id>/documents/<int:document_id>/', ai_audit_api.delete_audit_document_api, name='api-delete-audit-document'),
 
+     path('ai-audit/<str:audit_id>/documents/delete-all/', ai_audit_api.delete_all_audit_documents_api, name='api-delete-all-audit-documents'),
+   
+    # Get relevant documents from file_operations for an audit
+    path('ai-audit/<str:audit_id>/relevant-documents/', ai_audit_api.get_relevant_documents_for_audit, name='api-get-relevant-documents'),
+   
+    # Trigger database analysis for an audit
+    path('ai-audit/<str:audit_id>/trigger-database-analysis/', ai_audit_api.trigger_database_analysis, name='api-trigger-database-analysis'),
+ 
+ 
     
 
     # AI Document Relevance Analysis

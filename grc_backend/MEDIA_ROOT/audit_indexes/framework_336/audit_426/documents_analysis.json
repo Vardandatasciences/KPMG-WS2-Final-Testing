@@ -1,0 +1,41 @@
+{
+  "framework_id": 336,
+  "audit_id": 426,
+  "last_updated": "2025-12-30T11:40:18.732106",
+  "documents": [
+    {
+      "operation_id": 1526,
+      "s3_key": "vikram.patel_1766735169515_p5ekgz_document_handling_20251226_basel_iii_framework_incident_compliant_dataset_3_1.xlsx",
+      "stored_name": "vikram.patel_1766735169515_p5ekgz_document_handling_20251226_basel_iii_framework_incident_compliant_dataset_3_1.xlsx",
+      "analyzed_at": "2025-12-26T13:23:06.106054",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document provides a snapshot of financial institutions' compliance with regulatory requirements, specifically focusing on tier 1 capital, total assets, leverage ratio, and stress test impact. Although it does not explicitly address all framework elements, it indirectly addresses some compliance requirements related to risk management and capital adequacy.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1530,
+      "s3_key": "vikram.patel_1766984027171_z833xa_document_handling_20251229_basel_iii_framework_policy_annual_macro_stress_test_regulatory_submission_evidence_100_rows.xlsx",
+      "stored_name": "vikram.patel_1766984027171_z833xa_document_handling_20251229_basel_iii_framework_policy_annual_macro_stress_test_regulatory_submission_evidence_100_rows.xlsx",
+      "analyzed_at": "2025-12-29T10:24:49.975866",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document appears to be a historical record of macroeconomic stress test results submitted to the Reserve Bank of India (RBI) from 1925-1942, which does not directly address any of the audit's objectives or scope. Although it provides some information on regulatory submissions and acknowledgement received, it is not relevant to the Basel III – Macroeconomic Stress Testing Audit.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    },
+    {
+      "operation_id": 1533,
+      "s3_key": "radha.sharma_1767074956269_bvgemm_document_handling_20251230_basel_iii_framework_policy_annual_macro_stress_test_regulatory_submission_evidence_100_rows.xlsx",
+      "stored_name": "radha.sharma_1767074956269_bvgemm_document_handling_20251230_basel_iii_framework_policy_annual_macro_stress_test_regulatory_submission_evidence_100_rows.xlsx",
+      "analyzed_at": "2025-12-30T11:40:18.732106",
+      "relevance_score": 0.0,
+      "relevance_reason": "** The document appears to be a historical regulatory submission evidence sheet from 1925-1942, detailing macroeconomic stress test results submitted annually. It does not directly address any of the policies, subpolicies, or compliance requirements listed in the framework.",
+      "matched_policies": [],
+      "matched_subpolicies": [],
+      "matched_compliances": []
+    }
+  ],
+  "database_data": []
+}
