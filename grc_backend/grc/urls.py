@@ -115,6 +115,7 @@ from .routes.Policy.public_acknowledgement import (
 from .routes.Policy.homePolices import get_policies_by_status, get_policy_details as get_home_policy_details, get_policies_by_status_public
 
 from .routes.Home.dynamic_homepage import get_homepage_data, get_all_frameworks_data
+from .routes.Home.domain import get_domains_with_frameworks, update_framework_domain, bulk_update_framework_domains
 
 from .routes.UploadFramework.new_upload_framework import (
     upload_framework_file as new_upload_framework_file, 
@@ -974,6 +975,11 @@ policy_urlpatterns = [
     # Dynamic Homepage Data
     path('homepage/', get_homepage_data, name='get-homepage-data'),
     path('homepage/all-frameworks/', get_all_frameworks_data, name='get-all-frameworks-data'),
+    
+    # Domain Management
+    path('domains/', get_domains_with_frameworks, name='get-domains-with-frameworks'),
+    path('domains/update-framework/', update_framework_domain, name='update-framework-domain'),
+    path('domains/bulk-update/', bulk_update_framework_domains, name='bulk-update-framework-domains'),
 
     
 

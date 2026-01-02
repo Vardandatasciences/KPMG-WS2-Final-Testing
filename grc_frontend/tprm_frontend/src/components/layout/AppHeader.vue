@@ -227,7 +227,24 @@ const routeTitleMap = {
   '/contracts/preview': 'Contract Preview',
   '/rfp': 'RFP Management',
   '/rfp-analytics': 'RFP Analytics Dashboard',
-  '/bcp': 'BCP Management',
+  '/bcp': 'Management',
+  '/bcp/vendor-upload': 'Vendor Upload',
+  '/bcp/plan-submission-ocr': 'Plan Submission OCR',
+  '/bcp/evaluation': 'Plan Evaluation',
+  '/bcp/library': 'Plan Library',
+  '/bcp/questionnaire-library': 'Questionnaire Library',
+  '/bcp/testing-library': 'Testing Library',
+  '/bcp/questionnaire-builder': 'Questionnaire Builder',
+  '/bcp/questionnaire-workflow': 'Questionnaire Workflow',
+  '/bcp/questionnaire-assignment': 'Questionnaire Assignment',
+  '/bcp/questionnaire-assignment-workflow': 'Questionnaire Assignment Workflow',
+  '/bcp/approval-assignment': 'Approval Assignment',
+  '/bcp/my-approvals': 'My Approvals',
+  '/bcp/vendor-hub': 'Vendor Hub',
+  '/bcp/vendor-overview/:vendorId': 'Vendor Overview',
+  '/bcp/kpi-dashboard': 'KPI Dashboard',
+  '/bcp/dashboard': 'Dashboard',
+  '/bcp/risk-analytics': 'Risk Analytics',
   '/vendor-upload': 'Vendor Upload',
   '/ocr-extraction': 'OCR Extraction',
   '/evaluation': 'Plan Evaluation',
@@ -584,124 +601,124 @@ const routeBreadcrumbMap = {
 
   // BCP/DRP Management
   '/bcp/vendor-upload': [
-    { name: 'BCP/DRP Management', path: '/bcp/vendor-upload' },
+    { name: 'Continuity and Recovery plans management', path: '/bcp/vendor-upload' },
     { name: 'Plan Phase', path: '/bcp/vendor-upload' },
     { name: 'Upload Plans' }
   ],
   '/bcp/ocr-extraction': [
-    { name: 'BCP/DRP Management', path: '/bcp/vendor-upload' },
+    { name: 'Continuity and Recovery plans management', path: '/bcp/vendor-upload' },
     { name: 'Plan Phase', path: '/bcp/vendor-upload' },
     { name: 'OCR Extraction' }
   ],
   '/bcp/evaluation': [
-    { name: 'BCP/DRP Management', path: '/bcp/vendor-upload' },
+    { name: 'Continuity and Recovery plans management', path: '/bcp/vendor-upload' },
     { name: 'Plan Phase', path: '/bcp/vendor-upload' },
     { name: 'Plan Evaluation' }
   ],
   '/bcp/library': [
-    { name: 'BCP/DRP Management', path: '/bcp/vendor-upload' },
+    { name: 'Continuity and Recovery plans management', path: '/bcp/vendor-upload' },
     { name: 'Plan Phase', path: '/bcp/vendor-upload' },
     { name: 'Plan Library' }
   ],
   '/bcp/dashboard': [
-    { name: 'BCP/DRP Management', path: '/bcp/vendor-upload' },
+    { name: 'Continuity and Recovery plans management', path: '/bcp/vendor-upload' },
     { name: 'Owner Console', path: '/bcp/dashboard' },
     { name: 'Analytics Dashboard' }
   ],
   '/bcp/kpi-dashboard': [
-    { name: 'BCP/DRP Management', path: '/bcp/vendor-upload' },
+    { name: 'Continuity and Recovery plans management', path: '/bcp/vendor-upload' },
     { name: 'Owner Console', path: '/bcp/dashboard' },
     { name: 'KPI Dashboard' }
   ],
   '/bcp/risk-analytics': [
-    { name: 'BCP/DRP Management', path: '/bcp/vendor-upload' },
+    { name: 'Continuity and Recovery plans management', path: '/bcp/vendor-upload' },
     { name: 'Owner Console', path: '/bcp/dashboard' },
     { name: 'Risk Analytics' }
   ],
   '/bcp/testing-library': [
-    { name: 'BCP/DRP Management', path: '/bcp/vendor-upload' },
+    { name: 'Continuity and Recovery plans management', path: '/bcp/vendor-upload' },
     { name: 'Testing Phase', path: '/bcp/testing-library' },
     { name: 'Testing Library' }
   ],
   '/bcp/questionnaire-library': [
-    { name: 'BCP/DRP Management', path: '/bcp/vendor-upload' },
+    { name: 'Continuity and Recovery plans management', path: '/bcp/vendor-upload' },
     { name: 'Testing Phase', path: '/bcp/testing-library' },
     { name: 'Questionnaire Library' }
   ],
   '/bcp/questionnaire-builder': [
-    { name: 'BCP/DRP Management', path: '/bcp/vendor-upload' },
+    { name: 'Continuity and Recovery plans management', path: '/bcp/vendor-upload' },
     { name: 'Testing Phase', path: '/bcp/testing-library' },
     { name: 'Build & Review' }
   ],
   '/bcp/questionnaire-assignment': [
-    { name: 'BCP/DRP Management', path: '/bcp/vendor-upload' },
+    { name: 'Continuity and Recovery plans management', path: '/bcp/vendor-upload' },
     { name: 'Testing Phase', path: '/bcp/testing-library' },
     { name: 'Assignment & Answering' }
   ],
   '/bcp/approval-assignment': [
-    { name: 'BCP/DRP Management', path: '/bcp/vendor-upload' },
+    { name: 'Continuity and Recovery plans management', path: '/bcp/vendor-upload' },
     { name: 'Testing Phase', path: '/bcp/testing-library' },
     { name: 'Approval Assignment' }
   ],
   '/bcp/my-approvals': [
-    { name: 'BCP/DRP Management', path: '/bcp/vendor-upload' },
+    { name: 'Continuity and Recovery plans management', path: '/bcp/vendor-upload' },
     { name: 'Testing Phase', path: '/bcp/testing-library' },
     { name: 'My Approvals' }
   ],
   '/bcp/vendor-hub': [
-    { name: 'BCP/DRP Management', path: '/bcp/vendor-upload' },
+    { name: 'Continuity and Recovery plans management', path: '/bcp/vendor-upload' },
     { name: 'Testing Phase', path: '/bcp/testing-library' },
     { name: 'Vendor Hub' }
   ],
 
   // Legacy routes for backward compatibility
   '/vendor-upload': [
-    { name: 'BCP/DRP Management', path: '/bcp/vendor-upload' },
+    { name: 'Continuity and Recovery plans management', path: '/bcp/vendor-upload' },
     { name: 'Plan Phase', path: '/bcp/vendor-upload' },
     { name: 'Upload Plans' }
   ],
   '/ocr-extraction': [
-    { name: 'BCP/DRP Management', path: '/bcp/vendor-upload' },
+    { name: 'Continuity and Recovery plans management', path: '/bcp/vendor-upload' },
     { name: 'Plan Phase', path: '/bcp/vendor-upload' },
     { name: 'OCR Extraction' }
   ],
   '/evaluation': [
-    { name: 'BCP/DRP Management', path: '/bcp/vendor-upload' },
+    { name: 'Continuity and Recovery plans management', path: '/bcp/vendor-upload' },
     { name: 'Plan Phase', path: '/bcp/vendor-upload' },
     { name: 'Plan Evaluation' }
   ],
   '/library': [
-    { name: 'BCP/DRP Management', path: '/bcp/vendor-upload' },
+    { name: 'Continuity and Recovery plans management', path: '/bcp/vendor-upload' },
     { name: 'Plan Phase', path: '/bcp/vendor-upload' },
     { name: 'Plan Library' }
   ],
   '/questionnaire-library': [
-    { name: 'BCP/DRP Management', path: '/bcp/vendor-upload' },
+    { name: 'Continuity and Recovery plans management', path: '/bcp/vendor-upload' },
     { name: 'Testing Phase', path: '/bcp/testing-library' },
     { name: 'Questionnaire Library' }
   ],
   '/testing-library': [
-    { name: 'BCP/DRP Management', path: '/bcp/vendor-upload' },
+    { name: 'Continuity and Recovery plans management', path: '/bcp/vendor-upload' },
     { name: 'Testing Phase', path: '/bcp/testing-library' },
     { name: 'Testing Library' }
   ],
   '/questionnaire-builder': [
-    { name: 'BCP/DRP Management', path: '/bcp/vendor-upload' },
+    { name: 'Continuity and Recovery plans management', path: '/bcp/vendor-upload' },
     { name: 'Testing Phase', path: '/bcp/testing-library' },
     { name: 'Build & Review' }
   ],
   '/questionnaire-assignment': [
-    { name: 'BCP/DRP Management', path: '/bcp/vendor-upload' },
+    { name: 'Continuity and Recovery plans management', path: '/bcp/vendor-upload' },
     { name: 'Testing Phase', path: '/bcp/testing-library' },
     { name: 'Assignment & Answering' }
   ],
   '/approval-assignment': [
-    { name: 'BCP/DRP Management', path: '/bcp/vendor-upload' },
+    { name: 'Continuity and Recovery plans management', path: '/bcp/vendor-upload' },
     { name: 'Testing Phase', path: '/bcp/testing-library' },
     { name: 'Approval Assignment' }
   ],
   '/vendor-hub': [
-    { name: 'BCP/DRP Management', path: '/bcp/vendor-upload' },
+    { name: 'Continuity and Recovery plans management', path: '/bcp/vendor-upload' },
     { name: 'Testing Phase', path: '/bcp/testing-library' },
     { name: 'Vendor Hub' }
   ]
@@ -769,7 +786,7 @@ const breadcrumbs = computed(() => {
       'contract': { name: 'Contract Management', path: '/contractdashboard' },
       'sla': { name: 'Service Level Agreement', path: '/dashboard' },
       'slas': { name: 'Service Level Agreement', path: '/dashboard' },
-      'bcp': { name: 'BCP/DRP Management', path: '/bcp/vendor-upload' },
+      'bcp': { name: 'Continuity and Recovery plans management', path: '/bcp/vendor-upload' },
       'audit': { name: 'Service Level Agreement', path: '/dashboard' },
       'dashboard': { name: 'Service Level Agreement', path: '/dashboard' },
       'performance': { name: 'Service Level Agreement', path: '/dashboard' },

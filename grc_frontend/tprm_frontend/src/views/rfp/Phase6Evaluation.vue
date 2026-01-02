@@ -7,14 +7,6 @@
         <div class="py-6">
     <div class="md:flex md:items-center md:justify-between">
       <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-3 mb-3">
-                <div class="flex items-center gap-2">
-                  <div class="w-8 h-8 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
-                    <span class="text-white font-bold text-sm">6</span>
-                  </div>
-                  <Badge variant="outline" class="bg-blue-50 text-blue-700 border-blue-200">Phase 6 of 10</Badge>
-                </div>
-        </div>
               <h1 class="text-3xl font-bold text-gray-900 sm:text-4xl">
                 Proposal Evaluation
               </h1>
@@ -97,71 +89,149 @@
         </div>
         <div class="p-6">
           <div class="space-y-6">
-            <!-- RFP Selection Type -->
-            <div>
-              <label class="block text-sm font-semibold text-gray-700 mb-3">RFP Selection Type</label>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <label class="relative flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 hover:bg-blue-50" 
-                       :class="rfpSelectionType === 'user' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'">
-                  <input 
-                    type="radio" 
-                    v-model="rfpSelectionType" 
-                    value="user" 
-                    class="sr-only"
-                    @change="onRFPSelectionTypeChange"
-                  />
-                  <div class="flex items-center">
-                    <div class="w-5 h-5 border-2 rounded-full mr-3 flex items-center justify-center"
-                         :class="rfpSelectionType === 'user' ? 'border-blue-500' : 'border-gray-300'">
-                      <div v-if="rfpSelectionType === 'user'" class="w-2 h-2 bg-blue-500 rounded-full"></div>
-                    </div>
-                    <div>
-                      <p class="text-sm font-medium text-gray-900">My RFPs</p>
-                      <p class="text-xs text-gray-500">Created by me</p>
-                    </div>
+            <!-- RFP Selection Controls - Unified Card Grid -->
+            <div class="space-y-4">
+              <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div class="flex items-center gap-3">
+                  <label class="text-sm font-semibold text-gray-700 whitespace-nowrap">RFP Selection Type:</label>
+                  <div class="flex gap-2">
+                    <label class="relative flex items-center px-4 py-2.5 border-2 rounded-lg cursor-pointer transition-all duration-200 hover:bg-blue-50" 
+                           :class="rfpSelectionType === 'user' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'">
+                      <input 
+                        type="radio" 
+                        v-model="rfpSelectionType" 
+                        value="user" 
+                        class="sr-only"
+                        @change="onRFPSelectionTypeChange"
+                      />
+                      <div class="flex items-center">
+                        <div class="w-4 h-4 border-2 rounded-full mr-2 flex items-center justify-center"
+                             :class="rfpSelectionType === 'user' ? 'border-blue-500' : 'border-gray-300'">
+                          <div v-if="rfpSelectionType === 'user'" class="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                        </div>
+                        <span class="text-sm font-medium text-gray-900">My RFPs</span>
+                      </div>
+                    </label>
+                    
+                    <label class="relative flex items-center px-4 py-2.5 border-2 rounded-lg cursor-pointer transition-all duration-200 hover:bg-blue-50"
+                           :class="rfpSelectionType === 'all' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'">
+                      <input 
+                        type="radio" 
+                        v-model="rfpSelectionType" 
+                        value="all" 
+                        class="sr-only"
+                        @change="onRFPSelectionTypeChange"
+                      />
+                      <div class="flex items-center">
+                        <div class="w-4 h-4 border-2 rounded-full mr-2 flex items-center justify-center"
+                             :class="rfpSelectionType === 'all' ? 'border-blue-500' : 'border-gray-300'">
+                          <div v-if="rfpSelectionType === 'all'" class="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                        </div>
+                        <span class="text-sm font-medium text-gray-900">All RFPs</span>
+                      </div>
+                    </label>
                   </div>
-                </label>
+                </div>
                 
-                <label class="relative flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 hover:bg-blue-50"
-                       :class="rfpSelectionType === 'all' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'">
-                  <input 
-                    type="radio" 
-                    v-model="rfpSelectionType" 
-                    value="all" 
-                    class="sr-only"
-                    @change="onRFPSelectionTypeChange"
-                  />
-                  <div class="flex items-center">
-                    <div class="w-5 h-5 border-2 rounded-full mr-3 flex items-center justify-center"
-                         :class="rfpSelectionType === 'all' ? 'border-blue-500' : 'border-gray-300'">
-                      <div v-if="rfpSelectionType === 'all'" class="w-2 h-2 bg-blue-500 rounded-full"></div>
-                    </div>
-                    <div>
-                      <p class="text-sm font-medium text-gray-900">All RFPs</p>
-                      <p class="text-xs text-gray-500">Available to me</p>
-                    </div>
-                  </div>
-                </label>
+                <div class="text-sm text-gray-600">
+                  <span class="inline-flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                    {{ availableRFPs.length }} RFPs Available
+                  </span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button
+                    @click="rfpViewMode = 'grid'"
+                    :class="rfpViewMode === 'grid' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white text-gray-700 border-gray-200'"
+                    class="px-3 py-1.5 text-sm font-medium border rounded-lg hover:bg-blue-50 transition"
+                  >
+                    Grid
+                  </button>
+                  <button
+                    @click="rfpViewMode = 'list'"
+                    :class="rfpViewMode === 'list' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white text-gray-700 border-gray-200'"
+                    class="px-3 py-1.5 text-sm font-medium border rounded-lg hover:bg-blue-50 transition"
+                  >
+                    List
+                  </button>
+                </div>
               </div>
-            </div>
-            
-            <!-- RFP Selection -->
-        <div>
-              <label class="block text-sm font-semibold text-gray-700 mb-3">Select RFP</label>
-              <div class="relative">
-                <select 
-                  v-model="selectedRFP" 
-                  @change="onRFPSelectionChange"
-                  class="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
-                  :disabled="loading"
-                >
-                  <option value="">{{ loading ? 'Loading RFPs...' : 'Choose an RFP...' }}</option>
-                  <option v-for="rfp in availableRFPs" :key="rfp.rfp_id" :value="rfp.rfp_id">
-                    {{ rfp.rfp_title }} ({{ rfp.rfp_number }})
-            </option>
-          </select>
-                <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                  <Icons name="chevron-down" class="h-5 w-5 text-gray-400" />
+
+              <div v-if="loading" class="flex items-center gap-2 text-sm text-gray-500">
+                <Icons name="loader" class="h-4 w-4 animate-spin" />
+                Loading RFPs...
+              </div>
+              <div v-else-if="availableRFPs.length === 0" class="text-sm text-gray-500">
+                No RFPs found for the selected type.
+              </div>
+              <div v-else>
+                <div v-if="rfpViewMode === 'grid'" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  <button
+                    v-for="rfp in availableRFPs"
+                    :key="rfp.rfp_id"
+                    type="button"
+                    @click="selectRfpCard(rfp)"
+                    class="group w-full text-left bg-white border rounded-xl p-5 shadow-sm transition-all duration-200 hover:border-blue-400 hover:shadow-md focus:ring-2 focus:ring-blue-500"
+                    :class="selectedRFP === rfp.rfp_id ? 'border-blue-500 shadow-md' : 'border-gray-200'"
+                  >
+                    <div class="flex items-start justify-between mb-3">
+                      <div class="pr-6">
+                        <h4 class="text-base font-semibold text-gray-900 group-hover:text-blue-700 transition-colors">
+                          {{ rfp.rfp_title || rfp.title || 'Untitled RFP' }}
+                        </h4>
+                        <p class="text-sm text-gray-600 mt-1 line-clamp-2">
+                          {{ rfp.description || 'No description available.' }}
+                        </p>
+                      </div>
+                      <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-800 border border-blue-100">
+                        {{ rfp.rfp_number || rfp.number || 'N/A' }}
+                      </span>
+                    </div>
+
+                    <div class="flex items-center justify-between text-xs text-gray-500">
+                      <span class="inline-flex items-center px-2 py-1 rounded-full font-medium"
+                            :class="getStatusBadgeClass(rfp.status)">
+                        {{ rfp.status || 'N/A' }}
+                      </span>
+                      <span class="flex items-center gap-1">
+                        <Icons name="calendar" class="h-4 w-4" />
+                        {{ formatDate(rfp.submission_deadline) }}
+                      </span>
+                    </div>
+                  </button>
+                </div>
+
+                <div v-else class="space-y-3">
+                  <button
+                    v-for="rfp in availableRFPs"
+                    :key="rfp.rfp_id"
+                    type="button"
+                    @click="selectRfpCard(rfp)"
+                    class="group w-full text-left bg-white border rounded-lg p-4 shadow-sm transition-all duration-200 hover:border-blue-400 hover:shadow-md focus:ring-2 focus:ring-blue-500 flex items-center justify-between"
+                    :class="selectedRFP === rfp.rfp_id ? 'border-blue-500 shadow-md' : 'border-gray-200'"
+                  >
+                    <div class="flex-1 pr-4">
+                      <h4 class="text-base font-semibold text-gray-900 group-hover:text-blue-700 transition-colors">
+                        {{ rfp.rfp_title || rfp.title || 'Untitled RFP' }}
+                      </h4>
+                      <p class="text-sm text-gray-600 mt-1 line-clamp-1">
+                        {{ rfp.description || 'No description available.' }}
+                      </p>
+                      <div class="flex items-center gap-3 mt-2 text-xs text-gray-500">
+                        <span class="inline-flex items-center px-2 py-1 rounded-full font-medium"
+                              :class="getStatusBadgeClass(rfp.status)">
+                          {{ rfp.status || 'N/A' }}
+                        </span>
+                        <span class="flex items-center gap-1">
+                          <Icons name="calendar" class="h-4 w-4" />
+                          {{ formatDate(rfp.submission_deadline) }}
+                        </span>
+                      </div>
+                    </div>
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-800 border border-blue-100">
+                      {{ rfp.rfp_number || rfp.number || 'N/A' }}
+                    </span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -232,7 +302,7 @@
               class="flex items-center"
               :disabled="loading"
             >
-              <Icons name="refresh" class="h-4 w-4 mr-1" />
+              <Icons name="refresh-cw" class="h-4 w-4 mr-1" />
               Refresh
             </Button>
           </div>
@@ -295,10 +365,8 @@
                 <div class="pr-8">
                   <div class="flex items-start justify-between mb-4">
                     <div class="flex-1">
-                      <h4 class="text-lg font-semibold text-gray-900 mb-1">{{ getVendorName(proposal) }}</h4>
-                      <p class="text-sm text-gray-600">
-                        {{ getOrganizationName(proposal) }}
-                      </p>
+                      <h4 class="text-lg font-semibold text-gray-900 mb-1">{{ proposal.vendor_name }}</h4>
+                      <p class="text-sm text-gray-600">{{ proposal.org || 'No organization specified' }}</p>
                     </div>
                     <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
                           :class="getStatusBadgeClass(proposal.evaluation_status)">
@@ -313,7 +381,7 @@
                       Submitted: {{ formatDate(proposal.submitted_at) }}
                     </div>
                     <div v-if="proposal.proposed_value" class="flex items-center text-sm text-gray-600">
-                      <Icons name="currency-dollar" class="h-4 w-4 mr-2" />
+                      <Icons name="dollar-sign" class="h-4 w-4 mr-2" />
                       Value: ${{ proposal.proposed_value.toLocaleString() }}
                     </div>
                     <div v-if="proposal.contact_email" class="flex items-center text-sm text-gray-600">
@@ -373,7 +441,7 @@
           </ul>
           <div class="flex flex-col sm:flex-row gap-3 justify-center">
             <Button @click="loadRFPProposals" variant="outline" class="flex items-center">
-              <Icons name="refresh" class="h-4 w-4 mr-2" />
+              <Icons name="refresh-cw" class="h-4 w-4 mr-2" />
               Refresh Proposals
             </Button>
             <Button @click="onRFPSelectionChange" variant="outline" class="flex items-center">
@@ -407,7 +475,8 @@ import { PopupService } from '@/popup/popupService'
 import Icons from '@/components_rfp/ui/Icons.vue'
 
 // API base URL
-const API_BASE_URL = 'http://localhost:8000/api/tprm/rfp'
+import { getTprmApiV1BaseUrl } from '@/utils/backendEnv'
+const API_BASE_URL = getTprmApiV1BaseUrl()
 
 // Router
 const router = useRouter()
@@ -417,6 +486,7 @@ const { showSuccess, showError, showWarning, showInfo } = useNotifications()
 
 const rfpSelectionType = ref('user')
 const selectedRFP = ref('')
+const rfpViewMode = ref<'grid' | 'list'>('grid')
 const availableRFPs = ref([])
 const selectedRFPDetails = ref(null)
 const proposals = ref([])
@@ -453,76 +523,16 @@ const loadUserRFPs = async () => {
     const { fetchRFPs } = useRfpApi()
     const currentUserId = getCurrentUserId()
     
-    // For "My RFPs", fetch all RFPs created by the user (no status filter)
-    // This ensures we get all RFPs regardless of status
-    const filters = { created_by: currentUserId }
-    
-    console.log('[Phase6Evaluation] Loading user RFPs with filters:', filters)
-    console.log('[Phase6Evaluation] Current user ID:', currentUserId)
-    
     // Use authenticated API with filters
-    const data = await fetchRFPs(filters)
+    const data = await fetchRFPs({ 
+      created_by: currentUserId, 
+      status: 'EVALUATION' 
+    })
     
-    console.log('[Phase6Evaluation] Raw API response:', data)
-    console.log('[Phase6Evaluation] Response type:', typeof data)
-    console.log('[Phase6Evaluation] Is array:', Array.isArray(data))
-    if (data && typeof data === 'object') {
-      console.log('[Phase6Evaluation] Response keys:', Object.keys(data))
-      console.log('[Phase6Evaluation] Response structure:', JSON.stringify(data, null, 2))
-    }
-    
-    // Handle DRF paginated response format: {results: [...], count: N, next: null, previous: null}
-    // Or direct array response
-    if (data && typeof data === 'object') {
-      if (Array.isArray(data)) {
-        availableRFPs.value = data
-        console.log(`[Phase6Evaluation] Loaded ${data.length} RFPs (array format)`)
-      } else if (data.results && Array.isArray(data.results)) {
-        availableRFPs.value = data.results
-        console.log(`[Phase6Evaluation] Loaded ${data.results.length} RFPs (paginated format)`)
-      } else if (Array.isArray(data.data)) {
-        availableRFPs.value = data.data
-        console.log(`[Phase6Evaluation] Loaded ${data.data.length} RFPs (data wrapper format)`)
-      } else if (data.count !== undefined) {
-        // Empty paginated response: {count: 0, next: null, previous: null}
-        // Or paginated response without results key (shouldn't happen, but handle it)
-        availableRFPs.value = data.results || []
-        console.log(`[Phase6Evaluation] Paginated response (count: ${data.count}, results: ${data.results?.length || 0})`)
-      } else {
-        // Try to extract any array-like values
-        const possibleArrays = Object.values(data).filter(v => Array.isArray(v))
-        if (possibleArrays.length > 0) {
-          availableRFPs.value = possibleArrays[0]
-          console.log(`[Phase6Evaluation] Loaded ${possibleArrays[0].length} RFPs (found array in object)`)
-        } else {
-          availableRFPs.value = []
-          console.warn('[Phase6Evaluation] Unexpected response format:', data)
-          console.warn('[Phase6Evaluation] Response keys:', Object.keys(data))
-        }
-      }
-    } else {
-      availableRFPs.value = []
-      console.warn('[Phase6Evaluation] Invalid response data:', data)
-    }
-    
-    // Debug: Log first RFP structure
-    if (availableRFPs.value.length > 0) {
-      console.log('[Phase6Evaluation] First RFP structure:', availableRFPs.value[0])
-      console.log('[Phase6Evaluation] RFP fields:', {
-        rfp_id: availableRFPs.value[0].rfp_id,
-        rfp_number: availableRFPs.value[0].rfp_number,
-        rfp_title: availableRFPs.value[0].rfp_title
-      })
-    } else {
-      console.warn('[Phase6Evaluation] No RFPs loaded - check filters and API response')
-      console.warn('[Phase6Evaluation] This might mean:')
-      console.warn('  - No RFPs match the filters (created_by=1, status=EVALUATION)')
-      console.warn('  - The API response format is different than expected')
-      console.warn('  - There is a data issue')
-    }
+    availableRFPs.value = data.results || data
     
   } catch (error) {
-    console.error('[Phase6Evaluation] Error loading user RFPs:', error)
+    console.error('Error loading user RFPs:', error)
     availableRFPs.value = []
     PopupService.error('Failed to load your RFPs. Please try again.', 'Loading Failed')
   } finally {
@@ -535,75 +545,13 @@ const loadAllRFPs = async () => {
   try {
     const { fetchRFPs } = useRfpApi()
     
-    // For "All RFPs", fetch ALL RFPs without any filters
-    // This ensures we get all active RFPs regardless of status or creator
-    const filters = {}
+    // Use authenticated API with status filter
+    const data = await fetchRFPs({ status: 'EVALUATION' })
     
-    console.log('[Phase6Evaluation] Loading all RFPs (no filters)')
-    
-    // Use authenticated API without filters to get all RFPs
-    const data = await fetchRFPs(filters)
-    
-    console.log('[Phase6Evaluation] Raw API response:', data)
-    console.log('[Phase6Evaluation] Response type:', typeof data)
-    console.log('[Phase6Evaluation] Is array:', Array.isArray(data))
-    if (data && typeof data === 'object') {
-      console.log('[Phase6Evaluation] Response keys:', Object.keys(data))
-      console.log('[Phase6Evaluation] Response structure:', JSON.stringify(data, null, 2))
-    }
-    
-    // Handle DRF paginated response format: {results: [...], count: N, next: null, previous: null}
-    // Or direct array response
-    if (data && typeof data === 'object') {
-      if (Array.isArray(data)) {
-        availableRFPs.value = data
-        console.log(`[Phase6Evaluation] Loaded ${data.length} RFPs (array format)`)
-      } else if (data.results && Array.isArray(data.results)) {
-        availableRFPs.value = data.results
-        console.log(`[Phase6Evaluation] Loaded ${data.results.length} RFPs (paginated format)`)
-      } else if (Array.isArray(data.data)) {
-        availableRFPs.value = data.data
-        console.log(`[Phase6Evaluation] Loaded ${data.data.length} RFPs (data wrapper format)`)
-      } else if (data.count !== undefined) {
-        // Empty paginated response: {count: 0, next: null, previous: null}
-        // Or paginated response without results key (shouldn't happen, but handle it)
-        availableRFPs.value = data.results || []
-        console.log(`[Phase6Evaluation] Paginated response (count: ${data.count}, results: ${data.results?.length || 0})`)
-      } else {
-        // Try to extract any array-like values
-        const possibleArrays = Object.values(data).filter(v => Array.isArray(v))
-        if (possibleArrays.length > 0) {
-          availableRFPs.value = possibleArrays[0]
-          console.log(`[Phase6Evaluation] Loaded ${possibleArrays[0].length} RFPs (found array in object)`)
-        } else {
-          availableRFPs.value = []
-          console.warn('[Phase6Evaluation] Unexpected response format:', data)
-          console.warn('[Phase6Evaluation] Response keys:', Object.keys(data))
-        }
-      }
-    } else {
-      availableRFPs.value = []
-      console.warn('[Phase6Evaluation] Invalid response data:', data)
-    }
-    
-    // Debug: Log first RFP structure
-    if (availableRFPs.value.length > 0) {
-      console.log('[Phase6Evaluation] First RFP structure:', availableRFPs.value[0])
-      console.log('[Phase6Evaluation] RFP fields:', {
-        rfp_id: availableRFPs.value[0].rfp_id,
-        rfp_number: availableRFPs.value[0].rfp_number,
-        rfp_title: availableRFPs.value[0].rfp_title
-      })
-    } else {
-      console.warn('[Phase6Evaluation] No RFPs loaded - check filters and API response')
-      console.warn('[Phase6Evaluation] This might mean:')
-      console.warn('  - No RFPs match the filter (status=EVALUATION)')
-      console.warn('  - The API response format is different than expected')
-      console.warn('  - There is a data issue')
-    }
+    availableRFPs.value = data.results || data
     
   } catch (error) {
-    console.error('[Phase6Evaluation] Error loading all RFPs:', error)
+    console.error('Error loading all RFPs:', error)
     availableRFPs.value = []
     PopupService.error('Failed to load RFPs. Please try again.', 'Loading Failed')
   } finally {
@@ -782,6 +730,13 @@ const assignEvaluator = async (proposal) => {
   }
 }
 
+const selectRfpCard = async (rfp) => {
+  if (!rfp || loading.value) return
+  selectedRFP.value = rfp.rfp_id
+  selectedRFPDetails.value = rfp
+  await onRFPSelectionChange()
+}
+
 const navigateToMyApprovals = () => {
   router.push('/my-approvals')
 }
@@ -848,153 +803,27 @@ const getCurrentUserId = () => {
 }
 
 const getStatusBadgeClass = (status) => {
-  const classes = {
-    'SUBMITTED': 'bg-blue-100 text-blue-800',
-    'UNDER_EVALUATION': 'bg-yellow-100 text-yellow-800',
-    'SHORTLISTED': 'bg-green-100 text-green-800',
-    'REJECTED': 'bg-red-100 text-red-800',
-    'AWARDED': 'bg-green-100 text-green-800',
-    'DRAFT': 'bg-gray-100 text-gray-800',
-    'PUBLISHED': 'bg-blue-100 text-blue-800',
-    'CLOSED': 'bg-gray-100 text-gray-800'
+  const key = (status || '').toString().toUpperCase()
+  const map = {
+    APPROVED: 'bg-green-100 text-green-800',
+    ACTIVE: 'bg-green-100 text-green-800',
+    IN_REVIEW: 'bg-yellow-100 text-yellow-800',
+    PENDING: 'bg-yellow-100 text-yellow-800',
+    DRAFT: 'bg-gray-100 text-gray-800',
+    EVALUATION: 'bg-blue-100 text-blue-800',
+    SUBMITTED: 'bg-blue-100 text-blue-800',
+    UNDER_EVALUATION: 'bg-yellow-100 text-yellow-800',
+    SHORTLISTED: 'bg-green-100 text-green-800',
+    AWARDED: 'bg-green-100 text-green-800',
+    CLOSED: 'bg-gray-100 text-gray-800'
   }
-  return classes[status] || 'bg-gray-100 text-gray-800'
+  return map[key] || 'bg-gray-100 text-gray-800'
 }
 
 const formatDate = (dateString) => {
   if (!dateString) return 'N/A'
   const date = new Date(dateString)
   return date.toLocaleDateString()
-}
-
-const getVendorName = (proposal) => {
-  if (!proposal) return 'Unknown Vendor'
-  
-  // Try direct vendor_name field first
-  if (proposal.vendor_name) return proposal.vendor_name
-  
-  // Try companyInfo.vendor_name
-  if (proposal.proposal_data?.companyInfo?.vendor_name) {
-    return proposal.proposal_data.companyInfo.vendor_name
-  }
-  
-  // Try companyInfo.company_name
-  if (proposal.proposal_data?.companyInfo?.company_name) {
-    return proposal.proposal_data.companyInfo.company_name
-  }
-  
-  // Try companyInfo.organization_name
-  if (proposal.proposal_data?.companyInfo?.organization_name) {
-    return proposal.proposal_data.companyInfo.organization_name
-  }
-  
-  // Try response_documents.companyInfo
-  if (proposal.response_documents?.companyInfo?.vendor_name) {
-    return proposal.response_documents.companyInfo.vendor_name
-  }
-  
-  if (proposal.response_documents?.companyInfo?.company_name) {
-    return proposal.response_documents.companyInfo.company_name
-  }
-  
-  if (proposal.response_documents?.companyInfo?.organization_name) {
-    return proposal.response_documents.companyInfo.organization_name
-  }
-  
-  // Try direct response_documents fields
-  if (proposal.response_documents?.vendor_name) {
-    return proposal.response_documents.vendor_name
-  }
-  
-  if (proposal.response_documents?.company_name) {
-    return proposal.response_documents.company_name
-  }
-  
-  if (proposal.response_documents?.organization_name) {
-    return proposal.response_documents.organization_name
-  }
-  
-  // Fallback to organization name if available (check org field directly to avoid circular dependency)
-  if (proposal.org) return proposal.org
-  
-  if (proposal.proposal_data?.companyInfo?.org) {
-    return proposal.proposal_data.companyInfo.org
-  }
-  
-  if (proposal.response_documents?.companyInfo?.org) {
-    return proposal.response_documents.companyInfo.org
-  }
-  
-  if (proposal.response_documents?.org) {
-    return proposal.response_documents.org
-  }
-  
-  return 'Unknown Vendor'
-}
-
-const getOrganizationName = (proposal) => {
-  if (!proposal) return 'No organization specified'
-  
-  // Try direct org field first
-  if (proposal.org) return proposal.org
-  
-  // Try companyInfo.org
-  if (proposal.proposal_data?.companyInfo?.org) {
-    return proposal.proposal_data.companyInfo.org
-  }
-  
-  // Try companyInfo.organization_name
-  if (proposal.proposal_data?.companyInfo?.organization_name) {
-    return proposal.proposal_data.companyInfo.organization_name
-  }
-  
-  // Try companyInfo.company_name
-  if (proposal.proposal_data?.companyInfo?.company_name) {
-    return proposal.proposal_data.companyInfo.company_name
-  }
-  
-  // Try response_documents.companyInfo
-  if (proposal.response_documents?.companyInfo?.org) {
-    return proposal.response_documents.companyInfo.org
-  }
-  
-  if (proposal.response_documents?.companyInfo?.organization_name) {
-    return proposal.response_documents.companyInfo.organization_name
-  }
-  
-  if (proposal.response_documents?.companyInfo?.company_name) {
-    return proposal.response_documents.companyInfo.company_name
-  }
-  
-  // Try direct response_documents fields
-  if (proposal.response_documents?.org) {
-    return proposal.response_documents.org
-  }
-  
-  if (proposal.response_documents?.organization_name) {
-    return proposal.response_documents.organization_name
-  }
-  
-  if (proposal.response_documents?.company_name) {
-    return proposal.response_documents.company_name
-  }
-  
-  // Fallback to vendor_name if available (check vendor_name field directly to avoid circular dependency)
-  if (proposal.vendor_name) return proposal.vendor_name
-  
-  if (proposal.proposal_data?.companyInfo?.vendor_name) {
-    return proposal.proposal_data.companyInfo.vendor_name
-  }
-  
-  if (proposal.response_documents?.companyInfo?.vendor_name) {
-    return proposal.response_documents.companyInfo.vendor_name
-  }
-  
-  if (proposal.response_documents?.vendor_name) {
-    return proposal.response_documents.vendor_name
-  }
-  
-  return 'No organization specified'
 }
 </script>
 

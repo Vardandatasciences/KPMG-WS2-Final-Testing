@@ -365,6 +365,7 @@ import PopupModal from '@/popup/PopupModal.vue'
 import { PopupService } from '@/popup/popupService'
 import { useNotifications } from '@/composables/useNotifications'
 import loggingService from '@/services/loggingService'
+import { getTprmApiUrl } from '@/utils/backendEnv'
 
 // Router
 const router = useRouter()
@@ -776,7 +777,7 @@ const handleEvaluateProposal = async (approval: any) => {
       if (!rfpId && approval.approval_id) {
         try {
           console.log('🔍 DEBUG: Fetching approval request data for RFP ID...')
-          const approvalResponse = await fetch(`http://localhost:8000/api/tprm/approval/requests/`, {
+          const approvalResponse = await fetch(getTprmApiUrl('approval/requests/'), {
             method: 'GET',
             headers: getAuthHeaders()
           })
@@ -862,7 +863,7 @@ const handleEvaluateProposal = async (approval: any) => {
       
        try {
          // Try to get proposal ID from backend using the correct approval_id
-         const response = await fetch(`http://localhost:8000/api/tprm/rfp-approval/get-proposal-id/${approval.approval_id}/`, {
+         const response = await fetch(getTprmApiUrl(`rfp-approval/get-proposal-id/${approval.approval_id}/`), {
            method: 'GET',
            headers: getAuthHeaders()
          })
@@ -1086,7 +1087,7 @@ onMounted(async () => {
   // Test API connectivity first
   try {
     console.log('🧪 Testing API connectivity...')
-    const testUrl = 'http://localhost:8000/api/tprm/rfp-approval/users/'
+    const testUrl = getTprmApiUrl('rfp-approval/users/')
     console.log('🧪 Testing URL:', testUrl)
     const testResponse = await fetch(testUrl, {
       method: 'GET',

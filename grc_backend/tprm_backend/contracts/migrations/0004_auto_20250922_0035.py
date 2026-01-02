@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('tprm_contracts', '0003_create_contract_approval'),
+        ('contracts', '0003_create_contract_approval'),
     ]
 
     operations = [

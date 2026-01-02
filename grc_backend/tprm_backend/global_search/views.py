@@ -8,15 +8,12 @@ from django.views.decorators.cache import cache_page
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny, IsAuthenticated, BasePermission
+from rest_framework.permissions import AllowAny
 from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django.db import IntegrityError, DataError
 from django.core.exceptions import ValidationError
-
-# Use Unified JWT Authentication from GRC
-from grc.jwt_auth import UnifiedJWTAuthentication
 
 from .models import SearchIndex, SearchAnalytics
 from .serializers import (
@@ -36,22 +33,11 @@ class SearchPagination(PageNumberPagination):
     max_page_size = 10000  # Increased maximum page size
 
 
-class SimpleAuthenticatedPermission(BasePermission):
-    """Custom permission class that checks for authenticated users"""
-    def has_permission(self, request, view):
-        # Just check if user object exists and is authenticated
-        # UnifiedJWTAuthentication handles GRC/TPRM user verification
-        if request.user and hasattr(request.user, 'is_authenticated'):
-            return request.user.is_authenticated
-        return False
-
-
 class GlobalSearchViewSet(viewsets.ViewSet):
     """
     Global Search API ViewSet for searching across all TPRM modules.
     """
-    authentication_classes = [UnifiedJWTAuthentication]
-    permission_classes = [SimpleAuthenticatedPermission]
+    permission_classes = [AllowAny]
     pagination_class = SearchPagination
     
     @action(detail=False, methods=['post'], url_path='query')
@@ -232,15 +218,6 @@ class GlobalSearchViewSet(viewsets.ViewSet):
         if modules:
             table_configs = {k: v for k, v in table_configs.items() if k in modules}
         
-        # Map old app names to correct app labels
-        app_label_mapping = {
-            'vendor_core': 'tprm_vendor_core',
-            'rfp': 'tprm_rfp',
-            'contracts': 'tprm_contracts',
-            'slas': 'tprm_slas',
-            'bcpdrp': 'tprm_bcpdrp',
-        }
-        
         for table_name, config in table_configs.items():
             try:
                 # Get the model - handle different model name formats
@@ -263,9 +240,6 @@ class GlobalSearchViewSet(viewsets.ViewSet):
                     # Simple format: ModelName (assume current app)
                     app_label = 'global_search'
                     model_class = model_name
-                
-                # Map to correct app label if needed
-                app_label = app_label_mapping.get(app_label, app_label)
                 
                 model = apps.get_model(app_label, model_class)
                 
@@ -1003,12 +977,12 @@ class GlobalSearchViewSet(viewsets.ViewSet):
             # Get all models that have these fields
             try:
                 models_with_filters = {
-                    'vendor': apps.get_model('tprm_vendor_core', 'Vendors'),
-                    'rfp': apps.get_model('tprm_rfp', 'RFP'),
-                    'contract': apps.get_model('tprm_contracts', 'VendorContract'),
-                    'sla': apps.get_model('tprm_slas', 'VendorSLA'),
-                    'bcp_drp_plans': apps.get_model('tprm_bcpdrp', 'Plan'),
-                    'bcp_drp_evaluations': apps.get_model('tprm_bcpdrp', 'Evaluation'),
+                    'vendor': apps.get_model('vendor_core', 'Vendors'),
+                    'rfp': apps.get_model('rfp', 'RFP'),
+                    'contract': apps.get_model('contracts', 'VendorContract'),
+                    'sla': apps.get_model('slas', 'VendorSLA'),
+                    'bcp_drp_plans': apps.get_model('bcpdrp', 'Plan'),
+                    'bcp_drp_evaluations': apps.get_model('bcpdrp', 'Evaluation'),
                 }
             except Exception as e:
                 print(f"Error loading models for filter options: {e}")

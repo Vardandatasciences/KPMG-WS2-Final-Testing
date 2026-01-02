@@ -10,7 +10,7 @@
             {{ audit.title }}
           </CardTitle>
           <CardDescription class="mt-1 text-sm">
-            <span class="font-medium">SLA:</span> {{ audit.sla_name || 'Unknown SLA' }}
+            <span class="font-medium">Contract:</span> {{ audit.contract_title || 'Unknown Contract' }}
           </CardDescription>
           <Badge v-if="audit.business_unit" variant="outline" class="mt-2 text-xs">
             {{ audit.business_unit }}

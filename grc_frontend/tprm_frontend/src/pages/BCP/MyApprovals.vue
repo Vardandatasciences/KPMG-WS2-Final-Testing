@@ -1,18 +1,5 @@
 <template>
   <div class="p-6 max-w-7xl mx-auto space-y-6">
-    <div class="flex items-center justify-between">
-      <div>
-        <h1 class="text-3xl font-bold text-foreground">My Approvals</h1>
-        <p class="text-muted-foreground">View and manage approvals assigned to you</p>
-      </div>
-      <div class="flex gap-3">
-        <span class="badge badge--outline text-sm">Personal Dashboard</span>
-        <div class="text-sm text-muted-foreground">
-          {{ isLoadingApprovals ? 'Loading...' : `${approvals.length} approvals assigned` }}
-        </div>
-      </div>
-    </div>
-
     <!-- User Info Card -->
     <div class="card" v-if="userInfo">
       <div class="card-header">
@@ -118,145 +105,127 @@
             <label class="block text-sm font-medium">Object Type</label>
             <select v-model="filters.object_type" class="input" @change="fetchMyApprovals">
               <option value="">All Object Types</option>
-              <option value="PLAN">Plan</option>
-              <option value="QUESTIONNAIRE">Questionnaire</option>
-              <option value="ASSIGNMENT_RESPONSE">Assignment Response</option>
+              <option value="PLAN EVALUATION">Plan Evaluation</option>
+              <option value="NEW QUESTIONNAIRE">New Questionnaire</option>
+              <option value="QUESTIONNAIRE RESPONSE">Questionnaire Response</option>
             </select>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- My Approvals Table -->
+    <!-- My Approvals Cards -->
     <div class="card">
       <div class="card-header">
-        <h3 class="card-title">My Assigned Approvals</h3>
-        <div class="text-sm text-muted-foreground">
-          {{ isLoadingApprovals ? 'Loading...' : `${approvals.length} approvals found` }}
+        <div class="flex items-center gap-2">
+          <svg class="h-5 w-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <h3 class="card-title">Pending Approvals ({{ isLoadingApprovals ? '...' : filteredApprovals.length }})</h3>
         </div>
       </div>
-      <div class="card-content p-0">
+      <!-- Object Type Toggle -->
+      <div class="object-type-toggle-container">
+        <div class="object-type-toggle">
+          <button
+            v-for="type in objectTypes"
+            :key="type.value"
+            @click="selectedObjectType = type.value"
+            class="toggle-option"
+            :class="{ 'toggle-option--active': selectedObjectType === type.value }"
+          >
+            {{ type.label }}
+            <span class="toggle-count">({{ getApprovalCountByType(type.value) }})</span>
+          </button>
+        </div>
+      </div>
+      <div class="card-content">
         <div v-if="isLoadingApprovals" class="p-6 text-center">
           <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
           <p class="mt-2 text-muted-foreground">Loading your approvals...</p>
         </div>
-        <div v-else-if="approvals.length === 0" class="p-6 text-center">
+        <div v-else-if="filteredApprovals.length === 0" class="p-6 text-center">
           <div class="mb-4">
             <svg class="h-12 w-12 mx-auto text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
             </svg>
           </div>
-          <p class="text-muted-foreground">No approvals assigned to you at the moment.</p>
-          <p class="text-sm text-muted-foreground mt-2">Check back later or contact your administrator if you expect to see approvals here.</p>
+          <p class="text-muted-foreground">
+            <span v-if="selectedObjectType !== 'ALL'">No {{ objectTypes.find(t => t.value === selectedObjectType)?.label || selectedObjectType }} approvals found.</span>
+            <span v-else>No approvals assigned to you at the moment.</span>
+          </p>
+          <p class="text-sm text-muted-foreground mt-2">
+            <span v-if="selectedObjectType !== 'ALL'">Try selecting a different type or "All" to see all approvals.</span>
+            <span v-else>Check back later or contact your administrator if you expect to see approvals here.</span>
+          </p>
         </div>
-        <div v-else class="overflow-x-auto">
-          <table class="approval-table">
-            <thead>
-              <tr>
-                <th>Priority</th>
-                <th>Workflow Name</th>
-                <th>Plan Type</th>
-                <th>Object Type</th>
-                <th>Object ID</th>
-                <th>Assigned By</th>
-                <th>Status</th>
-                <th>Assigned Date</th>
-                <th>Due Date</th>
-                <th>Days Left</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="approval in approvals" :key="approval.approval_id" 
-                  :class="{ 'approval-row--overdue': approval.is_overdue, 'approval-row--urgent': approval.days_until_due <= 2 && approval.days_until_due > 0 }">
-                <td>
-                  <div class="priority-indicator">
-                    <div v-if="approval.is_overdue" class="priority-badge priority-badge--overdue">
-                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
-                      </svg>
-                      Overdue
-                    </div>
-                    <div v-else-if="approval.days_until_due <= 2 && approval.days_until_due > 0" class="priority-badge priority-badge--urgent">
-                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                      </svg>
-                      Urgent
-                    </div>
-                    <div v-else-if="approval.days_until_due <= 7 && approval.days_until_due > 2" class="priority-badge priority-badge--normal">
-                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                      </svg>
-                      Normal
-                    </div>
-                    <div v-else class="priority-badge priority-badge--low">
-                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                      </svg>
-                      Low
-                    </div>
-                  </div>
-                </td>
-                <td>
-                  <div class="font-medium">{{ approval.workflow_name }}</div>
-                  <div v-if="approval.comment_text" class="text-sm text-muted-foreground">
-                    {{ approval.comment_text.substring(0, 50) }}{{ approval.comment_text.length > 50 ? '...' : '' }}
-                  </div>
-                </td>
-                <td>
-                  <span class="badge" :class="approval.plan_type === 'BCP' ? 'badge--success' : 'badge--info'">
+        <div v-else class="approval-cards-grid">
+          <div 
+            v-for="approval in filteredApprovals" 
+            :key="approval.approval_id" 
+            class="approval-card"
+            :class="{ 
+              'approval-card--overdue': approval.is_overdue, 
+              'approval-card--urgent': approval.days_until_due <= 2 && approval.days_until_due > 0 
+            }"
+          >
+            <div class="approval-card__header">
+              <div class="approval-card__title-row">
+                <h4 class="approval-card__title">{{ approval.object_type }}</h4>
+                <div class="approval-card__tags">
+                  <span class="badge badge--plan-type" :class="approval.plan_type === 'BCP' ? 'badge--success' : 'badge--info'">
                     {{ approval.plan_type }}
                   </span>
-                </td>
-                <td>
-                  <span class="badge badge--outline">{{ approval.object_type }}</span>
-                </td>
-                <td class="font-mono text-sm">{{ approval.object_id }}</td>
-                <td>{{ approval.assigner_name }}</td>
-                <td>
-                  <span class="status-badge" :class="`status-badge--${approval.status.toLowerCase().replace('_', '-')}`">
-                    {{ approval.status.replace('_', ' ') }}
+                  <span class="badge badge--priority" :class="getPriorityBadgeClass(approval)">
+                    {{ getPriorityLabel(approval) }}
                   </span>
-                </td>
-                <td class="text-sm">{{ formatDate(approval.assigned_date) }}</td>
-                <td class="text-sm">{{ formatDate(approval.due_date) }}</td>
-                <td>
-                  <span v-if="approval.is_overdue" class="text-red-600 font-medium">
-                    {{ Math.abs(approval.days_until_due) }} days overdue
+                </div>
+              </div>
+              <h5 class="approval-card__subtitle">{{ approval.workflow_name }}</h5>
+            </div>
+            <div class="approval-card__body">
+              <div class="approval-card__details">
+                <span class="approval-card__detail-text">
+                  {{ approval.object_type }} #{{ approval.object_id }} | Assigned by: {{ approval.assigner_name }}
+                </span>
+              </div>
+              <div class="approval-card__due-date">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span class="approval-card__due-text" :class="getDueDateClass(approval)">
+                  Due: {{ formatDateShort(approval.due_date) }} 
+                  <span v-if="approval.is_overdue" class="approval-card__days-left">
+                    ({{ Math.abs(approval.days_until_due) }} days overdue)
                   </span>
-                  <span v-else-if="approval.days_until_due !== null" 
-                        :class="{ 'text-orange-600 font-medium': approval.days_until_due <= 2, 'text-yellow-600': approval.days_until_due <= 7 }">
-                    {{ approval.days_until_due }} days left
+                  <span v-else-if="approval.days_until_due !== null" class="approval-card__days-left">
+                    ({{ approval.days_until_due }} {{ approval.days_until_due === 1 ? 'day' : 'days' }} left)
                   </span>
-                  <span v-else class="text-muted-foreground">No due date</span>
-                </td>
-                <td>
-                  <div class="flex gap-2">
-                    <button 
-                      @click="viewApproval(approval)" 
-                      class="btn btn--sm btn--outline"
-                      title="View Details"
-                    >
-                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                      </svg>
-                    </button>
-                    <button 
-                      @click="updateStatus(approval, 'IN_PROGRESS')" 
-                      class="btn btn--sm btn--primary"
-                      v-if="approval.status === 'ASSIGNED'"
-                      title="Start Working"
-                    >
-                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1.586a1 1 0 01.707.293l2.414 2.414a1 1 0 00.707.293H15M9 10V9a2 2 0 012-2h2a2 2 0 012 2v1m-6 0V9a2 2 0 012-2h2a2 2 0 012 2v1"/>
-                      </svg>
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                </span>
+              </div>
+            </div>
+            <div class="approval-card__actions">
+              <button 
+                @click="viewApproval(approval)" 
+                class="btn btn--card btn--view"
+                title="View Details"
+              >
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                </svg>
+                View
+              </button>
+              <button 
+                @click="updateStatus(approval, 'IN_PROGRESS')" 
+                class="btn btn--card btn--start"
+                v-if="approval.status === 'ASSIGNED'"
+                title="Start Working"
+              >
+                Start Working
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -414,6 +383,15 @@ export default {
     const showViewModal = ref(false)
     const selectedApproval = ref(null)
     const commentText = ref('')
+    
+    // Object type toggle state
+    const selectedObjectType = ref('ALL')
+    const objectTypes = [
+      { value: 'ALL', label: 'All' },
+      { value: 'PLAN EVALUATION', label: 'Plan Evaluation' },
+      { value: 'NEW QUESTIONNAIRE', label: 'New Questionnaire' },
+      { value: 'QUESTIONNAIRE RESPONSE', label: 'Questionnaire Response' }
+    ]
 
     // Computed properties for statistics
     const totalApprovals = computed(() => approvals.value.length)
@@ -426,6 +404,22 @@ export default {
     const completedApprovals = computed(() => 
       approvals.value.filter(a => a.status === 'COMMENTED' || a.status === 'SKIPPED').length
     )
+    
+    // Filtered approvals based on selected object type
+    const filteredApprovals = computed(() => {
+      if (selectedObjectType.value === 'ALL') {
+        return approvals.value
+      }
+      return approvals.value.filter(a => a.object_type === selectedObjectType.value)
+    })
+    
+    // Get count of approvals by type
+    const getApprovalCountByType = (type) => {
+      if (type === 'ALL') {
+        return approvals.value.length
+      }
+      return approvals.value.filter(a => a.object_type === type).length
+    }
 
     // Methods
     const fetchUsers = async () => {
@@ -510,6 +504,49 @@ export default {
       }
     }
 
+    const formatDateShort = (dateString) => {
+      if (!dateString) return 'N/A'
+      try {
+        const date = new Date(dateString)
+        return date.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        })
+      } catch (error) {
+        return 'Invalid Date'
+      }
+    }
+
+    const getObjectTypeLabel = (objectType) => {
+      const labels = {
+        'PLAN EVALUATION': 'Plan Review',
+        'NEW QUESTIONNAIRE': 'Questionnaire Review',
+        'QUESTIONNAIRE RESPONSE': 'Evaluation Approval'
+      }
+      return labels[objectType] || objectType
+    }
+
+    const getPriorityLabel = (approval) => {
+      if (approval.is_overdue) return 'High'
+      if (approval.days_until_due <= 2 && approval.days_until_due > 0) return 'High'
+      if (approval.days_until_due <= 7 && approval.days_until_due > 2) return 'Normal'
+      return 'Low'
+    }
+
+    const getPriorityBadgeClass = (approval) => {
+      if (approval.is_overdue) return 'badge--priority-high'
+      if (approval.days_until_due <= 2 && approval.days_until_due > 0) return 'badge--priority-high'
+      if (approval.days_until_due <= 7 && approval.days_until_due > 2) return 'badge--priority-normal'
+      return 'badge--priority-low'
+    }
+
+    const getDueDateClass = (approval) => {
+      if (approval.is_overdue) return 'approval-card__due-text--overdue'
+      if (approval.days_until_due <= 2 && approval.days_until_due > 0) return 'approval-card__due-text--urgent'
+      return ''
+    }
+
     const viewApproval = (approval) => {
       selectedApproval.value = approval
       showViewModal.value = true
@@ -526,13 +563,26 @@ export default {
 
     const updateStatus = async (approval, newStatus) => {
       try {
-        // This would be an API call to update the approval status
         console.log(`Updating approval ${approval.approval_id} to status ${newStatus}`)
         
-        // For now, just update locally
+        // Call API to update approval status
+        const response = await api.approvals.updateStatus(approval.approval_id, {
+          status: newStatus,
+          comment_text: approval.comment_text || ''
+        })
+        
+        console.log('Approval status update response:', response)
+        
+        // Update local state
         const index = approvals.value.findIndex(a => a.approval_id === approval.approval_id)
         if (index !== -1) {
           approvals.value[index].status = newStatus
+          if (response.data) {
+            // Update any other fields from response if needed
+            if (response.data.new_status) {
+              approvals.value[index].status = response.data.new_status
+            }
+          }
         }
         
         console.log(`Approval status updated to ${newStatus.replace('_', ' ')}`)
@@ -550,11 +600,11 @@ export default {
         
         // Navigate based on object type when status is IN_PROGRESS
         if (newStatus === 'IN_PROGRESS') {
-          if (approval.object_type === 'PLAN') {
+          if (approval.object_type === 'PLAN EVALUATION') {
             navigateToPlanEvaluation(approval)
-          } else if (approval.object_type === 'QUESTIONNAIRE') {
+          } else if (approval.object_type === 'NEW QUESTIONNAIRE') {
             navigateToQuestionnaireBuilder(approval)
-          } else if (approval.object_type === 'ASSIGNMENT_RESPONSE') {
+          } else if (approval.object_type === 'QUESTIONNAIRE RESPONSE') {
             navigateToAssignmentAnswering(approval)
           }
         }
@@ -570,7 +620,8 @@ export default {
         })
         
         // Show error popup
-        PopupService.error('Failed to update approval status. Please try again.', 'Update Failed')
+        const errorMessage = error.response?.data?.message || error.message || 'Failed to update approval status. Please try again.'
+        PopupService.error(errorMessage, 'Update Failed')
       }
     }
 
@@ -578,10 +629,17 @@ export default {
       if (!commentText.value.trim()) return
 
       try {
-        // This would be an API call to submit the comment
         console.log(`Submitting comment for approval ${selectedApproval.value.approval_id}:`, commentText.value)
         
-        // For now, just update locally
+        // Call API to update approval status to COMMENTED with comment
+        const response = await api.approvals.updateStatus(selectedApproval.value.approval_id, {
+          status: 'COMMENTED',
+          comment_text: commentText.value
+        })
+        
+        console.log('Comment submission response:', response)
+        
+        // Update local state
         const index = approvals.value.findIndex(a => a.approval_id === selectedApproval.value.approval_id)
         if (index !== -1) {
           approvals.value[index].comment_text = commentText.value
@@ -590,9 +648,17 @@ export default {
         
         console.log('Comment submitted successfully')
         
+        // Show success message
+        PopupService.success('Review comment submitted successfully. Questionnaire has been approved.', 'Comment Submitted')
+        
+        // Refresh approvals list to get updated data
+        await fetchMyApprovals()
+        
         closeCommentModal()
       } catch (error) {
         console.error('Error submitting comment:', error)
+        const errorMessage = error.response?.data?.message || error.message || 'Failed to submit comment. Please try again.'
+        PopupService.error(errorMessage, 'Submission Failed')
       }
     }
 
@@ -668,6 +734,11 @@ export default {
       fetchUsers,
       fetchMyApprovals,
       formatDate,
+      formatDateShort,
+      getObjectTypeLabel,
+      getPriorityLabel,
+      getPriorityBadgeClass,
+      getDueDateClass,
       viewApproval,
       addComment,
       updateStatus,
@@ -676,7 +747,11 @@ export default {
       closeViewModal,
       navigateToPlanEvaluation,
       navigateToQuestionnaireBuilder,
-      navigateToAssignmentAnswering
+      navigateToAssignmentAnswering,
+      selectedObjectType,
+      objectTypes,
+      filteredApprovals,
+      getApprovalCountByType
     }
   }
 }

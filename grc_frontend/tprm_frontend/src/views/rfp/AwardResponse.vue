@@ -217,7 +217,8 @@ import { PopupService } from '@/popup/popupService'
 import loggingService from '@/services/loggingService'
 
 const route = useRoute()
-const API_BASE_URL = 'http://localhost:8000/api/tprm/rfp'
+import { getTprmApiV1BaseUrl } from '@/utils/backendEnv'
+const API_BASE_URL = getTprmApiV1BaseUrl()
 
 const loading = ref(true)
 const error = ref('')

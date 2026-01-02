@@ -1,20 +1,17 @@
 <template>
   <div class="min-h-screen bg-gray-50">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="max-w-full mx-auto px-2 sm:px-4 lg:px-6 py-8">
       <div class="space-y-8">
     <!-- Header -->
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
       <div>
-              <h1 class="text-3xl font-bold tracking-tight text-gray-900">Phase 7: Comparison & Analysis</h1>
+              <h1 class="text-3xl font-bold tracking-tight text-gray-900">Comparison & Analysis</h1>
               <p class="text-gray-600 mt-2">
                 Compare vendor responses and analyze evaluation results.
         </p>
       </div>
       <div class="flex items-center gap-2">
-              <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-          Phase 7 of 10
-              </span>
               <button 
                 @click="refreshData"
                 :disabled="loading"
@@ -37,35 +34,40 @@
               <h3 class="text-2xl font-bold text-gray-900">Select RFP for Comparison</h3>
               <p class="text-gray-600 mt-1">Choose an RFP to view and compare vendor proposals</p>
             </div>
-             <div class="flex items-center gap-4">
+             <div class="flex items-center gap-3 flex-wrap text-sm text-gray-600">
+               <span class="inline-flex items-center gap-2">
+                 <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                 {{ availableRfps.length }} RFPs Available
+               </span>
+               <span class="inline-flex items-center gap-2">
+                 <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                 {{ totalProposals }} Total Proposals
+               </span>
                <div class="flex items-center gap-2">
-                 <div class="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                 <span class="text-sm text-gray-600">{{ availableRfps.length }} RFPs Available</span>
-               </div>
-               <div class="flex items-center gap-2">
-                 <div class="w-3 h-3 bg-blue-500 rounded-full"></div>
-                 <span class="text-sm text-gray-600">{{ totalProposals }} Total Proposals</span>
+                 <button 
+                   @click="rfpViewMode = 'grid'"
+                   :class="rfpViewMode === 'grid' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white text-gray-700 border-gray-200'"
+                   class="px-3 py-1.5 text-sm font-medium border rounded-lg hover:bg-blue-50 transition"
+                 >
+                   Grid
+                 </button>
+                 <button 
+                   @click="rfpViewMode = 'list'"
+                   :class="rfpViewMode === 'list' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white text-gray-700 border-gray-200'"
+                   class="px-3 py-1.5 text-sm font-medium border rounded-lg hover:bg-blue-50 transition"
+                 >
+                   List
+                 </button>
                  <button 
                    @click="refreshProposalCounts"
-                   class="ml-2 p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                   class="p-1 text-gray-400 hover:text-blue-600 transition-colors"
                    title="Refresh proposal counts"
                  >
-                   <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                    </svg>
                  </button>
                </div>
-               <!-- Debug info - remove in production -->
-               <div class="text-xs text-gray-400">
-                 Debug: {{ Object.keys(rfpProposalCounts).length }} counts loaded
-               </div>
-               <button 
-                 @click="testApiDirectly"
-                 class="ml-2 px-2 py-1 text-xs bg-red-100 text-red-600 rounded hover:bg-red-200"
-                 title="Test API directly"
-               >
-                 Test API
-               </button>
              </div>
           </div>
 
@@ -101,85 +103,74 @@
             <p class="text-gray-600">No RFPs with vendor responses are available for comparison.</p>
           </div>
 
-          <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 rfp-card-grid">
-            <div 
-              v-for="rfp in availableRfps" 
-              :key="rfp.id"
-              @click="selectedRfpId = rfp.id"
-              class="group relative bg-white border-2 border-gray-200 rounded-xl p-6 hover:border-blue-300 hover:shadow-lg cursor-pointer transition-all duration-300 hover:-translate-y-1 rfp-card hover-lift-enhanced"
-            >
-              <!-- Status Indicator -->
-              <div class="absolute top-4 right-4">
-                <span :class="{
-                  'bg-green-100 text-green-800': rfp.status === 'active',
-                  'bg-yellow-100 text-yellow-800': rfp.status === 'pending',
-                  'bg-blue-100 text-blue-800': rfp.status === 'evaluation'
-                }" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium">
-                  <div :class="{
-                    'bg-green-400 status-indicator': rfp.status === 'active',
-                    'bg-yellow-400 status-indicator': rfp.status === 'pending',
-                    'bg-blue-400 status-indicator': rfp.status === 'evaluation'
-                  }" class="w-2 h-2 rounded-full mr-1.5"></div>
-                  {{ rfp.status }}
-                </span>
-              </div>
+          <div v-else>
+            <div v-if="rfpViewMode === 'grid'" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 rfp-card-grid">
+              <div 
+                v-for="rfp in availableRfps" 
+                :key="rfp.id"
+                @click="selectedRfpId = rfp.id"
+                class="group relative bg-white border rounded-xl p-5 shadow-sm cursor-pointer transition-all duration-200 hover:border-blue-300 hover:shadow-lg"
+                :class="selectedRfpId === rfp.id ? 'border-blue-500 shadow-md' : 'border-gray-200'"
+              >
+                <div class="flex items-start justify-between mb-3">
+                  <div class="pr-6">
+                    <h4 class="font-semibold text-gray-900 group-hover:text-blue-700 transition-colors">
+                      {{ rfp.title }}
+                    </h4>
+                    <p class="text-sm text-gray-600 mt-1 line-clamp-2">
+                      {{ rfp.description || 'No description available.' }}
+                    </p>
+                  </div>
+                  <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-800 border border-blue-100">
+                    {{ rfp.rfp_number || rfp.number || rfp.id }}
+                  </span>
+                </div>
 
-              <!-- RFP Content -->
-              <div class="pr-20">
-                <h4 class="font-bold text-gray-900 text-lg mb-2 group-hover:text-blue-600 transition-colors">
-                  {{ rfp.title }}
-                </h4>
-                <p class="text-sm text-gray-600 mb-4">{{ rfp.description }}</p>
-                
-                <!-- Proposal Count Badge -->
-                <div class="flex items-center justify-between mb-4">
-                  <div class="flex items-center gap-2">
-                    <div class="flex items-center justify-center w-10 h-10 bg-blue-100 rounded-lg proposal-count-badge">
-                      <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
-                      </svg>
+                <div class="flex items-center justify-between text-xs text-gray-500">
+                  <span class="inline-flex items-center px-2 py-1 rounded-full font-medium"
+                        :class="getRfpStatusClass(rfp.status)">
+                    {{ rfp.status || 'N/A' }}
+                  </span>
+                  <span class="flex items-center gap-1">
+                    <Calendar class="h-4 w-4" />
+                    {{ new Date(rfp.created_at).toLocaleDateString() }}
+                  </span>
+                </div>
+              </div>
             </div>
-            <div>
-                       <p class="text-sm font-medium text-gray-900">
-                         <span v-if="rfpProposalCounts[rfp.id] !== undefined">
-                           {{ rfpProposalCounts[rfp.id] || 0 }}
-                         </span>
-                         <span v-else class="animate-pulse text-gray-400">...</span>
-                       </p>
-                       <p class="text-xs text-gray-500">Proposals</p>
-            </div>
-          </div>
-                  
-                  <!-- View Button -->
-                  <div class="opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div class="flex items-center text-blue-600 text-sm font-medium">
-                      <span>View Details</span>
-                      <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                      </svg>
+
+            <div v-else class="space-y-3">
+              <div 
+                v-for="rfp in availableRfps" 
+                :key="rfp.id"
+                @click="selectedRfpId = rfp.id"
+                class="group w-full text-left bg-white border rounded-lg p-4 shadow-sm cursor-pointer transition-all duration-200 hover:border-blue-300 hover:shadow-md"
+                :class="selectedRfpId === rfp.id ? 'border-blue-500 shadow-md' : 'border-gray-200'"
+              >
+                <div class="flex items-center justify-between gap-4">
+                  <div class="flex-1">
+                    <h4 class="font-semibold text-gray-900 group-hover:text-blue-700 transition-colors">
+                      {{ rfp.title }}
+                    </h4>
+                    <p class="text-sm text-gray-600 mt-1 line-clamp-1">
+                      {{ rfp.description || 'No description available.' }}
+                    </p>
+                    <div class="flex items-center gap-3 mt-2 text-xs text-gray-500">
+                      <span class="inline-flex items-center px-2 py-1 rounded-full font-medium"
+                            :class="getRfpStatusClass(rfp.status)">
+                        {{ rfp.status || 'N/A' }}
+                      </span>
+                      <span class="flex items-center gap-1">
+                        <Calendar class="h-4 w-4" />
+                        {{ new Date(rfp.created_at).toLocaleDateString() }}
+                      </span>
                     </div>
                   </div>
-                </div>
-
-                <!-- Additional Info -->
-                <div class="flex items-center justify-between text-xs text-gray-500 pt-4 border-t border-gray-100">
-                  <div class="flex items-center gap-1">
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                    </svg>
-                    {{ new Date(rfp.created_at).toLocaleDateString() }}
-                  </div>
-                  <div class="flex items-center gap-1">
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                    {{ Math.ceil((Date.now() - new Date(rfp.created_at).getTime()) / (1000 * 60 * 60 * 24)) }} days ago
-                  </div>
+                  <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-800 border border-blue-100">
+                    {{ rfp.rfp_number || rfp.number || rfp.id }}
+                  </span>
                 </div>
               </div>
-
-              <!-- Hover Effect -->
-              <div class="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
             </div>
           </div>
         </div>
@@ -204,7 +195,7 @@
         <!-- Main Content (only show when RFP is selected and data is loaded) -->
         <div v-if="selectedRfpId && !loading && !error && vendorEvaluations.length > 0">
           <!-- Summary Statistics -->
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 lg:gap-6">
             <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
               <div class="flex items-center gap-4">
                 <div class="p-3 rounded-lg bg-blue-50">
@@ -305,9 +296,10 @@
             <div v-if="activeTab === 'comparison'" class="p-6 space-y-6">
               <!-- Filters and Controls -->
               <div class="bg-gray-50 rounded-lg p-4">
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-                  <div class="space-y-2">
-                    <label class="text-sm font-medium text-gray-700">Filter by Score</label>
+                <div class="flex flex-wrap items-end gap-4">
+                  <!-- Filter by Score -->
+                  <div class="flex-1 min-w-[150px]">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Filter by Score</label>
                     <div class="relative">
                       <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                       <input
@@ -319,8 +311,9 @@
                     </div>
                   </div>
 
-                  <div class="space-y-2">
-                    <label class="text-sm font-medium text-gray-700">Sort by</label>
+                  <!-- Sort by -->
+                  <div class="flex-1 min-w-[150px]">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Sort by</label>
                     <select 
                       v-model="sortBy" 
                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -331,8 +324,9 @@
                     </select>
                   </div>
 
-                  <div class="space-y-2">
-                    <label class="text-sm font-medium text-gray-700">Top Performers</label>
+                  <!-- Top Performers -->
+                  <div class="flex-1 min-w-[120px]">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Top Performers</label>
                     <input
                       v-model.number="topPerformersCount"
                       @input="handleTopPerformersCountChange"
@@ -340,12 +334,13 @@
                       min="1"
                       :max="vendorEvaluations.length"
                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Number of top performers"
+                      placeholder="3"
                     />
                   </div>
 
-                  <div class="space-y-2">
-                    <label class="text-sm font-medium text-gray-700">Quick Select</label>
+                  <!-- Quick Select -->
+                  <div class="flex-1 min-w-[140px]">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Quick Select</label>
                     <button 
                       @click="handleSelectTopPerformers"
                       :disabled="!canSelectTopPerformers"
@@ -356,21 +351,23 @@
                     </button>
                   </div>
 
-                  <div class="space-y-2">
-                    <label class="text-sm font-medium text-gray-700">Auto-Select</label>
-                    <div class="flex items-center space-x-2">
+                  <!-- Auto-Select -->
+                  <div class="flex-1 min-w-[180px]">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Auto-Select</label>
+                    <div class="flex items-center space-x-2 h-[38px]">
                       <input
                         v-model="autoSelectTopPerformers"
                         @change="handleAutoSelectToggle"
                         type="checkbox"
                         class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                       />
-                      <span class="text-sm text-gray-600">Auto-select top performers</span>
+                      <span class="text-sm text-gray-600 whitespace-nowrap">Auto-select top performers</span>
                     </div>
                   </div>
                   
-                  <div class="space-y-2">
-                    <label class="text-sm font-medium text-gray-700">Shortlist</label>
+                  <!-- Shortlist -->
+                  <div class="flex-1 min-w-[140px]">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Shortlist</label>
                     <button @click="rfpHandleShortlist" class="w-full inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 transition-colors">
                       <CheckCircle2 class="h-4 w-4 mr-2" />
                       Shortlist ({{ selectedVendors.length }})
@@ -434,28 +431,36 @@
 
               <!-- Comparison Table -->
               <div class="bg-white rounded-lg shadow-sm border border-gray-200">
-                <div class="px-6 py-4 border-b border-gray-200">
+                <div class="px-4 sm:px-6 py-4 border-b border-gray-200">
                   <h3 class="text-lg font-semibold text-gray-900">Vendor Comparison Table</h3>
                 </div>
         <div class="overflow-x-auto">
-          <table class="w-full">
+          <table class="w-full table-auto">
                     <thead class="bg-gray-50">
                       <tr>
-                        <th class="text-left py-4 px-6 font-medium text-gray-900 w-16">Rank</th>
-                        <th class="text-left py-4 px-6 font-medium text-gray-900 min-w-[200px]">Vendor</th>
-                        <th class="text-left py-4 px-6 font-medium text-gray-900">Total Score</th>
-                        <th class="text-left py-4 px-6 font-medium text-gray-900">Technical</th>
-                        <th class="text-left py-4 px-6 font-medium text-gray-900">Status</th>
-                        <th class="text-left py-4 px-6 font-medium text-gray-900">Completion</th>
-                        <th class="text-left py-4 px-6 font-medium text-gray-900">Submitted</th>
-                        <th class="text-left py-4 px-6 font-medium text-gray-900">Proposed Value</th>
-                        <th class="text-left py-4 px-6 font-medium text-gray-900">Variance</th>
-                        <th class="text-left py-4 px-6 font-medium text-gray-900">Actions</th>
+                        <th class="text-left py-4 px-3 sm:px-4 font-medium text-gray-900 w-12">Select</th>
+                        <th class="text-left py-4 px-3 sm:px-4 font-medium text-gray-900 w-16">Rank</th>
+                        <th class="text-left py-4 px-3 sm:px-4 font-medium text-gray-900 min-w-[180px]">Vendor</th>
+                        <th class="text-left py-4 px-3 sm:px-4 font-medium text-gray-900 w-24">Total Score</th>
+                        <th class="text-left py-4 px-3 sm:px-4 font-medium text-gray-900 w-24">Technical</th>
+                        <th class="text-left py-4 px-3 sm:px-4 font-medium text-gray-900 w-28">Status</th>
+                        <th class="text-left py-4 px-3 sm:px-4 font-medium text-gray-900 w-32">Completion</th>
+                        <th class="text-left py-4 px-3 sm:px-4 font-medium text-gray-900 w-28">Submitted</th>
+                        <th class="text-left py-4 px-3 sm:px-4 font-medium text-gray-900 w-36">Proposed Value</th>
+                        <th class="text-left py-4 px-3 sm:px-4 font-medium text-gray-900 w-24">Variance</th>
               </tr>
             </thead>
                     <tbody class="divide-y divide-gray-200">
                       <tr v-for="(vendor, index) in filteredVendors" :key="vendor.id" :class="selectedVendors.includes(vendor.id) ? 'bg-blue-50' : 'hover:bg-gray-50'">
-                        <td class="py-4 px-6">
+                        <td class="py-4 px-3 sm:px-4">
+                          <input
+                            type="checkbox"
+                            :checked="selectedVendors.includes(vendor.id)"
+                            @change="handleVendorSelect(vendor.id)"
+                            class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          />
+                        </td>
+                        <td class="py-4 px-3 sm:px-4">
                           <div class="flex items-center gap-2">
                             <Trophy v-if="index === 0" class="h-5 w-5 text-yellow-500" />
                             <Star v-else-if="index === 1" class="h-5 w-5 text-gray-400" />
@@ -463,73 +468,68 @@
                             <span class="font-semibold text-gray-900">#{{ index + 1 }}</span>
                   </div>
                 </td>
-                        <td class="py-4 px-6">
+                        <td class="py-4 px-3 sm:px-4">
                           <div class="space-y-1">
                             <div class="flex items-center gap-2">
-                              <p class="font-semibold text-gray-900">{{ vendor.name || vendor.company_name }}</p>
+                              <div>
+                                <p class="font-semibold text-gray-900">{{ vendor.name || vendor.company_name || 'Unknown Vendor' }}</p>
+                                <p v-if="vendor.company_name && vendor.company_name !== vendor.name" class="text-xs text-gray-500 mt-0.5">{{ vendor.company_name }}</p>
+                              </div>
                               <span v-if="vendor.totalEvaluators > 0" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800" title="Number of evaluators">
                                 {{ vendor.totalEvaluators }} eval.
                               </span>
                             </div>
-                            <p class="text-sm text-gray-500">{{ vendor.contact_email || vendor.email }}</p>
+                            <p class="text-sm text-gray-500">{{ vendor.contact_email || vendor.email || '' }}</p>
                   </div>
                 </td>
-                        <td class="py-4 px-6">
-                          <span :class="getScoreBadge(vendor.overallScore || vendor.totalScore)" class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium">
+                        <td class="py-4 px-3 sm:px-4">
+                          <span :class="getScoreBadge(vendor.overallScore || vendor.totalScore)" class="inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-sm font-medium">
                             {{ vendor.overallScore || vendor.totalScore }}
                           </span>
                 </td>
-                        <td class="py-4 px-6">
+                        <td class="py-4 px-3 sm:px-4">
                           <span :class="getScoreColor(vendor.technicalScore || vendor.scores?.technical)" class="font-medium">
                             {{ vendor.technicalScore || vendor.scores?.technical || 'N/A' }}
                           </span>
                 </td>
-                        <td class="py-4 px-6">
+                        <td class="py-4 px-3 sm:px-4">
                           <span :class="{
                             'bg-green-100 text-green-800': vendor.evaluation_status === 'AWARDED',
                             'bg-blue-100 text-blue-800': vendor.evaluation_status === 'SHORTLISTED',
                             'bg-yellow-100 text-yellow-800': vendor.evaluation_status === 'UNDER_EVALUATION',
                             'bg-gray-100 text-gray-800': vendor.evaluation_status === 'SUBMITTED'
-                          }" class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium">
+                          }" class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">
                             {{ vendor.evaluation_status || vendor.status || 'N/A' }}
                           </span>
                 </td>
-                        <td class="py-4 px-6">
+                        <td class="py-4 px-3 sm:px-4">
                           <div class="flex items-center gap-2">
-                            <div class="w-16 bg-gray-200 rounded-full h-2">
+                            <div class="w-12 sm:w-16 bg-gray-200 rounded-full h-2">
                               <div :class="{
                                 'bg-green-500': (vendor.completion_percentage || 0) >= 80,
                                 'bg-yellow-500': (vendor.completion_percentage || 0) >= 50 && (vendor.completion_percentage || 0) < 80,
                                 'bg-red-500': (vendor.completion_percentage || 0) < 50
                               }" class="h-2 rounded-full" :style="{ width: (vendor.completion_percentage || 0) + '%' }"></div>
                             </div>
-                            <span class="text-sm font-medium text-gray-700">{{ vendor.completion_percentage || 0 }}%</span>
+                            <span class="text-sm font-medium text-gray-700 whitespace-nowrap">{{ vendor.completion_percentage || 0 }}%</span>
                           </div>
                 </td>
-                        <td class="py-4 px-6">
-                          <span class="text-sm text-gray-600">
+                        <td class="py-4 px-3 sm:px-4">
+                          <span class="text-sm text-gray-600 whitespace-nowrap">
                             {{ vendor.submission_date ? new Date(vendor.submission_date).toLocaleDateString() : 'N/A' }}
                           </span>
                         </td>
-                        <td class="py-4 px-6">
-                          <span class="font-semibold text-gray-900">
+                        <td class="py-4 px-3 sm:px-4">
+                          <span class="font-semibold text-gray-900 whitespace-nowrap">
                             {{ vendor.price || vendor.proposedValue || 'N/A' }}
                           </span>
                         </td>
-                        <td class="py-4 px-6">
-                          <span v-if="vendor.totalEvaluators > 0" :class="(vendor.evaluatorVariance || vendor.variance || 0) > 3 ? 'text-yellow-600' : 'text-green-600'" class="font-medium" :title="`Standard deviation across ${vendor.totalEvaluators} evaluators`">
+                        <td class="py-4 px-3 sm:px-4">
+                          <span v-if="vendor.totalEvaluators > 0" :class="(vendor.evaluatorVariance || vendor.variance || 0) > 3 ? 'text-yellow-600' : 'text-green-600'" class="font-medium whitespace-nowrap" :title="`Standard deviation across ${vendor.totalEvaluators} evaluators`">
                             ±{{ vendor.evaluatorVariance || vendor.variance || 0 }}
                           </span>
                           <span v-else class="text-gray-400 text-sm">N/A</span>
                         </td>
-                        <td class="py-4 px-6">
-                          <input
-                            type="checkbox"
-                            :checked="selectedVendors.includes(vendor.id)"
-                            @change="handleVendorSelect(vendor.id)"
-                            class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                </td>
               </tr>
             </tbody>
           </table>
@@ -789,31 +789,6 @@
           </div>
         </div>
 
-        <!-- Progress Status -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 class="text-lg font-semibold text-gray-900 mb-4">Phase 7 Progress</h3>
-          <div class="space-y-4">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-3">
-                <div :class="`w-4 h-4 rounded-full ${rfpShortlistedVendors.length > 0 ? 'bg-green-500' : 'bg-gray-300'}`"></div>
-                <span class="text-sm font-medium text-gray-700">Vendors Shortlisted</span>
-              </div>
-              <span :class="rfpShortlistedVendors.length > 0 ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'" class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium">
-                {{ rfpShortlistedVendors.length }} vendors
-              </span>
-            </div>
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-3">
-                <div :class="`w-4 h-4 rounded-full ${rfpCommitteeAssigned ? 'bg-green-500' : 'bg-gray-300'}`"></div>
-                <span class="text-sm font-medium text-gray-700">Committee Assigned</span>
-              </div>
-              <span :class="rfpCommitteeAssigned ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'" class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium">
-                {{ rfpCommitteeAssigned ? 'Complete' : rfpShortlistedVendors.length > 0 ? 'Ready' : 'Pending' }}
-              </span>
-            </div>
-          </div>
-    </div>
-
     <!-- Navigation -->
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -891,7 +866,8 @@ import {
   UserPlus,
   Crown,
   Shield,
-  AlertCircle
+  AlertCircle,
+  Calendar
 } from 'lucide-vue-next'
 
 // Router
@@ -924,6 +900,7 @@ const selectedRfpId = ref('')
 const availableRfps = ref([])
 const lastUpdated = ref(null)
 const rfpProposalCounts = ref({}) // Store proposal counts for each RFP
+const rfpViewMode = ref('grid')
 
 // Computed properties
 const averageScore = computed(() => {
@@ -986,7 +963,11 @@ const sortedVendors = computed(() => {
 const filteredVendors = computed(() => {
   return sortedVendors.value.filter(vendor => {
     const score = vendor.overallScore || vendor.totalScore || 0
-    return !filterMinScore.value || score >= parseFloat(filterMinScore.value)
+    if (!filterMinScore.value || filterMinScore.value === '') {
+      return true
+    }
+    const minScore = parseFloat(filterMinScore.value)
+    return !isNaN(minScore) && score >= minScore
   })
 })
 
@@ -995,11 +976,11 @@ const shortlistedVendorData = computed(() => {
 })
 
 const topPerformers = computed(() => {
-  return sortedVendors.value.slice(0, topPerformersCount.value)
+  return filteredVendors.value.slice(0, topPerformersCount.value)
 })
 
 const canSelectTopPerformers = computed(() => {
-  return vendorEvaluations.value.length >= topPerformersCount.value
+  return filteredVendors.value.length >= topPerformersCount.value
 })
 
 const totalProposals = computed(() => {
@@ -1027,6 +1008,21 @@ const calculateStandardDeviation = (values) => {
   const squaredDiffs = values.map(val => Math.pow(val - mean, 2))
   const avgSquaredDiff = squaredDiffs.reduce((sum, val) => sum + val, 0) / values.length
   return Math.sqrt(avgSquaredDiff)
+}
+
+// Shared status badge class for RFP cards
+const getRfpStatusClass = (status) => {
+  const key = (status || '').toString().toUpperCase()
+  const map = {
+    APPROVED: 'bg-green-100 text-green-800',
+    ACTIVE: 'bg-green-100 text-green-800',
+    IN_REVIEW: 'bg-yellow-100 text-yellow-800',
+    PENDING: 'bg-yellow-100 text-yellow-800',
+    DRAFT: 'bg-gray-100 text-gray-800',
+    EVALUATION: 'bg-blue-100 text-blue-800',
+    CLOSED: 'bg-gray-100 text-gray-800'
+  }
+  return map[key] || 'bg-gray-100 text-gray-800'
 }
 
 // API functions to fetch real data
@@ -1235,6 +1231,16 @@ const fetchComparisonData = async (rfpId) => {
 
     // Handle the actual API response structure: {success: true, responses: [...], total_count: X}
     if (data && data.success === true && data.responses && Array.isArray(data.responses)) {
+      console.log(`📊 Fetched ${data.responses.length} vendor responses for RFP ${rfpId}`)
+      if (data.responses.length > 0) {
+        console.log('📋 Sample response structure:', JSON.stringify(data.responses[0], null, 2))
+        console.log('📋 Available fields in response:', Object.keys(data.responses[0]))
+      }
+      
+      // Note: Vendor API endpoint doesn't exist (returns 404), so we'll rely on vendor info in response_documents
+      // The vendor information should be in response_documents field of each response
+      const vendorDetailsMap = {} // Keep empty for now since vendor API doesn't exist
+      
       // Fetch evaluation scores for all responses to calculate mean scores
       const responseIds = data.responses.map(r => r.response_id).join(',')
       
@@ -1386,6 +1392,179 @@ const fetchComparisonData = async (rfpId) => {
         const meanScores = evaluationScores[responseId] || {}
         const variance = evaluatorVariance[responseId] || {}
         
+        // Debug: Log vendor data to see available fields - log everything
+        console.log('📋 Full vendor response object:', vendor)
+        console.log('📋 Vendor response data summary:', {
+          response_id: responseId,
+          vendor_id: vendor.vendor_id,
+          vendor_name: vendor.vendor_name,
+          org: vendor.org,
+          organization_name: vendor.organization_name,
+          company_name: vendor.company_name,
+          vendor: vendor.vendor,
+          response_documents_type: typeof vendor.response_documents,
+          response_documents: vendor.response_documents,
+          proposal_data_type: typeof vendor.proposal_data,
+          proposal_data: vendor.proposal_data,
+          all_keys: Object.keys(vendor)
+        })
+        
+        // Extract vendor info from response_documents (JSON field) - this is where vendor info is stored
+        let responseDocs = vendor.response_documents || vendor.proposal_data || {}
+        
+        // Handle case where response_documents might be a string that needs parsing
+        if (typeof responseDocs === 'string') {
+          try {
+            responseDocs = JSON.parse(responseDocs)
+          } catch (e) {
+            console.warn('Failed to parse response_documents as JSON:', e)
+            responseDocs = {}
+          }
+        }
+        
+        // Log the full structure to see what's actually in response_documents
+        console.log('📄 Full response_documents structure:', JSON.stringify(responseDocs, null, 2))
+        console.log('📄 response_documents keys:', responseDocs ? Object.keys(responseDocs) : 'null/undefined')
+        
+        // Try multiple possible field names and nested structures
+        const docVendorName = responseDocs?.vendor_name 
+          || responseDocs?.name
+          || responseDocs?.vendor?.vendor_name
+          || responseDocs?.vendor?.name
+          || responseDocs?.company?.name
+          || responseDocs?.organization?.name
+        const docOrg = responseDocs?.org 
+          || responseDocs?.organization_name 
+          || responseDocs?.company_name
+          || responseDocs?.organization?.name
+          || responseDocs?.company?.name
+          || responseDocs?.vendor?.org
+          || responseDocs?.vendor?.organization_name
+        const docContactEmail = responseDocs?.contact_email 
+          || responseDocs?.email
+          || responseDocs?.contact?.email
+          || responseDocs?.vendor?.email
+        
+        console.log('📄 Extracted from response_documents:', {
+          vendor_name: docVendorName,
+          org: docOrg,
+          contact_email: docContactEmail,
+          raw_response_docs: responseDocs
+        })
+        
+        // Get vendor details from map if available
+        const vendorDetails = vendor.vendor_id ? vendorDetailsMap[vendor.vendor_id] : null
+        console.log(`🔍 Vendor details for ID ${vendor.vendor_id}:`, vendorDetails)
+        
+        // Handle nested vendor object (if API returns vendor as an object)
+        let nestedVendorName = null
+        let nestedCompanyName = null
+        if (vendor.vendor && typeof vendor.vendor === 'object') {
+          console.log('📦 Nested vendor object:', vendor.vendor)
+          nestedVendorName = vendor.vendor.vendor_name 
+            || vendor.vendor.name 
+            || vendor.vendor.organization_name 
+            || vendor.vendor.company_name 
+            || vendor.vendor.org
+          nestedCompanyName = vendor.vendor.organization_name 
+            || vendor.vendor.company_name 
+            || vendor.vendor.org
+            || vendor.vendor.vendor_name 
+            || vendor.vendor.name
+        }
+        
+        // Try multiple possible field names for vendor name - prioritize response_documents first
+        // Also check if vendor_name or org are directly in the response (they might be there)
+        let vendorName = docVendorName
+          || vendor.vendor_name 
+          || vendor.org  // org might be the organization name
+          || vendor.organization_name 
+          || vendor.company_name
+          || nestedVendorName
+        
+        // If we have org but no vendor_name, use org as the vendor name
+        if (!vendorName && vendor.org) {
+          vendorName = vendor.org
+        }
+        
+        // If still no name, check nested vendor object more thoroughly
+        if (!vendorName && vendor.vendor) {
+          if (typeof vendor.vendor === 'object') {
+            vendorName = vendor.vendor.name
+              || vendor.vendor.organization_name
+              || vendor.vendor.company_name
+              || vendor.vendor.vendor_name
+              || vendor.vendor.org
+          } else if (typeof vendor.vendor === 'string') {
+            vendorName = vendor.vendor
+          }
+        }
+        
+        // Check response_documents more deeply if it's an object
+        if (!vendorName && responseDocs && typeof responseDocs === 'object') {
+          // Try checking nested structures
+          vendorName = responseDocs.vendor?.name
+            || responseDocs.vendor?.vendor_name
+            || responseDocs.company?.name
+            || responseDocs.organization?.name
+            || responseDocs.contact?.company_name
+            || responseDocs.basic_info?.vendor_name
+            || responseDocs.basic_info?.name
+        }
+        
+        // Last resort: use vendor_id to generate name
+        if (!vendorName) {
+          if (vendor.vendor_id) {
+            console.warn(`⚠️ No vendor name found for vendor_id ${vendor.vendor_id} in response. Available fields:`, Object.keys(vendor))
+            console.warn(`⚠️ response_documents content:`, responseDocs)
+            vendorName = `Vendor ${vendor.vendor_id}`
+          } else {
+            vendorName = 'Unknown Vendor'
+          }
+        }
+        
+        // Try multiple possible field names for company name - prioritize response_documents first
+        let companyName = docOrg
+          || vendor.org 
+          || vendor.organization_name 
+          || vendor.company_name
+          || nestedCompanyName
+        
+        // If still no company name, check nested vendor object
+        if (!companyName && vendor.vendor && typeof vendor.vendor === 'object') {
+          companyName = vendor.vendor.organization_name
+            || vendor.vendor.company_name
+            || vendor.vendor.org
+            || vendor.vendor.vendor_name
+            || vendor.vendor.name
+        }
+        
+        // Check response_documents more deeply if it's an object
+        if (!companyName && responseDocs && typeof responseDocs === 'object') {
+          // Try checking nested structures
+          companyName = responseDocs.vendor?.org
+            || responseDocs.vendor?.organization_name
+            || responseDocs.vendor?.company_name
+            || responseDocs.company?.name
+            || responseDocs.organization?.name
+            || responseDocs.contact?.company_name
+            || responseDocs.basic_info?.org
+            || responseDocs.basic_info?.organization_name
+        }
+        
+        // Last resort: use vendor name
+        if (!companyName) {
+          if (docVendorName) {
+            companyName = docVendorName
+          } else if (vendor.vendor_name) {
+            companyName = vendor.vendor_name
+          } else {
+            companyName = vendorName
+          }
+        }
+        
+        console.log(`✅ Extracted vendor name: "${vendorName}", company: "${companyName}"`)
+        
         // Group criteria scores by category
         const scoresByCategory = {
           technical: [],
@@ -1426,12 +1605,14 @@ const fetchComparisonData = async (rfpId) => {
           ? scoresByCategory.commercial.reduce((sum, s) => sum + s, 0) / scoresByCategory.commercial.length 
           : 0
         
+        console.log(`✅ Mapped vendor: ${vendorName} (ID: ${responseId}, Vendor ID: ${vendor.vendor_id}, Company: ${companyName})`)
+        
         return {
           id: responseId,
-          name: vendor.vendor_name || 'Unknown Vendor',
-          company_name: vendor.org || vendor.vendor_name,
-          contact_email: vendor.contact_email || '',
-          email: vendor.contact_email || '',
+          name: vendorName,
+          company_name: companyName,
+          contact_email: docContactEmail || vendor.contact_email || vendor.email || vendorDetails?.email || '',
+          email: docContactEmail || vendor.contact_email || vendor.email || vendorDetails?.email || '',
           // Use mean scores from evaluators, fallback to existing scores
           overallScore: meanScores.overall || vendor.overall_score || vendor.weighted_final_score || 0,
           totalScore: meanScores.overall || vendor.overall_score || vendor.weighted_final_score || 0,
@@ -1487,6 +1668,10 @@ const fetchComparisonData = async (rfpId) => {
           user_agent: vendor.user_agent || ''
         }
       })
+      
+      console.log(`✅ Successfully mapped ${vendorEvaluations.value.length} vendors:`, 
+        vendorEvaluations.value.map(v => ({ id: v.id, name: v.name, company_name: v.company_name }))
+      )
       
       summary.value = {
         total_responses: vendorEvaluations.value.length,
@@ -1650,7 +1835,7 @@ const fetchCommitteeMembers = async () => {
     // Get authentication headers
     const { getAuthHeaders, buildApiUrl } = useRfpApi()
     
-    const response = await fetch(buildApiUrl(`/rfps/users/?t=${Date.now()}`), {
+    const response = await fetch(buildApiUrl(`/users/?t=${Date.now()}`), {
       method: 'GET',
       headers: getAuthHeaders()
     })
@@ -1792,9 +1977,10 @@ const handleVendorSelect = (vendorId) => {
 }
 
 const handleTopPerformersCountChange = () => {
-  // Validate the count
-  if (topPerformersCount.value > vendorEvaluations.value.length) {
-    topPerformersCount.value = vendorEvaluations.value.length
+  // Validate the count against filtered vendors
+  const maxCount = filteredVendors.value.length || vendorEvaluations.value.length
+  if (topPerformersCount.value > maxCount) {
+    topPerformersCount.value = maxCount
   }
   if (topPerformersCount.value < 1) {
     topPerformersCount.value = 1
@@ -1803,7 +1989,7 @@ const handleTopPerformersCountChange = () => {
 
 const handleSelectTopPerformers = () => {
   if (!canSelectTopPerformers.value) {
-    PopupService.warning(`Cannot select ${topPerformersCount.value} top performers. Only ${vendorEvaluations.value.length} vendors available.`, 'Not Enough Vendors')
+    PopupService.warning(`Cannot select ${topPerformersCount.value} top performers. Only ${filteredVendors.value.length} vendors available${filterMinScore.value ? ' (after filtering)' : ''}.`, 'Not Enough Vendors')
     return
   }
   
@@ -1993,20 +2179,33 @@ const loadCommitteeStatus = async (rfpId) => {
 }
 
 // Watchers
-watch(selectedRfpId, (newRfpId) => {
-  if (newRfpId) {
+watch(selectedRfpId, (newRfpId, oldRfpId) => {
+  // Only fetch if RFP ID actually changed
+  if (newRfpId && newRfpId !== oldRfpId) {
     fetchComparisonData(newRfpId)
     loadCommitteeStatus(newRfpId)
   }
-})
+}, { immediate: false })
 
 // Real-time data refresh
+let isRefreshing = false
 const refreshData = async () => {
-  if (selectedRfpId.value) {
-    await fetchComparisonData(selectedRfpId.value)
-  } else {
-    // If no RFP is selected, refresh the RFP list and proposal counts
-    await fetchAvailableRfps()
+  // Prevent multiple simultaneous refresh calls
+  if (isRefreshing) {
+    console.log('Refresh already in progress, skipping...')
+    return
+  }
+  
+  try {
+    isRefreshing = true
+    if (selectedRfpId.value) {
+      await fetchComparisonData(selectedRfpId.value)
+    } else {
+      // If no RFP is selected, refresh the RFP list and proposal counts
+      await fetchAvailableRfps()
+    }
+  } finally {
+    isRefreshing = false
   }
 }
 
@@ -2029,75 +2228,14 @@ const refreshProposalCounts = async () => {
   }
 }
 
-// Test function to debug API issues
-const testApiDirectly = async () => {
-  console.log('🧪 Testing API directly...')
-  
-  if (availableRfps.value.length === 0) {
-    console.log('❌ No RFPs available to test')
-    return
-  }
-  
-  const testRfp = availableRfps.value[0]
-  console.log(`🧪 Testing with RFP: ${testRfp.id} (${testRfp.title})`)
-  
-  try {
-    // Get authentication headers
-    const { getAuthHeaders, buildApiUrl } = useRfpApi()
-    
-    // Test 1: Basic endpoint for specific RFP
-    console.log('🧪 Test 1: Basic endpoint for specific RFP')
-    const response1 = await fetch(buildApiUrl(`/rfp-responses-list/?rfp_id=${testRfp.id}&t=${Date.now()}`), {
-      method: 'GET',
-      headers: getAuthHeaders()
-    })
-    console.log('📡 Response 1 status:', response1.status)
-    const data1 = await response1.json()
-    console.log('📊 Response 1 data:', data1)
-    
-    // Test 2: All responses (no filter) to see what's in the database
-    console.log('🧪 Test 2: All responses endpoint (no filter)')
-    const response2 = await fetch(buildApiUrl(`/rfp-responses-list/?t=${Date.now()}`), {
-      method: 'GET',
-      headers: getAuthHeaders()
-    })
-    console.log('📡 Response 2 status:', response2.status)
-    const data2 = await response2.json()
-    console.log('📊 Response 2 data:', data2)
-    
-    // Test 3: Check the structure of the API response
-    if (data1 && data1.success === true) {
-      console.log('✅ API Response structure is correct')
-      console.log(`📋 Total count: ${data1.total_count}`)
-      console.log(`📋 Responses array length: ${data1.responses ? data1.responses.length : 0}`)
-      
-      if (data1.responses && data1.responses.length > 0) {
-        console.log('📝 Sample response structure:', data1.responses[0])
-      }
-    } else {
-      console.log('❌ API Response structure is unexpected')
-    }
-    
-    // Test 4: Check if there are any responses at all in the database
-    if (data2 && data2.success === true && data2.responses) {
-      const responsesForTestRfp = data2.responses.filter(r => r.rfp_id === testRfp.id)
-      console.log(`🧪 Found ${responsesForTestRfp.length} responses for RFP ${testRfp.id} in all responses`)
-      if (responsesForTestRfp.length > 0) {
-        console.log('📝 Sample response structure from all responses:', responsesForTestRfp[0])
-      }
-    }
-    
-  } catch (error) {
-    console.error('❌ API test failed:', error)
-  }
-}
-
-// Auto-refresh functionality
+// Auto-refresh functionality - DISABLED to prevent excessive reloads
+// Users can manually refresh using the refresh button if needed
 const startAutoRefresh = () => {
-  // Refresh data every 30 seconds
-  return setInterval(() => {
-    refreshData()
-  }, 30000)
+  // Auto-refresh disabled - refresh data only on manual request
+  // return setInterval(() => {
+  //   refreshData()
+  // }, 30000)
+  return null
 }
 
 let autoRefreshInterval = null
@@ -2114,8 +2252,8 @@ onMounted(async () => {
     await loadCommitteeStatus(selectedRfpId.value)
   }
   
-  // Start auto-refresh
-  autoRefreshInterval = startAutoRefresh()
+  // Auto-refresh disabled - users can manually refresh using the refresh button
+  // autoRefreshInterval = startAutoRefresh()
 })
 
 // Cleanup on unmount

@@ -2,15 +2,43 @@ const stripTrailingSlash = (value = '') => value.replace(/\/+$/, '')
 const ensureLeadingSlash = (path = '') => (path.startsWith('/') ? path : `/${path}`)
 
 const resolveWindowOrigin = () => {
-  if (typeof window === 'undefined' || !window.location) {
-    return 'http://localhost:8000'
+  // Always check environment variables first - these take highest priority
+  const envUrl = import.meta.env.VITE_API_BASE_URL?.replace('/api/tprm', '').replace('/api', '') || 
+                 import.meta.env.VITE_BACKEND_URL
+  
+  if (envUrl) {
+    // Extract origin from env URL if it's a full URL
+    try {
+      const url = new URL(envUrl)
+      return url.origin
+    } catch {
+      // If it's not a full URL, return as is (will be handled by caller)
+      return envUrl
+    }
   }
-
-  const { protocol, hostname, port } = window.location
-  const devPorts = new Set(['3000', '4173', '4174', '5173', '5174'])
-  const backendPort = !port || devPorts.has(port) ? '8000' : port
-  const portSegment = backendPort ? `:${backendPort}` : ''
-  return `${protocol}//${hostname}${portSegment}`
+  
+  // Check if we're in development mode and on localhost
+  const isDevelopment = import.meta.env.MODE === 'development' || import.meta.env.DEV
+  const isLocalhost = typeof window !== 'undefined' && window.location && 
+                      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  
+  // Use localhost in development if on localhost OR if explicitly set via VITE_USE_LOCALHOST=true
+  if (isDevelopment && isLocalhost || import.meta.env.VITE_USE_LOCALHOST === 'true') {
+    if (typeof window !== 'undefined' && window.location) {
+      const { protocol, hostname, port } = window.location
+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        const devPorts = new Set(['3000', '4173', '4174', '5173', '5174'])
+        const backendPort = !port || devPorts.has(port) ? '8000' : port
+        const portSegment = backendPort ? `:${backendPort}` : ''
+        console.log('[backendEnv] Using localhost for API in development:', `${protocol}//${hostname}${portSegment}`)
+        return `${protocol}//${hostname}${portSegment}`
+      }
+    }
+  }
+  
+  // DEFAULT: Always use production URL
+  console.log('[backendEnv] Using production API URL (development mode:', isDevelopment, ', localhost:', isLocalhost, ')')
+  return 'https://grc-tprm.vardaands.com'
 }
 
 const resolveApiBaseUrl = () => {
@@ -26,7 +54,13 @@ const resolveApiBaseUrl = () => {
     return stripTrailingSlash(candidates[0])
   }
 
-  return `${resolveWindowOrigin()}/api`
+  // Default to production API URL
+  const origin = resolveWindowOrigin()
+  // If origin already includes /api, don't add it again
+  if (origin.includes('/api')) {
+    return stripTrailingSlash(origin)
+  }
+  return `${origin}/api`
 }
 
 const joinUrl = (base, path = '') => {
@@ -59,6 +93,13 @@ const resolveTprmBaseUrl = () => {
     return `${API_ORIGIN}${ensureLeadingSlash(stripTrailingSlash(prefix))}`
   }
 
+  // Default to production TPRM API URL
+  // If API_BASE_URL already includes /tprm, return it as is
+  if (API_BASE_URL.includes('/tprm')) {
+    return stripTrailingSlash(API_BASE_URL)
+  }
+  
+  // Otherwise, append /tprm
   return joinUrl(API_BASE_URL, 'tprm')
 }
 
@@ -75,4 +116,3 @@ export const getApiUrl = (path = '') => joinUrl(API_BASE_URL, path)
 export const getApiV1Url = (path = '') => joinUrl(API_V1_BASE_URL, path)
 export const getTprmApiUrl = (path = '') => joinUrl(TPRM_API_BASE_URL, path)
 export const getTprmApiV1Url = (path = '') => joinUrl(TPRM_API_V1_BASE_URL, path)
-

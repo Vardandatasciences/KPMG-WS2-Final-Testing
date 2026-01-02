@@ -154,7 +154,7 @@
                 :key="auditor.user_id" 
                 :value="auditor.user_id"
               >
-                {{ auditor.name }} ({{ auditor.email }})
+                {{ auditor.name }}
               </option>
             </select>
           </div>
@@ -172,7 +172,7 @@
                 :key="reviewer.user_id" 
                 :value="reviewer.user_id"
               >
-                {{ reviewer.name }} ({{ reviewer.email }})
+                {{ reviewer.name }}
               </option>
             </select>
           </div>
@@ -252,6 +252,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useStore } from 'vuex'
 import { 
   FileText, 
   Target, 
@@ -278,7 +279,17 @@ import loggingService from '@/services/loggingService'
 // CustomQuestion interface removed for JavaScript compatibility
 
 const router = useRouter()
+const store = useStore()
 const { showSuccess, showError, showWarning, showInfo } = useNotifications()
+
+// Get current user from store
+const currentUser = computed(() => store.state.auth.currentUser)
+
+// Get current user ID
+const currentUserId = computed(() => {
+  if (!currentUser.value) return null
+  return currentUser.value.id || currentUser.value.user_id || currentUser.value.userid
+})
 
 // Form state
 const selectedSLAId = ref(null)
@@ -319,10 +330,23 @@ const loadData = async () => {
     const slasData = await apiService.getAvailableSLAs()
     approvedSLAs.value = slasData
 
-    // Load available users
+    // Load available users (only those with PerformContractAudit permission)
     const usersData = await apiService.getAvailableUsers()
-    auditors.value = usersData.filter(user => user.role === 'auditor')
-    reviewers.value = usersData.filter(user => user.role === 'reviewer')
+    // All returned users have PerformContractAudit permission, so show them in both dropdowns
+    // Users can be assigned as either auditor or reviewer
+    auditors.value = usersData
+    reviewers.value = usersData
+    
+    // Pre-select the logged-in user as the auditor by default
+    if (currentUserId.value && usersData.length > 0) {
+      const currentUserInList = usersData.find(user => 
+        user.user_id === currentUserId.value
+      )
+      if (currentUserInList) {
+        selectedAuditorId.value = currentUserInList.user_id
+        console.log('Pre-selected current user as auditor:', currentUserInList)
+      }
+    }
   } catch (error) {
     console.error('Error loading data:', error)
     

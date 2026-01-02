@@ -21,7 +21,7 @@ from .entity_service import EntityDataService
 
 # RBAC imports
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required
-from tprm_backend.rfp.rfp_authentication import UnifiedJWTAuthentication, SimpleAuthenticatedPermission
+from tprm_backend.rfp.rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 class RiskViewSet(viewsets.ModelViewSet):
     """ViewSet for Risks"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [SimpleAuthenticatedPermission]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['priority', 'status', 'risk_type', 'assigned_to']
@@ -146,7 +146,7 @@ class RiskViewSet(viewsets.ModelViewSet):
 
 class RiskHeatmapViewSet(viewsets.ViewSet):
     """ViewSet for Risk Heatmap - dynamically generated from Risk data"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [SimpleAuthenticatedPermission]
     
     def list(self, request):
@@ -176,7 +176,7 @@ class RiskHeatmapViewSet(viewsets.ViewSet):
 
 class RiskStatisticsAPIView(APIView):
     """API view for risk statistics"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [SimpleAuthenticatedPermission]
     
     def get(self, request):
@@ -199,7 +199,7 @@ class RiskStatisticsAPIView(APIView):
 
 class DashboardAPIView(APIView):
     """API view for dashboard data"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [SimpleAuthenticatedPermission]
     
     def get(self, request):
@@ -241,7 +241,7 @@ class DashboardAPIView(APIView):
 
 class EntityDataDropdownAPIView(APIView):
     """API view for entity-data-row dropdown functionality"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [SimpleAuthenticatedPermission]
     
     def get(self, request):
@@ -342,7 +342,7 @@ class EntityRiskGenerationAPIView(APIView):
     
     See INTEGRATION_GUIDE.md for complete examples!
     """
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [SimpleAuthenticatedPermission]
     
     def post(self, request):
@@ -464,7 +464,7 @@ class EntityRiskGenerationAPIView(APIView):
 
 class TaskStatusAPIView(APIView):
     """API view for checking background task status"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [SimpleAuthenticatedPermission]
     
     def get(self, request, task_id):

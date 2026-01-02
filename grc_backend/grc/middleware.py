@@ -175,6 +175,11 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
         # Check if path should be skipped
         path = request.path_info
         
+        # Explicitly skip cookie preferences endpoints (GDPR compliance - must work without authentication)
+        if path.startswith('/api/cookie/preferences/'):
+            logger.debug(f"[JWT Middleware] Skipping authentication for cookie preferences endpoint: {path}")
+            return None
+        
         # Explicitly skip data subject requests (GDPR compliance - users may not be logged in)
         if path.startswith('/api/data-subject-requests/'):
             logger.debug(f"[JWT Middleware] Skipping authentication for data subject request endpoint: {path}")

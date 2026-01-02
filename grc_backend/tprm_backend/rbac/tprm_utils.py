@@ -8,8 +8,6 @@ Supports all TPRM modules: RFP, Contract, Vendor, Risk, Compliance, and BCP/DRP.
 import logging
 from django.utils import timezone
 from .models import RBACTPRM
-from tprm_backend.mfa_auth.models import User as TprmUser
-from django.db.models import Q
 from django.db import models
 
 logger = logging.getLogger(__name__)
@@ -27,118 +25,17 @@ class RBACTPRMUtils:
         """
         logger.debug("[RBAC TPRM] Starting get_user_id_from_request")
         
-        def resolve_user_identity(user_id=None, username=None, email=None):
-            """
-            Normalize identifiers to a valid TPRM userid from the MFA users table.
-            """
-            try:
-                query = Q()
-                if user_id:
-                    query |= Q(userid=user_id)
-                if username:
-                    query |= Q(username=username)
-                if email:
-                    query |= Q(email=email)
-                
-                if not query:
-                    return None
-                
-                user = TprmUser.objects.filter(query).order_by('-updated_at', '-created_at').first()
-                if user:
-                    logger.info(f"[RBAC TPRM] Resolved identifier to user_id={user.userid}, username={user.username}")
-                    return user.userid
-                logger.warning(f"[RBAC TPRM] Unable to resolve user identity (user_id={user_id}, username={username}, email={email}) in TPRM users table")
-            except Exception as e:
-                logger.error(f"[RBAC TPRM] Error resolving user identity: {e}")
-            return None
-        
-        # 1. Allow explicit override from query params or headers so GRC frontend
-        #    can supply the user id it already resolved.
-        override_sources = []
-        if hasattr(request, 'GET'):
-            override_sources.append(request.GET)
-        # Safely check request.POST - handle both Django and DRF request objects
-        # For multipart/form-data, request.POST is a QueryDict, not a dict
-        try:
-            if hasattr(request, 'POST'):
-                post_data = request.POST
-                # Check if it's a dict-like object (QueryDict, dict, etc.)
-                if hasattr(post_data, 'get') or isinstance(post_data, dict):
-                    override_sources.append(post_data)
-        except Exception as e:
-            # If accessing POST fails (e.g., unsupported media type), skip it
-            # We'll rely on JWT token from headers instead
-            logger.debug(f"[RBAC TPRM] Could not access request.POST (likely multipart/form-data): {e}")
-        
-        override_user_id = None
-        override_username = None
-        override_email = None
-        
-        id_keys = ['user_id', 'userid', 'UserId']
-        username_keys = ['username', 'user_name', 'UserName']
-        email_keys = ['email', 'Email']
-        
-        for source in override_sources:
-            for key in id_keys:
-                value = source.get(key)
-                if value:
-                    try:
-                        override_user_id = int(value)
-                        logger.info(f"[RBAC TPRM] Override provided user_id via data: {override_user_id}")
-                    except ValueError:
-                        logger.warning(f"[RBAC TPRM] Invalid user_id override value '{value}' for key '{key}'")
-            for key in username_keys:
-                value = source.get(key)
-                if value:
-                    override_username = value.strip()
-                    logger.info(f"[RBAC TPRM] Override provided username via data: {override_username}")
-            for key in email_keys:
-                value = source.get(key)
-                if value:
-                    override_email = value.strip()
-                    logger.info(f"[RBAC TPRM] Override provided email via data: {override_email}")
-        
-        if hasattr(request, 'headers'):
-            for key in id_keys:
-                header_key = f'X-{key}'.replace('_', '-')
-                value = request.headers.get(header_key) or request.headers.get(key)
-                if value:
-                    try:
-                        override_user_id = int(value)
-                        logger.info(f"[RBAC TPRM] Override provided user_id via header ({header_key}): {override_user_id}")
-                    except ValueError:
-                        logger.warning(f"[RBAC TPRM] Invalid header user_id override '{value}' for key '{header_key}'")
-            for key in username_keys:
-                header_key = f'X-{key}'.replace('_', '-')
-                value = request.headers.get(header_key) or request.headers.get(key)
-                if value:
-                    override_username = value.strip()
-                    logger.info(f"[RBAC TPRM] Override provided username via header ({header_key}): {override_username}")
-            for key in email_keys:
-                header_key = f'X-{key}'.replace('_', '-')
-                value = request.headers.get(header_key) or request.headers.get(key)
-                if value:
-                    override_email = value.strip()
-                    logger.info(f"[RBAC TPRM] Override provided email via header ({header_key}): {override_email}")
-        
-        resolved = resolve_user_identity(override_user_id, override_username, override_email)
-        if resolved:
-            return resolved
-        
         # Try to get user_id from request.user (set by JWTAuthentication)
         try:
             if hasattr(request, 'user') and request.user:
-                maybe_username = getattr(request.user, 'username', None)
                 if hasattr(request.user, 'userid'):
                     user_id = request.user.userid
-                    resolved = resolve_user_identity(user_id, maybe_username)
-                    if resolved:
-                        return resolved
+                    logger.info(f"[RBAC TPRM] Successfully extracted user_id from request.user: {user_id}")
+                    return user_id
                 elif hasattr(request.user, 'id'):
                     user_id = request.user.id
-                    resolved = resolve_user_identity(user_id, maybe_username)
-                    if resolved:
-                        return resolved
+                    logger.info(f"[RBAC TPRM] Successfully extracted user_id from request.user.id: {user_id}")
+                    return user_id
         except Exception as e:
             logger.error(f"[RBAC TPRM] Error extracting user_id from request.user: {e}")
         
@@ -153,24 +50,13 @@ class RBACTPRMUtils:
                 from django.conf import settings
                 secret_key = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
                 payload = jwt.decode(token, secret_key, algorithms=['HS256'])
-                user_id = (
-                    payload.get('user_id')
-                    or payload.get('UserId')
-                    or payload.get('userid')
-                    or payload.get('sub')
-                )
-                username_claim = (
-                    payload.get('username')
-                    or payload.get('preferred_username')
-                    or payload.get('user_name')
-                )
-                email_claim = payload.get('email')
+                user_id = payload.get('user_id')
                 
-                resolved = resolve_user_identity(user_id, username_claim, email_claim)
-                if resolved:
-                    return resolved
+                if user_id:
+                    logger.info(f"[RBAC TPRM] Successfully extracted user_id from JWT: {user_id}")
+                    return user_id
                 else:
-                    logger.warning("[RBAC TPRM] Unable to resolve user identity from JWT payload")
+                    logger.warning("[RBAC TPRM] No user_id found in JWT payload")
                     
         except Exception as e:
             logger.error(f"[RBAC TPRM] Error extracting user_id from JWT: {e}")
@@ -214,12 +100,7 @@ class RBACTPRMUtils:
             return rbac_record
             
         except Exception as e:
-            # Check if it's a database connection error
-            error_str = str(e).lower()
-            if 'unknown server host' in error_str or '11001' in error_str or '2005' in error_str:
-                logger.warning(f"[RBAC TPRM] Database connection error for user {user_id}: {e}. Database may be unreachable.")
-            else:
-                logger.error(f"[RBAC TPRM] Error getting RBAC record for user {user_id}: {e}")
+            logger.error(f"[RBAC TPRM] Error getting RBAC record for user {user_id}: {e}")
             return None
     
     @staticmethod
@@ -379,10 +260,15 @@ class RBACTPRMUtils:
             'TriggerOCR': 'trigger_ocr',
             'GetNLPClauses': 'get_nlp_clauses',
             'CreateContractAudit': 'create_contract_audit',
+            'PerformContractAudit': 'perform_contract_audit',
             'GetContractHistory': 'get_contract_history',
             'CompareContractVersion': 'compare_contract_version',
             'DownloadContractDocument': 'download_contract_document',
-            'ValidateContractData': 'validate_contract_data'
+            'ValidateContractData': 'validate_contract_data',
+            
+            # Simplified versions for Contract Analysis permissions
+            'perform_audit': 'perform_contract_audit',
+            'perform_contract_audit': 'perform_contract_audit'
         }
         
         permission_field = contract_permissions.get(permission_type)

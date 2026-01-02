@@ -24,11 +24,6 @@ class Dropdown(models.Model):
 
 class Plan(models.Model):
     """BCP/DRP Plan model"""
-    PLAN_TYPE_CHOICES = [
-        ('BCP', 'Business Continuity Plan'),
-        ('DRP', 'Disaster Recovery Plan'),
-    ]
-    
     
     CRITICALITY_CHOICES = [
         ('LOW', 'Low'),
@@ -50,7 +45,7 @@ class Plan(models.Model):
     vendor_id = models.IntegerField()
     strategy_id = models.IntegerField()
     strategy_name = models.CharField(max_length=255)
-    plan_type = models.CharField(max_length=10, choices=PLAN_TYPE_CHOICES)
+    plan_type = models.CharField(max_length=45)  # Increased length to accommodate dynamic values
     plan_name = models.CharField(max_length=255)
     version = models.CharField(max_length=32, default='1.0')
     document_date = models.DateField(null=True, blank=True)
@@ -66,6 +61,7 @@ class Plan(models.Model):
     ocr_extracted = models.BooleanField(default=False)
     ocr_by_user_id = models.IntegerField(null=True, blank=True)
     ocr_extracted_at = models.DateTimeField(null=True, blank=True)
+    ocr_extracted_data = models.JSONField(default=dict, blank=True, null=True)
     
     # Approval related fields
     approved_by = models.IntegerField(null=True, blank=True)
@@ -247,13 +243,7 @@ class Questionnaire(models.Model):
     previous_questionnaire_id = models.IntegerField(null=True, blank=True)
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
-    plan_type = models.CharField(
-        max_length=10,
-        choices=[
-            ('BCP', 'Business Continuity Plan'),
-            ('DRP', 'Disaster Recovery Plan'),
-        ]
-    )
+    plan_type = models.CharField(max_length=45)  # Increased length to accommodate dynamic values
     created_by_user_id = models.IntegerField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DRAFT')
     reviewer_user_id = models.IntegerField(null=True, blank=True)
@@ -362,9 +352,9 @@ class TestAssignmentsResponses(models.Model):
 class BcpDrpApprovals(models.Model):
     """BCP/DRP Approvals model for workflow management"""
     OBJECT_TYPE_CHOICES = [
-        ('PLAN', 'Plan'),
-        ('QUESTIONNAIRE', 'Questionnaire'),
-        ('ASSIGNMENT_RESPONSE', 'Assignment Response'),
+        ('PLAN EVALUATION', 'Plan Evaluation'),
+        ('NEW QUESTIONNAIRE', 'New Questionnaire'),
+        ('QUESTIONNAIRE RESPONSE', 'Questionnaire Response'),
     ]
     
     STATUS_CHOICES = [
@@ -376,11 +366,6 @@ class BcpDrpApprovals(models.Model):
         ('CANCELLED', 'Cancelled'),
     ]
     
-    PLAN_TYPE_CHOICES = [
-        ('BCP', 'Business Continuity Plan'),
-        ('DRP', 'Disaster Recovery Plan'),
-    ]
-
     approval_id = models.AutoField(primary_key=True)
     workflow_id = models.IntegerField()
     workflow_name = models.CharField(max_length=255)
@@ -388,9 +373,9 @@ class BcpDrpApprovals(models.Model):
     assigner_name = models.CharField(max_length=255)
     assignee_id = models.IntegerField()
     assignee_name = models.CharField(max_length=255)
-    object_type = models.CharField(max_length=20, choices=OBJECT_TYPE_CHOICES)
+    object_type = models.CharField(max_length=45, choices=OBJECT_TYPE_CHOICES)
     object_id = models.IntegerField()
-    plan_type = models.CharField(max_length=10, choices=PLAN_TYPE_CHOICES)
+    plan_type = models.CharField(max_length=45)  # Increased length to accommodate dynamic values
     assigned_date = models.DateTimeField(auto_now_add=True)
     due_date = models.DateTimeField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ASSIGNED')
@@ -442,8 +427,7 @@ class QuestionnaireTemplate(models.Model):
     MODULE_TYPE_CHOICES = [
         ('VENDOR', 'Vendor'),
         ('CONTRACT', 'Contract'),
-        ('BCP', 'Business Continuity Planning'),
-        ('DRP', 'Disaster Recovery Planning'),
+        ('PLANS', 'Plans'),
         ('SLA', 'Service Level Agreement'),
         ('AUDIT', 'Audit'),
         ('GENERAL', 'General'),

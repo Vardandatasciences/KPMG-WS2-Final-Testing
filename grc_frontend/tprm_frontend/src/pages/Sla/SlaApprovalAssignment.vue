@@ -487,13 +487,18 @@
 
 <script setup lang="ts">
 import './SlaApprovalAssignment.css'
-import { ref, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { useStore } from 'vuex'
 import slaApprovalApi from '../../services/slaApprovalApi.js'
 import PopupModal from '@/popup/PopupModal.vue'
 import { PopupService } from '@/popup/popupService'
 
 const route = useRoute()
+const store = useStore()
+
+// Get current user from store
+const currentUser = computed(() => store.getters['auth/currentUser'])
 
 // Reactive data
 const isSubmitting = ref(false)
@@ -534,6 +539,23 @@ const form = ref({
 // Additional data
 const contracts = ref([])
 
+// Watch for current user and users to auto-select assigner
+watch([currentUser, users], ([newUser, newUsers]) => {
+  // Only auto-select if no assigner is currently selected and both user and users list are available
+  if (newUser && newUsers && newUsers.length > 0 && !form.value.assigner_id) {
+    const currentUserId = newUser?.userid || newUser?.user_id || newUser?.id
+    if (currentUserId) {
+      // Check if current user exists in the users list
+      const currentUserInUsers = newUsers.find(
+        user => user.user_id == currentUserId || user.userid == currentUserId || user.id == currentUserId
+      )
+      if (currentUserInUsers) {
+        form.value.assigner_id = currentUserInUsers.user_id || currentUserInUsers.userid || currentUserInUsers.id
+        console.log('Auto-selected current user as assigner (via watcher):', form.value.assigner_id)
+      }
+    }
+  }
+}, { immediate: true })
 
 // Methods
 const fetchUsers = async () => {
@@ -553,6 +575,21 @@ const fetchUsers = async () => {
     } else {
       console.error('API returned no users data')
       users.value = []
+    }
+    
+    // Automatically select current user as assigner if available
+    if (currentUser.value && !form.value.assigner_id) {
+      const currentUserId = currentUser.value?.userid || currentUser.value?.user_id || currentUser.value?.id
+      if (currentUserId) {
+        // Check if current user exists in the users list
+        const currentUserInUsers = users.value.find(
+          user => user.user_id == currentUserId || user.userid == currentUserId || user.id == currentUserId
+        )
+        if (currentUserInUsers) {
+          form.value.assigner_id = currentUserInUsers.user_id || currentUserInUsers.userid || currentUserInUsers.id
+          console.log('Auto-selected current user as assigner:', form.value.assigner_id)
+        }
+      }
     }
   } catch (error) {
     console.error('Error fetching users:', error)
@@ -635,20 +672,13 @@ const fetchSLAsForDropdown = async () => {
 }
 
 const assignApproval = (sla) => {
-  if (!sla || !sla.sla_id) {
-    PopupService.error('Invalid SLA data. Please try selecting the SLA again.', 'Invalid SLA')
-    return
-  }
-  
   selectedContract.value = sla
-  // Ensure sla_id is an integer
-  const slaIdInt = parseInt(sla.sla_id, 10)
-  form.value.object_id = slaIdInt
-  form.value.sla_id = slaIdInt
+  form.value.object_id = sla.sla_id
+  form.value.sla_id = sla.sla_id
   form.value.object_type = 'SLA_CREATION'
   
   // Add the selected SLA to the SLAs list if not already present
-  const existingSLA = contracts.value.find(c => c.sla_id == slaIdInt)
+  const existingSLA = contracts.value.find(c => c.sla_id === sla.sla_id)
   if (!existingSLA) {
     contracts.value.unshift(sla) // Add to the beginning of the list
   }
@@ -680,23 +710,14 @@ const onAssigneeChange = () => {
 }
 
 const onSLAChange = () => {
-  if (!form.value.object_id) {
-    selectedContract.value = null
-    form.value.sla_id = ''
-    return
-  }
-  
-  const slaIdInt = parseInt(form.value.object_id, 10)
-  const sla = contracts.value.find(c => c.sla_id == slaIdInt)
+  const sla = contracts.value.find(c => c.sla_id == form.value.object_id)
   if (sla) {
     selectedContract.value = sla
-    // Ensure sla_id is an integer
-    form.value.sla_id = parseInt(sla.sla_id, 10)
-    console.log('Selected SLA:', sla, 'with sla_id:', form.value.sla_id)
+    form.value.sla_id = sla.sla_id
+    console.log('Selected SLA:', sla)
   } else {
     selectedContract.value = null
     form.value.sla_id = ''
-    console.warn('SLA not found for object_id:', form.value.object_id)
   }
 }
 
@@ -704,36 +725,10 @@ const createAssignment = async () => {
   isSubmitting.value = true
   
   try {
-    // Validate that sla_id is set and is a valid integer
-    if (!form.value.sla_id && !form.value.object_id) {
-      PopupService.error('Please select an SLA before creating the assignment.', 'Missing SLA')
-      isSubmitting.value = false
-      return
-    }
-    
-    // Prepare the data with proper type conversions
-    const approvalData = {
-      ...form.value,
-      sla_id: form.value.sla_id ? parseInt(form.value.sla_id, 10) : (form.value.object_id ? parseInt(form.value.object_id, 10) : null),
-      object_id: form.value.object_id ? parseInt(form.value.object_id, 10) : null,
-      assigner_id: form.value.assigner_id ? parseInt(form.value.assigner_id, 10) : null,
-      assignee_id: form.value.assignee_id ? parseInt(form.value.assignee_id, 10) : null,
-      workflow_id: form.value.workflow_id ? parseInt(form.value.workflow_id, 10) : 1
-    }
-    
-    // Remove empty or null values that might cause issues
-    Object.keys(approvalData).forEach(key => {
-      if (approvalData[key] === '' || approvalData[key] === null || approvalData[key] === undefined) {
-        if (key !== 'comment_text') { // Allow empty comment_text
-          delete approvalData[key]
-        }
-      }
-    })
-    
-    console.log('Creating SLA approval assignment with prepared data:', approvalData)
+    console.log('Creating SLA approval assignment:', form.value)
     
     // Call the API to create the approval assignment
-    const response = await slaApprovalApi.createApproval(approvalData)
+    const response = await slaApprovalApi.createApproval(form.value)
     
     console.log('Assignment created successfully:', response)
     
@@ -752,29 +747,12 @@ const createAssignment = async () => {
     
     // Handle different types of errors
     let errorMessage = 'Error creating assignment. Please try again.'
-    
-    // Check for API response errors
-    if (error.response?.data) {
-      const errorData = error.response.data
-      
-      // Handle serializer validation errors
-      if (errorData.errors) {
-        const errorList = []
-        for (const [field, messages] of Object.entries(errorData.errors)) {
-          if (Array.isArray(messages)) {
-            errorList.push(`${field}: ${messages.join(', ')}`)
-          } else {
-            errorList.push(`${field}: ${messages}`)
-          }
-        }
-        errorMessage = errorList.join('\n')
-      } else if (errorData.message) {
-        errorMessage = errorData.message
-      } else if (errorData.error) {
-        errorMessage = errorData.error
-      }
-    } else if (error.message) {
+    if (error.message) {
       errorMessage = error.message
+    } else if (error.response?.data?.message) {
+      errorMessage = error.response.data.message
+    } else if (error.response?.data?.error) {
+      errorMessage = error.response.data.error
     }
     
     PopupService.error(errorMessage, 'Assignment Failed')
@@ -914,17 +892,14 @@ onMounted(async () => {
     showCreateForm.value = true
     
     if (slaId) {
-      // Convert to integer for consistency
-      const slaIdInt = parseInt(slaId, 10)
-      form.value.object_id = slaIdInt
-      form.value.sla_id = slaIdInt
+      form.value.object_id = slaId
+      form.value.sla_id = slaId
       // Find and set the selected SLA
-      const sla = contracts.value.find(c => c.sla_id == slaIdInt)
+      const sla = contracts.value.find(c => c.sla_id == slaId)
       if (sla) {
         selectedContract.value = sla
-        form.value.sla_id = sla.sla_id // Ensure we use the actual sla_id from the SLA object
       }
-      console.log('Auto-filled object_id and sla_id from URL parameter:', slaIdInt)
+      console.log('Auto-filled object_id from URL parameter:', slaId)
     }
     
     if (objectType) {

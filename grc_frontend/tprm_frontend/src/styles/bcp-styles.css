@@ -3,7 +3,6 @@
 /* Import all BCP component CSS files */
 @import '../pages/BCP/VendorUpload.css';
 @import '../pages/BCP/PlanLibrary.css';
-@import '../pages/BCP/OcrExtraction.css';
 @import '../pages/BCP/PlanEvaluation.css';
 @import '../pages/BCP/MyApprovals.css';
 @import '../pages/BCP/QuestionnaireBuilder.css';

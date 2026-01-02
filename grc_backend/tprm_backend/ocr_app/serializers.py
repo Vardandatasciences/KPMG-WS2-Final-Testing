@@ -112,10 +112,10 @@ class SLAExtractionPayloadSerializer(serializers.Serializer):
 
 
 class BcpDrpOcrRunSerializer(serializers.Serializer):
-    """Serializer for BCP/DRP OCR run request"""
+    """Serializer for BCP/DRP OCR run request - accepts any plan type"""
     
     plan_id = serializers.IntegerField(required=True)
-    plan_type = serializers.ChoiceField(choices=['BCP', 'DRP'], required=True)
+    plan_type = serializers.CharField(max_length=45, required=True)  # Accept any plan type
     file_uri = serializers.CharField(max_length=1024, required=False, allow_blank=True, allow_null=True)
     
     def validate_plan_id(self, value):

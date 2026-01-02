@@ -1,0 +1,100 @@
+/* src/styles/ui.css */
+:root{
+  --bg:#fff; --text:#0f172a; --muted:#f6f7fb; --border:#e5e7eb;
+  --primary:#1d4ed8; --success:#16a34a; --warning:#f59e0b; --destructive:#dc2626;
+  --muted-foreground:#6b7280; --card:#ffffff; --shadow:0 1px 2px rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.1);
+}
+
+/* primitives */
+.text-foreground{color:var(--text)}
+.text-muted-foreground{color:var(--muted-foreground)}
+.bg-muted{background:var(--muted)}
+.bg-primary{background:var(--primary)} .text-primary{color:var(--primary)}
+.bg-success{background:var(--success)} .text-success{color:var(--success)}
+.bg-warning{background:var(--warning)} .text-warning{color:var(--warning)}
+.bg-destructive{background:var(--destructive)} .text-destructive{color:var(--destructive)}
+
+/* soft backgrounds used in KPI icons */
+.bg-primary-soft{background:rgba(29,78,216,.12)}
+.bg-success-soft{background:rgba(22,163,74,.12)}
+.bg-warning-soft{background:rgba(245,158,11,.12)}
+.bg-destructive-soft{background:rgba(220,38,38,.12)}
+
+/* Card */
+.card{background:var(--card); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow)}
+.card-header{padding:16px 16px 0}
+.card-title{font-weight:600}
+.card-content{padding:16px}
+
+/* Buttons */
+.btn{display:inline-flex; align-items:center; gap:.5rem; border-radius:10px; padding:.5rem .9rem; font-weight:500; border:1px solid transparent}
+.btn-sm{padding:.35rem .7rem; font-size:.875rem}
+.btn-primary{background:var(--primary); color:#fff}
+.btn-outline{background:#fff; color:var(--text); border-color:var(--border)}
+.btn-secondary{background:#f3f4f6; color:var(--text)}
+.btn-destructive{background:var(--destructive); color:#fff}
+
+/* Badges */
+.badge{display:inline-flex; align-items:center; gap:.25rem; padding:.15rem .5rem; border-radius:999px; font-size:.75rem; line-height:1; border:1px solid transparent}
+.badge-outline{background:#fff; border-color:var(--border); color:var(--text)}
+
+/* BADGE VARIANTS */
+.badge-success{ background: rgba(22,163,74,.12); color: var(--success); border-color: rgba(22,163,74,.25) }
+.badge-warning{ background: rgba(245,158,11,.12); color: var(--warning); border-color: rgba(245,158,11,.25) }
+.badge-destructive{ background: rgba(220,38,38,.12); color: var(--destructive); border-color: rgba(220,38,38,.25) }
+.badge-default{ background:#fff; color:var(--text); border-color: var(--border) }
+
+/* Inputs */
+.input, .select{width:100%; padding:.55rem .75rem; border:1px solid var(--border); border-radius:10px; background:#fff}
+.input:focus, .select:focus{outline:none; border-color:var(--primary); box-shadow:0 0 0 3px rgba(29,78,216,.15)}
+
+/* Tabs */
+.tabs-list{display:grid; gap:6px; background:#f8fafc; border:1px solid var(--border); border-radius:10px; padding:6px}
+.tabs-trigger{padding:.5rem .75rem; text-align:center; border-radius:8px; border:1px solid transparent; background:transparent}
+.tabs-trigger-active{background:#fff; border-color:var(--border); box-shadow:var(--shadow); font-weight:600}
+.tabs-content{margin-top:12px}
+
+/* Optional tiny helpers */
+.text-up{ color: var(--success) }
+.text-down{ color: var(--destructive) }
+
+/* Content width like the TSX pages */
+.container-lg{max-width:1180px;margin:0 auto;padding:0 16px}
+
+/* Inputs & textareas (same look) */
+.textarea{width:100%; padding:.6rem .75rem; border:1px solid var(--border); border-radius:10px; background:#fff; min-height:100px}
+.textarea:focus{outline:none; border-color:var(--primary); box-shadow:0 0 0 3px rgba(29,78,216,.15)}
+
+/* Thin card spacing */
+.card-header{padding:16px 16px 0}
+.card-content{padding:16px}
+
+/* Small pill badges used in left panel */
+.pill{display:inline-flex;align-items:center;padding:.15rem .5rem;font-size:.72rem;border-radius:999px;border:1px solid var(--border);background:#fff}
+.pill-secondary{background:#f3f4f6;color:#111827;border-color:#e5e7eb}
+.pill-outline-warning{background:#fff;color:var(--warning);border-color:rgba(245,158,11,.35)}
+.pill-outline-success{background:#fff;color:var(--success);border-color:rgba(22,163,74,.35)}
+
+/* Page width identical to TSX */
+.container-lg{max-width:1180px;margin:0 auto;padding:0 16px}
+
+/* Card density (match TSX) */
+.card-header{padding:16px 16px 0}
+.card-content{padding:16px}
+
+/* Thin progress bar */
+.progress{height:6px;background:var(--muted);border-radius:999px;overflow:hidden}
+.progress-indicator{height:100%;background:var(--primary);border-radius:999px}
+
+/* Small chips used for "Required / Completed / x of y completed" */
+.chip{display:inline-flex;align-items:center;gap:.25rem;padding:.15rem .5rem;border-radius:999px;
+      font-size:.72rem;border:1px solid var(--border);background:#fff}
+.chip-soft{background:#f8fafc;border-color:#eef2f7}
+.chip-success{color:var(--success);border-color:rgba(22,163,74,.3);background:rgba(22,163,74,.06)}
+.chip-warn{color:var(--warning);border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.06)}
+
+/* Inputs (consistent focus) */
+.textarea{width:100%;padding:.6rem .75rem;border:1px solid var(--border);border-radius:10px;background:#fff;min-height:100px}
+.textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(29,78,216,.15)}
+.select,.input{width:100%;padding:.55rem .7rem;border:1px solid var(--border);border-radius:10px;background:#fff}
+.select:focus,.input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(29,78,216,.15)}

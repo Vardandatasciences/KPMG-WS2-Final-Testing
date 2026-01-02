@@ -1,0 +1,445 @@
+/* ApprovalWorkflowCreator.vue Enhanced Styling */
+
+.approval-workflow-creator {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  min-height: 100vh;
+}
+
+.workflow-card {
+  margin-bottom: 24px;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: none;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.workflow-card .el-card__header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 24px;
+  border-bottom: none;
+}
+
+.card-header {
+  text-align: center;
+}
+
+.card-header h2 {
+  margin: 0 0 12px 0;
+  color: #ffffff;
+  font-size: 28px;
+  font-weight: 600;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.card-header p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 16px;
+  font-weight: 300;
+}
+
+.workflow-form {
+  margin-top: 0;
+  padding: 32px;
+}
+
+/* Form Sections */
+.el-divider {
+  margin: 32px 0 24px 0;
+  border-color: #e4e7ed;
+}
+
+.el-divider__text {
+  background: #ffffff;
+  color: #606266;
+  font-weight: 600;
+  font-size: 16px;
+  padding: 0 20px;
+}
+
+/* Form Items */
+.el-form-item {
+  margin-bottom: 24px;
+}
+
+.el-form-item__label {
+  font-weight: 600;
+  color: #303133;
+  font-size: 14px;
+}
+
+.el-input__inner,
+.el-textarea__inner,
+.el-select .el-input__inner {
+  border-radius: 8px;
+  border: 2px solid #e4e7ed;
+  transition: all 0.3s ease;
+  font-size: 14px;
+  padding: 12px 16px;
+}
+
+.el-input__inner:focus,
+.el-textarea__inner:focus,
+.el-select .el-input__inner:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.el-input-number {
+  width: 100%;
+}
+
+.el-input-number .el-input__inner {
+  text-align: center;
+}
+
+/* Stages Section */
+.stages-section {
+  margin-top: 32px;
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.stages-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #e4e7ed;
+}
+
+.stages-header h3 {
+  margin: 0;
+  color: #303133;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.stages-header .el-button {
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  transition: all 0.3s ease;
+}
+
+.stages-header .el-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+}
+
+/* No Stages State */
+.no-stages {
+  text-align: center;
+  padding: 60px 40px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 12px;
+  border: 2px dashed #dee2e6;
+}
+
+.no-stages .el-empty__description {
+  color: #6c757d;
+  font-size: 16px;
+  margin-bottom: 24px;
+}
+
+.no-stages .el-button {
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-weight: 600;
+}
+
+/* Stages List */
+.stages-list {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.stage-card {
+  border: 2px solid #e4e7ed;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.stage-card:hover {
+  border-color: #667eea;
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.15);
+  transform: translateY(-2px);
+}
+
+.stage-card .el-card__header {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  padding: 16px 20px;
+  border-bottom: 1px solid #e4e7ed;
+}
+
+.stage-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.stage-title {
+  font-weight: 700;
+  color: #303133;
+  font-size: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stage-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.stage-actions .el-button {
+  border-radius: 6px;
+  padding: 8px 12px;
+  transition: all 0.3s ease;
+}
+
+.stage-actions .el-button:hover {
+  transform: scale(1.1);
+}
+
+.stage-card .el-card__body {
+  padding: 24px;
+}
+
+/* Stage Form Items */
+.stage-card .el-form-item {
+  margin-bottom: 20px;
+}
+
+.stage-card .el-form-item__label {
+  font-weight: 600;
+  color: #495057;
+  font-size: 13px;
+}
+
+.stage-card .el-input__inner,
+.stage-card .el-textarea__inner,
+.stage-card .el-select .el-input__inner {
+  border-radius: 6px;
+  border: 1px solid #ced4da;
+  font-size: 13px;
+  padding: 10px 14px;
+}
+
+.stage-card .el-input__inner:focus,
+.stage-card .el-textarea__inner:focus,
+.stage-card .el-select .el-input__inner:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+/* Checkbox Styling */
+.el-checkbox {
+  margin-top: 16px;
+}
+
+.el-checkbox__label {
+  font-weight: 600;
+  color: #495057;
+  font-size: 14px;
+}
+
+/* Form Actions */
+.form-actions {
+  text-align: center;
+  margin-top: 40px;
+  padding-top: 32px;
+  border-top: 2px solid #e4e7ed;
+}
+
+.form-actions .el-button {
+  border-radius: 8px;
+  padding: 14px 32px;
+  font-weight: 600;
+  font-size: 16px;
+  margin: 0 12px;
+  transition: all 0.3s ease;
+}
+
+.form-actions .el-button--primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
+}
+
+.form-actions .el-button--primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.form-actions .el-button:not(.el-button--primary) {
+  background: #ffffff;
+  border: 2px solid #e4e7ed;
+  color: #606266;
+}
+
+.form-actions .el-button:not(.el-button--primary):hover {
+  border-color: #667eea;
+  color: #667eea;
+  transform: translateY(-2px);
+}
+
+/* Success Dialog */
+.el-dialog {
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.el-dialog__header {
+  background: linear-gradient(135deg, #67c23a 0%, #85ce61 100%);
+  color: white;
+  padding: 24px;
+}
+
+.el-dialog__title {
+  color: white;
+  font-weight: 600;
+  font-size: 20px;
+}
+
+.success-content {
+  text-align: center;
+  padding: 32px 24px;
+}
+
+.success-icon {
+  margin-bottom: 24px;
+}
+
+.success-content h3 {
+  margin: 16px 0;
+  color: #67c23a;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.success-content p {
+  color: #606266;
+  font-size: 16px;
+  margin-bottom: 24px;
+}
+
+.workflow-info {
+  text-align: left;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  padding: 20px;
+  border-radius: 8px;
+  margin-top: 24px;
+  border: 1px solid #e4e7ed;
+}
+
+.workflow-info p {
+  margin: 12px 0;
+  font-size: 14px;
+  color: #495057;
+}
+
+.workflow-info strong {
+  color: #303133;
+  font-weight: 600;
+}
+
+/* Dialog Footer */
+.el-dialog__footer {
+  padding: 20px 24px;
+  background: #f8f9fa;
+  border-top: 1px solid #e4e7ed;
+}
+
+.el-dialog__footer .el-button {
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-weight: 600;
+  margin: 0 8px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .approval-workflow-creator {
+    padding: 16px;
+  }
+  
+  .workflow-form {
+    padding: 20px;
+  }
+  
+  .stages-section {
+    padding: 16px;
+  }
+  
+  .stages-header {
+    flex-direction: column;
+    gap: 16px;
+    align-items: stretch;
+  }
+  
+  .stage-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+  }
+  
+  .stage-actions {
+    justify-content: center;
+  }
+  
+  .form-actions .el-button {
+    margin: 8px 0;
+    width: 100%;
+  }
+}
+
+/* Loading States */
+.el-loading-mask {
+  border-radius: 12px;
+}
+
+/* Animation Enhancements */
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stage-card {
+  animation: slideInUp 0.3s ease-out;
+}
+
+/* Custom Scrollbar */
+.stages-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.stages-list::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.stages-list::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.stages-list::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}

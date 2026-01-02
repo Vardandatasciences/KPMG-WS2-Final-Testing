@@ -92,7 +92,7 @@ def _get_contract_amendments(self) -> List[Dict]:
 # ============================================================================
 
 # In your contract_module/views.py:
-from tprm_backend.contract_risk_analysis.services import RiskAnalysisService
+from contract_risk_analysis.services import RiskAnalysisService
 from celery import shared_task
 import logging
 

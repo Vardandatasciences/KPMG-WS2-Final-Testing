@@ -1,10 +1,5 @@
 <template>
   <div class="kpi-dashboard">
-    <div class="dashboard-header">
-      <h1 class="dashboard-title">BCP/DRP KPI Dashboard (Performance)</h1>
-      <p class="dashboard-subtitle">Monitor business continuity and disaster recovery planning metrics</p>
-    </div>
-
     <!-- Error Message -->
     <div v-if="error" class="error-message">
       {{ error }}

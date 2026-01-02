@@ -106,7 +106,7 @@ class RFPSerializer(serializers.ModelSerializer):
             'category', 'estimated_value', 'currency', 'issue_date',
             'submission_deadline', 'evaluation_period_end', 'award_date',
             'status', 'created_by', 'approved_by', 'primary_reviewer_id',
-            'executive_reviewer_id', 'version_number', 'auto_publish',
+            'executive_reviewer_id', 'version_number', 'auto_approve',
             'allow_late_submissions', 'created_at', 'updated_at',
             'approval_workflow_id', 'evaluation_method', 'budget_range_min',
             'budget_range_max', 'criticality_level', 'geographical_scope',
@@ -250,10 +250,27 @@ class RFPSerializer(serializers.ModelSerializer):
 class RFPCreateSerializer(RFPSerializer):
     """Serializer specifically for RFP creation with validation"""
     
+    class Meta(RFPSerializer.Meta):
+        # Override read_only_fields to allow rfp_number to be writable during creation
+        read_only_fields = [
+            'rfp_id', 'created_at', 'updated_at', 
+            'created_by_details', 'approved_by_details', 'primary_reviewer_details',
+            'executive_reviewer_details'
+        ]
+    
     def validate(self, data):
         """Additional validation for RFP creation"""
         # Print data for debugging
         print("RFPCreateSerializer validate data:", data)
+        
+        # Normalize rfp_number: strip whitespace and set to None if empty
+        if 'rfp_number' in data:
+            if isinstance(data['rfp_number'], str):
+                data['rfp_number'] = data['rfp_number'].strip()
+                if not data['rfp_number']:
+                    data['rfp_number'] = None
+            elif not data['rfp_number']:
+                data['rfp_number'] = None
         
         # Call parent validation first (which handles decimal conversion)
         data = super().validate(data)

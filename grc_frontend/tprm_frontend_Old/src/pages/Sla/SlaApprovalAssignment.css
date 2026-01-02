@@ -1,0 +1,1293 @@
+/* SLA Approval Assignment specific styles */
+
+.SAA_container {
+  padding: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  min-height: 100vh;
+}
+
+/* Header Styles */
+.SAA_approval-header {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  margin-bottom: 2rem;
+  box-shadow: none;
+  color: #1f2937;
+}
+
+.SAA_header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.SAA_header-text {
+  flex: 1;
+  min-width: 300px;
+}
+
+.SAA_page-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem 0;
+  color: #1f2937;
+}
+
+.SAA_page-subtitle {
+  font-size: 1.125rem;
+  color: #6b7280;
+  margin: 0;
+  font-weight: 400;
+}
+
+.SAA_header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.SAA_status-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #f3f4f6;
+  padding: 0.5rem 1rem;
+  border-radius: 50px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.SAA_badge-icon {
+  width: 1rem;
+  height: 1rem;
+  color: #6b7280;
+}
+
+.SAA_btn--create {
+  background: #fbbf24;
+  color: #1f2937;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(251, 191, 36, 0.3);
+  transition: all 0.3s ease;
+}
+
+.SAA_btn--create:hover {
+  background: #f59e0b;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(251, 191, 36, 0.4);
+}
+
+.SAA_btn-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+/* Filters Card */
+.SAA_filters-card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e5e7eb;
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+}
+
+.SAA_filters-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.SAA_filters-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.SAA_filters-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  color: #6366f1;
+}
+
+.SAA_filters-title h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+.SAA_filters-count {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.SAA_count-badge {
+  background: #6366f1;
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 50px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.SAA_filters-content {
+  padding: 1.5rem;
+}
+
+.SAA_filters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+}
+
+.SAA_filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.SAA_filter-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+.SAA_label-icon {
+  width: 1rem;
+  height: 1rem;
+  color: #6b7280;
+}
+
+.SAA_filter-input,
+.SAA_filter-select {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+  background: white;
+}
+
+.SAA_filter-input:focus,
+.SAA_filter-select:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+/* Contracts Card */
+.SAA_contracts-card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e5e7eb;
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+}
+
+.SAA_contracts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.SAA_contracts-title {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.SAA_contracts-icon {
+  width: 2rem;
+  height: 2rem;
+  color: #059669;
+}
+
+.SAA_contracts-title h3 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 0.25rem 0;
+}
+
+.SAA_contracts-subtitle {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+.SAA_contracts-stats {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.SAA_stat-item {
+  text-align: center;
+}
+
+.SAA_stat-number {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.SAA_stat-label {
+  font-size: 0.75rem;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.SAA_contracts-content {
+  padding: 0;
+}
+
+.SAA_loading-state,
+.SAA_empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  text-align: center;
+}
+
+.SAA_loading-spinner {
+  width: 2rem;
+  height: 2rem;
+  border: 3px solid #e5e7eb;
+  border-top: 3px solid #6366f1;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+.SAA_loading-text {
+  color: #6b7280;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.SAA_empty-icon {
+  width: 3rem;
+  height: 3rem;
+  color: #d1d5db;
+  margin-bottom: 1rem;
+}
+
+.SAA_empty-state h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 0.5rem 0;
+}
+
+.SAA_empty-state p {
+  color: #6b7280;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.SAA_contracts-table-container {
+  overflow-x: auto;
+}
+
+.SAA_contracts-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.SAA_contracts-table th {
+  background: #f9fafb;
+  color: #374151;
+  font-weight: 600;
+  text-align: left;
+  padding: 1rem;
+  border-bottom: 2px solid #e5e7eb;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.SAA_contracts-table td {
+  padding: 1rem;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: middle;
+}
+
+.SAA_contract-row {
+  transition: all 0.2s ease;
+}
+
+.SAA_contract-row:hover {
+  background: #f8fafc;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.SAA_contract-id {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.75rem;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+.SAA_contract-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.SAA_contract-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+.SAA_contract-number {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+.SAA_type-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: 50px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+}
+
+.SAA_vendor-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.SAA_vendor-name {
+  font-size: 0.875rem;
+  color: #374151;
+  font-weight: 500;
+}
+
+.SAA_value-amount {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #059669;
+}
+
+.SAA_date-text {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.SAA_status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 50px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.SAA_status-pending {
+  background: #fef3c7;
+  color: #d97706;
+  border: 1px solid #fde68a;
+}
+
+.SAA_status-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.SAA_action-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.SAA_btn--assign {
+  background: #059669;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.SAA_btn--assign:hover {
+  background: #047857;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
+}
+
+.SAA_btn--assigned {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+.SAA_btn--assigned:hover {
+  background: #2563eb;
+  transform: none;
+  box-shadow: none;
+}
+
+.SAA_btn--view {
+  background: transparent;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+  padding: 0.5rem;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.SAA_btn--view:hover {
+  background: #f3f4f6;
+  color: #374151;
+  border-color: #9ca3af;
+}
+
+/* Approvals Card */
+.SAA_approvals-card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e5e7eb;
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+}
+
+.SAA_approvals-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.SAA_approvals-title {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.SAA_approvals-icon {
+  width: 2rem;
+  height: 2rem;
+  color: #7c3aed;
+}
+
+.SAA_approvals-title h3 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 0.25rem 0;
+}
+
+.SAA_approvals-subtitle {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+.SAA_approvals-count {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.SAA_approvals-content {
+  padding: 0;
+}
+
+.SAA_approvals-table-container {
+  overflow-x: auto;
+}
+
+.SAA_approvals-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.SAA_approvals-table th {
+  background: #f9fafb;
+  color: #374151;
+  font-weight: 600;
+  text-align: left;
+  padding: 1rem;
+  border-bottom: 2px solid #e5e7eb;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.SAA_approvals-table td {
+  padding: 1rem;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: middle;
+}
+
+.SAA_approval-row {
+  transition: all 0.2s ease;
+}
+
+.SAA_approval-row:hover {
+  background: #f8fafc;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.SAA_approval-id {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.75rem;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+.SAA_workflow-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.SAA_workflow-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+.SAA_type-creation {
+  background: #e0e7ff;
+  color: #3730a3;
+  border: 1px solid #c7d2fe;
+}
+
+.SAA_contract-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.SAA_contract-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.SAA_contract-number {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.SAA_contract-id {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.75rem;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+.SAA_user-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.SAA_user-name {
+  font-size: 0.875rem;
+  color: #374151;
+  font-weight: 500;
+}
+
+.SAA_date-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.SAA_date-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.SAA_date-label {
+  font-size: 0.625rem;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 500;
+}
+
+.SAA_date-value {
+  font-size: 0.75rem;
+  color: #374151;
+  font-weight: 500;
+}
+
+.SAA_btn--edit {
+  background: transparent;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+  padding: 0.5rem;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.SAA_btn--edit:hover {
+  background: #f3f4f6;
+  color: #374151;
+  border-color: #9ca3af;
+}
+
+/* Selected Contract Info */
+.selected-contract-info {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border: 2px solid #bfdbfe;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 4px 6px rgba(59, 130, 246, 0.1);
+}
+
+.selected-contract-info h4 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1e40af;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.selected-contract-info h4::before {
+  content: "📋";
+  font-size: 1.5rem;
+}
+
+.selected-contract-info p {
+  font-size: 0.875rem;
+  color: #1e40af;
+  margin: 0 0 0.5rem 0;
+  line-height: 1.5;
+}
+
+.selected-contract-info p:last-child {
+  margin-bottom: 0;
+}
+
+/* Status Badges */
+.SAA_status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 50px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid transparent;
+}
+
+.SAA_status-assigned {
+  background: #dbeafe;
+  color: #1e40af;
+  border-color: #bfdbfe;
+}
+
+.SAA_status-in-progress {
+  background: #fef3c7;
+  color: #d97706;
+  border-color: #fde68a;
+}
+
+.SAA_status-commented {
+  background: #d1fae5;
+  color: #065f46;
+  border-color: #a7f3d0;
+}
+
+.SAA_status-skipped {
+  background: #f3f4f6;
+  color: #6b7280;
+  border-color: #d1d5db;
+}
+
+.SAA_status-expired {
+  background: #fee2e2;
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+.SAA_status-cancelled {
+  background: #f3f4f6;
+  color: #6b7280;
+  border-color: #d1d5db;
+}
+
+.SAA_status-default {
+  background: #f3f4f6;
+  color: #6b7280;
+  border-color: #d1d5db;
+}
+
+/* Badge Styles */
+.SAA_badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.SAA_badge--outline {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.SAA_badge--primary {
+  background: rgba(59, 130, 246, 0.1);
+  color: #2563eb;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.SAA_badge--success {
+  background: rgba(34, 197, 94, 0.1);
+  color: #16a34a;
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.SAA_badge--warning {
+  background: rgba(245, 158, 11, 0.1);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.SAA_badge--danger {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+/* Button Styles */
+.SAA_btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  gap: 8px;
+}
+
+.SAA_btn--primary {
+  background: #2563eb;
+  color: white;
+  border-color: #2563eb;
+}
+
+.SAA_btn--primary:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+.SAA_btn--outline {
+  background: transparent;
+  color: #374151;
+  border-color: #d1d5db;
+}
+
+.SAA_btn--outline:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.SAA_btn--sm {
+  padding: 6px 12px;
+  font-size: 0.75rem;
+  min-height: 32px;
+}
+
+.SAA_btn--sm svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Form Grid */
+.SAA_form-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--sp-4);
+}
+
+@media (min-width: 768px) {
+  .SAA_form-grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Form Grid for 2 columns */
+.SAA_form-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--sp-4);
+}
+
+@media (min-width: 768px) {
+  .SAA_form-grid-2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Card Styles */
+.SAA_card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.SAA_card-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+  border-radius: 8px 8px 0 0;
+}
+
+.SAA_card-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.SAA_card-content {
+  padding: 20px;
+}
+
+/* Loading Spinner */
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Utility Classes */
+.text-muted-foreground {
+  color: #6b7280;
+}
+
+.font-medium {
+  font-weight: 500;
+}
+
+.font-bold {
+  font-weight: 700;
+}
+
+.text-sm {
+  font-size: 0.875rem;
+}
+
+.text-xs {
+  font-size: 0.75rem;
+}
+
+.text-lg {
+  font-size: 1.125rem;
+}
+
+.text-3xl {
+  font-size: 1.875rem;
+}
+
+.flex {
+  display: flex;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.gap-2 {
+  gap: 8px;
+}
+
+.gap-3 {
+  gap: 12px;
+}
+
+.gap-4 {
+  gap: 16px;
+}
+
+.gap-6 {
+  gap: 24px;
+}
+
+.space-y-2 > * + * {
+  margin-top: 8px;
+}
+
+.space-y-4 > * + * {
+  margin-top: 16px;
+}
+
+.space-y-6 > * + * {
+  margin-top: 24px;
+}
+
+.p-6 {
+  padding: 24px;
+}
+
+.p-4 {
+  padding: 16px;
+}
+
+.p-0 {
+  padding: 0;
+}
+
+.mb-2 {
+  margin-bottom: 8px;
+}
+
+.mb-4 {
+  margin-bottom: 16px;
+}
+
+.mt-2 {
+  margin-top: 8px;
+}
+
+.mt-4 {
+  margin-top: 16px;
+}
+
+.mr-1 {
+  margin-right: 4px;
+}
+
+.mr-2 {
+  margin-right: 8px;
+}
+
+/* Grid Utilities */
+.grid {
+  display: grid;
+}
+
+.grid-cols-1 {
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
+@media (min-width: 768px) {
+  .md\:grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Input Styles */
+.SAA_input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  transition: border-color 0.2s ease;
+}
+
+.SAA_input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* Label Styles */
+label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 4px;
+}
+
+/* Animations */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.SAA_contract-approval-container {
+  animation: fadeIn 0.6s ease-out;
+}
+
+.SAA_contracts-card,
+.SAA_approvals-card,
+.filters-card {
+  animation: slideIn 0.4s ease-out;
+}
+
+.SAA_contract-row,
+.SAA_approval-row {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+  .SAA_contracts-table th,
+  .SAA_contracts-table td,
+  .SAA_approvals-table th,
+  .SAA_approvals-table td {
+    padding: 0.75rem;
+  }
+  
+  .SAA_contracts-stats,
+  .SAA_approvals-count {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .SAA_contract-approval-container {
+    padding: 1rem;
+  }
+  
+  .SAA_approval-header {
+    padding: 0;
+  }
+  
+  .page-title {
+    font-size: 2rem;
+  }
+  
+  .header-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1.5rem;
+  }
+  
+  .header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .filters-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  .SAA_contracts-header,
+  .SAA_approvals-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  
+  .SAA_contracts-stats {
+    flex-direction: row;
+    gap: 1rem;
+  }
+  
+  .SAA_contracts-table,
+  .SAA_approvals-table {
+    font-size: 0.75rem;
+  }
+  
+  .SAA_contracts-table th,
+  .SAA_contracts-table td,
+  .SAA_approvals-table th,
+  .SAA_approvals-table td {
+    padding: 0.5rem;
+  }
+  
+  .SAA_action-buttons {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  
+  .SAA_btn--assign,
+  .SAA_btn--view,
+  .SAA_btn--edit {
+    font-size: 0.625rem;
+    padding: 0.375rem 0.75rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .SAA_contract-approval-container {
+    padding: 0.5rem;
+  }
+  
+  .SAA_approval-header {
+    padding: 0;
+  }
+  
+  .page-title {
+    font-size: 1.75rem;
+  }
+  
+  .title-icon {
+    width: 2rem;
+    height: 2rem;
+  }
+  
+  .SAA_contracts-table th,
+  .SAA_contracts-table td,
+  .SAA_approvals-table th,
+  .SAA_approvals-table td {
+    padding: 0.375rem;
+  }
+  
+  .SAA_contract-name,
+  .SAA_workflow-name {
+    font-size: 0.75rem;
+  }
+  
+  .SAA_contract-number,
+  .SAA_contract-title {
+    font-size: 0.625rem;
+  }
+}
+
+/* Overflow handling */
+.overflow-x-auto {
+  overflow-x: auto;
+}
+
+/* Text alignment */
+.text-center {
+  text-align: center;
+}
+
+/* Font utilities */
+.font-mono {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+/* Color utilities */
+.text-blue-700 {
+  color: #1d4ed8;
+}
+
+.text-blue-900 {
+  color: #1e3a8a;
+}
+
+.bg-blue-50 {
+  background-color: #eff6ff;
+}
+
+.border-blue-200 {
+  border-color: #bfdbfe;
+}
+
+/* Currency formatting */
+.currency-value {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-weight: 500;
+}

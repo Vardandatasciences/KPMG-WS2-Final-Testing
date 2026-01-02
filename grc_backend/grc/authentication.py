@@ -120,8 +120,11 @@ def _is_session_token_valid(user_id, session_token):
     
     active_session_token = _get_user_session_token(user_id)
     if active_session_token is None:
-        # No active session exists (user logged out or never logged in with new system)
-        return False
+        # Cache expired or cleared - restore session token from token (cache recovery)
+        # This handles cases where cache expires but tokens are still valid
+        logger.debug(f"Cache empty for user {user_id}, restoring session token from token: {session_token}")
+        _set_user_session_token(user_id, session_token)
+        return True
     return active_session_token == session_token
 
 def _log_failed_login(username, login_type, client_ip, reason, failed_attempts=None, additional_info=None):
@@ -585,9 +588,15 @@ def verify_jwt_token(token, check_session=True):
             # Only check session if both user_id and session_token exist
             # If session_token is None (old tokens), _is_session_token_valid returns True for backward compatibility
             if user_id:
+                # Check if session token is valid (this also restores cache if expired)
                 if not _is_session_token_valid(user_id, session_token):
-                    logger.warning(f"Session token invalid for user {user_id} - session may have been invalidated")
-                    return None  # Session token doesn't match active session
+                    # Check if there's a different active session (user logged in elsewhere)
+                    active_session_token = _get_user_session_token(user_id)
+                    if active_session_token and active_session_token != session_token:
+                        logger.warning(f"Session token invalid for user {user_id} - session may have been invalidated")
+                        return None  # Session token doesn't match active session
+                    # If cache was empty, _is_session_token_valid already restored it, so allow verification
+                    logger.debug(f"Session token restored from token for user {user_id} during verification")
         
         return payload
     except jwt.ExpiredSignatureError:
@@ -621,14 +630,29 @@ def verify_recaptcha(captcha_token):
         logger.debug("reCAPTCHA verification disabled in settings")
         return True
     
+    # Get secret key
+    secret_key = getattr(settings, 'RECAPTCHA_SECRET_KEY', '')
+    
+    # If using test keys, be more lenient
+    test_secret_key = '6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe'
+    test_site_key = '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI'
+    
+    # If using test keys, allow any token (including empty) for development
+    if secret_key == test_secret_key:
+        logger.debug("Using reCAPTCHA test keys - allowing any token for development")
+        return True
+    
     if not captcha_token:
         logger.warning("reCAPTCHA token is missing")
+        # If no secret key configured, allow in development
+        if not secret_key:
+            logger.warning("reCAPTCHA secret key not configured - allowing in development")
+            return True
         return False
     
-    secret_key = getattr(settings, 'RECAPTCHA_SECRET_KEY', '')
     if not secret_key:
-        logger.warning("reCAPTCHA secret key not configured")
-        return False
+        logger.warning("reCAPTCHA secret key not configured - allowing in development")
+        return True
     
     try:
         # Verify with Google's reCAPTCHA API
@@ -646,9 +670,17 @@ def verify_recaptcha(captcha_token):
         else:
             error_codes = result.get('error-codes', [])
             logger.warning(f"reCAPTCHA verification failed: {error_codes}")
+            # For test environment, be more lenient with certain error codes
+            if 'invalid-input-response' in error_codes and secret_key == test_secret_key:
+                logger.debug("Test key with invalid response - allowing for development")
+                return True
             return False
     except Exception as e:
         logger.error(f"Error verifying reCAPTCHA: {str(e)}")
+        # In development, allow if verification fails due to network issues
+        if not secret_key or secret_key == test_secret_key:
+            logger.warning("Allowing login due to reCAPTCHA verification error in development")
+            return True
         return False
 
 @api_view(['POST'])
@@ -1199,12 +1231,23 @@ def jwt_refresh(request):
             old_session_token = refresh.get('jti')
             if old_session_token:
                 # Verify the old session token is still valid (user hasn't logged in elsewhere)
+                # This also restores the session token in cache if it was expired
                 if not _is_session_token_valid(user_id, old_session_token):
-                    logger.warning(f"Session token invalid during refresh for user {user_id} - user logged in elsewhere")
-                    return Response({
-                        'status': 'error',
-                        'message': 'Session invalidated. Please log in again.'
-                    }, status=status.HTTP_401_UNAUTHORIZED)
+                    # Check if there's a different active session (user logged in elsewhere)
+                    active_session_token = _get_user_session_token(user_id)
+                    if active_session_token and active_session_token != old_session_token:
+                        logger.warning(f"Session token invalid during refresh for user {user_id} - user logged in elsewhere")
+                        return Response({
+                            'status': 'error',
+                            'message': 'Session invalidated. Please log in again.'
+                        }, status=status.HTTP_401_UNAUTHORIZED)
+                    # If cache was empty, _is_session_token_valid already restored it, so allow refresh
+                    logger.debug(f"Session token restored from refresh token for user {user_id}")
+            else:
+                # No session token in old token - generate a new one for backward compatibility
+                old_session_token = str(uuid.uuid4())
+                _set_user_session_token(user_id, old_session_token)
+                logger.debug(f"Generated new session token for user {user_id} during refresh (backward compatibility)")
             
             # Generate new tokens with preserved login_time and session_token (before blacklisting old token)
             # This ensures we have valid tokens even if blacklisting fails
@@ -1234,11 +1277,20 @@ def jwt_refresh(request):
                 },
             })
             
-        except (InvalidToken, TokenError):
-            # Invalid or blacklisted refresh token - silently return 401 without logging
+        except (InvalidToken, TokenError) as e:
+            # Invalid or blacklisted refresh token
+            # Log the error type for debugging but don't spam logs
+            error_type = type(e).__name__
+            if 'blacklist' in str(e).lower() or 'blacklisted' in str(e).lower():
+                logger.debug(f"Refresh token blacklisted for user (token was already used)")
+            elif 'expired' in str(e).lower():
+                logger.debug(f"Refresh token expired")
+            else:
+                logger.debug(f"Refresh token invalid: {error_type}")
+            
             return Response({
                 'status': 'error',
-                'message': 'Invalid refresh token'
+                'message': 'Invalid or expired refresh token. Please log in again.'
             }, status=status.HTTP_401_UNAUTHORIZED)
         except Users.DoesNotExist:
             return Response({

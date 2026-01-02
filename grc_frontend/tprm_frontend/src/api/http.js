@@ -45,14 +45,9 @@ http.interceptors.response.use(
         }
       } else {
         // Error response - throw an error
-        // Handle both string and object error formats
-        const errorMessage = typeof response.data.error === 'string' 
-          ? response.data.error 
-          : (response.data.error?.message || 'Unknown error')
-        const error = new Error(errorMessage)
-        error.code = typeof response.data.error === 'object' ? response.data.error?.code : undefined
-        error.details = typeof response.data.error === 'object' ? response.data.error?.details : undefined
-        error.response = response  // Preserve original response for error handling
+        const error = new Error(response.data.error?.message || 'Unknown error')
+        error.code = response.data.error?.code
+        error.details = response.data.error?.details
         throw error
       }
     }
@@ -100,27 +95,10 @@ http.interceptors.response.use(
     if (error.response) {
       // Server responded with error status
       const errorData = error.response.data
-      if (errorData) {
-        // Handle both string and object error formats
-        let errorMessage = 'Server error'
-        let errorCode = undefined
-        let errorDetails = undefined
-        
-        if (errorData.error) {
-          if (typeof errorData.error === 'string') {
-            errorMessage = errorData.error
-          } else if (typeof errorData.error === 'object') {
-            errorMessage = errorData.error.message || errorData.error.error || 'Server error'
-            errorCode = errorData.error.code
-            errorDetails = errorData.error.details
-          }
-        } else if (errorData.message) {
-          errorMessage = errorData.message
-        }
-        
-        const newError = new Error(errorMessage)
-        newError.code = errorCode || errorData.code
-        newError.details = errorDetails || errorData.details
+      if (errorData && errorData.error) {
+        const newError = new Error(errorData.error.message || 'Server error')
+        newError.code = errorData.error.code
+        newError.details = errorData.error.details
         newError.response = error.response
         throw newError
       }

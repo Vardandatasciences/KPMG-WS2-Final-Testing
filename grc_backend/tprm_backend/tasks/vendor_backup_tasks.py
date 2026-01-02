@@ -9,7 +9,7 @@ from celery import shared_task
 from django.conf import settings
 from django.core.management import call_command
 from django.core.cache import cache
-from database.vendor_sqlalchemy_manager import vendor_db_manager
+from tprm_backend.database.vendor_sqlalchemy_manager import vendor_db_manager
 
 vendor_backup_logger = logging.getLogger('vendor_security')
 

@@ -13,9 +13,6 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Q, Count
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
-
-# Use Unified JWT Authentication from GRC
-from grc.jwt_auth import UnifiedJWTAuthentication
 from django.utils import timezone
 from datetime import datetime, timedelta
 import jwt
@@ -28,6 +25,7 @@ from .serializers import (
     AuditFindingSerializer, AuditReportSerializer
 )
 from tprm_backend.slas.models import VendorSLA, SLAMetric
+from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
 
 logger = logging.getLogger(__name__)
 
@@ -35,19 +33,84 @@ logger = logging.getLogger(__name__)
 class SimpleAuthenticatedPermission(BasePermission):
     """Custom permission class that checks for authenticated users"""
     def has_permission(self, request, view):
-        # Just check if user object exists and is authenticated
-        # UnifiedJWTAuthentication handles GRC/TPRM user verification
-        if request.user and hasattr(request.user, 'is_authenticated'):
-            return request.user.is_authenticated
-        return False
+        # Check if user is authenticated
+        return bool(
+            request.user and 
+            hasattr(request.user, 'userid') and
+            getattr(request.user, 'is_authenticated', False)
+        )
 
+
+class PerformContractAuditPermission(BasePermission):
+    """Permission class that checks for PerformContractAudit permission"""
+    def has_permission(self, request, view):
+        # Get user_id from request
+        try:
+            user_id = RBACTPRMUtils.get_user_id_from_request(request)
+            
+            if not user_id:
+                logger.warning("[RBAC TPRM] No user_id found in request for PerformContractAudit check")
+                return False
+            
+            # Check PerformContractAudit permission
+            has_permission = RBACTPRMUtils.check_contract_permission(user_id, 'PerformContractAudit')
+            
+            if not has_permission:
+                logger.warning(f"[RBAC TPRM] User {user_id} denied PerformContractAudit access")
+            
+            return has_permission
+            
+        except Exception as e:
+            logger.error(f"[RBAC TPRM] Error checking PerformContractAudit permission: {e}")
+            return False
+
+
+class JWTAuthentication(BaseAuthentication):
+    """Custom JWT authentication class for DRF"""
+    def authenticate(self, request):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return None
+        
+        try:
+            token = auth_header.split(' ')[1]
+            # Use JWT_SECRET_KEY from settings
+            secret_key = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+            payload = jwt.decode(token, secret_key, algorithms=['HS256'])
+            user_id = payload.get('user_id')
+            
+            if user_id:
+                try:
+                    from mfa_auth.models import User
+                    user = User.objects.get(userid=user_id)
+                    # Add is_authenticated attribute for DRF compatibility
+                    user.is_authenticated = True
+                    return (user, token)
+                except (User.DoesNotExist, ImportError):
+                    # If User model doesn't exist or user not found, create a mock user
+                    class MockUser:
+                        def __init__(self, user_id):
+                            self.userid = user_id
+                            self.username = f"user_{user_id}"
+                            self.is_authenticated = True
+                    
+                    return (MockUser(user_id), token)
+        except jwt.ExpiredSignatureError:
+            logger.warning("JWT token expired")
+            return None
+        except jwt.InvalidTokenError:
+            logger.warning("Invalid JWT token")
+            return None
+        except Exception as e:
+            logger.error(f"JWT authentication error: {str(e)}")
+            return None
 
 
 class AuditListView(generics.ListCreateAPIView):
     """List and create audits."""
     queryset = Audit.objects.all()
-    authentication_classes = [UnifiedJWTAuthentication]
-    permission_classes = [SimpleAuthenticatedPermission]
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [PerformContractAuditPermission]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['status', 'audit_type', 'frequency', 'auditor_id', 'reviewer_id']
     search_fields = ['title', 'scope']
@@ -81,8 +144,8 @@ class AuditDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Retrieve, update and delete audit."""
     queryset = Audit.objects.all()
     serializer_class = AuditSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
-    permission_classes = [SimpleAuthenticatedPermission]
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [PerformContractAuditPermission]
 
 
 class QuestionnairesPagination(PageNumberPagination):
@@ -96,8 +159,8 @@ class StaticQuestionnaireListView(generics.ListCreateAPIView):
     """List and create static questionnaires."""
     queryset = StaticQuestionnaire.objects.all()
     serializer_class = StaticQuestionnaireSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
-    permission_classes = [SimpleAuthenticatedPermission]
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [PerformContractAuditPermission]
     pagination_class = QuestionnairesPagination
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['metric_name', 'question_type', 'is_required']
@@ -107,16 +170,16 @@ class StaticQuestionnaireDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Retrieve, update and delete static questionnaire."""
     queryset = StaticQuestionnaire.objects.all()
     serializer_class = StaticQuestionnaireSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
-    permission_classes = [SimpleAuthenticatedPermission]
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [PerformContractAuditPermission]
 
 
 class AuditVersionListView(generics.ListCreateAPIView):
     """List and create audit versions."""
     queryset = AuditVersion.objects.all()
     serializer_class = AuditVersionSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
-    permission_classes = [SimpleAuthenticatedPermission]
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [PerformContractAuditPermission]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ['audit_id', 'version_type', 'approval_status', 'user_id']
     ordering_fields = ['date_created', 'created_at']
@@ -127,16 +190,16 @@ class AuditVersionDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Retrieve, update and delete audit version."""
     queryset = AuditVersion.objects.all()
     serializer_class = AuditVersionSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
-    permission_classes = [SimpleAuthenticatedPermission]
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [PerformContractAuditPermission]
 
 
 class AuditFindingListView(generics.ListCreateAPIView):
     """List and create audit findings."""
     queryset = AuditFinding.objects.all()
     serializer_class = AuditFindingSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
-    permission_classes = [SimpleAuthenticatedPermission]
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [PerformContractAuditPermission]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ['audit_id', 'metrics_id', 'user_id']
     ordering_fields = ['check_date', 'created_at']
@@ -147,16 +210,16 @@ class AuditFindingDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Retrieve, update and delete audit finding."""
     queryset = AuditFinding.objects.all()
     serializer_class = AuditFindingSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
-    permission_classes = [SimpleAuthenticatedPermission]
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [PerformContractAuditPermission]
 
 
 class AuditReportListView(generics.ListCreateAPIView):
     """List and create audit reports."""
     queryset = AuditReport.objects.all()
     serializer_class = AuditReportSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
-    permission_classes = [SimpleAuthenticatedPermission]
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [PerformContractAuditPermission]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ['audit_id', 'sla_id', 'metrics_id']
     ordering_fields = ['generated_at']
@@ -167,13 +230,13 @@ class AuditReportDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Retrieve, update and delete audit report."""
     queryset = AuditReport.objects.all()
     serializer_class = AuditReportSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
-    permission_classes = [SimpleAuthenticatedPermission]
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [PerformContractAuditPermission]
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
-@permission_classes_decorator([SimpleAuthenticatedPermission])
+@authentication_classes([JWTAuthentication])
+@permission_classes_decorator([PerformContractAuditPermission])
 def audit_dashboard_stats(request):
     """Get audit dashboard statistics."""
     total_audits = Audit.objects.count()
@@ -193,8 +256,8 @@ def audit_dashboard_stats(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
-@permission_classes_decorator([SimpleAuthenticatedPermission])
+@authentication_classes([JWTAuthentication])
+@permission_classes_decorator([PerformContractAuditPermission])
 def available_slas(request):
     """Get available SLAs for audit creation."""
     # Check if user is admin (user_id = 1) - admin can access any SLA
@@ -228,8 +291,8 @@ def available_slas(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
-@permission_classes_decorator([SimpleAuthenticatedPermission])
+@authentication_classes([JWTAuthentication])
+@permission_classes_decorator([PerformContractAuditPermission])
 def sla_metrics(request, sla_id):
     """Get metrics for a specific SLA."""
     try:
@@ -275,88 +338,73 @@ def sla_metrics(request, sla_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
-@permission_classes_decorator([SimpleAuthenticatedPermission])
+@authentication_classes([JWTAuthentication])
+@permission_classes_decorator([PerformContractAuditPermission])
 def available_users(request):
-    """Get available users for auditor and reviewer assignment."""
-    from django.db import connections
-    
+    """Get users with PerformContractAudit permission for auditor and reviewer assignment."""
     try:
-        # Connect to tprm_integration database
-        with connections['default'].cursor() as cursor:
-            cursor.execute("""
-                SELECT UserId, UserName, Email, FirstName, LastName, DepartmentId, IsActive
-                FROM users 
-                WHERE IsActive = 'Y' OR IsActive = '1' OR IsActive = 'true'
-                ORDER BY FirstName, LastName
-            """)
+        # Import required models
+        from mfa_auth.models import User
+        
+        # Get all active users (filter by is_active_raw which can be 'Y', 'YES', '1', 'TRUE')
+        all_users = User.objects.filter(
+            is_active_raw__in=['Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true']
+        ).order_by('userid')
+        
+        logger.info(f"Found {all_users.count()} active users in database")
+        
+        # Filter users who have PerformContractAudit permission
+        users_with_permission = []
+        for user in all_users:
+            user_id = user.userid
             
-            users_data = []
-            for row in cursor.fetchall():
-                user_id, username, email, first_name, last_name, dept_id, is_active = row
+            # Check if user has PerformContractAudit permission
+            has_permission = RBACTPRMUtils.check_contract_permission(user_id, 'PerformContractAudit')
+            
+            # Include user if they have PerformContractAudit permission
+            if has_permission:
+                full_name = f"{user.first_name} {user.last_name}".strip()
+                display_name = full_name if full_name else user.username
                 
-                # Combine first and last name
-                full_name = f"{first_name or ''} {last_name or ''}".strip()
-                if not full_name:
-                    full_name = username or f"User {user_id}"
-                
-                # For now, we'll assign roles based on department or user ID
-                # In a real system, you might have a separate roles table
+                # Assign role based on department or user ID (for backward compatibility)
+                dept_id = getattr(user, 'department_id', None)
                 if dept_id == 1 or user_id % 2 == 1:
                     role = 'auditor'
                 else:
                     role = 'reviewer'
                 
-                users_data.append({
+                user_data = {
                     'user_id': user_id,
-                    'name': full_name,
-                    'email': email or f"user{user_id}@example.com",
-                    'role': role,
-                    'department': f"Department {dept_id}" if dept_id else "Unknown",
-                    'username': username
-                })
+                    'username': user.username,
+                    'name': display_name,
+                    'email': user.email or f"user{user_id}@example.com",
+                    'role': role,  # Default role for audit users
+                    'department': getattr(user, 'department', 'Unknown'),
+                }
+                users_with_permission.append(user_data)
+                logger.info(f"User with PerformContractAudit permission: {user_data}")
+        
+        logger.info(f"Returning {len(users_with_permission)} users with PerformContractAudit permission to frontend")
             
-            return Response(users_data)
+        return Response(users_with_permission)
             
     except Exception as e:
-        # Fallback to mock data if database connection fails
-        print(f"Error connecting to tprm_db: {e}")
-        users_data = [
+        # Log error and return empty list
+        logger.error(f"Error fetching users with PerformContractAudit permission: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return Response(
             {
-                'user_id': 1,
-                'name': 'John Doe',
-                'email': 'john.doe@example.com',
-                'role': 'auditor',
-                'department': 'IT'
+                'error': 'Failed to fetch users',
+                'message': 'Unable to retrieve users with PerformContractAudit permission. Please try again later.'
             },
-            {
-                'user_id': 2,
-                'name': 'Jane Smith',
-                'email': 'jane.smith@example.com',
-                'role': 'reviewer',
-                'department': 'Compliance'
-            },
-            {
-                'user_id': 3,
-                'name': 'Mike Johnson',
-                'email': 'mike.johnson@example.com',
-                'role': 'auditor',
-                'department': 'IT'
-            },
-            {
-                'user_id': 4,
-                'name': 'Sarah Wilson',
-                'email': 'sarah.wilson@example.com',
-                'role': 'reviewer',
-                'department': 'Compliance'
-            }
-        ]
-        return Response(users_data)
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
-@permission_classes_decorator([SimpleAuthenticatedPermission])
+@authentication_classes([JWTAuthentication])
+@permission_classes_decorator([PerformContractAuditPermission])
 def submit_audit_response(request, audit_id):
     """Submit responses for an audit."""
     try:
@@ -407,8 +455,8 @@ def submit_audit_response(request, audit_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
-@permission_classes_decorator([SimpleAuthenticatedPermission])
+@authentication_classes([JWTAuthentication])
+@permission_classes_decorator([PerformContractAuditPermission])
 def review_audit(request, audit_id):
     """Review and approve/reject an audit."""
     try:

@@ -3,33 +3,6 @@ import { getTprmApiBaseUrl } from '@/utils/backendEnv'
 
 const API_BASE_URL = getTprmApiBaseUrl()
 
-const TOKEN_STORAGE_KEYS = [
-  'session_token',
-  'token',
-  'access_token',
-  'jwt_token'
-]
-
-const USER_STORAGE_KEYS = [
-  'current_user',
-  'user'
-]
-
-const getFromStorage = (keys) => {
-  for (const key of keys) {
-    const value = localStorage.getItem(key)
-    if (value) {
-      return { key, value }
-    }
-  }
-  return { key: null, value: null }
-}
-
-const getStoredToken = () => {
-  const { value } = getFromStorage(TOKEN_STORAGE_KEYS)
-  return value
-}
-
 // Create axios instance with default config
 const authApi = axios.create({
   baseURL: `${API_BASE_URL}/auth`,
@@ -42,7 +15,7 @@ const authApi = axios.create({
 // Request interceptor to add token
 authApi.interceptors.request.use(
   (config) => {
-    const token = getStoredToken()
+    const token = localStorage.getItem('session_token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -71,7 +44,7 @@ authApi.interceptors.response.use(
 
 export default {
   /**
-   * Login with username and password (single-step, MFA disabled)
+   * Step 1: Login with username and password, receive OTP via email
    */
   async login(username, password) {
     try {
@@ -79,27 +52,11 @@ export default {
         username,
         password
       })
-
-      const token = response.data.session_token || response.data.access_token
-
-      if (token) {
-        localStorage.setItem('session_token', token)
-      }
-      if (response.data.access_token) {
-        localStorage.setItem('access_token', response.data.access_token)
-      }
-      if (response.data.refresh_token) {
-        localStorage.setItem('refresh_token', response.data.refresh_token)
-      }
-      localStorage.setItem('current_user', JSON.stringify(response.data.user))
-
       return {
         success: true,
         data: response.data,
+        requiresOtp: response.data.requires_otp,
         user: response.data.user,
-        token,
-        accessToken: response.data.access_token,
-        refreshToken: response.data.refresh_token,
         message: response.data.message
       }
     } catch (error) {
@@ -107,6 +64,63 @@ export default {
       return {
         success: false,
         error: error.response?.data?.message || 'Login failed. Please try again.',
+        details: error.response?.data
+      }
+    }
+  },
+
+  /**
+   * Step 2: Verify OTP code
+   */
+  async verifyOtp(username, otp) {
+    try {
+      const response = await authApi.post('/verify-otp/', {
+        username,
+        otp
+      })
+      
+      if (response.data.success) {
+        // Store authentication data
+        const token = response.data.session_token || response.data.access_token
+        localStorage.setItem('session_token', token)
+        localStorage.setItem('access_token', response.data.access_token)
+        localStorage.setItem('refresh_token', response.data.refresh_token)
+        localStorage.setItem('current_user', JSON.stringify(response.data.user))
+      }
+      
+      return {
+        success: true,
+        data: response.data,
+        user: response.data.user,
+        token: response.data.session_token || response.data.access_token
+      }
+    } catch (error) {
+      console.error('OTP verification error:', error)
+      return {
+        success: false,
+        error: error.response?.data?.message || 'OTP verification failed. Please try again.',
+        details: error.response?.data
+      }
+    }
+  },
+
+  /**
+   * Resend OTP code
+   */
+  async resendOtp(username) {
+    try {
+      const response = await authApi.post('/resend-otp/', {
+        username
+      })
+      return {
+        success: true,
+        message: response.data.message
+      }
+    } catch (error) {
+      console.error('Resend OTP error:', error)
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Failed to resend OTP. Please try again.',
         details: error.response?.data
       }
     }
@@ -203,12 +217,33 @@ export default {
   },
 
   /**
+   * Get MFA status for a user
+   */
+  async getMfaStatus(username) {
+    try {
+      const response = await authApi.get('/status/', {
+        params: { username }
+      })
+      return {
+        success: true,
+        data: response.data
+      }
+    } catch (error) {
+      console.error('MFA status error:', error)
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Failed to get MFA status'
+      }
+    }
+  },
+
+  /**
    * Get current user from localStorage
    */
   getCurrentUser() {
     try {
-      const { value } = getFromStorage(USER_STORAGE_KEYS)
-      return value ? JSON.parse(value) : null
+      const userStr = localStorage.getItem('current_user')
+      return userStr ? JSON.parse(userStr) : null
     } catch (error) {
       console.error('Error getting current user:', error)
       return null
@@ -219,7 +254,7 @@ export default {
    * Get current session token
    */
   getSessionToken() {
-    return getStoredToken()
+    return localStorage.getItem('session_token')
   },
 
   /**
@@ -228,8 +263,7 @@ export default {
   isAuthenticated() {
     const token = this.getSessionToken()
     const user = this.getCurrentUser()
-    const grcAuthFlag = localStorage.getItem('isAuthenticated') === 'true' || localStorage.getItem('is_logged_in') === 'true'
-    return !!user && (!!token || grcAuthFlag)
+    return !!(token && user)
   }
 }
 

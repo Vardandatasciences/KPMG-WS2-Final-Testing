@@ -711,53 +711,31 @@ export default {
         }
 
         // Add current user's ID to filters to get only their assigned approvals
-        // Try multiple possible user ID fields and ensure it's converted to number
-        const userId = currentUser.userid || currentUser.user_id || currentUser.UserId
+        const userId = currentUser.userid || currentUser.user_id
         if (!userId) {
           console.error('No user ID found in current user data:', currentUser)
           assignedApprovals.value = []
           return
         }
 
-        // Convert to number to ensure type consistency with backend
-        const userIdNum = typeof userId === 'string' ? parseInt(userId, 10) : userId
-        if (isNaN(userIdNum)) {
-          console.error('Invalid user ID format:', userId)
-          assignedApprovals.value = []
-          return
-        }
-
         const filtersWithUser = {
           ...filters.value,
-          assignee_id: userIdNum
+          assignee_id: userId
         }
-        
-        console.log('🔍 Fetching assigned approvals for user ID:', userIdNum, 'with filters:', filtersWithUser)
         
         const response = await contractApprovalApi.getApprovals(filtersWithUser)
         
-        console.log('📋 API Response for user', userIdNum, ':', response)
-        console.log('📋 Response data:', response.data)
-        console.log('📋 Number of approvals:', response.data?.length || 0)
+        console.log('API Response for user', userId, ':', response)
         
         if (response.success && response.data) {
-          // Extra safety: ensure we only show approvals where current user is the ASSIGNEE
-          assignedApprovals.value = response.data.filter(a => {
-            const assigneeId = a.assignee_id || a.assignee || a.assigneeId
-            return String(assigneeId) === String(userIdNum)
-          })
-
-          console.log('✅ Assigned approvals set to:', assignedApprovals.value.length, 'items (filtered by assignee_id)')
-          if (assignedApprovals.value.length > 0) {
-            console.log('📄 Sample approval (assigned):', assignedApprovals.value[0])
-          }
+          assignedApprovals.value = response.data
+          console.log('Assigned approvals set to:', assignedApprovals.value)
         } else {
-          console.error('❌ Failed to fetch approvals:', response.message || 'Unknown error')
+          console.error('Failed to fetch approvals:', response.message || 'Unknown error')
           assignedApprovals.value = []
         }
       } catch (error) {
-        console.error('❌ Error fetching my approvals:', error)
-        console.error('❌ Error details:', error.response?.data || error.message)
+        console.error('Error fetching my approvals:', error)
         assignedApprovals.value = []
       } finally {
         isLoadingApprovals.value = false
@@ -776,53 +754,28 @@ export default {
         }
 
         // Add current user's ID to filters to get only their assigned reviews
-        // Try multiple possible user ID fields and ensure it's converted to number
-        const userId = currentUser.userid || currentUser.user_id || currentUser.UserId
+        const userId = currentUser.userid || currentUser.user_id
         if (!userId) {
           console.error('No user ID found in current user data:', currentUser)
           reviewApprovals.value = []
           return
         }
 
-        // Convert to number to ensure type consistency with backend
-        const userIdNum = typeof userId === 'string' ? parseInt(userId, 10) : userId
-        if (isNaN(userIdNum)) {
-          console.error('Invalid user ID format:', userId)
-          reviewApprovals.value = []
-          return
-        }
-
         const filtersWithUser = {
           ...filters.value,
-          assigner_id: userIdNum
+          assigner_id: userId
         }
-        
-        console.log('🔍 Fetching review approvals for assigner ID:', userIdNum, 'with filters:', filtersWithUser)
         
         const response = await contractApprovalApi.getAssignerApprovals(filtersWithUser)
         
-        console.log('📋 API Response for assigner', userIdNum, ':', response)
-        console.log('📋 Response data:', response.data)
-        console.log('📋 Number of reviews:', response.data?.length || 0)
-        
         if (response.success && response.data) {
-          // Extra safety: ensure we only show approvals where current user is the ASSIGNER
-          reviewApprovals.value = response.data.filter(a => {
-            const assignerId = a.assigner_id || a.assigner || a.assignerId
-            return String(assignerId) === String(userIdNum)
-          })
-
-          console.log('✅ Review approvals set to:', reviewApprovals.value.length, 'items (filtered by assigner_id)')
-          if (reviewApprovals.value.length > 0) {
-            console.log('📄 Sample review (assigner):', reviewApprovals.value[0])
-          }
+          reviewApprovals.value = response.data
         } else {
-          console.error('❌ Failed to fetch reviews:', response.message || 'Unknown error')
+          console.error('Failed to fetch reviews:', response.message || 'Unknown error')
           reviewApprovals.value = []
         }
       } catch (error) {
-        console.error('❌ Error fetching my reviews:', error)
-        console.error('❌ Error details:', error.response?.data || error.message)
+        console.error('Error fetching my reviews:', error)
         reviewApprovals.value = []
       } finally {
         isLoadingReviews.value = false
@@ -1080,7 +1033,7 @@ export default {
           // Set user info from store
           userInfo.value = {
             full_name: currentUser.full_name || `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim() || currentUser.username,
-            user_id: currentUser.userid || currentUser.user_id || currentUser.UserId,
+            user_id: currentUser.userid || currentUser.user_id,
             username: currentUser.username,
             role: currentUser.role || 'User'
           }
@@ -1126,7 +1079,7 @@ export default {
         console.log('User logged in, setting up component')
         userInfo.value = {
           full_name: newUser.full_name || `${newUser.first_name || ''} ${newUser.last_name || ''}`.trim() || newUser.username,
-          user_id: newUser.userid || newUser.user_id || newUser.UserId,
+          user_id: newUser.userid || newUser.user_id,
           username: newUser.username,
           role: newUser.role || 'User'
         }

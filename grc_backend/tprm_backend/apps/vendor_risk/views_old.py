@@ -79,7 +79,7 @@ class VendorLifecycleStageViewSet(VendorAuthenticationMixin, viewsets.ModelViewS
 
 class VendorRiskDashboardAPIView(APIView):
     """API view for vendor risk dashboard data with RBAC protection"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [SimpleAuthenticatedPermission]
     
     def get(self, request):
@@ -186,7 +186,7 @@ class VendorRiskDashboardAPIView(APIView):
 
 class VendorRisksAPIView(APIView):
     """API view for vendor risks with filtering and pagination with RBAC protection"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [SimpleAuthenticatedPermission]
     
     def get(self, request):
@@ -289,7 +289,7 @@ class VendorRisksAPIView(APIView):
 
 class VendorModulesAPIView(APIView):
     """API view for vendor modules with RBAC protection"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [SimpleAuthenticatedPermission]
     
     def get(self, request):
@@ -333,7 +333,7 @@ class VendorModulesAPIView(APIView):
 
 class VendorListAPIView(APIView):
     """API view for getting list of vendors with RBAC protection"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [SimpleAuthenticatedPermission]
     
     def get(self, request):
@@ -373,7 +373,7 @@ class VendorListAPIView(APIView):
 
 class VendorRiskGenerationAPIView(APIView):
     """API view for generating vendor risks using AI with RBAC protection"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [SimpleAuthenticatedPermission]
     
     def post(self, request):

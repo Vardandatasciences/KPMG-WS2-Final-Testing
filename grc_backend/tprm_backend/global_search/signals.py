@@ -149,19 +149,37 @@ def index_sla_data(sla_instance):
 def index_bcp_drp_data(bcp_drp_instance):
     """Index BCP/DRP data for search."""
     try:
+        # Use plan_name instead of title (Plan model doesn't have title attribute)
+        plan_title = getattr(bcp_drp_instance, 'plan_name', '') or getattr(bcp_drp_instance, 'strategy_name', '') or f"Plan {bcp_drp_instance.id}"
+        
+        # Use plan_scope as summary/description (Plan model doesn't have description attribute)
+        plan_summary = getattr(bcp_drp_instance, 'plan_scope', '') or ''
+        
+        # Build keywords from available fields
+        keywords_parts = [
+            getattr(bcp_drp_instance, 'status', ''),
+            getattr(bcp_drp_instance, 'plan_type', ''),
+            getattr(bcp_drp_instance, 'strategy_name', ''),
+            getattr(bcp_drp_instance, 'criticality', ''),
+        ]
+        keywords = ' '.join(filter(None, keywords_parts))
+        
         SearchIndex.create_or_update(
             entity_type='bcp_drp',
             entity_id=bcp_drp_instance.id,
-            title=bcp_drp_instance.title,
-            summary=bcp_drp_instance.description or '',
-            keywords=f"{bcp_drp_instance.status} {bcp_drp_instance.plan_type} {getattr(bcp_drp_instance, 'category', '')} {getattr(bcp_drp_instance, 'risk_level', '')}",
+            title=plan_title,
+            summary=plan_summary,
+            keywords=keywords,
             payload_json={
-                'status': bcp_drp_instance.status,
-                'plan_type': bcp_drp_instance.plan_type,
-                'category': getattr(bcp_drp_instance, 'category', ''),
-                'risk_level': getattr(bcp_drp_instance, 'risk_level', ''),
-                'vendor_name': getattr(bcp_drp_instance, 'vendor_name', ''),
-                'last_review_date': str(getattr(bcp_drp_instance, 'last_review_date', '')),
+                'status': getattr(bcp_drp_instance, 'status', ''),
+                'plan_type': getattr(bcp_drp_instance, 'plan_type', ''),
+                'plan_name': getattr(bcp_drp_instance, 'plan_name', ''),
+                'strategy_name': getattr(bcp_drp_instance, 'strategy_name', ''),
+                'criticality': getattr(bcp_drp_instance, 'criticality', ''),
+                'vendor_id': getattr(bcp_drp_instance, 'vendor_id', ''),
+                'version': getattr(bcp_drp_instance, 'version', ''),
+                'document_date': str(getattr(bcp_drp_instance, 'document_date', '')) if getattr(bcp_drp_instance, 'document_date', None) else '',
+                'ocr_extracted': getattr(bcp_drp_instance, 'ocr_extracted', False),
             }
         )
     except Exception as e:

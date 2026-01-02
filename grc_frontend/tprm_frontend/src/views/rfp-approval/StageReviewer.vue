@@ -75,7 +75,7 @@
                   :class="getStatusBadgeClass(stage.stage_status)"
                   class="px-3 py-1 text-sm font-medium rounded-full"
                 >
-                  {{ stage.stage_status }}
+                  {{ getStageStatusLabel(stage.stage_status) }}
                 </span>
                 <!-- Workflow Type Indicator -->
                 <span 
@@ -457,7 +457,7 @@
               <div class="space-y-6">
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-4">Decision</label>
-                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <!-- Approve Button -->
                     <button
                       @click="stageDecision.decision = 'APPROVE'"
@@ -483,34 +483,6 @@
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                         </svg>
                         <span>Approve</span>
-                      </div>
-                    </button>
-
-                    <!-- Reject Button -->
-                    <button
-                      @click="stageDecision.decision = 'REJECT'"
-                      :disabled="!canMakeDecision(stage)"
-                      :class="[
-                        'relative flex items-center justify-center px-4 py-3 rounded-lg border-2 transition-all duration-200 font-medium text-sm',
-                        stageDecision.decision === 'REJECT' 
-                          ? 'border-red-500 bg-red-50 text-red-700 shadow-sm' 
-                          : 'border-gray-200 bg-white text-gray-600 hover:border-red-300 hover:bg-red-25',
-                        !canMakeDecision(stage) ? 'opacity-50 cursor-not-allowed' : ''
-                      ]"
-                    >
-                      <div class="flex items-center space-x-2">
-                        <div :class="[
-                          'w-4 h-4 rounded-full border-2 flex items-center justify-center',
-                          stageDecision.decision === 'REJECT' 
-                            ? 'border-red-500 bg-red-500' 
-                            : 'border-gray-300'
-                        ]">
-                          <div v-if="stageDecision.decision === 'REJECT'" class="w-2 h-2 bg-white rounded-full"></div>
-                        </div>
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                        </svg>
-                        <span>Reject</span>
                       </div>
                     </button>
 
@@ -542,20 +514,6 @@
                       </div>
                     </button>
                   </div>
-                </div>
-
-                <div v-if="stageDecision.decision === 'REJECT'">
-                  <label class="block text-sm font-medium text-gray-700 mb-2">Rejection Reason</label>
-                  <textarea
-                      v-model="stageDecision.rejection_reason"
-                      :disabled="!canMakeDecision(stage)"
-                      placeholder="Please provide a reason for rejection..."
-                    :class="[
-                      'w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
-                      !canMakeDecision(stage) ? 'opacity-50 cursor-not-allowed bg-gray-100' : ''
-                    ]"
-                    rows="3"
-                  ></textarea>
                 </div>
 
                 <div v-if="stageDecision.decision === 'REQUEST_CHANGES'">
@@ -690,7 +648,7 @@
                   <div>
                     <h5 class="text-sm font-medium text-blue-800">Decision Submitted</h5>
                     <p class="text-sm text-blue-700 mt-1">
-                      Your decision has been submitted and sent to the next level. The stage is now {{ stage.stage_status ? stage.stage_status.toLowerCase() : 'unknown' }}.
+                      Your decision has been submitted and sent to the next level. The stage is now {{ getStageStatusLabel(stage.stage_status) }}.
                     </p>
                   </div>
                 </div>
@@ -705,14 +663,14 @@
                         :class="getStatusBadgeClass(stage.stage_status)"
                         class="ml-2 px-2 py-1 text-xs font-medium rounded-full"
                       >
-                          {{ stage.stage_status }}
+                      {{ getStageStatusLabel(stage.stage_status) }}
                       </span>
                     </p>
                     <p><strong class="text-gray-700">Completed:</strong> {{ formatDate(stage.completed_at) }}</p>
                   </div>
                   <div class="space-y-2">
-                    <p v-if="stage.rejection_reason"><strong class="text-gray-700">Reason:</strong> {{ stage.rejection_reason }}</p>
-                    <p v-if="stage.response_data && stage.response_data.comments"><strong class="text-gray-700">Comments:</strong> {{ stage.response_data.comments }}</p>
+                    <p v-if="stage.rejection_reason"><strong class="text-gray-700">Requested Changes:</strong> {{ stage.rejection_reason }}</p>
+                    <p v-if="stage.response_data && stage.response_data.comments"><strong class="text-gray-700">Additional Comments:</strong> {{ stage.response_data.comments }}</p>
                   </div>
                 </div>
                 </div>
@@ -726,9 +684,9 @@
                 <div class="h-px bg-gray-300 flex-1"></div>
               </div>
               <div class="space-y-2">
-                <p><strong class="text-gray-700">Status:</strong> {{ stage.stage_status }}</p>
+                <p><strong class="text-gray-700">Status:</strong> {{ getStageStatusLabel(stage.stage_status) }}</p>
                 <p v-if="stage.completed_at"><strong class="text-gray-700">Completed:</strong> {{ formatDate(stage.completed_at) }}</p>
-                <p v-if="stage.rejection_reason"><strong class="text-gray-700">Rejection Reason:</strong> {{ stage.rejection_reason }}</p>
+                <p v-if="stage.rejection_reason"><strong class="text-gray-700">Requested Changes:</strong> {{ stage.rejection_reason }}</p>
               </div>
               </div>
 
@@ -896,6 +854,7 @@ import PopupModal from '@/popup/PopupModal.vue'
 import { PopupService } from '@/popup/popupService'
 import { useNotifications } from '@/composables/useNotifications'
 import loggingService from '@/services/loggingService'
+import { getTprmApiUrl, getApiOrigin } from '@/utils/backendEnv'
 
 // Router
 const router = useRouter()
@@ -928,12 +887,11 @@ const getUrlParams = () => {
     const assignedStages = ref([])
     const allStagesForWorkflow = ref([]) // Store ALL stages including approved ones for checking dependencies
     const submitting = ref(false)
-    const stageDecision = reactive({
-      decision: '',
-      rejection_reason: '',
-      change_request: '',
-      comments: ''
-    })
+const stageDecision = reactive({
+  decision: '',
+  change_request: '',
+  comments: ''
+})
     const rfpDetails = ref({}) // Store complete RFP details
     const loadingRfpDetails = ref(false)
     const versionHistory = ref({}) // Store version history for each stage
@@ -1342,11 +1300,6 @@ const filterSequentialStages = async (stages) => {
         return
       }
 
-      if (stageDecision.decision === 'REJECT' && !stageDecision.rejection_reason) {
-        showMessage('Please provide a rejection reason', 'warning')
-        return
-      }
-
       if (stageDecision.decision === 'REQUEST_CHANGES' && !stageDecision.change_request) {
         showMessage('Please describe the changes needed', 'warning')
         return
@@ -1354,6 +1307,9 @@ const filterSequentialStages = async (stages) => {
 
       try {
         submitting.value = true
+
+        const isRequestChanges = stageDecision.decision === 'REQUEST_CHANGES'
+        const commentForApi = isRequestChanges ? stageDecision.change_request : stageDecision.comments
         
         const decisionData = {
           action: stageDecision.decision,
@@ -1362,7 +1318,6 @@ const filterSequentialStages = async (stages) => {
           response_data: {
             decision: stageDecision.decision,
             comments: stageDecision.comments,
-            rejection_reason: stageDecision.rejection_reason,
             change_request: stageDecision.change_request
           }
         }
@@ -1374,7 +1329,7 @@ const filterSequentialStages = async (stages) => {
           body: JSON.stringify({
             stage_id: stage.stage_id,
             status: stageDecision.decision,
-            comments: stageDecision.comments,
+            comments: commentForApi,
             response_data: decisionData.response_data
           })
         })
@@ -1389,7 +1344,6 @@ const filterSequentialStages = async (stages) => {
         // Reset form and refresh stages
         Object.assign(stageDecision, {
           decision: '',
-          rejection_reason: '',
           change_request: '',
           comments: ''
         })
@@ -1404,18 +1358,28 @@ const filterSequentialStages = async (stages) => {
       }
     }
 
-    const getStatusBadgeClass = (status) => {
+const getStatusBadgeClass = (status) => {
       const statusMap = {
         'PENDING': 'bg-yellow-100 text-yellow-800',
         'IN_PROGRESS': 'bg-blue-100 text-blue-800',
         'APPROVED': 'bg-green-100 text-green-800',
-        'REJECTED': 'bg-red-100 text-red-800',
+    'REJECTED': 'bg-amber-100 text-amber-800',
         'SKIPPED': 'bg-gray-100 text-gray-800',
         'EXPIRED': 'bg-red-100 text-red-800',
         'CANCELLED': 'bg-gray-100 text-gray-800'
       }
       return statusMap[status] || 'bg-gray-100 text-gray-800'
     }
+
+const getStageStatusLabel = (status) => {
+  if (!status) {
+    return 'Unknown'
+  }
+  if (status === 'REJECTED') {
+    return 'Request Changes'
+  }
+  return formatKey(status.toLowerCase())
+}
 
     const formatDate = (dateString) => {
       if (!dateString) return 'Not set'
@@ -1752,7 +1716,7 @@ const handleEvaluateProposal = async (stage) => {
       
        try {
          // Try to get proposal ID from backend
-         const response = await fetch(`http://localhost:8000/api/tprm/rfp-approval/get-proposal-id/${stage.approval_id}/`, {
+         const response = await fetch(getTprmApiUrl(`rfp-approval/get-proposal-id/${stage.approval_id}/`), {
            method: 'GET',
            headers: getAuthHeaders()
          })
@@ -1905,11 +1869,12 @@ const getDocumentUrl = (document) => {
   // If URL is relative, prepend backend URL
   if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
     // Check if it starts with /media/ or /static/
+    const apiOrigin = getApiOrigin() || 'https://grc-tprm.vardaands.com'
     if (url.startsWith('/media/') || url.startsWith('/static/')) {
-      url = `http://localhost:8000${url}`
+      url = `${apiOrigin}${url}`
     } else {
       // Assume it's a relative path, prepend backend URL
-      url = `http://localhost:8000/${url}`
+      url = `${apiOrigin}/${url}`
     }
   }
   
@@ -2047,7 +2012,7 @@ const getStageProgressClass = (stageNumber, currentStageOrder, currentStageStatu
     if (currentStageStatus === 'APPROVED') {
       return 'bg-green-500 text-white border-green-500'
     } else if (currentStageStatus === 'REJECTED') {
-      return 'bg-red-500 text-white border-red-500'
+    return 'bg-amber-500 text-white border-amber-500'
     } else if (currentStageStatus === 'IN_PROGRESS') {
       return 'bg-blue-500 text-white border-blue-500'
     } else {

@@ -61,7 +61,7 @@ from .forms import (
 
 # RBAC imports
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required
-from .rfp_authentication import UnifiedJWTAuthentication, SimpleAuthenticatedPermission, RFPAuthenticationMixin
+from .rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission, RFPAuthenticationMixin
 
 
 
@@ -70,7 +70,7 @@ from .rfp_authentication import UnifiedJWTAuthentication, SimpleAuthenticatedPer
 # ============================================================================
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_rfp_kpi_summary(request):
@@ -359,7 +359,7 @@ def get_rfp_kpi_summary(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_rfp_creation_rate(request):
@@ -489,7 +489,7 @@ def get_rfp_creation_rate(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_first_time_approval_rate(request):
@@ -698,7 +698,7 @@ def get_first_time_approval_rate(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_rfp_approval_time(request):
@@ -752,7 +752,7 @@ def get_rfp_approval_time(request):
         # Query RFPs that have been approved (status = APPROVED, PUBLISHED, or SUBMISSION_OPEN)
         # Calculate approval time using actual approval completion date from approval_requests table
         # Falls back to updated_at if no approval completion date is available
-        from tprm_backend.rfp_approval.models import ApprovalRequests
+        from rfp_approval.models import ApprovalRequests
         
         approved_rfps = RFP.objects.filter(
             status__in=['APPROVED', 'PUBLISHED', 'SUBMISSION_OPEN', 'EVALUATION', 'AWARDED'],
@@ -905,7 +905,7 @@ def get_rfp_approval_time(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_vendor_response_rate(request):
@@ -1081,7 +1081,7 @@ def get_vendor_response_rate(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_new_vs_existing_vendors(request):
@@ -1248,7 +1248,7 @@ def get_new_vs_existing_vendors(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_category_performance(request):
@@ -1273,96 +1273,73 @@ def get_category_performance(request):
     - Summary statistics per category
     """
     try:
-        from django.db.models import Avg, Count, Q, F, Case, When, Value, CharField
+        from .models import RFPEvaluationScore
+        from django.db.models import Avg, Count, Q, F
         from django.utils import timezone
         from datetime import timedelta
         import json
         
         print(f"[KPI] Calculating Category Performance KPI")
         
-        # Use Django ORM instead of raw SQL
+        # Use raw SQL for better performance and to avoid ORM issues
+        from django.db import connection
         
-        # Get vendor invitations with vendor information
-        invitations = VendorInvitation.objects.filter(
-            vendor_id__isnull=False
-        ).select_related('vendor', 'rfp')
+        with connection.cursor() as cursor:
+            # Get vendor invitations with categories and response data
+            query = """
+                SELECT 
+                    COALESCE(v.industry_sector, v.business_type, 'Uncategorized') as category,
+                    COUNT(DISTINCT vi.invitation_id) as total_invitations,
+                    COUNT(DISTINCT vi.vendor_id) as unique_vendors,
+                    COUNT(DISTINCT res.response_id) as total_responses,
+                    AVG(CASE WHEN res.response_id IS NOT NULL THEN 1.0 ELSE 0.0 END) * 100 as response_rate
+                FROM rfp_vendor_invitations vi
+                INNER JOIN vendors v ON vi.vendor_id = v.vendor_id
+                LEFT JOIN rfp_responses res ON vi.vendor_id = res.vendor_id AND vi.rfp_id = res.rfp_id
+                WHERE vi.vendor_id IS NOT NULL
+                GROUP BY COALESCE(v.industry_sector, v.business_type, 'Uncategorized')
+                HAVING COUNT(DISTINCT vi.vendor_id) >= 3
+                ORDER BY response_rate DESC
+            """
+            
+            cursor.execute(query)
+            category_rows = cursor.fetchall()
+            
+            print(f"[KPI] Found {len(category_rows)} categories with at least 3 vendors")
         
-        # Group by category using Python (since COALESCE is complex in ORM)
+        # Group by category and calculate metrics
         category_stats = {}
         
-        for invitation in invitations:
-            if not invitation.vendor:
-                continue
+        # Process category data from SQL query
+        for row in category_rows:
+            category, total_invitations, unique_vendors, total_responses, response_rate = row
+            category = category or 'Uncategorized'
             
-            # Get category from vendor
-            category = invitation.vendor.industry_sector or invitation.vendor.business_type or 'Uncategorized'
-            
-            if category not in category_stats:
-                category_stats[category] = {
-                    'category': category,
-                    'invitation_ids': set(),
-                    'vendor_ids': set(),
-                    'response_ids': set(),
-                    'quality_scores': []
-                }
-            
-            category_stats[category]['invitation_ids'].add(invitation.invitation_id)
-            if invitation.vendor_id:
-                category_stats[category]['vendor_ids'].add(invitation.vendor_id)
-            
-            # Check for responses
-            if invitation.rfp_id and invitation.vendor_id:
-                responses = RFPResponse.objects.filter(
-                    rfp_id=invitation.rfp_id,
-                    vendor_id=invitation.vendor_id
-                )
-                for response in responses:
-                    category_stats[category]['response_ids'].add(response.response_id)
+            category_stats[category] = {
+                'category': category,
+                'invitations': int(total_invitations or 0),
+                'responses': int(total_responses or 0),
+                'quality_scores': [],
+                'vendor_count': int(unique_vendors or 0)
+            }
         
-        # Convert sets to counts and filter categories with at least 3 vendors
-        filtered_stats = {}
-        for category, stats in category_stats.items():
-            vendor_count = len(stats['vendor_ids'])
-            if vendor_count >= 3:
-                filtered_stats[category] = {
-                    'category': category,
-                    'invitations': len(stats['invitation_ids']),
-                    'responses': len(stats['response_ids']),
-                    'quality_scores': [],
-                    'vendor_count': vendor_count,
-                    'vendor_ids': stats['vendor_ids']  # Keep for quality score query
-                }
-        
-        print(f"[KPI] Found {len(filtered_stats)} categories with at least 3 vendors")
-        
-        # Get quality scores for each category using Django ORM
-        for category, stats in filtered_stats.items():
+        # Get quality scores for each category
+        for category in category_stats.keys():
             # Get quality scores for responses in this category
-            vendor_ids = list(stats['vendor_ids'])
-            responses = RFPResponse.objects.filter(vendor_id__in=vendor_ids)
-            response_ids = list(responses.values_list('response_id', flat=True))
-            
-            if response_ids:
-                # Get average quality score for this category
-                scores = RFPEvaluationScore.objects.filter(
-                    response_id__in=response_ids,
-                    score_value__isnull=False
-                )
-                
-                # Filter out empty strings in Python
-                valid_scores = []
-                for score in scores:
-                    try:
-                        if score.score_value is not None and str(score.score_value).strip() != '':
-                            valid_scores.append(float(score.score_value))
-                    except (ValueError, TypeError):
-                        continue
-                
-                if valid_scores:
-                    avg_score = sum(valid_scores) / len(valid_scores)
-                    filtered_stats[category]['quality_scores'].append(avg_score)
-        
-        category_stats = filtered_stats
+            with connection.cursor() as cursor:
+                quality_query = """
+                    SELECT AVG(CAST(es.score_value AS DECIMAL(10,2))) as avg_score
+                    FROM rfp_evaluation_scores es
+                    INNER JOIN rfp_responses res ON es.response_id = res.response_id
+                    INNER JOIN vendors v ON res.vendor_id = v.vendor_id
+                    WHERE COALESCE(v.industry_sector, v.business_type, 'Uncategorized') = %s
+                    AND es.score_value IS NOT NULL
+                    AND CAST(es.score_value AS CHAR) != ''
+                """
+                cursor.execute(quality_query, [category])
+                quality_result = cursor.fetchone()
+                if quality_result and quality_result[0]:
+                    category_stats[category]['quality_scores'].append(float(quality_result[0]))
         
         # Calculate final metrics for each category
         scatter_data = []
@@ -1450,7 +1427,7 @@ def get_category_performance(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_award_acceptance_rate(request):
@@ -1613,7 +1590,7 @@ def get_award_acceptance_rate(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_reviewer_workload(request):
@@ -1647,7 +1624,7 @@ def get_reviewer_workload(request):
         from django.utils import timezone
         from datetime import timedelta
         from collections import defaultdict
-        from tprm_backend.rfp_approval.models import ApprovalStages, ApprovalRequests, ApprovalWorkflows
+        from rfp_approval.models import ApprovalStages, ApprovalRequests, ApprovalWorkflows
         
         print(f"[KPI] Calculating Reviewer Workload from approval_stages table (RFP workflows only)")
         
@@ -1875,7 +1852,7 @@ def get_reviewer_workload(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_vendor_conversion_funnel(request):
@@ -2063,7 +2040,7 @@ def get_vendor_conversion_funnel(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_evaluator_consistency(request):
@@ -2493,7 +2470,7 @@ def get_evaluator_consistency(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_evaluator_completion_time(request):
@@ -2521,7 +2498,7 @@ def get_evaluator_completion_time(request):
         from django.utils import timezone
         from datetime import timedelta
         from collections import defaultdict
-        from tprm_backend.rfp_approval.models import ApprovalStages
+        from rfp_approval.models import ApprovalStages
         
         print(f"[KPI] Calculating Evaluator Completion Time from approval_stages table")
         
@@ -2718,7 +2695,7 @@ def get_evaluator_completion_time(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_consensus_quality(request):
@@ -2734,37 +2711,38 @@ def get_consensus_quality(request):
         
         print("[KPI] Starting consensus quality calculation...")
         
-        # Use Django ORM instead of raw SQL
-        # Get all evaluation scores with evaluator and criteria information
-        # Note: Can't use exclude(score_value='') on DecimalField, so filter in Python
-        scores = RFPEvaluationScore.objects.filter(
-            score_value__isnull=False
-        ).order_by('response_id', 'criteria_id', 'evaluator_id')
-        
-        total_scores_check = scores.count()
-        print(f"[KPI] Total evaluation scores in database: {total_scores_check}")
-        
-        print("[KPI] Executing consensus quality query...")
-        rows = []
-        for score in scores:
-            try:
-                # Skip None or empty string values
-                if score.score_value is None or str(score.score_value).strip() == '':
-                    continue
-                score_float = float(score.score_value)
-                if score_float is not None:
-                    rows.append((
-                        score.response_id,
-                        score.criteria_id,
-                        score.evaluator_id,
-                        score.score_value
-                    ))
-            except (ValueError, TypeError):
-                continue
-        
-        print(f"[KPI] Found {len(rows)} evaluation score rows")
-        
-        if not rows:
+        with connection.cursor() as cursor:
+            # First check total scores
+            check_query = """
+                SELECT COUNT(*) as total_scores
+                FROM rfp_evaluation_scores
+                WHERE score_value IS NOT NULL
+                AND CAST(score_value AS CHAR) != ''
+            """
+            cursor.execute(check_query)
+            total_scores_check = cursor.fetchone()[0]
+            print(f"[KPI] Total evaluation scores in database: {total_scores_check}")
+            
+            # Get all evaluation scores with evaluator and criteria information
+            query = """
+                SELECT 
+                    r.response_id,
+                    r.criteria_id,
+                    r.evaluator_id,
+                    r.score_value
+                FROM rfp_evaluation_scores r
+                WHERE r.score_value IS NOT NULL
+                AND CAST(r.score_value AS CHAR) != ''
+                ORDER BY r.response_id, r.criteria_id, r.evaluator_id
+            """
+            
+            print("[KPI] Executing consensus quality query...")
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            
+            print(f"[KPI] Found {len(rows)} evaluation score rows")
+            
+            if not rows:
                 print("[KPI] [WARNING] No evaluation scores found in database")
                 return JsonResponse({
                     'success': True,
@@ -2783,176 +2761,176 @@ def get_consensus_quality(request):
                     },
                     'message': 'No evaluation scores found. Please complete evaluations to see consensus data.'
                 })
-        
-        # Process scores and group by response-criteria pairs
-        consensus_data = defaultdict(list)
-        all_evaluator_ids = set()
-        all_criteria_ids = set()
-        
-        for row in rows:
-            response_id, criteria_id, evaluator_id, score_value = row
             
-            # Skip invalid scores
-            try:
-                score_float = float(score_value) if score_value is not None else None
-                if score_float is None:
+            # Process scores and group by response-criteria pairs
+            consensus_data = defaultdict(list)
+            all_evaluator_ids = set()
+            all_criteria_ids = set()
+            
+            for row in rows:
+                response_id, criteria_id, evaluator_id, score_value = row
+                
+                # Skip invalid scores
+                try:
+                    score_float = float(score_value) if score_value is not None else None
+                    if score_float is None:
+                        continue
+                except (ValueError, TypeError):
+                    print(f"[KPI] Skipping invalid score: {score_value}")
                     continue
-            except (ValueError, TypeError):
-                print(f"[KPI] Skipping invalid score: {score_value}")
-                continue
+                
+                key = f"{response_id}_{criteria_id}"
+                consensus_data[key].append({
+                    'evaluator_id': evaluator_id,
+                    'score': score_float
+                })
+                all_evaluator_ids.add(evaluator_id)
+                all_criteria_ids.add(criteria_id)
             
-            key = f"{response_id}_{criteria_id}"
-            consensus_data[key].append({
-                'evaluator_id': evaluator_id,
-                'score': score_float
-            })
-            all_evaluator_ids.add(evaluator_id)
-            all_criteria_ids.add(criteria_id)
-        
-        print(f"[KPI] Grouped into {len(consensus_data)} criteria-response pairs")
-        print(f"[KPI] Unique evaluators: {len(all_evaluator_ids)}, Unique criteria: {len(all_criteria_ids)}")
-        
-        # Calculate inter-evaluator agreement for each criteria-response pair
-        criteria_consensus = []
-        evaluator_agreement = defaultdict(list)
-        skipped_single_evaluator = 0
-        
-        for key, evaluator_scores in consensus_data.items():
-            if len(evaluator_scores) < 2:
-                skipped_single_evaluator += 1
-                continue  # Need at least 2 evaluators for consensus
+            print(f"[KPI] Grouped into {len(consensus_data)} criteria-response pairs")
+            print(f"[KPI] Unique evaluators: {len(all_evaluator_ids)}, Unique criteria: {len(all_criteria_ids)}")
             
-            scores_list = [s['score'] for s in evaluator_scores]
+            # Calculate inter-evaluator agreement for each criteria-response pair
+            criteria_consensus = []
+            evaluator_agreement = defaultdict(list)
+            skipped_single_evaluator = 0
             
-            # Calculate coefficient of variation (CV) as a measure of consensus
-            # Lower CV = higher consensus
-            mean_score = sum(scores_list) / len(scores_list)
-            variance = sum((s - mean_score) ** 2 for s in scores_list) / len(scores_list)
-            std_dev = math.sqrt(variance) if variance > 0 else 0
+            for key, evaluator_scores in consensus_data.items():
+                if len(evaluator_scores) < 2:
+                    skipped_single_evaluator += 1
+                    continue  # Need at least 2 evaluators for consensus
+                
+                scores_list = [s['score'] for s in evaluator_scores]
+                
+                # Calculate coefficient of variation (CV) as a measure of consensus
+                # Lower CV = higher consensus
+                mean_score = sum(scores_list) / len(scores_list)
+                variance = sum((s - mean_score) ** 2 for s in scores_list) / len(scores_list)
+                std_dev = math.sqrt(variance) if variance > 0 else 0
+                
+                # Normalize consensus (0 = no consensus, 1 = perfect consensus)
+                # Using inverse of CV, capped at 1
+                if mean_score > 0:
+                    cv = std_dev / mean_score
+                    consensus = 1 / (1 + cv)  # Inverse relationship
+                else:
+                    consensus = 1.0 if std_dev == 0 else 0.0
+                
+                # Extract response and criteria from key
+                parts = key.split('_')
+                response_id = int(parts[0])
+                criteria_id = int(parts[1])
+                
+                criteria_consensus.append({
+                    'response_id': response_id,
+                    'criteria_id': criteria_id,
+                    'consensus': round(consensus, 3),
+                    'mean_score': round(mean_score, 2),
+                    'std_dev': round(std_dev, 2),
+                    'num_evaluators': len(evaluator_scores)
+                })
+                
+                # Track evaluator agreement
+                for eval_score in evaluator_scores:
+                    evaluator_agreement[eval_score['evaluator_id']].append(consensus)
             
-            # Normalize consensus (0 = no consensus, 1 = perfect consensus)
-            # Using inverse of CV, capped at 1
-            if mean_score > 0:
-                cv = std_dev / mean_score
-                consensus = 1 / (1 + cv)  # Inverse relationship
+            print(f"[KPI] Calculated consensus for {len(criteria_consensus)} criteria pairs")
+            print(f"[KPI] [WARNING] Skipped {skipped_single_evaluator} pairs with only 1 evaluator")
+            
+            # Calculate overall consensus
+            if criteria_consensus:
+                overall_consensus = sum(c['consensus'] for c in criteria_consensus) / len(criteria_consensus)
             else:
-                consensus = 1.0 if std_dev == 0 else 0.0
+                overall_consensus = 0
+                print("[KPI] [WARNING] No consensus data calculated - need multiple evaluators per criteria")
             
-            # Extract response and criteria from key
-            parts = key.split('_')
-            response_id = int(parts[0])
-            criteria_id = int(parts[1])
+            # Calculate average consensus per evaluator
+            evaluator_agreement_list = []
+            for evaluator_id, consensus_values in evaluator_agreement.items():
+                evaluator_agreement_list.append({
+                    'evaluator_id': evaluator_id,
+                    'avg_consensus': round(sum(consensus_values) / len(consensus_values), 3),
+                    'num_evaluations': len(consensus_values)
+                })
             
-            criteria_consensus.append({
-                'response_id': response_id,
-                'criteria_id': criteria_id,
-                'consensus': round(consensus, 3),
-                'mean_score': round(mean_score, 2),
-                'std_dev': round(std_dev, 2),
-                'num_evaluators': len(evaluator_scores)
-            })
+            # Sort by consensus (highest first)
+            evaluator_agreement_list.sort(key=lambda x: x['avg_consensus'], reverse=True)
             
-            # Track evaluator agreement
-            for eval_score in evaluator_scores:
-                evaluator_agreement[eval_score['evaluator_id']].append(consensus)
-        
-        print(f"[KPI] Calculated consensus for {len(criteria_consensus)} criteria pairs")
-        print(f"[KPI] [WARNING] Skipped {skipped_single_evaluator} pairs with only 1 evaluator")
-        
-        # Calculate overall consensus
-        if criteria_consensus:
-            overall_consensus = sum(c['consensus'] for c in criteria_consensus) / len(criteria_consensus)
-        else:
-            overall_consensus = 0
-            print("[KPI] [WARNING] No consensus data calculated - need multiple evaluators per criteria")
-        
-        # Calculate average consensus per evaluator
-        evaluator_agreement_list = []
-        for evaluator_id, consensus_values in evaluator_agreement.items():
-            evaluator_agreement_list.append({
-                'evaluator_id': evaluator_id,
-                'avg_consensus': round(sum(consensus_values) / len(consensus_values), 3),
-                'num_evaluations': len(consensus_values)
-            })
-        
-        # Sort by consensus (highest first)
-        evaluator_agreement_list.sort(key=lambda x: x['avg_consensus'], reverse=True)
-        
-        # Generate heatmap data from actual consensus values
-        # Create a grid that represents actual consensus data
-        heatmap_data = []
-        if criteria_consensus:
-            # Use actual consensus values to populate the heatmap
-            grid_size = 5
-            consensus_values_flat = [c['consensus'] for c in criteria_consensus]
+            # Generate heatmap data from actual consensus values
+            # Create a grid that represents actual consensus data
+            heatmap_data = []
+            if criteria_consensus:
+                # Use actual consensus values to populate the heatmap
+                grid_size = 5
+                consensus_values_flat = [c['consensus'] for c in criteria_consensus]
+                
+                for i in range(grid_size):
+                    row = []
+                    for j in range(grid_size):
+                        # Map actual consensus values to grid positions
+                        idx = (i * grid_size + j) % len(consensus_values_flat) if consensus_values_flat else 0
+                        if consensus_values_flat:
+                            value = consensus_values_flat[idx]
+                        else:
+                            value = 0.0
+                        
+                        row.append({
+                            'value': round(value, 2),
+                            'x': j,
+                            'y': i,
+                            'label': f"Consensus: {(value * 100):.1f}%"
+                        })
+                    heatmap_data.append(row)
+                
+                print(f"[KPI] Generated {len(heatmap_data)}x{len(heatmap_data[0]) if heatmap_data else 0} heatmap from actual consensus data")
+            else:
+                print("[KPI] No consensus data to generate heatmap")
             
-            for i in range(grid_size):
-                row = []
-                for j in range(grid_size):
-                    # Map actual consensus values to grid positions
-                    idx = (i * grid_size + j) % len(consensus_values_flat) if consensus_values_flat else 0
-                    if consensus_values_flat:
-                        value = consensus_values_flat[idx]
-                    else:
-                        value = 0.0
-                    
-                    row.append({
-                        'value': round(value, 2),
-                        'x': j,
-                        'y': i,
-                        'label': f"Consensus: {(value * 100):.1f}%"
-                    })
-                heatmap_data.append(row)
+            # Get summary statistics
+            total_evaluations = len(rows)
+            unique_criteria = len(all_criteria_ids)
+            unique_evaluators = len(all_evaluator_ids)
             
-            print(f"[KPI] Generated {len(heatmap_data)}x{len(heatmap_data[0]) if heatmap_data else 0} heatmap from actual consensus data")
-        else:
-            print("[KPI] No consensus data to generate heatmap")
-        
-        # Get summary statistics
-        total_evaluations = len(rows)
-        unique_criteria = len(all_criteria_ids)
-        unique_evaluators = len(all_evaluator_ids)
-        
-        # Check if we have any consensus data
-        if not criteria_consensus:
-            print("[KPI] [WARNING] No consensus data - returning empty state")
+            # Check if we have any consensus data
+            if not criteria_consensus:
+                print("[KPI] [WARNING] No consensus data - returning empty state")
+                return JsonResponse({
+                    'success': True,
+                    'consensus_quality': {
+                        'heatmap_data': [],
+                        'overall_consensus': 0,
+                        'criteria_consensus': [],
+                        'evaluator_agreement': [],
+                        'summary': {
+                            'total_evaluations': total_evaluations,
+                            'total_criteria': unique_criteria,
+                            'total_evaluators': unique_evaluators,
+                            'avg_consensus': 0,
+                            'consensus_interpretation': f'No consensus data - need multiple evaluators per criteria. Found {total_evaluations} evaluations from {unique_evaluators} evaluators across {unique_criteria} criteria.'
+                        }
+                    },
+                    'message': f'Found {total_evaluations} evaluations, but need at least 2 evaluators scoring the same criteria to calculate consensus.'
+                })
+            
+            print(f"[KPI] [OK] Returning consensus data: {len(criteria_consensus)} pairs, overall consensus: {overall_consensus}")
+            print(f"[KPI] Heatmap data: {len(heatmap_data)} rows")
+            
             return JsonResponse({
                 'success': True,
                 'consensus_quality': {
-                    'heatmap_data': [],
-                    'overall_consensus': 0,
-                    'criteria_consensus': [],
-                    'evaluator_agreement': [],
+                    'heatmap_data': heatmap_data,
+                    'overall_consensus': round(overall_consensus, 3),
+                    'criteria_consensus': criteria_consensus[:10],  # Top 10 for preview
+                    'evaluator_agreement': evaluator_agreement_list[:10],  # Top 10 evaluators
                     'summary': {
                         'total_evaluations': total_evaluations,
                         'total_criteria': unique_criteria,
                         'total_evaluators': unique_evaluators,
-                        'avg_consensus': 0,
-                        'consensus_interpretation': f'No consensus data - need multiple evaluators per criteria. Found {total_evaluations} evaluations from {unique_evaluators} evaluators across {unique_criteria} criteria.'
+                        'avg_consensus': round(overall_consensus, 3),
+                        'consensus_interpretation': get_consensus_interpretation(overall_consensus)
                     }
-                },
-                'message': f'Found {total_evaluations} evaluations, but need at least 2 evaluators scoring the same criteria to calculate consensus.'
-            })
-        
-        print(f"[KPI] [OK] Returning consensus data: {len(criteria_consensus)} pairs, overall consensus: {overall_consensus}")
-        print(f"[KPI] Heatmap data: {len(heatmap_data)} rows")
-        
-        return JsonResponse({
-            'success': True,
-            'consensus_quality': {
-                'heatmap_data': heatmap_data,
-                'overall_consensus': round(overall_consensus, 3),
-                'criteria_consensus': criteria_consensus[:10],  # Top 10 for preview
-                'evaluator_agreement': evaluator_agreement_list[:10],  # Top 10 evaluators
-                'summary': {
-                    'total_evaluations': total_evaluations,
-                    'total_criteria': unique_criteria,
-                    'total_evaluators': unique_evaluators,
-                    'avg_consensus': round(overall_consensus, 3),
-                    'consensus_interpretation': get_consensus_interpretation(overall_consensus)
                 }
-            }
-        })
+            })
     
     except Exception as e:
         import traceback
@@ -2983,7 +2961,7 @@ def get_consensus_interpretation(consensus_score):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_score_distribution(request):
@@ -3162,7 +3140,7 @@ def get_score_distribution(request):
         }, status=500)
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_criteria_effectiveness(request):
@@ -3177,74 +3155,61 @@ def get_criteria_effectiveness(request):
         
         print("[KPI] Starting criteria effectiveness calculation...")
         
-        # Use Django ORM instead of raw SQL
-        # First, check if we have any evaluation scores at all
-        total_scores_check = RFPEvaluationScore.objects.filter(score_value__isnull=False).count()
-        print(f"[KPI] Total evaluation scores in database: {total_scores_check}")
-        
-        # Get all completed evaluations with scores using Django ORM
-        # Note: Can't use exclude(score_value='') on DecimalField, so filter in Python
-        scores = RFPEvaluationScore.objects.filter(
-            score_value__isnull=False
-        ).order_by('criteria_id', 'response_id')
-        
-        print("[KPI] Executing criteria effectiveness query...")
-        
-        # Pre-fetch related objects for efficiency
-        criteria_ids = scores.values_list('criteria_id', flat=True).distinct()
-        response_ids = scores.values_list('response_id', flat=True).distinct()
-        
-        criteria_map = {c.criteria_id: c for c in RFPEvaluationCriteria.objects.filter(criteria_id__in=criteria_ids)}
-        responses_map = {r.response_id: r for r in RFPResponse.objects.filter(response_id__in=response_ids)}
-        rfp_ids = [r.rfp_id for r in responses_map.values() if r.rfp_id]
-        rfps_map = {r.rfp_id: r for r in RFP.objects.filter(rfp_id__in=rfp_ids)}
-        
-        # Build rows list from ORM queryset
-        rows = []
-        for score in scores:
-            try:
-                criteria = criteria_map.get(score.criteria_id)
-                response = responses_map.get(score.response_id)
-                
-                if not criteria or not response:
-                    continue
-                
-                rfp = rfps_map.get(response.rfp_id)
-                if not rfp:
-                    continue
-                
-                # Skip None or empty string values
-                if score.score_value is None or str(score.score_value).strip() == '':
-                    continue
-                score_float = float(score.score_value)
-                if score_float is not None:
-                    rows.append((
-                        score.criteria_id,
-                        criteria.criteria_name,
-                        criteria.weight_percentage,
-                        score.score_value,
-                        response.response_id,
-                        response.rfp_id,
-                        rfp.final_evaluation_score,
-                        score.evaluator_id,
-                        rfp.status
-                    ))
-            except (ValueError, TypeError) as e:
-                continue
-        
-        print(f"[KPI] Found {len(rows)} evaluation score rows")
-        
-        if not rows:
-            print("[KPI] [WARNING] No evaluation scores found matching criteria")
-            # Check what statuses exist using Django ORM
-            status_counts = RFP.objects.filter(
-                rfpresponse__rfpevaluationscore__score_value__isnull=False
-            ).values('status').annotate(count=Count('status')).distinct()
+        with connection.cursor() as cursor:
+            # First, check if we have any evaluation scores at all
+            check_query = """
+                SELECT COUNT(*) as total_scores
+                FROM rfp_evaluation_scores
+                WHERE score_value IS NOT NULL
+            """
+            cursor.execute(check_query)
+            total_scores_check = cursor.fetchone()[0]
+            print(f"[KPI] Total evaluation scores in database: {total_scores_check}")
             
-            status_list = [(s['status'], s['count']) for s in status_counts]
-            print(f"[KPI] RFP statuses with evaluation scores: {status_list}")
+            # Get all completed evaluations with scores
+            # Include all RFPs with evaluation scores, regardless of status
+            query = """
+                SELECT 
+                    r.criteria_id,
+                    c.criteria_name,
+                    c.weight_percentage,
+                    r.score_value,
+                    res.response_id,
+                    res.rfp_id,
+                    rfp.final_evaluation_score,
+                    r.evaluator_id,
+                    rfp.status as rfp_status
+                FROM rfp_evaluation_scores r
+                INNER JOIN rfp_evaluation_criteria c ON r.criteria_id = c.criteria_id
+                INNER JOIN rfp_responses res ON r.response_id = res.response_id
+                INNER JOIN rfps rfp ON res.rfp_id = rfp.rfp_id
+                WHERE r.score_value IS NOT NULL
+                AND CAST(r.score_value AS CHAR) != ''
+                ORDER BY r.criteria_id, res.response_id
+            """
             
-            return JsonResponse({
+            print("[KPI] Executing criteria effectiveness query...")
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            
+            print(f"[KPI] Found {len(rows)} evaluation score rows")
+            
+            if not rows:
+                print("[KPI] [WARNING] No evaluation scores found matching criteria")
+                # Check what statuses exist
+                status_check_query = """
+                    SELECT DISTINCT rfp.status, COUNT(*) as count
+                    FROM rfps rfp
+                    INNER JOIN rfp_responses res ON rfp.rfp_id = res.rfp_id
+                    INNER JOIN rfp_evaluation_scores r ON res.response_id = r.response_id
+                    WHERE r.score_value IS NOT NULL
+                    GROUP BY rfp.status
+                """
+                cursor.execute(status_check_query)
+                status_counts = cursor.fetchall()
+                print(f"[KPI] RFP statuses with evaluation scores: {status_counts}")
+                
+                return JsonResponse({
                     'success': True,
                     'message': 'No evaluation data available for criteria effectiveness analysis',
                     'criteria_effectiveness': {
@@ -3263,15 +3228,15 @@ def get_criteria_effectiveness(request):
                         }
                     }
                 })
-        
-        # Organize data by criteria and response
-        criteria_data = defaultdict(lambda: defaultdict(list))  # criteria_id -> response_id -> [scores]
-        criteria_info = {}  # criteria_id -> {name, weight}
-        response_final_scores = {}  # response_id -> final_score
-        
-        print(f"[KPI] Processing {len(rows)} rows...")
-        
-        for row in rows:
+            
+            # Organize data by criteria and response
+            criteria_data = defaultdict(lambda: defaultdict(list))  # criteria_id -> response_id -> [scores]
+            criteria_info = {}  # criteria_id -> {name, weight}
+            response_final_scores = {}  # response_id -> final_score
+            
+            print(f"[KPI] Processing {len(rows)} rows...")
+            
+            for row in rows:
                 criteria_id, criteria_name, weight, score, response_id, rfp_id, final_score, evaluator_id, rfp_status = row
                 
                 # Skip invalid scores
@@ -3293,202 +3258,202 @@ def get_criteria_effectiveness(request):
                         response_final_scores[response_id] = float(final_score) if final_score else None
                     except (ValueError, TypeError):
                         response_final_scores[response_id] = None
-        
-        print(f"[KPI] Organized data: {len(criteria_data)} unique criteria, {len(response_final_scores)} unique responses")
-        
-        # Calculate average scores per criteria per response
-        criteria_avg_scores = {}
-        for criteria_id, response_scores in criteria_data.items():
-            criteria_avg_scores[criteria_id] = {}
-            for response_id, scores in response_scores.items():
-                criteria_avg_scores[criteria_id][response_id] = np.mean(scores)
-        
-        # Get unique criteria names (not IDs) to avoid duplicates
-        # Group by criteria name instead of criteria_id
-        criteria_name_to_ids = defaultdict(list)  # name -> [criteria_ids]
-        for criteria_id in criteria_avg_scores.keys():
-            criteria_name = criteria_info[criteria_id]['name']
-            criteria_name_to_ids[criteria_name].append(criteria_id)
-        
-        # Get unique criteria names sorted
-        unique_criteria_names = sorted(criteria_name_to_ids.keys())
-        print(f"[KPI] Found {len(unique_criteria_names)} unique criteria names (from {len(criteria_avg_scores)} criteria IDs)")
-        
-        # Build aggregated scores by criteria name (combine scores from same-named criteria across RFPs)
-        criteria_name_avg_scores = {}
-        for criteria_name in unique_criteria_names:
-            criteria_name_avg_scores[criteria_name] = {}
-            # Aggregate scores from all criteria_ids with this name
-            for criteria_id in criteria_name_to_ids[criteria_name]:
-                for response_id, score in criteria_avg_scores[criteria_id].items():
-                    if response_id not in criteria_name_avg_scores[criteria_name]:
-                        criteria_name_avg_scores[criteria_name][response_id] = []
-                    criteria_name_avg_scores[criteria_name][response_id].append(score)
-            # Average if multiple scores per response
-            for response_id in criteria_name_avg_scores[criteria_name]:
-                scores_list = criteria_name_avg_scores[criteria_name][response_id]
-                criteria_name_avg_scores[criteria_name][response_id] = np.mean(scores_list)
-        
-        all_response_ids = sorted(set(response_final_scores.keys()))
-        
-        # Calculate overall aggregated correlations instead of full matrix
-        # For KPI display, we only need summary metrics
-        num_criteria = len(unique_criteria_names)
-        
-        # Calculate overall correlation statistics
-        all_pairwise_correlations = []
-        top_correlations = []  # Top 5 strongest correlations
-        
-        print(f"[KPI] Calculating overall correlation statistics for {num_criteria} unique criteria")
-        
-        # Calculate correlations between all pairs (for summary stats)
-        for i, criteria_name_i in enumerate(unique_criteria_names):
-            for j, criteria_name_j in enumerate(unique_criteria_names[i+1:], start=i+1):
-                # Get scores for both criteria for common responses
-                scores_i = []
-                scores_j = []
-                for response_id in all_response_ids:
-                    if response_id in criteria_name_avg_scores[criteria_name_i] and response_id in criteria_name_avg_scores[criteria_name_j]:
-                        scores_i.append(criteria_name_avg_scores[criteria_name_i][response_id])
-                        scores_j.append(criteria_name_avg_scores[criteria_name_j][response_id])
+            
+            print(f"[KPI] Organized data: {len(criteria_data)} unique criteria, {len(response_final_scores)} unique responses")
+            
+            # Calculate average scores per criteria per response
+            criteria_avg_scores = {}
+            for criteria_id, response_scores in criteria_data.items():
+                criteria_avg_scores[criteria_id] = {}
+                for response_id, scores in response_scores.items():
+                    criteria_avg_scores[criteria_id][response_id] = np.mean(scores)
+            
+            # Get unique criteria names (not IDs) to avoid duplicates
+            # Group by criteria name instead of criteria_id
+            criteria_name_to_ids = defaultdict(list)  # name -> [criteria_ids]
+            for criteria_id in criteria_avg_scores.keys():
+                criteria_name = criteria_info[criteria_id]['name']
+                criteria_name_to_ids[criteria_name].append(criteria_id)
+            
+            # Get unique criteria names sorted
+            unique_criteria_names = sorted(criteria_name_to_ids.keys())
+            print(f"[KPI] Found {len(unique_criteria_names)} unique criteria names (from {len(criteria_avg_scores)} criteria IDs)")
+            
+            # Build aggregated scores by criteria name (combine scores from same-named criteria across RFPs)
+            criteria_name_avg_scores = {}
+            for criteria_name in unique_criteria_names:
+                criteria_name_avg_scores[criteria_name] = {}
+                # Aggregate scores from all criteria_ids with this name
+                for criteria_id in criteria_name_to_ids[criteria_name]:
+                    for response_id, score in criteria_avg_scores[criteria_id].items():
+                        if response_id not in criteria_name_avg_scores[criteria_name]:
+                            criteria_name_avg_scores[criteria_name][response_id] = []
+                        criteria_name_avg_scores[criteria_name][response_id].append(score)
+                # Average if multiple scores per response
+                for response_id in criteria_name_avg_scores[criteria_name]:
+                    scores_list = criteria_name_avg_scores[criteria_name][response_id]
+                    criteria_name_avg_scores[criteria_name][response_id] = np.mean(scores_list)
+            
+            all_response_ids = sorted(set(response_final_scores.keys()))
+            
+            # Calculate overall aggregated correlations instead of full matrix
+            # For KPI display, we only need summary metrics
+            num_criteria = len(unique_criteria_names)
+            
+            # Calculate overall correlation statistics
+            all_pairwise_correlations = []
+            top_correlations = []  # Top 5 strongest correlations
+            
+            print(f"[KPI] Calculating overall correlation statistics for {num_criteria} unique criteria")
+            
+            # Calculate correlations between all pairs (for summary stats)
+            for i, criteria_name_i in enumerate(unique_criteria_names):
+                for j, criteria_name_j in enumerate(unique_criteria_names[i+1:], start=i+1):
+                    # Get scores for both criteria for common responses
+                    scores_i = []
+                    scores_j = []
+                    for response_id in all_response_ids:
+                        if response_id in criteria_name_avg_scores[criteria_name_i] and response_id in criteria_name_avg_scores[criteria_name_j]:
+                            scores_i.append(criteria_name_avg_scores[criteria_name_i][response_id])
+                            scores_j.append(criteria_name_avg_scores[criteria_name_j][response_id])
+                    
+                    if len(scores_i) > 1:
+                        correlation = np.corrcoef(scores_i, scores_j)[0, 1]
+                        if not np.isnan(correlation):
+                            all_pairwise_correlations.append(correlation)
+                            top_correlations.append({
+                                'criteria_1': criteria_name_i,
+                                'criteria_2': criteria_name_j,
+                                'correlation': round(correlation, 3)
+                            })
+            
+            # Sort and get top correlations
+            top_correlations.sort(key=lambda x: abs(x['correlation']), reverse=True)
+            top_correlations = top_correlations[:5]  # Top 5
+            
+            # Create simplified matrix representation (just for structure, not full display)
+            # For KPI, we'll return a 3x3 summary matrix showing overall correlation strength
+            correlation_matrix = []
+            criteria_names = unique_criteria_names[:3] if len(unique_criteria_names) >= 3 else unique_criteria_names  # Max 3 for summary
+            
+            # Calculate average correlation strength categories
+            avg_correlation = np.mean([abs(c) for c in all_pairwise_correlations]) if all_pairwise_correlations else 0.0
+            strong_correlation_count = sum(1 for c in all_pairwise_correlations if abs(c) > 0.7)
+            moderate_correlation_count = sum(1 for c in all_pairwise_correlations if 0.3 < abs(c) <= 0.7)
+            weak_correlation_count = sum(1 for c in all_pairwise_correlations if abs(c) <= 0.3)
+            
+            # Create a simple 3x3 summary matrix (if we have at least 3 criteria)
+            if len(unique_criteria_names) >= 3:
+                for i in range(3):
+                    row = []
+                    for j in range(3):
+                        if i == j:
+                            row.append(1.0)
+                        else:
+                            # Use average correlation as representative
+                            row.append(round(avg_correlation, 3))
+                    correlation_matrix.append(row)
+            else:
+                # For fewer criteria, create a smaller matrix
+                for i in range(len(unique_criteria_names)):
+                    row = []
+                    for j in range(len(unique_criteria_names)):
+                        if i == j:
+                            row.append(1.0)
+                        else:
+                            row.append(round(avg_correlation, 3))
+                    correlation_matrix.append(row)
+            
+            print(f"[KPI] Calculated {len(all_pairwise_correlations)} pairwise correlations")
+            print(f"[KPI] Average correlation: {avg_correlation:.3f}")
+            
+            # Calculate criteria importance (correlation with final score) using unique criteria names
+            criteria_importance = []
+            # Get average weight for each unique criteria name
+            criteria_name_weights = {}
+            for criteria_name in unique_criteria_names:
+                weights = []
+                for criteria_id in criteria_name_to_ids[criteria_name]:
+                    weights.append(criteria_info[criteria_id]['weight'])
+                criteria_name_weights[criteria_name] = np.mean(weights) if weights else 0
+            
+            for criteria_name in unique_criteria_names:
+                criterion_scores = []
+                final_scores = []
                 
-                if len(scores_i) > 1:
-                    correlation = np.corrcoef(scores_i, scores_j)[0, 1]
-                    if not np.isnan(correlation):
-                        all_pairwise_correlations.append(correlation)
-                        top_correlations.append({
-                            'criteria_1': criteria_name_i,
-                            'criteria_2': criteria_name_j,
-                            'correlation': round(correlation, 3)
-                        })
-        
-        # Sort and get top correlations
-        top_correlations.sort(key=lambda x: abs(x['correlation']), reverse=True)
-        top_correlations = top_correlations[:5]  # Top 5
-        
-        # Create simplified matrix representation (just for structure, not full display)
-        # For KPI, we'll return a 3x3 summary matrix showing overall correlation strength
-        correlation_matrix = []
-        criteria_names = unique_criteria_names[:3] if len(unique_criteria_names) >= 3 else unique_criteria_names  # Max 3 for summary
-        
-        # Calculate average correlation strength categories
-        avg_correlation = np.mean([abs(c) for c in all_pairwise_correlations]) if all_pairwise_correlations else 0.0
-        strong_correlation_count = sum(1 for c in all_pairwise_correlations if abs(c) > 0.7)
-        moderate_correlation_count = sum(1 for c in all_pairwise_correlations if 0.3 < abs(c) <= 0.7)
-        weak_correlation_count = sum(1 for c in all_pairwise_correlations if abs(c) <= 0.3)
-        
-        # Create a simple 3x3 summary matrix (if we have at least 3 criteria)
-        if len(unique_criteria_names) >= 3:
-            for i in range(3):
-                row = []
-                for j in range(3):
-                    if i == j:
-                        row.append(1.0)
-                    else:
-                        # Use average correlation as representative
-                        row.append(round(avg_correlation, 3))
-                correlation_matrix.append(row)
-        else:
-            # For fewer criteria, create a smaller matrix
-            for i in range(len(unique_criteria_names)):
-                row = []
-                for j in range(len(unique_criteria_names)):
-                    if i == j:
-                        row.append(1.0)
-                    else:
-                        row.append(round(avg_correlation, 3))
-                correlation_matrix.append(row)
-        
-        print(f"[KPI] Calculated {len(all_pairwise_correlations)} pairwise correlations")
-        print(f"[KPI] Average correlation: {avg_correlation:.3f}")
-        
-        # Calculate criteria importance (correlation with final score) using unique criteria names
-        criteria_importance = []
-        # Get average weight for each unique criteria name
-        criteria_name_weights = {}
-        for criteria_name in unique_criteria_names:
-            weights = []
-            for criteria_id in criteria_name_to_ids[criteria_name]:
-                weights.append(criteria_info[criteria_id]['weight'])
-            criteria_name_weights[criteria_name] = np.mean(weights) if weights else 0
-        
-        for criteria_name in unique_criteria_names:
-            criterion_scores = []
-            final_scores = []
-            
-            for response_id in all_response_ids:
-                if response_id in criteria_name_avg_scores[criteria_name] and response_final_scores[response_id] is not None:
-                    criterion_scores.append(criteria_name_avg_scores[criteria_name][response_id])
-                    final_scores.append(response_final_scores[response_id])
-            
-            if len(criterion_scores) > 1:
-                correlation_with_final = np.corrcoef(criterion_scores, final_scores)[0, 1]
-                if np.isnan(correlation_with_final):
+                for response_id in all_response_ids:
+                    if response_id in criteria_name_avg_scores[criteria_name] and response_final_scores[response_id] is not None:
+                        criterion_scores.append(criteria_name_avg_scores[criteria_name][response_id])
+                        final_scores.append(response_final_scores[response_id])
+                
+                if len(criterion_scores) > 1:
+                    correlation_with_final = np.corrcoef(criterion_scores, final_scores)[0, 1]
+                    if np.isnan(correlation_with_final):
+                        correlation_with_final = 0.0
+                else:
                     correlation_with_final = 0.0
+                
+                criteria_importance.append({
+                    'criteria_id': criteria_name_to_ids[criteria_name][0] if criteria_name_to_ids[criteria_name] else None,  # Use first ID as representative
+                    'criteria_name': criteria_name,
+                    'correlation_with_final': round(correlation_with_final, 3),
+                    'assigned_weight': round(criteria_name_weights[criteria_name], 2),
+                    'importance_rank': 0  # Will be set after sorting
+                })
+            
+            # Sort by correlation with final score (importance)
+            criteria_importance.sort(key=lambda x: abs(x['correlation_with_final']), reverse=True)
+            for idx, item in enumerate(criteria_importance):
+                item['importance_rank'] = idx + 1
+            
+            # Calculate weight effectiveness (how well assigned weights align with actual importance)
+            weight_effectiveness = []
+            for item in criteria_importance:
+                assigned_weight = item['assigned_weight']
+                actual_importance = abs(item['correlation_with_final']) * 100  # Convert to percentage
+                
+                weight_alignment = 'Well Aligned'
+                if abs(assigned_weight - actual_importance) > 20:
+                    weight_alignment = 'Misaligned'
+                elif abs(assigned_weight - actual_importance) > 10:
+                    weight_alignment = 'Moderately Aligned'
+                
+                weight_effectiveness.append({
+                    'criteria_name': item['criteria_name'],
+                    'assigned_weight': assigned_weight,
+                    'actual_importance': round(actual_importance, 1),
+                    'weight_difference': round(abs(assigned_weight - actual_importance), 1),
+                    'weight_alignment': weight_alignment
+                })
+            
+            # avg_correlation already calculated above from all_pairwise_correlations
+            
+            # Determine overall weight alignment
+            misaligned_count = sum(1 for item in weight_effectiveness if item['weight_alignment'] == 'Misaligned')
+            total_criteria = len(weight_effectiveness)
+            
+            if total_criteria > 0:
+                misalignment_rate = (misaligned_count / total_criteria) * 100
+                if misalignment_rate > 30:
+                    overall_alignment = 'Poor Alignment'
+                elif misalignment_rate > 15:
+                    overall_alignment = 'Moderate Alignment'
+                else:
+                    overall_alignment = 'Good Alignment'
             else:
-                correlation_with_final = 0.0
+                overall_alignment = 'No data available'
             
-            criteria_importance.append({
-                'criteria_id': criteria_name_to_ids[criteria_name][0] if criteria_name_to_ids[criteria_name] else None,  # Use first ID as representative
-                'criteria_name': criteria_name,
-                'correlation_with_final': round(correlation_with_final, 3),
-                'assigned_weight': round(criteria_name_weights[criteria_name], 2),
-                'importance_rank': 0  # Will be set after sorting
-            })
-        
-        # Sort by correlation with final score (importance)
-        criteria_importance.sort(key=lambda x: abs(x['correlation_with_final']), reverse=True)
-        for idx, item in enumerate(criteria_importance):
-            item['importance_rank'] = idx + 1
-        
-        # Calculate weight effectiveness (how well assigned weights align with actual importance)
-        weight_effectiveness = []
-        for item in criteria_importance:
-            assigned_weight = item['assigned_weight']
-            actual_importance = abs(item['correlation_with_final']) * 100  # Convert to percentage
+            print(f"[KPI] Criteria effectiveness calculation complete:")
+            print(f"  - Unique Criteria: {num_criteria}")
+            print(f"  - Responses: {len(all_response_ids)}")
+            print(f"  - Evaluations: {len(rows)}")
+            print(f"  - Pairwise Correlations: {len(all_pairwise_correlations)}")
+            print(f"  - Avg correlation: {round(avg_correlation, 3)}")
+            print(f"  - Strong correlations (>0.7): {strong_correlation_count}")
+            print(f"  - Moderate correlations (0.3-0.7): {moderate_correlation_count}")
+            print(f"  - Weak correlations (<0.3): {weak_correlation_count}")
             
-            weight_alignment = 'Well Aligned'
-            if abs(assigned_weight - actual_importance) > 20:
-                weight_alignment = 'Misaligned'
-            elif abs(assigned_weight - actual_importance) > 10:
-                weight_alignment = 'Moderately Aligned'
-            
-            weight_effectiveness.append({
-                'criteria_name': item['criteria_name'],
-                'assigned_weight': assigned_weight,
-                'actual_importance': round(actual_importance, 1),
-                'weight_difference': round(abs(assigned_weight - actual_importance), 1),
-                'weight_alignment': weight_alignment
-            })
-        
-        # avg_correlation already calculated above from all_pairwise_correlations
-        
-        # Determine overall weight alignment
-        misaligned_count = sum(1 for item in weight_effectiveness if item['weight_alignment'] == 'Misaligned')
-        total_criteria = len(weight_effectiveness)
-        
-        if total_criteria > 0:
-            misalignment_rate = (misaligned_count / total_criteria) * 100
-            if misalignment_rate > 30:
-                overall_alignment = 'Poor Alignment'
-            elif misalignment_rate > 15:
-                overall_alignment = 'Moderate Alignment'
-            else:
-                overall_alignment = 'Good Alignment'
-        else:
-            overall_alignment = 'No data available'
-        
-        print(f"[KPI] Criteria effectiveness calculation complete:")
-        print(f"  - Unique Criteria: {num_criteria}")
-        print(f"  - Responses: {len(all_response_ids)}")
-        print(f"  - Evaluations: {len(rows)}")
-        print(f"  - Pairwise Correlations: {len(all_pairwise_correlations)}")
-        print(f"  - Avg correlation: {round(avg_correlation, 3)}")
-        print(f"  - Strong correlations (>0.7): {strong_correlation_count}")
-        print(f"  - Moderate correlations (0.3-0.7): {moderate_correlation_count}")
-        print(f"  - Weak correlations (<0.3): {weak_correlation_count}")
-        
-        return JsonResponse({
+            return JsonResponse({
                 'success': True,
                 'criteria_effectiveness': {
                     'correlation_matrix': {
@@ -3532,7 +3497,7 @@ def get_criteria_effectiveness(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_budget_variance(request):
@@ -3547,40 +3512,41 @@ def get_budget_variance(request):
         
         logger.info("Starting budget variance calculation...")
         
-        # Use Django ORM instead of raw SQL
-        # Debug: Check total RFPs in database
-        total_rfps = RFP.objects.count()
-        rfps_with_estimated = RFP.objects.exclude(estimated_value__isnull=True).filter(estimated_value__gt=0).count()
-        logger.info(f"Database Debug: Total RFPs={total_rfps}, With Estimated Value={rfps_with_estimated}")
-        
-        # Get all RFPs with budget information using Django ORM
-        rfps = RFP.objects.filter(
-            estimated_value__isnull=False,
-            estimated_value__gt=0
-        ).order_by('-created_at')
-        
-        logger.info(f"Found {rfps.count()} RFPs with estimated values")
-        
-        # Convert to rows format for compatibility
-        rows = []
-        for rfp in rfps:
-            rows.append((
-                rfp.rfp_id,
-                rfp.rfp_number,
-                rfp.rfp_title,
-                rfp.estimated_value,
-                rfp.budget_range_min,
-                rfp.budget_range_max,
-                rfp.currency,
-                rfp.status,
-                rfp.award_decision_date,
-                rfp.final_evaluation_score
-            ))
-        
-        # Log sample data for debugging
-        if rows:
-            sample = rows[0]
-            logger.info(f"Sample RFP: ID={sample[0]}, Number={sample[1]}, Estimated={sample[3]}, Status={sample[7]}")
+        with connection.cursor() as cursor:
+            # Debug: Check total RFPs in database
+            debug_query = "SELECT COUNT(*) as total, COUNT(estimated_value) as with_estimated FROM rfps"
+            cursor.execute(debug_query)
+            debug_result = cursor.fetchone()
+            logger.info(f"Database Debug: Total RFPs={debug_result[0]}, With Estimated Value={debug_result[1]}")
+            
+            # Get all RFPs with budget information - removed restrictive status filter
+            query = """
+                SELECT 
+                    rfp.rfp_id,
+                    rfp.rfp_number,
+                    rfp.rfp_title,
+                    rfp.estimated_value,
+                    rfp.budget_range_min,
+                    rfp.budget_range_max,
+                    rfp.currency,
+                    rfp.status,
+                    rfp.award_decision_date,
+                    rfp.final_evaluation_score
+                FROM rfps rfp
+                WHERE rfp.estimated_value IS NOT NULL
+                AND rfp.estimated_value > 0
+                ORDER BY rfp.created_at DESC
+            """
+            
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            
+            logger.info(f"Found {len(rows)} RFPs with estimated values")
+            
+            # Log sample data for debugging
+            if rows:
+                sample = rows[0]
+                logger.info(f"Sample RFP: ID={sample[0]}, Number={sample[1]}, Estimated={sample[3]}, Status={sample[7]}")
             
             if not rows:
                 return JsonResponse({
@@ -3792,7 +3758,7 @@ def get_budget_variance(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_price_spread(request):
@@ -4007,7 +3973,7 @@ def get_price_spread(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_process_funnel(request):
@@ -4211,7 +4177,7 @@ def get_process_funnel(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_rfp_lifecycle_time(request):

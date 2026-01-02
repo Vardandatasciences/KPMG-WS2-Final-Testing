@@ -17,6 +17,10 @@
           <Upload class="w-4 h-4" />
           OCR Upload
         </button>
+        <Button variant="outline" @click="loadExampleData" class="gap-2" :type="'button'">
+          <FileText class="w-4 h-4" />
+          Load Example
+        </Button>
         <Button variant="outline" @click="handleCreateSubcontract" class="gap-2" :type="'button'">
           <FileText class="w-4 h-4" />
           Create Subcontract
@@ -1541,6 +1545,7 @@ import {
 import contractsApi from '@/services/contractsApi'
 import apiService from '@/services/api'
 import { PopupService } from '@/popup/popupService'
+import { getTprmApiUrl } from '@/utils/backendEnv'
 
 const router = useRouter()
 const route = useRoute()
@@ -1565,6 +1570,7 @@ const showOCR = ref(false)
 const formKey = ref(0) // Key to force form re-rendering
 const fileInput = ref(null)
 const isDragOver = ref(false)
+const hasAccess = ref(false) // Permission check state - starts as false for create route
 
 
 
@@ -1593,15 +1599,13 @@ const navigateToPreview = () => {
     contractTerms: contractTerms.value,
     contractClauses: contractClauses.value,
     allTermQuestionnaires: allTermQuestionnaires.value, // Include questionnaires for preview page
-    selectedTemplates: selectedTemplates.value, // IMPORTANT: Store selected templates so preview page knows which templates to use
-    templateQuestionsCache: templateQuestionsCache.value // OPTIMIZATION: Pass cached template questions to avoid API calls in preview
+    selectedTemplates: selectedTemplates.value // IMPORTANT: Store selected templates so preview page knows which templates to use
   }
   
   console.log('💾 Storing preview data:', previewData)
   console.log('💾 S3 file_path in preview data:', previewData.contractData?.file_path)
   console.log(`💾 Storing ${allTermQuestionnaires.value.length} questionnaires for preview`)
   console.log(`💾 Storing selected templates:`, selectedTemplates.value)
-  console.log(`💾 Storing ${Object.keys(templateQuestionsCache.value).length} cached template question sets`)
   sessionStorage.setItem('contractPreviewData', JSON.stringify(previewData))
   
   // Navigate to preview page
@@ -1894,6 +1898,57 @@ onMounted(async () => {
   console.log('🚀 CreateContract onMounted - showOCR initial value:', showOCR.value)
   console.log('🚀 CreateContract onMounted - testOCRButton function:', typeof testOCRButton)
   
+  // Check permission for creating contracts (only for create route, not edit)
+  const currentPath = route.path
+  const isOnCreateRoute = currentPath === '/contracts/create' || currentPath === '/contracts/new'
+  
+  // For edit routes, allow access immediately (permission check is handled elsewhere)
+  if (!isOnCreateRoute || contractId) {
+    hasAccess.value = true
+  }
+  
+  if (isOnCreateRoute && !contractId) {
+    console.log('🔐 Checking CreateContract permission for create route...')
+    try {
+      const permissionResult = await contractsApi.checkContractCreatePermission()
+      console.log('🔐 Permission check result:', permissionResult)
+      
+      if (!permissionResult.hasPermission) {
+        console.warn('❌ User does not have CreateContract permission')
+        
+        // Store error details for AccessDenied page
+        sessionStorage.setItem('access_denied_error', JSON.stringify({
+          message: permissionResult.message || 'You do not have permission to create contracts. This page requires the CreateContract permission.',
+          code: '403',
+          path: currentPath,
+          permission: 'CreateContract',
+          permissionRequired: 'CreateContract'
+        }))
+        
+        // Redirect to access denied page
+        router.push('/access-denied')
+        return // Exit early without loading data
+      }
+      
+      console.log('✅ User has CreateContract permission, proceeding...')
+      hasAccess.value = true // Grant access after permission check passes
+    } catch (error) {
+      console.error('❌ Error checking CreateContract permission:', error)
+      
+      // On error, deny access for security
+      sessionStorage.setItem('access_denied_error', JSON.stringify({
+        message: 'Unable to verify permissions. Please try again or contact your administrator.',
+        code: '500',
+        path: currentPath,
+        permission: 'CreateContract',
+        permissionRequired: 'CreateContract'
+      }))
+      
+      router.push('/access-denied')
+      return // Exit early without loading data
+    }
+  }
+  
   // Set active tab from route query if present
   if (route.query.tab && typeof route.query.tab === 'string') {
     activeTab.value = route.query.tab
@@ -1918,8 +1973,7 @@ onMounted(async () => {
   
   // Load contract data if editing
   // Double-check we're not on the create route
-  const currentPath = route.path
-  const isOnCreateRoute = currentPath === '/contracts/create' || currentPath === '/contracts/new'
+  // Note: currentPath and isOnCreateRoute are already declared above in permission check section
   
   if (contractId && !isOnCreateRoute && contractId > 0) {
     console.log('🔄 Loading contract data for editing in onMounted')
@@ -2640,28 +2694,27 @@ const handleSubmitForReview = async () => {
     // The preview page will handle the actual database save
     console.log('✅ Navigating to preview page for contract review')
     
-    // OPTIMIZATION: Pre-load ALL questionnaires for ALL terms in parallel BEFORE navigating
-    // This ensures preview page has all data immediately without making API calls
-    if (contractTerms.value.length > 0) {
-      console.log('📋 Pre-loading all questionnaires for all terms in parallel...')
-      isLoading.value = true
-      
-      try {
-        // Load questionnaires for all terms if not already loaded
-        if (allTermQuestionnaires.value.length === 0) {
-          await loadTermQuestionnaires()
+    // Load questionnaires in background (non-blocking) if terms exist
+    // Store current questionnaires in sessionStorage, ContractPreview will load if needed
+    if (contractTerms.value.length > 0 && allTermQuestionnaires.value.length === 0) {
+      console.log('📋 Loading questionnaires in background (non-blocking)...')
+      // Don't await - load in background and update sessionStorage when done
+      loadTermQuestionnaires().then(() => {
+        // Update sessionStorage with loaded questionnaires
+        const previewData = sessionStorage.getItem('contractPreviewData')
+        if (previewData) {
+          try {
+            const data = JSON.parse(previewData)
+            data.allTermQuestionnaires = allTermQuestionnaires.value
+            sessionStorage.setItem('contractPreviewData', JSON.stringify(data))
+            console.log(`📋 Updated sessionStorage with ${allTermQuestionnaires.value.length} questionnaires`)
+          } catch (e) {
+            console.error('Error updating sessionStorage with questionnaires:', e)
+          }
         }
-        
-        // Pre-load template questions for ALL selected templates in parallel
-        await preloadAllTemplateQuestions()
-        
-        console.log(`✅ Pre-loaded ${allTermQuestionnaires.value.length} questionnaires`)
-      } catch (err) {
-        console.error('❌ Error pre-loading questionnaires:', err)
-        // Continue anyway - preview page will handle missing data
-      } finally {
-        isLoading.value = false
-      }
+      }).catch(err => {
+        console.error('Error loading questionnaires in background:', err)
+      })
     }
     
     navigateToPreview()
@@ -2845,27 +2898,18 @@ const handleCreateSubcontract = async () => {
       const mainContractId = response.data.contract_id
       console.log('✅ Main contract saved with ID:', mainContractId)
       
-      // Navigate immediately - don't wait for terms/clauses to save
+      // Save terms and clauses if any exist
+      if (contractTerms.value.length > 0) {
+        await saveContractTerms(mainContractId)
+      }
+      
+      if (contractClauses.value.length > 0) {
+        await saveContractClauses(mainContractId)
+      }
+      
+      // Navigate to subcontract creation page with the main contract ID
       console.log('🔄 Navigating to subcontract creation with parent ID:', mainContractId)
       router.push(`/contracts/${mainContractId}/subcontract`)
-      
-      // Save terms and clauses in the background (non-blocking)
-      // This allows the user to see the subcontract page immediately
-      if (contractTerms.value.length > 0 || contractClauses.value.length > 0) {
-        console.log('📋 Saving terms and clauses in background...')
-        Promise.all([
-          contractTerms.value.length > 0 ? saveContractTerms(mainContractId).catch(err => {
-            console.error('❌ Error saving terms in background:', err)
-          }) : Promise.resolve(),
-          contractClauses.value.length > 0 ? saveContractClauses(mainContractId).catch(err => {
-            console.error('❌ Error saving clauses in background:', err)
-          }) : Promise.resolve()
-        ]).then(() => {
-          console.log('✅ Terms and clauses saved in background')
-        }).catch(err => {
-          console.error('❌ Error saving terms/clauses in background:', err)
-        })
-      }
     } else {
       errors.value.general = response.message || 'Failed to save main contract'
     }
@@ -3084,16 +3128,6 @@ const handleFileDrop = (event) => {
   }
 }
 
-// Helper function to get stored token (compatible with GRC auth)
-const getStoredToken = () => {
-  const keys = ['access_token', 'session_token', 'token', 'jwt_token']
-  for (const key of keys) {
-    const val = localStorage.getItem(key)
-    if (val) return val
-  }
-  return null
-}
-
 const handleFileUpload = async (event) => {
   console.log('📁 File upload triggered:', event)
   
@@ -3145,12 +3179,6 @@ const handleFileUpload = async (event) => {
     // Hint backend to run only contract extraction (safe no-op if unsupported)
     uploadFormData.append('mode', 'contract_only')
     
-    // Get authentication token
-    const token = getStoredToken()
-    if (!token) {
-      throw new Error('Authentication required. Please log in to upload files.')
-    }
-    
     console.log('📤 Uploading file to OCR service...')
     
     // Simulate progress updates
@@ -3160,79 +3188,22 @@ const handleFileUpload = async (event) => {
       }
         }, 500)
     
-    // Call the OCR API endpoint with authentication
-    // Note: Don't set Content-Type header - browser will set it with boundary for FormData
-    const headers = {
-      'Authorization': `Bearer ${token}`
-    }
-    
-    const response = await fetch('http://localhost:8000/api/tprm/ocr/upload/', {
+    // Call the OCR API endpoint
+    const response = await fetch(getTprmApiUrl('ocr/upload/'), {
       method: 'POST',
-      headers: headers,
       body: uploadFormData,
+      // Don't set Content-Type header - browser will set it with boundary for FormData
     })
     
     clearInterval(progressInterval)
-    
-    // Handle 401 errors - try to refresh token and retry
-    let finalResponse = response
-    if (response.status === 401) {
-      console.log('🔄 401 error detected, attempting token refresh...')
-      
-      try {
-        // Try to refresh token
-        const refreshToken = localStorage.getItem('refresh_token')
-        if (refreshToken) {
-          const refreshResponse = await fetch('http://localhost:8000/api/jwt/refresh/', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ refresh_token: refreshToken })
-          })
-          
-          if (refreshResponse.ok) {
-            const refreshData = await refreshResponse.json()
-            if (refreshData.status === 'success') {
-              // Update tokens
-              localStorage.setItem('access_token', refreshData.access_token)
-              if (refreshData.refresh_token) {
-                localStorage.setItem('refresh_token', refreshData.refresh_token)
-              }
-              
-              // Retry the upload with new token
-              console.log('✅ Token refreshed, retrying OCR upload...')
-              const newToken = getStoredToken()
-              const retryHeaders = {
-                'Authorization': `Bearer ${newToken}`
-              }
-              
-              finalResponse = await fetch('http://localhost:8000/api/tprm/ocr/upload/', {
-                method: 'POST',
-                headers: retryHeaders,
-                body: uploadFormData,
-              })
-            }
-          }
-        }
-      } catch (refreshError) {
-        console.error('❌ Token refresh failed:', refreshError)
-        // Continue to error handling below
-      }
-    }
-    
     uploadProgress.value = 100
     
-    if (!finalResponse.ok) {
-      const errorData = await finalResponse.json().catch(() => ({ error: 'Unknown error' }))
-      const errorMessage = errorData.error || `HTTP ${finalResponse.status}: ${finalResponse.statusText}`
-      if (finalResponse.status === 401) {
-        throw new Error('Authentication required. Please log in again.')
-      }
-      throw new Error(errorMessage)
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+      throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
     }
     
-  const result = await finalResponse.json()
+  const result = await response.json()
   console.log('✅ OCR processing completed:', result)
   
   // Log and store S3 upload information
@@ -4260,60 +4231,6 @@ function getQuestionnaireCount(termTitle, termId) {
   }).length
 }
 
-// Cache for template questions to avoid redundant API calls
-const templateQuestionsCache = ref({}) // { template_id: questions[] }
-
-// Pre-load ALL template questions for selected templates in parallel (OPTIMIZATION)
-async function preloadAllTemplateQuestions() {
-  try {
-    const selectedTemplateIds = Object.values(selectedTemplates.value).filter(Boolean)
-    if (selectedTemplateIds.length === 0) {
-      console.log('📋 No templates selected, skipping pre-load')
-      return
-    }
-    
-    console.log(`📋 Pre-loading questions for ${selectedTemplateIds.length} selected templates in parallel...`)
-    
-    // Load all template questions in PARALLEL
-    const loadPromises = selectedTemplateIds.map(async (templateId) => {
-      // Skip if already cached
-      if (templateQuestionsCache.value[templateId]) {
-        console.log(`📋 Template ${templateId} already cached, skipping`)
-        return
-      }
-      
-      try {
-        const response = await apiService.getTemplateQuestions(templateId, null, null)
-        const questions = response.questions || []
-        
-        // Cache the questions
-        templateQuestionsCache.value[templateId] = questions.map(q => ({
-          question_id: q.question_id,
-          question_text: q.question_text || '',
-          question_type: mapAnswerTypeToQuestionType(q.answer_type || 'TEXT'),
-          is_required: q.is_required || false,
-          scoring_weightings: q.weightage || 10.0,
-          question_category: q.question_category || 'Contract',
-          options: q.options || [],
-          help_text: q.help_text || '',
-          metric_name: q.metric_name || null,
-          allow_document_upload: q.allow_document_upload || false,
-          template_id: templateId
-        }))
-        
-        console.log(`✅ Cached ${templateQuestionsCache.value[templateId].length} questions for template ${templateId}`)
-      } catch (error) {
-        console.error(`❌ Error loading questions for template ${templateId}:`, error)
-      }
-    })
-    
-    await Promise.all(loadPromises)
-    console.log(`✅ Pre-loaded questions for ${selectedTemplateIds.length} templates`)
-  } catch (error) {
-    console.error('❌ Error in preloadAllTemplateQuestions:', error)
-  }
-}
-
 // Get questionnaires for a specific term (used when saving)
 // Now uses selected template if available, otherwise falls back to direct questionnaires
 async function getQuestionnairesForTerm(termId, termCategory, termTitle) {
@@ -4324,36 +4241,32 @@ async function getQuestionnairesForTerm(termId, termCategory, termTitle) {
   if (selectedTemplateId) {
     try {
       console.log(`📋 Using selected template ${selectedTemplateId} for term ${termIdStr}`)
-      
-      // Check cache first (OPTIMIZATION)
-      if (templateQuestionsCache.value[selectedTemplateId]) {
-        console.log(`📋 Using cached questions for template ${selectedTemplateId}`)
-        return templateQuestionsCache.value[selectedTemplateId]
-      }
-      
-      // If not cached, fetch from API
+      // When a template is selected, fetch ALL questions from that template
+      // Don't pass term_id or term_category to get ALL questions (not filtered)
       const response = await apiService.getTemplateQuestions(selectedTemplateId, null, null)
       const questions = response.questions || []
       
       console.log(`✅ Retrieved ${questions.length} questions from template ${selectedTemplateId}`)
       
       // Convert template questions to the format expected by backend
-      const formattedQuestions = questions.map(q => ({
-        question_id: q.question_id,
-        question_text: q.question_text || '',
-        question_type: mapAnswerTypeToQuestionType(q.answer_type || 'TEXT'),
-        is_required: q.is_required || false,
-        scoring_weightings: q.weightage || 10.0,
-        question_category: q.question_category || 'Contract',
-        options: q.options || [],
-        help_text: q.help_text || '',
-        metric_name: q.metric_name || null,
-        allow_document_upload: q.allow_document_upload || false,
-        template_id: selectedTemplateId // Include template_id for reference
-      }))
-      
-      // Cache for future use
-      templateQuestionsCache.value[selectedTemplateId] = formattedQuestions
+      const formattedQuestions = questions.map(q => {
+        const questionType = mapAnswerTypeToQuestionType(q.answer_type || 'TEXT')
+        return {
+          question_id: q.question_id,
+          question_text: q.question_text || '',
+          question_type: questionType,
+          is_required: q.is_required || false,
+          scoring_weightings: q.weightage || 10.0,
+          question_category: q.question_category || 'Contract',
+          options: q.options || [],
+          help_text: q.help_text || '',
+          metric_name: q.metric_name || null,
+          allow_document_upload: q.allow_document_upload || false,
+          document_upload: q.allow_document_upload || false, // Map allow_document_upload to document_upload
+          multiple_choice: questionType === 'multiple_choice' ? (q.options || []) : null, // Only set when question_type is multiple_choice
+          template_id: selectedTemplateId // Include template_id for reference
+        }
+      })
       
       console.log(`📋 Returning ${formattedQuestions.length} formatted questions from selected template`)
       return formattedQuestions
@@ -4391,18 +4304,23 @@ async function getQuestionnairesForTerm(termId, termCategory, termTitle) {
   })
   
   // Return questionnaires in the format expected by backend
-  return matchingQuestionnaires.map(q => ({
-    question_id: q.question_id,
-    question_text: q.question_text || '',
-    question_type: q.question_type || 'text',
-    is_required: q.is_required || false,
-    scoring_weightings: q.scoring_weightings || 10.0,
-    question_category: q.question_category || 'Contract',
-    options: q.options || [],
-    help_text: q.help_text || '',
-    metric_name: q.metric_name || null,
-    allow_document_upload: q.allow_document_upload || false
-  }))
+  return matchingQuestionnaires.map(q => {
+    const questionType = q.question_type || 'text'
+    return {
+      question_id: q.question_id,
+      question_text: q.question_text || '',
+      question_type: questionType,
+      is_required: q.is_required || false,
+      scoring_weightings: q.scoring_weightings || 10.0,
+      question_category: q.question_category || 'Contract',
+      options: q.options || [],
+      help_text: q.help_text || '',
+      metric_name: q.metric_name || null,
+      allow_document_upload: q.allow_document_upload || false,
+      document_upload: q.allow_document_upload || false, // Map allow_document_upload to document_upload
+      multiple_choice: questionType === 'multiple_choice' ? (q.options || []) : null // Only set when question_type is multiple_choice
+    }
+  })
 }
 
 // Load templates for a term
@@ -4424,13 +4342,6 @@ async function loadTemplatesForTerm(termOrTitle, termIdArg = null, termCategoryA
     const termCategory = term?.term_category || ''
 
     console.log('📋 Loading templates for term:', { termTitle, termId: termIdStr, termCategory })
-    
-    // Only make API call if we have at least termCategory or termTitle
-    if (!termCategory && !termTitle && !termIdStr) {
-      console.warn('⚠️ No term category, title, or ID provided - skipping template load')
-      loadedTemplatesForTerms.value.add(termIdStr || 'empty')
-      return
-    }
     
     const response = await apiService.getTemplatesByTerm(termTitle, termIdStr, termCategory)
     const templates = response.templates || response || []
@@ -4460,21 +4371,7 @@ async function loadTemplatesForTerm(termOrTitle, termIdArg = null, termCategoryA
     // If no templates were found, we simply leave the list empty without showing a popup
   } catch (error) {
     console.error('❌ Error loading templates:', error)
-    
-    // Don't show error popup for 500 errors if it's likely a backend issue
-    // Just log it and mark as loaded so we don't keep retrying
-    if (error.message && error.message.includes('500')) {
-      console.warn('⚠️ Server error loading templates - this may be a backend issue')
-      const termIdStr = String(termOrTitle?.term_id || termIdArg || '')
-      loadedTemplatesForTerms.value.add(termIdStr)
-      // Don't show popup for server errors - just silently fail
-      return
-    }
-    
-    // Only show popup for client-side errors (401, 403, network errors)
-    if (error.message && !error.message.includes('500')) {
-      PopupService.error(`Failed to load templates: ${error.message || 'Please try again.'}`, 'Error')
-    }
+    PopupService.error(`Failed to load templates: ${error.message || 'Please try again.'}`, 'Error')
   }
 }
 
@@ -4724,9 +4621,11 @@ function editQuestionnaires(termTitle, termId, existingQuestionnaires = []) {
         weightage: q.scoring_weightings !== undefined ? q.scoring_weightings : (q.weightage !== undefined ? q.weightage : 10.0),
         term_id: actualTermId,
         allow_document_upload: q.allow_document_upload !== undefined ? q.allow_document_upload : false,
+        document_upload: q.allow_document_upload !== undefined ? q.allow_document_upload : false, // Map allow_document_upload to document_upload
         options: Array.isArray(q.options) ? q.options : [],
         _optionsString: Array.isArray(q.options) && q.options.length > 0 ? q.options.join(', ') : '',
-        metric_name: q.metric_name || null
+        metric_name: q.metric_name || null,
+        multiple_choice: answerType === 'MULTIPLE_CHOICE' ? (Array.isArray(q.options) ? q.options : []) : null // Only set when answer_type is MULTIPLE_CHOICE
       }
     })
     
@@ -4831,26 +4730,16 @@ watch(() => contractTerms.value.map(t => t.term_category), async (newCategories,
     clearTimeout(questionnairesTimer)
   }
   questionnairesTimer = setTimeout(async () => {
-    // OPTIMIZATION: Load templates for ALL terms in PARALLEL
-    const termsToLoad = contractTerms.value.filter(term => 
-      term.term_category && term.term_id && !hasLoadedTemplatesForTerm(term.term_id)
-    )
-    
-    if (termsToLoad.length > 0) {
-      console.log(`🔄 Auto-loading templates for ${termsToLoad.length} terms in PARALLEL...`)
-      
-      // Load all templates in parallel instead of sequentially
-      await Promise.all(
-        termsToLoad.map(term => 
-          loadTemplatesForTerm(term).catch(err => {
-            console.error(`Error loading templates for term ${term.term_id}:`, err)
-          })
-        )
-      )
-      
-      console.log(`✅ Finished loading templates for ${termsToLoad.length} terms`)
+    // Load templates for terms with category changes
+    for (const term of contractTerms.value) {
+      if (term.term_category && term.term_id) {
+        // Auto-load templates when term_category is set
+        if (!hasLoadedTemplatesForTerm(term.term_id)) {
+          console.log(`🔄 Auto-loading templates for term ${term.term_id} with category ${term.term_category}`)
+          await loadTemplatesForTerm(term)
+        }
+      }
     }
-    
     // Also load questionnaires (legacy support)
     await loadTermQuestionnaires()
   }, 1000)
@@ -4869,21 +4758,12 @@ watch(activeTab, async (newTab, oldTab) => {
     closeQuestionnairesModal()
     // Small delay to ensure tab is fully rendered
     setTimeout(async () => {
-      // OPTIMIZATION: Load templates for all terms with categories in PARALLEL
-      const termsToLoad = contractTerms.value.filter(term => term.term_category && term.term_id)
-      
-      if (termsToLoad.length > 0) {
-        console.log(`🔄 Loading templates for ${termsToLoad.length} terms in PARALLEL...`)
-        
-        await Promise.all(
-          termsToLoad.map(term => 
-            loadTemplatesForTerm(term).catch(err => {
-              console.error(`Error loading templates for term ${term.term_id}:`, err)
-            })
-          )
-        )
+      // Load templates for all terms with categories
+      for (const term of contractTerms.value) {
+        if (term.term_category && term.term_id) {
+          await loadTemplatesForTerm(term)
+        }
       }
-      
       // Also load questionnaires (legacy support)
       await loadTermQuestionnaires()
       console.log('✅ Templates and questionnaires reloaded after switching to terms tab')
@@ -5016,5 +4896,101 @@ const clearSessionStorage = () => {
   sessionStorage.removeItem('contractPreviewData')
   console.log('🧹 Session storage cleared')
   PopupService.success('Session storage cleared! You can now create a standalone contract.', 'Storage Cleared')
+}
+
+// Quickly populate the form with example data for demo/testing
+const loadExampleData = () => {
+  formData.value = {
+    ...formData.value,
+    contract_title: 'Cloud Infrastructure Services Agreement',
+    contract_number: 'CNT-EXAMPLE-001',
+    contract_type: 'SERVICE_AGREEMENT',
+    contract_kind: 'MAIN',
+    contract_category: 'technology',
+    vendor_id: vendors.value?.[0]?.vendor_id || 1,
+    vendor_name: vendors.value?.[0]?.company_name || 'Example Vendor LLC',
+    contract_value: 250000,
+    currency: 'USD',
+    liability_cap: 1000000,
+    start_date: '2024-01-01',
+    end_date: '2026-01-01',
+    notice_period_days: 30,
+    status: 'PENDING_ASSIGNMENT',
+    workflow_stage: 'under_review',
+    priority: 'medium',
+    compliance_status: 'under_review',
+    dispute_resolution_method: 'arbitration',
+    governing_law: 'California, USA',
+    termination_clause_type: 'convenience',
+    compliance_framework: 'SOC2',
+    contract_owner: users.value?.[0]?.user_id || 1,
+    legal_reviewer: legalReviewers.value?.[0]?.user_id || 2,
+    assigned_to: users.value?.[0]?.user_id || 1,
+    file_path: formData.value.file_path || ''
+  }
+
+  contractTerms.value = [
+    reactive({
+      term_id: `term_example_payment_${Date.now()}`,
+      term_category: 'Payment',
+      term_title: 'Payment Schedule',
+      term_text: 'Invoices are payable within 30 days of receipt. Late payments incur 1.5% monthly interest.',
+      risk_level: 'Low',
+      compliance_status: 'Pending',
+      is_standard: true,
+      approval_status: 'Pending',
+      version_number: '1.0',
+      parent_term_id: '',
+      created_by: formData.value.contract_owner
+    }),
+    reactive({
+      term_id: `term_example_performance_${Date.now()}`,
+      term_category: 'Performance',
+      term_title: 'Service Levels',
+      term_text: 'Provider will maintain 99.9% uptime and respond to Sev1 incidents within 2 hours.',
+      risk_level: 'Low',
+      compliance_status: 'Pending',
+      is_standard: false,
+      approval_status: 'Pending',
+      version_number: '1.0',
+      parent_term_id: '',
+      created_by: formData.value.contract_owner
+    })
+  ]
+
+  contractClauses.value = [
+    reactive({
+      clause_id: `clause_example_liability_${Date.now()}`,
+      clause_name: 'Limitation of Liability',
+      clause_type: 'standard',
+      clause_text: 'Liability shall not exceed the total fees paid under this agreement in the prior 12 months.',
+      risk_level: 'medium',
+      legal_category: 'Liability',
+      version_number: '1',
+      is_standard: true,
+      created_by: formData.value.contract_owner
+    }),
+    reactive({
+      clause_id: `clause_example_renewal_${Date.now()}`,
+      clause_name: 'Renewal Terms',
+      clause_type: 'renewal',
+      clause_text: 'This agreement auto-renews annually unless either party provides 30 days written notice.',
+      risk_level: 'low',
+      legal_category: 'Contract Renewal',
+      version_number: '1',
+      is_standard: false,
+      created_by: formData.value.contract_owner,
+      notice_period_days: 30,
+      auto_renew: true,
+      renewal_terms: 'Auto-renews annually with 3% price uplift.'
+    })
+  ]
+
+  // Force UI refresh
+  contractTerms.value = [...contractTerms.value]
+  contractClauses.value = [...contractClauses.value]
+  formKey.value++
+
+  PopupService.success('Loaded example contract data.', 'Example Loaded')
 }
 </script>

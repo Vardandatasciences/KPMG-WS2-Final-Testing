@@ -1,9 +1,8 @@
 import axios from 'axios'
+import { getTprmApiBaseUrl } from '@/utils/backendEnv'
 
 // Get API base URL from environment variable or use default
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
-                     import.meta.env.VUE_APP_API_BASE_URL || 
-                     'http://localhost:8000'
+const API_BASE_URL = getTprmApiBaseUrl()
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -51,6 +50,7 @@ api.interceptors.response.use(
       if (error.response.status === 401) {
         console.error('[API] Authentication failed - redirecting to login')
         localStorage.removeItem('session_token')
+        localStorage.removeItem('user')
         window.location.href = '/login'
       }
       // Handle 403 Forbidden

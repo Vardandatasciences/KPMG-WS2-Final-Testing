@@ -17,7 +17,7 @@
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
       <div>
         <h1 class="text-2xl lg:text-3xl font-bold tracking-tight text-foreground">{{ audit.title }}</h1>
-        <p class="text-sm lg:text-base text-muted-foreground">Contract: {{ contract?.contract_title || 'Unknown Contract' }} (Admin View)</p>
+        <p class="text-sm lg:text-base text-muted-foreground">Contract: {{ audit?.contract_title || 'Unknown Contract' }} (Admin View)</p>
       </div>
       <div class="flex items-center gap-4">
         <!-- Admin Badge -->
@@ -220,10 +220,13 @@
                         class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <option value="">Select an option</option>
-                        <option value="option1">Option 1</option>
-                        <option value="option2">Option 2</option>
-                        <option value="option3">Option 3</option>
-                        <option value="other">Other</option>
+                        <option 
+                          v-for="(option, optIndex) in (question.multiple_choice || [])" 
+                          :key="optIndex" 
+                          :value="typeof option === 'string' ? option : option.value || option"
+                        >
+                          {{ typeof option === 'string' ? option : option.label || option.value || option }}
+                        </option>
                       </select>
                     </div>
                     
@@ -246,6 +249,96 @@
                         placeholder="Enter your answer..."
                         class="w-full"
                     />
+                    </div>
+                    
+                    <!-- Document Upload - Show near question if enabled -->
+                    <div v-if="question.document_upload" class="mt-3 pt-3 border-t border-border">
+                      <Label class="text-xs font-medium mb-2 flex items-center text-muted-foreground">
+                        <Upload class="mr-1.5 h-3.5 w-3.5" />
+                        Upload Supporting Documents (Multiple files allowed)
+                      </Label>
+                      <div class="space-y-2">
+                        <div class="flex items-center gap-2">
+                          <input
+                            type="file"
+                            :id="`document-upload-${workspace.metric_id}-${question.question_id}`"
+                            multiple
+                            accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
+                            class="flex h-9 flex-1 rounded-md border border-input bg-background px-3 py-1.5 text-xs ring-offset-background file:border-0 file:bg-transparent file:text-xs file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            @change="(event) => handleQuestionDocumentUpload(workspaceIndex, question.question_id, event)"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            @click="() => {
+                              const input = document.getElementById(`document-upload-${workspace.metric_id}-${question.question_id}`)
+                              if (input) {
+                                input.value = ''
+                                input.click()
+                              }
+                            }"
+                            class="h-9 text-xs"
+                          >
+                            <Upload class="h-3 w-3 mr-1" />
+                            Add More
+                          </Button>
+                        </div>
+                        <p class="text-xs text-muted-foreground">
+                          Accepted: PDF, DOC, DOCX, XLS, XLSX, PNG, JPG, JPEG (You can select multiple files)
+                        </p>
+                        <!-- Show uploaded files for this question -->
+                        <div v-if="getQuestionDocuments(workspaceIndex, question.question_id).length > 0" class="mt-2 space-y-2">
+                          <div class="flex items-center justify-between">
+                            <p class="text-xs font-medium text-muted-foreground">
+                              Uploaded files ({{ getQuestionDocuments(workspaceIndex, question.question_id).length }}):
+                            </p>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              @click="clearQuestionDocuments(workspaceIndex, question.question_id)"
+                              class="h-6 text-xs text-destructive hover:text-destructive"
+                            >
+                              Clear All
+                            </Button>
+                          </div>
+                          <div class="space-y-1">
+                            <div 
+                              v-for="(doc, docIndex) in getQuestionDocuments(workspaceIndex, question.question_id)" 
+                              :key="docIndex" 
+                              class="flex items-center justify-between text-xs bg-muted p-2 rounded border border-border hover:bg-muted/80 transition-colors group"
+                            >
+                              <div class="flex items-center gap-2 flex-1 min-w-0">
+                                <FileText class="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                                <span class="text-foreground truncate" :title="doc.name">{{ doc.name }}</span>
+                              </div>
+                              <div class="flex items-center gap-2 flex-shrink-0">
+                                <span class="text-muted-foreground">{{ formatFileSize(doc.size) }}</span>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  @click="viewQuestionDocument(doc)"
+                                  class="h-6 px-2 text-xs flex items-center gap-1"
+                                  title="View document"
+                                >
+                                  <Eye class="h-3 w-3" />
+                                  View
+                                </Button>
+                                <button
+                                  type="button"
+                                  @click="removeQuestionDocument(workspaceIndex, question.question_id, docIndex)"
+                                  class="h-6 w-6 p-0 flex items-center justify-center rounded-full text-destructive hover:text-destructive hover:bg-destructive/20 transition-colors cursor-pointer opacity-70 group-hover:opacity-100"
+                                  title="Remove this document"
+                                >
+                                  <X class="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -562,7 +655,52 @@ const findValueByCandidates = (source, candidates) => {
   return undefined
 }
 
-const buildExtendedInfoPayload = () => {
+// Helper function to convert File to base64
+const fileToBase64 = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.readAsDataURL(file)
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = error => reject(error)
+  })
+}
+
+// Helper function to convert documents to serializable format
+const serializeDocuments = (questionDocuments = {}) => {
+  if (!questionDocuments || Object.keys(questionDocuments).length === 0) {
+    return {}
+  }
+
+  const serialized = {}
+  Object.entries(questionDocuments).forEach(([questionId, documents]) => {
+    if (!Array.isArray(documents) || documents.length === 0) {
+      return
+    }
+    
+    serialized[questionId] = documents.map(doc => {
+        const fileData = {
+          name: doc.name,
+          size: doc.size,
+          type: doc.type,
+        uploadedAt: doc.uploadedAt || new Date().toISOString(),
+        url: doc.url || doc.document_url || null,
+        s3_file_id: doc.s3_file_id || doc.id || null,
+        s3_key: doc.s3_key || null,
+        storage: doc.storage || (doc.url ? 's3' : undefined)
+        }
+        
+      if (!fileData.url && doc.content) {
+          fileData.content = doc.content
+        }
+        
+        return fileData
+      })
+  })
+  
+  return serialized
+}
+
+const buildExtendedInfoPayload = async () => {
   if (!workspaceData.value || workspaceData.value.length === 0) return null
 
   const payload = {
@@ -571,14 +709,16 @@ const buildExtendedInfoPayload = () => {
     verification_methods: {},
     recommendations: {},
     comments: {},
+    documents: {}, // Store uploaded documents
     metadata: {
       terms: {}
     }
   }
 
-  workspaceData.value.forEach(workspace => {
+  // Process all workspaces and their documents
+  for (const workspace of workspaceData.value) {
     const key = getWorkspaceKey(workspace)
-    if (!key) return
+    if (!key) continue
 
     payload.responses[key] = { ...(workspace.responses || {}) }
     payload.evidence[key] = workspace.evidence || ''
@@ -590,7 +730,12 @@ const buildExtendedInfoPayload = () => {
       term_name: workspace.metric_name,
       metric_id: normalizeValue(workspace.metric_id)
     }
-  })
+    
+    // Serialize documents for this workspace
+    if (workspace.questionDocuments && Object.keys(workspace.questionDocuments).length > 0) {
+      payload.documents[key] = serializeDocuments(workspace.questionDocuments)
+    }
+  }
 
   return payload
 }
@@ -728,12 +873,8 @@ const loadAuditData = async () => {
     console.log('Audit contract type:', typeof auditData.contract)
     audit.value = auditData
     
-    // Load Contract details
-    if (auditData.contract_id) {
-      const contractResponse = await contractAuditApi.getAvailableContracts()
-      const contractData = contractResponse.success ? contractResponse.data : []
-      contract.value = contractData.find(c => c.contract_id === auditData.contract_id) || null
-    }
+    // Note: contract_title is already included in the audit response from the API
+    // No need to load contract separately
     
     // Load users (auditor/reviewer)
     const usersResponse = await contractAuditApi.getAvailableUsers()
@@ -910,7 +1051,8 @@ watch([audit, metrics, questionnaires], async ([newAudit, newMetrics, newQuestio
           evidence: '',
           comments: '',
           verification_method: '',
-          recommendations: ''
+          recommendations: '',
+          questionDocuments: {} // Store documents per question
         }
       })
 
@@ -927,7 +1069,8 @@ watch([audit, metrics, questionnaires], async ([newAudit, newMetrics, newQuestio
           evidence: '',
           comments: '',
           verification_method: '',
-          recommendations: ''
+          recommendations: '',
+          questionDocuments: {} // Store documents per question
         })
       }
     } else {
@@ -949,7 +1092,8 @@ watch([audit, metrics, questionnaires], async ([newAudit, newMetrics, newQuestio
         evidence: '',
         comments: '',
         verification_method: '',
-        recommendations: ''
+        recommendations: '',
+        questionDocuments: {} // Store documents per question
       }]
     }
     
@@ -1040,6 +1184,11 @@ watch([audit, metrics, questionnaires], async ([newAudit, newMetrics, newQuestio
             if (savedRecommendations !== undefined) {
               workspace.recommendations = savedRecommendations || ''
             }
+
+        const savedDocuments = findValueByCandidates(extendedInfo.documents, candidateKeys)
+        if (savedDocuments !== undefined) {
+          workspace.questionDocuments = cloneQuestionDocuments(savedDocuments)
+            }
           })
         }
       }
@@ -1061,7 +1210,8 @@ watch([audit, metrics, questionnaires], async ([newAudit, newMetrics, newQuestio
             evidence: savedWorkspace.evidence || '',
             comments: savedWorkspace.comments || '',
             verification_method: savedWorkspace.verification_method || '',
-            recommendations: savedWorkspace.recommendations || ''
+            recommendations: savedWorkspace.recommendations || '',
+            questionDocuments: savedWorkspace.questionDocuments || {}
           }
         }
         return workspace
@@ -1104,10 +1254,269 @@ const updateWorkspaceField = (workspaceIndex, fieldName, value) => {
   }
 }
 
+const handleQuestionDocumentUpload = async (workspaceIndex, questionId, event) => {
+  const files = event.target.files
+  if (!files || files.length === 0) return
+
+  if (!audit.value?.audit_id) {
+    PopupService.error('Audit must be loaded before uploading documents.', 'Upload Error')
+    return
+  }
+  
+  console.log(`Uploading ${files.length} document(s) for question ${questionId} in workspace ${workspaceIndex}`)
+  
+  if (!workspaceData.value[workspaceIndex].questionDocuments) {
+    workspaceData.value[workspaceIndex].questionDocuments = {}
+  }
+  
+  if (!workspaceData.value[workspaceIndex].questionDocuments[questionId]) {
+    workspaceData.value[workspaceIndex].questionDocuments[questionId] = []
+  }
+  
+  for (const file of Array.from(files)) {
+    try {
+      const base64Content = await fileToBase64(file)
+      const uploadPayload = {
+        audit_id: audit.value.audit_id,
+        term_id: workspaceData.value[workspaceIndex].term_id,
+        question_id: questionId,
+        file_name: file.name,
+        file_type: file.type,
+        file_size: file.size,
+        file_data: base64Content
+      }
+
+      const uploadResponse = await contractAuditApi.uploadAuditDocument(uploadPayload)
+      if (!uploadResponse.success) {
+        console.error('Document upload failed:', uploadResponse.error)
+        PopupService.error(uploadResponse.error || 'Failed to upload document', 'Upload Failed')
+        continue
+      }
+
+      const uploadedFile = uploadResponse.data?.file || {}
+    const docEntry = {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+        uploadedAt: new Date().toISOString(),
+        url: uploadedFile.url,
+        s3_file_id: uploadedFile.s3_file_id,
+        s3_key: uploadedFile.s3_key,
+        storage: 's3'
+      }
+
+      workspaceData.value[workspaceIndex].questionDocuments[questionId].push(docEntry)
+      showSuccess(`Uploaded ${file.name}`)
+    } catch (error) {
+      console.error('Error uploading document:', error)
+      PopupService.error('Failed to upload document. Please try again.', 'Upload Error')
+    }
+    }
+    
+  if (event?.target) {
+    event.target.value = ''
+  }
+  
+  console.log(`Documents stored for question ${questionId}:`, workspaceData.value[workspaceIndex].questionDocuments[questionId])
+  
+  saveWorkspaceToStorage()
+}
+
+const getQuestionDocuments = (workspaceIndex, questionId) => {
+  if (!workspaceData.value[workspaceIndex]?.questionDocuments?.[questionId]) {
+    return []
+  }
+  return workspaceData.value[workspaceIndex].questionDocuments[questionId]
+}
+
+const formatFileSize = (bytes) => {
+  if (!bytes) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
+}
+
+const removeQuestionDocument = (workspaceIndex, questionId, docIndex) => {
+  if (!workspaceData.value[workspaceIndex]?.questionDocuments?.[questionId]) {
+    return
+  }
+  
+  workspaceData.value[workspaceIndex].questionDocuments[questionId].splice(docIndex, 1)
+  
+  // If no documents left, clean up the array
+  if (workspaceData.value[workspaceIndex].questionDocuments[questionId].length === 0) {
+    delete workspaceData.value[workspaceIndex].questionDocuments[questionId]
+  }
+  
+  // Save to localStorage
+  saveWorkspaceToStorage()
+  
+  showInfo('Document removed')
+}
+
+const clearQuestionDocuments = (workspaceIndex, questionId) => {
+  if (!workspaceData.value[workspaceIndex]?.questionDocuments?.[questionId]) {
+    return
+  }
+  
+  if (confirm(`Are you sure you want to remove all ${workspaceData.value[workspaceIndex].questionDocuments[questionId].length} document(s) for this question?`)) {
+    delete workspaceData.value[workspaceIndex].questionDocuments[questionId]
+    
+    // Save to localStorage
+    saveWorkspaceToStorage()
+    
+    showInfo('All documents removed')
+  }
+}
+
+const viewQuestionDocument = (doc) => {
+  console.log('Viewing document:', doc)
+  
+  if (doc.url) {
+    window.open(doc.url, '_blank')
+    return
+  }
+  
+  // Check if document has File object (from upload)
+  if (doc.file && doc.file instanceof File) {
+    try {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const content = e.target.result
+        const fileName = doc.name || doc.file.name || 'document'
+        const fileType = doc.type || doc.file.type || ''
+        
+        openDocumentViewer(content, fileName, fileType)
+      }
+      reader.onerror = (error) => {
+        console.error('Error reading file:', error)
+        PopupService.error('Failed to read document', 'Error')
+      }
+      reader.readAsDataURL(doc.file)
+    } catch (error) {
+      console.error('Error viewing document:', error)
+      PopupService.error('Failed to view document', 'Error')
+    }
+  } else if (doc.content) {
+    // Document already has base64 content
+    const fileName = doc.name || doc.filename || 'document'
+    const fileType = doc.type || ''
+    openDocumentViewer(doc.content, fileName, fileType)
+  } else {
+    PopupService.warning('Document content not available for viewing.', 'Cannot View Document')
+  }
+}
+
+const openDocumentViewer = (content, fileName, fileType) => {
+  try {
+    // Determine file type and handle accordingly
+    // For PDFs, open directly in new tab
+    if (fileType.includes('pdf') || fileName.toLowerCase().endsWith('.pdf')) {
+      const newWindow = window.open('', '_blank')
+      if (newWindow) {
+        newWindow.document.write(`
+          <html>
+            <head>
+              <title>${fileName}</title>
+              <style>
+                body { margin: 0; padding: 0; }
+                iframe { width: 100vw; height: 100vh; border: none; }
+              </style>
+            </head>
+            <body>
+              <iframe src="${content}" type="application/pdf"></iframe>
+            </body>
+          </html>
+        `)
+        newWindow.document.close()
+      } else {
+        // Popup blocked, trigger download instead
+        triggerDocumentDownload(content, fileName)
+      }
+    } else if (fileType.startsWith('image/')) {
+      // For images, open in new tab
+      const newWindow = window.open('', '_blank')
+      if (newWindow) {
+        newWindow.document.write(`
+          <html>
+            <head>
+              <title>${fileName}</title>
+              <style>
+                body { margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #f5f5f5; }
+                img { max-width: 100%; max-height: 90vh; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+              </style>
+            </head>
+            <body>
+              <img src="${content}" alt="${fileName}" />
+            </body>
+          </html>
+        `)
+        newWindow.document.close()
+      } else {
+        triggerDocumentDownload(content, fileName)
+      }
+    } else {
+      // For other file types, trigger download
+      triggerDocumentDownload(content, fileName)
+    }
+  } catch (error) {
+    console.error('Error opening document viewer:', error)
+    PopupService.error('Failed to view document. Please try downloading it instead.', 'Error')
+  }
+}
+
+const triggerDocumentDownload = (content, fileName) => {
+  try {
+    const link = document.createElement('a')
+    link.href = content
+    link.download = fileName
+    link.target = '_blank'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  } catch (error) {
+    console.error('Error downloading document:', error)
+    PopupService.error('Failed to download document', 'Error')
+  }
+}
+
+const sanitizeDocumentsForStorage = (questionDocuments = {}) => {
+  const sanitized = {}
+  Object.entries(questionDocuments || {}).forEach(([questionId, documents]) => {
+    sanitized[questionId] = documents.map(doc => ({
+      name: doc.name,
+      size: doc.size,
+      type: doc.type,
+      uploadedAt: doc.uploadedAt,
+      url: doc.url || doc.document_url || null,
+      s3_file_id: doc.s3_file_id || null,
+      s3_key: doc.s3_key || null,
+      storage: doc.storage || (doc.url ? 's3' : undefined),
+      content: doc.content || null
+    }))
+  })
+  return sanitized
+}
+
+const sanitizeWorkspaceForStorage = (workspace) => ({
+  ...workspace,
+  questionDocuments: sanitizeDocumentsForStorage(workspace.questionDocuments)
+})
+
+const cloneQuestionDocuments = (documents = {}) => {
+  const cloned = {}
+  Object.entries(documents || {}).forEach(([questionId, docs]) => {
+    cloned[questionId] = Array.isArray(docs) ? docs.map(doc => ({ ...doc })) : []
+  })
+  return cloned
+}
+
 const saveWorkspaceToStorage = () => {
   try {
     const auditId = route.params.auditId
-    localStorage.setItem(`audit_workspace_${auditId}`, JSON.stringify(workspaceData.value))
+    const sanitizedData = workspaceData.value.map(workspace => sanitizeWorkspaceForStorage(workspace))
+    localStorage.setItem(`audit_workspace_${auditId}`, JSON.stringify(sanitizedData))
     console.log('Workspace data saved to localStorage')
   } catch (error) {
     console.error('Error saving workspace to localStorage:', error)
@@ -1153,12 +1562,13 @@ const handleSaveProgress = async () => {
   isLoading.value = true
   try {
     const auditId = route.params.auditId
-    const extendedInfoPayload = buildExtendedInfoPayload() || {
+    const extendedInfoPayload = await buildExtendedInfoPayload() || {
       responses: {},
       evidence: {},
       verification_methods: {},
       recommendations: {},
       comments: {},
+      documents: {},
       metadata: { terms: {} }
     }
     
@@ -1240,12 +1650,13 @@ const handleSubmitForReview = async () => {
   isLoading.value = true
   try {
     const auditId = route.params.auditId
-    const extendedInfoPayload = buildExtendedInfoPayload() || {
+    const extendedInfoPayload = await buildExtendedInfoPayload() || {
       responses: {},
       evidence: {},
       verification_methods: {},
       recommendations: {},
       comments: {},
+      documents: {},
       metadata: { terms: {} }
     }
     
@@ -1329,12 +1740,13 @@ const handleResubmitForReview = async () => {
   isLoading.value = true
   try {
     const auditId = route.params.auditId
-    const extendedInfoPayload = buildExtendedInfoPayload() || {
+    const extendedInfoPayload = await buildExtendedInfoPayload() || {
       responses: {},
       evidence: {},
       verification_methods: {},
       recommendations: {},
       comments: {},
+      documents: {},
       metadata: { terms: {} }
     }
     

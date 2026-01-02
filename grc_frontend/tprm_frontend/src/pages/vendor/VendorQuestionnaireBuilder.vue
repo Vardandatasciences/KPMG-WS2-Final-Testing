@@ -126,130 +126,37 @@
                     
                     <!-- RFP Response Documents Section -->
                     <div class="attribute-item full-width">
-                      <span class="attribute-label">Response Documents:</span>
-                      <div class="documents-container">
+                      <div class="response-documents-header">
+                        <span class="attribute-label">Response Documents:</span>
+                        <button 
+                          v-if="rfpData.length > 0" 
+                          @click="openResponseDetailsModal" 
+                          class="btn-view-details"
+                          type="button"
+                        >
+                          <svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                          View Details
+                        </button>
+                      </div>
+                      <div class="documents-summary">
                         <div v-if="rfpData.length === 0" class="no-documents">
                           <span class="attribute-value">No RFP responses found</span>
                         </div>
-                        <div v-else class="documents-list">
-                          <div v-for="(response, index) in rfpData" :key="response.response_id" class="response-documents">
-                            <div class="response-group">
-                              <div class="response-header">
-                                <span class="response-title">Response #{{ response.response_id }} ({{ formatDate(response.submission_date) }})</span>
-                                <span class="document-count" v-if="getResponseDocumentCount(response) > 0">
-                                  {{ getResponseDocumentCount(response) }} item(s)
-                                </span>
-                              </div>
-                              
-                              <!-- All Data from response_documents (simplified structure) -->
-                              <div class="response-data-container" v-if="getRequiredResponseData(response)">
-                                <div v-for="(groupData, groupName) in getRequiredResponseData(response)" :key="groupName" class="data-group">
-                                  <h4 class="group-title">{{ groupName }}</h4>
-                                  <div v-for="(value, key) in groupData" :key="key" class="data-field">
-                                    <span class="field-label">{{ formatJsonKey(key) }}:</span>
-                                    <!-- Array of Objects -->
-                                    <div v-if="Array.isArray(value) && value.length > 0 && typeof value[0] === 'object'" class="array-items">
-                                      <div v-for="(item, index) in value" :key="index" class="array-item">
-                                        <div v-for="(itemValue, itemKey) in item" :key="itemKey" class="field-row">
-                                          <span class="field-label-small">{{ formatJsonKey(itemKey) }}:</span>
-                                          <!-- URL Button -->
-                                          <button 
-                                            v-if="isUrl(itemValue)" 
-                                            @click="openDocumentViewer(getUrlFromValue(itemValue), getFileNameFromUrl(itemValue))"
-                                            class="url-button"
-                                            type="button"
-                                          >
-                                            <svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                                            </svg>
-                                            {{ getFileNameFromUrl(itemValue) }}
-                                          </button>
-                                          <!-- Regular Value -->
-                                          <span v-else :class="'field-value field-value-' + getJsonValueType(itemValue)">{{ formatJsonValue(itemValue) }}</span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                    <!-- Simple Array -->
-                                    <div v-else-if="Array.isArray(value)" class="array-items">
-                                      <div v-for="(item, index) in value" :key="index" class="array-item-simple">
-                                        <!-- URL Button -->
-                                        <button 
-                                          v-if="isUrl(item)" 
-                                          @click="openDocumentViewer(getUrlFromValue(item), getFileNameFromUrl(item))"
-                                          class="url-button"
-                                          type="button"
-                                        >
-                                          <svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                                          </svg>
-                                          {{ getFileNameFromUrl(item) }}
-                                        </button>
-                                        <!-- Regular Value -->
-                                        <span v-else :class="'field-value field-value-' + getJsonValueType(item)">{{ formatJsonValue(item) }}</span>
-                                      </div>
-                                    </div>
-                                    <!-- Object -->
-                                    <div v-else-if="typeof value === 'object' && value !== null" class="object-items">
-                                      <div v-for="(objValue, objKey) in value" :key="objKey" class="field-row">
-                                        <span class="field-label-small">{{ formatJsonKey(objKey) }}:</span>
-                                        <!-- URL Button -->
-                                        <button 
-                                          v-if="isUrl(objValue)" 
-                                          @click="openDocumentViewer(getUrlFromValue(objValue), getFileNameFromUrl(objValue))"
-                                          class="url-button"
-                                          type="button"
-                                        >
-                                          <svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                                          </svg>
-                                          {{ getFileNameFromUrl(objValue) }}
-                                        </button>
-                                        <!-- Regular Value -->
-                                        <span v-else :class="'field-value field-value-' + getJsonValueType(objValue)">{{ formatJsonValue(objValue) }}</span>
-                                      </div>
-                                    </div>
-                                    <!-- Simple Value -->
-                                    <div v-else class="simple-value-wrapper">
-                                      <!-- URL Button -->
-                                      <button 
-                                        v-if="isUrl(value)" 
-                                        @click="openDocumentViewer(getUrlFromValue(value), getFileNameFromUrl(value))"
-                                        class="url-button"
-                                        type="button"
-                                      >
-                                        <svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                                        </svg>
-                                        {{ getFileNameFromUrl(value) }}
-                                      </button>
-                                      <!-- Regular Value -->
-                                      <span v-else :class="'field-value field-value-' + getJsonValueType(value)">{{ formatJsonValue(value) }}</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                              
-                              <!-- Documents from document_urls - Inline Viewer -->
-                              <div v-if="getDocumentsFromUrls(response).length > 0" class="documents-section">
-                                <div class="documents-header">
-                                  <span class="documents-title">Attached Documents</span>
-                                  <span class="documents-count">{{ getDocumentsFromUrls(response).length }} file(s)</span>
-                                </div>
-                                <div class="documents-list">
-                                  <button 
-                                    v-for="(document, docIndex) in getDocumentsFromUrls(response)" 
-                                    :key="docIndex"
-                                    @click="openDocumentViewer(getDocumentUrlFromData(document), getDocumentName(document))"
-                                    class="document-link"
-                                  >
-                                    <svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                                    </svg>
-                                    {{ getDocumentName(document) }}
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
+                        <div v-else class="summary-info">
+                          <div class="summary-item">
+                            <span class="summary-label">Total Responses:</span>
+                            <span class="summary-value">{{ rfpData.length }}</span>
+                          </div>
+                          <div class="summary-item" v-if="rfpData[0]?.submission_date">
+                            <span class="summary-label">Latest Submission:</span>
+                            <span class="summary-value">{{ formatDate(rfpData[0].submission_date) }}</span>
+                          </div>
+                          <div class="summary-item" v-if="getTotalDocumentCount() > 0">
+                            <span class="summary-label">Total Items:</span>
+                            <span class="summary-value">{{ getTotalDocumentCount() }} item(s)</span>
                           </div>
                         </div>
                       </div>
@@ -734,6 +641,163 @@
       </div>
     </div>
   </div>
+
+  <!-- Response Details Modal -->
+  <div v-if="responseDetailsModal.show" class="response-details-overlay" @click.self="closeResponseDetailsModal">
+    <div class="response-details-modal">
+      <div class="response-details-header">
+        <div class="response-details-header-content">
+          <div class="response-details-title-section">
+            <h3 class="response-details-title">Response Documents Details</h3>
+            <p class="response-details-subtitle">Complete information and documents from RFP responses</p>
+          </div>
+          <button @click="closeResponseDetailsModal" class="response-details-close">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="response-details-content">
+        <div v-if="rfpData.length === 0" class="response-details-empty">
+          <div class="response-details-empty-icon">
+            <svg class="icon-large" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+          </div>
+          <h4 class="response-details-empty-title">No RFP Responses Found</h4>
+          <p class="response-details-empty-text">There are no RFP responses available for this vendor.</p>
+        </div>
+        <div v-else class="response-details-list">
+          <div v-for="(response, index) in rfpData" :key="response.response_id" class="response-documents-modern">
+            <div class="response-group-modern">
+              <div class="response-header-modern">
+                <div class="response-header-info">
+                  <h4 class="response-title-modern">Response #{{ response.response_id }}</h4>
+                  <p class="response-subtitle-modern">Submitted on {{ formatDate(response.submission_date) }}</p>
+                </div>
+                <div class="response-header-badge" v-if="getResponseDocumentCount(response) > 0">
+                  <svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                  </svg>
+                  {{ getResponseDocumentCount(response) }} item(s)
+                </div>
+              </div>
+              
+              <!-- All Data from response_documents (simplified structure) -->
+              <div class="response-data-container" v-if="getRequiredResponseData(response)">
+                <div v-for="(groupData, groupName) in getRequiredResponseData(response)" :key="groupName" class="data-group">
+                  <h4 class="group-title">{{ groupName }}</h4>
+                  <div v-for="(value, key) in groupData" :key="key" class="data-field">
+                    <span class="field-label">{{ formatJsonKey(key) }}:</span>
+                    <!-- Array of Objects -->
+                    <div v-if="Array.isArray(value) && value.length > 0 && typeof value[0] === 'object'" class="array-items">
+                      <div v-for="(item, index) in value" :key="index" class="array-item">
+                        <div v-for="(itemValue, itemKey) in item" :key="itemKey" class="field-row">
+                          <span class="field-label-small">{{ formatJsonKey(itemKey) }}:</span>
+                          <!-- URL Button -->
+                          <button 
+                            v-if="isUrl(itemValue)" 
+                            @click="openDocumentViewer(getUrlFromValue(itemValue), getFileNameFromUrl(itemValue))"
+                            class="url-button"
+                            type="button"
+                          >
+                            <svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                            {{ getFileNameFromUrl(itemValue) }}
+                          </button>
+                          <!-- Regular Value -->
+                          <span v-else :class="'field-value field-value-' + getJsonValueType(itemValue)">{{ formatJsonValue(itemValue) }}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <!-- Simple Array -->
+                    <div v-else-if="Array.isArray(value)" class="array-items">
+                      <div v-for="(item, index) in value" :key="index" class="array-item-simple">
+                        <!-- URL Button -->
+                        <button 
+                          v-if="isUrl(item)" 
+                          @click="openDocumentViewer(getUrlFromValue(item), getFileNameFromUrl(item))"
+                          class="url-button"
+                          type="button"
+                        >
+                          <svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                          </svg>
+                          {{ getFileNameFromUrl(item) }}
+                        </button>
+                        <!-- Regular Value -->
+                        <span v-else :class="'field-value field-value-' + getJsonValueType(item)">{{ formatJsonValue(item) }}</span>
+                      </div>
+                    </div>
+                    <!-- Object -->
+                    <div v-else-if="typeof value === 'object' && value !== null" class="object-items">
+                      <div v-for="(objValue, objKey) in value" :key="objKey" class="field-row">
+                        <span class="field-label-small">{{ formatJsonKey(objKey) }}:</span>
+                        <!-- URL Button -->
+                        <button 
+                          v-if="isUrl(objValue)" 
+                          @click="openDocumentViewer(getUrlFromValue(objValue), getFileNameFromUrl(objValue))"
+                          class="url-button"
+                          type="button"
+                        >
+                          <svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                          </svg>
+                          {{ getFileNameFromUrl(objValue) }}
+                        </button>
+                        <!-- Regular Value -->
+                        <span v-else :class="'field-value field-value-' + getJsonValueType(objValue)">{{ formatJsonValue(objValue) }}</span>
+                      </div>
+                    </div>
+                    <!-- Simple Value -->
+                    <div v-else class="simple-value-wrapper">
+                      <!-- URL Button -->
+                      <button 
+                        v-if="isUrl(value)" 
+                        @click="openDocumentViewer(getUrlFromValue(value), getFileNameFromUrl(value))"
+                        class="url-button"
+                        type="button"
+                      >
+                        <svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        {{ getFileNameFromUrl(value) }}
+                      </button>
+                      <!-- Regular Value -->
+                      <span v-else :class="'field-value field-value-' + getJsonValueType(value)">{{ formatJsonValue(value) }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Documents from document_urls - Inline Viewer -->
+              <div v-if="getDocumentsFromUrls(response).length > 0" class="documents-section">
+                <div class="documents-header">
+                  <span class="documents-title">Attached Documents</span>
+                  <span class="documents-count">{{ getDocumentsFromUrls(response).length }} file(s)</span>
+                </div>
+                <div class="documents-list">
+                  <button 
+                    v-for="(document, docIndex) in getDocumentsFromUrls(response)" 
+                    :key="docIndex"
+                    @click="openDocumentViewer(getDocumentUrlFromData(document), getDocumentName(document))"
+                    class="document-link"
+                  >
+                    <svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    {{ getDocumentName(document) }}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup>
@@ -780,6 +844,29 @@ const closeDocumentViewer = () => {
     url: '',
     title: ''
   }
+}
+
+// Response details modal state
+const responseDetailsModal = ref({
+  show: false
+})
+
+const openResponseDetailsModal = () => {
+  responseDetailsModal.value.show = true
+}
+
+const closeResponseDetailsModal = () => {
+  responseDetailsModal.value.show = false
+}
+
+// Helper to get total document count across all responses
+const getTotalDocumentCount = () => {
+  if (!rfpData.value || rfpData.value.length === 0) return 0
+  let total = 0
+  rfpData.value.forEach(response => {
+    total += getResponseDocumentCount(response)
+  })
+  return total
 }
 
 // Check if a value is a URL or contains a URL

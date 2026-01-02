@@ -31,7 +31,7 @@ class PlanCreateSerializer(serializers.Serializer):
     vendor_id = serializers.IntegerField(required=True)
     strategy_id = serializers.IntegerField(required=False, allow_null=True)
     strategy_name = serializers.CharField(max_length=255, required=True)
-    plan_type = serializers.ChoiceField(choices=['BCP', 'DRP'], required=True)
+    plan_type = serializers.CharField(max_length=45, required=True)  # Validated against dropdown values in view
     plan_name = serializers.CharField(max_length=255, required=True)
     version = serializers.CharField(max_length=32, required=False, default='1.0')
     document_date = serializers.DateField(required=False, allow_null=True)

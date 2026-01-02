@@ -1,0 +1,340 @@
+{
+  "performanceDashboard": {
+    "summary": {
+      "overallCompliance": 95.2,
+      "avgResponseTime": 2.1,
+      "systemUptime": 99.6,
+      "activeAlerts": 3,
+      "highPriorityAlerts": 2,
+      "trends": {
+        "compliance": "+2.1%",
+        "responseTime": "-0.3s",
+        "uptime": "+0.2%"
+      }
+    },
+    "vendorPerformance": [
+      {
+        "name": "Oracle",
+        "compliance": 98,
+        "responseTime": 1.8,
+        "uptime": 99.9,
+        "status": "excellent",
+        "slaCount": 5,
+        "activeAlerts": 0
+      },
+      {
+        "name": "AWS",
+        "compliance": 95,
+        "responseTime": 2.1,
+        "uptime": 99.7,
+        "status": "good",
+        "slaCount": 8,
+        "activeAlerts": 1
+      },
+      {
+        "name": "Microsoft",
+        "compliance": 92,
+        "responseTime": 2.5,
+        "uptime": 99.5,
+        "status": "warning",
+        "slaCount": 6,
+        "activeAlerts": 1
+      },
+      {
+        "name": "Salesforce",
+        "compliance": 89,
+        "responseTime": 3.2,
+        "uptime": 99.2,
+        "status": "poor",
+        "slaCount": 4,
+        "activeAlerts": 1
+      }
+    ],
+    "complianceDistribution": [
+      { "name": "Excellent", "value": 45, "color": "#22c55e" },
+      { "name": "Good", "value": 35, "color": "#3b82f6" },
+      { "name": "Warning", "value": 15, "color": "#f59e0b" },
+      { "name": "Poor", "value": 5, "color": "#ef4444" }
+    ],
+    "performanceTrends": [
+      { "month": "Jul", "uptime": 99.1, "responseTime": 2.3, "compliance": 94 },
+      { "month": "Aug", "uptime": 99.5, "responseTime": 2.1, "compliance": 96 },
+      { "month": "Sep", "uptime": 98.8, "responseTime": 2.8, "compliance": 92 },
+      { "month": "Oct", "uptime": 99.3, "responseTime": 2.2, "compliance": 95 },
+      { "month": "Nov", "uptime": 99.0, "responseTime": 2.5, "compliance": 93 },
+      { "month": "Dec", "uptime": 99.7, "responseTime": 1.9, "compliance": 97 }
+    ]
+  },
+  "dataCollection": {
+    "dataSources": [
+      {
+        "id": "api",
+        "name": "API Integration",
+        "description": "Real-time data from vendor APIs",
+        "status": "active",
+        "dataPoints": 847,
+        "lastSync": "2024-01-15T14:35:00Z"
+      },
+      {
+        "id": "monitoring",
+        "name": "Monitoring Tools",
+        "description": "Automated monitoring systems",
+        "status": "active",
+        "dataPoints": 324,
+        "lastSync": "2024-01-15T14:30:00Z"
+      },
+      {
+        "id": "manual",
+        "name": "Manual Entry",
+        "description": "User-entered performance data",
+        "status": "active",
+        "dataPoints": 76,
+        "lastSync": "2024-01-15T14:25:00Z"
+      },
+      {
+        "id": "bulk",
+        "name": "Bulk Upload",
+        "description": "CSV/Excel file imports",
+        "status": "active",
+        "dataPoints": 0,
+        "lastSync": "2024-01-15T12:00:00Z"
+      }
+    ],
+    "statistics": {
+      "totalDataPoints": 1247,
+      "automatedCollection": 95.2,
+      "manualEntry": 4.8,
+      "dataQuality": 98.5
+    },
+    "slas": [
+      {
+        "id": "1",
+        "name": "Cloud Infrastructure SLA",
+        "metrics": ["Uptime", "Response Time", "Throughput"],
+        "vendor": "AWS"
+      },
+      {
+        "id": "2",
+        "name": "Support Services SLA",
+        "metrics": ["Resolution Time", "First Response", "Customer Satisfaction"],
+        "vendor": "Microsoft"
+      },
+      {
+        "id": "3",
+        "name": "Data Processing SLA",
+        "metrics": ["Processing Speed", "Error Rate", "Availability"],
+        "vendor": "Oracle"
+      }
+    ],
+    "metricTypes": [
+      { "value": "uptime", "label": "Uptime (%)", "unit": "%" },
+      { "value": "response_time", "label": "Response Time", "unit": "ms" },
+      { "value": "throughput", "label": "Throughput", "unit": "req/sec" },
+      { "value": "resolution_time", "label": "Resolution Time", "unit": "hours" },
+      { "value": "first_response", "label": "First Response", "unit": "minutes" },
+      { "value": "satisfaction", "label": "Customer Satisfaction", "unit": "score" },
+      { "value": "processing_speed", "label": "Processing Speed", "unit": "MB/s" },
+      { "value": "error_rate", "label": "Error Rate", "unit": "%" },
+      { "value": "availability", "label": "Availability", "unit": "%" }
+    ]
+  },
+  "analytics": {
+    "summary": {
+      "analyticsCoverage": 98.5,
+      "aiPredictions": 87.3,
+      "trendAccuracy": 94.2,
+      "forecastHorizon": "6M"
+    },
+    "vendorComparison": [
+      {
+        "vendor": "Oracle",
+        "compliance": 98,
+        "responseTime": 1.8,
+        "uptime": 99.9,
+        "cost": 85000,
+        "satisfaction": 4.8
+      },
+      {
+        "vendor": "AWS",
+        "compliance": 95,
+        "responseTime": 2.1,
+        "uptime": 99.7,
+        "cost": 92000,
+        "satisfaction": 4.6
+      },
+      {
+        "vendor": "Microsoft",
+        "compliance": 92,
+        "responseTime": 2.5,
+        "uptime": 99.5,
+        "cost": 78000,
+        "satisfaction": 4.4
+      },
+      {
+        "vendor": "Salesforce",
+        "compliance": 89,
+        "responseTime": 3.2,
+        "uptime": 99.2,
+        "cost": 65000,
+        "satisfaction": 4.2
+      }
+    ],
+    "forecastData": [
+      { "month": "Feb", "predicted": 96.5, "confidence": 85 },
+      { "month": "Mar", "predicted": 97.2, "confidence": 82 },
+      { "month": "Apr", "predicted": 96.8, "confidence": 78 },
+      { "month": "May", "predicted": 97.5, "confidence": 75 }
+    ],
+    "aiInsights": [
+      {
+        "id": "1",
+        "slaName": "Cloud Infrastructure SLA",
+        "metricType": "Uptime",
+        "classification": "excellent",
+        "aiPrediction": "Target will be met consistently",
+        "confidence": 92,
+        "trend": "up"
+      },
+      {
+        "id": "2",
+        "slaName": "Cloud Infrastructure SLA",
+        "metricType": "Response Time",
+        "classification": "warning",
+        "aiPrediction": "Performance may degrade",
+        "confidence": 78,
+        "trend": "down"
+      },
+      {
+        "id": "3",
+        "slaName": "Support Services SLA",
+        "metricType": "Resolution Time",
+        "classification": "poor",
+        "aiPrediction": "Requires immediate attention",
+        "confidence": 95,
+        "trend": "down"
+      },
+      {
+        "id": "4",
+        "slaName": "Data Processing SLA",
+        "metricType": "Processing Speed",
+        "classification": "excellent",
+        "aiPrediction": "Performance trending upward",
+        "confidence": 85,
+        "trend": "up"
+      }
+    ]
+  },
+  "monitoring": {
+    "summary": {
+      "activeAlerts": 3,
+      "monitoringRules": 12,
+      "activeRules": 10,
+      "avgResponseTime": 1.8,
+      "systemHealth": 98.5
+    },
+    "realTimeMetrics": [
+      { "time": "14:30", "uptime": 99.95, "responseTime": 180, "alerts": 0 },
+      { "time": "14:31", "uptime": 99.92, "responseTime": 185, "alerts": 0 },
+      { "time": "14:32", "uptime": 99.88, "responseTime": 220, "alerts": 1 },
+      { "time": "14:33", "uptime": 99.85, "responseTime": 250, "alerts": 2 },
+      { "time": "14:34", "uptime": 99.90, "responseTime": 190, "alerts": 1 },
+      { "time": "14:35", "uptime": 99.95, "responseTime": 175, "alerts": 0 }
+    ],
+    "activeAlerts": [
+      {
+        "id": "ALT-001",
+        "vendor": "Salesforce",
+        "metric": "Response Time",
+        "currentValue": "3.2s",
+        "threshold": "2.0s",
+        "severity": "high",
+        "status": "active",
+        "timestamp": "2024-01-15T14:32:00Z",
+        "duration": "3m 45s",
+        "assignedTo": "John Smith"
+      },
+      {
+        "id": "ALT-002",
+        "vendor": "Microsoft",
+        "metric": "Uptime",
+        "currentValue": "99.5%",
+        "threshold": "99.8%",
+        "severity": "medium",
+        "status": "active",
+        "timestamp": "2024-01-15T14:30:00Z",
+        "duration": "5m 12s",
+        "assignedTo": "Mary Johnson"
+      },
+      {
+        "id": "ALT-003",
+        "vendor": "Oracle",
+        "metric": "Database Performance",
+        "currentValue": "85%",
+        "threshold": "90%",
+        "severity": "low",
+        "status": "acknowledged",
+        "timestamp": "2024-01-15T14:25:00Z",
+        "duration": "8m 30s",
+        "assignedTo": "David Wilson"
+      }
+    ],
+    "alertHistory": [
+      {
+        "id": "ALT-H001",
+        "vendor": "AWS",
+        "metric": "Latency",
+        "value": "2.8s",
+        "threshold": "2.0s",
+        "severity": "high",
+        "status": "resolved",
+        "timestamp": "2024-01-15T13:45:00Z",
+        "resolvedAt": "2024-01-15T14:15:00Z",
+        "resolution": "Auto-scaling triggered"
+      },
+      {
+        "id": "ALT-H002",
+        "vendor": "Google Cloud",
+        "metric": "Availability",
+        "value": "99.7%",
+        "threshold": "99.9%",
+        "severity": "medium",
+        "status": "resolved",
+        "timestamp": "2024-01-15T12:30:00Z",
+        "resolvedAt": "2024-01-15T13:00:00Z",
+        "resolution": "Service restored"
+      }
+    ],
+    "monitoringRules": [
+      {
+        "id": "rule-1",
+        "name": "Response Time Alert",
+        "metric": "Response Time",
+        "condition": ">",
+        "threshold": "2.0s",
+        "severity": "high",
+        "enabled": true,
+        "vendor": "All Vendors"
+      },
+      {
+        "id": "rule-2",
+        "name": "Uptime Alert",
+        "metric": "Uptime",
+        "condition": "<",
+        "threshold": "99.8%",
+        "severity": "medium",
+        "enabled": true,
+        "vendor": "All Vendors"
+      },
+      {
+        "id": "rule-3",
+        "name": "Database Performance",
+        "metric": "Database Performance",
+        "condition": "<",
+        "threshold": "90%",
+        "severity": "low",
+        "enabled": false,
+        "vendor": "Oracle"
+      }
+    ]
+  }
+}

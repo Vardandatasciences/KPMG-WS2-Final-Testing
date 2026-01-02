@@ -105,7 +105,7 @@ class Migration(migrations.Migration):
                 ('archived_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='archived_contracts', to=settings.AUTH_USER_MODEL)),
                 ('contract_owner', models.ForeignKey(blank=True, help_text='Contract owner', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='owned_contracts', to=settings.AUTH_USER_MODEL)),
                 ('legal_reviewer', models.ForeignKey(blank=True, help_text='Legal reviewer', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='reviewed_contracts', to=settings.AUTH_USER_MODEL)),
-                ('vendor', models.ForeignKey(help_text='Associated vendor', on_delete=django.db.models.deletion.CASCADE, related_name='contracts', to='tprm_contracts.vendor')),
+                ('vendor', models.ForeignKey(help_text='Associated vendor', on_delete=django.db.models.deletion.CASCADE, related_name='contracts', to='contracts.vendor')),
             ],
             options={
                 'db_table': 'vendor_contracts',
@@ -131,7 +131,7 @@ class Migration(migrations.Migration):
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('approved_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='approved_terms', to=settings.AUTH_USER_MODEL)),
                 ('created_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='created_terms', to=settings.AUTH_USER_MODEL)),
-                ('contract', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='terms', to='tprm_contracts.vendorcontract')),
+                ('contract', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='terms', to='contracts.vendorcontract')),
             ],
             options={
                 'db_table': 'contract_terms',
@@ -144,7 +144,7 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('clause_id', models.CharField(max_length=100, unique=True)),
                 ('clause_name', models.CharField(max_length=255)),
-                ('clause_type', models.CharField(choices=[('standard', 'Standard'), ('risk', 'Risk'), ('tprm_compliance', 'Compliance'), ('financial', 'Financial'), ('operational', 'Operational'), ('renewal', 'Renewal'), ('termination', 'Termination'), ('other', 'Other')], default='standard', max_length=20)),
+                ('clause_type', models.CharField(choices=[('standard', 'Standard'), ('risk', 'Risk'), ('compliance', 'Compliance'), ('financial', 'Financial'), ('operational', 'Operational'), ('renewal', 'Renewal'), ('termination', 'Termination'), ('other', 'Other')], default='standard', max_length=20)),
                 ('clause_text', models.TextField()),
                 ('risk_level', models.CharField(choices=[('low', 'Low'), ('medium', 'Medium'), ('high', 'High'), ('critical', 'Critical'), ('urgent', 'Urgent')], default='low', max_length=10)),
                 ('legal_category', models.CharField(blank=True, max_length=100, null=True)),
@@ -159,7 +159,7 @@ class Migration(migrations.Migration):
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('created_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='created_clauses', to=settings.AUTH_USER_MODEL)),
-                ('contract', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='clauses', to='tprm_contracts.vendorcontract')),
+                ('contract', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='clauses', to='contracts.vendorcontract')),
             ],
             options={
                 'db_table': 'contract_clauses',

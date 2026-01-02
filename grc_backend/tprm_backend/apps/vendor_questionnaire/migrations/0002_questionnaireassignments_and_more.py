@@ -7,8 +7,8 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('tprm_vendor_core', '__first__'),
-        ('tprm_vendor_questionnaire', '0001_initial'),
+        ('vendor_core', '__first__'),
+        ('vendor_questionnaire', '0001_initial'),
     ]
 
     operations = [
@@ -25,7 +25,7 @@ class Migration(migrations.Migration):
                 ('notes', models.TextField(blank=True, null=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('assigned_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.DO_NOTHING, to='tprm_vendor_core.users')),
+                ('assigned_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.DO_NOTHING, to='vendor_core.users')),
             ],
             options={
                 'verbose_name': 'Questionnaire Assignment',
@@ -46,7 +46,7 @@ class Migration(migrations.Migration):
                 ('file_uploads', models.JSONField(blank=True, null=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('assignment', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='responses', to='tprm_vendor_questionnaire.questionnaireassignments')),
+                ('assignment', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='responses', to='vendor_questionnaire.questionnaireassignments')),
             ],
             options={
                 'verbose_name': 'Questionnaire Response',
@@ -69,17 +69,17 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='questionnaireresponsesubmissions',
             name='question',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='vendor_responses', to='tprm_vendor_questionnaire.questionnairequestions'),
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='vendor_responses', to='vendor_questionnaire.questionnairequestions'),
         ),
         migrations.AddField(
             model_name='questionnaireassignments',
             name='questionnaire',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='assignments', to='tprm_vendor_questionnaire.questionnaires'),
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='assignments', to='vendor_questionnaire.questionnaires'),
         ),
         migrations.AddField(
             model_name='questionnaireassignments',
             name='temp_vendor',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='questionnaire_assignments', to='tprm_vendor_core.tempvendor'),
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='questionnaire_assignments', to='vendor_core.tempvendor'),
         ),
         migrations.AlterUniqueTogether(
             name='questionnaireresponsesubmissions',

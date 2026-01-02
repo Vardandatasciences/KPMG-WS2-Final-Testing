@@ -476,14 +476,19 @@
 
 <script setup lang="ts">
 import './ContractApprovalAssignment.css'
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { useStore } from 'vuex'
 import contractApprovalApi from '../../services/contractApprovalApi.js'
 import contractsApi from '../../services/contractsApi.js'
 import loggingService from '@/services/loggingService'
 import { PopupService } from '@/popup/popupService'
 
 const route = useRoute()
+const store = useStore()
+
+// Get current user from store
+const currentUser = computed(() => store.getters['auth/currentUser'] || store.state.auth?.currentUser)
 
 // Reactive data
 const isSubmitting = ref(false)
@@ -533,21 +538,39 @@ watch(form, (newForm) => {
 const fetchUsers = async () => {
   isLoadingUsers.value = true
   try {
-    console.log('Fetching users from contracts API')
-    const response = await contractsApi.getUsers()
+    console.log('Fetching approval users (with ApproveContract permission) from contracts API')
+    // Use the new endpoint that filters users by ApproveContract permission
+    const response = await contractsApi.getApprovalUsers()
     
     console.log('API response data:', response)
     
     if (response.success && response.data) {
       users.value = response.data
-      console.log('Successfully fetched users:', response.data.length, 'records')
+      console.log('Successfully fetched approval users:', response.data.length, 'records')
+      
+      // Set assigner_id to current logged-in user if they have permission
+      if (currentUser.value) {
+        const currentUserId = currentUser.value.userid || currentUser.value.user_id
+        if (currentUserId) {
+          // Check if current user is in the filtered list
+          const currentUserInList = users.value.find(u => u.user_id == currentUserId)
+          if (currentUserInList) {
+          form.value.assigner_id = currentUserId.toString()
+          console.log('Set assigner_id to current user:', currentUserId)
+          } else {
+            console.log('Current user does not have ApproveContract permission, not setting as assigner')
+          }
+        }
+      }
     } else {
-      console.error('API returned no users data')
+      console.error('API returned no approval users data')
       users.value = []
     }
   } catch (error) {
-    console.error('Error fetching users:', error)
+    console.error('Error fetching approval users:', error)
     users.value = []
+    // Show error message to user
+    PopupService.warning('Failed to load users with approval permissions. Please try again or contact your administrator.', 'Loading Error')
   } finally {
     isLoadingUsers.value = false
   }
@@ -790,10 +813,13 @@ const createAssignment = async () => {
 }
 
 const resetForm = () => {
+  // Get current user ID for assigner
+  const currentUserId = currentUser.value?.userid || currentUser.value?.user_id
+  
   form.value = {
     workflow_id: null, // Will be auto-generated as integer based on workflow_name
     workflow_name: '',
-    assigner_id: '',
+    assigner_id: currentUserId ? currentUserId.toString() : '', // Set to current logged-in user
     assignee_id: '', // User can select from dropdown
     object_type: '', // Will be updated based on selected contract
     object_id: '',
@@ -886,6 +912,15 @@ onMounted(async () => {
   tomorrow.setDate(tomorrow.getDate() + 1)
   
   form.value.due_date = tomorrow.toISOString().slice(0, 16)
+  
+  // Set assigner_id to current logged-in user if available
+  if (currentUser.value) {
+    const currentUserId = currentUser.value.userid || currentUser.value.user_id
+    if (currentUserId) {
+      form.value.assigner_id = currentUserId.toString()
+      console.log('Set assigner_id to current user on mount:', currentUserId)
+    }
+  }
   
   // Fetch all data first
   await fetchUsers()

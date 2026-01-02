@@ -42,7 +42,7 @@ from django.db import transaction
 
 # RBAC imports
 from tprm_backend.rbac.tprm_decorators import rbac_vendor_required
-from tprm_backend.apps.vendor_core.vendor_authentication import UnifiedJWTAuthentication, SimpleAuthenticatedPermission
+from tprm_backend.apps.vendor_core.vendor_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 
 
 
@@ -716,7 +716,7 @@ def check_sequential_approval_ready(approval_id, stage_order):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view')
 def get_my_approvals(request):
@@ -966,7 +966,7 @@ def get_my_approvals(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view')
 def get_stage_reviewers(request):
@@ -1024,7 +1024,7 @@ def get_stage_reviewers(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view')
 def get_user_assigned_stages(request, user_id):
@@ -1122,7 +1122,7 @@ def get_user_assigned_stages(request, user_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('approve_reject')
 def post_stage_action(request, stage_id):
@@ -1676,7 +1676,7 @@ def post_stage_action(request, stage_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view')
 def get_questionnaire_questions(request, questionnaire_id: int):
@@ -1760,7 +1760,7 @@ def get_questionnaire_questions(request, questionnaire_id: int):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view')
 def get_approvals_by_requester(request):
@@ -1924,7 +1924,7 @@ def get_approvals_by_requester(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view')
 def get_users(request):
@@ -2048,7 +2048,7 @@ def get_users(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view')
 def get_request_with_stages(request, approval_id: str):
@@ -2262,7 +2262,7 @@ def get_request_with_stages(request, approval_id: str):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('approve_reject')
 def requester_final_decision(request, approval_id: str):
@@ -2982,7 +2982,7 @@ def requester_final_decision(request, approval_id: str):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('approve_reject')
 def admin_handle_rejection(request, approval_id):
@@ -3404,7 +3404,7 @@ def admin_handle_rejection(request, approval_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view')
 def get_request_versions(request, approval_id):
@@ -3493,7 +3493,7 @@ def get_request_versions(request, approval_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view')
 def debug_version_data(request, approval_id):
@@ -3604,7 +3604,7 @@ def debug_version_data(request, approval_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('create')
 def create_workflow(request):
@@ -3844,7 +3844,7 @@ def create_workflow(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view')
 def get_workflows(request):
@@ -3894,7 +3894,7 @@ def get_workflows(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view')
 def get_workflow_stages(request, workflow_id):
@@ -3948,7 +3948,7 @@ def get_workflow_stages(request, workflow_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('submit_for_approval')
 def create_workflow_request(request):
@@ -4190,7 +4190,7 @@ def create_workflow_request(request):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('create')
 def create_comprehensive_workflow(request):
@@ -4975,7 +4975,7 @@ def create_comprehensive_workflow(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view')
 def get_active_questionnaires(request):
@@ -5079,7 +5079,7 @@ def get_active_questionnaires(request):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('create')
 def add_dummy_users(request):
@@ -5179,7 +5179,7 @@ def add_dummy_users(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view')
 def get_vendors(request):
@@ -5281,7 +5281,7 @@ def get_vendors(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view')
 def get_vendor_detail(request, vendor_id):
@@ -5399,7 +5399,7 @@ def get_vendor_detail(request, vendor_id):
 # Dashboard API Endpoints
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view')
 def dashboard_stats(request):
@@ -5565,7 +5565,7 @@ def dashboard_stats(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view')
 def recent_requests(request):
@@ -5673,7 +5673,7 @@ def recent_requests(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view')
 def user_tasks(request, user_id):
@@ -5819,7 +5819,7 @@ def user_tasks(request, user_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view')
 def user_requests(request, user_id):
@@ -5929,7 +5929,7 @@ def user_requests(request, user_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view')
 def get_vendor_risks(request, vendor_id):
@@ -6243,7 +6243,7 @@ def get_vendor_risks(request, vendor_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view')
 def get_submitted_questionnaire_assignments(request):
@@ -6439,7 +6439,7 @@ def get_submitted_questionnaire_assignments(request):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('update')
 def save_reviewer_scores(request):
@@ -7019,7 +7019,7 @@ def save_reviewer_scores(request):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('update')
 def save_stage_draft(request):
@@ -7189,7 +7189,7 @@ def save_stage_draft(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view')
 def load_stage_draft(request, stage_id):
@@ -7289,7 +7289,7 @@ def load_stage_draft(request, stage_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view')
 def get_parallel_approval_scoring_data(request, approval_id):
@@ -7875,7 +7875,7 @@ def get_parallel_approval_scoring_data(request, approval_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('update')
 def save_final_assignee_scores(request):
@@ -8849,7 +8849,7 @@ def save_final_assignee_scores(request):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('update')
 def update_question_scores_in_json(request):
@@ -9432,7 +9432,7 @@ def _end_questionnaire_approval_start_questionnaire_response(vendor_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view')
 def test_lifecycle_stage_3(request, vendor_id):
@@ -9481,7 +9481,7 @@ def test_lifecycle_stage_3(request, vendor_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view')
 def check_risk_generation_status(request, approval_id):
@@ -9543,7 +9543,7 @@ def check_risk_generation_status(request, approval_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view')
 def get_approval_version_history(request, approval_id):

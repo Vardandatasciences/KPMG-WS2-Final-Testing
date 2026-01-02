@@ -5,8 +5,6 @@ URL patterns for TPRM RBAC system
 from django.urls import path
 from . import tprm_views
 
-app_name = 'tprm_rbac'
-
 urlpatterns = [
     # Core RBAC endpoints
     path('permissions/', tprm_views.get_user_permissions, name='get_user_permissions'),

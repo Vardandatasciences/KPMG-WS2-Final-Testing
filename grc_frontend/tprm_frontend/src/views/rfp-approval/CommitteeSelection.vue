@@ -250,8 +250,9 @@ import loggingService from '@/services/loggingService'
 
 const router = useRouter()
 
+import { getTprmApiV1BaseUrl, getTprmApiUrl } from '@/utils/backendEnv'
 // API base URL
-const API_BASE_URL = 'http://localhost:8000/api/tprm/rfp'
+const API_BASE_URL = getTprmApiV1BaseUrl()
 
 // Get auth headers once at the top level
 const { getAuthHeaders } = useRfpApi()
@@ -629,7 +630,7 @@ const createCommitteeEvaluationWorkflow = async (rfpId, committeeMembers, respon
     console.log('Response IDs:', responseIds)
     
     // Check if workflow already exists for this RFP
-    const existingWorkflowsResponse = await fetch(`http://localhost:8000/api/approval/workflows/`, {
+    const existingWorkflowsResponse = await fetch(getTprmApiUrl('approval/workflows/'), {
       method: 'GET',
       headers: getAuthHeaders()
     })
@@ -681,7 +682,7 @@ const createCommitteeEvaluationWorkflow = async (rfpId, committeeMembers, respon
     console.log('Workflow data to be submitted:', workflowData)
     
     // Submit workflow to backend
-    const response = await fetch('http://localhost:8000/api/approval/workflows/', {
+    const response = await fetch(getTprmApiUrl('approval/workflows/'), {
       method: 'POST',
       headers: {
         ...getAuthHeaders(),

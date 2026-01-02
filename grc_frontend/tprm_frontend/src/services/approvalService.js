@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const API_BASE_URL = process.env.VUE_APP_API_URL || 'http://localhost:8000/api/tprm'
+const API_BASE_URL = process.env.VUE_APP_API_URL || 'http://localhost:3000/api'
 
 // Create axios instance with default config
 const apiClient = axios.create({

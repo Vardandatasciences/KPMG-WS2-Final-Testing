@@ -421,7 +421,7 @@
                     <button 
                       @click="updateStatus(approval, 'IN_PROGRESS')" 
                           class="sla-approvals-action-btn action-btn--start"
-                      v-if="approval.status === 'ASSIGNED'"
+                      v-if="canActOnApproval(approval) && approval.status === 'ASSIGNED'"
                       title="Start Working"
                     >
                       <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -620,7 +620,7 @@
                         <button 
                           @click="approveSLA(approval)" 
                           class="sla-approvals-action-btn action-btn--approve"
-                          v-if="approval.status === 'COMMENTED'"
+                          v-if="canActOnApproval(approval) && approval.status === 'COMMENTED'"
                           title="Approve SLA"
                         >
                           <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -630,7 +630,7 @@
                         <button 
                           @click="rejectSLA(approval)" 
                           class="sla-approvals-action-btn action-btn--reject"
-                          v-if="approval.status === 'COMMENTED'"
+                          v-if="canActOnApproval(approval) && approval.status === 'COMMENTED'"
                           title="Reject SLA"
                         >
                           <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -692,8 +692,9 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, onActivated, watch } from 'vue'
+import { ref, computed, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
+import { useStore } from 'vuex'
 import slaApprovalApi from '../../services/slaApprovalApi.js'
 import PopupModal from '@/popup/PopupModal.vue'
 import { PopupService } from '@/popup/popupService'
@@ -708,6 +709,7 @@ export default {
   setup() {
     const router = useRouter()
     const { withPermissionCheck } = usePermissions()
+    const store = useStore()
     
     // Reactive data
     const assignedApprovals = ref([])
@@ -722,6 +724,26 @@ export default {
       object_type: ''
     })
     
+    const getStoredUser = () => {
+      const stored = localStorage.getItem('current_user')
+      if (!stored) return null
+      try {
+        return JSON.parse(stored)
+      } catch (error) {
+        console.error('Error parsing current_user from storage:', error)
+        return null
+      }
+    }
+
+    const getCurrentUser = () => {
+      return store.getters['auth/currentUser'] || getStoredUser()
+    }
+
+    const getCurrentUserId = () => {
+      const user = getCurrentUser()
+      return user?.userid || user?.user_id || user?.id || null
+    }
+
     // Modal states
     const showCommentModal = ref(false)
     const selectedApproval = ref(null)
@@ -743,42 +765,32 @@ export default {
     const fetchMyApprovals = async () => {
       isLoadingApprovals.value = true
       try {
-        // Check if token exists before making request
-        const token = localStorage.getItem('session_token')
-        if (!token) {
-          console.warn('No authentication token found. Please log in.')
+        const currentUserId = getCurrentUserId()
+        if (!currentUserId) {
           assignedApprovals.value = []
+          console.warn('No authenticated user id found for approvals')
           return
         }
-        
-        // Admin view - fetch all approvals without user filtering
+
+        // Fetch approvals assigned to the current user
         const response = await withPermissionCheck(
-          () => slaApprovalApi.getAllApprovals(filters.value),
-          { redirectOnError: false }
+          () => slaApprovalApi.getAllApprovals({
+            ...filters.value,
+            assignee_id: currentUserId
+          })
         )
         
-        console.log('API Response for all approvals:', response)
+        console.log('API Response for approvals:', response)
         
-        if (response && response.success && response.data) {
+        if (response.success && response.data) {
           assignedApprovals.value = response.data
-          console.log('All approvals set to:', assignedApprovals.value)
+          console.log('Approvals set to:', assignedApprovals.value)
         } else {
-          console.error('Failed to fetch approvals:', response?.message || 'Unknown error')
+          console.error('Failed to fetch approvals:', response.message || 'Unknown error')
           assignedApprovals.value = []
         }
       } catch (error) {
-        console.error('Error fetching all approvals:', error)
-        
-        // Handle authentication errors
-        if (error.status === 401 || error.code === 'AUTH_REQUIRED') {
-          console.warn('Authentication required. Redirecting to login...')
-          localStorage.removeItem('session_token')
-          localStorage.removeItem('current_user')
-          if (window.location.pathname !== '/login') {
-            window.location.href = '/login'
-          }
-        }
-        
+        console.error('Error fetching approvals:', error)
         assignedApprovals.value = []
       } finally {
         isLoadingApprovals.value = false
@@ -788,40 +800,37 @@ export default {
     const fetchMyReviews = async () => {
       isLoadingReviews.value = true
       try {
-        // Check if token exists before making request
-        const token = localStorage.getItem('session_token')
-        if (!token) {
-          console.warn('No authentication token found. Please log in.')
+        const currentUserId = getCurrentUserId()
+        if (!currentUserId) {
           reviewApprovals.value = []
+          console.warn('No authenticated user id found for reviews')
           return
         }
+
+        // Fetch approvals created by the current user
+        const response = await slaApprovalApi.getAllReviews({
+          ...filters.value,
+          assigner_id: currentUserId
+        })
         
-        // Admin view - fetch all reviews without user filtering
-        const response = await slaApprovalApi.getAllReviews(filters.value)
-        
-        if (response && response.success && response.data) {
+        if (response.success && response.data) {
           reviewApprovals.value = response.data
         } else {
-          console.error('Failed to fetch reviews:', response?.message || 'Unknown error')
+          console.error('Failed to fetch reviews:', response.message || 'Unknown error')
           reviewApprovals.value = []
         }
       } catch (error) {
-        console.error('Error fetching all reviews:', error)
-        
-        // Handle authentication errors
-        if (error.status === 401 || error.code === 'AUTH_REQUIRED') {
-          console.warn('Authentication required. Redirecting to login...')
-          localStorage.removeItem('session_token')
-          localStorage.removeItem('current_user')
-          if (window.location.pathname !== '/login') {
-            window.location.href = '/login'
-          }
-        }
-        
+        console.error('Error fetching reviews:', error)
         reviewApprovals.value = []
       } finally {
         isLoadingReviews.value = false
       }
+    }
+
+    const canActOnApproval = (approval) => {
+      const currentUserId = getCurrentUserId()
+      if (!currentUserId) return false
+      return Number(approval.assignee_id) === Number(currentUserId)
     }
 
     const formatDate = (dateString) => {
@@ -846,12 +855,20 @@ export default {
     }
 
     const addComment = (approval) => {
+      if (!canActOnApproval(approval)) {
+        PopupService.warning('Only the assigned approver can comment on this SLA.', 'Action Not Allowed')
+        return
+      }
       selectedApproval.value = approval
       commentText.value = approval.comment_text || ''
       showCommentModal.value = true
     }
 
     const updateStatus = async (approval, newStatus) => {
+      if (!canActOnApproval(approval)) {
+        PopupService.warning('Only the assigned approver can update this SLA.', 'Action Not Allowed')
+        return
+      }
       try {
         console.log(`Updating approval ${approval.approval_id} to status ${newStatus}`)
         
@@ -875,6 +892,11 @@ export default {
 
     const submitComment = async () => {
       if (!commentText.value.trim()) return
+
+      if (!selectedApproval.value || !canActOnApproval(selectedApproval.value)) {
+        PopupService.warning('Only the assigned approver can comment on this SLA.', 'Action Not Allowed')
+        return
+      }
 
       try {
         console.log(`Submitting comment for approval ${selectedApproval.value.approval_id}:`, commentText.value)
@@ -928,6 +950,10 @@ export default {
     }
 
     const approveSLA = async (approval) => {
+      if (!canActOnApproval(approval)) {
+        PopupService.warning('Only the assigned approver can approve this SLA.', 'Action Not Allowed')
+        return
+      }
       try {
         console.log(`Approving SLA for approval ${approval.approval_id}`)
         
@@ -954,6 +980,10 @@ export default {
     }
 
     const rejectSLA = async (approval) => {
+      if (!canActOnApproval(approval)) {
+        PopupService.warning('Only the assigned approver can reject this SLA.', 'Action Not Allowed')
+        return
+      }
       PopupService.comment(
         'Please provide a reason for rejection:',
         'Reject SLA',
@@ -994,8 +1024,8 @@ export default {
       console.log('MySlaApprovals component mounted')
       await loggingService.logPageView('SLA', 'My SLA Approvals')
       
-      // Set default user info without authentication dependency
-      userInfo.value = {
+      // Set user info from store/storage fallback
+      userInfo.value = getCurrentUser() || {
         full_name: 'System User',
         user_id: 1,
         username: 'system',
@@ -1052,7 +1082,8 @@ export default {
       closeCommentModal,
       clearFilters,
       approveSLA,
-      rejectSLA
+      rejectSLA,
+      canActOnApproval
     }
   }
 }

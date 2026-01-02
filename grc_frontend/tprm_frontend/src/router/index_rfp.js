@@ -225,7 +225,7 @@ const router = createRouter({
 // Navigation guard with MFA authentication, RBAC permissions, and document title
 router.beforeEach(async (to, from, next) => {
   const isAuthenticated = authService.isAuthenticated()
-  const publicRoutes = ['/login', '/access-denied']
+  const publicRoutes = ['/login', '/otp-verification', '/access-denied']
   const isPublicRoute = publicRoutes.includes(to.path)
   
   console.log('RFP Router - Authentication status:', isAuthenticated)

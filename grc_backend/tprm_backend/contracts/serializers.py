@@ -56,29 +56,38 @@ class VendorSerializer(serializers.ModelSerializer):
         return VendorContactSerializer(contacts, many=True).data
     
     def get_contracts_count(self, obj):
-        """Get total contracts count for vendor"""
+        """Get total contracts count for vendor - optimized to use annotation if available"""
+        # Check if annotation exists (from optimized queryset)
+        if hasattr(obj, 'contracts_count_annotated'):
+            return obj.contracts_count_annotated
+        # Fallback to query if annotation not available (for backward compatibility)
         from .models import VendorContract
         count = VendorContract.objects.filter(
             vendor_id=obj.vendor_id,
             is_archived=False
         ).count()
-        print(f"Vendor {obj.company_name} (ID: {obj.vendor_id}) has {count} contracts")
         return count
     
     def get_total_value(self, obj):
-        """Get total contract value for vendor"""
+        """Get total contract value for vendor - optimized to use annotation if available"""
+        # Check if annotation exists (from optimized queryset)
+        if hasattr(obj, 'total_value_annotated'):
+            return float(obj.total_value_annotated or 0)
+        # Fallback to query if annotation not available (for backward compatibility)
         from .models import VendorContract
         from django.db.models import Sum
         total = VendorContract.objects.filter(
             vendor_id=obj.vendor_id,
             is_archived=False
         ).aggregate(total=Sum('contract_value'))['total']
-        value = float(total or 0)
-        print(f"Vendor {obj.company_name} (ID: {obj.vendor_id}) has total value: ${value}")
-        return value
+        return float(total or 0)
     
     def get_last_activity(self, obj):
-        """Get last activity date for vendor"""
+        """Get last activity date for vendor - optimized to use annotation if available"""
+        # Check if annotation exists (from optimized queryset)
+        if hasattr(obj, 'last_activity_annotated') and obj.last_activity_annotated:
+            return obj.last_activity_annotated
+        # Fallback to query if annotation not available (for backward compatibility)
         from .models import VendorContract
         from django.utils import timezone
         
@@ -1731,7 +1740,7 @@ class ContractApprovalSerializer(serializers.ModelSerializer):
     def get_assigner(self, obj):
         """Get assigner user details"""
         try:
-            from mfa_auth.models import User
+            from tprm_backend.mfa_auth.models import User
             user = User.objects.get(userid=obj.assigner_id)
             return {
                 'userid': user.userid,
@@ -1752,7 +1761,7 @@ class ContractApprovalSerializer(serializers.ModelSerializer):
     def get_assignee(self, obj):
         """Get assignee user details"""
         try:
-            from mfa_auth.models import User
+            from tprm_backend.mfa_auth.models import User
             user = User.objects.get(userid=obj.assignee_id)
             return {
                 'userid': user.userid,

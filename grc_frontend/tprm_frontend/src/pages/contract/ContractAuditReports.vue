@@ -185,6 +185,18 @@
                   Test Findings
                 </Button>
                 <Button
+                  v-if="getStoredReport(audit.audit_id)"
+                  @click="viewStoredReport(audit.audit_id)"
+                  :disabled="loading"
+                  variant="outline"
+                  size="sm"
+                  class="flex items-center gap-2"
+                >
+                  <ExternalLink class="h-4 w-4" />
+                  View Report
+                </Button>
+                <Button
+                  v-else
                   @click="generateAuditReport(audit)"
                   :disabled="loading"
                   variant="outline"
@@ -258,6 +270,18 @@
                   Test
                 </Button>
                 <Button
+                  v-if="getStoredReport(audit.audit_id)"
+                  @click="viewStoredReport(audit.audit_id)"
+                  :disabled="loading"
+                  variant="outline"
+                  size="sm"
+                  class="flex items-center gap-1"
+                >
+                  <ExternalLink class="h-3 w-3" />
+                  View
+                </Button>
+                <Button
+                  v-else
                   @click="generateAuditReport(audit)"
                   :disabled="loading"
                   variant="outline"
@@ -296,6 +320,7 @@ import {
   Clock,
   AlertTriangle,
   FileText,
+  ExternalLink,
   Grid3X3,
   List,
   Eye,
@@ -318,6 +343,7 @@ const availableContracts = ref([])
 const availableUsers = ref([])
 const auditFindings = ref([])
 const staticQuestionnaires = ref([])
+const auditReports = ref([])
 const loading = ref(true)
 
 // Filter state
@@ -387,6 +413,16 @@ const loadReportsData = async () => {
       staticQuestionnaires.value = []
     }
     
+    // Load stored audit reports
+    const reportsResponse = await contractAuditApi.getContractAuditReports()
+    if (reportsResponse.success) {
+      const reportData = reportsResponse.data?.data || reportsResponse.data?.results || reportsResponse.data || []
+      auditReports.value = Array.isArray(reportData) ? reportData : []
+    } else {
+      console.error('Error loading stored audit reports:', reportsResponse.error)
+      auditReports.value = []
+    }
+
   } catch (error) {
     console.error('Error loading reports data:', error)
     allAudits.value = []
@@ -472,6 +508,18 @@ const keyMetrics = computed(() => {
   ]
 })
 
+const reportsByAuditId = computed(() => {
+  const map = {}
+  if (Array.isArray(auditReports.value)) {
+    auditReports.value.forEach(report => {
+      if (report && report.audit_id != null) {
+        map[report.audit_id] = report
+      }
+    })
+  }
+  return map
+})
+
 
 // Event handlers
 const handleDateRangeChange = () => {
@@ -489,6 +537,20 @@ const handleContractFilter = () => {
 
 const handleAuditorFilter = () => {
   console.log('Auditor filter changed:', selectedAuditor.value)
+}
+
+const getStoredReport = (auditId) => {
+  if (!auditId) return null
+  return reportsByAuditId.value[auditId] || null
+}
+
+const viewStoredReport = (auditId) => {
+  const storedReport = getStoredReport(auditId)
+  if (storedReport?.report_link) {
+    window.open(storedReport.report_link, '_blank')
+  } else {
+    PopupService.warning('No stored report link available for this audit yet.', 'Report Not Available')
+  }
 }
 
 // Load data on component mount
@@ -533,106 +595,258 @@ const generateAuditReport = async (audit) => {
     console.log('📋 Final findings array:', findings)
     console.log('📋 Findings count:', findings.length)
     
-    // Create PDF document
-    const pdf = new jsPDF()
+    // Create PDF document with professional settings
+    const pdf = new jsPDF('p', 'mm', 'a4')
+    const pageWidth = pdf.internal.pageSize.getWidth()
+    const pageHeight = pdf.internal.pageSize.getHeight()
+    const margin = 20
+    const contentWidth = pageWidth - (margin * 2)
     let yPosition = 20
     
-    // Header
-    pdf.setFontSize(20)
+    // Color scheme
+    const primaryColor = [37, 99, 235] // Blue
+    const secondaryColor = [107, 114, 128] // Gray
+    const successColor = [34, 197, 94] // Green
+    const headerBgColor = [249, 250, 251] // Light gray
+    const borderColor = [229, 231, 235] // Border gray
+    
+    // Helper function to add page footer
+    const addFooter = (pageNum, totalPages) => {
+      const footerY = pageHeight - 15
+      pdf.setDrawColor(...borderColor)
+      pdf.setLineWidth(0.5)
+      pdf.line(margin, footerY, pageWidth - margin, footerY)
+      
+      pdf.setFontSize(8)
+      pdf.setTextColor(...secondaryColor)
+      pdf.setFont('helvetica', 'normal')
+      pdf.text(`Generated on ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`, margin, footerY + 5)
+      pdf.text(`Page ${pageNum} of ${totalPages}`, pageWidth - margin, footerY + 5, { align: 'right' })
+    }
+    
+    // Helper function to check and add new page
+    const checkNewPage = (requiredSpace = 20) => {
+      if (yPosition + requiredSpace > pageHeight - 30) {
+        const currentPage = pdf.getNumberOfPages()
+        addFooter(currentPage, currentPage)
+        pdf.addPage()
+        yPosition = 20
+        return true
+      }
+      return false
+    }
+    
+    // Helper function to add section header
+    const addSectionHeader = (title, y) => {
+      // Background bar
+      pdf.setFillColor(...headerBgColor)
+      pdf.rect(margin, y - 5, contentWidth, 8, 'F')
+      
+      // Colored accent line
+      pdf.setFillColor(...primaryColor)
+      pdf.rect(margin, y - 5, 3, 8, 'F')
+      
+      // Title
+      pdf.setFontSize(14)
+      pdf.setTextColor(...primaryColor)
+      pdf.setFont('helvetica', 'bold')
+      pdf.text(title, margin + 8, y + 1)
+      
+      // Reset text color
+      pdf.setTextColor(0, 0, 0)
+      
+      return y + 10
+    }
+    
+    // Helper function to add info table row
+    const addInfoRow = (label, value, y, isMultiline = false) => {
+      const labelWidth = contentWidth * 0.35
+      const valueWidth = contentWidth * 0.65
+      const rowHeight = isMultiline ? 12 : 8
+      
+      checkNewPage(rowHeight + 5)
+      
+      // Label background
+      pdf.setFillColor(...headerBgColor)
+      pdf.rect(margin, y - 4, labelWidth, rowHeight, 'F')
+      
+      // Borders
+      pdf.setDrawColor(...borderColor)
+      pdf.setLineWidth(0.3)
+      pdf.rect(margin, y - 4, labelWidth, rowHeight)
+      pdf.rect(margin + labelWidth, y - 4, valueWidth, rowHeight)
+      
+      // Label text
+      pdf.setFontSize(9)
+      pdf.setTextColor(75, 85, 99) // gray-600
+      pdf.setFont('helvetica', 'bold')
+      pdf.text(label, margin + 3, y + 2)
+      
+      // Value text
+      pdf.setFontSize(9)
+      pdf.setTextColor(0, 0, 0)
+      pdf.setFont('helvetica', 'normal')
+      
+      if (isMultiline && value) {
+        const valueLines = pdf.splitTextToSize(value || 'N/A', valueWidth - 6)
+        const actualHeight = Math.max(rowHeight, valueLines.length * 4 + 4)
+        pdf.rect(margin + labelWidth, y - 4, valueWidth, actualHeight)
+        pdf.text(valueLines, margin + labelWidth + 3, y + 2)
+        return y + actualHeight + 3
+      } else {
+        pdf.text(value || 'N/A', margin + labelWidth + 3, y + 2)
+        return y + rowHeight + 3
+      }
+    }
+    
+    // ========== COVER PAGE ==========
+    // Header with colored bar
+    pdf.setFillColor(...primaryColor)
+    pdf.rect(0, 0, pageWidth, 50, 'F')
+    
+    // Company/System name
+    pdf.setFontSize(24)
+    pdf.setTextColor(255, 255, 255)
     pdf.setFont('helvetica', 'bold')
-    pdf.text('AUDIT REPORT', 105, yPosition, { align: 'center' })
+    pdf.text('AUDIT REPORT', pageWidth / 2, 25, { align: 'center' })
+    
+    pdf.setFontSize(12)
+    pdf.setFont('helvetica', 'normal')
+    pdf.text('Contract Compliance Audit', pageWidth / 2, 35, { align: 'center' })
+    
+    yPosition = 70
+    
+    // Report title
+    pdf.setFontSize(18)
+    pdf.setTextColor(0, 0, 0)
+    pdf.setFont('helvetica', 'bold')
+    pdf.text(audit.title || 'Contract Audit', pageWidth / 2, yPosition, { align: 'center' })
     yPosition += 20
     
-    // Audit Information
-    pdf.setFontSize(14)
-    pdf.setFont('helvetica', 'bold')
-    pdf.text('Audit Information', 20, yPosition)
-    yPosition += 15
+    // Report metadata box
+    const boxY = yPosition
+    pdf.setFillColor(255, 255, 255)
+    pdf.setDrawColor(...borderColor)
+    pdf.setLineWidth(0.5)
+    pdf.roundedRect(margin, boxY, contentWidth, 60, 3, 3, 'FD')
+    
+    yPosition += 10
+    yPosition = addInfoRow('Audit ID', `#${audit.audit_id}`, yPosition)
+    yPosition = addInfoRow('Contract', audit.contract_title || 'N/A', yPosition)
+    yPosition = addInfoRow('Auditor', audit.auditor_name || 'N/A', yPosition)
+    yPosition = addInfoRow('Status', audit.status?.toUpperCase() || 'N/A', yPosition)
+    
+    const completionDateText = audit.completion_date 
+      ? new Date(audit.completion_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+      : 'N/A'
+    yPosition = addInfoRow('Completion Date', completionDateText, yPosition)
+    
+    const dueDateText = audit.due_date 
+      ? new Date(audit.due_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+      : 'N/A'
+    yPosition = addInfoRow('Due Date', dueDateText, yPosition)
+    
+    yPosition += 20
+    
+    // Executive Summary
+    yPosition = addSectionHeader('Executive Summary', yPosition)
     
     pdf.setFontSize(10)
+    pdf.setTextColor(0, 0, 0)
     pdf.setFont('helvetica', 'normal')
-    pdf.text(`Audit ID: ${audit.audit_id}`, 20, yPosition)
+    
+    const summaryText = `This audit report presents a comprehensive review of the contract compliance audit conducted for ${audit.contract_title || 'the specified contract'}. The audit was completed on ${completionDateText} and includes ${findings.length} finding(s) across various contract terms and compliance requirements.`
+    
+    const summaryLines = pdf.splitTextToSize(summaryText, contentWidth)
+    pdf.text(summaryLines, margin, yPosition)
+    yPosition += summaryLines.length * 5 + 10
+    
+    // Summary statistics box
+    pdf.setFillColor(...headerBgColor)
+    pdf.setDrawColor(...borderColor)
+    pdf.roundedRect(margin, yPosition, contentWidth, 25, 3, 3, 'FD')
+    
     yPosition += 8
-    pdf.text(`Title: ${audit.title}`, 20, yPosition)
-    yPosition += 8
-    pdf.text(`Contract: ${audit.contract_title || 'N/A'}`, 20, yPosition)
-    yPosition += 8
-    pdf.text(`Auditor: ${audit.auditor_name || 'N/A'}`, 20, yPosition)
-    yPosition += 8
-    pdf.text(`Status: ${audit.status}`, 20, yPosition)
+    pdf.setFontSize(10)
+    pdf.setFont('helvetica', 'bold')
+    pdf.text('Summary Statistics', margin + 5, yPosition)
     yPosition += 8
     
-    // Format completion date properly
-    const completionDateText = audit.completion_date 
-      ? new Date(audit.completion_date).toLocaleDateString() 
-      : 'N/A'
-    pdf.text(`Completion Date: ${completionDateText}`, 20, yPosition)
-    yPosition += 8
-    
-    // Add due date as well
-    const dueDateText = audit.due_date 
-      ? new Date(audit.due_date).toLocaleDateString() 
-      : 'N/A'
-    pdf.text(`Due Date: ${dueDateText}`, 20, yPosition)
+    pdf.setFontSize(9)
+    pdf.setFont('helvetica', 'normal')
+    pdf.text(`Total Findings: ${findings.length}`, margin + 5, yPosition)
+    pdf.text(`Contract: ${audit.contract_title || 'N/A'}`, margin + contentWidth / 2, yPosition)
     yPosition += 15
     
-    // Audit Findings
-    console.log('📄 Generating PDF findings section with', findings.length, 'findings')
+    // Add footer to first page
+    addFooter(1, 1)
+    
+    // ========== AUDIT FINDINGS SECTION ==========
     if (findings.length > 0) {
-      console.log('✅ Found findings, adding to PDF:', findings)
-      pdf.setFontSize(14)
-      pdf.setFont('helvetica', 'bold')
-      pdf.text('Audit Findings', 20, yPosition)
-      yPosition += 15
+      pdf.addPage()
+      yPosition = 20
+      
+      yPosition = addSectionHeader('Detailed Audit Findings', yPosition)
+      yPosition += 5
       
       findings.forEach((finding, index) => {
-        if (yPosition > 250) {
-          pdf.addPage()
-          yPosition = 20
-        }
+        checkNewPage(80)
+        
+        // Finding header box
+        pdf.setFillColor(...primaryColor)
+        pdf.roundedRect(margin, yPosition - 5, contentWidth, 8, 2, 2, 'F')
         
         pdf.setFontSize(12)
+        pdf.setTextColor(255, 255, 255)
         pdf.setFont('helvetica', 'bold')
-        pdf.text(`Finding ${index + 1}:`, 20, yPosition)
-        yPosition += 10
+        pdf.text(`Finding ${index + 1}`, margin + 5, yPosition + 1)
         
-        pdf.setFontSize(10)
-        pdf.setFont('helvetica', 'normal')
+        yPosition += 12
         
-        // Evidence
+        // Finding details in table format
+        if (finding.term_id) {
+          yPosition = addInfoRow('Term ID', finding.term_id, yPosition)
+        }
+        
+        if (finding.term_title) {
+          yPosition = addInfoRow('Term Title', finding.term_title, yPosition, true)
+        }
+        
+        if (finding.term_category) {
+          yPosition = addInfoRow('Term Category', finding.term_category, yPosition)
+        }
+        
+        if (finding.term_text) {
+          yPosition = addInfoRow('Term Text', finding.term_text, yPosition, true)
+        }
+        
         if (finding.evidence) {
-          pdf.text('Evidence:', 25, yPosition)
-          yPosition += 8
-          const evidenceLines = pdf.splitTextToSize(finding.evidence, 160)
-          pdf.text(evidenceLines, 30, yPosition)
-          yPosition += evidenceLines.length * 4 + 5
+          yPosition = addInfoRow('Evidence', finding.evidence, yPosition, true)
         }
         
-        // Verification Method
         if (finding.how_to_verify) {
-          pdf.text('Verification Method:', 25, yPosition)
-          yPosition += 8
-          const verificationLines = pdf.splitTextToSize(finding.how_to_verify, 160)
-          pdf.text(verificationLines, 30, yPosition)
-          yPosition += verificationLines.length * 4 + 5
+          yPosition = addInfoRow('Verification Method', finding.how_to_verify, yPosition, true)
         }
         
-        // Recommendations
         if (finding.impact_recommendations) {
-          pdf.text('Recommendations:', 25, yPosition)
-          yPosition += 8
-          const recommendationLines = pdf.splitTextToSize(finding.impact_recommendations, 160)
-          pdf.text(recommendationLines, 30, yPosition)
-          yPosition += recommendationLines.length * 4 + 5
+          yPosition = addInfoRow('Recommendations', finding.impact_recommendations, yPosition, true)
         }
         
-        // Questionnaire Responses
+        if (finding.details_of_finding) {
+          yPosition = addInfoRow('Details', finding.details_of_finding, yPosition, true)
+        }
+        
+        // Questionnaire Responses Section
         if (finding.questionnaire_responses || finding.questionnaire_responses_with_questions) {
-          pdf.text('Questionnaire Responses:', 25, yPosition)
+          checkNewPage(30)
+          
+          pdf.setFontSize(10)
+          pdf.setFont('helvetica', 'bold')
+          pdf.setTextColor(...primaryColor)
+          pdf.text('Questionnaire Responses', margin, yPosition)
           yPosition += 8
           
           try {
-            // Use enhanced responses if available, otherwise parse the raw responses
             let responses = finding.questionnaire_responses_with_questions
             
             if (!responses && finding.questionnaire_responses) {
@@ -641,70 +855,154 @@ const generateAuditReport = async (audit) => {
                 : finding.questionnaire_responses
             }
             
-            console.log('📋 Parsed questionnaire responses:', responses)
-            
-            // Display each response
-            Object.entries(responses).forEach(([questionId, responseData]) => {
-              if (yPosition > 250) {
-                pdf.addPage()
-                yPosition = 20
-              }
+            if (responses && Object.keys(responses).length > 0) {
+              // Create a table for responses
+              const responseEntries = Object.entries(responses)
               
-              pdf.setFontSize(9)
-              pdf.setFont('helvetica', 'normal')
-              
-              // Check if we have enhanced response data with question text
-              if (responseData && typeof responseData === 'object' && responseData.question_text) {
-                // Enhanced format with question text
-                const questionText = responseData.question_text
-                const answer = responseData.answer
+              responseEntries.forEach(([questionId, responseData], qIndex) => {
+                // Calculate content height first
+                let questionText = ''
+                let answerText = ''
+                let questionLines = []
+                let questionHeight = 0
+                let answerHeight = 0
+                const indent = 5 // Indentation for answer alignment
                 
-                // Split long question text into multiple lines
-                const questionLines = pdf.splitTextToSize(`Q${questionId}: ${questionText}`, 150)
-                pdf.text(questionLines, 30, yPosition)
-                yPosition += questionLines.length * 4 + 2
+                pdf.setFontSize(9)
+                pdf.setFont('helvetica', 'normal')
                 
-                // Add the answer
-                pdf.setFont('helvetica', 'bold')
-                pdf.text(`Answer: ${answer}`, 35, yPosition)
-                yPosition += 6
-              } else {
-                // Simple format (question ID and answer)
-                pdf.text(`Q${questionId}: ${responseData}`, 30, yPosition)
-                yPosition += 6
-              }
-            })
+                if (responseData && typeof responseData === 'object' && responseData.question_text) {
+                  questionText = `Q${questionId}: ${responseData.question_text}`
+                  answerText = responseData.answer || ''
+                  questionLines = pdf.splitTextToSize(questionText, contentWidth)
+                  questionHeight = questionLines.length * 3.5
+                  if (answerText) {
+                    // Calculate answer height for multiline answers
+                    const answerLines = pdf.splitTextToSize(`Answer: ${answerText}`, contentWidth - indent)
+                    answerHeight = answerLines.length * 3.5
+                  }
+                } else {
+                  questionText = `Q${questionId}: ${responseData}`
+                  questionLines = pdf.splitTextToSize(questionText, contentWidth)
+                  questionHeight = questionLines.length * 3.5
+                }
+                
+                const totalHeight = questionHeight + answerHeight + (answerText ? 2 : 0)
+                
+                checkNewPage(totalHeight + 2)
+                
+                // Draw question
+                pdf.setTextColor(0, 0, 0)
+                pdf.setFont('helvetica', 'normal')
+                pdf.text(questionLines, margin, yPosition)
+                
+                // Draw answer with proper indentation and alignment
+                if (answerText) {
+                  const answerY = yPosition + questionHeight + 2
+                  pdf.setFont('helvetica', 'bold')
+                  pdf.setTextColor(...primaryColor)
+                  
+                  // Handle multiline answers
+                  const answerLines = pdf.splitTextToSize(`Answer: ${answerText}`, contentWidth - indent)
+                  pdf.text(answerLines, margin + indent, answerY)
+                  answerHeight = answerLines.length * 3.5
+                }
+                
+                // Move to next response with spacing
+                yPosition += totalHeight + 5
+              })
+            }
           } catch (error) {
             console.error('Error parsing questionnaire responses:', error)
             pdf.setFontSize(9)
             pdf.setFont('helvetica', 'normal')
-            pdf.text('Error parsing questionnaire responses', 30, yPosition)
+            pdf.setTextColor(239, 68, 68) // Red for error
+            pdf.text('Error parsing questionnaire responses', margin, yPosition)
             yPosition += 6
           }
-          
-          yPosition += 5
+        }
+        
+        // Add spacing before comments section
+        if (finding.comment && (finding.questionnaire_responses || finding.questionnaire_responses_with_questions)) {
+          yPosition += 8
+        }
+        
+        // Comments section (after questionnaire responses)
+        if (finding.comment) {
+          yPosition = addInfoRow('Comments', finding.comment, yPosition, true)
         }
         
         yPosition += 10
+        
+        // Divider line between findings
+        if (index < findings.length - 1) {
+          pdf.setDrawColor(...borderColor)
+          pdf.setLineWidth(0.5)
+          pdf.line(margin, yPosition, pageWidth - margin, yPosition)
+          yPosition += 5
+        }
       })
     } else {
-      console.log('❌ No findings found, adding "No findings" message to PDF')
-      pdf.setFontSize(12)
-      pdf.setFont('helvetica', 'normal')
-      pdf.text('No audit findings available for this audit.', 20, yPosition)
+      pdf.addPage()
+      yPosition = 20
+      yPosition = addSectionHeader('Detailed Audit Findings', yPosition)
+      yPosition += 10
+      
+      pdf.setFontSize(11)
+      pdf.setTextColor(...secondaryColor)
+      pdf.setFont('helvetica', 'italic')
+      pdf.text('No audit findings available for this audit.', margin, yPosition)
     }
     
-    // Footer
-    pdf.setFontSize(8)
-    pdf.setFont('helvetica', 'normal')
-    pdf.text(`Generated on: ${new Date().toLocaleDateString()}`, 20, 280)
-    pdf.text(`Page 1 of ${pdf.getNumberOfPages()}`, 170, 280)
+    // Add footer to last page
+    const totalPages = pdf.getNumberOfPages()
+    addFooter(totalPages, totalPages)
     
     // Download the PDF
     const fileName = `Audit_Report_${audit.audit_id}_${audit.title.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`
+    
+    // Persist report in backend/S3 before saving locally
+    try {
+      const contractIdForReport = audit.contract_id || audit.contract?.contract_id || audit.contract || null
+      const termIdForReport = audit.term_id || null
+      const dataUriString = pdf.output('datauristring')
+      
+      const uploadPayload = {
+        audit_id: audit.audit_id,
+        contract_id: contractIdForReport,
+        term_id: termIdForReport,
+        file_name: fileName,
+        file_data: dataUriString
+      }
+      
+      const uploadResponse = await contractAuditApi.uploadAuditReport(uploadPayload)
+      if (uploadResponse.success) {
+        console.log('✅ Audit report stored in S3 and recorded:', uploadResponse.data)
+        const storedReport = uploadResponse.data?.report
+        if (storedReport) {
+          auditReports.value = [
+            ...auditReports.value.filter(r => r.report_id !== storedReport.report_id),
+            storedReport
+          ]
+        }
+      } else {
+        console.error('❌ Failed to upload audit report:', uploadResponse.error)
+        PopupService.warning(
+          'Report downloaded locally but storing the report link failed. Please retry later.',
+          'Report Storage Warning'
+        )
+      }
+    } catch (uploadError) {
+      console.error('❌ Error uploading audit report:', uploadError)
+      PopupService.warning(
+        'Could not persist the audit report in S3. Local download will continue.',
+        'Report Storage Error'
+      )
+    }
+    
     pdf.save(fileName)
     
-    PopupService.success(`Audit report for "${audit.title}" has been downloaded successfully!`, 'Report Downloaded')
+    PopupService.success(`Professional audit report for "${audit.title}" has been downloaded successfully!`, 'Report Downloaded')
     
   } catch (error) {
     console.error('Error generating audit report:', error)
@@ -754,7 +1052,12 @@ const testFindingsAPI = async (auditId) => {
     
     if (findings.length > 0) {
       const findingsSummary = findings.map(f => {
-        let summary = `- ${f.term_id}: ${f.evidence?.substring(0, 50)}...`
+        const termLabel = f.term_title || f.term_id || 'Unknown Term'
+        let summary = `- ${termLabel}: ${f.evidence?.substring(0, 50) || ''}...`
+        
+        if (f.term_category) {
+          summary += `\n  Category: ${f.term_category}`
+        }
         
         // Add questionnaire responses info
         if (f.questionnaire_responses || f.questionnaire_responses_with_questions) {

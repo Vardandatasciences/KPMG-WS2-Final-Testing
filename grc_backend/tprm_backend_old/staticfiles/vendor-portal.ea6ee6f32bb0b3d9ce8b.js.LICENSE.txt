@@ -1,0 +1,27 @@
+/*!
+ * pinia v2.3.1
+ * (c) 2025 Eduardo San Martin Morote
+ * @license MIT
+ */
+
+/*! #__NO_SIDE_EFFECTS__ */
+
+/*! Axios v1.12.2 Copyright (c) 2025 Matt Zabriskie and contributors */
+
+/**
+* @vue/runtime-core v3.5.21
+* (c) 2018-present Yuxi (Evan) You and Vue contributors
+* @license MIT
+**/
+
+/**
+* @vue/runtime-dom v3.5.21
+* (c) 2018-present Yuxi (Evan) You and Vue contributors
+* @license MIT
+**/
+
+/**
+* @vue/shared v3.5.21
+* (c) 2018-present Yuxi (Evan) You and Vue contributors
+* @license MIT
+**/

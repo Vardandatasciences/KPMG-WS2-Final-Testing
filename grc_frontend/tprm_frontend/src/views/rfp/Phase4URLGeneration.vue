@@ -14,15 +14,11 @@
         <div class="header-text">
           <h1 class="page-title">
             <span class="title-icon">📧</span>
-            Phase 4: Vendor Invitations
+            Vendor Invitations
           </h1>
           <p class="page-description">
             Generate unique invitation URLs and send personalized invitations to selected vendors.
           </p>
-        </div>
-        <div class="phase-badge">
-          <span class="badge-number">4</span>
-          <span class="badge-text">of 10</span>
         </div>
       </div>
     </div>
@@ -1014,92 +1010,9 @@ const getStatusDotColor = (status) => {
   }
 }
 
-const copyToClipboard = async (text) => {
-  if (!text) {
-    showErrorToast("No text to copy")
-    return
-  }
-
-  // Use fallback method directly to avoid Clipboard API permission issues
-  // The execCommand method works in all contexts without permission requirements
-  try {
-    const textArea = document.createElement('textarea')
-    textArea.value = text
-    // Make it invisible but still functional
-    textArea.style.position = 'fixed'
-    textArea.style.left = '-999999px'
-    textArea.style.top = '-999999px'
-    textArea.style.opacity = '0'
-    textArea.style.pointerEvents = 'none'
-    textArea.setAttribute('readonly', '')
-    textArea.setAttribute('aria-hidden', 'true')
-    
-    document.body.appendChild(textArea)
-    
-    // For iOS devices
-    if (navigator.userAgent.match(/ipad|iphone/i)) {
-      const range = document.createRange()
-      range.selectNodeContents(textArea)
-      const selection = window.getSelection()
-      if (selection) {
-        selection.removeAllRanges()
-        selection.addRange(range)
-      }
-      textArea.setSelectionRange(0, 999999)
-    } else {
-      textArea.focus()
-      textArea.select()
-      textArea.setSelectionRange(0, 999999) // For mobile devices
-    }
-    
-    const successful = document.execCommand('copy')
-    document.body.removeChild(textArea)
-    
-    if (successful) {
-      showToast("Copied to clipboard")
-      return
-    }
-  } catch (error) {
-    // Silently continue to next fallback
-  }
-  
-  // Alternative fallback using input element
-  try {
-    const input = document.createElement('input')
-    input.value = text
-    input.style.position = 'fixed'
-    input.style.left = '-999999px'
-    document.body.appendChild(input)
-    input.focus()
-    input.select()
-    input.setSelectionRange(0, 999999)
-    
-    const successful = document.execCommand('copy')
-    document.body.removeChild(input)
-    
-    if (successful) {
-      showToast("Copied to clipboard")
-      return
-    }
-  } catch (error) {
-    // Silently continue to last resort
-  }
-  
-  // Last resort: show prompt
-  showSelectableText(text)
-}
-
-// Last resort: show text in a way user can manually copy
-const showSelectableText = (text) => {
-  // Try to show in a way that's easy to copy
-  if (window.prompt) {
-    window.prompt("Copy to clipboard: Ctrl+C, Enter", text)
-    showToast("Please copy from the prompt dialog")
-  } else {
-    showErrorToast("Unable to copy automatically. Please select and copy the URL manually.")
-    // Log to console as backup
-    console.log("Text to copy:", text)
-  }
+const copyToClipboard = (text) => {
+  navigator.clipboard.writeText(text)
+  showToast("Copied to clipboard")
 }
 
 const loadInvitations = async () => {

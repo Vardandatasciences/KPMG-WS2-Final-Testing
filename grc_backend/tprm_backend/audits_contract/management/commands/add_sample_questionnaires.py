@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand
-from tprm_backend.audits_contract.models import ContractStaticQuestionnaire
+from audits_contract.models import ContractStaticQuestionnaire
 
 
 class Command(BaseCommand):

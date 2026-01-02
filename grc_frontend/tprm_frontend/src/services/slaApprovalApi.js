@@ -1,27 +1,23 @@
 import apiService from './api'
+import { getTprmApiUrl } from '@/utils/backendEnv'
 
 class SLAApprovalApiService {
   constructor() {
-    this.baseURL = 'http://localhost:8000/api/tprm/slas/approvals'
+    this.baseURL = getTprmApiUrl('slas/approvals')
   }
 
   async slaApprovalRequest(endpoint, options = {}) {
     try {
       // Get JWT token from localStorage
       const token = localStorage.getItem('session_token')
-      
-      // Check if token exists - if not, throw a clear error
-      if (!token) {
-        const error = new Error('Authentication required. Please log in.')
-        error.status = 401
-        error.code = 'AUTH_REQUIRED'
-        throw error
-      }
-      
       const headers = {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
         ...options.headers
+      }
+      
+      // Add Authorization header if token exists
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
       }
       
       const response = await fetch(`${this.baseURL}${endpoint}`, {
@@ -31,24 +27,6 @@ class SLAApprovalApiService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        
-        // Handle authentication errors
-        if (response.status === 401 || response.status === 403) {
-          // If it's an auth error, clear the token and redirect to login
-          if (response.status === 401) {
-            localStorage.removeItem('session_token')
-            localStorage.removeItem('current_user')
-            if (window.location.pathname !== '/login') {
-              window.location.href = '/login'
-            }
-          }
-          
-          const error = new Error(errorData.detail || errorData.message || 'Authentication failed')
-          error.status = response.status
-          error.response = errorData
-          throw error
-        }
-        
         throw new Error(`HTTP error! status: ${response.status} - ${JSON.stringify(errorData)}`)
       }
 
@@ -138,7 +116,7 @@ class SLAApprovalApiService {
     })
     
     const queryString = queryParams.toString()
-    const endpoint = queryString ? `/slas/${slaId}/?${queryString}` : `/slas/${slaId}/`
+    const endpoint = queryString ? `/slas/${slaId}/approvals/?${queryString}` : `/slas/${slaId}/approvals/`
     
     return this.slaApprovalRequest(endpoint)
   }
@@ -154,7 +132,6 @@ class SLAApprovalApiService {
     })
     
     const queryString = queryParams.toString()
-    // Note: assigner-approvals is a separate endpoint, not under /approvals/
     const endpoint = queryString ? `/assigner-approvals/?${queryString}` : '/assigner-approvals/'
     
     return this.slaApprovalRequest(endpoint)
@@ -196,7 +173,7 @@ class SLAApprovalApiService {
     })
     
     const queryString = queryParams.toString()
-    const endpoint = queryString ? `http://localhost:8000/api/tprm/slas/?${queryString}` : 'http://localhost:8000/api/tprm/slas/'
+    const endpoint = queryString ? `/api/slas/?${queryString}` : '/api/slas/'
     
     const token = localStorage.getItem('session_token')
     const headers = {
@@ -230,7 +207,7 @@ class SLAApprovalApiService {
     })
     
     const queryString = queryParams.toString()
-    const endpoint = queryString ? `http://localhost:8000/api/tprm/slas/?${queryString}` : 'http://localhost:8000/api/tprm/slas/?approval_status=PENDING'
+    const endpoint = queryString ? `/api/slas/?${queryString}` : '/api/slas/?approval_status=PENDING'
     
     const token = localStorage.getItem('session_token')
     const headers = {
@@ -261,7 +238,7 @@ class SLAApprovalApiService {
     })
     
     const queryString = queryParams.toString()
-    const endpoint = queryString ? `http://localhost:8000/api/tprm/slas/?${queryString}` : 'http://localhost:8000/api/tprm/slas/'
+    const endpoint = queryString ? `/api/slas/?${queryString}` : '/api/slas/'
     
     const token = localStorage.getItem('session_token')
     const headers = {
@@ -292,7 +269,7 @@ class SLAApprovalApiService {
     })
     
     const queryString = queryParams.toString()
-    const endpoint = queryString ? `http://localhost:8000/api/tprm/slas/vendors/?${queryString}` : 'http://localhost:8000/api/tprm/slas/vendors/'
+    const endpoint = queryString ? `/api/slas/vendors/?${queryString}` : '/api/slas/vendors/'
     
     const token = localStorage.getItem('session_token')
     const headers = {
@@ -312,27 +289,9 @@ class SLAApprovalApiService {
     })
   }
 
-  // Get users for assignment
+  // Get users for assignment (users with ApproveContract permission)
   async getUsers(filters = {}) {
-    // Use the available-users endpoint from audits app
-    const token = localStorage.getItem('session_token')
-    const headers = {
-      'Content-Type': 'application/json'
-    }
-    
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`
-    }
-    
-    const response = await fetch('http://localhost:8000/api/tprm/audits/available-users/', {
-      headers: headers
-    })
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-    
-    return await response.json()
+    return this.slaApprovalRequest('/available-users/')
   }
 
   // Health check

@@ -14,14 +14,14 @@
 </template>
 
 <script setup>
-import { RouterView, useRoute } from 'vue-router'
+import { RouterView, useRoute, useRouter } from 'vue-router'
 import AppLayout from './components/layout/AppLayout.vue'
 import PopupModal from './popup/PopupModal.vue'
 import { computed, onMounted } from 'vue'
 import { useStore } from 'vuex'
-import { getTprmApiBaseUrl } from '@/utils/backendEnv'
 
 const route = useRoute()
+const router = useRouter()
 const store = useStore()
 
 // Define standalone routes that should not have layout
@@ -31,8 +31,8 @@ const standaloneRoutes = [
   'VendorPortalOpen',
   'TestVendorPortal',
   'VendorPortalDirect',
-  'AwardResponse',
-  'Login'
+  'AwardResponse'
+  // Login removed - using GRC login instead
 ]
 
 const isStandaloneRoute = computed(() => {
@@ -42,11 +42,118 @@ const isStandaloneRoute = computed(() => {
 onMounted(() => {
   console.log('=== TPRM App Mounted ===')
   console.log('Environment:', import.meta.env.MODE)
-  console.log('API Base URL:', getTprmApiBaseUrl())
+  console.log('API Base URL:', import.meta.env.VITE_API_BASE_URL)
   
   // Initialize authentication state from localStorage
   store.dispatch('auth/initializeAuth')
   console.log('Auth initialized')
+  
+  // Listen for auth sync messages from GRC parent (if in iframe)
+  const isInIframe = window.self !== window.top
+  if (isInIframe) {
+    console.log('[TPRM App] In iframe - setting up auth sync listener')
+    
+    // Request auth from parent immediately
+    if (window.parent && window.parent !== window) {
+      console.log('[TPRM App] Requesting auth from parent...')
+      window.parent.postMessage({ type: 'TPRM_AUTH_REQUEST' }, '*')
+    }
+    
+    // Listen for messages from parent (auth sync and navigation)
+    const handleMessage = (event) => {
+      // Debug: log all messages (can be removed later)
+      if (event.data && event.data.type) {
+        console.log('[TPRM App] 📨 Received message from parent:', event.data.type, event.data)
+      }
+      
+      // Handle auth sync from parent
+      if (event.data && event.data.type === 'GRC_AUTH_SYNC') {
+        console.log('[TPRM App] ✅ Received auth sync from GRC parent:', {
+          hasToken: !!event.data.token,
+          hasUser: !!event.data.user,
+          isAuthenticated: event.data.isAuthenticated,
+          tokenLength: event.data.token?.length || 0
+        })
+        
+        // Store auth data in localStorage
+        if (event.data.token) {
+          localStorage.setItem('session_token', event.data.token)
+          localStorage.setItem('access_token', event.data.token)
+          console.log('[TPRM App] ✅ Token stored in localStorage:', event.data.token.substring(0, 20) + '...')
+        } else {
+          console.warn('[TPRM App] ⚠️ No token in auth sync message')
+        }
+        
+        if (event.data.refreshToken) {
+          localStorage.setItem('refresh_token', event.data.refreshToken)
+          console.log('[TPRM App] ✅ Refresh token stored')
+        }
+        
+        if (event.data.user) {
+          localStorage.setItem('current_user', JSON.stringify(event.data.user))
+          console.log('[TPRM App] ✅ User stored in localStorage:', event.data.user.UserName || event.data.user.username)
+        } else {
+          console.warn('[TPRM App] ⚠️ No user in auth sync message')
+        }
+        
+        // Update Vuex store
+        if (event.data.token && event.data.user) {
+          store.commit('auth/SET_AUTH', {
+            user: event.data.user,
+            token: event.data.token
+          })
+          console.log('[TPRM App] ✅ Auth synced to Vuex store')
+        } else {
+          console.warn('[TPRM App] ⚠️ Cannot sync to Vuex - missing token or user')
+        }
+      }
+      
+      // Handle navigation request from parent
+      if (event.data && event.data.type === 'NAVIGATE_TO_ROUTE') {
+        const targetPath = event.data.path
+        if (targetPath) {
+          console.log('[TPRM App] 🧭 Received navigation request from parent:', targetPath)
+          // Normalize path (remove leading /tprm if present, ensure leading slash)
+          let normalizedPath = targetPath.startsWith('/tprm/') 
+            ? targetPath.replace('/tprm', '') 
+            : targetPath.startsWith('/tprm') 
+            ? targetPath.replace('/tprm', '') 
+            : targetPath
+          if (!normalizedPath.startsWith('/')) {
+            normalizedPath = '/' + normalizedPath
+          }
+          
+          // Only navigate if path is different from current route
+          if (normalizedPath !== route.path) {
+            console.log('[TPRM App] 🧭 Navigating to:', normalizedPath, '(current:', route.path, ')')
+            router.push(normalizedPath).catch(err => {
+              // Ignore navigation errors (e.g., if already navigating to the same route)
+              if (err.name !== 'NavigationDuplicated') {
+                console.error('[TPRM App] Navigation error:', err)
+              }
+            })
+          } else {
+            console.log('[TPRM App] Already at target path, skipping navigation')
+          }
+        }
+      }
+    }
+    
+    // Set up listener immediately
+    window.addEventListener('message', handleMessage)
+    console.log('[TPRM App] ✅ Message listener set up (auth sync + navigation)')
+    
+    // Also check if auth data is already in parent's localStorage (for immediate sync)
+    // This is a fallback in case the message was sent before listener was set up
+    setTimeout(() => {
+      if (!localStorage.getItem('session_token')) {
+        console.log('[TPRM App] No token found, requesting auth again...')
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: 'TPRM_AUTH_REQUEST' }, '*')
+        }
+      }
+    }, 500)
+  }
 })
 </script>
 

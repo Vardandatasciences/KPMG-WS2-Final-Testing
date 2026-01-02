@@ -119,6 +119,7 @@ class RBACTPRM(models.Model):
     
     # Contract Analysis Permissions
     create_contract_audit = models.BooleanField(db_column='CreateContractAudit', default=False)
+    perform_contract_audit = models.BooleanField(db_column='PerformContractAudit', default=False)
     trigger_ocr = models.BooleanField(db_column='TriggerOCR', default=False)
     get_nlp_clauses = models.BooleanField(db_column='GetNLPClauses', default=False)
     contract_search = models.BooleanField(db_column='ContractSearch', default=False)
@@ -270,7 +271,6 @@ class RBACTPRM(models.Model):
     is_active = models.CharField(db_column='IsActive', max_length=1, default='Y')
     
     class Meta:
-        app_label = 'tprm_rbac'  # Force this model to use tprm database via router
         db_table = 'rbac_tprm'
         managed = False  # Table already exists in database
         verbose_name = 'RBAC TPRM Permission'

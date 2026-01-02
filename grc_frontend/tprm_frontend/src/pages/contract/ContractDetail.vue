@@ -4,7 +4,7 @@
     <div class="bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-4">
-          <Button variant="ghost" size="icon" @click="navigate('/contracts')" class="hover:bg-white/50 dark:hover:bg-slate-700/50">
+          <Button variant="ghost" size="icon" @click="handleBack" class="hover:bg-white/50 dark:hover:bg-slate-700/50">
           <ArrowLeft class="w-4 h-4" />
         </Button>
           <div class="space-y-1">
@@ -983,9 +983,9 @@
           </svg>
           Try Again
         </Button>
-        <Button @click="navigate('/contracts')" class="gap-2">
+        <Button @click="handleBack" class="gap-2">
           <FileText class="w-4 h-4" />
-          Back to Contracts
+          Back to {{ route.query.returnTo === 'vendor-contracts' ? 'Vendor Contracts' : 'Contracts' }}
         </Button>
       </div>
     </div>
@@ -999,9 +999,9 @@
       <p class="text-muted-foreground text-center max-w-md mb-6">
         The contract you're looking for doesn't exist or has been removed.
       </p>
-      <Button @click="navigate('/contracts')" class="gap-2">
+      <Button @click="handleBack" class="gap-2">
         <FileText class="w-4 h-4" />
-        Back to Contracts
+        Back to {{ route.query.returnTo === 'vendor-contracts' ? 'Vendor Contracts' : 'Contracts' }}
       </Button>
     </div>
   </div>
@@ -1025,6 +1025,19 @@ const router = useRouter()
 const navigate = (path) => router.push(path)
 
 const contractId = route.params.id
+
+// Determine where to navigate back to based on query parameter
+const getBackPath = () => {
+  const returnTo = route.query.returnTo
+  if (returnTo === 'vendor-contracts') {
+    return '/vendors'
+  }
+  return '/contracts'
+}
+
+const handleBack = () => {
+  navigate(getBackPath())
+}
 
 // Safeguard: If contractId is "new" or "create", redirect to create page
 // This prevents ContractDetail from trying to load a contract with ID "new" or "create"

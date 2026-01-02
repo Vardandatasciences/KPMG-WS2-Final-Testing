@@ -1,25 +1,5 @@
 <template>
   <div class="approval-assignment-page p-6 max-w-7xl mx-auto space-y-6">
-    <div class="flex items-center justify-between">
-      <div>
-        <h1 class="text-3xl font-bold text-foreground">Approval Assignment</h1>
-        <p class="text-muted-foreground">Manage BCP/DRP approval workflows and assignments</p>
-      </div>
-      <div class="flex gap-3">
-        <span class="badge badge--outline text-sm">Workflow Management</span>
-        <button 
-          @click="toggleFormView" 
-          class="btn btn--primary"
-          v-if="!showCreateForm"
-        >
-          <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-          </svg>
-          Assign Approval
-        </button>
-      </div>
-    </div>
-
     <!-- APPROVAL ASSIGNMENTS TABLE -->
     <div v-if="!showCreateForm" class="space-y-6">
       <!-- Filters -->
@@ -184,9 +164,9 @@
                   <label for="objectType" class="block text-sm font-medium">Object Type <span class="text-destructive">*</span></label>
                   <select v-model="form.object_type" id="objectType" class="input" required>
                     <option value="">Select object type</option>
-                    <option value="PLAN">Plan</option>
-                    <option value="QUESTIONNAIRE">Questionnaire</option>
-                    <option value="ASSIGNMENT_RESPONSE">Assignment Response</option>
+                    <option value="PLAN EVALUATION">Plan Evaluation</option>
+                    <option value="NEW QUESTIONNAIRE">New Questionnaire</option>
+                    <option value="QUESTIONNAIRE RESPONSE">Questionnaire Response</option>
                   </select>
                 </div>
               </div>
@@ -334,8 +314,8 @@
               </div>
             </div>
 
-            <!-- Plan Evaluations (for PLAN object type) -->
-            <div v-if="approvalDetails.object_type === 'PLAN'" class="details-section">
+            <!-- Plan Evaluations (for PLAN EVALUATION object type) -->
+            <div v-if="approvalDetails.object_type === 'PLAN EVALUATION'" class="details-section">
               <h4 class="section-title">Plan Information</h4>
               
               <!-- Show plan basic info if available -->
@@ -413,8 +393,8 @@
               </div>
             </div>
 
-            <!-- Questionnaire Details (for QUESTIONNAIRE object type) -->
-            <div v-if="approvalDetails.object_type === 'QUESTIONNAIRE' && questionnaireDetails" class="details-section">
+            <!-- Questionnaire Details (for NEW QUESTIONNAIRE object type) -->
+            <div v-if="approvalDetails.object_type === 'NEW QUESTIONNAIRE' && questionnaireDetails" class="details-section">
               <h4 class="section-title">Questionnaire Details</h4>
               
               <div class="questionnaire-info">
@@ -504,8 +484,8 @@
               
             </div>
 
-            <!-- Assignment Response Details (for ASSIGNMENT_RESPONSE object type) -->
-            <div v-if="approvalDetails.object_type === 'ASSIGNMENT_RESPONSE' && assignmentResponseDetails" class="details-section">
+            <!-- Assignment Response Details (for QUESTIONNAIRE RESPONSE object type) -->
+            <div v-if="approvalDetails.object_type === 'QUESTIONNAIRE RESPONSE' && assignmentResponseDetails" class="details-section">
               <h4 class="section-title">Assignment Response Details</h4>
               <div class="assignment-info">
                 <div class="detail-item">
@@ -958,11 +938,11 @@ const viewApprovalDetails = async (approval) => {
     assignmentResponseDetails.value = null
     
     // Fetch details based on object type
-    if (approval.object_type === 'PLAN') {
+    if (approval.object_type === 'PLAN EVALUATION') {
       await fetchPlanEvaluations(approval.object_id)
-    } else if (approval.object_type === 'QUESTIONNAIRE') {
+    } else if (approval.object_type === 'NEW QUESTIONNAIRE') {
       await fetchQuestionnaireDetails(approval.object_id)
-    } else if (approval.object_type === 'ASSIGNMENT_RESPONSE') {
+    } else if (approval.object_type === 'QUESTIONNAIRE RESPONSE') {
       await fetchAssignmentResponseDetails(approval.object_id)
     }
   } catch (error) {
@@ -1146,11 +1126,11 @@ const approveApproval = async () => {
     
     // Call the appropriate API based on object type
     let response
-    if (approvalDetails.value.object_type === 'PLAN') {
+    if (approvalDetails.value.object_type === 'PLAN EVALUATION') {
       response = await api.plans.approve(approvalDetails.value.object_id)
-    } else if (approvalDetails.value.object_type === 'QUESTIONNAIRE') {
+    } else if (approvalDetails.value.object_type === 'NEW QUESTIONNAIRE') {
       response = await api.questionnaires.approve(approvalDetails.value.object_id)
-    } else if (approvalDetails.value.object_type === 'ASSIGNMENT_RESPONSE') {
+    } else if (approvalDetails.value.object_type === 'QUESTIONNAIRE RESPONSE') {
       response = await api.assignments.approve(approvalDetails.value.object_id)
     }
     
@@ -1193,11 +1173,11 @@ const rejectApproval = async () => {
     
     // Call the appropriate API based on object type
     let response
-    if (approvalDetails.value.object_type === 'PLAN') {
+    if (approvalDetails.value.object_type === 'PLAN EVALUATION') {
       response = await api.plans.reject(approvalDetails.value.object_id)
-    } else if (approvalDetails.value.object_type === 'QUESTIONNAIRE') {
+    } else if (approvalDetails.value.object_type === 'NEW QUESTIONNAIRE') {
       response = await api.questionnaires.reject(approvalDetails.value.object_id)
-    } else if (approvalDetails.value.object_type === 'ASSIGNMENT_RESPONSE') {
+    } else if (approvalDetails.value.object_type === 'QUESTIONNAIRE RESPONSE') {
       response = await api.assignments.reject(approvalDetails.value.object_id)
     }
     
@@ -1325,7 +1305,7 @@ onMounted(async () => {
     
     // Handle assignment_response object type from TestingLibrary
     if (objectType === 'assignment_response') {
-      form.value.object_type = 'ASSIGNMENT_RESPONSE'
+      form.value.object_type = 'QUESTIONNAIRE RESPONSE'
       console.log('Auto-filled object_type from URL parameter:', objectType)
     }
     
@@ -1381,7 +1361,7 @@ onMounted(async () => {
 /* Scoped styles to ensure proper rendering and override external CSS */
 .approval-assignment-page {
   min-height: 100vh !important;
-  background-color: hsl(var(--background)) !important;
+  background-color: transparent !important;
   color: hsl(var(--foreground)) !important;
 }
 

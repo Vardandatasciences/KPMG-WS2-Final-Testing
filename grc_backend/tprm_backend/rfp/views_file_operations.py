@@ -18,12 +18,12 @@ from typing import Dict, Any
 
 from .s3_service import get_s3_service
 from .models import FileStorage
-from .rfp_authentication import UnifiedJWTAuthentication, SimpleAuthenticatedPermission
+from .rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required, rbac_rfp_optional
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def s3_health_check(request):
@@ -45,7 +45,7 @@ def s3_health_check(request):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
 def upload_file(request):
@@ -102,7 +102,7 @@ def upload_file(request):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def download_file(request):
@@ -148,7 +148,7 @@ def download_file(request):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def export_data(request):
@@ -197,7 +197,7 @@ def export_data(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def file_history(request):
@@ -235,7 +235,7 @@ def file_history(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def file_stats(request):
@@ -257,7 +257,7 @@ def file_stats(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_file_by_id(request, file_id):
@@ -307,75 +307,44 @@ def get_file_by_id(request, file_id):
 @api_view(['GET'])
 @authentication_classes([])  # Allow anonymous access for vendor portal
 @permission_classes([AllowAny])  # Allow anonymous access for vendor portal
-@rbac_rfp_optional('view_rfp')  # Optional RBAC check (doesn't block if not authenticated)
 def get_s3_file_by_id(request, file_id):
     """
     Get specific S3 file details by ID
     Allows anonymous access for vendor portal document validation
     """
     try:
-        from .models import S3Files
-        import traceback
+        from rfp.models import S3Files
         
         try:
             s3_file = S3Files.objects.get(id=file_id)
         except S3Files.DoesNotExist:
             return Response({
                 'success': False,
-                'error': f'S3 file with ID {file_id} not found'
+                'error': 'S3 file not found'
             }, status=status.HTTP_404_NOT_FOUND)
         
-        # Safely get metadata
-        metadata = s3_file.metadata or {}
-        if isinstance(metadata, str):
-            try:
-                metadata = json.loads(metadata)
-            except (json.JSONDecodeError, TypeError):
-                metadata = {}
-        
-        # Get document_name from metadata or use file_name as fallback
-        document_name = metadata.get('document_name') or s3_file.file_name or 'Unknown Document'
-        
-        # Get file_size from metadata or None
-        file_size = metadata.get('file_size') if isinstance(metadata, dict) else None
-        
-        try:
-            response_data = {
-                'success': True,
-                's3_file': {
-                    'id': s3_file.id,
-                    'file_name': s3_file.file_name or 'unknown',
-                    'document_name': document_name,  # Added for frontend compatibility
-                    'file_type': s3_file.file_type or 'unknown',
-                    'url': s3_file.url or '',
-                    'user_id': s3_file.user_id or '1',
-                    'file_size': file_size,  # Added file_size
-                    'metadata': metadata,
-                    'uploaded_at': s3_file.uploaded_at.isoformat() if s3_file.uploaded_at else None,
-                }
+        return Response({
+            'success': True,
+            's3_file': {
+                'id': s3_file.id,
+                'file_name': s3_file.file_name,
+                'file_type': s3_file.file_type,
+                'url': s3_file.url,
+                'user_id': s3_file.user_id,
+                'metadata': s3_file.metadata,
+                'uploaded_at': s3_file.uploaded_at.isoformat() if s3_file.uploaded_at else None,
             }
-            
-            return Response(response_data)
-        except Exception as serialization_error:
-            print(f"[ERROR] Error serializing S3 file {file_id}: {str(serialization_error)}")
-            print(traceback.format_exc())
-            return Response({
-                'success': False,
-                'error': f'Error serializing file data: {str(serialization_error)}'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        })
         
     except Exception as e:
-        print(f"[ERROR] Error in get_s3_file_by_id for file_id {file_id}: {str(e)}")
-        import traceback
-        print(traceback.format_exc())
         return Response({
             'success': False,
-            'error': f'Failed to retrieve S3 file: {str(e)}'
+            'error': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def export_rfp_data(request, rfp_id):

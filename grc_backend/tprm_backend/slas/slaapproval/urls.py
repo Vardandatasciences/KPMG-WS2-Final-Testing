@@ -23,4 +23,7 @@ urlpatterns = [
     path('assigner-approvals/', views.get_assigner_approvals, name='assigner-approvals'),
     path('approvals/<int:approval_id>/approve/', views.approve_sla, name='approve-sla'),
     path('approvals/<int:approval_id>/reject/', views.reject_sla, name='reject-sla'),
+    
+    # User management
+    path('available-users/', views.available_users, name='available-users'),
 ]

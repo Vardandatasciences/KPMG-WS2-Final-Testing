@@ -19,7 +19,7 @@ import io
 import csv
 
 # RBAC imports
-from tprm_backend.apps.vendor_core.vendor_authentication import UnifiedJWTAuthentication, SimpleAuthenticatedPermission, VendorPermission
+from tprm_backend.apps.vendor_core.vendor_authentication import JWTAuthentication, SimpleAuthenticatedPermission, VendorPermission
 
 # Try to import openpyxl, but don't fail if it's not available
 try:
@@ -50,20 +50,9 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-# Database connection helper - Use tprm_integration database for all vendor operations
-def get_db_connection():
-    """
-    Get the correct database connection for tprm_integration database.
-    Returns 'tprm' if available, otherwise falls back to 'default'.
-    """
-    if 'tprm' in connections.databases:
-        return connections['tprm']
-    return get_db_connection()
-
-
 class ScreeningMatchRateAPIView(APIView):
     """API view for calculating vendor screening match rate with RBAC protection"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
     def get(self, request):
@@ -71,18 +60,18 @@ class ScreeningMatchRateAPIView(APIView):
         logger.info("ScreeningMatchRateAPIView.get called")
         
         try:
-            with get_db_connection().cursor() as cursor:
+            with connections['default'].cursor() as cursor:
                 # Step 1: Get total vendors count from temp_vendor table
-                cursor.execute("SELECT COUNT(*) AS total_vendors FROM tprm_integration.temp_vendor")
+                cursor.execute("SELECT COUNT(*) AS total_vendors FROM temp_vendor")
                 total_vendors = cursor.fetchone()[0] or 0
                 logger.info(f"Total vendors: {total_vendors}")
                 
                 # Step 2: Get vendors with valid matches (excluding false positives and resolved matches)
                 cursor.execute("""
                     SELECT COUNT(DISTINCT v.id) AS matched_vendors
-                    FROM tprm_integration.temp_vendor v
-                    JOIN tprm_integration.external_screening_results esr ON v.id = esr.vendor_id
-                    JOIN tprm_integration.screening_matches sm ON esr.screening_id = sm.screening_id
+                    FROM temp_vendor v
+                    JOIN external_screening_results esr ON v.id = esr.vendor_id
+                    JOIN screening_matches sm ON esr.screening_id = sm.screening_id
                     WHERE sm.is_false_positive = 0
                       AND sm.resolution_status IN ('PENDING', 'ESCALATED', 'BLOCKED')
                 """)
@@ -100,9 +89,9 @@ class ScreeningMatchRateAPIView(APIView):
                         sm.match_type,
                         COUNT(DISTINCT v.id) as vendor_count,
                         ROUND((COUNT(DISTINCT v.id) * 100.0 / %s), 1) as percentage
-                    FROM tprm_integration.temp_vendor v
-                    JOIN tprm_integration.external_screening_results esr ON v.id = esr.vendor_id
-                    JOIN tprm_integration.screening_matches sm ON esr.screening_id = sm.screening_id
+                    FROM temp_vendor v
+                    JOIN external_screening_results esr ON v.id = esr.vendor_id
+                    JOIN screening_matches sm ON esr.screening_id = sm.screening_id
                     WHERE sm.is_false_positive = 0
                       AND sm.resolution_status IN ('PENDING', 'ESCALATED', 'BLOCKED')
                     GROUP BY sm.match_type
@@ -173,7 +162,7 @@ class ScreeningMatchRateAPIView(APIView):
 
 class QuestionnaireOverdueRateAPIView(APIView):
     """API view for calculating questionnaire overdue rate with RBAC protection"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
     def get(self, request):
@@ -181,16 +170,16 @@ class QuestionnaireOverdueRateAPIView(APIView):
         logger.info("QuestionnaireOverdueRateAPIView.get called")
         
         try:
-            with get_db_connection().cursor() as cursor:
+            with connections['default'].cursor() as cursor:
                 # Step 1: Get total questionnaires count from questionnaire_assignments table
-                cursor.execute("SELECT COUNT(*) AS total_questionnaires FROM tprm_integration.questionnaire_assignments")
+                cursor.execute("SELECT COUNT(*) AS total_questionnaires FROM questionnaire_assignments")
                 total_questionnaires = cursor.fetchone()[0] or 0
                 logger.info(f"Total questionnaires: {total_questionnaires}")
                 
                 # Step 2: Get overdue questionnaires count
                 cursor.execute("""
                     SELECT COUNT(*) AS overdue_questionnaires
-                    FROM tprm_integration.questionnaire_assignments
+                    FROM questionnaire_assignments
                     WHERE due_date < NOW()
                       AND (submission_date IS NULL OR submission_date > due_date)
                 """)
@@ -206,7 +195,7 @@ class QuestionnaireOverdueRateAPIView(APIView):
                 # Get on-time questionnaires count
                 cursor.execute("""
                     SELECT COUNT(*) AS ontime_questionnaires
-                    FROM tprm_integration.questionnaire_assignments
+                    FROM questionnaire_assignments
                     WHERE NOT (due_date < NOW() AND (submission_date IS NULL OR submission_date > due_date))
                 """)
                 ontime_questionnaires = cursor.fetchone()[0] or 0
@@ -269,7 +258,7 @@ class QuestionnaireOverdueRateAPIView(APIView):
 
 class VendorsFlaggedOFACPEPAPIView(APIView):
     """API view for calculating vendors flagged in OFAC/PEP lists with RBAC protection"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
     def get(self, request):
@@ -277,9 +266,9 @@ class VendorsFlaggedOFACPEPAPIView(APIView):
         logger.info("VendorsFlaggedOFACPEPAPIView.get called")
         
         try:
-            with get_db_connection().cursor() as cursor:
+            with connections['default'].cursor() as cursor:
                 # Step 1: Get total vendors count from temp_vendor table
-                cursor.execute("SELECT COUNT(*) AS total_vendors FROM tprm_integration.temp_vendor")
+                cursor.execute("SELECT COUNT(*) AS total_vendors FROM temp_vendor")
                 total_vendors = cursor.fetchone()[0] or 0
                 logger.info(f"Total vendors: {total_vendors}")
                 
@@ -287,9 +276,9 @@ class VendorsFlaggedOFACPEPAPIView(APIView):
                 # Join temp_vendor with external_screening_results and screening_matches
                 cursor.execute("""
                     SELECT COUNT(DISTINCT v.id) AS flagged_vendors
-                    FROM tprm_integration.temp_vendor v
-                    JOIN tprm_integration.external_screening_results esr ON v.id = esr.vendor_id
-                    JOIN tprm_integration.screening_matches sm ON esr.screening_id = sm.screening_id
+                    FROM temp_vendor v
+                    JOIN external_screening_results esr ON v.id = esr.vendor_id
+                    JOIN screening_matches sm ON esr.screening_id = sm.screening_id
                     WHERE sm.is_false_positive = 0
                       AND sm.resolution_status IN ('PENDING', 'ESCALATED', 'BLOCKED')
                       AND sm.match_type IN ('OFAC - sdn', 'PEP')
@@ -302,9 +291,9 @@ class VendorsFlaggedOFACPEPAPIView(APIView):
                     SELECT 
                         sm.match_type,
                         COUNT(DISTINCT v.id) as vendor_count
-                    FROM tprm_integration.temp_vendor v
-                    JOIN tprm_integration.external_screening_results esr ON v.id = esr.vendor_id
-                    JOIN tprm_integration.screening_matches sm ON esr.screening_id = sm.screening_id
+                    FROM temp_vendor v
+                    JOIN external_screening_results esr ON v.id = esr.vendor_id
+                    JOIN screening_matches sm ON esr.screening_id = sm.screening_id
                     WHERE sm.is_false_positive = 0
                       AND sm.resolution_status IN ('PENDING', 'ESCALATED', 'BLOCKED')
                       AND sm.match_type IN ('OFAC - sdn', 'PEP')
@@ -323,9 +312,9 @@ class VendorsFlaggedOFACPEPAPIView(APIView):
                         sm.match_type,
                         sm.resolution_status,
                         sm.match_score
-                    FROM tprm_integration.temp_vendor v
-                    JOIN tprm_integration.external_screening_results esr ON v.id = esr.vendor_id
-                    JOIN tprm_integration.screening_matches sm ON esr.screening_id = sm.screening_id
+                    FROM temp_vendor v
+                    JOIN external_screening_results esr ON v.id = esr.vendor_id
+                    JOIN screening_matches sm ON esr.screening_id = sm.screening_id
                     WHERE sm.is_false_positive = 0
                       AND sm.resolution_status IN ('PENDING', 'ESCALATED', 'BLOCKED')
                       AND sm.match_type IN ('OFAC - sdn', 'PEP')
@@ -354,9 +343,9 @@ class VendorsFlaggedOFACPEPAPIView(APIView):
                     SELECT 
                         DATE_FORMAT(tv.created_at, '%Y-%m') AS month,
                         COUNT(DISTINCT tv.id) AS flagged_vendors_count
-                    FROM tprm_integration.temp_vendor tv
-                    JOIN tprm_integration.external_screening_results esr ON tv.id = esr.vendor_id
-                    JOIN tprm_integration.screening_matches sm ON esr.screening_id = sm.screening_id
+                    FROM temp_vendor tv
+                    JOIN external_screening_results esr ON tv.id = esr.vendor_id
+                    JOIN screening_matches sm ON esr.screening_id = sm.screening_id
                     WHERE sm.is_false_positive = 0
                       AND sm.resolution_status IN ('PENDING', 'ESCALATED', 'BLOCKED')
                       AND sm.match_type IN ('OFAC - sdn', 'PEP')
@@ -449,7 +438,7 @@ class VendorsFlaggedOFACPEPAPIView(APIView):
 
 class VendorAcceptanceTimeAPIView(APIView):
     """API view for calculating vendor acceptance/acknowledgment time with RBAC protection"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
     def get(self, request):
@@ -457,12 +446,12 @@ class VendorAcceptanceTimeAPIView(APIView):
         logger.info("VendorAcceptanceTimeAPIView.get called")
         
         try:
-            with get_db_connection().cursor() as cursor:
+            with connections['default'].cursor() as cursor:
                 # Step 1: Get overall average acceptance time
                 cursor.execute("""
                     SELECT AVG(DATEDIFF(v.created_at, tv.created_at)) AS avg_acceptance_time
-                    FROM tprm_integration.vendors v
-                    JOIN tprm_integration.temp_vendor tv ON v.vendor_code = tv.vendor_code
+                    FROM vendors v
+                    JOIN temp_vendor tv ON v.vendor_code = tv.vendor_code
                     WHERE v.status = 'APPROVED'
                 """)
                 result = cursor.fetchone()
@@ -477,8 +466,8 @@ class VendorAcceptanceTimeAPIView(APIView):
                         v.company_name,
                         DATEDIFF(v.created_at, tv.created_at) AS acceptance_days,
                         DATE_FORMAT(v.created_at, '%Y-%m') AS approval_month
-                    FROM tprm_integration.vendors v
-                    JOIN tprm_integration.temp_vendor tv ON v.vendor_code = tv.vendor_code
+                    FROM vendors v
+                    JOIN temp_vendor tv ON v.vendor_code = tv.vendor_code
                     WHERE v.status = 'APPROVED'
                     ORDER BY v.created_at ASC
                 """)
@@ -512,8 +501,8 @@ class VendorAcceptanceTimeAPIView(APIView):
                 # Step 3: Get total approved vendors count
                 cursor.execute("""
                     SELECT COUNT(*) AS total_approved_vendors
-                    FROM tprm_integration.vendors v
-                    JOIN tprm_integration.temp_vendor tv ON v.vendor_code = tv.vendor_code
+                    FROM vendors v
+                    JOIN temp_vendor tv ON v.vendor_code = tv.vendor_code
                     WHERE v.status = 'APPROVED'
                 """)
                 total_approved_vendors = cursor.fetchone()[0] or 0
@@ -524,8 +513,8 @@ class VendorAcceptanceTimeAPIView(APIView):
                     SELECT 
                         DATE_FORMAT(v.created_at, '%Y-%m') AS month,
                         AVG(DATEDIFF(v.created_at, tv.created_at)) AS avg_acceptance_time
-                    FROM tprm_integration.vendors v
-                    JOIN tprm_integration.temp_vendor tv ON v.vendor_code = tv.vendor_code
+                    FROM vendors v
+                    JOIN temp_vendor tv ON v.vendor_code = tv.vendor_code
                     WHERE v.status = 'APPROVED'
                       AND v.created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
                     GROUP BY DATE_FORMAT(v.created_at, '%Y-%m')
@@ -611,7 +600,7 @@ class VendorAcceptanceTimeAPIView(APIView):
 
 class DashboardMetricsAPIView(APIView):
     """API view for dashboard metrics using temp_vendor table with RBAC protection"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
     def get(self, request):
@@ -715,7 +704,7 @@ class DashboardMetricsAPIView(APIView):
 
 class VendorAlertsAPIView(APIView):
     """API view for vendor alerts and exceptions with RBAC protection"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
     def get(self, request):
@@ -723,89 +712,89 @@ class VendorAlertsAPIView(APIView):
         logger.info("VendorAlertsAPIView.get called")
         
         try:
-            alerts = []
-            from datetime import timedelta
-            from django.utils import timezone as django_timezone
-            
-            # 1. Check for vendors flagged in OFAC list this week - Use Django ORM
-            week_ago = django_timezone.now() - timedelta(days=7)
-            flagged_screening_ids = ScreeningMatch.objects.filter(
-                is_false_positive=False,
-                resolution_status__in=['PENDING', 'ESCALATED', 'BLOCKED'],
-                match_type__in=['OFAC - sdn', 'PEP']
-            ).values_list('screening_id', flat=True).distinct()
-            
-            flagged_vendor_ids = ExternalScreeningResult.objects.filter(
-                screening_id__in=flagged_screening_ids
-            ).values_list('vendor_id', flat=True).distinct()
-            
-            ofac_flagged = TempVendor.objects.filter(
-                id__in=flagged_vendor_ids,
-                updated_at__gte=week_ago
-            ).count()
-            
-            if ofac_flagged > 0:
-                alerts.append({
-                    'type': 'critical',
-                    'icon': 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z',
-                    'message': f'{ofac_flagged} Vendor{"s" if ofac_flagged > 1 else ""} flagged in OFAC list this week',
-                    'color': 'vendor_text-destructive'
-                })
-            
-            # 2. Check high-risk vendor percentage - Use Django ORM
-            total_vendors = TempVendor.objects.count()
-            high_risk_vendors = TempVendor.objects.filter(risk_level__icontains='HIGH').count()
-            
-            if total_vendors > 0:
-                high_risk_percentage = round((high_risk_vendors / total_vendors) * 100, 1)
-                if high_risk_percentage > 15:  # Target threshold
+            with connections['default'].cursor() as cursor:
+                alerts = []
+                
+                # 1. Check for vendors flagged in OFAC list this week
+                cursor.execute("""
+                    SELECT COUNT(DISTINCT v.id) AS flagged_count
+                    FROM temp_vendor v
+                    JOIN external_screening_results esr ON v.id = esr.vendor_id
+                    JOIN screening_matches sm ON esr.screening_id = sm.screening_id
+                    WHERE sm.is_false_positive = 0
+                      AND sm.resolution_status IN ('PENDING', 'ESCALATED', 'BLOCKED')
+                      AND sm.match_type IN ('OFAC - sdn', 'PEP')
+                      AND v.updated_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+                """)
+                ofac_flagged = cursor.fetchone()[0] or 0
+                
+                if ofac_flagged > 0:
+                    alerts.append({
+                        'type': 'critical',
+                        'icon': 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z',
+                        'message': f'{ofac_flagged} Vendor{"s" if ofac_flagged > 1 else ""} flagged in OFAC list this week',
+                        'color': 'vendor_text-destructive'
+                    })
+                
+                # 2. Check high-risk vendor percentage
+                cursor.execute("SELECT COUNT(*) FROM temp_vendor")
+                total_vendors = cursor.fetchone()[0] or 0
+                
+                cursor.execute("SELECT COUNT(*) FROM temp_vendor WHERE risk_level LIKE '%HIGH%'")
+                high_risk_vendors = cursor.fetchone()[0] or 0
+                
+                if total_vendors > 0:
+                    high_risk_percentage = round((high_risk_vendors / total_vendors) * 100, 1)
+                    if high_risk_percentage > 15:  # Target threshold
+                        alerts.append({
+                            'type': 'warning',
+                            'icon': 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z',
+                            'message': f'High-risk vendor percentage above target at {high_risk_percentage}%',
+                            'color': 'vendor_text-warning'
+                        })
+                
+                # 3. Check questionnaire completion rate
+                cursor.execute("SELECT COUNT(*) FROM questionnaire_assignments")
+                total_assignments = cursor.fetchone()[0] or 0
+                
+                cursor.execute("SELECT COUNT(*) FROM questionnaire_assignments WHERE status = 'RESPONDED'")
+                completed_assignments = cursor.fetchone()[0] or 0
+                
+                if total_assignments > 0:
+                    completion_rate = round((completed_assignments / total_assignments) * 100, 1)
+                    if completion_rate < 95:  # Target threshold
+                        alerts.append({
+                            'type': 'info',
+                            'icon': 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+                            'message': f'Questionnaire completion rate below 95% target at {completion_rate}%',
+                            'color': 'vendor_text-primary'
+                        })
+                
+                # 4. Check for overdue questionnaires
+                cursor.execute("""
+                    SELECT COUNT(*) FROM questionnaire_assignments
+                    WHERE due_date < NOW() AND (submission_date IS NULL OR submission_date > due_date)
+                """)
+                overdue_questionnaires = cursor.fetchone()[0] or 0
+                
+                if overdue_questionnaires > 0:
                     alerts.append({
                         'type': 'warning',
-                        'icon': 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z',
-                        'message': f'High-risk vendor percentage above target at {high_risk_percentage}%',
+                        'icon': 'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+                        'message': f'{overdue_questionnaires} Questionnaire{"s" if overdue_questionnaires > 1 else ""} overdue',
                         'color': 'vendor_text-warning'
                     })
-            
-            # 3. Check questionnaire completion rate - Use Django ORM
-            total_assignments = QuestionnaireAssignments.objects.count()
-            completed_assignments = QuestionnaireAssignments.objects.filter(status='RESPONDED').count()
-            
-            if total_assignments > 0:
-                completion_rate = round((completed_assignments / total_assignments) * 100, 1)
-                if completion_rate < 95:  # Target threshold
-                    alerts.append({
-                        'type': 'info',
-                        'icon': 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
-                        'message': f'Questionnaire completion rate below 95% target at {completion_rate}%',
-                        'color': 'vendor_text-primary'
-                    })
-            
-            # 4. Check for overdue questionnaires - Use Django ORM
-            now = django_timezone.now()
-            overdue_questionnaires = QuestionnaireAssignments.objects.filter(
-                due_date__lt=now
-            ).filter(
-                Q(submission_date__isnull=True) | Q(submission_date__gt=F('due_date'))
-            ).count()
-            
-            if overdue_questionnaires > 0:
-                alerts.append({
-                    'type': 'warning',
-                    'icon': 'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
-                    'message': f'{overdue_questionnaires} Questionnaire{"s" if overdue_questionnaires > 1 else ""} overdue',
-                    'color': 'vendor_text-warning'
-                })
-            
-            response_data = {
-                'alerts': alerts,
-                'total_alerts': len(alerts),
-                'critical_alerts': len([a for a in alerts if a['type'] == 'critical']),
-                'warning_alerts': len([a for a in alerts if a['type'] == 'warning']),
-                'info_alerts': len([a for a in alerts if a['type'] == 'info'])
-            }
-            
-            logger.info(f"Returning alerts: {len(alerts)} total alerts")
-            return Response(response_data, status=status.HTTP_200_OK)
+                
+                response_data = {
+                    'alerts': alerts,
+                    'total_alerts': len(alerts),
+                    'critical_alerts': len([a for a in alerts if a['type'] == 'critical']),
+                    'warning_alerts': len([a for a in alerts if a['type'] == 'warning']),
+                    'info_alerts': len([a for a in alerts if a['type'] == 'info'])
+                }
+                
+                logger.info(f"Returning alerts: {len(alerts)} total alerts")
+                return Response(response_data, status=status.HTTP_200_OK)
                 
         except Exception as e:
             logger.error(f"Error in VendorAlertsAPIView: {str(e)}")
@@ -819,7 +808,7 @@ class VendorAlertsAPIView(APIView):
 
 class VendorRegistrationCompletionRateAPIView(APIView):
     """API view for calculating vendor registration completion rate with RBAC protection"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
     def get(self, request):
@@ -827,17 +816,17 @@ class VendorRegistrationCompletionRateAPIView(APIView):
         logger.info("VendorRegistrationCompletionRateAPIView.get called")
         
         try:
-            with get_db_connection().cursor() as cursor:
+            with connections['default'].cursor() as cursor:
                 # Step 1: Get total award notifications
-                cursor.execute("SELECT COUNT(*) AS total_notifications FROM tprm_integration.rfp_award_notifications")
+                cursor.execute("SELECT COUNT(*) AS total_notifications FROM rfp_award_notifications")
                 total_notifications = cursor.fetchone()[0] or 0
                 logger.info(f"Total award notifications: {total_notifications}")
                 
                 # Step 2: Get vendors who completed registration (response_id exists in temp_vendor)
                 cursor.execute("""
                     SELECT COUNT(DISTINCT ran.response_id) AS registered_vendors
-                    FROM tprm_integration.rfp_award_notifications ran
-                    INNER JOIN tprm_integration.temp_vendor tv ON ran.response_id = tv.response_id
+                    FROM rfp_award_notifications ran
+                    INNER JOIN temp_vendor tv ON ran.response_id = tv.response_id
                     WHERE ran.response_id IS NOT NULL
                 """)
                 registered_vendors = cursor.fetchone()[0] or 0
@@ -851,8 +840,8 @@ class VendorRegistrationCompletionRateAPIView(APIView):
                 # Step 4: Get pending registrations (notifications sent but not yet registered)
                 cursor.execute("""
                     SELECT COUNT(*) AS pending_registrations
-                    FROM tprm_integration.rfp_award_notifications ran
-                    LEFT JOIN tprm_integration.temp_vendor tv ON ran.response_id = tv.response_id
+                    FROM rfp_award_notifications ran
+                    LEFT JOIN temp_vendor tv ON ran.response_id = tv.response_id
                     WHERE ran.response_id IS NOT NULL 
                       AND tv.response_id IS NULL
                 """)
@@ -865,8 +854,8 @@ class VendorRegistrationCompletionRateAPIView(APIView):
                         ran.notification_status,
                         COUNT(*) as count,
                         SUM(CASE WHEN tv.response_id IS NOT NULL THEN 1 ELSE 0 END) as registered_count
-                    FROM tprm_integration.rfp_award_notifications ran
-                    LEFT JOIN tprm_integration.temp_vendor tv ON ran.response_id = tv.response_id
+                    FROM rfp_award_notifications ran
+                    LEFT JOIN temp_vendor tv ON ran.response_id = tv.response_id
                     WHERE ran.response_id IS NOT NULL
                     GROUP BY ran.notification_status
                     ORDER BY ran.notification_status
@@ -931,7 +920,7 @@ class VendorRegistrationCompletionRateAPIView(APIView):
 
 class VendorRegistrationTimeAPIView(APIView):
     """API view for calculating vendor registration time with RBAC protection"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
     def get(self, request):
@@ -939,12 +928,12 @@ class VendorRegistrationTimeAPIView(APIView):
         logger.info("VendorRegistrationTimeAPIView.get called")
         
         try:
-            with get_db_connection().cursor() as cursor:
+            with connections['default'].cursor() as cursor:
                 # Step 1: Get average registration time (response_date to created_at)
                 cursor.execute("""
                     SELECT AVG(DATEDIFF(tv.created_at, ran.response_date)) AS avg_registration_time
-                    FROM tprm_integration.temp_vendor tv
-                    INNER JOIN tprm_integration.rfp_award_notifications ran ON tv.response_id = ran.response_id
+                    FROM temp_vendor tv
+                    INNER JOIN rfp_award_notifications ran ON tv.response_id = ran.response_id
                     WHERE ran.response_date IS NOT NULL 
                       AND tv.created_at IS NOT NULL
                       AND ran.response_date <= tv.created_at
@@ -962,8 +951,8 @@ class VendorRegistrationTimeAPIView(APIView):
                         AVG(DATEDIFF(tv.created_at, ran.response_date)) as avg_time,
                         MIN(DATEDIFF(tv.created_at, ran.response_date)) as min_time,
                         MAX(DATEDIFF(tv.created_at, ran.response_date)) as max_time
-                    FROM tprm_integration.temp_vendor tv
-                    INNER JOIN tprm_integration.rfp_award_notifications ran ON tv.response_id = ran.response_id
+                    FROM temp_vendor tv
+                    INNER JOIN rfp_award_notifications ran ON tv.response_id = ran.response_id
                     WHERE ran.response_date IS NOT NULL 
                       AND tv.created_at IS NOT NULL
                       AND ran.response_date <= tv.created_at
@@ -1022,8 +1011,8 @@ class VendorRegistrationTimeAPIView(APIView):
                 
                 # Step 4: Get total vendors with registration time data
                 cursor.execute("""
-                    SELECT COUNT(*) FROM tprm_integration.temp_vendor tv
-                    INNER JOIN tprm_integration.rfp_award_notifications ran ON tv.response_id = ran.response_id
+                    SELECT COUNT(*) FROM temp_vendor tv
+                    INNER JOIN rfp_award_notifications ran ON tv.response_id = ran.response_id
                     WHERE ran.response_date IS NOT NULL 
                       AND tv.created_at IS NOT NULL
                       AND ran.response_date <= tv.created_at
@@ -1042,8 +1031,8 @@ class VendorRegistrationTimeAPIView(APIView):
                             ELSE '2+ weeks'
                         END as time_bucket,
                         COUNT(*) as vendor_count
-                    FROM tprm_integration.temp_vendor tv
-                    INNER JOIN tprm_integration.rfp_award_notifications ran ON tv.response_id = ran.response_id
+                    FROM temp_vendor tv
+                    INNER JOIN rfp_award_notifications ran ON tv.response_id = ran.response_id
                     WHERE ran.response_date IS NOT NULL 
                       AND tv.created_at IS NOT NULL
                       AND ran.response_date <= tv.created_at
@@ -1070,8 +1059,8 @@ class VendorRegistrationTimeAPIView(APIView):
                         DATEDIFF(tv.created_at, ran.response_date) as registration_days,
                         ran.response_date,
                         tv.created_at
-                    FROM tprm_integration.temp_vendor tv
-                    INNER JOIN tprm_integration.rfp_award_notifications ran ON tv.response_id = ran.response_id
+                    FROM temp_vendor tv
+                    INNER JOIN rfp_award_notifications ran ON tv.response_id = ran.response_id
                     WHERE ran.response_date IS NOT NULL 
                       AND tv.created_at IS NOT NULL
                       AND ran.response_date <= tv.created_at
@@ -1143,7 +1132,7 @@ class VendorRegistrationTimeAPIView(APIView):
 
 class VendorKPICategoriesAPIView(APIView):
     """API view for KPI categories overview with RBAC protection"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
     def get(self, request):
@@ -1153,7 +1142,7 @@ class VendorKPICategoriesAPIView(APIView):
         try:
             categories = []
             
-            # 1. Initial Validation KPIs - Use Django ORM
+            # 1. Initial Validation KPIs - Use Django ORM with TempVendor model
             total_validated = TempVendor.objects.filter(status__in=['APPROVED', 'PENDING_REVIEW']).count()
             approved_vendors = TempVendor.objects.filter(status='APPROVED').count()
             
@@ -1169,7 +1158,7 @@ class VendorKPICategoriesAPIView(APIView):
                 'iconPath': 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'
             })
             
-            # 2. Due Diligence KPIs - Use Django ORM
+            # 2. Due Diligence KPIs - Use Django ORM with QuestionnaireAssignments model
             total_questionnaires = QuestionnaireAssignments.objects.count()
             completed_questionnaires = QuestionnaireAssignments.objects.filter(status='RESPONDED').count()
             
@@ -1185,7 +1174,7 @@ class VendorKPICategoriesAPIView(APIView):
                 'iconPath': 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'
             })
             
-            # 3. Risk Scoring KPIs - Use Django ORM
+            # 3. Risk Scoring KPIs - Use Django ORM with TempVendor model
             total_risk_assessed = TempVendor.objects.exclude(risk_level__isnull=True).exclude(risk_level='').count()
             low_medium_risk = TempVendor.objects.filter(risk_level__in=['LOW', 'MEDIUM']).count()
             
@@ -1201,12 +1190,11 @@ class VendorKPICategoriesAPIView(APIView):
                 'iconPath': 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z'
             })
             
-            # 4. External Verification KPIs - Use Django ORM
-            # Get vendors that have been screened
-            screened_vendor_ids = ExternalScreeningResult.objects.values_list('vendor_id', flat=True).distinct()
-            total_screened = len(screened_vendor_ids)
+            # 4. External Verification KPIs - Use Django ORM (vendor_id is not a ForeignKey, so use filter)
+            vendor_ids_with_screening = ExternalScreeningResult.objects.values_list('vendor_id', flat=True).distinct()
+            total_screened = len(vendor_ids_with_screening)
             
-            # Get flagged vendors with unresolved matches
+            # Get flagged vendors: those with screening matches that are not false positives and have pending/escalated/blocked status
             flagged_screening_ids = ScreeningMatch.objects.filter(
                 is_false_positive=False,
                 resolution_status__in=['PENDING', 'ESCALATED', 'BLOCKED']
@@ -1215,6 +1203,7 @@ class VendorKPICategoriesAPIView(APIView):
             flagged_vendor_ids = ExternalScreeningResult.objects.filter(
                 screening_id__in=flagged_screening_ids
             ).values_list('vendor_id', flat=True).distinct()
+            
             flagged_vendors = len(flagged_vendor_ids)
             
             external_verification_score = round(((total_screened - flagged_vendors) / total_screened * 100), 1) if total_screened > 0 else 100
@@ -1234,11 +1223,11 @@ class VendorKPICategoriesAPIView(APIView):
                 'total_categories': len(categories),
                 'average_score': round(sum(cat['score'] for cat in categories) / len(categories), 1) if categories else 0,
                 'top_performing_category': max(categories, key=lambda x: x['score'])['name'] if categories else None,
-                'needs_attention_category': min(categories, key=lambda x: x['score'])['name'] if categories else None
-            }
-            
-            logger.info(f"Returning KPI categories: {len(categories)} categories")
-            return Response(response_data, status=status.HTTP_200_OK)
+                    'needs_attention_category': min(categories, key=lambda x: x['score'])['name'] if categories else None
+                }
+                
+                logger.info(f"Returning KPI categories: {len(categories)} categories")
+                return Response(response_data, status=status.HTTP_200_OK)
                 
         except Exception as e:
             logger.error(f"Error in VendorKPICategoriesAPIView: {str(e)}")
@@ -1254,7 +1243,7 @@ class VendorDashboardExportPDFAPIView(APIView):
     """
     Export Vendor Dashboard as PDF with RBAC protection
     """
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
     def post(self, request):
@@ -1683,7 +1672,7 @@ class VendorDashboardExportExcelAPIView(APIView):
     """
     Export Vendor Dashboard as Excel with RBAC protection
     """
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
     def post(self, request):

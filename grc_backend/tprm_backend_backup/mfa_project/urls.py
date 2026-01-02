@@ -1,0 +1,21 @@
+"""
+URL configuration for mfa_project project.
+"""
+from django.contrib import admin
+from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('api/auth/', include('mfa_auth.urls')),
+    path('rbac/', include('rbac.tprm_urls')),
+    path('rbac/example/', include('rbac.example_urls')),
+    path('api/contracts/', include('contracts.urls')),
+    path('api/v1/vendor-core/', include('apps.vendor_core.urls')),
+]
+
+# Serve media files during development
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.MEDIA_ROOT)

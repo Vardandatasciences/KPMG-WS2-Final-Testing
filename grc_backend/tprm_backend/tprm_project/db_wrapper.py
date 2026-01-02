@@ -44,6 +44,3 @@ def is_database_available(alias='default'):
     except Exception:
         return False
 
-
-
-

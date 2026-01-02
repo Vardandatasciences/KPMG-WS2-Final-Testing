@@ -3,6 +3,9 @@ Views for the Audits app with JWT Authentication.
 """
 import logging
 import jwt
+import base64
+import os
+import tempfile
 from rest_framework import status, generics, permissions
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.response import Response
@@ -13,9 +16,6 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Q, Count
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
-
-# Use Unified JWT Authentication from GRC
-from grc.jwt_auth import UnifiedJWTAuthentication
 from django.utils import timezone
 from django.conf import settings
 from datetime import datetime, timedelta
@@ -27,6 +27,9 @@ from .serializers import (
     ContractAuditFindingSerializer, ContractAuditReportSerializer
 )
 from tprm_backend.contracts.models import VendorContract, ContractTerm
+from tprm_backend.apps.vendor_core.models import S3Files
+from tprm_backend.s3 import create_direct_mysql_client
+from tprm_backend.rbac.tprm_decorators import rbac_contract_required
 
 import re
 def _normalize_term_id(term_id):
@@ -79,29 +82,137 @@ def _generate_term_variants(term_id):
 
 
 logger = logging.getLogger(__name__)
+_AUDIT_S3_CLIENT = None
+
+
+def get_audit_s3_client():
+    """Return shared S3 client instance for audit uploads."""
+    global _AUDIT_S3_CLIENT
+    if _AUDIT_S3_CLIENT is None:
+        try:
+            _AUDIT_S3_CLIENT = create_direct_mysql_client()
+            logger.info("Initialized S3 client for contract audit uploads")
+        except Exception as e:
+            logger.error("Failed to initialize S3 client: %s", e)
+            _AUDIT_S3_CLIENT = None
+    return _AUDIT_S3_CLIENT
 
 
 class SimpleAuthenticatedPermission(BasePermission):
     """Custom permission class that checks for authenticated users"""
     def has_permission(self, request, view):
-        # Just check if user object exists and is authenticated
-        # UnifiedJWTAuthentication handles GRC/TPRM user verification
-        if request.user and hasattr(request.user, 'is_authenticated'):
-            return request.user.is_authenticated
-        return False
+        # Check if user is authenticated
+        return bool(
+            request.user and 
+            hasattr(request.user, 'userid') and
+            getattr(request.user, 'is_authenticated', False)
+        )
 
+
+class PerformContractAuditPermission(BasePermission):
+    """Permission class that checks for PerformContractAudit permission"""
+    def has_permission(self, request, view):
+        # First check if user is authenticated
+        if not (request.user and hasattr(request.user, 'userid') and getattr(request.user, 'is_authenticated', False)):
+            return False
+        
+        # Get user_id
+        user_id = getattr(request.user, 'userid', None)
+        if not user_id:
+            # Try to get from id attribute
+            user_id = getattr(request.user, 'id', None)
+        
+        if not user_id:
+            return False
+        
+        # Check PerformContractAudit permission
+        from rbac.tprm_utils import RBACTPRMUtils
+        has_permission = RBACTPRMUtils.check_contract_permission(user_id, 'PerformContractAudit')
+        
+        if not has_permission:
+            logger.warning(f"[RBAC TPRM] User {user_id} denied PerformContractAudit access")
+        
+        return has_permission
+
+
+class JWTAuthentication(BaseAuthentication):
+    """Custom JWT authentication class for DRF"""
+    def authenticate(self, request):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return None
+        
+        try:
+            token = auth_header.split(' ')[1]
+            # Use JWT_SECRET_KEY from settings
+            secret_key = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+            payload = jwt.decode(token, secret_key, algorithms=['HS256'])
+            user_id = payload.get('user_id')
+            
+            if user_id:
+                try:
+                    from mfa_auth.models import User
+                    user = User.objects.get(userid=user_id)
+                    # Add is_authenticated attribute for DRF compatibility
+                    user.is_authenticated = True
+                    return (user, token)
+                except (User.DoesNotExist, ImportError):
+                    # If User model doesn't exist or user not found, create a mock user
+                    class MockUser:
+                        def __init__(self, user_id):
+                            self.userid = user_id
+                            self.username = f"user_{user_id}"
+                            self.is_authenticated = True
+                    
+                    return (MockUser(user_id), token)
+        except jwt.ExpiredSignatureError:
+            logger.warning("JWT token expired")
+            return None
+        except jwt.InvalidTokenError:
+            logger.warning("Invalid JWT token")
+            return None
+        except Exception as e:
+            logger.error(f"JWT authentication error: {str(e)}")
+            return None
 
 
 class ContractAuditListView(generics.ListCreateAPIView):
     """List and create contract audits."""
-    queryset = ContractAudit.objects.all()
-    authentication_classes = [UnifiedJWTAuthentication]
-    permission_classes = [SimpleAuthenticatedPermission]
+    queryset = ContractAudit.objects.select_related('contract').all()
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [PerformContractAuditPermission]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['status', 'audit_type', 'frequency', 'auditor_id', 'reviewer_id', 'contract']
-    search_fields = ['title', 'scope']
+    search_fields = ['title', 'scope', 'contract__contract_title']
     ordering_fields = ['due_date', 'created_at', 'updated_at']
     ordering = ['-created_at']
+    
+    def get_queryset(self):
+        """Override queryset to filter by current user's role when appropriate."""
+        queryset = super().get_queryset()
+        
+        # Get current user ID from request
+        if hasattr(self.request, 'user') and hasattr(self.request.user, 'userid'):
+            current_user_id = self.request.user.userid
+            
+            # Only apply user-based filtering if no explicit user filters are provided
+            # This allows admins to see all audits when they explicitly filter
+            has_explicit_user_filter = any([
+                self.request.query_params.get('auditor_id'),
+                self.request.query_params.get('reviewer_id'),
+                self.request.query_params.get('assignee_id')
+            ])
+            
+            # If no explicit user filters, show audits where user is assignee, auditor, or reviewer
+            # This ensures reviewers can see audits assigned to them
+            if not has_explicit_user_filter:
+                queryset = queryset.filter(
+                    Q(assignee_id=current_user_id) |
+                    Q(auditor_id=current_user_id) |
+                    Q(reviewer_id=current_user_id)
+                )
+        
+        return queryset
     
     def get_serializer_class(self):
         if self.request.method == 'POST':
@@ -124,8 +235,8 @@ class ContractAuditListView(generics.ListCreateAPIView):
 class ContractAuditDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Retrieve, update and delete contract audit."""
     queryset = ContractAudit.objects.all()
-    authentication_classes = [UnifiedJWTAuthentication]
-    permission_classes = [SimpleAuthenticatedPermission]
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [PerformContractAuditPermission]
     
     def get_serializer_class(self):
         if self.request.method in ['PUT', 'PATCH']:
@@ -161,8 +272,9 @@ class ContractAuditDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
+@rbac_contract_required('PerformContractAudit')
 def start_audit(request, audit_id):
     """Start an audit by changing status to in_progress."""
     try:
@@ -199,8 +311,8 @@ class ContractStaticQuestionnaireListView(generics.ListCreateAPIView):
     """List and create contract static questionnaires."""
     queryset = ContractStaticQuestionnaire.objects.all()
     serializer_class = ContractStaticQuestionnaireSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
-    permission_classes = [SimpleAuthenticatedPermission]
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [PerformContractAuditPermission]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['term_id', 'question_type', 'is_required']
 
@@ -209,16 +321,16 @@ class ContractStaticQuestionnaireDetailView(generics.RetrieveUpdateDestroyAPIVie
     """Retrieve, update and delete contract static questionnaire."""
     queryset = ContractStaticQuestionnaire.objects.all()
     serializer_class = ContractStaticQuestionnaireSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
-    permission_classes = [SimpleAuthenticatedPermission]
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [PerformContractAuditPermission]
 
 
 class ContractAuditVersionListView(generics.ListCreateAPIView):
     """List and create contract audit versions."""
     queryset = ContractAuditVersion.objects.all()
     serializer_class = ContractAuditVersionSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
-    permission_classes = [SimpleAuthenticatedPermission]
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [PerformContractAuditPermission]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ['audit_id', 'version_type', 'approval_status', 'user_id']
     ordering_fields = ['date_created', 'created_at']
@@ -229,16 +341,16 @@ class ContractAuditVersionDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Retrieve, update and delete contract audit version."""
     queryset = ContractAuditVersion.objects.all()
     serializer_class = ContractAuditVersionSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
-    permission_classes = [SimpleAuthenticatedPermission]
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [PerformContractAuditPermission]
 
 
 class ContractAuditFindingListView(generics.ListCreateAPIView):
     """List and create contract audit findings."""
     queryset = ContractAuditFinding.objects.all()
     serializer_class = ContractAuditFindingSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
-    permission_classes = [SimpleAuthenticatedPermission]
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [PerformContractAuditPermission]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ['audit_id', 'term_id', 'user_id']
     ordering_fields = ['check_date', 'created_at']
@@ -330,16 +442,16 @@ class ContractAuditFindingDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Retrieve, update and delete contract audit finding."""
     queryset = ContractAuditFinding.objects.all()
     serializer_class = ContractAuditFindingSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
-    permission_classes = [SimpleAuthenticatedPermission]
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [PerformContractAuditPermission]
 
 
 class ContractAuditReportListView(generics.ListCreateAPIView):
     """List and create contract audit reports."""
     queryset = ContractAuditReport.objects.all()
     serializer_class = ContractAuditReportSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
-    permission_classes = [SimpleAuthenticatedPermission]
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [PerformContractAuditPermission]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ['audit_id', 'contract_id', 'term_id']
     ordering_fields = ['generated_at']
@@ -350,13 +462,278 @@ class ContractAuditReportDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Retrieve, update and delete contract audit report."""
     queryset = ContractAuditReport.objects.all()
     serializer_class = ContractAuditReportSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
-    permission_classes = [SimpleAuthenticatedPermission]
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [PerformContractAuditPermission]
+
+
+@api_view(['POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([SimpleAuthenticatedPermission])
+@rbac_contract_required('PerformContractAudit')
+def upload_contract_audit_report(request):
+    """
+    Upload a generated audit PDF to S3, store metadata in s3_files,
+    and create a ContractAuditReport record with the resulting link.
+    """
+    data = request.data
+    
+    required_fields = ['audit_id', 'file_name', 'file_data']
+    missing = [field for field in required_fields if not data.get(field)]
+    if missing:
+        return Response(
+            {
+                'success': False,
+                'error': f"Missing required fields: {', '.join(missing)}"
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    audit_id = data.get('audit_id')
+    contract_id = data.get('contract_id')
+    term_id = data.get('term_id') or None
+    
+    try:
+        audit = ContractAudit.objects.get(audit_id=audit_id)
+    except ContractAudit.DoesNotExist:
+        return Response(
+            {'success': False, 'error': f'Audit {audit_id} not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    if contract_id is not None:
+        try:
+            contract_id = int(contract_id)
+        except (TypeError, ValueError):
+            return Response(
+                {'success': False, 'error': 'contract_id must be an integer'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    if not contract_id:
+        if audit.contract:
+            contract_id = audit.contract.contract_id
+        else:
+            return Response(
+                {
+                    'success': False,
+                    'error': 'contract_id is required when audit is not linked to a contract'
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    file_name = data.get('file_name')
+    file_data = data.get('file_data')
+    
+    base64_payload = file_data.split('base64,')[-1] if isinstance(file_data, str) else ''
+    try:
+        pdf_bytes = base64.b64decode(base64_payload)
+    except Exception as e:
+        logger.error("Failed to decode report payload: %s", e)
+        return Response(
+            {'success': False, 'error': 'Invalid file_data payload'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    s3_client = get_audit_s3_client()
+    if not s3_client:
+        return Response(
+            {'success': False, 'error': 'S3 client is not available'},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+    
+    user_identifier = getattr(getattr(request, 'user', None), 'userid', 'contract_audit_report')
+    
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+            temp_file.write(pdf_bytes)
+            temp_path = temp_file.name
+        
+        upload_result = s3_client.upload(
+            file_path=temp_path,
+            user_id=str(user_identifier),
+            custom_file_name=file_name
+        )
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.remove(temp_path)
+    
+    if not upload_result.get('success'):
+        logger.error("S3 upload failed for audit %s: %s", audit_id, upload_result.get('error'))
+        return Response(
+            {
+                'success': False,
+                'error': upload_result.get('error', 'Failed to upload report to storage')
+            },
+            status=status.HTTP_502_BAD_GATEWAY
+        )
+    
+    file_info = upload_result.get('file_info', {})
+    s3_url = file_info.get('url')
+    s3_key = file_info.get('s3Key')
+    
+    s3_file = S3Files.objects.create(
+        url=s3_url,
+        file_type='pdf',
+        file_name=file_name,
+        user_id=str(user_identifier),
+        metadata={
+            'audit_id': audit_id,
+            'contract_id': contract_id,
+            'term_id': term_id,
+            's3_key': s3_key,
+            'stored_name': file_info.get('storedName'),
+            'bucket': file_info.get('bucket'),
+            'source': 'contract_audit_report'
+        }
+    )
+    
+    report = ContractAuditReport.objects.create(
+        audit_id=audit_id,
+        contract_id=contract_id,
+        term_id=term_id,
+        report_link=s3_url
+    )
+    
+    return Response(
+        {
+            'success': True,
+            'message': 'Audit report uploaded successfully',
+            'report': {
+                'report_id': report.report_id,
+                'audit_id': audit_id,
+                'contract_id': contract_id,
+                'term_id': term_id,
+                'report_link': s3_url,
+                's3_file_id': s3_file.id,
+                'file_name': file_name
+            }
+        },
+        status=status.HTTP_201_CREATED
+    )
+
+
+@api_view(['POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([SimpleAuthenticatedPermission])
+@rbac_contract_required('PerformContractAudit')
+def upload_contract_audit_document(request):
+    """
+    Upload individual questionnaire documents to S3 and store metadata.
+    """
+    data = request.data
+    required_fields = ['audit_id', 'file_name', 'file_data']
+    missing = [field for field in required_fields if not data.get(field)]
+    if missing:
+        return Response(
+            {
+                'success': False,
+                'error': f"Missing required fields: {', '.join(missing)}"
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    audit_id = data.get('audit_id')
+    question_id = data.get('question_id')
+    term_id = data.get('term_id')
+    file_name = data.get('file_name')
+    file_type = data.get('file_type', '')
+    file_size = data.get('file_size')
+    file_data = data.get('file_data')
+    
+    try:
+        ContractAudit.objects.get(audit_id=audit_id)
+    except ContractAudit.DoesNotExist:
+        return Response(
+            {'success': False, 'error': f'Audit {audit_id} not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    base64_payload = file_data.split('base64,')[-1] if isinstance(file_data, str) else ''
+    try:
+        file_bytes = base64.b64decode(base64_payload)
+    except Exception as e:
+        logger.error("Failed to decode document payload: %s", e)
+        return Response(
+            {'success': False, 'error': 'Invalid file_data payload'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    s3_client = get_audit_s3_client()
+    if not s3_client:
+        return Response(
+            {'success': False, 'error': 'S3 client is not available'},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+    
+    suffix = os.path.splitext(file_name)[1] or '.bin'
+    user_identifier = getattr(getattr(request, 'user', None), 'userid', 'contract_audit_document')
+    
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
+            temp_file.write(file_bytes)
+            temp_path = temp_file.name
+        
+        upload_result = s3_client.upload(
+            file_path=temp_path,
+            user_id=str(user_identifier),
+            custom_file_name=file_name
+        )
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.remove(temp_path)
+    
+    if not upload_result.get('success'):
+        logger.error("S3 document upload failed for audit %s: %s", audit_id, upload_result.get('error'))
+        return Response(
+            {
+                'success': False,
+                'error': upload_result.get('error', 'Failed to upload document to storage')
+            },
+            status=status.HTTP_502_BAD_GATEWAY
+        )
+    
+    file_info = upload_result.get('file_info', {})
+    metadata = {
+        'audit_id': audit_id,
+        'term_id': term_id,
+        'question_id': question_id,
+        'file_size': file_size or len(file_bytes),
+        'content_type': file_type,
+        'storage': 's3',
+        's3_key': file_info.get('s3Key')
+    }
+    
+    s3_file = S3Files.objects.create(
+        url=file_info.get('url'),
+        file_type=file_type or suffix.replace('.', ''),
+        file_name=file_name,
+        user_id=str(user_identifier),
+        metadata=metadata
+    )
+    
+    return Response(
+        {
+            'success': True,
+            'file': {
+                's3_file_id': s3_file.id,
+                'url': file_info.get('url'),
+                's3_key': file_info.get('s3Key'),
+                'file_name': file_name,
+                'file_type': file_type,
+                'file_size': file_size or len(file_bytes),
+                'metadata': metadata
+            }
+        },
+        status=status.HTTP_201_CREATED
+    )
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
+@rbac_contract_required('PerformContractAudit')
 def contract_audit_dashboard_stats(request):
     """Get contract audit dashboard statistics."""
     total_audits = ContractAudit.objects.count()
@@ -376,8 +753,9 @@ def contract_audit_dashboard_stats(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
+@rbac_contract_required('PerformContractAudit')
 def available_contracts(request):
     """Get available contracts for audit creation."""
     contracts = VendorContract.objects.select_related('vendor')
@@ -401,8 +779,9 @@ def available_contracts(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
+@rbac_contract_required('PerformContractAudit')
 def contract_terms(request, contract_id):
     """Get terms for a specific contract."""
     try:
@@ -443,7 +822,7 @@ def contract_terms(request, contract_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 def questionnaires_by_term_title(request):
     """Get questionnaires for terms matching by term_category or term_title.
@@ -485,29 +864,22 @@ def questionnaires_by_term_title(request):
             # Also try to find questionnaires by looking up their term_ids in contract_terms
             # This handles cases where questionnaires might be linked to terms we haven't found yet
             # Get all unique term_ids from questionnaires that might match
-            all_questionnaire_term_ids = ContractStaticQuestionnaire.objects.values_list('term_id', flat=True).distinct()
+            all_questionnaire_term_ids = list(ContractStaticQuestionnaire.objects.values_list('term_id', flat=True).distinct())
             logger.info(f"Total unique term_ids in questionnaires: {len(all_questionnaire_term_ids)}")
             
-            # For each questionnaire term_id, check if it belongs to a term with matching category
-            additional_term_ids = []
-            for q_term_id in all_questionnaire_term_ids:
-                try:
-                    # Try to find a term with this term_id that has the matching category
-                    term_with_category = ContractTerm.objects.filter(
-                        term_id=q_term_id,
-                        term_category__iexact=term_category
-                    ).first()
-                    if term_with_category:
-                        additional_term_ids.append(q_term_id)
-                        logger.info(f"Found questionnaire term_id '{q_term_id}' linked to term with category '{term_category}'")
-                except Exception as e:
-                    logger.debug(f"Error checking term_id {q_term_id}: {e}")
-            
-            # Add any additional term_ids we found
-            if additional_term_ids:
-                matching_term_ids.extend(additional_term_ids)
-                matching_term_ids = list(set(matching_term_ids))  # Remove duplicates
-                logger.info(f"Total matching term_ids after checking questionnaires: {len(matching_term_ids)}")
+            # OPTIMIZED: Use bulk query instead of N+1 queries
+            # Find all terms that have matching category AND whose term_id is in the questionnaire term_ids
+            if all_questionnaire_term_ids:
+                additional_terms = ContractTerm.objects.filter(
+                    term_id__in=all_questionnaire_term_ids,
+                    term_category__iexact=term_category
+                ).values_list('term_id', flat=True)
+                additional_term_ids = list(additional_terms)
+                
+                if additional_term_ids:
+                    matching_term_ids.extend(additional_term_ids)
+                    matching_term_ids = list(set(matching_term_ids))  # Remove duplicates
+                    logger.info(f"Found {len(additional_term_ids)} additional term_ids via bulk query. Total matching term_ids: {len(matching_term_ids)}")
         else:
             # Fallback to term_title (case-insensitive match)
             matching_terms = ContractTerm.objects.filter(
@@ -598,20 +970,18 @@ def questionnaires_by_term_title(request):
         logger.info(f"Found {questionnaires_exact.count()} questionnaires by exact term_id match")
         
         # 2. Partial match - if term_id in questionnaires contains the term_id from contract_terms
+        # OPTIMIZED: Build Q objects for bulk query instead of looping
         # This handles cases where questionnaire term_id is "term_1759752260.987479" 
         # and contract_terms term_id is "9752260.987479"
-        # We check if the questionnaire term_id ends with the contract term_id
-        questionnaires_partial = ContractStaticQuestionnaire.objects.none()
+        partial_q_objects = Q()
         for tid in matching_term_ids:
             tid_str = str(tid)
             # Match if questionnaire term_id ends with the contract term_id (most common case)
             # or contains it as a substring (for other variations)
-            questionnaires_partial = questionnaires_partial | ContractStaticQuestionnaire.objects.filter(
-                term_id__iendswith=tid_str
-            ) | ContractStaticQuestionnaire.objects.filter(
-                term_id__icontains=tid_str
-            )
-        logger.info(f"Found {questionnaires_partial.count()} questionnaires by partial term_id match")
+            partial_q_objects |= Q(term_id__iendswith=tid_str) | Q(term_id__icontains=tid_str)
+        
+        questionnaires_partial = ContractStaticQuestionnaire.objects.filter(partial_q_objects)
+        logger.info(f"Found {questionnaires_partial.count()} questionnaires by partial term_id match (bulk query)")
         
         # 3. Direct lookup: Find questionnaires whose term_id exists in contract_terms with matching category
         # This is the most reliable method - it directly links questionnaires to terms by category
@@ -636,25 +1006,33 @@ def questionnaires_by_term_title(request):
                     category_term_id_variations.append(numeric_part)
                     category_term_id_variations.append(f'term_{numeric_part}')
             
+            # Remove duplicates from variations list
+            category_term_id_variations = list(set(category_term_id_variations))
+            
             # Find questionnaires with any of these term_ids
             questionnaires_by_category = ContractStaticQuestionnaire.objects.filter(
                 term_id__in=category_term_id_variations
             )
+            
+            # OPTIMIZED: Use bulk query instead of N+1 queries for reverse lookup
+            # Get all questionnaire term_ids (fetch once, reuse if already fetched earlier)
+            all_q_term_ids_for_reverse = list(ContractStaticQuestionnaire.objects.values_list('term_id', flat=True).distinct())
+            
+            if all_q_term_ids_for_reverse:
+                # Find all terms that have matching category AND whose term_id is in questionnaire term_ids
+                matching_q_term_ids = list(ContractTerm.objects.filter(
+                    term_id__in=all_q_term_ids_for_reverse,
+                    term_category__iexact=term_category
+                ).values_list('term_id', flat=True))
+                
+                if matching_q_term_ids:
+                    questionnaires_by_category_reverse = ContractStaticQuestionnaire.objects.filter(
+                        term_id__in=matching_q_term_ids
+                    )
+                    questionnaires_by_category = questionnaires_by_category | questionnaires_by_category_reverse
+            
+            # Only count once after all queries are combined
             logger.info(f"Found {questionnaires_by_category.count()} questionnaires by category lookup (term_ids: {category_term_ids[:5]}...)")
-            
-            # Also try reverse lookup: for each questionnaire term_id, check if it's in contract_terms with this category
-            all_q_term_ids = set(ContractStaticQuestionnaire.objects.values_list('term_id', flat=True).distinct())
-            matching_q_term_ids = []
-            for q_term_id in all_q_term_ids:
-                if ContractTerm.objects.filter(term_id=q_term_id, term_category__iexact=term_category).exists():
-                    matching_q_term_ids.append(q_term_id)
-            
-            if matching_q_term_ids:
-                questionnaires_by_category_reverse = ContractStaticQuestionnaire.objects.filter(
-                    term_id__in=matching_q_term_ids
-                )
-                logger.info(f"Found {questionnaires_by_category_reverse.count()} questionnaires by reverse category lookup")
-                questionnaires_by_category = questionnaires_by_category | questionnaires_by_category_reverse
         else:
             questionnaires_by_category = ContractStaticQuestionnaire.objects.none()
         
@@ -688,7 +1066,7 @@ def questionnaires_by_term_title(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 def questionnaires_by_term_ids(request):
     """Get questionnaires grouped by exact term_ids (with minimal normalization)."""
@@ -751,7 +1129,7 @@ def questionnaires_by_term_ids(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 def templates_by_term(request):
     """Get questionnaire templates for terms matching by term_category or term_id.
@@ -760,7 +1138,8 @@ def templates_by_term(request):
     matching the given term_category or term_id.
     """
     try:
-        from tprm_backend.bcpdrp.models import QuestionnaireTemplate
+        from bcpdrp.models import QuestionnaireTemplate
+        from rbac.models import RBACTPRM
         
         term_category = request.query_params.get('term_category', None)
         term_title = request.query_params.get('term_title', None)
@@ -772,10 +1151,61 @@ def templates_by_term(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Find matching templates
+        # Get current user ID from request
+        current_user_id = None
+        if hasattr(request, 'user') and hasattr(request.user, 'userid'):
+            current_user_id = request.user.userid
+        elif hasattr(request, 'user') and hasattr(request.user, 'id'):
+            current_user_id = request.user.id
+        
+        # If we can't get user ID from request.user, try JWT token directly
+        if not current_user_id:
+            try:
+                from rbac.tprm_utils import RBACTPRMUtils
+                current_user_id = RBACTPRMUtils.get_user_id_from_request(request)
+            except Exception as e:
+                logger.warning(f"Could not extract user_id from request: {e}")
+        
+        logger.info(f"Current user ID for template filtering: {current_user_id}")
+        
+        # Get all Admin user IDs from rbac_tprm table
+        # Check for Admin role (case-insensitive matching for flexibility)
+        admin_users = RBACTPRM.objects.filter(
+            role__iexact='Admin',
+            is_active='Y'
+        ).values_list('user_id', flat=True).distinct()
+        
+        admin_user_ids = list(admin_users)
+        logger.info(f"Found {len(admin_user_ids)} Admin users for template filtering")
+        
+        # Build list of user IDs whose templates should be visible
+        # Include Admin users (visible to all) and current user (visible only to them)
+        visible_user_ids = list(set(admin_user_ids))  # Start with Admin user IDs
+        
+        # Add current user ID if available
+        if current_user_id:
+            visible_user_ids.append(current_user_id)
+            visible_user_ids = list(set(visible_user_ids))  # Remove duplicates
+            logger.info(f"Template visibility: Admin users + current user ({current_user_id})")
+        else:
+            logger.warning("No current user ID found - only showing Admin templates")
+        
+        # If no users to show templates from, return empty list
+        if not visible_user_ids:
+            logger.info("No users found for template filtering - returning empty template list")
+            return Response({
+                'term_category': term_category,
+                'term_title': term_title,
+                'term_id': term_id,
+                'templates': [],
+                'count': 0
+            })
+        
+        # Find matching templates - show templates created by Admin users OR current user
         templates = QuestionnaireTemplate.objects.filter(
             module_type='CONTRACT',
-            is_active=True
+            is_active=True,
+            created_by__in=visible_user_ids
         )
         
         matching_templates = []
@@ -926,12 +1356,12 @@ def templates_by_term(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 def template_questions(request, template_id):
     """Get questions from a specific questionnaire template."""
     try:
-        from tprm_backend.bcpdrp.models import QuestionnaireTemplate
+        from bcpdrp.models import QuestionnaireTemplate
         
         try:
             template = QuestionnaireTemplate.objects.get(
@@ -977,105 +1407,69 @@ def template_questions(request, template_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
+@rbac_contract_required('PerformContractAudit')
 def available_users(request):
-    """Get all available users for auditor and reviewer assignment."""
-    # RBAC import removed - functionality preserved
-    from django.db import connections
-    
+    """Get users with PerformContractAudit permission for auditor and reviewer assignment."""
     try:
-        # Get all active users from the users table
-        with connections['default'].cursor() as cursor:
-            cursor.execute("""
-                SELECT UserId, UserName, Email, FirstName, LastName, DepartmentId, IsActive
-                FROM users 
-                WHERE IsActive = 'Y' OR IsActive = '1' OR IsActive = 'true'
-                ORDER BY FirstName, LastName
-            """)
+        # Import required models
+        from mfa_auth.models import User
+        from rbac.tprm_utils import RBACTPRMUtils
+        
+        # Get all active users (filter by is_active_raw which can be 'Y', 'YES', '1', 'TRUE')
+        all_users = User.objects.filter(
+            is_active_raw__in=['Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true']
+        ).order_by('userid')
+        
+        logger.info(f"Found {all_users.count()} active users in database")
+        
+        # Filter users who have PerformContractAudit permission
+        users_with_permission = []
+        for user in all_users:
+            user_id = user.userid
             
-            users_data = []
-            for row in cursor.fetchall():
-                user_id, username, email, first_name, last_name, dept_id, is_active = row
+            # Check if user has PerformContractAudit permission
+            has_permission = RBACTPRMUtils.check_contract_permission(user_id, 'PerformContractAudit')
+            
+            # Include user if they have PerformContractAudit permission
+            if has_permission:
+                full_name = f"{user.first_name} {user.last_name}".strip()
+                display_name = full_name if full_name else user.username
                 
-                # Combine first and last name
-                full_name = f"{first_name or ''} {last_name or ''}".strip()
-                if not full_name:
-                    full_name = username or f"User {user_id}"
-                
-                # RBAC removed - using default role assignment
-                role = 'user'  # Default role for all users
-                
-                users_data.append({
+                user_data = {
                     'user_id': user_id,
-                    'name': full_name,
-                    'email': email or f"user{user_id}@example.com",
-                    'role': role,
-                    'department': f"Department {dept_id}" if dept_id else "Unknown",
-                    'username': username
-                })
+                    'username': user.username,
+                    'name': display_name,
+                    'email': user.email or f"user{user_id}@example.com",
+                    'role': 'auditor',  # Default role for audit users
+                    'department': getattr(user, 'department', 'Unknown'),
+                }
+                users_with_permission.append(user_data)
+                logger.info(f"User with PerformContractAudit permission: {user_data}")
+        
+        logger.info(f"Returning {len(users_with_permission)} users with PerformContractAudit permission to frontend")
             
-            return Response(users_data)
+        return Response(users_with_permission)
             
     except Exception as e:
-        # Fallback to mock data if database connection fails
-        print(f"Error connecting to tprm_integration: {e}")
-        users_data = [
+        # Log error and return empty list
+        logger.error(f"Error fetching users with PerformContractAudit permission: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return Response(
             {
-                'user_id': 1,
-                'name': 'John Doe',
-                'email': 'john.doe@example.com',
-                'role': 'auditor',
-                'department': 'IT',
-                'username': 'johndoe'
+                'error': 'Failed to fetch users',
+                'message': 'Unable to retrieve users with PerformContractAudit permission. Please try again later.'
             },
-            {
-                'user_id': 2,
-                'name': 'Jane Smith',
-                'email': 'jane.smith@example.com',
-                'role': 'reviewer',
-                'department': 'Compliance',
-                'username': 'janesmith'
-            },
-            {
-                'user_id': 3,
-                'name': 'Mike Johnson',
-                'email': 'mike.johnson@example.com',
-                'role': 'auditor',
-                'department': 'IT',
-                'username': 'mikejohnson'
-            },
-            {
-                'user_id': 4,
-                'name': 'Sarah Wilson',
-                'email': 'sarah.wilson@example.com',
-                'role': 'reviewer',
-                'department': 'Compliance',
-                'username': 'sarahwilson'
-            },
-            {
-                'user_id': 5,
-                'name': 'David Brown',
-                'email': 'david.brown@example.com',
-                'role': 'user',
-                'department': 'Finance',
-                'username': 'davidbrown'
-            },
-            {
-                'user_id': 6,
-                'name': 'Lisa Davis',
-                'email': 'lisa.davis@example.com',
-                'role': 'user',
-                'department': 'HR',
-                'username': 'lisadavis'
-            }
-        ]
-        return Response(users_data)
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
+@rbac_contract_required('PerformContractAudit')
 def submit_contract_audit_response(request, audit_id):
     """Submit responses for a contract audit."""
     try:
@@ -1100,8 +1494,9 @@ def submit_contract_audit_response(request, audit_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
+@rbac_contract_required('PerformContractAudit')
 def review_contract_audit(request, audit_id):
     """Review and approve/reject a contract audit."""
     try:

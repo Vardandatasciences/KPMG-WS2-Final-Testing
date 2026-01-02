@@ -78,7 +78,7 @@ class Migration(migrations.Migration):
                 ('options', models.JSONField(blank=True, null=True)),
                 ('conditional_logic', models.JSONField(blank=True, null=True)),
                 ('help_text', models.TextField(blank=True, null=True)),
-                ('questionnaire', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='questions', to='tprm_vendor_questionnaire.questionnaires')),
+                ('questionnaire', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='questions', to='vendor_questionnaire.questionnaires')),
             ],
             options={
                 'verbose_name': 'Questionnaire Question',

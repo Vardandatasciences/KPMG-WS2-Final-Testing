@@ -8,11 +8,11 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/auth/', include('mfa_auth.urls')),
-    path('rbac/', include('rbac.tprm_urls')),
-    path('rbac/example/', include('rbac.example_urls')),
-    path('api/contracts/', include('contracts.urls')),
-    path('api/v1/vendor-core/', include('apps.vendor_core.urls')),
+    path('api/auth/', include('tprm_backend.mfa_auth.urls')),
+    path('rbac/', include('tprm_backend.rbac.tprm_urls')),
+    path('rbac/example/', include('tprm_backend.rbac.example_urls')),
+    path('api/contracts/', include('tprm_backend.contracts.urls')),
+    path('api/v1/vendor-core/', include('tprm_backend.apps.vendor_core.urls')),
 ]
 
 # Serve media files during development

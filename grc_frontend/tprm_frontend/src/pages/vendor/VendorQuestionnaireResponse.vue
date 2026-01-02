@@ -373,12 +373,8 @@ import { useNotifications } from '@/composables/useNotifications'
 import notificationService from '@/services/notificationService'
 import loggingService from '@/services/loggingService'
 import permissionsService from '@/services/permissionsService'
-import { getTprmApiUrl } from '@/utils/backendEnv'
 
 const { showSuccess, showError, showWarning, showInfo } = useNotifications()
-
-// API base URL for vendor-questionnaire endpoints
-const VENDOR_QUESTIONNAIRE_API_BASE_URL = getTprmApiUrl('vendor-questionnaire')
 
 // Reactive data
 const vendorAssignments = ref([])
@@ -428,7 +424,7 @@ const getVendorIdForUser = async (userId) => {
     
     // Try the get_user_data endpoint first
     try {
-      const response = await apiCall(`${getTprmApiUrl('vendor-core')}/temp-vendors/get_user_data/?user_id=${userId}`)
+      const response = await apiCall(`/api/v1/vendor-core/temp-vendors/get_user_data/?user_id=${userId}`)
       console.log('Temp vendor API response:', response)
       console.log('Response data structure:', {
         hasData: !!response.data,
@@ -440,7 +436,7 @@ const getVendorIdForUser = async (userId) => {
       // Try multiple response format patterns
       let tempVendorData = null
       
-      // Pattern 1: response.data.data.temp_vendor (most common DRF format)
+      // Pattern 1: response.data.data.temp_vendor
       if (response.data && response.data.data && response.data.data.temp_vendor) {
         tempVendorData = response.data.data.temp_vendor
         console.log('✅ Found vendor via pattern 1 (response.data.data.temp_vendor)')
@@ -459,11 +455,6 @@ const getVendorIdForUser = async (userId) => {
       else if (response.data && response.data.id && (response.data.userid == userId || response.data.user_id == userId)) {
         tempVendorData = response.data
         console.log('✅ Found vendor via pattern 4 (response.data is vendor object)')
-      }
-      // Pattern 5: Check if response.data.data exists and has id (nested structure)
-      else if (response.data && response.data.data && response.data.data.id) {
-        tempVendorData = response.data.data
-        console.log('✅ Found vendor via pattern 5 (response.data.data)')
       }
       
       if (tempVendorData) {
@@ -504,7 +495,7 @@ const getVendorIdForUser = async (userId) => {
     // Try alternative: search temp_vendors by userid
     try {
       console.log('🔍 Trying alternative lookup: search temp_vendors by userid...')
-      const searchResponse = await apiCall(`${getTprmApiUrl('vendor-core')}/temp-vendors/?userid=${userId}`)
+      const searchResponse = await apiCall(`/api/v1/vendor-core/temp-vendors/?userid=${userId}`)
       console.log('Search response:', searchResponse)
       
       if (searchResponse.data && Array.isArray(searchResponse.data) && searchResponse.data.length > 0) {
@@ -612,25 +603,14 @@ const loadVendorAssignments = async () => {
   try {
     console.log('=== VENDOR ASSIGNMENTS DEBUG ===')
     console.log('Loading vendor assignments for vendor ID:', currentVendorId.value)
-    console.log('API URL:', `${VENDOR_QUESTIONNAIRE_API_BASE_URL}/responses/get_vendor_assignments/?vendor_id=${currentVendorId.value}`)
+    console.log('API URL:', `/api/v1/vendor-questionnaire/responses/get_vendor_assignments/?vendor_id=${currentVendorId.value}`)
     
-    const response = await apiCall(`${VENDOR_QUESTIONNAIRE_API_BASE_URL}/responses/get_vendor_assignments/?vendor_id=${currentVendorId.value}`)
+    const response = await apiCall(`/api/v1/vendor-questionnaire/responses/get_vendor_assignments/?vendor_id=${currentVendorId.value}`)
     console.log('Vendor assignments API response:', response)
     console.log('Response data:', response.data)
     console.log('Response status:', response.status)
     
-    // Handle different response formats
-    if (Array.isArray(response.data)) {
-      vendorAssignments.value = response.data
-    } else if (Array.isArray(response)) {
-      vendorAssignments.value = response
-    } else if (response.data && Array.isArray(response.data)) {
-      vendorAssignments.value = response.data
-    } else {
-      console.warn('Unexpected response format:', response)
-      vendorAssignments.value = []
-    }
-    
+    vendorAssignments.value = response.data || response
     console.log('Set vendorAssignments.value to:', vendorAssignments.value)
     console.log('Number of assignments found:', vendorAssignments.value ? vendorAssignments.value.length : 0)
     
@@ -639,7 +619,7 @@ const loadVendorAssignments = async () => {
       console.log('=== NO ASSIGNMENTS FOUND - DEBUGGING ===')
       console.log('No assignments found, trying to get all assignments for debugging...')
       try {
-        const allAssignmentsResponse = await apiCall(`${VENDOR_QUESTIONNAIRE_API_BASE_URL}/assignments/`)
+        const allAssignmentsResponse = await apiCall('/api/v1/vendor-questionnaire/assignments/')
         console.log('All assignments in database:', allAssignmentsResponse)
         console.log('All assignments data:', allAssignmentsResponse.data)
         
@@ -679,19 +659,6 @@ const loadVendorAssignments = async () => {
       data: error.response?.data,
       status: error.response?.status
     })
-    
-    // Show user-friendly error message
-    if (error.response?.status === 404) {
-      console.log('⚠️ No assignments found for this vendor (404)')
-      vendorAssignments.value = []
-    } else if (error.response?.status === 400) {
-      console.error('⚠️ Bad request - vendor_id might be invalid')
-      showError('Invalid Request', error.response?.data?.error || 'Invalid vendor ID provided')
-    } else {
-      showError('Error Loading Assignments', error.response?.data?.error || error.message || 'Failed to load vendor assignments. Please try again.')
-    }
-    
-    vendorAssignments.value = []
   }
 }
 
@@ -713,7 +680,7 @@ const loadAssignmentQuestions = async () => {
   }
   
   try {
-    const response = await apiCall(`${VENDOR_QUESTIONNAIRE_API_BASE_URL}/responses/get_assignment_responses/?assignment_id=${selectedAssignmentId.value}`)
+    const response = await apiCall(`/api/v1/vendor-questionnaire/responses/get_assignment_responses/?assignment_id=${selectedAssignmentId.value}`)
     assignmentData.value = response.data.assignment
     responses.value = response.data.responses
     isLocked.value = response.data.assignment.is_locked || false
@@ -762,7 +729,18 @@ const recalculateCompletionStatus = () => {
     // Update completion status based on question type and current values
     switch (r.question_type) {
       case 'TEXT':
+        updated.is_completed = String(r.vendor_response || '').trim() !== ''
+        break
       case 'NUMBER':
+        // Check if number is provided and is valid
+        const numValue = r.vendor_response
+        if (numValue === null || numValue === undefined || numValue === '') {
+          updated.is_completed = false
+        } else {
+          const num = parseFloat(numValue)
+          updated.is_completed = !isNaN(num)
+        }
+        break
       case 'DATE':
         updated.is_completed = String(r.vendor_response || '').trim() !== ''
         break
@@ -773,10 +751,24 @@ const recalculateCompletionStatus = () => {
         updated.is_completed = updated.selectedOptions && updated.selectedOptions.length > 0
         break
       case 'RATING':
-        updated.is_completed = parseInt(r.vendor_response || 0) > 0
+        // For rating, check if value is provided and is within valid range
+        const ratingValue = r.vendor_response
+        if (ratingValue === null || ratingValue === undefined || ratingValue === '') {
+          updated.is_completed = false
+        } else {
+          const rating = parseFloat(ratingValue)
+          if (isNaN(rating)) {
+            updated.is_completed = false
+          } else {
+            const config = getRatingConfig(r)
+            const min = config.min || 1
+            const max = config.max || 5
+            updated.is_completed = rating >= min && rating <= max
+          }
+        }
         break
       case 'FILE_UPLOAD':
-        updated.is_completed = r.uploaded_files && r.uploaded_files.length > 0
+        updated.is_completed = r.uploaded_files && Array.isArray(r.uploaded_files) && r.uploaded_files.length > 0
         break
       default:
         updated.is_completed = String(r.vendor_response || '').trim() !== ''
@@ -794,7 +786,18 @@ const updateResponse = (id, field, value) => {
     // Update completion status based on question type and current values
     switch (r.question_type) {
       case 'TEXT':
+        r.is_completed = String(r.vendor_response || '').trim() !== ''
+        break
       case 'NUMBER':
+        // Check if number is provided and is valid
+        const numValue = r.vendor_response
+        if (numValue === null || numValue === undefined || numValue === '') {
+          r.is_completed = false
+        } else {
+          const num = parseFloat(numValue)
+          r.is_completed = !isNaN(num)
+        }
+        break
       case 'DATE':
         r.is_completed = String(r.vendor_response || '').trim() !== ''
         break
@@ -807,10 +810,24 @@ const updateResponse = (id, field, value) => {
         r.vendor_response = r.selectedOptions ? r.selectedOptions.join(', ') : ''
         break
       case 'RATING':
-        r.is_completed = parseInt(r.vendor_response || 0) > 0
+        // For rating, check if value is provided and is within valid range
+        const ratingValue = r.vendor_response
+        if (ratingValue === null || ratingValue === undefined || ratingValue === '') {
+          r.is_completed = false
+        } else {
+          const rating = parseFloat(ratingValue)
+          if (isNaN(rating)) {
+            r.is_completed = false
+          } else {
+            const config = getRatingConfig(r)
+            const min = config.min || 1
+            const max = config.max || 5
+            r.is_completed = rating >= min && rating <= max
+          }
+        }
         break
       case 'FILE_UPLOAD':
-        r.is_completed = r.uploaded_files && r.uploaded_files.length > 0
+        r.is_completed = r.uploaded_files && Array.isArray(r.uploaded_files) && r.uploaded_files.length > 0
         break
       default:
         r.is_completed = String(r.vendor_response || '').trim() !== ''
@@ -1027,7 +1044,7 @@ const handleFileUpload = async (questionId, event) => {
     console.log('Sending request to S3 backend...')
     
     // Upload files to S3 via backend
-    const response = await apiCall(`${VENDOR_QUESTIONNAIRE_API_BASE_URL}/responses/upload_files/`, {
+    const response = await apiCall('/api/v1/vendor-questionnaire/responses/upload_files/', {
       method: 'POST',
       data: formData
       // Note: Don't set Content-Type header for FormData - browser sets it automatically with boundary
@@ -1048,9 +1065,12 @@ const handleFileUpload = async (questionId, event) => {
       
       // Update vendor_response with file names
       r.vendor_response = r.uploaded_files.map(f => f.original_name || f.name || '').join(', ')
-      r.is_completed = r.uploaded_files.length > 0
+      r.is_completed = r.uploaded_files && Array.isArray(r.uploaded_files) && r.uploaded_files.length > 0
       
       responses.value[i] = r
+      
+      // Recalculate completion status for all questions to ensure consistency
+      recalculateCompletionStatus()
       
       console.log('Files uploaded successfully to S3:', uploadedFiles)
       console.log('Storage method used:', response.storage_method || 'S3')
@@ -1097,7 +1117,7 @@ const removeFile = async (questionId, fileName) => {
       if (fileToRemove && fileToRemove.s3_file_id) {
         try {
           // Call backend to remove file from S3
-          const response = await apiCall(`${VENDOR_QUESTIONNAIRE_API_BASE_URL}/responses/remove_file/`, {
+          const response = await apiCall('/api/v1/vendor-questionnaire/responses/remove_file/', {
             method: 'DELETE',
             data: {
               assignment_id: selectedAssignmentId.value,
@@ -1111,9 +1131,12 @@ const removeFile = async (questionId, fileName) => {
             // Update local state
             r.uploaded_files = (r.uploaded_files || []).filter(f => f.original_name !== fileName && f.name !== fileName)
             r.vendor_response = (r.uploaded_files || []).map(f => f.original_name || f.name).join(', ')
-            r.is_completed = (r.uploaded_files || []).length > 0
+            r.is_completed = r.uploaded_files && Array.isArray(r.uploaded_files) && r.uploaded_files.length > 0
             
             responses.value[i] = r
+            
+            // Recalculate completion status for all questions to ensure consistency
+            recalculateCompletionStatus()
             
             console.log('File removed successfully from S3')
           } else {
@@ -1128,9 +1151,12 @@ const removeFile = async (questionId, fileName) => {
         // Fallback: remove from local state only (for files without S3 file ID)
         r.uploaded_files = (r.uploaded_files || []).filter(f => f.name !== fileName && f.original_name !== fileName)
         r.vendor_response = (r.uploaded_files || []).map(f => f.original_name || f.name).join(', ')
-        r.is_completed = (r.uploaded_files || []).length > 0
+        r.is_completed = r.uploaded_files && Array.isArray(r.uploaded_files) && r.uploaded_files.length > 0
         
         responses.value[i] = r
+        
+        // Recalculate completion status for all questions to ensure consistency
+        recalculateCompletionStatus()
       }
     }
   }
@@ -1148,7 +1174,7 @@ const saveResponses = async (showMessage = true) => {
       vendor_comment: r.vendor_comment
     }))
     
-    await apiCall(`${VENDOR_QUESTIONNAIRE_API_BASE_URL}/responses/save_responses/`, {
+    await apiCall('/api/v1/vendor-questionnaire/responses/save_responses/', {
       method: 'POST',
       data: {
         assignment_id: selectedAssignmentId.value,
@@ -1202,13 +1228,42 @@ const saveResponses = async (showMessage = true) => {
 }
 
 const submitResponses = async () => {
-  if (requiredRemaining.value > 0) {
-    PopupService.warning('Please complete all required questions before submitting.', 'Missing Required Fields')
+  // Recalculate completion status right before checking to ensure accuracy
+  recalculateCompletionStatus()
+  
+  // Force Vue to update computed properties
+  await new Promise(resolve => setTimeout(resolve, 0))
+  
+  const remaining = responses.value.filter(r => r.is_required && !r.is_completed).length
+  
+  if (remaining > 0) {
+    // Get details of incomplete required questions for better error message
+    const incompleteQuestions = responses.value
+      .filter(r => r.is_required && !r.is_completed)
+      .map(r => ({
+        id: r.id,
+        question_text: r.question_text.substring(0, 50) + (r.question_text.length > 50 ? '...' : ''),
+        question_type: r.question_type,
+        has_response: !!r.vendor_response,
+        has_files: r.uploaded_files && r.uploaded_files.length > 0,
+        has_selected_options: r.selectedOptions && r.selectedOptions.length > 0
+      }))
+    
+    console.log('Incomplete required questions:', incompleteQuestions)
+    console.log('Total required questions:', responses.value.filter(r => r.is_required).length)
+    console.log('Completed required questions:', responses.value.filter(r => r.is_required && r.is_completed).length)
+    console.log('Remaining required questions:', remaining)
+    
+    PopupService.warning(
+      `Please complete all required questions before submitting. ${remaining} required question(s) remaining.`,
+      'Missing Required Fields'
+    )
     // Create warning notification
     await notificationService.createVendorWarningNotification('incomplete_questionnaire', {
       title: 'Missing Required Fields',
-      message: 'Please complete all required questions before submitting.',
-      required_remaining: requiredRemaining.value
+      message: `Please complete all required questions before submitting. ${remaining} required question(s) remaining.`,
+      required_remaining: remaining,
+      incomplete_questions: incompleteQuestions
     })
     return
   }
@@ -1231,7 +1286,7 @@ const performSubmit = async () => {
     await saveResponses(false)
     
     // Then submit final responses to lock the assignment
-    const response = await apiCall(`${VENDOR_QUESTIONNAIRE_API_BASE_URL}/responses/submit_final_responses/`, {
+    const response = await apiCall('/api/v1/vendor-questionnaire/responses/submit_final_responses/', {
       method: 'POST',
       data: {
         assignment_id: selectedAssignmentId.value

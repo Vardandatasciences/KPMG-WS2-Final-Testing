@@ -6,11 +6,11 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET
 from django.db import connection
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
-from .rfp_authentication import UnifiedJWTAuthentication, SimpleAuthenticatedPermission
+from .rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_vendor_primary_contact(request, vendor_id):

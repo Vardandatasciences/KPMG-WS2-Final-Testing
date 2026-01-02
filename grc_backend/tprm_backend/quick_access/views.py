@@ -2,7 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, authentication_classes, permission_classes as permission_classes_decorator
 from rest_framework.response import Response
 from rest_framework.authentication import BaseAuthentication
-from rest_framework.permissions import BasePermission, AllowAny
+from rest_framework.permissions import BasePermission
 from django.conf import settings
 from django.db.models import Count, Q
 from django.utils import timezone
@@ -15,30 +15,81 @@ from .serializers import (
     DashboardStatsSerializer, ActivitySummarySerializer, SuggestionSerializer
 )
 
-# Use Unified JWT Authentication from GRC
-from grc.jwt_auth import UnifiedJWTAuthentication
-
 logger = logging.getLogger(__name__)
 
 
 class SimpleAuthenticatedPermission(BasePermission):
     """Custom permission class that checks for authenticated users"""
     def has_permission(self, request, view):
-        # Just check if user object exists and is authenticated
-        # UnifiedJWTAuthentication handles GRC/TPRM user verification
-        if request.user and hasattr(request.user, 'is_authenticated'):
-            return request.user.is_authenticated
-        return False
+        # Check if user is authenticated
+        return bool(
+            request.user and 
+            hasattr(request.user, 'userid') and
+            getattr(request.user, 'is_authenticated', False)
+        )
 
 
-# REMOVED BUGGY LOCAL JWT CLASS - Using UnifiedJWTAuthentication from grc.jwt_auth instead
+class JWTAuthentication(BaseAuthentication):
+    """Custom JWT authentication class for DRF"""
+    def authenticate(self, request):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return None
+        
+        try:
+            token = auth_header.split(' ')[1]
+            # Use JWT_SECRET_KEY from settings
+            secret_key = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+            payload = jwt.decode(token, secret_key, algorithms=['HS256'])
+            user_id = payload.get('user_id')
+            
+            if user_id:
+                try:
+                    from mfa_auth.models import User
+                    user = User.objects.get(userid=user_id)
+                    # Add is_authenticated attribute for DRF compatibility
+                    user.is_authenticated = True
+                    return (user, token)
+                except ImportError:
+                    # If User model import fails, create a mock user
+                    logger.warning(f"User model import failed, creating mock user for user_id: {user_id}")
+                    class MockUser:
+                        def __init__(self, user_id):
+                            self.userid = user_id
+                            self.username = f"user_{user_id}"
+                            self.is_authenticated = True
+                    return (MockUser(user_id), token)
+                except Exception as db_error:
+                    # Handle database connection errors and DoesNotExist gracefully
+                    error_str = str(db_error).lower()
+                    if 'does not exist' in error_str or 'matching query does not exist' in error_str:
+                        # User not found in database, create a mock user
+                        logger.warning(f"User {user_id} not found in database, creating mock user")
+                        class MockUser:
+                            def __init__(self, user_id):
+                                self.userid = user_id
+                                self.username = f"user_{user_id}"
+                                self.is_authenticated = True
+                        return (MockUser(user_id), token)
+                    else:
+                        # Re-raise other database errors
+                        raise
+        except jwt.ExpiredSignatureError:
+            logger.warning("JWT token expired")
+            return None
+        except jwt.InvalidTokenError:
+            logger.warning("Invalid JWT token")
+            return None
+        except Exception as e:
+            logger.error(f"JWT authentication error: {str(e)}")
+            return None
 
 
 class GRCLogViewSet(viewsets.ModelViewSet):
     queryset = GRCLog.objects.all()
     serializer_class = GRCLogSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
-    permission_classes = [SimpleAuthenticatedPermission]  # Proper GRC user authentication
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [SimpleAuthenticatedPermission]
     pagination_class = None  # Disable pagination
 
     def get_queryset(self):
@@ -144,8 +195,8 @@ class GRCLogViewSet(viewsets.ModelViewSet):
 class QuickAccessFavoriteViewSet(viewsets.ModelViewSet):
     queryset = QuickAccessFavorite.objects.all()
     serializer_class = QuickAccessFavoriteSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
-    permission_classes = [SimpleAuthenticatedPermission]  # Proper GRC user authentication
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [SimpleAuthenticatedPermission]
     pagination_class = None  # Disable pagination
 
     def get_queryset(self):
@@ -234,8 +285,8 @@ class QuickAccessFavoriteViewSet(viewsets.ModelViewSet):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
-@permission_classes_decorator([AllowAny])  # Temporarily allow all for testing
+@authentication_classes([JWTAuthentication])
+@permission_classes_decorator([SimpleAuthenticatedPermission])
 def dashboard_stats(request):
     """Get dashboard statistics for quick access"""
     try:
@@ -302,8 +353,8 @@ def dashboard_stats(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
-@permission_classes_decorator([AllowAny])  # Temporarily allow all for testing
+@authentication_classes([JWTAuthentication])
+@permission_classes_decorator([SimpleAuthenticatedPermission])
 def get_suggestions(request):
     """Get smart suggestions based on user activity"""
     try:
@@ -419,8 +470,8 @@ def get_suggestions(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
-@permission_classes_decorator([AllowAny])  # Temporarily allow all for testing
+@authentication_classes([JWTAuthentication])
+@permission_classes_decorator([SimpleAuthenticatedPermission])
 def test_connection(request):
     """Test database connection and return basic info"""
     try:

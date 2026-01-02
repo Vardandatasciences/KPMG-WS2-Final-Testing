@@ -710,8 +710,9 @@ import SplitScreenEvaluator from '@/views/rfp/SplitScreenEvaluator.vue'
 
 const router = useRouter()
 
+import { getTprmApiV1BaseUrl, getTprmApiUrl } from '@/utils/backendEnv'
 // API base URL
-const API_BASE_URL = 'http://localhost:8000/api/tprm/rfp'
+const API_BASE_URL = getTprmApiV1BaseUrl()
 
 // State
 const { showSuccess, showError, showWarning, showInfo } = useNotifications()
@@ -1886,7 +1887,7 @@ const approveWorkflowStage = async (stageId) => {
     console.log('🔄 Approving workflow stage:', stageId)
     
     const { getAuthHeaders } = useRfpApi()
-    const response = await fetch('http://localhost:8000/api/tprm/rfp-approval/update-stage-status/', {
+    const response = await fetch(getTprmApiUrl('rfp-approval/update-stage-status/'), {
       method: 'POST',
       headers: {
         ...getAuthHeaders(),

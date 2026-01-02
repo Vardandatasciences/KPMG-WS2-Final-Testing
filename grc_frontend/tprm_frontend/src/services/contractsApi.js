@@ -7,7 +7,6 @@
 
 import { api } from './api'
 
-// Base path for contracts API - matches Django URL structure: /api/tprm/contracts/
 const CONTRACTS_API_BASE = '/contracts'
 
 class ContractsApiService {
@@ -18,19 +17,10 @@ class ContractsApiService {
    */
   async getContracts(params = {}) {
     try {
-      const url = `${CONTRACTS_API_BASE}/contracts/`
-      console.log(`[ContractsAPI] GET ${url}`, { params })
-      const response = await api.get(url, { params })
-      console.log(`[ContractsAPI] Response:`, response.status, response.data)
+      const response = await api.get(`${CONTRACTS_API_BASE}/contracts/`, { params })
       return response.data
     } catch (error) {
-      console.error('[ContractsAPI] Error fetching contracts:', {
-        message: error.message,
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        url: error.config?.url
-      })
+      console.error('Error fetching contracts:', error)
       throw this.handleError(error)
     }
   }
@@ -452,8 +442,13 @@ class ContractsApiService {
         }
       }
       
-      // For other errors, allow access but return the error
-      return { hasPermission: true, error: error }
+      // For other errors (network errors, 500, etc.), deny access for security
+      // This ensures we don't accidentally allow access when permission check fails
+      return {
+        hasPermission: false,
+        error: error,
+        message: 'Unable to verify permissions. Please try again or contact your administrator.'
+      }
     }
   }
 
@@ -1205,6 +1200,20 @@ class ContractsApiService {
   }
 
   /**
+   * Get users with ApproveContract permission for contract approval assignment
+   * @returns {Promise} API response
+   */
+  async getApprovalUsers() {
+    try {
+      const response = await api.get(`${CONTRACTS_API_BASE}/users/approval-users/`)
+      return response.data
+    } catch (error) {
+      console.error('Error fetching approval users:', error)
+      throw this.handleError(error)
+    }
+  }
+
+  /**
    * Create a new subcontract under a parent contract
    * @param {number} parentContractId - Parent contract ID
    * @param {Object} subcontractData - Subcontract data
@@ -1534,14 +1543,6 @@ class ContractsApiService {
     if (error.response) {
       // Server responded with error status
       const { status, data } = error.response
-      const url = error.config?.url || 'unknown'
-      
-      console.error(`[ContractsAPI] HTTP Error ${status} for ${url}:`, {
-        status,
-        statusText: error.response.statusText,
-        data,
-        headers: error.response.headers
-      })
       
       if (status === 401) {
         return new Error('Authentication required. Please log in.')
@@ -1552,28 +1553,15 @@ class ContractsApiService {
       } else if (status === 429) {
         return new Error('Too many requests. Please try again later.')
       } else if (status >= 500) {
-        // Log detailed error for 500 errors to help debug backend issues
-        const errorDetails = data?.detail || data?.error || data?.message || 'Unknown server error'
-        console.error(`[ContractsAPI] Server Error Details:`, {
-          url,
-          status,
-          error: errorDetails,
-          fullResponse: data
-        })
-        return new Error(`Server error (${status}): ${errorDetails}. Please check the backend logs.`)
+        return new Error('Server error. Please try again later.')
       } else {
-        return new Error(data.message || data.error || data.detail || 'An error occurred.')
+        return new Error(data.message || data.error || 'An error occurred.')
       }
     } else if (error.request) {
       // Network error
-      console.error('[ContractsAPI] Network Error:', {
-        url: error.config?.url,
-        message: error.message
-      })
       return new Error('Network error. Please check your connection.')
     } else {
       // Other error
-      console.error('[ContractsAPI] Unexpected Error:', error)
       return new Error(error.message || 'An unexpected error occurred.')
     }
   }

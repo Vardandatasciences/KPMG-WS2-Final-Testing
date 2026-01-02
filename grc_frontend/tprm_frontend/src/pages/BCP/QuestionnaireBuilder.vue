@@ -1,13 +1,5 @@
 <template>
   <div class="p-6 max-w-7xl mx-auto space-y-6">
-    <div class="flex items-center justify-between">
-    <div>
-        <h1 class="text-3xl font-bold text-foreground">Build & Review Questionnaire</h1>
-        <p class="text-muted-foreground">Create and review testing questionnaires for BCP/DRP plans</p>
-      </div>
-      <div class="badge badge--outline text-sm">Testing Phase</div>
-    </div>
-
     <!-- REVIEWER VIEW -->
     <div class="space-y-6">
         <!-- Questionnaire Selection Dropdown -->
@@ -272,7 +264,7 @@ const submitReviewComment = async () => {
     }
 
     // Make API call to save the review comment
-    const response = await http.put(`/bcpdrp/questionnaires/${selectedQuestionnaireId.value}/review/`, reviewData)
+    const response = await http.put(`/api/bcpdrp/questionnaires/${selectedQuestionnaireId.value}/review/`, reviewData)
 
     console.log('Review comment saved successfully:', response.data)
     

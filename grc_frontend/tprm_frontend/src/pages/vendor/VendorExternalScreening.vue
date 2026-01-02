@@ -409,6 +409,7 @@ import PopupModal from '@/popup/PopupModal.vue';
 import { PopupService } from '@/popup/popupService';
 import notificationService from '@/services/notificationService';
 import loggingService from '@/services/loggingService';
+import { getTprmApiV1BaseUrl, getTprmApiUrl } from '@/utils/backendEnv';
 
 export default {
   name: 'VendorExternalScreening',
@@ -476,7 +477,7 @@ export default {
       this.loading = true;
       this.error = null;
       try {
-        let url = 'http://localhost:8000/api/tprm/vendor-core/temp-vendors/';
+        let url = getTprmApiUrl('v1/vendor-core/temp-vendors/');
         
         // Add search parameter if provided
         if (searchQuery.trim()) {
@@ -613,7 +614,7 @@ export default {
 
       try {
         console.log(`🔍 Fetching screening results for vendor ID: ${this.selectedVendorId}`);
-        const response = await apiClient.get(`http://localhost:8000/api/tprm/vendor-core/screening-results/vendor_screening_results/?vendor_id=${this.selectedVendorId}`);
+        const response = await apiClient.get(getTprmApiUrl(`v1/vendor-core/screening-results/vendor_screening_results/?vendor_id=${this.selectedVendorId}`));
         
         console.log('📡 API Response:', response.data);
         
@@ -816,7 +817,7 @@ export default {
       
       try {
         const response = await apiClient.post(
-          `http://localhost:8000/api/tprm/vendor-core/screening-results/${this.selectedScreening.screening_id}/update_match_status/`,
+          getTprmApiUrl(`v1/vendor-core/screening-results/${this.selectedScreening.screening_id}/update_match_status/`),
           {
             match_id: matchId,
             status: status,
@@ -892,7 +893,7 @@ export default {
       try {
         // Update the selected screening to CLEAR status
         const response = await apiClient.post(
-          `http://localhost:8000/api/tprm/vendor-core/screening-results/${this.selectedScreening.screening_id}/mark_as_cleared/`
+          getTprmApiUrl(`v1/vendor-core/screening-results/${this.selectedScreening.screening_id}/mark_as_cleared/`)
         );
         
         if (response.data.message) {
@@ -919,7 +920,7 @@ export default {
           if (note && this.selectedScreening) {
             try {
               const response = await apiClient.post(
-            `http://localhost:8000/api/tprm/vendor-core/screening-results/${this.selectedScreening.screening_id}/add_note/`,
+            getTprmApiUrl(`v1/vendor-core/screening-results/${this.selectedScreening.screening_id}/add_note/`),
             { note: note }
           );
           

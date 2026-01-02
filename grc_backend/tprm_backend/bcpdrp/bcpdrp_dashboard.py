@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 import logging
 from tprm_backend.bcpdrp.models import (
     Plan, BcpDetails, DrpDetails, Evaluation, Questionnaire, Question, 
-    TestAssignmentsResponses, BcpDrpApprovals, Users
+    TestAssignmentsResponses, BcpDrpApprovals, Users, Dropdown
 )
 # Import risk models with error handling
 try:
@@ -25,15 +25,13 @@ from tprm_backend.bcpdrp.utils import success_response, error_response
 from tprm_backend.rbac.tprm_decorators import rbac_bcp_drp_required
 
 # Import proper authentication classes from views
-from tprm_backend.bcpdrp.views import SimpleAuthenticatedPermission
-# Use Unified JWT Authentication from GRC
-from grc.jwt_auth import UnifiedJWTAuthentication
+from tprm_backend.bcpdrp.views import JWTAuthentication, SimpleAuthenticatedPermission
 
 logger = logging.getLogger(__name__)
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('view_plans')
 def dashboard_overview(request):
@@ -92,10 +90,23 @@ def dashboard_overview(request):
 def get_plan_metrics():
     """Get plan management metrics"""
     try:
+        # Get plan types from dropdown table
+        plan_types = list(Dropdown.objects.filter(source='plan_type').values_list('value', flat=True))
+        
         # Basic counts
         total_plans = Plan.objects.count()
-        bcp_plans = Plan.objects.filter(plan_type='BCP').count()
-        drp_plans = Plan.objects.filter(plan_type='DRP').count()
+        
+        # Count plans by type dynamically
+        plan_type_counts = {}
+        for plan_type in plan_types:
+            plan_type_counts[f'{plan_type.lower()}_plans'] = Plan.objects.filter(plan_type=plan_type).count()
+        
+        # For backward compatibility, keep bcp_plans and drp_plans if they exist
+        bcp_plans = plan_type_counts.get('bcp_plans', 0) if 'BCP' in plan_types else 0
+        drp_plans = plan_type_counts.get('drp_plans', 0) if 'DRP' in plan_types else 0
+        
+        # Plan type distribution
+        plan_type_distribution = dict(Plan.objects.values('plan_type').annotate(count=Count('plan_id')).values_list('plan_type', 'count'))
         
         # Status distribution
         status_distribution = dict(Plan.objects.values('status').annotate(count=Count('plan_id')).values_list('status', 'count'))
@@ -123,10 +134,11 @@ def get_plan_metrics():
             Q(plan_scope__isnull=False) & ~Q(plan_scope='')
         ).count()
         
-        return {
+        result = {
             'total_plans': total_plans,
-            'bcp_plans': bcp_plans,
-            'drp_plans': drp_plans,
+            'bcp_plans': bcp_plans,  # For backward compatibility
+            'drp_plans': drp_plans,  # For backward compatibility
+            'plan_type_distribution': plan_type_distribution,
             'status_distribution': status_distribution,
             'criticality_distribution': criticality_distribution,
             'ocr_completed': ocr_completed,
@@ -139,6 +151,11 @@ def get_plan_metrics():
             'plans_with_details': plans_with_details,
             'quality_rate': round((plans_with_details / total_plans * 100) if total_plans > 0 else 0, 2)
         }
+        
+        # Add dynamic plan type counts
+        result.update(plan_type_counts)
+        
+        return result
         
     except Exception as e:
         logger.error(f"Error calculating plan metrics: {str(e)}")
@@ -486,7 +503,7 @@ def get_temporal_metrics():
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('view_plans')
 def dashboard_plan_metrics(request):
@@ -500,7 +517,7 @@ def dashboard_plan_metrics(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('view_plans')
 def dashboard_evaluation_metrics(request):
@@ -514,7 +531,7 @@ def dashboard_evaluation_metrics(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('view_plans')
 def dashboard_testing_metrics(request):
@@ -528,7 +545,7 @@ def dashboard_testing_metrics(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('view_plans')
 def dashboard_risk_metrics(request):
@@ -542,7 +559,7 @@ def dashboard_risk_metrics(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('view_plans')
 def dashboard_temporal_metrics(request):
@@ -556,7 +573,7 @@ def dashboard_temporal_metrics(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('view_plans')
 def dashboard_kpi_metrics(request):
@@ -621,7 +638,7 @@ def dashboard_kpi_metrics(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('view_plans')
 def dashboard_evaluation_scores_metrics(request):

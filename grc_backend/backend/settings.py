@@ -60,9 +60,10 @@ PERPLEXITY_API_KEY = os.environ.get("PERPLEXITY_API_KEY", "")
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "changeme-in-dev-only")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get("DJANGO_DEBUG", "false").lower() == "true"
 
-ALLOWED_HOSTS = ['localhost', 'grc-backend.vardaands.com','grc-backend.vardaands.com', '15.207.108.158','127.0.0.1','e581-2405-201-c00b-4973-29e6-34b2-9eae-1e0c.ngrok-free.app', '13.204.228.21']
+
+ALLOWED_HOSTS = ['localhost',"grc-tprm.vardaands.com", 'grc-backend.vardaands.com','grc-backend.vardaands.com', '15.207.108.158','127.0.0.1','e581-2405-201-c00b-4973-29e6-34b2-9eae-1e0c.ngrok-free.app', '13.204.228.21']
 
 
 # Application definition
@@ -123,10 +124,10 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "grc.middleware.RequestLoggingMiddleware",  # ADDED: Log all requests FIRST
     "corsheaders.middleware.CorsMiddleware",
-    "grc.middleware.CORSMiddleware",
+    # "grc.middleware.CORSMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
-    "grc.middleware.SessionTimeoutMiddleware",  # ADDED: Force logout after 5 minutes (for testing)
+    # "grc.middleware.SessionTimeoutMiddleware",  # TEMPORARILY DISABLED: Causing immediate logout issues
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -254,7 +255,7 @@ SESSION_SAVE_EVERY_REQUEST = False  # Don't extend session on every request - al
 SESSION_COOKIE_AGE = 3600  # Session expires after 1 hour (3600 seconds) of inactivity
 SESSION_COOKIE_NAME = 'grc_sessionid'  # Custom session cookie name
 SESSION_COOKIE_HTTPONLY = False  # Allow JavaScript access (needed for SPA)
-SESSION_COOKIE_SECURE = False  # Set to True in production with HTTPS
+SESSION_COOKIE_SECURE = False  # Set to True in production with HTTPS (False for HTTP/development)
 SESSION_COOKIE_SAMESITE = 'Lax'  # Allow cross-site requests with same-site protection (will be overridden by middleware for OAuth)
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False  # Session persists after browser close
 SESSION_COOKIE_DOMAIN = None  # Use default domain
@@ -391,29 +392,15 @@ SILENCED_SYSTEM_CHECKS = [
 ]
 
 # CORS settings
-CORS_ALLOW_ALL_ORIGINS = True  # For development only
+CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:8081",  # Vue.js development server
-    "http://localhost:8080",  # Alternative Vue.js port
-    "http://15.207.108.158:8080",  # AWS deployment frontend (HTTP)
-    "http://15.207.108.158:8081",  # AWS deployment frontend alternative (HTTP)
-    "https://15.207.108.158:8080",  # AWS deployment frontend (HTTPS)
-    "https://15.207.108.158:8081",  # AWS deployment frontend alternative (HTTPS)
-    "https://13.201.54.231",  # Deployed frontend URL (HTTPS)
-    "http://13.201.54.231",  # Deployed frontend URL
-    "http://13.201.54.231:80",  # Deployed frontend URL with port
-    "http://13.201.54.231:8080",  # Deployed frontend URL with port
-    "http://13.201.54.231:8081",  # Deployed frontend URL with port
-    "https://grc-backend.vardaands.com",  # New server IP with port
-    "https://13.204.228.21:8000",  # New server IP with port (HTTPS),
-    "http://13.204.228.21:8000",
-]
 
-# CSRF settings
-CSRF_TRUSTED_ORIGINS = [
+CORS_ALLOWED_ORIGINS = [
+    "https://grc-tprm.vardaands.com",
+    "http://localhost:3000",  # TPRM frontend development server
     "http://localhost:8081",  # Vue.js development server
     "http://localhost:8080",  # Alternative Vue.js port
+    "http://127.0.0.1:3000",  # TPRM frontend development server (127.0.0.1)
     "http://127.0.0.1:8080",
     "http://127.0.0.1:8081",
     "http://15.207.108.158:8080",  # AWS deployment frontend (HTTP)
@@ -429,6 +416,30 @@ CSRF_TRUSTED_ORIGINS = [
     "https://grc-backend.vardaands.com",  # New server IP with port
     "https://13.204.228.21:8000",  # New server IP with port (HTTPS)
     "http://13.204.228.21:8000",
+]
+
+# CSRF settings
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",  # TPRM frontend development server
+    "http://localhost:8081",  # Vue.js development server
+    "http://localhost:8080",  # Alternative Vue.js port
+    "http://127.0.0.1:3000",  # TPRM frontend development server (127.0.0.1)
+    "http://127.0.0.1:8080",
+    "http://127.0.0.1:8081",
+    "http://15.207.108.158:8080",  # AWS deployment frontend (HTTP)
+    "http://15.207.108.158:8081",  # AWS deployment frontend alternative (HTTP)
+    "https://15.207.108.158:8000",  # AWS backend HTTPS
+    "https://15.207.108.158:8080",  # AWS frontend HTTPS
+    "https://15.207.108.158:8081",  # AWS frontend alternative HTTPS
+    "http://13.201.54.231",  # Deployed frontend URL
+    "https://13.201.54.231",  # Deployed frontend URL (HTTPS)
+    "http://13.201.54.231:80",  # Deployed frontend URL with port
+    "http://13.201.54.231:8080",  # Deployed frontend URL with port
+    "http://13.201.54.231:8081",  # Deployed frontend URL with port
+    "https://grc-backend.vardaands.com",  # New server IP with port
+    "https://13.204.228.21:8000",  # New server IP with port (HTTPS)
+    "http://13.204.228.21:8000",
+    "https://grc-tprm.vardaands.com",
 ]
 
 # Additional CORS settings
@@ -458,7 +469,7 @@ CORS_ALLOW_HEADERS = [
 # HTTPS Security Settings
 # Note: Set these to True when using valid SSL certificates in production
 # For self-signed certificates in development, keep them as False
-CSRF_COOKIE_SECURE = False  # Set to True with valid SSL certificates
+CSRF_COOKIE_SECURE = False  # Set to True with valid SSL certificates (False for HTTP/development)
 CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript access to CSRF token
 
 # Session settings for HTTPS (duplicate - remove if causing issues)

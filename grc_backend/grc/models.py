@@ -182,9 +182,35 @@ class CategoryBusinessUnit(models.Model):
     def __str__(self):
         return f"{self.source} - {self.value}"
 
+class Domain(models.Model):
+    domain_id = models.AutoField(primary_key=True)
+    domain_name = models.CharField(max_length=150, unique=True)
+    IsActive = models.CharField(max_length=1, default='Y', choices=[('Y', 'Yes'), ('N', 'No')], db_column='isActive')
+
+    class Meta:
+        db_table = 'domain'
+
+    def __str__(self):
+        return self.domain_name
+    
+    @property
+    def is_active(self):
+        """Helper property to check if domain is active"""
+        return self.IsActive.upper() == 'Y'
+
 
 class Framework(models.Model):
     FrameworkId = models.AutoField(primary_key=True)
+
+    # ✅ FK to domain table (creates domainId column in frameworks)
+    domain = models.ForeignKey(
+        Domain,
+        on_delete=models.PROTECT,   # similar to ON DELETE RESTRICT
+        db_column='domainId',       # ensures column name is domainId
+        null=True,
+        blank=True
+    )
+
     FrameworkName = models.CharField(max_length=255)
     CurrentVersion = models.FloatField(default=1.0)
     FrameworkDescription = models.TextField()
@@ -199,15 +225,12 @@ class Framework(models.Model):
     Status = models.CharField(max_length=45, null=True, blank=True)
     ActiveInactive = models.CharField(max_length=45, null=True, blank=True)
     Reviewer = models.CharField(max_length=255)
-    InternalExternal= models.CharField(max_length=45, null=True, blank=True)
-    Amendment = models.JSONField(null=True, blank=True, default=list)  # Store amendment history
-    latestAmmendmentDate= models.DateField(null=True, blank=True)
-    latestComparisionCheckDate= models.DateField(null=True, blank=True)
-    # Data Inventory - JSON field mapping field labels to data types (personal, confidential, regular)
-    data_inventory = models.JSONField(null=True, blank=True)
+    InternalExternal = models.CharField(max_length=45, null=True, blank=True)
+    Amendment = models.JSONField(null=True, blank=True, default=list)
+    latestAmmendmentDate = models.DateField(null=True, blank=True)
+    latestComparisionCheckDate = models.DateField(null=True, blank=True)
     retentionExpiry = models.DateField(null=True, blank=True)
-    
- 
+
     class Meta:
         db_table = 'frameworks'
  

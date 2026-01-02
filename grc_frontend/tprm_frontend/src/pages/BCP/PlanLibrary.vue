@@ -1,11 +1,7 @@
 <template>
   <div class="space-y-6">
-    <!-- Main Header - Hidden when plan detail is shown -->
-    <div v-if="!showPlanDetail" class="flex items-center justify-between">
-      <div>
-        <h1 class="text-2xl font-bold text-foreground">Plan Library — Strategies</h1>
-        <p class="text-muted-foreground">Browse and manage BCP/DRP strategies and their plans</p>
-      </div>
+    <!-- View Toggle Button - Hidden when plan detail is shown -->
+    <div v-if="!showPlanDetail" class="flex items-center justify-end">
       <div class="flex gap-2">
         <button class="btn btn--outline" @click="toggleView">
           <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -906,7 +902,7 @@ const fetchStrategies = async () => {
     if (filters.value.criticality && filters.value.criticality !== 'all') params.append('criticality', filters.value.criticality)
     
     const queryString = params.toString()
-    const url = queryString ? `/bcpdrp/strategies/?${queryString}` : '/bcpdrp/strategies/'
+    const url = queryString ? `/api/bcpdrp/strategies/?${queryString}` : '/api/bcpdrp/strategies/'
     
     const response = await http.get(url)
     strategies.value = response.data.strategies || []
@@ -957,7 +953,7 @@ const fetchPlans = async () => {
     if (filters.value.criticality && filters.value.criticality !== 'all') params.append('criticality', filters.value.criticality)
     
     const queryString = params.toString()
-    const url = queryString ? `/bcpdrp/plans/?${queryString}` : '/bcpdrp/plans/'
+    const url = queryString ? `/api/bcpdrp/plans/?${queryString}` : '/api/bcpdrp/plans/'
     
     const response = await http.get(url)
     plans.value = response.data.plans || []
@@ -1056,7 +1052,7 @@ const fetchPlanDetails = async (planId: number) => {
   planDetailError.value = null
   
   try {
-    const response = await http.get(`/bcpdrp/plans/${planId}/comprehensive/`)
+    const response = await http.get(`/api/bcpdrp/plans/${planId}/comprehensive/`)
     planDetailData.value = response.data
     showPlanDetail.value = true
   } catch (err) {
@@ -1088,7 +1084,7 @@ const handleApprovalAssignment = (plan: any) => {
       createNew: 'true',
       planId: plan.plan_id,
       objectId: plan.plan_id,
-      objectType: 'PLAN',
+      objectType: 'PLAN EVALUATION',
       planType: plan.plan_type
     }
   })
@@ -1102,7 +1098,7 @@ const handleAssignTesting = (plan: any) => {
       createNew: 'true',
       planId: plan.plan_id,
       objectId: plan.plan_id,
-      objectType: 'PLAN',
+      objectType: 'PLAN EVALUATION',
       planType: plan.plan_type
     }
   })

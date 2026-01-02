@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { getTprmApiUrl } from '@/utils/backendEnv'
 
 export const useQuestionnaireStore = defineStore('questionnaire', () => {
   // State
@@ -21,8 +20,9 @@ export const useQuestionnaireStore = defineStore('questionnaire', () => {
   const loading = ref(false)
   const error = ref(null)
 
-  // API Base URL - use correct path: /api/tprm/vendor-questionnaire/
-  const API_BASE = getTprmApiUrl('vendor-questionnaire')
+  // API Base URL
+  import { getTprmApiV1Url } from '@/utils/backendEnv'
+  const API_BASE = getTprmApiV1Url('vendor-questionnaire')
 
   // Computed
   const getQuestionnaires = computed(() => questionnaires.value)

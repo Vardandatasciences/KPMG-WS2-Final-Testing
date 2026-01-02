@@ -8,9 +8,11 @@ import { z } from 'zod'
 import { RfpValidator, rfpSchemas } from './rfpValidation.js'
 import { rfpSanitizeString } from './rfpUtils.js'
 
+import { getTprmApiV1BaseUrl } from '@/utils/backendEnv'
+
 // Default configuration
 const defaultConfig = {
-  baseURL: process.env.VUE_APP_API_BASE_URL || 'http://localhost:8000/api/tprm',
+  baseURL: getTprmApiV1BaseUrl(),
   timeout: 30000, // 30 seconds
   maxRetries: 3,
   retryDelay: 1000, // 1 second

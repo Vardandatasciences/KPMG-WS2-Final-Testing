@@ -162,7 +162,11 @@
             alert('Periodic token refresh stopped')
           } else {
             // Start periodic refresh
-            authService.startPeriodicTokenRefresh()
+            if (authService && typeof authService.startPeriodicTokenRefresh === 'function') {
+              authService.startPeriodicTokenRefresh()
+            } else {
+              console.log('ℹ️ Periodic token refresh not available in authService')
+            }
             this.periodicRefreshButtonText = 'Stop Periodic Refresh'
             alert('Periodic token refresh started')
           }

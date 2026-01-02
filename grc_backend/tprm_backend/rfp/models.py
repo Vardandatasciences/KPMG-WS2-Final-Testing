@@ -65,7 +65,7 @@ class RFP(models.Model):
     version_number = models.IntegerField(default=1)
     
     # Configuration options
-    auto_publish = models.BooleanField(default=False)
+    auto_approve = models.BooleanField(default=False)
     allow_late_submissions = models.BooleanField(default=False)
     
     # Timestamps
@@ -92,7 +92,13 @@ class RFP(models.Model):
         return f"{self.rfp_title} ({self.rfp_number})"
     
     def save(self, *args, **kwargs):
-        # Generate RFP number if not provided
+        # Normalize rfp_number: strip whitespace if it's a string
+        if isinstance(self.rfp_number, str):
+            self.rfp_number = self.rfp_number.strip()
+            if not self.rfp_number:
+                self.rfp_number = None
+        
+        # Generate RFP number only if not provided and creating new instance
         if not self.rfp_number and not self.pk:
             # Format: RFP-YYYY-MM-XXXX (XXXX is a sequential number)
             today = timezone.now()
@@ -881,6 +887,7 @@ class RFPResponse(models.Model):
     This is a minimal model that only includes fields that exist in the actual database
     """
     EVALUATION_STATUS_CHOICES = [
+        ('DRAFT', 'Draft'),
         ('SUBMITTED', 'Submitted'),
         ('UNDER_EVALUATION', 'Under Evaluation'),
         ('SHORTLISTED', 'Shortlisted'),
@@ -912,7 +919,7 @@ class RFPResponse(models.Model):
     weighted_final_score = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     
     # Evaluation
-    evaluation_status = models.CharField(max_length=20, choices=EVALUATION_STATUS_CHOICES, default='SUBMITTED')
+    evaluation_status = models.CharField(max_length=20, choices=EVALUATION_STATUS_CHOICES, default='DRAFT')
     auto_rejected = models.BooleanField(default=False)
     rejection_reason = models.TextField(null=True, blank=True)
     
@@ -928,6 +935,19 @@ class RFPResponse(models.Model):
     evaluated_by = models.IntegerField(null=True, blank=True)
     evaluation_date = models.DateTimeField(null=True, blank=True)
     evaluation_comments = models.TextField(null=True, blank=True)
+    
+    # Vendor contact information (direct fields for easier querying)
+    org = models.CharField(max_length=255, null=True, blank=True)
+    vendor_name = models.CharField(max_length=255, null=True, blank=True)
+    contact_email = models.CharField(max_length=255, null=True, blank=True)
+    contact_phone = models.CharField(max_length=50, null=True, blank=True)
+    
+    # Additional data fields
+    proposal_data = models.JSONField(null=True, blank=True)
+    submission_status = models.CharField(max_length=20, default='DRAFT')  # NOT NULL in database, default to DRAFT (cannot be null)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    ip_address = models.CharField(max_length=45, null=True, blank=True)
+    user_agent = models.TextField(null=True, blank=True)
     
     # Foreign key to RFP
     rfp = models.ForeignKey('RFP', on_delete=models.CASCADE, related_name='responses')

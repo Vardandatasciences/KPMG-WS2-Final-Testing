@@ -1,19 +1,5 @@
 <template>
   <div class="dashboard-container">
-    <!-- Header Section -->
-    <div class="dashboard-header">
-      <h1 class="dashboard-title">BCP/DRP Analytics Dashboard</h1>
-      <!-- Debug Info -->
-      <div v-if="dataSource" class="debug-info" style="margin-top: 8px; padding: 8px; background: #f3f4f6; border-radius: 6px; font-size: 12px;">
-        <span :class="dataSource === 'real' ? 'text-success' : 'text-warning'">
-          📊 Data Source: {{ dataSource === 'real' ? 'Live API' : 'Mock Data' }}
-        </span>
-        <span v-if="lastUpdated" style="margin-left: 16px; color: #6b7280;">
-          🕒 Last Updated: {{ lastUpdated }}
-        </span>
-      </div>
-    </div>
-
     <!-- Error Display -->
     <div v-if="error" class="error-message">
       <div class="error-content">
@@ -866,6 +852,7 @@ import { useRouter } from 'vue-router'
 import { useNotifications } from '@/composables/useNotifications'
 import loggingService from '@/services/loggingService'
 import api from '@/services/api_bcp'
+import { getTprmApiBaseUrl } from '@/utils/backendEnv'
 
 const router = useRouter()
 const { showSuccess, showError, showWarning, showInfo } = useNotifications()
@@ -914,7 +901,7 @@ const trendsXAxisLabels = ref([])
 const trendsYAxisLabels = ref([])
 
 // API base URL
-const API_BASE = 'http://localhost:8000/api/tprm/bcpdrp'
+const API_BASE = `${getTprmApiBaseUrl()}/bcpdrp`
 
 // Test API connection first
 const testApiConnection = async () => {
@@ -1651,9 +1638,9 @@ const getMockDashboardData = () => {
         'SKIPPED': 7
       },
       object_type_dist: {
-        'PLAN': 30,
-        'QUESTIONNAIRE': 10,
-        'ASSIGNMENT_RESPONSE': 5
+        'PLAN EVALUATION': 30,
+        'NEW QUESTIONNAIRE': 10,
+        'QUESTIONNAIRE RESPONSE': 5
       },
       plan_type_dist: {
         'BCP': 25,

@@ -76,10 +76,6 @@ import loggingService from '@/services/loggingService'
 import { useVendorPermissions } from '@/composables/useVendorPermissions'
 import AccessDenied from '@/components/AccessDenied.vue'
 import permissionsService from '@/services/permissionsService'
-import { getTprmApiUrl } from '@/utils/backendEnv'
-
-// API base URL for vendor-approval endpoints
-const VENDOR_APPROVAL_API_BASE_URL = getTprmApiUrl('vendor-approval')
 
 // Initialize RBAC permissions
 const { permissions, showDeniedAlert } = useVendorPermissions()
@@ -97,8 +93,6 @@ const stageType = ref('All')
 const approvals = ref([])
 const loading = ref(false)
 const router = useRouter()
-const users = ref([])
-const selectedRequesterId = ref('')
 
 // Get current user from localStorage with Vuex fallback
 const getCurrentUserId = () => {
@@ -129,8 +123,8 @@ const getCurrentUserId = () => {
       const user = JSON.parse(currentUserFromStorage)
       console.log('Parsed currentUser object:', user)
       
-      // Try multiple possible user ID field names (including UserId with capital U)
-      const userId = user.UserId || user.id || user.user_id || user.userId || user.userid
+      // Try multiple possible user ID field names
+      const userId = user.id || user.user_id || user.userId || user.userid
       console.log('Available userId from localStorage:', userId)
       
       if (userId) {
@@ -149,7 +143,7 @@ const getCurrentUserId = () => {
 
 const loadUsers = async () => {
   try {
-    const res = await api.get(`${VENDOR_APPROVAL_API_BASE_URL}/users/`)
+    const res = await api.get('/api/v1/vendor-approval/users/')
     users.value = Array.isArray(res.data) ? res.data : []
   } catch (e) {
     console.warn('Failed to load users endpoint, will fallback to reviewers:', e?.message)
@@ -159,7 +153,7 @@ const loadUsers = async () => {
   // Fallback to reviewers list if users empty
   if (!users.value.length) {
     try {
-      const r = await api.get(`${VENDOR_APPROVAL_API_BASE_URL}/stages/reviewers/`)
+      const r = await api.get('/api/v1/vendor-approval/stages/reviewers/')
       users.value = (r.data || []).map(x => ({ id: x.id, UserName: x.name }))
     } catch (e) {
       console.error('Failed to load reviewers fallback:', e?.message)
@@ -183,7 +177,7 @@ const loadData = async () => {
   loading.value = true
   try {
     console.log('Loading approvals for user ID:', currentUserId)
-    const res = await api.get(`${VENDOR_APPROVAL_API_BASE_URL}/requests/by-requester/`, {
+    const res = await api.get('/api/v1/vendor-approval/requests/by-requester/', {
       params: { requester_id: Number(currentUserId), stage_type: stageType.value }
     })
     console.log('Approvals API response:', res.data)
@@ -241,7 +235,7 @@ onMounted(async () => {
       // If we got permission from backend, update localStorage
       if (hasPermission) {
         // Update user object in localStorage with permission
-        const userStr = localStorage.getItem('current_user') || localStorage.getItem('user')
+        const userStr = localStorage.getItem('user')
         if (userStr) {
           try {
             const user = JSON.parse(userStr)
@@ -249,7 +243,7 @@ onMounted(async () => {
               user.permissions = {}
             }
             user.permissions.SubmitVendorForApproval = true
-            localStorage.setItem('current_user', JSON.stringify(user))
+            localStorage.setItem('user', JSON.stringify(user))
             console.log('Updated localStorage with permission')
           } catch (e) {
             console.error('Error updating localStorage:', e)

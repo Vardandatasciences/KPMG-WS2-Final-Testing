@@ -19,11 +19,6 @@ const routes = [
     meta: { requiresAuth: true }
   },
   { 
-    path: '/ocr-extraction', 
-    component: () => import('../pages/BCP/OcrExtraction.vue'),
-    meta: { requiresAuth: true }
-  },
-  { 
     path: '/plan-submission-ocr', 
     component: () => import('../pages/BCP/PlanSubmissionOcr.vue'),
     meta: { requiresAuth: true }
@@ -114,7 +109,7 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   const isAuthenticated = authService.isAuthenticated()
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
-  const publicRoutes = ['/login']
+  const publicRoutes = ['/login', '/otp-verification']
   const isPublicRoute = publicRoutes.includes(to.path)
   
   console.log('BCP Router - Route:', to.path)

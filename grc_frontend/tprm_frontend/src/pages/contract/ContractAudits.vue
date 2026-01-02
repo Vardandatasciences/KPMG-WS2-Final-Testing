@@ -21,8 +21,9 @@
         <div class="relative">
           <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
           <Input
-            placeholder="Search audits by title or contract..."
             v-model="searchTerm"
+            type="text"
+            placeholder="Search audits by title or contract..."
             class="pl-10"
           />
         </div>
@@ -244,7 +245,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 import PopupModal from '@/popup/PopupModal.vue'
@@ -282,85 +283,57 @@ const viewMode = ref('grid') // 'grid' or 'list'
 const currentUser = computed(() => store.getters['auth/currentUser'])
 
 // Load audits from API
-const loadAudits = async () => {
+const loadAudits = async (searchQuery = '') => {
   try {
     loading.value = true
-    console.log('🔄 [ContractAudits] Loading audits...')
-    const response = await contractAuditApi.getContractAudits()
-    console.log('📦 [ContractAudits] API Response:', response)
-    
+    const params = {}
+    if (searchQuery) {
+      params.search = searchQuery
+    }
+    const response = await contractAuditApi.getContractAudits(params)
     if (response.success) {
-      // Handle different response structures
-      let audits = []
-      if (Array.isArray(response.data)) {
-        audits = response.data
-      } else if (response.data?.results && Array.isArray(response.data.results)) {
-        audits = response.data.results
-      } else if (response.data?.data && Array.isArray(response.data.data)) {
-        audits = response.data.data
-      } else if (response.data?.audits && Array.isArray(response.data.audits)) {
-        audits = response.data.audits
-      }
-      
-      console.log(`✅ [ContractAudits] Loaded ${audits.length} audits`)
-      allAudits.value = audits
+      allAudits.value = response.data.results || response.data || []
     } else {
-      console.error('❌ [ContractAudits] Error loading contract audits:', response.error || response.message)
+      console.error('Error loading contract audits:', response.error)
       allAudits.value = []
     }
   } catch (error) {
-    console.error('❌ [ContractAudits] Exception loading contract audits:', error)
-    console.error('❌ [ContractAudits] Error details:', error.response?.data || error.message)
+    console.error('Error loading contract audits:', error)
     allAudits.value = []
   } finally {
     loading.value = false
   }
 }
 
-// Filter audits to show only those assigned to current user or where user is auditor
-// TEMPORARY: Show all audits for debugging - will filter by user once we confirm data is loading
+// Filter audits to show only those assigned to current user, where user is auditor, or where user is reviewer
 const myAudits = computed(() => {
-  // For now, return all audits to debug if data is loading
-  // TODO: Re-enable filtering once we confirm data is loading correctly
-  if (allAudits.value.length > 0) {
-    console.log('📋 [ContractAudits] Showing all audits for debugging:', allAudits.value.length)
-    if (currentUser.value) {
-      const currentUserId = currentUser.value.userid || currentUser.value.user_id || currentUser.value.UserId || currentUser.value.id
-      console.log('👤 [ContractAudits] Current user ID:', currentUserId)
-      
-      // Log sample audit data
-      if (allAudits.value[0]) {
-        console.log('📄 [ContractAudits] Sample audit:', {
-          audit_id: allAudits.value[0].audit_id,
-          title: allAudits.value[0].title,
-          assignee_id: allAudits.value[0].assignee_id,
-          auditor_id: allAudits.value[0].auditor_id,
-          status: allAudits.value[0].status
-        })
-      }
-    }
-  }
+  if (!currentUser.value) return []
   
-  // Return all audits for now (remove filtering temporarily)
-  return allAudits.value
+  const currentUserId = currentUser.value.userid || currentUser.value.user_id
   
-  // Original filtering logic (commented out for debugging):
-  // if (!currentUser.value) {
-  //   console.warn('⚠️ [ContractAudits] No current user found')
-  //   return []
-  // }
-  // 
-  // const currentUserId = currentUser.value.userid || currentUser.value.user_id || currentUser.value.UserId || currentUser.value.id
-  // return allAudits.value.filter(audit => 
-  //   audit.assignee_id == currentUserId || audit.auditor_id == currentUserId
-  // )
+  return allAudits.value.filter(audit => 
+    audit.assignee_id == currentUserId || 
+    audit.auditor_id == currentUserId || 
+    audit.reviewer_id == currentUserId
+  )
 })
 
 // Filter by search term
-const filteredAudits = computed(() => myAudits.value.filter(audit =>
-  audit.title.toLowerCase().includes(searchTerm.value.toLowerCase()) ||
-  (audit.contract_title && audit.contract_title.toLowerCase().includes(searchTerm.value.toLowerCase()))
-))
+const filteredAudits = computed(() => {
+  if (!searchTerm.value || searchTerm.value.trim() === '') {
+    return myAudits.value
+  }
+  
+  const searchLower = searchTerm.value.toLowerCase().trim()
+  
+  return myAudits.value.filter(audit => {
+    const titleMatch = audit.title && audit.title.toLowerCase().includes(searchLower)
+    const contractMatch = audit.contract_title && audit.contract_title.toLowerCase().includes(searchLower)
+    const scopeMatch = audit.scope && audit.scope.toLowerCase().includes(searchLower)
+    
+    return titleMatch || contractMatch || scopeMatch
+  })
+})
 
 // Group audits by status
 const groupedAudits = computed(() => ({
@@ -393,6 +366,13 @@ const currentAudits = computed(() => {
     return filteredAudits.value
   }
   return groupedAudits.value[activeTab.value] || []
+})
+
+// Watch search term for debugging
+watch(searchTerm, (newValue) => {
+  console.log('Search term changed:', newValue)
+  console.log('Filtered audits count:', filteredAudits.value.length)
+  console.log('Current audits count:', currentAudits.value.length)
 })
 
 // Load data on component mount

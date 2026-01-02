@@ -37,7 +37,12 @@ export function useRfpApi() {
       localStorage.removeItem('refresh_token')
       localStorage.removeItem('current_user')
       
-      if (window.location.pathname !== '/login') {
+      // If in iframe, request parent to redirect to login
+      const isInIframe = window.self !== window.top
+      if (isInIframe && window.parent) {
+        console.log('[useRfpApi] 401 - Requesting parent to redirect to login')
+        window.parent.postMessage({ type: 'TPRM_REDIRECT_TO_LOGIN' }, '*')
+      } else if (window.location.pathname !== '/login') {
         window.location.href = '/login'
       }
       throw new Error('Authentication required')
@@ -57,7 +62,13 @@ export function useRfpApi() {
       }))
       
       console.log('🔄 Redirecting to /access-denied page...')
-      window.location.href = '/access-denied'
+      // If in iframe, use postMessage; otherwise direct redirect
+      const isInIframe = window.self !== window.top
+      if (isInIframe && window.parent) {
+        window.parent.postMessage({ type: 'TPRM_REDIRECT', path: '/access-denied' }, '*')
+      } else {
+        window.location.href = '/access-denied'
+      }
       // Return a never-resolving promise to stop execution
       return new Promise(() => {})
     }
@@ -74,36 +85,15 @@ export function useRfpApi() {
    * Fetch all RFPs
    */
   const fetchRFPs = async (filters = {}) => {
-    // Remove empty/null filters
-    const cleanFilters = Object.fromEntries(
-      Object.entries(filters).filter(([_, v]) => v !== null && v !== undefined && v !== '')
-    )
-    const queryParams = new URLSearchParams(cleanFilters).toString()
-    
-    // The router registers 'rfps' under /api/v1/rfps/, so the full path is /api/v1/rfps/rfps/
-    // But we want /api/v1/rfps/ directly, so we use the router's base path
+    const queryParams = new URLSearchParams(filters).toString()
     const url = buildApiUrl(`/rfps/${queryParams ? `?${queryParams}` : ''}`)
-    
-    console.log('[useRfpApi] Fetching RFPs from URL:', url)
-    console.log('[useRfpApi] Filters:', cleanFilters)
     
     const response = await fetch(url, {
       method: 'GET',
       headers: getAuthHeaders(),
     })
     
-    const data = await handleResponse(response)
-    console.log('[useRfpApi] Response received:', {
-      type: typeof data,
-      isArray: Array.isArray(data),
-      keys: data && typeof data === 'object' ? Object.keys(data) : null,
-      count: data?.count,
-      resultsLength: data?.results?.length,
-      hasResults: !!data?.results,
-      fullResponse: data
-    })
-    
-    return data
+    return handleResponse(response)
   }
 
   /**

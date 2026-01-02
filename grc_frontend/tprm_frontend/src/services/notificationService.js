@@ -418,14 +418,26 @@ class NotificationService {
       },
       data_saved: {
         title: 'Extracted Data Saved',
-        message: 'OCR extracted information has been saved successfully',
+        message: (() => {
+          let msg = `OCR extracted information for plan ${data.plan_id} has been saved successfully.`
+          if (data.risk_generation) {
+            if (data.risk_generation.status === 'started') {
+              msg += ' Risk generation has started in the background - risks will appear in Risk Analytics shortly.'
+            } else if (data.risk_generation.status === 'deferred') {
+              msg += ' Risk generation will start shortly - check Risk Analytics in a few minutes.'
+            }
+          }
+          return msg
+        })(),
         notification_type: 'user_action',
-        priority: 'low',
+        priority: 'medium',
         channel: 'in_app',
         status: 'delivered',
         metadata: {
           plan_id: data.plan_id,
-          action: 'data_saved'
+          action: 'data_saved',
+          risk_generation_status: data.risk_generation?.status || null,
+          risk_generation_task_id: data.risk_generation?.task_id || null
         }
       },
       assigned_for_evaluation: {
@@ -476,7 +488,7 @@ class NotificationService {
       },
       evaluation_submitted: {
         title: 'Evaluation Submitted Successfully',
-        message: `Evaluation for plan ${data.plan_id} submitted. Risk generation will continue in the background.`,
+        message: `Evaluation for plan ${data.plan_id} submitted successfully.`,
         notification_type: 'user_action',
         priority: 'medium',
         channel: 'in_app',
@@ -484,7 +496,6 @@ class NotificationService {
         metadata: {
           plan_id: data.plan_id,
           evaluation_id: data.evaluation_id,
-          risk_generation_status: data.risk_generation_status,
           action: 'evaluation_submitted'
         }
       },

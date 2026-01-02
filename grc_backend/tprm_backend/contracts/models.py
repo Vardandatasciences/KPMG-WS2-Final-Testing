@@ -751,7 +751,7 @@ class ContractAmendment(models.Model):
         """Get display name for approved_by user"""
         if self.approved_by:
             try:
-                from tprm_backend.mfa_auth.models import User
+                from mfa_auth.models import User
                 user = User.objects.get(userid=self.approved_by)
                 first_name = user.first_name or ""
                 last_name = user.last_name or ""
@@ -765,7 +765,7 @@ class ContractAmendment(models.Model):
         """Get display name for initiated_by user"""
         if self.initiated_by:
             try:
-                from tprm_backend.mfa_auth.models import User
+                from mfa_auth.models import User
                 user = User.objects.get(userid=self.initiated_by)
                 first_name = user.first_name or ""
                 last_name = user.last_name or ""
@@ -895,7 +895,7 @@ class ContractRenewal(models.Model):
         """Get display name for initiated_by user"""
         if self.initiated_by:
             try:
-                from tprm_backend.mfa_auth.models import User
+                from mfa_auth.models import User
                 user = User.objects.get(userid=self.initiated_by)
                 first_name = user.first_name or ""
                 last_name = user.last_name or ""
@@ -909,7 +909,7 @@ class ContractRenewal(models.Model):
         """Get display name for decided_by user"""
         if self.decided_by:
             try:
-                from tprm_backend.mfa_auth.models import User
+                from mfa_auth.models import User
                 user = User.objects.get(userid=self.decided_by)
                 first_name = user.first_name or ""
                 last_name = user.last_name or ""

@@ -19,13 +19,17 @@
               @click="toggleExpanded(item.title)"
               class="flex items-center justify-between w-full px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <div class="flex items-center">
+              <div class="flex items-center flex-1 min-w-0">
                 <component :is="item.icon" class="h-5 w-5 mr-3 flex-shrink-0" />
-                <span v-if="!isCollapsed" class="truncate">{{ item.title }}</span>
+                <div v-if="!isCollapsed" class="flex flex-col leading-tight min-w-0">
+                  <span v-if="item.title === 'Continuity and Recovery plans management'" class="whitespace-nowrap">Continuity and Recovery</span>
+                  <span v-else class="truncate">{{ item.title }}</span>
+                  <span v-if="item.title === 'Continuity and Recovery plans management'" class="whitespace-nowrap">plans management</span>
+                </div>
               </div>
               <ChevronDown 
                 v-if="!isCollapsed"
-                :class="['h-4 w-4 transition-transform chevron-arrow', expandedItems.includes(item.title) ? 'rotate-180' : '']" 
+                :class="['h-4 w-4 transition-transform chevron-arrow flex-shrink-0 ml-2', expandedItems.includes(item.title) ? 'rotate-180' : '']" 
               />
             </button>
             <div v-if="expandedItems.includes(item.title) && !isCollapsed" class="ml-6 space-y-1">
@@ -369,11 +373,6 @@ const mainItems = [
         icon: FileText
       },
       { 
-        title: "Search", 
-        url: "/search", 
-        icon: Search
-      },
-      { 
         title: "Contract Comparison", 
         url: "/contract-comparison", 
         icon: GitCompare
@@ -458,7 +457,7 @@ const mainItems = [
   },
   
   { 
-    title: "BCP/DRP Management", 
+    title: "Continuity and Recovery plans management", 
     url: "/bcp/vendor-upload", 
     icon: Shield,
     subItems: [
@@ -470,7 +469,6 @@ const mainItems = [
           { title: "Plan Submission & OCR", url: "/bcp/plan-submission-ocr" },
           { title: "Plan Evaluation", url: "/bcp/evaluation" },
           { title: "Plan Library", url: "/bcp/library" },
-          // { title: "OCR Extraction", url: "/bcp/ocr-extraction" },
         ]
       },
       { 

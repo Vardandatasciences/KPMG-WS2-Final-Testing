@@ -311,7 +311,7 @@ router.beforeEach(async (to, from, next) => {
   console.log(`🚀 Navigation: ${from.path || 'initial'} → ${to.path}`)
   
   const isAuthenticated = authService.isAuthenticated()
-  const publicRoutes = ['/login']
+  const publicRoutes = ['/login', '/otp-verification']
   const isPublicRoute = publicRoutes.includes(to.path)
   
   console.log('🔐 Authentication status:', isAuthenticated)

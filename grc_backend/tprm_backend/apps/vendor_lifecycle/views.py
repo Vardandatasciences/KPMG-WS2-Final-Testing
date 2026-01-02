@@ -25,11 +25,11 @@ from tprm_backend.apps.vendor_approval.models import ApprovalRequests, ApprovalS
 
 # RBAC imports
 from tprm_backend.rbac.tprm_decorators import rbac_vendor_required
-from tprm_backend.apps.vendor_core.vendor_authentication import UnifiedJWTAuthentication, SimpleAuthenticatedPermission
+from tprm_backend.apps.vendor_core.vendor_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('ViewLifecycleHistory')
 def lifecycle_tracker_data(request):
@@ -260,7 +260,7 @@ def get_vendor_stages_from_temp_table():
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('ViewLifecycleHistory')
 def vendor_lifecycle_stages(request):
@@ -290,7 +290,7 @@ def vendor_lifecycle_stages(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('ViewLifecycleHistory')
 def vendor_timeline(request, vendor_id):
@@ -329,7 +329,7 @@ def vendor_timeline(request, vendor_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('ViewLifecycleHistory')
 def temp_vendor_stages(request):
@@ -350,7 +350,7 @@ def temp_vendor_stages(request):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('update_vendor')
 def update_vendor_stage(request):
@@ -405,7 +405,7 @@ def update_vendor_stage(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('ViewLifecycleHistory')
 def get_vendors_list(request):
@@ -438,7 +438,7 @@ def get_vendors_list(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('ViewLifecycleHistory')
 def get_vendor_lifecycle_timeline(request, vendor_id):
@@ -537,7 +537,7 @@ def get_vendor_lifecycle_timeline(request, vendor_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('ViewLifecycleHistory')
 def get_lifecycle_analytics(request):

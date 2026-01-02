@@ -240,13 +240,13 @@
             <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
             <polyline points="22,6 12,13 2,6"></polyline>
           </svg>
-          <span>TPRM reuses your authenticated GRC session</span>
+          <span>OTP will be sent to your registered email</span>
         </div>
         <div class="info-item">
           <svg class="info-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
           </svg>
-          <span>Security policies match your GRC account posture</span>
+          <span>Secure two-factor authentication</span>
           </div>
         </div>
       </div>
@@ -294,8 +294,24 @@ export default {
 
     async getPostLoginRoute() {
       try {
-        const hasVendorRegistration = await permissionsService.checkPermission('vendor_create')
-        return hasVendorRegistration ? '/vendor-registration' : '/'
+        const token = localStorage.getItem('session_token')
+        if (!token) {
+          console.warn('No session token available, defaulting to home page')
+          return '/'
+        }
+        
+        // Get user ID from localStorage (user object has 'userid' field)
+        let userId = null
+        try {
+          const currentUser = JSON.parse(localStorage.getItem('current_user') || '{}')
+          userId = currentUser.userid || currentUser.id || currentUser.user_id
+        } catch (e) {
+          console.error('Error getting user ID:', e)
+        }
+        
+        // Use role-based routing service
+        const roleRoutingService = await import('@/services/roleRoutingService')
+        return await roleRoutingService.getPostLoginRoute(token, userId)
       } catch (error) {
         console.error('LoginView: Failed to resolve post-login route', error)
         return '/'
@@ -318,11 +334,21 @@ export default {
         })
         
         if (result.success) {
-          this.showAlert(result.message || 'Login successful! Redirecting...', 'success')
-          const targetRoute = await this.getPostLoginRoute()
-          setTimeout(() => {
-            this.$router.push(targetRoute)
-          }, 1000)
+          if (result.requiresOtp) {
+            // OTP required, show success message and redirect to OTP page
+            this.showAlert(result.message || 'OTP sent to your email!', 'success')
+            
+            setTimeout(() => {
+              this.$router.push('/otp-verification')
+            }, 1500)
+          } else {
+            // Direct login (shouldn't happen with MFA)
+            this.showAlert('Login successful!', 'success')
+            const targetRoute = await this.getPostLoginRoute()
+            setTimeout(() => {
+              this.$router.push(targetRoute)
+            }, 1000)
+          }
         } else {
           this.showAlert(result.error || 'Login failed. Please check your credentials.', 'error')
         }

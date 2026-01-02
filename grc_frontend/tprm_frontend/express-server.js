@@ -102,7 +102,7 @@ app.use((err, req, res, next) => {
   res.status(500).sendFile(path.join(__dirname, 'dist', '50x.html'));
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`RFP Management System MPA server running on port ${PORT}`);
   console.log(`Available routes:`);
   console.log(`  - http://localhost:${PORT}/dashboard`);

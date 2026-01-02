@@ -3,9 +3,6 @@
     <!-- Header -->
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
       <div>
-        <div class="flex items-center gap-2 mb-2">
-          <Badge variant="outline">Phase 2</Badge>
-        </div>
         <h1 class="text-3xl font-bold tracking-tight">RFP Management</h1>
         <p class="text-muted-foreground">
           View and manage RFPs created by users.
@@ -162,7 +159,6 @@ import {
 } from 'lucide-vue-next'
 import { rfpUseToast } from '@/composables/rfpUseToast.js'
 import { API_CONFIG, API_ENDPOINTS, buildApiUrl, apiCall } from '@/config/api.js'
-import { getTprmApiUrl } from '@/utils/backendEnv'
 import Card from '@/components_rfp/ui/Card.vue'
 import CardContent from '@/components_rfp/ui/CardContent.vue'
 import CardDescription from '@/components_rfp/ui/CardDescription.vue'
@@ -208,8 +204,7 @@ const fetchRFPs = async () => {
   loading.value = true
   try {
     // Use the correct API endpoint for RFPs
-    // The correct URL is /api/tprm/rfp/rfps/ (not /api/tprm/v1/rfps/)
-    const url = `${getTprmApiUrl('rfp')}/rfps/`
+    const url = `${API_CONFIG.BASE_URL}/v1/rfps/`
     const data = await apiCall(url)
     rfps.value = data.results || data // Handle pagination if present
   } catch (err) {

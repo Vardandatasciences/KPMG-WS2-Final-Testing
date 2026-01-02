@@ -1,33 +1,7 @@
 import { defineStore } from 'pinia'
+import { getTprmApiV1Url } from '@/utils/backendEnv'
 
-/**
- * Vendor Auth Store - reads from GRC session
- */
-
-const TOKEN_KEYS = ['session_token', 'token', 'access_token', 'jwt_token']
-const USER_KEYS = ['current_user', 'user']
-
-function getStoredToken() {
-  for (const key of TOKEN_KEYS) {
-    const val = localStorage.getItem(key)
-    if (val) return val
-  }
-  return null
-}
-
-function getStoredUser() {
-  for (const key of USER_KEYS) {
-    const val = localStorage.getItem(key)
-    if (val) {
-      try {
-        return JSON.parse(val)
-      } catch (e) {
-        console.error('Error parsing stored user:', e)
-      }
-    }
-  }
-  return null
-}
+const API_BASE_URL = getTprmApiV1Url('vendor-auth')
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -46,80 +20,116 @@ export const useAuthStore = defineStore('auth', {
     setUser(userData) {
       this.user = userData
       this.isAuthenticated = true
-      localStorage.setItem('current_user', JSON.stringify(userData))
       localStorage.setItem('user', JSON.stringify(userData))
+      localStorage.setItem('current_user', JSON.stringify(userData))
       localStorage.setItem('isAuthenticated', 'true')
     },
 
-    // Clear user data (local only, don't clear GRC session)
+    // Clear user data
     clearUser() {
       this.user = null
       this.isAuthenticated = false
-      console.log('[VendorAuthStore] Local state cleared')
+      localStorage.removeItem('user')
+      localStorage.removeItem('current_user')
+      localStorage.removeItem('isAuthenticated')
+      localStorage.removeItem('session_token')
     },
 
-    // Initialize auth state from localStorage (GRC session)
+    // Initialize auth state from localStorage or check with backend
     async initializeAuth() {
-      console.log('[VendorAuthStore] Initializing from GRC session...')
-      
-      const user = getStoredUser()
-      const token = getStoredToken()
-      const isAuthFlag = localStorage.getItem('isAuthenticated') === 'true' || 
-                         localStorage.getItem('is_logged_in') === 'true'
-      
-      console.log('[VendorAuthStore] Found:', { 
-        hasUser: !!user, 
-        hasToken: !!token, 
-        isAuthFlag,
-        userId: user?.userid || user?.UserId || user?.id || user?.user_id
-      })
-      
-      if (user && (token || isAuthFlag)) {
-        this.user = user
+      const user = localStorage.getItem('user')
+      const isAuthenticated = localStorage.getItem('isAuthenticated')
+     
+      if (user && isAuthenticated === 'true') {
+        this.user = JSON.parse(user)
         this.isAuthenticated = true
-        console.log('[VendorAuthStore] Authenticated as:', user.username || user.UserName || user.email)
       } else {
-        console.warn('[VendorAuthStore] No valid GRC session found')
-        this.user = null
-        this.isAuthenticated = false
+        // Check with backend if user is authenticated
+        await this.checkAuth()
       }
     },
 
-    // Check authentication status - just re-read from localStorage
+    // Check authentication status with backend
     async checkAuth() {
       this.loading = true
       try {
-        await this.initializeAuth()
-        return this.isAuthenticated
+        const response = await fetch(`${API_BASE_URL}/check-auth/`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include', // Include cookies for session
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          if (data.authenticated && data.user) {
+            this.setUser(data.user)
+            return true
+          }
+        }
+        
+        // If not authenticated, clear user data
+        this.clearUser()
+        return false
+      } catch (error) {
+        console.error('Auth check failed:', error)
+        this.clearUser()
+        return false
       } finally {
         this.loading = false
       }
     },
 
-    // Login - for vendor module this just re-reads GRC session
+    // Login with credentials
     async login(credentials) {
       this.loading = true
       try {
-        await this.initializeAuth()
-        
-        if (this.isAuthenticated) {
-          return { success: true, message: 'Using GRC session' }
+        const response = await fetch(`${API_BASE_URL}/login/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include', // Include cookies for session
+          body: JSON.stringify(credentials),
+        })
+
+        const data = await response.json()
+
+        if (response.ok && data.success && data.user) {
+          this.setUser(data.user)
+          return { success: true, message: data.message || 'Login successful' }
+        } else {
+          return { success: false, message: data.message || 'Login failed' }
         }
-        
-        return { success: false, message: 'No GRC session found - please login to GRC first' }
+      } catch (error) {
+        console.error('Login failed:', error)
+        return { success: false, message: 'An error occurred during login' }
       } finally {
         this.loading = false
       }
     },
 
-    // Logout - just clear local state
+    // Logout
     async logout() {
       this.loading = true
       try {
-        this.clearUser()
+        await fetch(`${API_BASE_URL}/logout/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include', // Include cookies for session
+        })
+      } catch (error) {
+        console.error('Logout error:', error)
       } finally {
+        // Always clear user data locally
+        this.clearUser()
         this.loading = false
       }
     }
   }
 })
+ 
+ 

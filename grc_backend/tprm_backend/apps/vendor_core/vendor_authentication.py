@@ -4,17 +4,73 @@ Similar to RFP authentication but for Vendor module
 """
 
 import logging
+import jwt
+from django.conf import settings
+from rest_framework.authentication import BaseAuthentication
 from rest_framework.permissions import BasePermission
-from rest_framework.exceptions import NotAuthenticated, PermissionDenied
-
-# Use Unified JWT Authentication from GRC
-from grc.jwt_auth import UnifiedJWTAuthentication
+from rest_framework.exceptions import AuthenticationFailed, NotAuthenticated, PermissionDenied
 
 logger = logging.getLogger(__name__)
 
-# REMOVED BUGGY LOCAL JWT CLASS - Using UnifiedJWTAuthentication from grc.jwt_auth instead
-# For backward compatibility, export UnifiedJWTAuthentication as JWTAuthentication
-JWTAuthentication = UnifiedJWTAuthentication
+
+class JWTAuthentication(BaseAuthentication):
+    """
+    Custom JWT Authentication for Vendor module
+    """
+    
+    def authenticate(self, request):
+        auth_header = request.headers.get('Authorization')
+        
+        if not auth_header:
+            logger.warning("[Vendor Auth] No Authorization header provided")
+            return None
+        
+        if not auth_header.startswith('Bearer '):
+            logger.warning("[Vendor Auth] Invalid Authorization header format")
+            return None
+        
+        token = auth_header.split(' ')[1]
+        
+        try:
+            secret_key = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+            payload = jwt.decode(token, secret_key, algorithms=['HS256'])
+            
+            user_id = payload.get('user_id')
+            username = payload.get('username', 'Unknown')
+            
+            if not user_id:
+                logger.warning("[Vendor Auth] No user_id in JWT payload")
+                raise AuthenticationFailed('Invalid token: missing user_id')
+            
+            # Create a simple user object
+            class SimpleUser:
+                def __init__(self, userid, username):
+                    self.userid = userid
+                    self.id = userid  # Add id attribute for DRF compatibility
+                    self.pk = userid  # Add pk attribute for DRF throttling and other features
+                    self.username = username
+                    self.is_authenticated = True
+                    
+                def __str__(self):
+                    return f"User({self.username}, id={self.userid})"
+                
+                def __repr__(self):
+                    return f"SimpleUser(pk={self.pk}, username='{self.username}')"
+            
+            user = SimpleUser(user_id, username)
+            logger.info(f"[Vendor Auth] Successfully authenticated user: {user}")
+            
+            return (user, None)
+            
+        except jwt.ExpiredSignatureError:
+            logger.warning("[Vendor Auth] JWT token has expired")
+            raise AuthenticationFailed('Token has expired')
+        except jwt.DecodeError:
+            logger.warning("[Vendor Auth] JWT token decode error")
+            raise AuthenticationFailed('Error decoding token')
+        except Exception as e:
+            logger.error(f"[Vendor Auth] JWT authentication error: {e}")
+            raise AuthenticationFailed(f'Authentication failed: {str(e)}')
 
 
 class SimpleAuthenticatedPermission(BasePermission):
@@ -97,7 +153,7 @@ class VendorAuthenticationMixin:
     """
     Mixin to add JWT authentication and vendor permission to viewsets
     """
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
     def get_authenticators(self):

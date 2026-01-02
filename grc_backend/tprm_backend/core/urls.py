@@ -3,16 +3,10 @@ URL patterns for the core app.
 """
 from django.urls import path
 from . import views
-from . import test_views
 
 app_name = 'core'
 
 urlpatterns = [
-    # Test endpoints for debugging
-    path('test/', test_views.test_auth, name='test-auth'),
-    path('test/cors/', test_views.test_cors, name='test-cors'),
-    path('test/methods/', test_views.test_methods, name='test-methods'),
-    
     # Dashboard endpoints
     path('dashboard/', views.dashboard_overview, name='dashboard'),
     path('dashboard/stats/', views.dashboard_stats, name='dashboard-stats'),

@@ -3,8 +3,9 @@
  * Handles API calls for user permission management
  */
 import axios from 'axios';
+import { getTprmApiUrl } from '@/utils/backendEnv';
 
-const API_BASE_URL = 'http://localhost:8000/api/tprm/admin-access';
+const API_BASE_URL = getTprmApiUrl('admin-access');
 
 const adminAccessService = {
   /**

@@ -59,13 +59,21 @@ api.interceptors.response.use(
 );
 // Add request interceptor to include JWT token
 api.interceptors.request.use((config) => {
+  // Skip JWT token for cookie preferences endpoints (they work without authentication)
+  const isCookiePreferencesEndpoint = config.url && (
+    config.url.includes('/api/cookie/preferences/') ||
+    config.url.includes('/cookie/preferences/')
+  );
+  
   // Get JWT token from localStorage (authService stores it as 'access_token')
   const token = localStorage.getItem('access_token') || localStorage.getItem('token');
-  if (token) {
+  if (token && !isCookiePreferencesEndpoint) {
     config.headers.Authorization = `Bearer ${token}`;
     console.log(`🔐 [API] Adding JWT token to request: ${config.method?.toUpperCase()} ${config.url}`);
-  } else {
+  } else if (!token && !isCookiePreferencesEndpoint) {
     console.log(`⚠️ [API] No JWT token found for request: ${config.method?.toUpperCase()} ${config.url}`);
+  } else if (isCookiePreferencesEndpoint) {
+    console.log(`🍪 [API] Cookie preferences endpoint - skipping JWT token: ${config.method?.toUpperCase()} ${config.url}`);
   }
  
   // Add user_id to request if available (for backward compatibility)

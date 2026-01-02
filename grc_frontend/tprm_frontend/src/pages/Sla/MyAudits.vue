@@ -3,8 +3,8 @@
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
       <div>
-        <h1 class="text-2xl lg:text-3xl font-bold tracking-tight text-foreground">All Audits</h1>
-        <p class="text-sm lg:text-base text-muted-foreground">Manage all audits and review queue (Admin View)</p>
+        <h1 class="text-2xl lg:text-3xl font-bold tracking-tight text-foreground">My Audits</h1>
+        <p class="text-sm lg:text-base text-muted-foreground">Manage audits assigned to you as auditor or reviewer</p>
       </div>
       <Button 
         @click="navigateToCreate"
@@ -256,6 +256,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useStore } from 'vuex'
 import { 
   FileText, 
   Search, 
@@ -284,7 +285,17 @@ import { useNotifications } from '@/composables/useNotifications'
 import loggingService from '@/services/loggingService'
 
 const router = useRouter()
+const store = useStore()
 const { showSuccess, showError, showWarning, showInfo } = useNotifications()
+
+// Get current user from store
+const currentUser = computed(() => store.state.auth.currentUser)
+
+// Get current user ID
+const currentUserId = computed(() => {
+  if (!currentUser.value) return null
+  return currentUser.value.id || currentUser.value.user_id || currentUser.value.userid
+})
 
 const searchTerm = ref('')
 const activeTab = ref('all')
@@ -326,10 +337,6 @@ const getEvidenceUpdatedLabel = (auditId) => {
   if (!updatedAt) return null
   return new Date(updatedAt).toLocaleDateString()
 }
-
-// Admin mode - show all audits regardless of user
-const isAdmin = ref(true) // Always true for admin interface
-const currentUserId = ref(1) // Current user ID - in real app, this would come from auth
 
 // Load audits from API
 const loadAudits = async () => {
@@ -424,10 +431,18 @@ const loadAudits = async () => {
   }
 }
 
-// Admin view - show all audits
+// Filter audits to show only those assigned to the current user
 const myAudits = computed(() => {
-  // Admin can see all audits
-  return allAudits.value
+  if (!currentUserId.value) {
+    // If no user is logged in, return empty array
+    return []
+  }
+  
+  // Filter audits where user is the assigned auditor or reviewer
+  return allAudits.value.filter(audit => 
+    audit.auditor_id === currentUserId.value || 
+    audit.reviewer_id === currentUserId.value
+  )
 })
 
 // Filter by search term

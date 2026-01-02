@@ -93,10 +93,6 @@ import { useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 import api from '@/utils/api'
 import loggingService from '@/services/loggingService'
-import { getTprmApiUrl } from '@/utils/backendEnv'
-
-// API base URL for vendor-approval endpoints
-const VENDOR_APPROVAL_API_BASE_URL = getTprmApiUrl('vendor-approval')
 
 const loading = ref(false)
 const parallel = ref([])
@@ -135,8 +131,8 @@ const getCurrentUserId = () => {
       const user = JSON.parse(currentUserFromStorage)
       console.log('Parsed currentUser object:', user)
       
-      // Try multiple possible user ID field names (including UserId with capital U)
-      const userId = user.UserId || user.id || user.user_id || user.userId || user.userid
+      // Try multiple possible user ID field names
+      const userId = user.id || user.user_id || user.userId || user.userid
       console.log('Available userId from localStorage:', userId)
       
       if (userId) {
@@ -164,7 +160,7 @@ const loadApprovals = async () => {
   loading.value = true
   try {
     console.log('Loading approvals for user ID:', currentUserId)
-    const res = await api.get(`${VENDOR_APPROVAL_API_BASE_URL}/my-approvals/`, {
+    const res = await api.get('/api/v1/vendor-approval/my-approvals/', {
       params: { user_id: currentUserId }
     })
     console.log('Approvals API response:', res.data)

@@ -34,6 +34,17 @@
                 <span>Reset</span>
               </button>
               
+              <!-- Load Sample Data -->
+              <button
+                @click="loadSampleData"
+                :disabled="isSubmitting || isGeneratingDocument || isUploadingDocuments"
+                class="inline-flex items-center justify-center px-4 h-10 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 hover:border-indigo-300 transition-all text-sm font-medium shadow-sm"
+                title="Load realistic sample data into the form"
+              >
+                <Icons name="wand-2" class="h-4 w-4 mr-1.5" />
+                <span>Load Sample</span>
+              </button>
+              
               <!-- Save Draft -->
               <button 
                 @click="handleSaveDraft" 
@@ -74,6 +85,17 @@
                   <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                 </svg>
               </button>
+
+              <!-- Vendor Portal Preview -->
+              <button
+                @click="openVendorPortalPreview"
+                :disabled="!canPreviewVendorPortal"
+                class="inline-flex items-center justify-center px-4 h-10 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium shadow-sm"
+                title="Preview how vendors will experience this RFP"
+              >
+                <Icons name="eye" class="h-4 w-4 mr-1.5" />
+                <span>Vendor Preview</span>
+              </button>
               
               <div class="h-6 w-px bg-gray-300"></div>
               
@@ -82,13 +104,13 @@
                 @click="handleProceedToApprovalWorkflow" 
                 :disabled="isSubmitting || isUploadingDocuments || !isFormValid"
                 class="inline-flex items-center px-5 h-10 rounded-lg bg-blue-600 text-white hover:bg-blue-700 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold shadow-md"
-                title="Proceed to Approval Workflow"
+                :title="formData.autoApprove ? 'Submit RFP (will be auto-approved)' : 'Proceed to Approval Workflow'"
               >
                 <Icons v-if="(isSubmitting || isUploadingDocuments) && isFormValid" name="loader" class="h-4 w-4 mr-2 animate-spin" />
                 <Icons v-else name="arrow-right" class="h-4 w-4 mr-2" />
                 <span v-if="isUploadingDocuments">Uploading...</span>
                 <span v-else-if="isSubmitting">Processing...</span>
-                <span v-else>Proceed to Approval</span>
+                <span v-else>{{ formData.autoApprove ? 'Submit & Auto-Approve' : 'Proceed to Approval' }}</span>
               </button>
             </div>
           </div>
@@ -102,46 +124,104 @@
 
       <!-- Full-width form container -->
       <div class="space-y-6">
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200">
-          <div class="px-4 py-5">
-            <div class="relative">
-              <div class="flex flex-wrap gap-4 relative">
-            <button
-                v-for="(tab, index) in formTabs"
-              :key="tab.value"
-              type="button"
-              @click="activeTab = tab.value"
-              :class="[
-                  'group flex items-center gap-3 rounded-xl px-4 py-3 text-left transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2',
-                activeTab === tab.value
-                    ? 'bg-blue-50 text-blue-700 shadow-sm border border-blue-100'
-                    : 'bg-transparent text-gray-600 border border-transparent hover:border-gray-200'
-              ]"
-              role="tab"
-              :aria-selected="activeTab === tab.value"
-            >
-                <span
-                  class="flex items-center justify-center h-9 w-9 rounded-full border-2 text-sm font-semibold transition-colors"
-                  :class="activeTab === tab.value
-                    ? 'border-blue-600 text-blue-600 bg-white'
-                    : 'border-gray-300 text-gray-500 bg-white'"
+        <!-- Professional Tabs Navigation -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div class="border-b border-gray-200 bg-gray-50/50">
+            <nav class="flex overflow-x-auto" aria-label="Tabs" style="scrollbar-width: none; -ms-overflow-style: none;">
+              <div 
+                class="flex w-full px-2 tab-container"
+                :style="{ '--tab-count': visibleTabs.length }"
+              >
+                <button
+                  v-for="(tab, index) in visibleTabs"
+                  :key="tab.value"
+                  type="button"
+                  @click="activeTab = tab.value"
+                  :class="[
+                    'group relative flex items-center gap-2 px-2 sm:px-3 py-2.5 sm:py-3 text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 tab-button',
+                    activeTab === tab.value
+                      ? 'text-blue-700 border-b-2 border-blue-600 bg-white shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-white/50 border-b-2 border-transparent'
+                  ]"
+                  role="tab"
+                  :aria-selected="activeTab === tab.value"
                 >
-                  {{ index + 1 }}
-                </span>
-                <span class="flex flex-col">
-                  <span class="text-sm font-semibold">{{ tab.label }}</span>
-                  <span class="text-xs text-gray-500 max-w-[12rem]">
-                    {{ tab.description }}
+                  <span
+                    class="flex items-center justify-center h-6 w-6 sm:h-7 sm:w-7 rounded-full text-xs font-bold transition-all duration-200 shrink-0 tab-number"
+                    :class="activeTab === tab.value
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'bg-white border-2 border-gray-300 text-gray-600 group-hover:border-gray-400'"
+                  >
+                    {{ getTabDisplayIndex(tab.value) }}
                   </span>
-                </span>
+                  <span class="flex flex-col items-start min-w-0 flex-1 overflow-hidden tab-text">
+                    <span class="font-semibold leading-tight truncate w-full text-xs sm:text-sm tab-label">{{ tab.label }}</span>
+                    <span class="text-[10px] sm:text-xs font-normal text-gray-500 leading-tight truncate w-full tab-description">
+                      {{ tab.description }}
+                    </span>
+                  </span>
+                  <button
+                    v-if="tab.canHide"
+                    @click.stop="hideTab(tab.value)"
+                    type="button"
+                    class="ml-1 p-0.5 sm:p-1 rounded-md hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors shrink-0 flex-shrink-0 tab-close"
+                    title="Remove this section"
+                  >
+                    <Icons name="x" class="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                  </button>
+                </button>
+              </div>
+            </nav>
+          </div>
+          
+          <!-- Hidden Tabs Section -->
+          <div v-if="hiddenTabs.size > 0" class="border-t border-gray-200 bg-gray-50 px-4 py-3">
+            <button
+              @click="showHiddenTabs = !showHiddenTabs"
+              class="flex items-center justify-between w-full text-sm text-gray-600 hover:text-gray-900 transition-colors"
+            >
+              <div class="flex items-center gap-2">
+                <Icons name="eye-off" class="h-4 w-4" />
+                <span class="font-medium">{{ hiddenTabs.size }} section{{ hiddenTabs.size > 1 ? 's' : '' }} hidden</span>
+                <span class="text-xs text-gray-500">(Click to {{ showHiddenTabs ? 'hide' : 'view' }})</span>
+              </div>
+              <Icons 
+                :name="showHiddenTabs ? 'chevron-up' : 'chevron-down'" 
+                class="h-4 w-4 transition-transform"
+              />
             </button>
+            
+            <div v-if="showHiddenTabs" class="mt-3 space-y-2">
+              <div
+                v-for="tab in hiddenTabsList"
+                :key="tab.value"
+                class="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-gray-300 transition-colors"
+              >
+                <div class="flex items-center gap-3">
+                  <span class="flex items-center justify-center h-7 w-7 rounded-full bg-gray-100 text-gray-600 text-xs font-semibold">
+                    {{ getTabDisplayIndex(tab.value) }}
+                  </span>
+                  <div>
+                    <span class="font-medium text-gray-900">{{ tab.label }}</span>
+                    <p class="text-xs text-gray-500">{{ tab.description }}</p>
+                  </div>
+                </div>
+                <button
+                  @click="restoreTab(tab.value)"
+                  type="button"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors"
+                  title="Restore this section"
+                >
+                  <Icons name="rotate-ccw" class="h-3.5 w-3.5" />
+                  Restore
+                </button>
               </div>
             </div>
           </div>
         </div>
         <!-- Basic Information -->
         <Card
-          v-show="activeTab === 'basic'"
+          v-show="activeTab === 'basic' && !hiddenTabs.has('basic')"
           class="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200"
         >
           <CardHeader class="bg-gradient-to-r from-gray-50 to-white border-b border-gray-100 rounded-t-xl">
@@ -418,7 +498,7 @@
                         <Textarea
                           v-else-if="newCustomField.type === 'textarea'"
                           v-model="newCustomField.value"
-                          rows="2"
+                          :rows="2"
                           placeholder="Enter value"
                           @focus="newCustomField.category = category.id"
                         />
@@ -560,7 +640,7 @@
 
         <!-- Document Upload Section -->
         <Card
-          v-show="activeTab === 'documents'"
+          v-show="activeTab === 'documents' && !hiddenTabs.has('documents')"
           class="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200"
         >
           <CardHeader>
@@ -734,7 +814,7 @@
 
         <!-- Budget & Timeline -->
         <Card
-          v-show="activeTab === 'budget'"
+          v-show="activeTab === 'budget' && !hiddenTabs.has('budget')"
           class="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200"
         >
           <CardHeader>
@@ -874,7 +954,7 @@
 
         <!-- Evaluation Criteria -->
         <Card
-          v-show="activeTab === 'criteria'"
+          v-show="activeTab === 'criteria' && !hiddenTabs.has('criteria')"
           class="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200"
         >
           <CardHeader>
@@ -982,7 +1062,7 @@
 
         <!-- Evaluation & Process Settings -->
         <Card
-          v-show="activeTab === 'process'"
+          v-show="activeTab === 'process' && !hiddenTabs.has('process')"
           class="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200"
         >
           <CardHeader>
@@ -1092,16 +1172,16 @@
                   <Icons name="x" class="h-3 w-3 text-gray-500 hover:text-red-500" />
                 </button>
               </div>
-              <div v-if="!hiddenFields.autoPublish" class="flex items-center space-x-2">
+              <div v-if="!hiddenFields.autoApprove" class="flex items-center space-x-2">
                 <Checkbox
-                  id="autoPublish"
-                  v-model="formData.autoPublish"
+                  id="autoApprove"
+                  v-model="formData.autoApprove"
                 />
-                <Label html-for="autoPublish" class="text-sm">
-                  Auto-publish when approved
+                <Label html-for="autoApprove" class="text-sm" title="When enabled, this RFP is automatically approved by the creator without going through the approval workflow">
+                  Auto-approve (no approval workflow required)
                 </Label>
                 <button
-                  @click="hideField('autoPublish')"
+                  @click="hideField('autoApprove')"
                   type="button"
                   class="p-1 hover:bg-gray-100 rounded-full transition-colors ml-auto"
                   title="Remove this field from form"
@@ -1349,6 +1429,45 @@
       </div>
     </div>
 
+  <!-- Vendor Portal Preview Modal -->
+  <transition name="fade">
+    <div
+      v-if="showVendorPreview && vendorPreviewPayload"
+      class="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 px-4 py-6"
+    >
+      <div class="flex h-full w-full max-w-7xl flex-col rounded-2xl border border-gray-200 bg-white shadow-2xl">
+        <div class="flex items-start justify-between border-b border-gray-200 px-6 py-4">
+          <div>
+            <p class="text-base font-semibold text-gray-900">Vendor Portal Preview</p>
+            <p class="text-sm text-gray-500">Live view of how vendors will experience this RFP</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <Button variant="outline" size="sm" @click="closeVendorPortalPreview" class="text-sm">
+              Back to RFP Builder
+            </Button>
+            <button
+              type="button"
+              class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 text-gray-500 hover:text-gray-700"
+              @click="closeVendorPortalPreview"
+            >
+              <Icons name="x" class="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+        <div class="flex-1 overflow-hidden bg-gray-50">
+          <div class="h-full overflow-y-auto">
+            <VendorPortal
+              v-if="vendorPreviewPayload"
+              :preview-payload="vendorPreviewPayload"
+              @exit-preview="closeVendorPortalPreview"
+              :key="vendorPreviewPayload.generatedAt || vendorPreviewPayload.rfpInfo?.rfpNumber || 'vendor-preview'"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  </transition>
+
     <!-- Weight Adjustment Notification -->
     <div v-if="showWeightAdjustmentNotification" class="fixed top-4 right-4 bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md z-50 shadow-lg">
       <div class="flex items-start gap-3">
@@ -1449,9 +1568,12 @@ import { rfpUseToast } from '@/composables/rfpUseToast.js'
 import { useRFPStore } from '@/store/index_rfp'
 import { useRfpApi } from '@/composables/useRfpApi'
 import { buildApiUrl, apiCall } from '@/config/api.js'
+import VendorPortal from '@/views/rfp/VendorPortal.vue'
+import { getTprmApiV1BaseUrl, getTprmApiUrl, getApiOrigin } from '@/utils/backendEnv'
 
 // API base URL - use the Django backend endpoints
-const API_BASE_URL = 'http://localhost:8000/api/tprm/rfp'
+const API_BASE_URL = getTprmApiV1BaseUrl()
+const VENDOR_PREVIEW_STORAGE_KEY = 'vendor_portal_preview_payload'
 
 interface EvaluationCriteria {
   id: string
@@ -1492,14 +1614,21 @@ const mergedDocument = ref(null)
 const draggedIndex = ref<number | null>(null)
 const dragOverIndex = ref<number | null>(null)
 
+const showVendorPreview = ref(false)
+const vendorPreviewPayload = ref<Record<string, any> | null>(null)
+
 const formTabs = [
-  { value: 'basic', label: 'Basic Setup', description: 'Core details & custom fields' },
-  { value: 'documents', label: 'Documents', description: 'Upload and manage files' },
-  { value: 'budget', label: 'Budget & Timeline', description: 'Financials and schedule' },
-  { value: 'criteria', label: 'Evaluation Criteria', description: 'Weights & scoring' },
-  { value: 'process', label: 'Process Settings', description: 'Methods & compliance' }
+  { value: 'basic', label: 'Basic Setup', description: 'Core details & custom fields', canHide: false },
+  { value: 'documents', label: 'Documents', description: 'Upload and manage files', canHide: true },
+  { value: 'budget', label: 'Budget & Timeline', description: 'Financials and schedule', canHide: true },
+  { value: 'criteria', label: 'Evaluation Criteria', description: 'Weights & scoring', canHide: true },
+  { value: 'process', label: 'Process Settings', description: 'Methods & compliance', canHide: true }
 ]
 const activeTab = ref(formTabs[0].value)
+
+// Track which tabs are hidden/removed
+const hiddenTabs = ref<Set<string>>(new Set())
+const showHiddenTabs = ref(false) // Toggle to show/hide the hidden tabs section
 
 // Document upload functionality
 const newDocument = ref({
@@ -1545,11 +1674,27 @@ const hiddenFields = ref<Record<string, boolean>>({
   geographicalScope: false,
   complianceRequirements: false,
   allowLateSubmissions: false,
-  autoPublish: false
+  autoApprove: false
 })
 
 // Track which custom fields are hidden/removed
 const hiddenCustomFields = ref<Set<string>>(new Set())
+
+// Computed properties for tab management
+const visibleTabs = computed(() => {
+  return formTabs.filter(tab => !hiddenTabs.value.has(tab.value))
+})
+
+const hiddenTabsList = computed(() => {
+  return formTabs.filter(tab => hiddenTabs.value.has(tab.value))
+})
+
+// Get display index for tab (sequential numbering excluding hidden tabs)
+const getTabDisplayIndex = (tabValue: string) => {
+  const visible = visibleTabs.value
+  const index = visible.findIndex(t => t.value === tabValue)
+  return index >= 0 ? index + 1 : formTabs.findIndex(t => t.value === tabValue) + 1
+}
 
 // Store field definitions by category
 const categoryCustomFields = ref<Record<string, Array<{
@@ -1635,7 +1780,7 @@ const formData = ref({
   
   // Additional Options
   allowLateSubmissions: false,
-  autoPublish: false,
+  autoApprove: false,
   
   // Custom Fields (dynamic based on RFP type)
   customFields: {} as Record<string, any>
@@ -1841,6 +1986,24 @@ const isFormValid = computed(() => {
   
   return true
 })
+
+const canPreviewVendorPortal = computed(() => {
+  return Boolean(
+    formData.value.rfpNumber &&
+    formData.value.title &&
+    formData.value.description &&
+    formData.value.type
+  )
+})
+
+const cloneJson = (value: any, fallback: any = Array.isArray(value) ? [] : {}) => {
+  try {
+    return JSON.parse(JSON.stringify(value ?? fallback))
+  } catch (err) {
+    console.warn('cloneJson fallback triggered', err)
+    return fallback
+  }
+}
 
 let autoSaveInterval: any = null
 
@@ -2471,7 +2634,7 @@ onMounted(async () => {
         geographical_scope: draftData.geographical_scope,
         compliance_requirements: draftData.compliance_requirements,
         allow_late_submissions: draftData.allow_late_submissions,
-        auto_publish: draftData.auto_publish,
+        auto_approve: draftData.auto_approve,
         evaluation_criteria_count: draftData.evaluation_criteria?.length || 0
       })
       
@@ -2532,7 +2695,7 @@ onMounted(async () => {
           ? draftData.compliance_requirements.join(', ') 
           : toStringValue(draftData.compliance_requirements || draftData.complianceRequirements),
         allowLateSubmissions: Boolean(draftData.allow_late_submissions || draftData.allowLateSubmissions),
-        autoPublish: Boolean(draftData.auto_publish || draftData.autoPublish),
+        autoApprove: Boolean(draftData.auto_approve || draftData.autoApprove),
         customFields: draftData.custom_fields || draftData.customFields || {}
       }
       
@@ -2608,7 +2771,7 @@ onMounted(async () => {
         geographicalScope: formData.value.geographicalScope ? '✅ Populated (or intentionally empty)' : '⚠️ Empty',
         complianceRequirements: formData.value.complianceRequirements ? '✅ Populated' : '⚠️ Empty',
         allowLateSubmissions: formData.value.allowLateSubmissions !== undefined ? '✅ Set' : '❌ Not set',
-        autoPublish: formData.value.autoPublish !== undefined ? '✅ Set' : '❌ Not set'
+        autoApprove: formData.value.autoApprove !== undefined ? '✅ Set' : '❌ Not set'
       })
       
       // Load evaluation criteria if available
@@ -2739,6 +2902,9 @@ const autoSaveDraft = () => {
       const draftData = {
         ...formData.value,
         criteria: criteria.value,
+        hiddenFields: { ...hiddenFields.value },
+        hiddenCustomFields: Array.from(hiddenCustomFields.value),
+        hiddenTabs: Array.from(hiddenTabs.value),
         lastSaved: new Date().toISOString(),
         version: '1.0' // Add version tracking
       }
@@ -2839,7 +3005,8 @@ const removeDocument = async (index) => {
           console.error('Error deleting document:', error)
           error('Delete Error', 'Failed to delete document. Please try again.')
         }
-      }
+      },
+      undefined
     )
   } else {
     // For pending documents, just remove from queue
@@ -2970,20 +3137,21 @@ const saveSingleDocument = async (index: number) => {
     console.log(`📤 Saving single document: ${doc.name}`)
 
     // Create FormData for file upload
-    const formData = new FormData()
-    formData.append('file', doc.file)
-    formData.append('document_name', doc.name)
-    formData.append('rfp_id', rfpId)
-    formData.append('user_id', '1') // Mock user ID for development
+    const uploadFormData = new FormData()
+    uploadFormData.append('file', doc.file)
+    uploadFormData.append('document_name', doc.name)
+    uploadFormData.append('rfp_id', rfpId)
+    uploadFormData.append('user_id', '1') // Mock user ID for development
 
     console.log(`📋 FormData prepared for: ${doc.name}`)
 
     // Upload to S3 via backend API
     const authHeaders = getAuthHeaders()
-    // Remove Content-Type from headers when sending FormData - axios will set it automatically with boundary
-    const { 'Content-Type': _, ...headersWithoutContentType } = authHeaders
-    const uploadResponse = await axios.post(`${API_BASE_URL}/upload-document/`, formData, {
-      headers: headersWithoutContentType,
+    const uploadResponse = await axios.post(`${API_BASE_URL}/upload-document/`, uploadFormData, {
+      headers: {
+        ...authHeaders,
+        'Content-Type': 'multipart/form-data',
+      },
       timeout: 60000 // 60 second timeout for large files
     })
 
@@ -3262,39 +3430,23 @@ const mergeDocumentsFromFiles = async (docs) => {
     console.log(`🔄 Merging ${docs.length} files directly (before upload)`)
 
     // Create FormData with files in order
-    const formData = new FormData()
-    let fileCount = 0
-    docs.forEach((doc, index) => {
+    const mergeFormData = new FormData()
+    docs.forEach(doc => {
       if (doc.file) {
-        formData.append('files', doc.file, doc.file.name || `document_${index + 1}`)
-        fileCount++
-        console.log(`📎 Added file ${index + 1}: ${doc.file.name} (size: ${doc.file.size} bytes)`)
+        mergeFormData.append('files', doc.file)
       }
     })
     
-    console.log(`📦 FormData created with ${fileCount} files`)
-    
     if (rfpId) {
-      formData.append('rfp_id', rfpId)
-      console.log(`📋 RFP ID: ${rfpId}`)
+      mergeFormData.append('rfp_id', rfpId)
     }
-    formData.append('user_id', '1')
+    mergeFormData.append('user_id', '1')
 
-    // Log FormData contents (for debugging)
-    console.log('📤 Sending merge request with FormData:')
-    for (const [key, value] of formData.entries()) {
-      if (value instanceof File) {
-        console.log(`   ${key}: File(${value.name}, ${value.size} bytes)`)
-      } else {
-        console.log(`   ${key}: ${value}`)
-      }
-    }
-
-    const authHeaders = getAuthHeaders()
-    // Remove Content-Type from headers when sending FormData - axios will set it automatically with boundary
-    const { 'Content-Type': _, ...headersWithoutContentType } = authHeaders
-    const mergeResponse = await axios.post(`${API_BASE_URL}/merge-documents/`, formData, {
-      headers: headersWithoutContentType,
+    const mergeResponse = await axios.post(`${API_BASE_URL}/merge-documents/`, mergeFormData, {
+      headers: {
+        ...getAuthHeaders(),
+        'Content-Type': 'multipart/form-data',
+      },
       timeout: 120000
     })
 
@@ -3303,41 +3455,52 @@ const mergeDocumentsFromFiles = async (docs) => {
     if (mergeResponse.data && mergeResponse.data.success) {
       console.log('✅ Documents merged successfully from files:', mergeResponse.data)
       
-      // Try to fetch full document details from API, but use merge response as fallback
-      let fileData = null
+      // Fetch full document details from API
       try {
         const docResponse = await axios.get(`${API_BASE_URL}/s3-files/${mergeResponse.data.merged_document_id}/`, {
           headers: getAuthHeaders()
         })
         
-        if (docResponse.data && docResponse.data.success) {
-          fileData = docResponse.data.s3_file || docResponse.data
-          console.log('✅ Fetched merged document details:', fileData)
+        const fileData = docResponse.data.s3_file || docResponse.data
+        console.log('✅ Fetched merged document details:', fileData)
+        
+        // Create merged document object and add to uploadedDocuments array
+        const mergedDoc = {
+          name: fileData.document_name || fileData.file_name || `Merged Document - ${formData.value.title || 'RFP'}`,
+          fileName: fileData.file_name || 'merged_document.pdf',
+          fileSize: fileData.file_size || 0,
+          fileType: fileData.file_type || 'pdf',
+          url: fileData.url || mergeResponse.data.merged_document_url,
+          uploaded: true,
+          s3Id: mergeResponse.data.merged_document_id,
+          file: null,
+          isMerged: true
         }
+        
+        // Add merged document to the uploadedDocuments array
+        uploadedDocuments.value.push(mergedDoc)
+        console.log('✅ Merged document added to document list:', mergedDoc)
+        
+        // Clear the separate merged document display
+        mergedDocument.value = null
+        
       } catch (fetchError) {
-        console.warn('⚠️ Could not fetch merged document details, using merge response data:', fetchError.response?.data || fetchError.message)
-        // Continue with merge response data as fallback
+        console.error('❌ Error fetching merged document details:', fetchError)
+        // Fallback: create document object from merge response
+        const mergedDoc = {
+          name: mergeResponse.data.merged_document_name || `Merged Document - ${formData.value.title || 'RFP'}`,
+          fileName: mergeResponse.data.merged_document_name || 'merged_document.pdf',
+          fileSize: 0,
+          fileType: 'pdf',
+          url: mergeResponse.data.merged_document_url,
+          uploaded: true,
+          s3Id: mergeResponse.data.merged_document_id,
+          file: null,
+          isMerged: true
+        }
+        uploadedDocuments.value.push(mergedDoc)
+        mergedDocument.value = null
       }
-      
-      // Create merged document object from fetched data or merge response
-      const mergedDoc = {
-        name: fileData?.document_name || fileData?.file_name || mergeResponse.data.merged_document_name || `Merged Document - ${formData.value.title || 'RFP'}`,
-        fileName: fileData?.file_name || mergeResponse.data.merged_document_name || 'merged_document.pdf',
-        fileSize: fileData?.file_size || 0,
-        fileType: fileData?.file_type || 'pdf',
-        url: fileData?.url || mergeResponse.data.merged_document_url || '',
-        uploaded: true,
-        s3Id: mergeResponse.data.merged_document_id,
-        file: null,
-        isMerged: true
-      }
-      
-      // Add merged document to the uploadedDocuments array
-      uploadedDocuments.value.push(mergedDoc)
-      console.log('✅ Merged document added to document list:', mergedDoc)
-      
-      // Clear the separate merged document display
-      mergedDocument.value = null
       
       success('Documents Merged', `Successfully merged ${mergeResponse.data.document_count || docs.length} documents.`)
       return mergeResponse.data.merged_document_id
@@ -3489,18 +3652,19 @@ const saveAllDocuments = async () => {
 
       try {
         // Create FormData for file upload
-        const formData = new FormData()
-        formData.append('file', doc.file)
-        formData.append('document_name', doc.name)
-        formData.append('rfp_id', rfpId)
-        formData.append('user_id', '1')
+        const uploadFormData = new FormData()
+        uploadFormData.append('file', doc.file)
+        uploadFormData.append('document_name', doc.name)
+        uploadFormData.append('rfp_id', rfpId)
+        uploadFormData.append('user_id', '1')
 
         // Upload to S3 via backend API
         const authHeaders = getAuthHeaders()
-        // Remove Content-Type from headers when sending FormData - axios will set it automatically with boundary
-        const { 'Content-Type': _, ...headersWithoutContentType } = authHeaders
-        const uploadResponse = await axios.post(`${API_BASE_URL}/upload-document/`, formData, {
-          headers: headersWithoutContentType,
+        const uploadResponse = await axios.post(`${API_BASE_URL}/upload-document/`, uploadFormData, {
+          headers: {
+            ...authHeaders,
+            'Content-Type': 'multipart/form-data',
+          },
           timeout: 60000
         })
 
@@ -3860,6 +4024,93 @@ watch(totalWeight, (newTotal, oldTotal) => {
   }
 })
 
+const buildVendorPortalPreviewPayload = () => {
+  const formatBudget = () => {
+    if (formData.value.estimatedValue) {
+      const numericValue = Number(formData.value.estimatedValue)
+      const formatted = Number.isFinite(numericValue) ? numericValue.toLocaleString() : formData.value.estimatedValue
+      return `${formData.value.currency || 'USD'} ${formatted}`
+    }
+    if (formData.value.budgetMin && formData.value.budgetMax) {
+      const min = Number(formData.value.budgetMin)
+      const max = Number(formData.value.budgetMax)
+      const formattedMin = Number.isFinite(min) ? min.toLocaleString() : formData.value.budgetMin
+      const formattedMax = Number.isFinite(max) ? max.toLocaleString() : formData.value.budgetMax
+      return `${formData.value.currency || 'USD'} ${formattedMin} - ${formattedMax}`
+    }
+    return 'TBD'
+  }
+
+  const evaluationCriteriaPreview = criteria.value.map((criterion, index) => ({
+    id: criterion.id || `preview-${index}`,
+    title: criterion.name || `Criterion ${index + 1}`,
+    description: criterion.description || '',
+    weight: Number(criterion.weight) || 0,
+    required: Boolean(criterion.isVeto),
+    type: 'text'
+  }))
+
+  const timeline = {
+    issueDate: formData.value.issueDate,
+    deadline: formData.value.deadline,
+    evaluationPeriodEnd: formData.value.evaluationPeriodEnd,
+    timeline: formData.value.timeline
+  }
+
+  return {
+    generatedAt: new Date().toISOString(),
+    rfpInfo: {
+      rfpTitle: formData.value.title,
+      rfpNumber: formData.value.rfpNumber,
+      deadline: timeline.deadline,
+      budget: formatBudget(),
+      description: formData.value.description,
+      rfpType: formData.value.type,
+      category: formData.value.category,
+      criticality: formData.value.criticalityLevel
+    },
+    evaluationCriteria: evaluationCriteriaPreview,
+    dynamicResponseFields: cloneJson(customFieldsSchema.value || []),
+    categoryCustomFields: cloneJson(categoryCustomFields.value || {}),
+    categoryCustomFieldData: cloneJson(categoryCustomFieldData.value || {}),
+    hiddenFields: { ...hiddenFields.value },
+    hiddenCustomFields: Array.from(hiddenCustomFields.value),
+    documents: uploadedDocuments.value.map((doc, index) => ({
+      id: doc.s3Id || `preview-doc-${index}`,
+      name: doc.name,
+      label: doc.name,
+      fileName: doc.fileName || doc.file?.name || '',
+      fileSize: doc.fileSize || doc.file?.size || 0,
+      uploaded: Boolean(doc.uploaded),
+      url: doc.url || null,
+      content_type: doc.fileType || doc.mimeType || null
+    })),
+    customFieldsData: cloneJson(formData.value.customFields || {}),
+    timeline
+  }
+}
+
+const openVendorPortalPreview = () => {
+  if (!canPreviewVendorPortal.value) {
+    showWarning('Complete Required Fields', 'Please fill in RFP number, title, description, and type before previewing.')
+    return
+  }
+
+  try {
+    const payload = buildVendorPortalPreviewPayload()
+    vendorPreviewPayload.value = payload
+    showVendorPreview.value = true
+    localStorage.setItem(VENDOR_PREVIEW_STORAGE_KEY, JSON.stringify(payload))
+  } catch (err) {
+    console.error('Error generating vendor preview:', err)
+    error('Preview Error', 'Unable to open the vendor portal preview. Please try again.')
+  }
+}
+
+const closeVendorPortalPreview = () => {
+  showVendorPreview.value = false
+}
+
 const handleSaveDraft = async () => {
   try {
     isSubmitting.value = true
@@ -3874,7 +4125,8 @@ const handleSaveDraft = async () => {
     
     // Force update mode if in change request mode
     if (changeRequestMode && !isUpdate) {
-      existingRfpId = route.query.rfpId || localStorage.getItem('current_rfp_id')
+      const rfpIdFromQuery = route.query.rfpId
+      existingRfpId = (Array.isArray(rfpIdFromQuery) ? rfpIdFromQuery[0] : rfpIdFromQuery) || localStorage.getItem('current_rfp_id')
       isUpdate = !!existingRfpId
       if (existingRfpId) {
         localStorage.setItem('current_rfp_id', existingRfpId)
@@ -3929,7 +4181,7 @@ const handleSaveDraft = async () => {
         ? [formData.value.complianceRequirements] 
         : null,
       allow_late_submissions: Boolean(formData.value.allowLateSubmissions),
-      auto_publish: Boolean(formData.value.autoPublish),
+      auto_approve: Boolean(formData.value.autoApprove),
       status: 'DRAFT',
       // Include custom fields - merge RFP type fields and categorized fields
       custom_fields: (() => {
@@ -4159,6 +4411,13 @@ const handleSaveDraft = async () => {
     const savedRfpId = response.data.rfp_id || existingRfpId
     localStorage.setItem('current_rfp_id', savedRfpId)
     localStorage.setItem('selectedRFP', JSON.stringify(response.data))
+    
+    // Update form data with the RFP number from the response (user input or auto-generated)
+    if (response.data.rfp_number) {
+      formData.value.rfpNumber = response.data.rfp_number
+      console.log(`✅ RFP Number updated from backend: ${response.data.rfp_number}`)
+    }
+    
     console.log(`RFP ${isUpdate ? 'updated' : 'created'} successfully with ID:`, savedRfpId)
     
     // Save evaluation criteria separately after RFP is created/updated
@@ -4292,11 +4551,11 @@ const handleSaveDraft = async () => {
           uploadFormData.append('rfp_id', savedRfpId)
           uploadFormData.append('user_id', '1')
           
-          const authHeaders = getAuthHeaders()
-          // Remove Content-Type from headers when sending FormData - axios will set it automatically with boundary
-          const { 'Content-Type': _, ...headersWithoutContentType } = authHeaders
           const uploadResponse = await axios.post(`${API_BASE_URL}/upload-document/`, uploadFormData, {
-            headers: headersWithoutContentType,
+            headers: {
+              ...getAuthHeaders(),
+              'Content-Type': 'multipart/form-data',
+            },
             timeout: 60000
           })
           
@@ -4364,7 +4623,7 @@ const handleSaveDraft = async () => {
     const approvalId = route.query.approvalId || localStorage.getItem('current_approval_id')
     const stageId = route.query.stageId || localStorage.getItem('current_stage_id')
     if (changeRequestMode && changeRequestId && approvalId && stageId) {
-      const respondUrl = 'http://localhost:8000/api/tprm/rfp-approval/change-requests/respond/'
+      const respondUrl = getTprmApiUrl('rfp-approval/change-requests/respond/')
       const payload = {
         change_request_id: changeRequestId,
         approval_id: approvalId,
@@ -4391,7 +4650,7 @@ const handleSaveDraft = async () => {
           geographical_scope: formData.value.geographicalScope,
           compliance_requirements: formData.value.complianceRequirements,
           allow_late_submissions: formData.value.allowLateSubmissions,
-          auto_publish: formData.value.autoPublish,
+          auto_approve: formData.value.autoApprove,
           evaluation_criteria: criteria.value.map((c, idx) => ({
             id: c.id,
             criteria_name: c.name,
@@ -4536,6 +4795,10 @@ const handleProceedToApprovalWorkflow = async () => {
     // Detect change request mode early
     const changeRequestMode = route.query.mode === 'change_request'
 
+    // Check auto-approve BEFORE saving to handle it correctly
+    const shouldAutoApprove = Boolean(formData.value.autoApprove)
+    console.log('🔍 Checking auto-approve status before saving:', shouldAutoApprove)
+
     // First save the RFP as draft (this already responds to the change request and records version)
     await handleSaveDraft()
 
@@ -4546,6 +4809,7 @@ const handleProceedToApprovalWorkflow = async () => {
       setTimeout(() => {
         router.push({ name: 'ChangeRequestManager' })
       }, 800)
+      isSubmitting.value = false
       return
     }
     
@@ -4555,8 +4819,118 @@ const handleProceedToApprovalWorkflow = async () => {
     
     if (!rfpId) {
       error('Error', 'Could not find RFP ID. Please try again.')
+      isSubmitting.value = false
       return
     }
+
+    // Verify auto-approve status from saved RFP
+    let rfpAutoApprove = shouldAutoApprove
+    try {
+      const rfpCheckResponse = await axios.get(`${API_BASE_URL}/rfps/${rfpId}/`, {
+        headers: getAuthHeaders()
+      })
+      rfpAutoApprove = Boolean(rfpCheckResponse.data.auto_approve || rfpCheckResponse.data.autoApprove || shouldAutoApprove)
+      console.log('✅ Verified auto-approve status from saved RFP:', rfpAutoApprove)
+      console.log('✅ RFP data auto_approve field:', rfpCheckResponse.data.auto_approve)
+      console.log('✅ Current RFP status:', rfpCheckResponse.data.status)
+    } catch (checkError) {
+      console.warn('⚠️ Could not verify auto-approve status from RFP, using form value:', shouldAutoApprove)
+      rfpAutoApprove = shouldAutoApprove
+    }
+
+    // If auto-approve is enabled, skip approval workflow and directly approve
+    if (rfpAutoApprove) {
+      console.log('✅ Auto-approve enabled - bypassing approval workflow and directly approving RFP')
+      
+      try {
+        // Use the approve endpoint which now handles auto-approve from any status (except CANCELLED/ARCHIVED)
+        const approveResponse = await axios.post(`${API_BASE_URL}/rfps/${rfpId}/approve/`, {}, {
+          headers: getAuthHeaders()
+        })
+        
+        console.log('✅ RFP auto-approved successfully:', approveResponse.data)
+        
+        // Verify the status was updated correctly
+        const verifyResponse = await axios.get(`${API_BASE_URL}/rfps/${rfpId}/`, {
+          headers: getAuthHeaders()
+        })
+        console.log('✅ Verified RFP status after approval:', verifyResponse.data.status)
+        console.log('✅ RFP approved_by:', verifyResponse.data.approved_by)
+        console.log('✅ RFP approval_workflow_id:', verifyResponse.data.approval_workflow_id)
+        
+        // Ensure approval_workflow_id is null for auto-approved RFPs
+        if (verifyResponse.data.approval_workflow_id) {
+          console.log('⚠️ approval_workflow_id is not null, clearing it...')
+          await axios.patch(`${API_BASE_URL}/rfps/${rfpId}/`, {
+            approval_workflow_id: null
+          }, {
+            headers: getAuthHeaders()
+          })
+        }
+        
+        // Clear draft from localStorage
+        localStorage.removeItem('rfp_draft_current')
+        localStorage.removeItem('rfp_for_approval_workflow') // Clear any approval workflow data
+        resetFormData()
+        
+        success('RFP Auto-Approved', 'RFP has been automatically approved by the creator. No approval workflow required.')
+        
+        isSubmitting.value = false
+        
+        // Navigate to RFP list
+        setTimeout(() => {
+          router.push('/rfp-list')
+        }, 1000)
+        
+        return
+      } catch (approveError) {
+        console.error('❌ Error auto-approving RFP:', approveError)
+        if (approveError.response) {
+          console.error('❌ Error response:', approveError.response.data)
+          console.error('❌ Error status:', approveError.response.status)
+          
+          // If approve endpoint fails, try direct PATCH as fallback
+          try {
+            console.log('⚠️ Trying fallback: direct status update to APPROVED')
+            const fallbackResponse = await axios.patch(`${API_BASE_URL}/rfps/${rfpId}/`, {
+              status: 'APPROVED',
+              approved_by: 1,
+              approval_workflow_id: null // Ensure no approval workflow is assigned
+            }, {
+              headers: getAuthHeaders()
+            })
+            console.log('✅ Fallback successful - RFP status set to APPROVED via PATCH')
+            
+            // Verify the status was updated correctly
+            const verifyResponse = await axios.get(`${API_BASE_URL}/rfps/${rfpId}/`, {
+              headers: getAuthHeaders()
+            })
+            console.log('✅ Verified RFP status after fallback:', verifyResponse.data.status)
+            
+            localStorage.removeItem('rfp_draft_current')
+            localStorage.removeItem('rfp_for_approval_workflow')
+            resetFormData()
+            success('RFP Auto-Approved', 'RFP has been automatically approved by the creator.')
+            isSubmitting.value = false
+            setTimeout(() => {
+              router.push('/rfp-list')
+            }, 1000)
+            return
+          } catch (fallbackError) {
+            console.error('❌ Fallback also failed:', fallbackError)
+            error('Auto-Approval Error', `Failed to auto-approve RFP. Please try again or proceed through normal approval workflow.`)
+            isSubmitting.value = false
+            return
+          }
+        } else {
+          error('Auto-Approval Error', `Failed to auto-approve RFP: ${approveError.message || 'Unknown error'}. Please try again or proceed through normal approval workflow.`)
+          isSubmitting.value = false
+          return
+        }
+      }
+    }
+    
+    console.log('ℹ️ Auto-approve not enabled, proceeding with normal approval workflow')
 
     // Upload documents to S3 if any are selected
     let documentIds = []
@@ -4603,10 +4977,11 @@ const handleProceedToApprovalWorkflow = async () => {
           try {
             // Upload to S3 via backend API
             const authHeaders = getAuthHeaders()
-            // Remove Content-Type from headers when sending FormData - axios will set it automatically with boundary
-            const { 'Content-Type': _, ...headersWithoutContentType } = authHeaders
             const uploadResponse = await axios.post(`${API_BASE_URL}/upload-document/`, formData, {
-              headers: headersWithoutContentType,
+              headers: {
+                ...authHeaders,
+                'Content-Type': 'multipart/form-data',
+              },
               timeout: 60000 // 60 second timeout for large files
             })
             
@@ -4719,8 +5094,9 @@ const handleProceedToApprovalWorkflow = async () => {
       complianceRequirements: formData.value.complianceRequirements, // Keep both for compatibility
       allow_late_submissions: formData.value.allowLateSubmissions,
       allowLateSubmissions: formData.value.allowLateSubmissions, // Keep both for compatibility
-      auto_publish: formData.value.autoPublish,
-      autoPublish: formData.value.autoPublish, // Keep both for compatibility
+      // Note: auto_approve should be false here since we already handled auto-approve case above
+      auto_approve: false,
+      autoApprove: false, // Keep both for compatibility
       criteria: criteria.value.map((criterion, index) => ({
         id: criterion.id,
         name: criterion.name,
@@ -4753,7 +5129,7 @@ const handleProceedToApprovalWorkflow = async () => {
         console.log('🔄 Creating revision version for RFP after change request:', rfpId)
         
         // Get the latest version number
-        const versionHistoryResponse = await axios.get(`http://localhost:8000/api/tprm/rfp-approval/approval-request-versions/${rfpId}/`, {
+        const versionHistoryResponse = await axios.get(getTprmApiUrl(`rfp-approval/approval-request-versions/${rfpId}/`), {
           headers: getAuthHeaders()
         })
         
@@ -4777,7 +5153,7 @@ const handleProceedToApprovalWorkflow = async () => {
           is_approved: false
         }
         
-        const versionResponse = await axios.post(`http://localhost:8000/api/tprm/rfp-approval/approval-request-versions/`, versionData, {
+        const versionResponse = await axios.post(getTprmApiUrl('rfp-approval/approval-request-versions/'), versionData, {
           headers: getAuthHeaders()
         })
         
@@ -4807,7 +5183,7 @@ const handleProceedToApprovalWorkflow = async () => {
           is_approved: false
         }
         
-        const versionResponse = await axios.post(`http://localhost:8000/api/tprm/rfp-approval/approval-request-versions/`, versionData, {
+        const versionResponse = await axios.post(getTprmApiUrl('rfp-approval/approval-request-versions/'), versionData, {
           headers: getAuthHeaders()
         })
         
@@ -4883,8 +5259,59 @@ const clearDraftAndStartFresh = () => {
     'Start Fresh',
     () => {
       startFresh()
-    }
+    },
+    undefined
   )
+}
+
+// Function to hide/remove an entire section/tab
+const hideTab = (tabValue: string) => {
+  const tab = formTabs.find(t => t.value === tabValue)
+  if (!tab) return
+  
+  // Only allow hiding tabs that can be hidden
+  if (!tab.canHide) {
+    PopupService.warning('This section cannot be removed as it contains required fields.', 'Cannot Remove Section')
+    return
+  }
+  
+  // Confirm before hiding
+  const confirmMessage = `Are you sure you want to remove the "${tab.label}" section? You can restore it later if needed.`
+  const confirmHeading = 'Remove Section'
+  const onConfirmRemove = () => {
+    hiddenTabs.value.add(tabValue)
+    
+    // If the hidden tab is currently active, switch to the first visible tab
+    if (activeTab.value === tabValue) {
+      const nextVisibleTab = visibleTabs.value.find(t => t.value !== tabValue)
+      if (nextVisibleTab) {
+        activeTab.value = nextVisibleTab.value
+      } else {
+        // If no other visible tabs, switch to basic (which cannot be hidden)
+        activeTab.value = 'basic'
+      }
+    }
+    
+    console.log(`Tab ${tabValue} hidden from form`)
+    PopupService.success('Section Removed', `The "${tab.label}" section has been removed. You can restore it from the hidden sections area.`)
+  }
+  const onCancelRemove = undefined
+  
+  PopupService.confirm(confirmMessage, confirmHeading, onConfirmRemove, onCancelRemove)
+}
+
+// Function to restore a hidden section/tab
+const restoreTab = (tabValue: string) => {
+  const tab = formTabs.find(t => t.value === tabValue)
+  if (!tab) return
+  
+  hiddenTabs.value.delete(tabValue)
+  
+  // Switch to the restored tab
+  activeTab.value = tabValue
+  
+  console.log(`Tab ${tabValue} restored`)
+  PopupService.success('Section Restored', `The "${tab.label}" section has been restored.`)
 }
 
 // Function to hide/remove a specific form field from the UI
@@ -4899,7 +5326,7 @@ const hideField = (fieldName: string) => {
         formData.value[fieldName] = 'weighted_scoring'
       } else if (fieldName === 'criticalityLevel') {
         formData.value[fieldName] = 'medium'
-      } else if (fieldName === 'allowLateSubmissions' || fieldName === 'autoPublish') {
+      } else if (fieldName === 'allowLateSubmissions' || fieldName === 'autoApprove') {
         formData.value[fieldName] = false
       } else {
         formData.value[fieldName] = ''
@@ -5008,7 +5435,7 @@ const resetFormData = () => {
     
     // Additional Options
     allowLateSubmissions: false,
-    autoPublish: false,
+    autoApprove: false,
     
     // Custom Fields
     customFields: {}
@@ -5031,9 +5458,13 @@ const resetFormData = () => {
     geographicalScope: false,
     complianceRequirements: false,
     allowLateSubmissions: false,
-    autoPublish: false
+    autoApprove: false
   }
   hiddenCustomFields.value.clear()
+  
+  // Reset hidden tabs - make all tabs visible again
+  hiddenTabs.value.clear()
+  showHiddenTabs.value = false
   
   // Reset criteria to default values
   criteria.value = [
@@ -5075,6 +5506,119 @@ const resetFormData = () => {
   ]
   
   console.log('Form data reset to initial state')
+}
+
+// Load realistic sample data into the form
+const loadSampleData = () => {
+  const today = new Date()
+  const inTwoWeeks = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000)
+  const inOneMonth = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000)
+
+  const formatDate = (d: Date) => d.toISOString().split('T')[0]
+  const formatDateTimeLocal = (d: Date) => {
+    const iso = d.toISOString()
+    return iso.slice(0, 16)
+  }
+  const pad = (n: number, size = 2) => String(n).padStart(size, '0')
+
+  // Generate a mostly-unique RFP number to avoid backend UNIQUE constraint errors
+  const year = today.getFullYear()
+  const month = pad(today.getMonth() + 1)
+  const day = pad(today.getDate())
+  const hours = pad(today.getHours())
+  const minutes = pad(today.getMinutes())
+  const randomSuffix = Math.floor(Math.random() * 900 + 100) // 3‑digit random
+  const generatedRfpNumber = `RFP-${year}${month}${day}-${hours}${minutes}-${randomSuffix}`
+
+  // Try to pick a realistic RFP type from loaded types if available
+  const sampleType = rfpTypes.value[0] || 'Technology Services'
+
+  formData.value = {
+    // Basic Information
+    rfpNumber: generatedRfpNumber,
+    title: 'Enterprise Cloud Security & Compliance Platform',
+    description:
+      'We are seeking proposals for an enterprise-grade cloud security and compliance platform to monitor, detect, and remediate risks across multi-cloud environments (AWS, Azure, GCP). The solution should provide real-time visibility, automated controls, and evidence collection to support SOC 2, ISO 27001, and other regulatory frameworks.',
+    type: sampleType,
+    category: 'security',
+
+    // Financial Information
+    estimatedValue: '750000',
+    currency: 'USD',
+    budgetMin: '500000',
+    budgetMax: '900000',
+
+    // Timeline Information
+    issueDate: formatDate(today),
+    deadline: formatDateTimeLocal(inTwoWeeks),
+    evaluationPeriodEnd: formatDate(inOneMonth),
+    timeline: '12-month implementation with phased rollout across business units',
+
+    // Evaluation & Process
+    evaluationMethod: 'weighted_scoring',
+    criticalityLevel: 'high',
+
+    // Scope & Requirements
+    geographicalScope: 'North America & Europe (remote delivery allowed)',
+    complianceRequirements:
+      'SOC 2 Type II, ISO 27001, GDPR readiness, data residency controls for EU customers.',
+
+    // Additional Options
+    allowLateSubmissions: false,
+    autoApprove: false,
+
+    // Custom Fields
+    customFields: { ...formData.value.customFields }
+  }
+
+  // Sample evaluation criteria (must total 100%)
+  criteria.value = [
+    {
+      id: 'crit-tech',
+      name: 'Technical Capability & Architecture',
+      description:
+        'Depth of security features, scalability, integration options (APIs, SIEM, ticketing), and support for multi-cloud environments.',
+      weight: 35,
+      isVeto: true
+    },
+    {
+      id: 'crit-risk',
+      name: 'Risk, Compliance & Reporting',
+      description:
+        'Support for regulatory frameworks (SOC 2, ISO 27001, GDPR), audit-ready reporting, evidence collection, and control monitoring.',
+      weight: 25,
+      isVeto: true
+    },
+    {
+      id: 'crit-price',
+      name: 'Commercials & Total Cost of Ownership',
+      description:
+        'Pricing model, transparency of costs over 3 years, and overall value for money.',
+      weight: 20,
+      isVeto: false
+    },
+    {
+      id: 'crit-experience',
+      name: 'Experience, References & Support',
+      description:
+        'Relevant customer references in financial services, implementation experience, and quality of ongoing support.',
+      weight: 10,
+      isVeto: false
+    },
+    {
+      id: 'crit-delivery',
+      name: 'Implementation Timeline & Delivery Approach',
+      description:
+        'Realistic implementation plan, milestones, change management, and knowledge transfer.',
+      weight: 10,
+      isVeto: false
+    }
+  ]
+
+  activeTab.value = 'basic'
+  showTipsDialog.value = true
+
+  success('Sample Data Loaded', 'Realistic sample data has been loaded into the RFP form.')
 }
 
 const resumeDraft = async () => {
@@ -5127,7 +5671,7 @@ const resumeDraft = async () => {
       
       // Additional Options
       allowLateSubmissions: Boolean(draftData.allowLateSubmissions),
-      autoPublish: Boolean(draftData.autoPublish),
+      autoApprove: Boolean(draftData.autoApprove),
       
       // Custom Fields
       customFields: draftData.customFields || {}
@@ -5162,6 +5706,28 @@ const resumeDraft = async () => {
     } else {
       // If no criteria in draft, keep default criteria
       console.log('No criteria found in draft, keeping defaults')
+    }
+    
+    // Restore hidden fields
+    if (draftData.hiddenFields) {
+      hiddenFields.value = { ...hiddenFields.value, ...draftData.hiddenFields }
+    }
+    
+    // Restore hidden custom fields
+    if (draftData.hiddenCustomFields && Array.isArray(draftData.hiddenCustomFields)) {
+      hiddenCustomFields.value = new Set(draftData.hiddenCustomFields)
+    }
+    
+    // Restore hidden tabs
+    if (draftData.hiddenTabs && Array.isArray(draftData.hiddenTabs)) {
+      hiddenTabs.value = new Set(draftData.hiddenTabs)
+      // If the active tab is hidden, switch to first visible tab
+      if (hiddenTabs.value.has(activeTab.value)) {
+        const firstVisible = visibleTabs.value[0]
+        if (firstVisible) {
+          activeTab.value = firstVisible.value
+        }
+      }
     }
 
     showDraftRecovery.value = false
@@ -5214,7 +5780,7 @@ const generateDocument = async (format: 'word' | 'pdf') => {
       geographicalScope: formData.value.geographicalScope || '',
       complianceRequirements: formData.value.complianceRequirements || '',
       allowLateSubmissions: Boolean(formData.value.allowLateSubmissions),
-      autoPublish: Boolean(formData.value.autoPublish),
+      autoApprove: Boolean(formData.value.autoApprove),
       status: 'DRAFT',
       criteria: criteria.value.map((criterion, index) => ({
         name: criterion.name || 'Unnamed Criterion',
@@ -5252,7 +5818,7 @@ const generateDocument = async (format: 'word' | 'pdf') => {
       geographical_scope: rfpData.geographicalScope,
       compliance_requirements: rfpData.complianceRequirements ? [rfpData.complianceRequirements] : null,
       allow_late_submissions: rfpData.allowLateSubmissions,
-      auto_publish: rfpData.autoPublish,
+      auto_approve: rfpData.autoApprove,
       status: 'DRAFT',
       evaluation_criteria: rfpData.criteria.map((criterion, index) => ({
         criteria_name: criterion.name,
@@ -5443,7 +6009,7 @@ const loadRFPForChangeRequest = async (rfpId) => {
           ? dataToUse.compliance_requirements.join(', ') 
           : toStringValue(dataToUse.compliance_requirements || dataToUse.complianceRequirements || ''),
         allowLateSubmissions: Boolean(dataToUse.allow_late_submissions || dataToUse.allowLateSubmissions),
-        autoPublish: Boolean(dataToUse.auto_publish || dataToUse.autoPublish),
+        autoApprove: Boolean(dataToUse.auto_approve || dataToUse.autoApprove),
         customFields: dataToUse.custom_fields || dataToUse.customFields || {}
       }
       
@@ -5729,7 +6295,7 @@ const previewDocument = async () => {
       geographicalScope: formData.value.geographicalScope || '',
       complianceRequirements: formData.value.complianceRequirements || '',
       allowLateSubmissions: Boolean(formData.value.allowLateSubmissions),
-      autoPublish: Boolean(formData.value.autoPublish),
+      autoApprove: Boolean(formData.value.autoApprove),
       status: 'DRAFT',
       criteria: criteria.value.map((criterion, index) => ({
         name: criterion.name || 'Unnamed Criterion',
@@ -5765,7 +6331,7 @@ const previewDocument = async () => {
       geographical_scope: rfpData.geographicalScope,
       compliance_requirements: rfpData.complianceRequirements ? [rfpData.complianceRequirements] : null,
       allow_late_submissions: rfpData.allowLateSubmissions,
-      auto_publish: rfpData.autoPublish,
+      auto_approve: rfpData.autoApprove,
       status: 'DRAFT',
       evaluation_criteria: rfpData.criteria.map((criterion, index) => ({
         criteria_name: criterion.name,
@@ -5854,6 +6420,11 @@ const previewDocument = async () => {
 </script>
 
 <style scoped>
+/* Hide scrollbar for Chrome, Safari and Opera */
+nav::-webkit-scrollbar {
+  display: none;
+}
+
 .phase-card {
   @apply shadow-sm border border-gray-200;
 }
@@ -5999,5 +6570,99 @@ const previewDocument = async () => {
 .border-blue-500 {
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Auto-adjusting tabs container */
+.tab-container {
+  display: flex;
+  width: 100%;
+  gap: 0;
+  min-width: 0;
+}
+
+/* Tab button auto-adjustment - distributes evenly based on available space */
+.tab-button {
+  flex: 1 1 0%;
+  min-width: 0;
+  /* Dynamically calculate minimum width based on tab count to ensure cross button visibility */
+  /* Formula: (100% container - padding) / tab count, with minimum of 120px */
+  min-width: clamp(120px, calc((100% - 16px) / max(var(--tab-count, 6), 1)), 220px);
+  max-width: 100%;
+  box-sizing: border-box;
+  transition: min-width 0.2s ease;
+}
+
+/* Ensure cross button is always visible */
+.tab-close {
+  min-width: 24px;
+  min-height: 24px;
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.tab-button:hover .tab-close {
+  opacity: 1;
+}
+
+/* Text truncation for auto-adjusting tabs */
+.tab-text {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.tab-label,
+.tab-description {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .tab-button {
+    min-width: clamp(100px, calc((100% - 12px) / max(var(--tab-count, 6), 1)), 180px);
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+  
+  .tab-number {
+    min-width: 24px;
+    min-height: 24px;
+  }
+  
+  .tab-label {
+    font-size: 0.75rem;
+  }
+  
+  .tab-description {
+    font-size: 0.625rem;
+  }
+}
+
+/* Ensure tabs don't overflow container */
+.tab-container {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* When tabs are too many, allow horizontal scroll with smooth behavior */
+@media (max-width: 768px) {
+  nav {
+    overflow-x: auto;
+    scroll-behavior: smooth;
+  }
+  
+  .tab-button {
+    flex: 0 0 auto;
+    min-width: 120px;
+  }
+}
+
+/* Fine-tune for very wide screens */
+@media (min-width: 1536px) {
+  .tab-button {
+    max-width: 280px;
+  }
 }
 </style>

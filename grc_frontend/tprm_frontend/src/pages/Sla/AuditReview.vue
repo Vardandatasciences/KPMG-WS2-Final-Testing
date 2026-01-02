@@ -17,12 +17,18 @@
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
       <div>
         <h1 class="text-2xl lg:text-3xl font-bold tracking-tight text-foreground">Review Audit</h1>
-        <p class="text-sm lg:text-base text-muted-foreground">{{ audit.title }} (Admin Review)</p>
+        <p class="text-sm lg:text-base text-muted-foreground">{{ audit.title }} 
+          <span v-if="isAssignedReviewer">(Reviewer Access)</span>
+          <span v-else>(View Only)</span>
+        </p>
       </div>
       <div class="flex items-center space-x-2">
-        <!-- Admin Badge -->
-        <Badge variant="default" class="bg-purple-600 text-white">
-          Admin Review
+        <!-- Reviewer Badge -->
+        <Badge v-if="isAssignedReviewer" variant="default" class="bg-blue-600 text-white">
+          Reviewer Access
+        </Badge>
+        <Badge v-else variant="outline" class="bg-yellow-100 text-yellow-800">
+          View Only
         </Badge>
         <Badge variant="outline" class="text-sm">
           Version {{ currentVersion?.version_number || 'N/A' }}
@@ -219,8 +225,22 @@
           <p class="text-muted-foreground">No audit data found for this version.</p>
         </div>
 
+        <!-- Access Denied Message -->
+        <div v-if="!isAssignedReviewer" class="mt-6 pt-6 border-t border-border">
+          <div class="text-center py-4">
+            <AlertCircle class="w-8 h-8 mx-auto mb-2 text-red-500" />
+            <p class="text-red-600 font-medium">Access Denied</p>
+            <p class="text-muted-foreground">
+              You are not the assigned reviewer for this audit. Only the assigned reviewer can approve or reject this audit.
+            </p>
+            <Button @click="navigateToMyAudits" variant="outline" class="mt-4">
+              Back to My Audits
+            </Button>
+          </div>
+        </div>
+
         <!-- Review Actions -->
-        <div class="mt-6 pt-6 border-t border-border">
+        <div v-else-if="canReview" class="mt-6 pt-6 border-t border-border">
           <div class="space-y-4">
             <div>
               <Label for="review-comments">Review Comments</Label>
@@ -274,6 +294,22 @@
             </div>
           </div>
         </div>
+        
+        <!-- Not Available for Review Message -->
+        <div v-else-if="audit.status !== 'under_review'" class="mt-6 pt-6 border-t border-border">
+          <div class="text-center py-4">
+            <AlertCircle class="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+            <p class="text-muted-foreground">
+              This audit is not currently under review. 
+              <span v-if="audit.status === 'completed'">It has already been completed.</span>
+              <span v-else-if="audit.status === 'rejected'">It has been rejected and is awaiting resubmission.</span>
+              <span v-else>Status: {{ audit.status }}</span>
+            </p>
+            <Button @click="navigateToMyAudits" variant="outline" class="mt-4">
+              Back to My Audits
+            </Button>
+          </div>
+        </div>
       </CardContent>
     </Card>
 
@@ -294,6 +330,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useStore } from 'vuex'
 import { 
   FileText, 
   Eye, 
@@ -324,12 +361,29 @@ import loggingService from '@/services/loggingService'
 
 const route = useRoute()
 const router = useRouter()
+const store = useStore()
 const { showSuccess, showError, showWarning, showInfo } = useNotifications()
+
+// Get current user from store
+const currentUser = computed(() => store.state.auth.currentUser)
+
+// Check if current user is the assigned reviewer
+const isAssignedReviewer = computed(() => {
+  if (!currentUser.value || !audit.value) return false
+  const userId = currentUser.value.id || currentUser.value.user_id || currentUser.value.userid
+  return userId && userId === audit.value.reviewer_id
+})
+
+// Check if user has access to review this audit
+const canReview = computed(() => {
+  return isAssignedReviewer.value && audit.value?.status === 'under_review'
+})
 
 const loading = ref(true)
 const audit = ref(null)
 const sla = ref(null)
 const auditor = ref(null)
+const reviewer = ref(null)
 const versions = ref([])
 const currentVersion = ref(null)
 const selectedVersion = ref(null)
@@ -370,9 +424,6 @@ const openEvidenceDocument = async (file) => {
   }
 }
 
-// Admin mode - no user restrictions
-const isAdmin = ref(true) // Always true for admin interface
-
 // Parse extended information JSON
 const parsedExtendedInfo = computed(() => {
   if (!selectedVersion.value?.extended_information) {
@@ -408,9 +459,10 @@ const loadAuditData = async () => {
       sla.value = slaData.find(s => s.sla_id === auditData.sla_id) || null
     }
     
-    // Load auditor
+    // Load auditor and reviewer
     const usersData = await apiService.getAvailableUsers()
     auditor.value = usersData.find(u => u.user_id === auditData.auditor_id) || null
+    reviewer.value = usersData.find(u => u.user_id === auditData.reviewer_id) || null
     
     // Load versions
     const versionsData = await apiService.getAuditVersions(auditId)

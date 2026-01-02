@@ -6,6 +6,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.http import JsonResponse
 import json
+from django.conf import settings
 import logging
 
 from .models import User, MfaEmailChallenge, MfaAuditLog
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 @permission_classes([AllowAny])
 def login_step1(request):
     """
-    Authenticate user credentials and issue session tokens (MFA disabled)
+    Step 1: Authenticate user credentials and send OTP
     """
     serializer = LoginRequestSerializer(data=request.data)
     if not serializer.is_valid():
@@ -54,20 +55,32 @@ def login_step1(request):
                 'message': 'No email address found for this user'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        tokens = JWTService.generate_tokens(user)
-        user.session_token = tokens['access_token']
-        user.save(update_fields=['session_token'])
+        enable_mfa = getattr(settings, 'ENABLE_VENDOR_MFA', False)
+        if not enable_mfa:
+            tokens = JWTService.generate_tokens(user)
+            user.session_token = tokens['access_token']
+            user.save(update_fields=['session_token'])
+            response_data = {
+                'success': True,
+                'message': 'Login successful',
+                'requires_otp': False,
+                'user': UserSerializer(user).data,
+                'session_token': tokens['access_token'],
+                'access_token': tokens['access_token'],
+                'refresh_token': tokens['refresh_token'],
+                'expires_in': tokens['expires_in'],
+                'refresh_expires_in': tokens['refresh_expires_in']
+            }
+            return Response(response_data, status=status.HTTP_200_OK)
+        
+        # Create MFA challenge and send OTP
+        MfaService.create_mfa_challenge(user, request)
         
         response_data = {
             'success': True,
-            'message': 'Login successful',
-            'requires_otp': False,
-            'user': UserSerializer(user).data,
-            'session_token': tokens['access_token'],
-            'access_token': tokens['access_token'],
-            'refresh_token': tokens['refresh_token'],
-            'expires_in': tokens['expires_in'],
-            'refresh_expires_in': tokens['refresh_expires_in']
+            'message': f'OTP sent to {user.email[:3]}***{user.email.split("@")[1]}',
+            'requires_otp': True,
+            'user': UserSerializer(user).data
         }
         
         return Response(response_data, status=status.HTTP_200_OK)

@@ -219,8 +219,8 @@ const formatDate = (dateString) => {
   return new Date(dateString).toLocaleDateString()
 }
 
-const navigateToCreate = () => router.push('/audit/create')
-const navigateToMyAudits = () => router.push('/audit/all')
-const navigateToReports = () => router.push('/audit/reports')
-const navigateToAudit = (auditId) => router.push(`/audit/${auditId}`)
+const navigateToCreate = () => router.push('/contract-audit/create')
+const navigateToMyAudits = () => router.push('/contract-audit/all')
+const navigateToReports = () => router.push('/contract-audit/reports')
+const navigateToAudit = (auditId) => router.push(`/contract-audit/${auditId}`)
 </script>

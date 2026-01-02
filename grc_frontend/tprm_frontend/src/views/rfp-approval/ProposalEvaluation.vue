@@ -800,7 +800,7 @@
                   :min="criterion.min_score || 0"
                   :max="criterion.max_score"
                   class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  @change="validateScore(criterion.id, $event.target.value)"
+                  @input="validateScore(criterion.id, $event.target.value)"
                 />
                 <input
                   v-model.number="scores[criterion.id]"
@@ -808,7 +808,7 @@
                   :min="criterion.min_score || 0"
                   :max="criterion.max_score"
                   class="w-20 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  @blur="validateScore(criterion.id, $event.target.value)"
+                  @input="validateScore(criterion.id, $event.target.value)"
                 />
                 <div class="flex justify-between text-xs text-gray-500">
                   <span>Poor</span>
@@ -890,6 +890,7 @@ import { PopupService } from '@/popup/popupService'
 import { useNotifications } from '@/composables/useNotifications'
 import notificationService from '@/services/notificationService'
 import loggingService from '@/services/loggingService'
+import { getTprmApiV1BaseUrl, getTprmApiUrl, getApiOrigin } from '@/utils/backendEnv'
 
 const router = useRouter()
 
@@ -947,7 +948,7 @@ const DataField = defineComponent({
 })
 
 // API base URL
-const API_BASE_URL = 'http://localhost:8000/api/tprm/rfp'
+const API_BASE_URL = getTprmApiV1BaseUrl()
 
 // State
 const { showSuccess, showError, showWarning, showInfo } = useNotifications()
@@ -986,7 +987,7 @@ const isValid = computed(() => {
   // Check if all mandatory criteria have scores and comments
   const mandatoryCriteria = evaluationCriteria.value.filter(c => c.is_mandatory)
   const allMandatoryScored = mandatoryCriteria.every(c => 
-    scores.value[c.id] !== undefined && scores.value[c.id] !== null && scores.value[c.id] >= 0
+    scores.value[c.id] && scores.value[c.id] > 0
   )
   const allMandatoryComments = mandatoryCriteria.every(c => 
     comments.value[c.id] && comments.value[c.id].trim().length > 0
@@ -1044,24 +1045,11 @@ const validateScore = (criterionId, value) => {
   const criterion = evaluationCriteria.value.find(c => c.id === criterionId)
   if (!criterion) return
 
-  const minScore = criterion.min_score !== undefined && criterion.min_score !== null ? criterion.min_score : 0
+  const numValue = Number(value)
+  const minScore = criterion.min_score || 0
   const maxScore = criterion.max_score || 100
 
-  // Handle empty/NaN values - set to minimum score (0)
-  if (value === '' || value === null || value === undefined) {
-    scores.value[criterionId] = minScore
-    return
-  }
-
-  const numValue = Number(value)
-  
-  // If conversion results in NaN, set to minimum
-  if (isNaN(numValue)) {
-    scores.value[criterionId] = minScore
-    return
-  }
-
-  // Ensure score is within bounds (0 is valid)
+  // Ensure score is within bounds
   scores.value[criterionId] = Math.min(Math.max(numValue, minScore), maxScore)
 }
 
@@ -1193,9 +1181,7 @@ const loadRisks = async () => {
 
     // Use the same base URL pattern as other endpoints
     // The endpoint is at /api/rfp-approval/risks-for-response/<response_id>/
-    // Build URL: http://localhost:8000/api/tprm/rfp-approval/risks-for-response/<response_id>/
-    const baseUrl = 'http://localhost:8000'
-    const endpoint = `${baseUrl}/api/rfp-approval/risks-for-response/${encodeURIComponent(response_id)}/`
+    const endpoint = getTprmApiUrl(`rfp-approval/risks-for-response/${encodeURIComponent(response_id)}/`)
     console.log('[RISKS] Loading risks from:', endpoint)
     console.log('[RISKS] Query: entity="RFP" AND row="' + response_id + '"')
     
@@ -1294,10 +1280,10 @@ const loadProposalData = async () => {
 
   try {
     // Use the correct API endpoint for RFP responses
-    const endpoint = `/api/v1/rfp-responses-detail/${response_id}/`
-    console.log('Fetching proposal data from:', `http://localhost:8000${endpoint}`)
+    const endpoint = getTprmApiUrl(`v1/rfp-responses-detail/${response_id}/`)
+    console.log('Fetching proposal data from:', endpoint)
     
-    const response = await fetch(`http://localhost:8000${endpoint}`, {
+    const response = await fetch(endpoint, {
       method: 'GET',
       headers: getAuthHeaders()
     })
@@ -1363,50 +1349,26 @@ const loadProposalData = async () => {
       // PRIORITY 1: Extract from document_urls (contains real S3 URLs)
       if (proposalData.value?.document_urls) {
         console.log('✅ Found document_urls (REAL S3 URLs):', proposalData.value.document_urls)
-        console.log('✅ document_urls type:', typeof proposalData.value.document_urls)
-        console.log('✅ document_urls keys:', Object.keys(proposalData.value.document_urls || {}))
         
-        Object.entries(proposalData.value.document_urls).forEach(([docType, docInfo]) => {
-          console.log(`Processing document type: ${docType}, value:`, docInfo, 'type:', typeof docInfo)
-          
-          // Handle both string URLs and object structures
-          let url = null
-          let filename = null
-          let size = null
-          let contentType = null
-          
-          if (typeof docInfo === 'string') {
-            // Simple string URL
-            url = docInfo
-            filename = url.split('/').pop() || docType
-          } else if (docInfo && typeof docInfo === 'object') {
-            // Object with url, filename, etc.
-            url = docInfo.url || docInfo.download_url || docInfo.preview_url
-            filename = docInfo.filename || docInfo.file_name || docInfo.name || (url ? url.split('/').pop() : docType)
-            size = docInfo.size
-            contentType = docInfo.content_type || docInfo.file_type
-          }
-          
-          if (url) {
+        Object.entries(proposalData.value.document_urls).forEach(([docType, url]) => {
+          if (url && typeof url === 'string') {
+            const filename = url.split('/').pop() || docType
             const doc = {
-              id: docInfo?.document_id || docInfo?.s3_file_id || `s3_${docType}`,
+              id: `s3_${docType}`,
               name: docType.replace(/_/g, ' ').toUpperCase(),
               file_name: filename,
               type: docType,
-              file_type: contentType || getFileTypeFromName(filename),
+              file_type: getFileTypeFromName(filename),
               url: url,
               download_url: url,
               preview_url: url,
-              size: size,
-              uploaded_at: docInfo?.upload_date || proposalData.value.submitted_at,
+              uploaded_at: proposalData.value.submitted_at,
               category: 'S3 Documents',
               description: `${docType.replace(/_/g, ' ').toUpperCase()} - Real S3 URL`,
               source: 'document_urls'
             }
             console.log('✅ Adding S3 document:', doc)
             documents.value.push(doc)
-          } else {
-            console.warn(`⚠️ Skipping document type ${docType} - no URL found in:`, docInfo)
           }
         })
       }
@@ -1757,7 +1719,7 @@ const submitEvaluation = async () => {
     if (stageId) {
       try {
         console.log('Updating stage status to APPROVED...')
-        const stageUpdateResponse = await fetch('http://localhost:8000/api/tprm/rfp-approval/update-stage-status/', {
+        const stageUpdateResponse = await fetch(getTprmApiUrl('rfp-approval/update-stage-status/'), {
           method: 'POST',
           headers: {
             ...getAuthHeaders(),

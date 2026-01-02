@@ -172,7 +172,7 @@ const fetchDashboardData = async () => {
     loading.value = true
     error.value = null
     
-    const response = await apiClient.get('/api/v1/vendor-dashboard/dashboard/')
+    const response = await apiClient.get('/api/v1/vendor-dashboard/api/dashboard/')
     const rawData = response.data
 
     const payload = rawData?.data && typeof rawData.data === 'object'

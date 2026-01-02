@@ -2,15 +2,16 @@ import { createRouter, createWebHistory } from 'vue-router'
 import authService from '@/services/authService'
 import permissionsService from '@/services/permissionsService'
 
+// Configure router base path to match Vite base configuration
+// In production, Vite uses /tprm/ base, so router must match
+// In development, both use / (root)
+const routerBase = import.meta.env.MODE === 'production' ? '/tprm/' : '/'
+
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(routerBase),
   routes: [
-    {
-      path: '/login',
-      name: 'Login',
-      component: () => import('@/views/Login.vue'),
-      meta: { requiresAuth: false, publicRoute: true }
-    },
+    // Login routes removed - using GRC login instead
+    // TPRM is embedded in GRC iframe, so authentication is handled by parent (GRC)
     {
       path: '/',
       name: 'HomePage',
@@ -77,13 +78,13 @@ const router = createRouter({
       path: '/slas/approvals',
       name: 'My SLA Approvals',
       component: () => import('@/pages/Sla/MySlaApprovals.vue'),
-      meta: { requiresAuth: true, permission: 'ViewSLA' }
+      meta: { requiresAuth: true, permission: 'ApproveContract' }
     },
     {
       path: '/slas/approvals/:id/review',
       name: 'SLA Review',
       component: () => import('@/pages/Sla/SLAReview.vue'),
-      meta: { requiresAuth: true, permission: 'ActivateDeactivateSLA' }
+      meta: { requiresAuth: true, permissions: ['ApproveContract', 'RejectContract'] }
     },
     {
       path: '/slas/approval-assignment',
@@ -103,37 +104,37 @@ const router = createRouter({
       path: '/audit',
       name: 'Audit Dashboard',
       component: () => import('@/pages/Sla/AuditDashboard.vue'),
-      meta: { requiresAuth: true, permission: 'ViewSLA' }
+      meta: { requiresAuth: true, permission: 'PerformContractAudit' }
     },
     {
       path: '/audit/create',
       name: 'Audit Create',
       component: () => import('@/pages/Sla/AuditCreate.vue'),
-      meta: { requiresAuth: true, permission: 'CreateSLA' }
+      meta: { requiresAuth: true, permission: 'PerformContractAudit' }
     },
     {
       path: '/audit/my-audits',
       name: 'My Audits',
       component: () => import('@/pages/Sla/MyAudits.vue'),
-      meta: { requiresAuth: true, permission: 'ViewSLA' }
+      meta: { requiresAuth: true, permission: 'PerformContractAudit' }
     },
     {
       path: '/audit/:auditId',
       name: 'Audit Execution',
       component: () => import('@/pages/Sla/AuditExecution.vue'),
-      meta: { requiresAuth: true, permission: 'UpdateSLA' }
+      meta: { requiresAuth: true, permission: 'PerformContractAudit' }
     },
     {
       path: '/audit/:auditId/review',
       name: 'Audit Review',
       component: () => import('@/pages/Sla/AuditReview.vue'),
-      meta: { requiresAuth: true, permission: 'ActivateDeactivateSLA' }
+      meta: { requiresAuth: true, permission: 'PerformContractAudit' }
     },
     {
       path: '/audit/reports',
       name: 'Audit Reports',
       component: () => import('@/pages/Sla/AuditReports.vue'),
-      meta: { requiresAuth: true, permission: 'ViewSLA' }
+      meta: { requiresAuth: true, permission: 'PerformContractAudit' }
     },
     // Vendor Routes
     {
@@ -184,11 +185,6 @@ const router = createRouter({
       path: '/bcp/vendor-upload',
       name: 'BCP Vendor Upload',
       component: () => import('@/pages/BCP/VendorUpload.vue')
-    },
-    {
-      path: '/bcp/ocr-extraction',
-      name: 'BCP Ocr Extraction',
-      component: () => import('@/pages/BCP/OcrExtraction.vue')
     },
     {
       path: '/bcp/plan-submission-ocr',
@@ -756,82 +752,38 @@ const router = createRouter({
   ]
 })
 
-// Navigation guard to check authentication
+// Navigation guard - NO REDIRECTS, always allow navigation
+// Pages will handle errors themselves
 router.beforeEach(async (to, from, next) => {
-  const isAuthenticated = authService.isAuthenticated()
-  const requiresAuth = to.matched.some(record => record.meta.requiresAuth !== false)
-  const isPublicRoute = to.matched.some(record => record.meta.publicRoute === true)
-  const requiredPermission = to.meta.permission
+  // Check if we're in an iframe (embedded in GRC)
+  const isInIframe = window.self !== window.top
   
-  console.log('Router guard:', {
-    to: to.path,
-    isAuthenticated,
-    requiresAuth,
-    isPublicRoute,
-    requiredPermission
-  })
-  
-  // If route requires auth and user is not authenticated
-  if (requiresAuth && !isAuthenticated) {
-    console.log('Redirecting to login - authentication required')
-    next('/login')
-    return
-  }
-  
-  // If trying to access login page while already authenticated
-  if (to.path === '/login' && isAuthenticated) {
-    console.log('Already authenticated, redirecting to home')
-    next('/')
-    return
-  }
-  
-  // Check RBAC permission if required
-  if (requiredPermission && isAuthenticated) {
-    console.log(`[Router Guard] Checking permission: ${requiredPermission} for route: ${to.path}`)
-    
-    try {
-      // Use checkPermission() which automatically routes to correct method (SLA or RFP)
-      const hasPermission = await permissionsService.checkPermission(requiredPermission)
-      
-      console.log(`[Router Guard] Permission check complete:`, {
-        permission: requiredPermission,
-        hasPermission: hasPermission,
-        route: to.path
-      })
-      
-      if (!hasPermission) {
-        console.warn(`[Router Guard] Permission DENIED: ${requiredPermission} for route: ${to.path}`)
-        
-        // Store error details for AccessDenied page
-        sessionStorage.setItem('access_denied_error', JSON.stringify({
-          message: `You do not have permission to access this page`,
-          code: '403',
-          permission: requiredPermission,
-          timestamp: new Date().toISOString(),
-          path: to.path
-        }))
-        
-        next('/access-denied')
-        return
-      }
-      
-      console.log(`[Router Guard] Permission GRANTED: ${requiredPermission} for route: ${to.path}`)
-    } catch (error) {
-      console.error('[Router Guard] Error checking permission:', error)
-      // On error, deny access for security
-      sessionStorage.setItem('access_denied_error', JSON.stringify({
-        message: 'Unable to verify permissions',
-        code: '500',
-        permission: requiredPermission,
-        timestamp: new Date().toISOString(),
-        path: to.path
-      }))
-      next('/access-denied')
-      return
+  // If in iframe and not authenticated, request auth sync from parent (non-blocking)
+  if (isInIframe && !authService.isAuthenticated()) {
+    console.log('[Router Guard] In iframe, requesting auth sync from parent (non-blocking)...')
+    // Request auth from parent
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: 'TPRM_AUTH_REQUEST' }, '*')
     }
   }
   
-  // All checks passed, allow navigation
+  const isAuthenticated = authService.isAuthenticated()
+  const requiresAuth = to.matched.some(record => record.meta.requiresAuth !== false)
+  const requiredPermission = to.meta.permission
+  const requiredPermissions = to.meta.permissions
+  
+  console.log('[Router Guard] Navigation:', {
+    to: to.path,
+    isAuthenticated,
+    requiresAuth,
+    requiredPermission,
+    inIframe: isInIframe
+  })
+  
+  // ALWAYS ALLOW NAVIGATION - NO REDIRECTS
+  // Pages will handle authentication/permission errors themselves
+  // This ensures pages load and APIs can be called
+  console.log('[Router Guard] Allowing navigation - pages will handle errors')
   next()
 })
 // Global error handler for route navigation
@@ -855,3 +807,5 @@ router.onError((error) => {
   // Don't throw - let Vue Router handle it gracefully
 })
 export default router
+ 
+ 

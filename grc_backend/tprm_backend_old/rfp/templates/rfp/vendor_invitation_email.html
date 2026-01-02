@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RFP Invitation - {{ rfp_title }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #2c3e50;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .email-container {
+            max-width: 700px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            animation: shimmer 3s ease-in-out infinite;
+        }
+        
+        @keyframes shimmer {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(180deg); }
+        }
+        
+        .header-content {
+            position: relative;
+            z-index: 2;
+        }
+        
+        .header h1 {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            font-size: 16px;
+            opacity: 0.9;
+            font-weight: 300;
+        }
+        
+        .content {
+            padding: 40px 30px;
+        }
+        
+        .greeting {
+            font-size: 20px;
+            margin-bottom: 25px;
+            color: #2c3e50;
+            font-weight: 500;
+        }
+        
+        .invitation-intro {
+            background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+            border-left: 5px solid #667eea;
+            padding: 25px;
+            margin: 25px 0;
+            border-radius: 0 15px 15px 0;
+            position: relative;
+        }
+        
+        .invitation-intro::before {
+            content: '💼';
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 24px;
+        }
+        
+        .rfp-info {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 15px;
+            padding: 30px;
+            margin: 30px 0;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .rfp-info::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #667eea, #764ba2, #f093fb, #f5576c);
+        }
+        
+        .rfp-info h3 {
+            color: #495057;
+            margin-bottom: 20px;
+            font-size: 20px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+        }
+        
+        .rfp-info h3::before {
+            content: '📋';
+            margin-right: 10px;
+            font-size: 24px;
+        }
+        
+        .info-grid {
+            display: grid;
+            gap: 15px;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #f1f3f4;
+            transition: all 0.3s ease;
+        }
+        
+        .info-row:hover {
+            background: rgba(102, 126, 234, 0.05);
+            padding-left: 10px;
+            border-radius: 8px;
+        }
+        
+        .info-row:last-child {
+            border-bottom: none;
+        }
+        
+        .info-label {
+            font-weight: 600;
+            color: #495057;
+            min-width: 140px;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .info-value {
+            color: #6c757d;
+            text-align: right;
+            flex: 1;
+            font-weight: 500;
+        }
+        
+        .response-section {
+            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+            border: 2px solid #ffc107;
+            border-radius: 20px;
+            padding: 35px;
+            margin: 35px 0;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .response-section::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,193,7,0.1) 0%, transparent 70%);
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+        
+        .response-content {
+            position: relative;
+            z-index: 2;
+        }
+        
+        .response-section h3 {
+            color: #856404;
+            margin-bottom: 20px;
+            font-size: 22px;
+            font-weight: 600;
+        }
+        
+        .button-container {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin: 30px 0;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 18px 35px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 16px;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            min-width: 180px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+        
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            transition: left 0.6s;
+        }
+        
+        .btn:hover::before {
+            left: 100%;
+        }
+        
+        .btn-acknowledge {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+            border: none;
+        }
+        
+        .btn-acknowledge:hover {
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 0 15px 35px rgba(40, 167, 69, 0.4);
+        }
+        
+        .btn-reject {
+            background: linear-gradient(135deg, #dc3545, #e74c3c);
+            color: white;
+            border: none;
+        }
+        
+        .btn-reject:hover {
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 0 15px 35px rgba(220, 53, 69, 0.4);
+        }
+        
+        .process-overview {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 20px;
+            padding: 30px;
+            margin: 30px 0;
+            border: 2px solid #dee2e6;
+        }
+        
+        .process-overview h3 {
+            color: #495057;
+            margin-bottom: 25px;
+            font-size: 20px;
+            font-weight: 600;
+            text-align: center;
+        }
+        
+        .timeline {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        
+        .timeline-item {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            border: 2px solid #e9ecef;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+        }
+        
+        .timeline-item:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            border-color: #667eea;
+        }
+        
+        .timeline-item strong {
+            color: #495057;
+            display: block;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+        
+        .next-steps {
+            background: linear-gradient(135deg, #e8f5e8 0%, #d4edda 100%);
+            border-left: 5px solid #28a745;
+            padding: 30px;
+            margin: 30px 0;
+            border-radius: 0 15px 15px 0;
+        }
+        
+        .support-info {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 20px;
+            padding: 30px;
+            margin: 30px 0;
+            border: 2px solid #dee2e6;
+        }
+        
+        .support-info h3 {
+            color: #495057;
+            margin-bottom: 20px;
+            font-size: 20px;
+            font-weight: 600;
+            text-align: center;
+        }
+        
+        .footer {
+            background: linear-gradient(135deg, #343a40 0%, #495057 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            font-size: 14px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .footer::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #667eea, #764ba2, #f093fb, #f5576c);
+        }
+        
+        .footer p {
+            margin: 8px 0;
+            opacity: 0.9;
+        }
+        
+        .security-notice {
+            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+            border: 2px solid #ffc107;
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+            font-size: 14px;
+            position: relative;
+        }
+        
+        .security-notice::before {
+            content: '🔒';
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            font-size: 20px;
+        }
+        
+        .custom-message {
+            background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+            border-left: 5px solid #2196f3;
+            padding: 25px;
+            margin: 25px 0;
+            border-radius: 0 15px 15px 0;
+        }
+        
+        .custom-message h4 {
+            color: #1976d2;
+            margin-bottom: 15px;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            
+            .email-container {
+                border-radius: 15px;
+            }
+            
+            .header {
+                padding: 30px 20px;
+            }
+            
+            .header h1 {
+                font-size: 24px;
+            }
+            
+            .content {
+                padding: 30px 20px;
+            }
+            
+            .button-container {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .btn {
+                width: 100%;
+                max-width: 280px;
+            }
+            
+            .info-row {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 5px;
+            }
+            
+            .info-value {
+                text-align: left;
+            }
+            
+            .timeline {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="header">
+            <div class="header-content">
+                <h1>🎯 RFP Invitation</h1>
+                <p>Third-Party Risk Management System</p>
+            </div>
+        </div>
+        
+        <div class="content">
+            <div class="greeting">
+                Dear <strong>{{ vendor_name }}</strong>,
+            </div>
+            
+            <div class="invitation-intro">
+                <p>We are delighted to extend a formal invitation for you to participate in our Request for Proposal (RFP) process. Your organization's expertise and proven track record make you an ideal candidate for this strategic partnership opportunity.</p>
+                
+                <h4 style="margin-top: 20px; color: #667eea;">💼 Why You Were Selected</h4>
+                <ul style="margin-top: 10px; padding-left: 20px;">
+                    <li>Your organization demonstrates exceptional expertise in the required domain</li>
+                    <li>Proven track record of successful project delivery and client satisfaction</li>
+                    <li>Strong alignment with our company values and business objectives</li>
+                    <li>Competitive pricing and innovative solutions approach</li>
+                </ul>
+            </div>
+            
+            <div class="rfp-info">
+                <h3>📋 RFP Information</h3>
+                <div class="info-grid">
+                    <div class="info-row">
+                        <span class="info-label">Title</span>
+                        <span class="info-value">{{ rfp_title }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">RFP Number</span>
+                        <span class="info-value">{{ rfp_number }}</span>
+                    </div>
+                    {% if include_deadline and deadline %}
+                    <div class="info-row">
+                        <span class="info-label">Deadline</span>
+                        <span class="info-value">{{ deadline }}</span>
+                    </div>
+                    {% endif %}
+                    <div class="info-row">
+                        <span class="info-label">Company</span>
+                        <span class="info-value">{{ company_name }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Contact</span>
+                        <span class="info-value">{{ vendor_name }} ({{ vendor_email }})</span>
+                    </div>
+                </div>
+            </div>
+            
+            {% if custom_message %}
+            <div class="custom-message">
+                <h4>📝 Additional Message</h4>
+                <p>{{ custom_message }}</p>
+            </div>
+            {% endif %}
+            
+            <div class="process-overview">
+                <h3>📋 RFP Process Overview</h3>
+                <div class="timeline">
+                    <div class="timeline-item">
+                        <strong>📝 Submission Requirements</strong><br>
+                        Technical proposal document<br>
+                        Financial proposal breakdown<br>
+                        Company credentials & references<br>
+                        Project timeline & milestones
+                    </div>
+                    <div class="timeline-item">
+                        <strong>⏰ Timeline</strong><br>
+                        Proposal submission: {{ deadline }}<br>
+                        Evaluation period: 2-3 weeks<br>
+                        Vendor presentations: TBD<br>
+                        Final decision: TBD
+                    </div>
+                </div>
+            </div>
+            
+            <div class="response-section">
+                <div class="response-content">
+                    <h3>📧 Response Required</h3>
+                    <p style="margin-bottom: 20px; font-size: 16px;">Please respond to this invitation by selecting one of the options below. Your response will be automatically tracked in our system to ensure proper follow-up and communication.</p>
+                    
+                    <div class="button-container">
+                        <a href="{{ acknowledgment_url }}" class="btn btn-acknowledge">
+                            ✅ Acknowledged
+                        </a>
+                        <a href="{{ decline_url }}" class="btn btn-reject">
+                            ❌ Rejected
+                        </a>
+                    </div>
+                    
+                    <p style="margin-top: 20px; font-size: 14px; color: #856404;"><strong>Response Tracking:</strong> Your response will be automatically tracked in our system. If you acknowledge, you'll receive immediate access to the vendor portal with detailed RFP requirements and submission guidelines.</p>
+                </div>
+            </div>
+            
+            <div class="next-steps">
+                <h3 style="color: #28a745; margin-bottom: 20px;">🎯 What Happens Next?</h3>
+                <div class="timeline">
+                    <div class="timeline-item">
+                        <strong>If You Accept:</strong><br>
+                        • Immediate portal access<br>
+                        • Detailed RFP documents<br>
+                        • Submission guidelines<br>
+                        • Direct communication channel
+                    </div>
+                    <div class="timeline-item">
+                        <strong>If You Decline:</strong><br>
+                        • No further communication<br>
+                        • Future opportunity notifications<br>
+                        • Relationship maintained<br>
+                        • Feedback welcome
+                    </div>
+                </div>
+            </div>
+            
+            <div class="support-info">
+                <h3>📞 Support & Contact Information</h3>
+                <div class="timeline">
+                    <div class="timeline-item">
+                        <strong>🆘 Technical Support</strong><br>
+                        Email: support@company.com<br>
+                        Phone: +1 (555) 123-4567<br>
+                        Hours: 24/7 availability<br>
+                        Portal: Live chat support
+                    </div>
+                    <div class="timeline-item">
+                        <strong>👥 Project Team</strong><br>
+                        Project Manager: John Smith<br>
+                        Technical Lead: Jane Doe<br>
+                        Procurement: Mike Johnson<br>
+                        Email: rfp@company.com
+                    </div>
+                </div>
+            </div>
+            
+            <div class="security-notice">
+                <strong>🔒 Security & Confidentiality</strong><br>
+                All submitted information is treated as confidential and proprietary. Secure data transmission using industry-standard encryption. Access controls and audit trails for all system interactions. Compliance with GDPR, SOC 2, and other security standards.
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p><strong>TPRM Management System</strong></p>
+            <p>Thank you for your interest in partnering with us.</p>
+            <p>We look forward to your response and potential collaboration.</p>
+            <p style="margin-top: 20px;">📧 Email: rfp@company.com | 🌐 Website: www.company.com | 📱 Portal: vendor.company.com</p>
+            <p style="margin-top: 15px; font-style: italic; opacity: 0.8;">This is an automated message. Please do not reply to this email.<br>For support, contact us through the vendor portal or your designated account manager.</p>
+            <p style="margin-top: 20px; font-size: 12px; opacity: 0.7;"><strong>Company Information:</strong><br>
+            Third-Party Risk Management System | Enterprise Solutions Division<br>
+            Address: 123 Business Street, Suite 100, City, State 12345<br>
+            Phone: +1 (555) 123-4567 | Fax: +1 (555) 123-4568</p>
+        </div>
+    </div>
+</body>
+</html>

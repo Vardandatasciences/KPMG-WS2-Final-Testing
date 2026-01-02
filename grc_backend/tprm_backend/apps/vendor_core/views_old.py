@@ -36,7 +36,7 @@ from tprm_backend.utils.vendor_validators import vendor_validate_input
 
 # RBAC imports
 from tprm_backend.rbac.tprm_decorators import rbac_vendor_required
-from .vendor_authentication import UnifiedJWTAuthentication, SimpleAuthenticatedPermission, VendorAuthenticationMixin
+from .vendor_authentication import JWTAuthentication, SimpleAuthenticatedPermission, VendorAuthenticationMixin
 
 # Initialize logger
 vendor_logger = logging.getLogger('vendor_security')

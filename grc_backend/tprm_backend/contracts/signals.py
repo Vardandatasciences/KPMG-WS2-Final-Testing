@@ -79,7 +79,7 @@ def contract_term_post_save(sender, instance, created, **kwargs):
             # with the original term_id (before it was modified due to duplicates)
             # This handles the case where questionnaires were created before the term was saved
             try:
-                from tprm_backend.audits_contract.models import ContractStaticQuestionnaire
+                from audits_contract.models import ContractStaticQuestionnaire
                 from django.utils import timezone
                 from datetime import timedelta
                 
@@ -209,7 +209,7 @@ def contract_term_post_save(sender, instance, created, **kwargs):
             if old_term_id and old_term_id != instance.term_id:
                 logger.info(f"Term ID changed from {old_term_id} to {instance.term_id}, updating questionnaires...")
                 try:
-                    from tprm_backend.audits_contract.models import ContractStaticQuestionnaire
+                    from audits_contract.models import ContractStaticQuestionnaire
                     updated_count = ContractStaticQuestionnaire.objects.filter(
                         term_id=old_term_id
                     ).update(term_id=instance.term_id)

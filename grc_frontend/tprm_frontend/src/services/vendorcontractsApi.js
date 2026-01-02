@@ -1,6 +1,7 @@
 import axios from 'axios'
+import { getTprmApiBaseUrl } from '@/utils/backendEnv'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/tprm'
+const API_BASE_URL = getTprmApiBaseUrl()
 
 // Create axios instance with default config
 const api = axios.create({

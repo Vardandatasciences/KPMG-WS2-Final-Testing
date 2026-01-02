@@ -9,26 +9,6 @@
   box-sizing: border-box;
 }
 
-/* Dashboard Header */
-.dashboard-header {
-  margin-bottom: 32px;
-}
-
-.dashboard-title {
-  font-size: 32px;
-  font-weight: 700;
-  color: #1f2937;
-  margin: 0 0 8px 0;
-  letter-spacing: -0.025em;
-}
-
-.dashboard-subtitle {
-  font-size: 16px;
-  color: #6b7280;
-  margin: 0;
-  font-weight: 400;
-}
-
 /* Filters Section */
 .filters-section {
   margin-bottom: 32px;
