@@ -124,6 +124,9 @@ class Vendor(models.Model):
     parent_vendor_id = models.BigIntegerField(blank=True, null=True)
     vendor_tier_id = models.BigIntegerField(blank=True, null=True)
     
+    # Data Inventory
+    data_inventory = models.JSONField(null=True, blank=True, help_text="JSON mapping vendor field labels to data types (personal, confidential, regular)")
+    
     # Audit Fields - using IntegerField to match existing database schema
     created_by = models.IntegerField(blank=True, null=True)
     updated_by = models.IntegerField(blank=True, null=True)
@@ -352,6 +355,7 @@ class VendorContract(models.Model):
     insurance_requirements = models.JSONField(default=dict, blank=True)
     data_protection_clauses = models.JSONField(default=dict, blank=True)
     custom_fields = models.JSONField(default=dict, blank=True)
+    data_inventory = models.JSONField(null=True, blank=True, help_text="JSON mapping contract field labels to data types (personal, confidential, regular)")
     
     # File Management
     file_path = models.CharField(max_length=500, blank=True, null=True, help_text="Path to contract file")
@@ -376,6 +380,9 @@ class VendorContract(models.Model):
     
     # Compliance
     compliance_framework = models.CharField(max_length=255, blank=True, null=True)
+    
+    # Data Retention
+    retentionExpiry = models.DateField(blank=True, null=True, db_column='retentionExpiry', help_text="Data retention expiry date")
     
     # Audit Fields
     created_at = models.DateTimeField(auto_now_add=True)
@@ -504,6 +511,8 @@ class ContractTerm(models.Model):
     version_number = models.CharField(max_length=20, default='1.0')
     parent_term_id = models.CharField(max_length=100, blank=True, null=True)
     created_by = models.IntegerField(blank=True, null=True)
+    data_inventory = models.JSONField(null=True, blank=True, help_text="JSON mapping term field labels to data types (personal, confidential, regular)")
+    retentionExpiry = models.DateField(blank=True, null=True, db_column='retentionExpiry', help_text="Data retention expiry date")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -569,6 +578,8 @@ class ContractClause(models.Model):
         validators=[MinValueValidator(0)]
     )
     termination_conditions = models.TextField(blank=True, null=True)
+    data_inventory = models.JSONField(null=True, blank=True, help_text="JSON mapping clause field labels to data types (personal, confidential, regular)")
+    retentionExpiry = models.DateField(blank=True, null=True, db_column='retentionExpiry', help_text="Data retention expiry date")
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

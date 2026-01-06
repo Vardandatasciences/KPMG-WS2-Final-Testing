@@ -59,6 +59,26 @@
             </div>
           </div>
 
+    <!-- Data Type Classification Legend -->
+    <div class="contract-data-type-legend">
+      <div class="contract-data-type-legend-container">
+        <div class="contract-data-type-options">
+          <div class="contract-data-type-legend-item personal-option">
+            <i class="fas fa-user"></i>
+            <span>Personal</span>
+          </div>
+          <div class="contract-data-type-legend-item confidential-option">
+            <i class="fas fa-shield-alt"></i>
+            <span>Confidential</span>
+          </div>
+          <div class="contract-data-type-legend-item regular-option">
+            <i class="fas fa-file-alt"></i>
+            <span>Regular</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Success Message -->
     <div v-if="successMessage" class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
       <div class="flex items-center gap-2 text-green-800">
@@ -409,7 +429,37 @@
           <CardContent class="space-y-4">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div class="space-y-2">
-                <Label for="contract_title">Contract Title *</Label>
+                <Label for="contract_title" class="flex items-center gap-2">
+                  <span>Contract Title *</span>
+                  <div class="contract-data-type-circle-toggle-wrapper">
+                    <div class="contract-data-type-circle-toggle">
+                      <div 
+                        class="contract-circle-option personal-circle" 
+                        :class="{ active: getDataType('contract_title') === 'personal' }"
+                        @click="setDataType('contract_title', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option confidential-circle" 
+                        :class="{ active: getDataType('contract_title') === 'confidential' }"
+                        @click="setDataType('contract_title', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option regular-circle" 
+                        :class="{ active: getDataType('contract_title') === 'regular' }"
+                        @click="setDataType('contract_title', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </Label>
                 <Input
                   id="contract_title"
                   placeholder="e.g., Cloud Infrastructure Services Agreement"
@@ -421,7 +471,37 @@
               </div>
               
               <div class="space-y-2">
-                <Label for="contract_number">Contract Number</Label>
+                <Label for="contract_number" class="flex items-center gap-2">
+                  <span>Contract Number</span>
+                  <div class="contract-data-type-circle-toggle-wrapper">
+                    <div class="contract-data-type-circle-toggle">
+                      <div 
+                        class="contract-circle-option personal-circle" 
+                        :class="{ active: getDataType('contract_number') === 'personal' }"
+                        @click="setDataType('contract_number', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option confidential-circle" 
+                        :class="{ active: getDataType('contract_number') === 'confidential' }"
+                        @click="setDataType('contract_number', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option regular-circle" 
+                        :class="{ active: getDataType('contract_number') === 'regular' }"
+                        @click="setDataType('contract_number', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </Label>
                 <Input
                   id="contract_number"
                   placeholder="e.g., CNT-2024-001"
@@ -431,7 +511,37 @@
               </div>
 
               <div class="space-y-2">
-                <Label for="parent_contract_id">Parent Contract ID</Label>
+                <Label for="parent_contract_id" class="flex items-center gap-2">
+                  <span>Parent Contract ID</span>
+                  <div class="contract-data-type-circle-toggle-wrapper">
+                    <div class="contract-data-type-circle-toggle">
+                      <div 
+                        class="contract-circle-option personal-circle" 
+                        :class="{ active: getDataType('parent_contract_id') === 'personal' }"
+                        @click="setDataType('parent_contract_id', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option confidential-circle" 
+                        :class="{ active: getDataType('parent_contract_id') === 'confidential' }"
+                        @click="setDataType('parent_contract_id', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option regular-circle" 
+                        :class="{ active: getDataType('parent_contract_id') === 'regular' }"
+                        @click="setDataType('parent_contract_id', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </Label>
                 <Input
                   id="parent_contract_id"
                   placeholder="e.g., 1001 (optional)"
@@ -441,7 +551,37 @@
               </div>
 
               <div class="space-y-2">
-                <Label for="contract_type">Contract Type *</Label>
+                <Label for="contract_type" class="flex items-center gap-2">
+                  <span>Contract Type *</span>
+                  <div class="contract-data-type-circle-toggle-wrapper">
+                    <div class="contract-data-type-circle-toggle">
+                      <div 
+                        class="contract-circle-option personal-circle" 
+                        :class="{ active: getDataType('contract_type') === 'personal' }"
+                        @click="setDataType('contract_type', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option confidential-circle" 
+                        :class="{ active: getDataType('contract_type') === 'confidential' }"
+                        @click="setDataType('contract_type', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option regular-circle" 
+                        :class="{ active: getDataType('contract_type') === 'regular' }"
+                        @click="setDataType('contract_type', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </Label>
                 <Select :model-value="formData.contract_type" @update:model-value="(value) => handleInputChange('contract_type', value)" :key="`contract_type_${formKey}`">
                   <SelectTrigger :class="errors.contract_type ? 'border-red-500' : ''">
                     <SelectValue :placeholder="formData.contract_type || 'Select contract type'" />
@@ -459,7 +599,37 @@
               </div>
 
               <div class="space-y-2">
-                <Label for="priority">Priority *</Label>
+                <Label for="priority" class="flex items-center gap-2">
+                  <span>Priority *</span>
+                  <div class="contract-data-type-circle-toggle-wrapper">
+                    <div class="contract-data-type-circle-toggle">
+                      <div 
+                        class="contract-circle-option personal-circle" 
+                        :class="{ active: getDataType('priority') === 'personal' }"
+                        @click="setDataType('priority', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option confidential-circle" 
+                        :class="{ active: getDataType('priority') === 'confidential' }"
+                        @click="setDataType('priority', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option regular-circle" 
+                        :class="{ active: getDataType('priority') === 'regular' }"
+                        @click="setDataType('priority', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </Label>
                 <Select :model-value="formData.priority" @update:model-value="(value) => handleInputChange('priority', value)" :key="`priority_${formKey}`">
                   <SelectTrigger>
                     <SelectValue :placeholder="formData.priority || 'Select priority'" />
@@ -474,7 +644,37 @@
               </div>
 
               <div class="space-y-2">
-                <Label for="contract_category">Contract Category</Label>
+                <Label for="contract_category" class="flex items-center gap-2">
+                  <span>Contract Category</span>
+                  <div class="contract-data-type-circle-toggle-wrapper">
+                    <div class="contract-data-type-circle-toggle">
+                      <div 
+                        class="contract-circle-option personal-circle" 
+                        :class="{ active: getDataType('contract_category') === 'personal' }"
+                        @click="setDataType('contract_category', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option confidential-circle" 
+                        :class="{ active: getDataType('contract_category') === 'confidential' }"
+                        @click="setDataType('contract_category', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option regular-circle" 
+                        :class="{ active: getDataType('contract_category') === 'regular' }"
+                        @click="setDataType('contract_category', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </Label>
                 <Select :model-value="formData.contract_category" @update:model-value="(value) => handleInputChange('contract_category', value)" :key="`contract_category_${formKey}`">
                   <SelectTrigger>
                     <SelectValue :placeholder="formData.contract_category || 'Select category'" />
@@ -503,7 +703,37 @@
           <CardContent class="space-y-4">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div class="space-y-2">
-                <Label for="vendor_id">Vendor *</Label>
+                <Label for="vendor_id" class="flex items-center gap-2">
+                  <span>Vendor *</span>
+                  <div class="contract-data-type-circle-toggle-wrapper">
+                    <div class="contract-data-type-circle-toggle">
+                      <div 
+                        class="contract-circle-option personal-circle" 
+                        :class="{ active: getDataType('vendor_id') === 'personal' }"
+                        @click="setDataType('vendor_id', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option confidential-circle" 
+                        :class="{ active: getDataType('vendor_id') === 'confidential' }"
+                        @click="setDataType('vendor_id', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option regular-circle" 
+                        :class="{ active: getDataType('vendor_id') === 'regular' }"
+                        @click="setDataType('vendor_id', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </Label>
                 <Select :model-value="formData.vendor_id" :key="`vendor_id_${formKey}`" @update:model-value="(value) => {
                   handleInputChange('vendor_id', value)
                   const selectedVendor = vendors.find(v => v.vendor_id == value)
@@ -553,7 +783,37 @@
           <CardContent class="space-y-4">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div class="space-y-2">
-                <Label for="contract_value">Contract Value *</Label>
+                <Label for="contract_value" class="flex items-center gap-2">
+                  <span>Contract Value *</span>
+                  <div class="contract-data-type-circle-toggle-wrapper">
+                    <div class="contract-data-type-circle-toggle">
+                      <div 
+                        class="contract-circle-option personal-circle" 
+                        :class="{ active: getDataType('contract_value') === 'personal' }"
+                        @click="setDataType('contract_value', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option confidential-circle" 
+                        :class="{ active: getDataType('contract_value') === 'confidential' }"
+                        @click="setDataType('contract_value', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option regular-circle" 
+                        :class="{ active: getDataType('contract_value') === 'regular' }"
+                        @click="setDataType('contract_value', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </Label>
                 <Input
                   id="contract_value"
                   type="number"
@@ -567,7 +827,37 @@
               </div>
               
               <div class="space-y-2">
-                <Label for="currency">Currency</Label>
+                <Label for="currency" class="flex items-center gap-2">
+                  <span>Currency</span>
+                  <div class="contract-data-type-circle-toggle-wrapper">
+                    <div class="contract-data-type-circle-toggle">
+                      <div 
+                        class="contract-circle-option personal-circle" 
+                        :class="{ active: getDataType('currency') === 'personal' }"
+                        @click="setDataType('currency', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option confidential-circle" 
+                        :class="{ active: getDataType('currency') === 'confidential' }"
+                        @click="setDataType('currency', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option regular-circle" 
+                        :class="{ active: getDataType('currency') === 'regular' }"
+                        @click="setDataType('currency', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </Label>
                 <Select :model-value="formData.currency" @update:model-value="(value) => handleInputChange('currency', value)">
                   <SelectTrigger>
                     <SelectValue placeholder="Select currency" />
@@ -583,7 +873,37 @@
               </div>
 
               <div class="space-y-2">
-                <Label for="liability_cap">Liability Cap</Label>
+                <Label for="liability_cap" class="flex items-center gap-2">
+                  <span>Liability Cap</span>
+                  <div class="contract-data-type-circle-toggle-wrapper">
+                    <div class="contract-data-type-circle-toggle">
+                      <div 
+                        class="contract-circle-option personal-circle" 
+                        :class="{ active: getDataType('liability_cap') === 'personal' }"
+                        @click="setDataType('liability_cap', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option confidential-circle" 
+                        :class="{ active: getDataType('liability_cap') === 'confidential' }"
+                        @click="setDataType('liability_cap', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option regular-circle" 
+                        :class="{ active: getDataType('liability_cap') === 'regular' }"
+                        @click="setDataType('liability_cap', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </Label>
                 <Input
                   id="liability_cap"
                   type="number"
@@ -612,7 +932,37 @@
           <CardContent class="space-y-4">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div class="space-y-2">
-                <Label for="start_date">Start Date *</Label>
+                <Label for="start_date" class="flex items-center gap-2">
+                  <span>Start Date *</span>
+                  <div class="contract-data-type-circle-toggle-wrapper">
+                    <div class="contract-data-type-circle-toggle">
+                      <div 
+                        class="contract-circle-option personal-circle" 
+                        :class="{ active: getDataType('start_date') === 'personal' }"
+                        @click="setDataType('start_date', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option confidential-circle" 
+                        :class="{ active: getDataType('start_date') === 'confidential' }"
+                        @click="setDataType('start_date', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option regular-circle" 
+                        :class="{ active: getDataType('start_date') === 'regular' }"
+                        @click="setDataType('start_date', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </Label>
                 <Input
                   id="start_date"
                   type="date"
@@ -624,7 +974,37 @@
               </div>
               
               <div class="space-y-2">
-                <Label for="end_date">End Date *</Label>
+                <Label for="end_date" class="flex items-center gap-2">
+                  <span>End Date *</span>
+                  <div class="contract-data-type-circle-toggle-wrapper">
+                    <div class="contract-data-type-circle-toggle">
+                      <div 
+                        class="contract-circle-option personal-circle" 
+                        :class="{ active: getDataType('end_date') === 'personal' }"
+                        @click="setDataType('end_date', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option confidential-circle" 
+                        :class="{ active: getDataType('end_date') === 'confidential' }"
+                        @click="setDataType('end_date', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option regular-circle" 
+                        :class="{ active: getDataType('end_date') === 'regular' }"
+                        @click="setDataType('end_date', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </Label>
                 <Input
                   id="end_date"
                   type="date"
@@ -636,7 +1016,37 @@
               </div>
 
               <div class="space-y-2">
-                <Label for="notice_period_days">Notice Period (Days)</Label>
+                <Label for="notice_period_days" class="flex items-center gap-2">
+                  <span>Notice Period (Days)</span>
+                  <div class="contract-data-type-circle-toggle-wrapper">
+                    <div class="contract-data-type-circle-toggle">
+                      <div 
+                        class="contract-circle-option personal-circle" 
+                        :class="{ active: getDataType('notice_period_days') === 'personal' }"
+                        @click="setDataType('notice_period_days', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option confidential-circle" 
+                        :class="{ active: getDataType('notice_period_days') === 'confidential' }"
+                        @click="setDataType('notice_period_days', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option regular-circle" 
+                        :class="{ active: getDataType('notice_period_days') === 'regular' }"
+                        @click="setDataType('notice_period_days', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </Label>
                 <Input
                   id="notice_period_days"
                   type="number"
@@ -663,7 +1073,37 @@
           <CardContent class="space-y-4">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div class="space-y-2">
-                <Label for="contract_owner">Contract Owner *</Label>
+                <Label for="contract_owner" class="flex items-center gap-2">
+                  <span>Contract Owner *</span>
+                  <div class="contract-data-type-circle-toggle-wrapper">
+                    <div class="contract-data-type-circle-toggle">
+                      <div 
+                        class="contract-circle-option personal-circle" 
+                        :class="{ active: getDataType('contract_owner') === 'personal' }"
+                        @click="setDataType('contract_owner', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option confidential-circle" 
+                        :class="{ active: getDataType('contract_owner') === 'confidential' }"
+                        @click="setDataType('contract_owner', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option regular-circle" 
+                        :class="{ active: getDataType('contract_owner') === 'regular' }"
+                        @click="setDataType('contract_owner', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </Label>
                 <Select v-model="formData.contract_owner" @update:model-value="(value) => handleInputChange('contract_owner', parseInt(value))">
                   <SelectTrigger :class="errors.contract_owner ? 'border-red-500' : ''">
                     <SelectValue placeholder="Select contract owner" />
@@ -679,7 +1119,37 @@
               </div>
               
               <div class="space-y-2">
-                <Label for="legal_reviewer">Legal Reviewer</Label>
+                <Label for="legal_reviewer" class="flex items-center gap-2">
+                  <span>Legal Reviewer</span>
+                  <div class="contract-data-type-circle-toggle-wrapper">
+                    <div class="contract-data-type-circle-toggle">
+                      <div 
+                        class="contract-circle-option personal-circle" 
+                        :class="{ active: getDataType('legal_reviewer') === 'personal' }"
+                        @click="setDataType('legal_reviewer', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option confidential-circle" 
+                        :class="{ active: getDataType('legal_reviewer') === 'confidential' }"
+                        @click="setDataType('legal_reviewer', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option regular-circle" 
+                        :class="{ active: getDataType('legal_reviewer') === 'regular' }"
+                        @click="setDataType('legal_reviewer', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </Label>
                 <Select v-model="formData.legal_reviewer" @update:model-value="(value) => handleInputChange('legal_reviewer', parseInt(value))">
                   <SelectTrigger>
                     <SelectValue placeholder="Select legal reviewer" />
@@ -711,7 +1181,37 @@
           </CardHeader>
           <CardContent class="space-y-4">
             <div class="space-y-3">
-              <Label for="compliance_framework">Compliance Framework</Label>
+              <Label for="compliance_framework" class="flex items-center gap-2">
+                <span>Compliance Framework</span>
+                <div class="contract-data-type-circle-toggle-wrapper">
+                  <div class="contract-data-type-circle-toggle">
+                    <div 
+                      class="contract-circle-option personal-circle" 
+                      :class="{ active: getDataType('compliance_framework') === 'personal' }"
+                      @click="setDataType('compliance_framework', 'personal')"
+                      title="Personal Data"
+                    >
+                      <div class="contract-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="contract-circle-option confidential-circle" 
+                      :class="{ active: getDataType('compliance_framework') === 'confidential' }"
+                      @click="setDataType('compliance_framework', 'confidential')"
+                      title="Confidential Data"
+                    >
+                      <div class="contract-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="contract-circle-option regular-circle" 
+                      :class="{ active: getDataType('compliance_framework') === 'regular' }"
+                      @click="setDataType('compliance_framework', 'regular')"
+                      title="Regular Data"
+                    >
+                      <div class="contract-circle-inner"></div>
+                    </div>
+                  </div>
+                </div>
+              </Label>
               <Select v-model="formData.compliance_framework">
                 <SelectTrigger>
                   <SelectValue placeholder="Select compliance framework" />
@@ -787,7 +1287,37 @@
                   
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="space-y-2">
-                      <Label>Term Category</Label>
+                      <Label class="flex items-center gap-2">
+                        <span>Term Category</span>
+                        <div class="contract-data-type-circle-toggle-wrapper">
+                          <div class="contract-data-type-circle-toggle">
+                            <div 
+                              class="contract-circle-option personal-circle" 
+                              :class="{ active: getTermDataType(term.term_id, 'term_category') === 'personal' }"
+                              @click="setTermDataType(term.term_id, 'term_category', 'personal')"
+                              title="Personal Data"
+                            >
+                              <div class="contract-circle-inner"></div>
+                            </div>
+                            <div 
+                              class="contract-circle-option confidential-circle" 
+                              :class="{ active: getTermDataType(term.term_id, 'term_category') === 'confidential' }"
+                              @click="setTermDataType(term.term_id, 'term_category', 'confidential')"
+                              title="Confidential Data"
+                            >
+                              <div class="contract-circle-inner"></div>
+                            </div>
+                            <div 
+                              class="contract-circle-option regular-circle" 
+                              :class="{ active: getTermDataType(term.term_id, 'term_category') === 'regular' }"
+                              @click="setTermDataType(term.term_id, 'term_category', 'regular')"
+                              title="Regular Data"
+                            >
+                              <div class="contract-circle-inner"></div>
+                            </div>
+                          </div>
+                        </div>
+                      </Label>
                                              <Select 
                          :model-value="String(term.term_category || '')"
                        @update:model-value="async (value) => {
@@ -817,7 +1347,37 @@
                     </div>
                     
                     <div class="space-y-2">
-                      <Label>Term Title</Label>
+                      <Label class="flex items-center gap-2">
+                        <span>Term Title</span>
+                        <div class="contract-data-type-circle-toggle-wrapper">
+                          <div class="contract-data-type-circle-toggle">
+                            <div 
+                              class="contract-circle-option personal-circle" 
+                              :class="{ active: getTermDataType(term.term_id, 'term_title') === 'personal' }"
+                              @click="setTermDataType(term.term_id, 'term_title', 'personal')"
+                              title="Personal Data"
+                            >
+                              <div class="contract-circle-inner"></div>
+                            </div>
+                            <div 
+                              class="contract-circle-option confidential-circle" 
+                              :class="{ active: getTermDataType(term.term_id, 'term_title') === 'confidential' }"
+                              @click="setTermDataType(term.term_id, 'term_title', 'confidential')"
+                              title="Confidential Data"
+                            >
+                              <div class="contract-circle-inner"></div>
+                            </div>
+                            <div 
+                              class="contract-circle-option regular-circle" 
+                              :class="{ active: getTermDataType(term.term_id, 'term_title') === 'regular' }"
+                              @click="setTermDataType(term.term_id, 'term_title', 'regular')"
+                              title="Regular Data"
+                            >
+                              <div class="contract-circle-inner"></div>
+                            </div>
+                          </div>
+                        </div>
+                      </Label>
                       <Input
                         :value="term.term_title"
                         @input="(event) => {
@@ -832,7 +1392,37 @@
                   </div>
 
                   <div class="space-y-2">
-                    <Label>Term Text</Label>
+                    <Label class="flex items-center gap-2">
+                      <span>Term Text</span>
+                      <div class="contract-data-type-circle-toggle-wrapper">
+                        <div class="contract-data-type-circle-toggle">
+                          <div 
+                            class="contract-circle-option personal-circle" 
+                            :class="{ active: getTermDataType(term.term_id, 'term_text') === 'personal' }"
+                            @click="setTermDataType(term.term_id, 'term_text', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="contract-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="contract-circle-option confidential-circle" 
+                            :class="{ active: getTermDataType(term.term_id, 'term_text') === 'confidential' }"
+                            @click="setTermDataType(term.term_id, 'term_text', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="contract-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="contract-circle-option regular-circle" 
+                            :class="{ active: getTermDataType(term.term_id, 'term_text') === 'regular' }"
+                            @click="setTermDataType(term.term_id, 'term_text', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="contract-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </Label>
                     <Textarea
                       :value="term.term_text"
                       @input="(event) => {
@@ -863,7 +1453,37 @@
                         }
                       }"
                     />
-                    <Label :for="`standard_${index}`">Standard Term</Label>
+                    <Label :for="`standard_${index}`" class="flex items-center gap-2">
+                      <span>Standard Term</span>
+                      <div class="contract-data-type-circle-toggle-wrapper">
+                        <div class="contract-data-type-circle-toggle">
+                          <div 
+                            class="contract-circle-option personal-circle" 
+                            :class="{ active: getTermDataType(term.term_id, 'is_standard') === 'personal' }"
+                            @click="setTermDataType(term.term_id, 'is_standard', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="contract-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="contract-circle-option confidential-circle" 
+                            :class="{ active: getTermDataType(term.term_id, 'is_standard') === 'confidential' }"
+                            @click="setTermDataType(term.term_id, 'is_standard', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="contract-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="contract-circle-option regular-circle" 
+                            :class="{ active: getTermDataType(term.term_id, 'is_standard') === 'regular' }"
+                            @click="setTermDataType(term.term_id, 'is_standard', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="contract-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </Label>
                   </div>
 
                   <!-- Templates Section -->
@@ -1088,7 +1708,37 @@
                   
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="space-y-2">
-                      <Label>Clause Name *</Label>
+                      <Label class="flex items-center gap-2">
+                        <span>Clause Name *</span>
+                        <div class="contract-data-type-circle-toggle-wrapper">
+                          <div class="contract-data-type-circle-toggle">
+                            <div 
+                              class="contract-circle-option personal-circle" 
+                              :class="{ active: getClauseDataType(clause.clause_id, 'clause_name') === 'personal' }"
+                              @click="setClauseDataType(clause.clause_id, 'clause_name', 'personal')"
+                              title="Personal Data"
+                            >
+                              <div class="contract-circle-inner"></div>
+                            </div>
+                            <div 
+                              class="contract-circle-option confidential-circle" 
+                              :class="{ active: getClauseDataType(clause.clause_id, 'clause_name') === 'confidential' }"
+                              @click="setClauseDataType(clause.clause_id, 'clause_name', 'confidential')"
+                              title="Confidential Data"
+                            >
+                              <div class="contract-circle-inner"></div>
+                            </div>
+                            <div 
+                              class="contract-circle-option regular-circle" 
+                              :class="{ active: getClauseDataType(clause.clause_id, 'clause_name') === 'regular' }"
+                              @click="setClauseDataType(clause.clause_id, 'clause_name', 'regular')"
+                              title="Regular Data"
+                            >
+                              <div class="contract-circle-inner"></div>
+                            </div>
+                          </div>
+                        </div>
+                      </Label>
                       <Input
                         :value="clause.clause_name"
                         @input="(event) => {
@@ -1110,7 +1760,37 @@
                     </div>
                     
                                          <div class="space-y-2">
-                       <Label>Clause Type</Label>
+                       <Label class="flex items-center gap-2">
+                         <span>Clause Type</span>
+                         <div class="contract-data-type-circle-toggle-wrapper">
+                           <div class="contract-data-type-circle-toggle">
+                             <div 
+                               class="contract-circle-option personal-circle" 
+                               :class="{ active: getClauseDataType(clause.clause_id, 'clause_type') === 'personal' }"
+                               @click="setClauseDataType(clause.clause_id, 'clause_type', 'personal')"
+                               title="Personal Data"
+                             >
+                               <div class="contract-circle-inner"></div>
+                             </div>
+                             <div 
+                               class="contract-circle-option confidential-circle" 
+                               :class="{ active: getClauseDataType(clause.clause_id, 'clause_type') === 'confidential' }"
+                               @click="setClauseDataType(clause.clause_id, 'clause_type', 'confidential')"
+                               title="Confidential Data"
+                             >
+                               <div class="contract-circle-inner"></div>
+                             </div>
+                             <div 
+                               class="contract-circle-option regular-circle" 
+                               :class="{ active: getClauseDataType(clause.clause_id, 'clause_type') === 'regular' }"
+                               @click="setClauseDataType(clause.clause_id, 'clause_type', 'regular')"
+                               title="Regular Data"
+                             >
+                               <div class="contract-circle-inner"></div>
+                             </div>
+                           </div>
+                         </div>
+                       </Label>
                        <Select 
                          :model-value="String(clause.clause_type || 'standard')"
                          @update:model-value="(value) => {
@@ -1138,7 +1818,37 @@
                     </div>
 
                     <div class="space-y-2">
-                      <Label>Legal Category</Label>
+                      <Label class="flex items-center gap-2">
+                        <span>Legal Category</span>
+                        <div class="contract-data-type-circle-toggle-wrapper">
+                          <div class="contract-data-type-circle-toggle">
+                            <div 
+                              class="contract-circle-option personal-circle" 
+                              :class="{ active: getClauseDataType(clause.clause_id, 'legal_category') === 'personal' }"
+                              @click="setClauseDataType(clause.clause_id, 'legal_category', 'personal')"
+                              title="Personal Data"
+                            >
+                              <div class="contract-circle-inner"></div>
+                            </div>
+                            <div 
+                              class="contract-circle-option confidential-circle" 
+                              :class="{ active: getClauseDataType(clause.clause_id, 'legal_category') === 'confidential' }"
+                              @click="setClauseDataType(clause.clause_id, 'legal_category', 'confidential')"
+                              title="Confidential Data"
+                            >
+                              <div class="contract-circle-inner"></div>
+                            </div>
+                            <div 
+                              class="contract-circle-option regular-circle" 
+                              :class="{ active: getClauseDataType(clause.clause_id, 'legal_category') === 'regular' }"
+                              @click="setClauseDataType(clause.clause_id, 'legal_category', 'regular')"
+                              title="Regular Data"
+                            >
+                              <div class="contract-circle-inner"></div>
+                            </div>
+                          </div>
+                        </div>
+                      </Label>
                       <Input
                         :value="clause.legal_category"
                         @input="(event) => {
@@ -1152,7 +1862,37 @@
                   </div>
 
                   <div class="space-y-2">
-                    <Label>Clause Text *</Label>
+                    <Label class="flex items-center gap-2">
+                      <span>Clause Text *</span>
+                      <div class="contract-data-type-circle-toggle-wrapper">
+                        <div class="contract-data-type-circle-toggle">
+                          <div 
+                            class="contract-circle-option personal-circle" 
+                            :class="{ active: getClauseDataType(clause.clause_id, 'clause_text') === 'personal' }"
+                            @click="setClauseDataType(clause.clause_id, 'clause_text', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="contract-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="contract-circle-option confidential-circle" 
+                            :class="{ active: getClauseDataType(clause.clause_id, 'clause_text') === 'confidential' }"
+                            @click="setClauseDataType(clause.clause_id, 'clause_text', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="contract-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="contract-circle-option regular-circle" 
+                            :class="{ active: getClauseDataType(clause.clause_id, 'clause_text') === 'regular' }"
+                            @click="setClauseDataType(clause.clause_id, 'clause_text', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="contract-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </Label>
                     <Textarea
                       :value="clause.clause_text"
                       @input="(event) => {
@@ -1189,7 +1929,37 @@
                         }
                       }"
                     />
-                    <Label :for="`standard_clause_${index}`">Standard Clause</Label>
+                    <Label :for="`standard_clause_${index}`" class="flex items-center gap-2">
+                      <span>Standard Clause</span>
+                      <div class="contract-data-type-circle-toggle-wrapper">
+                        <div class="contract-data-type-circle-toggle">
+                          <div 
+                            class="contract-circle-option personal-circle" 
+                            :class="{ active: getClauseDataType(clause.clause_id, 'is_standard') === 'personal' }"
+                            @click="setClauseDataType(clause.clause_id, 'is_standard', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="contract-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="contract-circle-option confidential-circle" 
+                            :class="{ active: getClauseDataType(clause.clause_id, 'is_standard') === 'confidential' }"
+                            @click="setClauseDataType(clause.clause_id, 'is_standard', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="contract-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="contract-circle-option regular-circle" 
+                            :class="{ active: getClauseDataType(clause.clause_id, 'is_standard') === 'regular' }"
+                            @click="setClauseDataType(clause.clause_id, 'is_standard', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="contract-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </Label>
                   </div>
                 </div>
               </div>
@@ -1243,7 +2013,37 @@
                   
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="space-y-2">
-                      <Label>Notice Period (Days)</Label>
+                      <Label class="flex items-center gap-2">
+                        <span>Notice Period (Days)</span>
+                        <div class="contract-data-type-circle-toggle-wrapper">
+                          <div class="contract-data-type-circle-toggle">
+                            <div 
+                              class="contract-circle-option personal-circle" 
+                              :class="{ active: getClauseDataType(clause.clause_id, 'notice_period_days') === 'personal' }"
+                              @click="setClauseDataType(clause.clause_id, 'notice_period_days', 'personal')"
+                              title="Personal Data"
+                            >
+                              <div class="contract-circle-inner"></div>
+                            </div>
+                            <div 
+                              class="contract-circle-option confidential-circle" 
+                              :class="{ active: getClauseDataType(clause.clause_id, 'notice_period_days') === 'confidential' }"
+                              @click="setClauseDataType(clause.clause_id, 'notice_period_days', 'confidential')"
+                              title="Confidential Data"
+                            >
+                              <div class="contract-circle-inner"></div>
+                            </div>
+                            <div 
+                              class="contract-circle-option regular-circle" 
+                              :class="{ active: getClauseDataType(clause.clause_id, 'notice_period_days') === 'regular' }"
+                              @click="setClauseDataType(clause.clause_id, 'notice_period_days', 'regular')"
+                              title="Regular Data"
+                            >
+                              <div class="contract-circle-inner"></div>
+                            </div>
+                          </div>
+                        </div>
+                      </Label>
                       <Input
                         type="number"
                         :value="clause.notice_period_days"
@@ -1258,7 +2058,37 @@
                   </div>
 
                   <div class="space-y-2">
-                    <Label>Renewal Terms</Label>
+                    <Label class="flex items-center gap-2">
+                      <span>Renewal Terms</span>
+                      <div class="contract-data-type-circle-toggle-wrapper">
+                        <div class="contract-data-type-circle-toggle">
+                          <div 
+                            class="contract-circle-option personal-circle" 
+                            :class="{ active: getClauseDataType(clause.clause_id, 'renewal_terms') === 'personal' }"
+                            @click="setClauseDataType(clause.clause_id, 'renewal_terms', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="contract-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="contract-circle-option confidential-circle" 
+                            :class="{ active: getClauseDataType(clause.clause_id, 'renewal_terms') === 'confidential' }"
+                            @click="setClauseDataType(clause.clause_id, 'renewal_terms', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="contract-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="contract-circle-option regular-circle" 
+                            :class="{ active: getClauseDataType(clause.clause_id, 'renewal_terms') === 'regular' }"
+                            @click="setClauseDataType(clause.clause_id, 'renewal_terms', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="contract-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </Label>
                     <Textarea
                       :value="clause.renewal_terms"
                       @input="(event) => {
@@ -1294,7 +2124,37 @@
                         }
                       }"
                     />
-                    <Label :for="`auto_renew_${clause.clause_id}`">Enable Auto-Renewal</Label>
+                    <Label :for="`auto_renew_${clause.clause_id}`" class="flex items-center gap-2">
+                      <span>Enable Auto-Renewal</span>
+                      <div class="contract-data-type-circle-toggle-wrapper">
+                        <div class="contract-data-type-circle-toggle">
+                          <div 
+                            class="contract-circle-option personal-circle" 
+                            :class="{ active: getClauseDataType(clause.clause_id, 'auto_renew') === 'personal' }"
+                            @click="setClauseDataType(clause.clause_id, 'auto_renew', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="contract-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="contract-circle-option confidential-circle" 
+                            :class="{ active: getClauseDataType(clause.clause_id, 'auto_renew') === 'confidential' }"
+                            @click="setClauseDataType(clause.clause_id, 'auto_renew', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="contract-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="contract-circle-option regular-circle" 
+                            :class="{ active: getClauseDataType(clause.clause_id, 'auto_renew') === 'regular' }"
+                            @click="setClauseDataType(clause.clause_id, 'auto_renew', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="contract-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </Label>
                   </div>
                 </div>
               </div>
@@ -1348,7 +2208,37 @@
                   
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="space-y-2">
-                      <Label>Notice Period (Days)</Label>
+                      <Label class="flex items-center gap-2">
+                        <span>Notice Period (Days)</span>
+                        <div class="contract-data-type-circle-toggle-wrapper">
+                          <div class="contract-data-type-circle-toggle">
+                            <div 
+                              class="contract-circle-option personal-circle" 
+                              :class="{ active: getClauseDataType(clause.clause_id, 'termination_notice_period') === 'personal' }"
+                              @click="setClauseDataType(clause.clause_id, 'termination_notice_period', 'personal')"
+                              title="Personal Data"
+                            >
+                              <div class="contract-circle-inner"></div>
+                            </div>
+                            <div 
+                              class="contract-circle-option confidential-circle" 
+                              :class="{ active: getClauseDataType(clause.clause_id, 'termination_notice_period') === 'confidential' }"
+                              @click="setClauseDataType(clause.clause_id, 'termination_notice_period', 'confidential')"
+                              title="Confidential Data"
+                            >
+                              <div class="contract-circle-inner"></div>
+                            </div>
+                            <div 
+                              class="contract-circle-option regular-circle" 
+                              :class="{ active: getClauseDataType(clause.clause_id, 'termination_notice_period') === 'regular' }"
+                              @click="setClauseDataType(clause.clause_id, 'termination_notice_period', 'regular')"
+                              title="Regular Data"
+                            >
+                              <div class="contract-circle-inner"></div>
+                            </div>
+                          </div>
+                        </div>
+                      </Label>
                       <Input
                         type="number"
                         :value="clause.termination_notice_period"
@@ -1362,7 +2252,37 @@
                     </div>
 
                     <div class="space-y-2">
-                      <Label>Early Termination Fee</Label>
+                      <Label class="flex items-center gap-2">
+                        <span>Early Termination Fee</span>
+                        <div class="contract-data-type-circle-toggle-wrapper">
+                          <div class="contract-data-type-circle-toggle">
+                            <div 
+                              class="contract-circle-option personal-circle" 
+                              :class="{ active: getClauseDataType(clause.clause_id, 'early_termination_fee') === 'personal' }"
+                              @click="setClauseDataType(clause.clause_id, 'early_termination_fee', 'personal')"
+                              title="Personal Data"
+                            >
+                              <div class="contract-circle-inner"></div>
+                            </div>
+                            <div 
+                              class="contract-circle-option confidential-circle" 
+                              :class="{ active: getClauseDataType(clause.clause_id, 'early_termination_fee') === 'confidential' }"
+                              @click="setClauseDataType(clause.clause_id, 'early_termination_fee', 'confidential')"
+                              title="Confidential Data"
+                            >
+                              <div class="contract-circle-inner"></div>
+                            </div>
+                            <div 
+                              class="contract-circle-option regular-circle" 
+                              :class="{ active: getClauseDataType(clause.clause_id, 'early_termination_fee') === 'regular' }"
+                              @click="setClauseDataType(clause.clause_id, 'early_termination_fee', 'regular')"
+                              title="Regular Data"
+                            >
+                              <div class="contract-circle-inner"></div>
+                            </div>
+                          </div>
+                        </div>
+                      </Label>
                       <Input
                         type="number"
                         :value="clause.early_termination_fee"
@@ -1377,7 +2297,37 @@
                   </div>
 
                   <div class="space-y-2">
-                    <Label>Termination Conditions</Label>
+                    <Label class="flex items-center gap-2">
+                      <span>Termination Conditions</span>
+                      <div class="contract-data-type-circle-toggle-wrapper">
+                        <div class="contract-data-type-circle-toggle">
+                          <div 
+                            class="contract-circle-option personal-circle" 
+                            :class="{ active: getClauseDataType(clause.clause_id, 'termination_conditions') === 'personal' }"
+                            @click="setClauseDataType(clause.clause_id, 'termination_conditions', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="contract-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="contract-circle-option confidential-circle" 
+                            :class="{ active: getClauseDataType(clause.clause_id, 'termination_conditions') === 'confidential' }"
+                            @click="setClauseDataType(clause.clause_id, 'termination_conditions', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="contract-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="contract-circle-option regular-circle" 
+                            :class="{ active: getClauseDataType(clause.clause_id, 'termination_conditions') === 'regular' }"
+                            @click="setClauseDataType(clause.clause_id, 'termination_conditions', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="contract-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </Label>
                     <Textarea
                       :value="clause.termination_conditions"
                       @input="(event) => {
@@ -1422,7 +2372,37 @@
           <CardContent class="space-y-4">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div class="space-y-2">
-                <Label for="dispute_resolution_method">Dispute Resolution</Label>
+                <Label for="dispute_resolution_method" class="flex items-center gap-2">
+                  <span>Dispute Resolution</span>
+                  <div class="contract-data-type-circle-toggle-wrapper">
+                    <div class="contract-data-type-circle-toggle">
+                      <div 
+                        class="contract-circle-option personal-circle" 
+                        :class="{ active: getDataType('dispute_resolution_method') === 'personal' }"
+                        @click="setDataType('dispute_resolution_method', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option confidential-circle" 
+                        :class="{ active: getDataType('dispute_resolution_method') === 'confidential' }"
+                        @click="setDataType('dispute_resolution_method', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option regular-circle" 
+                        :class="{ active: getDataType('dispute_resolution_method') === 'regular' }"
+                        @click="setDataType('dispute_resolution_method', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </Label>
                 <Select v-model="formData.dispute_resolution_method">
                   <SelectTrigger>
                     <SelectValue :placeholder="formData.dispute_resolution_method || 'Select resolution method'" />
@@ -1437,7 +2417,37 @@
               </div>
 
               <div class="space-y-2">
-                <Label for="governing_law">Governing Law</Label>
+                <Label for="governing_law" class="flex items-center gap-2">
+                  <span>Governing Law</span>
+                  <div class="contract-data-type-circle-toggle-wrapper">
+                    <div class="contract-data-type-circle-toggle">
+                      <div 
+                        class="contract-circle-option personal-circle" 
+                        :class="{ active: getDataType('governing_law') === 'personal' }"
+                        @click="setDataType('governing_law', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option confidential-circle" 
+                        :class="{ active: getDataType('governing_law') === 'confidential' }"
+                        @click="setDataType('governing_law', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option regular-circle" 
+                        :class="{ active: getDataType('governing_law') === 'regular' }"
+                        @click="setDataType('governing_law', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </Label>
                 <Input
                   id="governing_law"
                   placeholder="e.g., California, USA"
@@ -1447,7 +2457,37 @@
               </div>
 
               <div class="space-y-2">
-                <Label for="termination_clause_type">Termination Clause</Label>
+                <Label for="termination_clause_type" class="flex items-center gap-2">
+                  <span>Termination Clause</span>
+                  <div class="contract-data-type-circle-toggle-wrapper">
+                    <div class="contract-data-type-circle-toggle">
+                      <div 
+                        class="contract-circle-option personal-circle" 
+                        :class="{ active: getDataType('termination_clause_type') === 'personal' }"
+                        @click="setDataType('termination_clause_type', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option confidential-circle" 
+                        :class="{ active: getDataType('termination_clause_type') === 'confidential' }"
+                        @click="setDataType('termination_clause_type', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="contract-circle-option regular-circle" 
+                        :class="{ active: getDataType('termination_clause_type') === 'regular' }"
+                        @click="setDataType('termination_clause_type', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="contract-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </Label>
                 <Select v-model="formData.termination_clause_type">
                   <SelectTrigger>
                     <SelectValue :placeholder="formData.termination_clause_type || 'Select termination type'" />
@@ -1681,6 +2721,176 @@ const formData = ref({
 // Contract terms and clauses - initialize as empty arrays
 const contractTerms = ref([])
 const contractClauses = ref([])
+
+// Data type classification for contract fields
+// Stores data types (personal, confidential, regular) for each field
+const fieldDataTypes = reactive({
+  contract_title: 'regular',
+  contract_number: 'regular',
+  parent_contract_id: 'regular',
+  contract_type: 'regular',
+  priority: 'regular',
+  contract_category: 'regular',
+  vendor_id: 'regular',
+  contract_value: 'confidential',
+  currency: 'regular',
+  liability_cap: 'confidential',
+  start_date: 'regular',
+  end_date: 'regular',
+  notice_period_days: 'regular',
+  contract_owner: 'personal',
+  legal_reviewer: 'personal',
+  compliance_framework: 'regular',
+  dispute_resolution_method: 'regular',
+  governing_law: 'regular',
+  termination_clause_type: 'regular'
+})
+
+// Method to set data type for a field
+function setDataType(fieldName, type) {
+  if (fieldDataTypes.hasOwnProperty(fieldName)) {
+    fieldDataTypes[fieldName] = type
+    console.log(`Data type selected for ${fieldName}:`, type)
+  }
+}
+
+// Get data type for a field
+function getDataType(fieldName) {
+  return fieldDataTypes[fieldName] || 'regular'
+}
+
+// Helper function to build data_inventory JSON for contract
+// Creates a flat JSON structure: {"Field Label": "data_type"}
+// This will be stored in vendor_contracts.data_inventory
+function buildContractDataInventory() {
+  const fieldLabelMap = {
+    contract_title: 'Contract Title',
+    contract_number: 'Contract Number',
+    parent_contract_id: 'Parent Contract ID',
+    contract_type: 'Contract Type',
+    priority: 'Priority',
+    contract_category: 'Contract Category',
+    vendor_id: 'Vendor',
+    contract_value: 'Contract Value',
+    currency: 'Currency',
+    liability_cap: 'Liability Cap',
+    start_date: 'Start Date',
+    end_date: 'End Date',
+    notice_period_days: 'Notice Period (Days)',
+    contract_owner: 'Contract Owner',
+    legal_reviewer: 'Legal Reviewer',
+    compliance_framework: 'Compliance Framework',
+    dispute_resolution_method: 'Dispute Resolution Method',
+    governing_law: 'Governing Law',
+    termination_clause_type: 'Termination Clause Type'
+  }
+
+  const dataInventory = {}
+  
+  // Build flat structure: {"Field Label": "data_type"}
+  for (const [fieldName, dataType] of Object.entries(fieldDataTypes)) {
+    if (fieldLabelMap[fieldName]) {
+      const fieldLabel = fieldLabelMap[fieldName]
+      dataInventory[fieldLabel] = dataType
+    }
+  }
+  
+  console.log('📋 Contract Data Inventory JSON:', JSON.stringify(dataInventory, null, 2))
+  return dataInventory
+}
+
+// Data type classification for contract terms
+// Stores data types for each field in each term: { term_id: { field_name: 'data_type' } }
+const termDataTypes = reactive({})
+
+// Data type classification for contract clauses
+// Stores data types for each field in each clause: { clause_id: { field_name: 'data_type' } }
+const clauseDataTypes = reactive({})
+
+// Method to set data type for a term field
+function setTermDataType(termId, fieldName, type) {
+  if (!termDataTypes[termId]) {
+    termDataTypes[termId] = reactive({})
+  }
+  termDataTypes[termId][fieldName] = type
+  console.log(`Data type selected for term ${termId}, field ${fieldName}:`, type)
+}
+
+// Get data type for a term field
+function getTermDataType(termId, fieldName) {
+  return termDataTypes[termId]?.[fieldName] || 'regular'
+}
+
+// Method to set data type for a clause field
+function setClauseDataType(clauseId, fieldName, type) {
+  if (!clauseDataTypes[clauseId]) {
+    clauseDataTypes[clauseId] = reactive({})
+  }
+  clauseDataTypes[clauseId][fieldName] = type
+  console.log(`Data type selected for clause ${clauseId}, field ${fieldName}:`, type)
+}
+
+// Get data type for a clause field
+function getClauseDataType(clauseId, fieldName) {
+  return clauseDataTypes[clauseId]?.[fieldName] || 'regular'
+}
+
+// Helper function to build data_inventory JSON for a term
+function buildTermDataInventory(term) {
+  const fieldLabelMap = {
+    term_category: 'Term Category',
+    term_title: 'Term Title',
+    term_text: 'Term Text',
+    is_standard: 'Is Standard'
+  }
+  
+  const dataInventory = {}
+  const termId = term?.term_id
+  
+  if (termId && termDataTypes[termId]) {
+    for (const [fieldName, dataType] of Object.entries(termDataTypes[termId])) {
+      if (fieldLabelMap[fieldName]) {
+        const fieldLabel = fieldLabelMap[fieldName]
+        dataInventory[fieldLabel] = dataType
+      }
+    }
+  }
+  
+  console.log(`📋 Term ${termId} Data Inventory JSON:`, JSON.stringify(dataInventory, null, 2))
+  return Object.keys(dataInventory).length > 0 ? dataInventory : {}
+}
+
+// Helper function to build data_inventory JSON for a clause
+function buildClauseDataInventory(clause) {
+  const fieldLabelMap = {
+    clause_name: 'Clause Name',
+    clause_type: 'Clause Type',
+    legal_category: 'Legal Category',
+    clause_text: 'Clause Text',
+    is_standard: 'Is Standard',
+    notice_period_days: 'Notice Period Days',
+    auto_renew: 'Auto Renew',
+    renewal_terms: 'Renewal Terms',
+    termination_notice_period: 'Termination Notice Period',
+    early_termination_fee: 'Early Termination Fee',
+    termination_conditions: 'Termination Conditions'
+  }
+  
+  const dataInventory = {}
+  const clauseId = clause?.clause_id
+  
+  if (clauseId && clauseDataTypes[clauseId]) {
+    for (const [fieldName, dataType] of Object.entries(clauseDataTypes[clauseId])) {
+      if (fieldLabelMap[fieldName]) {
+        const fieldLabel = fieldLabelMap[fieldName]
+        dataInventory[fieldLabel] = dataType
+      }
+    }
+  }
+  
+  console.log(`📋 Clause ${clauseId} Data Inventory JSON:`, JSON.stringify(dataInventory, null, 2))
+  return Object.keys(dataInventory).length > 0 ? dataInventory : {}
+}
 
 // Watch for showOCR changes to reset OCR state when closing
 watch(showOCR, (newValue, oldValue) => {
@@ -2793,7 +4003,8 @@ const updateContractTerms = async (contractId) => {
         is_standard: Boolean(term.is_standard),
         approval_status: 'Pending', // Default value
         version_number: '1.0', // Default value
-        parent_term_id: term.parent_term_id || ''
+        parent_term_id: term.parent_term_id || '',
+        data_inventory: buildTermDataInventory(term)
       }
       
       const response = await contractsApi.createContractTerms(contractId, termData)
@@ -2850,7 +4061,8 @@ const updateContractClauses = async (contractId) => {
         renewal_terms: clause.renewal_terms || '',
         termination_notice_period: clause.termination_notice_period || null,
         early_termination_fee: clause.early_termination_fee || null,
-        termination_conditions: clause.termination_conditions || ''
+        termination_conditions: clause.termination_conditions || '',
+        data_inventory: buildClauseDataInventory(clause)
       }
       
       await contractsApi.createContractClauses(contractId, clauseData)
@@ -3054,7 +4266,8 @@ const saveContractClauses = async (contractId) => {
           renewal_terms: clause.renewal_terms || '',
           termination_notice_period: clause.termination_notice_period || null,
           early_termination_fee: clause.early_termination_fee || null,
-          termination_conditions: clause.termination_conditions || ''
+          termination_conditions: clause.termination_conditions || '',
+          data_inventory: buildClauseDataInventory(clause)
         }
         
         // Validate clause_name and clause_text before sending
@@ -4848,6 +6061,10 @@ const prepareContractData = () => {
     }
   })
   
+  // Add data_inventory JSON for contract fields
+  contractData.data_inventory = buildContractDataInventory()
+  console.log('📋 Contract Data Inventory being sent:', JSON.stringify(contractData.data_inventory, null, 2))
+  
   // Remove display-only fields
   delete contractData.vendor_name
   
@@ -4994,3 +6211,196 @@ const loadExampleData = () => {
   PopupService.success('Loaded example contract data.', 'Example Loaded')
 }
 </script>
+
+<style scoped>
+/* Data Type Classification Toggle Styles */
+.contract-data-type-circle-toggle-wrapper {
+  display: inline-flex !important;
+  align-items: center;
+  margin-left: 12px;
+  padding: 4px 8px;
+  background-color: white;
+  border: 1px solid var(--form-gray-300);
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+}
+
+.contract-data-type-circle-toggle {
+  display: flex !important;
+  align-items: center;
+  gap: 4px;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.contract-circle-option {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid var(--form-gray-300);
+  background-color: white;
+  cursor: pointer;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  position: relative;
+  visibility: visible !important;
+  opacity: 1 !important;
+  flex-shrink: 0;
+}
+
+.contract-circle-option:hover {
+  transform: scale(1.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12);
+}
+
+.contract-circle-inner {
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  background-color: transparent;
+}
+
+.contract-circle-option.active .contract-circle-inner {
+  width: 9px;
+  height: 9px;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Personal Circle - Blue */
+.contract-circle-option.personal-circle {
+  border: 1.5px solid #4f7cff !important;
+}
+
+.contract-circle-option.personal-circle.active {
+  border: 1.5px solid #4f7cff !important;
+  background-color: rgba(79, 124, 255, 0.1) !important;
+  box-shadow: 0 0 6px rgba(79, 124, 255, 0.2) !important;
+}
+
+.contract-circle-option.personal-circle.active .contract-circle-inner {
+  background-color: #4f7cff !important;
+  box-shadow: 0 0 4px rgba(79, 124, 255, 0.35);
+}
+
+/* Confidential Circle - Red */
+.contract-circle-option.confidential-circle {
+  border: 1.5px solid #e63946 !important;
+}
+
+.contract-circle-option.confidential-circle.active {
+  border: 1.5px solid #e63946 !important;
+  background-color: rgba(230, 57, 70, 0.1) !important;
+  box-shadow: 0 0 6px rgba(230, 57, 70, 0.2) !important;
+}
+
+.contract-circle-option.confidential-circle.active .contract-circle-inner {
+  background-color: #e63946 !important;
+  box-shadow: 0 0 4px rgba(230, 57, 70, 0.35);
+}
+
+/* Regular Circle - Grey */
+.contract-circle-option.regular-circle {
+  border: 1.5px solid #6c757d !important;
+}
+
+.contract-circle-option.regular-circle.active {
+  border: 1.5px solid #6c757d !important;
+  background-color: rgba(108, 117, 125, 0.1) !important;
+  box-shadow: 0 0 6px rgba(108, 117, 125, 0.2) !important;
+}
+
+.contract-circle-option.regular-circle.active .contract-circle-inner {
+  background-color: #6c757d !important;
+  box-shadow: 0 0 4px rgba(108, 117, 125, 0.35);
+}
+
+/* Data Type Legend Styles */
+.contract-data-type-legend {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-bottom: 1rem;
+}
+
+.contract-data-type-legend-container {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e9ecef;
+  padding: 6px 10px;
+  min-width: 200px;
+  max-width: 240px;
+}
+
+.contract-data-type-options {
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+}
+
+.contract-data-type-legend-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 4px;
+  border-radius: 6px;
+  background-color: #f8f9fa;
+}
+
+.contract-data-type-legend-item i {
+  font-size: 0.9rem;
+  margin-bottom: 2px;
+}
+
+.contract-data-type-legend-item span {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+/* Personal Data Type - Blue */
+.contract-data-type-legend-item.personal-option i {
+  color: #4f7cff;
+}
+
+.contract-data-type-legend-item.personal-option span {
+  color: #4f7cff;
+}
+
+/* Confidential Data Type - Red */
+.contract-data-type-legend-item.confidential-option i {
+  color: #e63946;
+}
+
+.contract-data-type-legend-item.confidential-option span {
+  color: #e63946;
+}
+
+/* Regular Data Type - Gray */
+.contract-data-type-legend-item.regular-option i {
+  color: #6c757d;
+}
+
+.contract-data-type-legend-item.regular-option span {
+  color: #6c757d;
+}
+
+/* Ensure labels properly display toggles */
+.space-y-2 .flex.items-center.gap-2 {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: 4px !important;
+}
+</style>

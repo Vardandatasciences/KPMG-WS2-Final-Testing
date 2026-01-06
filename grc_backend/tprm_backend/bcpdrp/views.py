@@ -521,6 +521,16 @@ def vendor_upload_view(request):
             logger.error(f"Error parsing documents JSON: {e}")
             documents = []
         
+        # Get data_inventory from request
+        data_inventory_str = request.data.get('data_inventory', '{}')
+        try:
+            data_inventory = json.loads(data_inventory_str) if isinstance(data_inventory_str, str) else data_inventory_str
+            if not isinstance(data_inventory, dict):
+                data_inventory = {}
+        except (json.JSONDecodeError, TypeError) as e:
+            logger.error(f"Error parsing data_inventory JSON: {e}")
+            data_inventory = {}
+        
         if not strategy_name:
             return error_response("Strategy name is required", status.HTTP_400_BAD_REQUEST)
         
@@ -607,6 +617,10 @@ def vendor_upload_view(request):
             max_plan = Plan.objects.aggregate(max_id=models.Max('plan_id'))
             plan_id = (max_plan['max_id'] or 0) + 1
             
+            # Get data_inventory from document data or use the one from request
+            plan_data_inventory = doc_data.get('data_inventory', data_inventory)
+            if not isinstance(plan_data_inventory, dict):
+                plan_data_inventory = {}
             # Get plan type from document data (per-document plan type)
             doc_plan_type = doc_data.get('planType', '').strip()
             
@@ -626,7 +640,8 @@ def vendor_upload_view(request):
                 plan_scope=doc_data.get('scope', ''),
                 criticality=doc_data.get('criticality', 'MEDIUM'),
                 status='SUBMITTED',
-                submitted_by=vendor_id  # In real app, this would be the authenticated user
+                submitted_by=vendor_id,  # In real app, this would be the authenticated user
+                data_inventory=plan_data_inventory
             )
             
             created_plans.append({
@@ -1494,6 +1509,10 @@ def evaluation_save_view(request, plan_id):
             compliance_score = float(evaluation_data.get('compliance_score')) if evaluation_data.get('compliance_score') is not None and evaluation_data.get('compliance_score') != '' else None
             weighted_score = float(evaluation_data.get('weighted_score')) if evaluation_data.get('weighted_score') is not None and evaluation_data.get('weighted_score') != '' else None
             
+            # Get data_inventory from evaluation_data
+            eval_data_inventory = evaluation_data.get('data_inventory', {})
+            if not isinstance(eval_data_inventory, dict):
+                eval_data_inventory = {}
             # Determine initial status based on is_final_submission
             is_final = evaluation_data.get('is_final_submission', False)
             initial_status = 'SUBMITTED' if is_final else 'IN_PROGRESS'
@@ -1513,7 +1532,8 @@ def evaluation_save_view(request, plan_id):
                 compliance_score=compliance_score,
                 weighted_score=weighted_score,
                 criteria_json=evaluation_data.get('criteria_json', {}),
-                evaluator_comments=evaluation_data.get('evaluator_comments', '')
+                evaluator_comments=evaluation_data.get('evaluator_comments', ''),
+                data_inventory=eval_data_inventory
             )
             created = True
             logger.info(f"Successfully created evaluation {evaluation.evaluation_id} with status {initial_status}")
@@ -1560,6 +1580,11 @@ def evaluation_save_view(request, plan_id):
                 evaluation.criteria_json = evaluation_data['criteria_json']
             if 'evaluator_comments' in evaluation_data:
                 evaluation.evaluator_comments = evaluation_data['evaluator_comments']
+            if 'data_inventory' in evaluation_data:
+                eval_data_inventory = evaluation_data.get('data_inventory', {})
+                if not isinstance(eval_data_inventory, dict):
+                    eval_data_inventory = {}
+                evaluation.data_inventory = eval_data_inventory
             
             # Update status based on whether it's a draft or final submission
             if evaluation_data.get('is_final_submission', False):

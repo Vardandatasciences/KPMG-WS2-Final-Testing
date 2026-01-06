@@ -81,6 +81,8 @@ class RFP(models.Model):
     # JSON fields
     compliance_requirements = models.JSONField(null=True, blank=True)
     custom_fields = models.JSONField(null=True, blank=True)
+    data_inventory = models.JSONField(null=True, blank=True, help_text="JSON mapping RFP field labels to data types (personal, confidential, regular)")
+    retentionExpiry = models.DateField(blank=True, null=True, db_column='retentionExpiry', help_text="Data retention expiry date")
     
     # Award information
     final_evaluation_score = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
@@ -190,6 +192,8 @@ class RFPEvaluationCriteria(models.Model):
     display_order = models.IntegerField(default=0)
     created_by = models.IntegerField()  # Changed from ForeignKey to IntegerField to match MySQL schema
     created_date = models.DateTimeField(auto_now_add=True)
+    data_inventory = models.JSONField(null=True, blank=True, help_text="JSON mapping criteria field labels to data types (personal, confidential, regular)")
+    retentionExpiry = models.DateField(blank=True, null=True, db_column='retentionExpiry', help_text="Data retention expiry date")
     
     def __str__(self):
         return f"{self.criteria_name} - {self.weight_percentage}%"
@@ -1034,6 +1038,8 @@ class RFPTypeCustomFields(models.Model):
     
     # Response fields stored as JSON
     response_fields = models.JSONField(null=True, blank=True)
+    data_inventory = models.JSONField(null=True, blank=True, help_text="JSON mapping RFP type custom field labels to data types (personal, confidential, regular)")
+    retentionExpiry = models.DateField(blank=True, null=True, db_column='retentionExpiry', help_text="Data retention expiry date")
     
     def __str__(self):
         return f"RFP Type: {self.rfp_type} (ID: {self.rfp_type_id})"

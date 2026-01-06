@@ -12,4 +12,4 @@ class VendorCoreConfig(AppConfig):
     
     def ready(self):
         """Initialize application when Django starts"""
-        pass  # No signals needed for unmanaged models
+        import tprm_backend.apps.vendor_core.signals  # noqa

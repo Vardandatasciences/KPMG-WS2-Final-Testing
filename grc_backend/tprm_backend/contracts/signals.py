@@ -12,6 +12,14 @@ from .models import VendorContract, ContractTerm, ContractClause
 
 logger = logging.getLogger(__name__)
 
+# Import retention helpers from GRC models
+try:
+    from grc.models import compute_retention_expiry, upsert_retention_timeline
+    RETENTION_AVAILABLE = True
+except ImportError:
+    RETENTION_AVAILABLE = False
+    logger.warning("Retention helpers not available. Retention expiry will not be set automatically.")
+
 # Store old term_id before save to track changes
 _term_id_cache = {}
 
@@ -51,6 +59,24 @@ def contract_post_save(sender, instance, created, **kwargs):
             logger.info(f"New contract created: {instance.contract_id} - {instance.contract_title}")
         else:
             logger.info(f"Contract updated: {instance.contract_id} - {instance.contract_title}")
+        
+        # Set retention expiry if retention is available
+        if RETENTION_AVAILABLE:
+            try:
+                page_key = 'contract_create' if created else 'contract_update'
+                expiry = compute_retention_expiry('vendor_contract', page_key)
+                if expiry:
+                    VendorContract.objects.filter(pk=instance.pk).update(retentionExpiry=expiry)
+                    setattr(instance, 'retentionExpiry', expiry)
+                    upsert_retention_timeline(
+                        instance,
+                        'vendor_contract',
+                        record_name=getattr(instance, 'contract_title', None),
+                        created_date=getattr(instance, 'created_at', None),
+                        framework_id=None
+                    )
+            except Exception as e:
+                logger.error(f"Error setting retention expiry for contract {instance.contract_id}: {str(e)}")
     except Exception as e:
         logger.error(f"Error in contract post_save signal: {str(e)}")
 
@@ -74,6 +100,17 @@ def contract_term_post_save(sender, instance, created, **kwargs):
     try:
         if created:
             logger.info(f"New contract term created: {instance.term_id} for contract {instance.contract_id}")
+            
+            # Set retention expiry if retention is available
+            if RETENTION_AVAILABLE:
+                try:
+                    page_key = 'contract_term_create'
+                    expiry = compute_retention_expiry('contract_term', page_key)
+                    if expiry:
+                        ContractTerm.objects.filter(pk=instance.pk).update(retentionExpiry=expiry)
+                        setattr(instance, 'retentionExpiry', expiry)
+                except Exception as e:
+                    logger.error(f"Error setting retention expiry for contract term {instance.pk}: {str(e)}")
             
             # For newly created terms, try to find and update questionnaires that might have been created
             # with the original term_id (before it was modified due to duplicates)
@@ -204,6 +241,17 @@ def contract_term_post_save(sender, instance, created, **kwargs):
         else:
             logger.info(f"Contract term updated: {instance.term_id} for contract {instance.contract_id}")
             
+            # Set retention expiry if retention is available
+            if RETENTION_AVAILABLE:
+                try:
+                    page_key = 'contract_term_update'
+                    expiry = compute_retention_expiry('contract_term', page_key)
+                    if expiry:
+                        ContractTerm.objects.filter(pk=instance.pk).update(retentionExpiry=expiry)
+                        setattr(instance, 'retentionExpiry', expiry)
+                except Exception as e:
+                    logger.error(f"Error setting retention expiry for contract term {instance.pk}: {str(e)}")
+            
             # If term_id changed, update questionnaires that reference the old term_id
             old_term_id = _term_id_cache.get(instance.pk)
             if old_term_id and old_term_id != instance.term_id:
@@ -231,6 +279,17 @@ def contract_clause_post_save(sender, instance, created, **kwargs):
             logger.info(f"New contract clause created: {instance.clause_id} for contract {instance.contract_id}")
         else:
             logger.info(f"Contract clause updated: {instance.clause_id} for contract {instance.contract_id}")
+        
+        # Set retention expiry if retention is available
+        if RETENTION_AVAILABLE:
+            try:
+                page_key = 'contract_clause_create' if created else 'contract_clause_update'
+                expiry = compute_retention_expiry('contract_clause', page_key)
+                if expiry:
+                    ContractClause.objects.filter(pk=instance.pk).update(retentionExpiry=expiry)
+                    setattr(instance, 'retentionExpiry', expiry)
+            except Exception as e:
+                logger.error(f"Error setting retention expiry for contract clause {instance.pk}: {str(e)}")
     except Exception as e:
         logger.error(f"Error in contract clause post_save signal: {str(e)}")
 

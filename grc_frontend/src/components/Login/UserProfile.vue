@@ -1218,7 +1218,10 @@
             </div>
             <div class="filter-stats">
               <span class="filter-stat-item">
-                <strong>Total:</strong> {{ dataSubjectRequests.length }}
+                <strong>Total (GRC):</strong> {{ dataSubjectRequests.length }}
+              </span>
+              <span class="filter-stat-item">
+                <strong>Total (TPRM):</strong> {{ tprmAccessRequests.length }}
               </span>
               <span class="filter-stat-item">
                 <strong>Filtered:</strong> {{ filteredRequests.length }}
@@ -1227,14 +1230,14 @@
           </div>
          
           <!-- Loading State -->
-          <div v-if="loadingRequests" class="loading-container">
+          <div v-if="loadingRequests || loadingTprmRequests" class="loading-container">
             <div class="spinner"></div>
             <p>Loading requests...</p>
           </div>
-         
+          
           <!-- Error State -->
-          <div v-else-if="requestsError" class="message error-message">
-            <i class="fas fa-exclamation-circle"></i> {{ requestsError }}
+          <div v-else-if="requestsError || tprmRequestsError" class="message error-message">
+            <i class="fas fa-exclamation-circle"></i> {{ requestsError || tprmRequestsError }}
           </div>
          
           <!-- Requests Table -->
@@ -1256,20 +1259,21 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-if="dataSubjectRequests.length === 0">
+                <tr v-if="filteredRequests.length === 0">
                   <td :colspan="isAdminUser ? 11 : 10" class="no-requests">
                     <i class="fas fa-inbox"></i>
-                    <p>No data subject requests found.</p>
+                    <p>No requests found.</p>
                   </td>
                 </tr>
-                <tr v-for="request in filteredRequests" :key="request.id" :class="getRequestRowClass(request)">
+                <tr v-for="request in filteredRequests" :key="`${request.source || 'grc'}-${request.id}`" :class="getRequestRowClass(request)">
                   <td>{{ request.id }}</td>
                   <td>{{ request.user_id }}</td>
-                  <td>{{ request.user_name }}</td>
+                  <td>{{ request.user_name || request.UserName || 'N/A' }}</td>
                   <td>
-                    <span class="request-type-badge" :class="'type-' + request.request_type.toLowerCase()">
-                      {{ request.request_type_display }}
+                    <span class="request-type-badge" :class="'type-' + (request.request_type || 'ACCESS').toLowerCase()">
+                      {{ request.request_type_display || (request.source === 'tprm' ? 'TPRM Access' : 'Access') }}
                     </span>
+                    <span v-if="request.source === 'tprm'" class="source-badge" style="margin-left: 5px; font-size: 10px; background: #17a2b8; color: white; padding: 2px 6px; border-radius: 3px;">TPRM</span>
                   </td>
                   <td>
                     <span v-if="getRequestRiskLevel(request)" class="risk-level-badge" :class="'risk-level-' + getRequestRiskLevel(request).toLowerCase()">
@@ -1353,25 +1357,29 @@
                     {{ selectedRequest.request_type_display }}
                   </span>
                 </div>
-                <!-- Show ACCESS request specific fields -->
-                <div v-if="selectedRequest.request_type === 'ACCESS'" class="info-item">
+                <!-- Show ACCESS request specific fields (both GRC and TPRM) -->
+                <div v-if="selectedRequest.request_type === 'ACCESS' || selectedRequest.source === 'tprm'" class="info-item">
                   <label>Requested URL:</label>
-                  <span class="url-text">{{ selectedRequest.audit_trail?.requested_url || 'N/A' }}</span>
+                  <span class="url-text">{{ selectedRequest.requested_url || selectedRequest.audit_trail?.requested_url || 'N/A' }}</span>
                 </div>
-                <div v-if="selectedRequest.request_type === 'ACCESS'" class="info-item">
+                <div v-if="selectedRequest.request_type === 'ACCESS' || selectedRequest.source === 'tprm'" class="info-item">
                   <label>Feature:</label>
-                  <span>{{ selectedRequest.audit_trail?.requested_feature || 'N/A' }}</span>
+                  <span>{{ selectedRequest.requested_feature || selectedRequest.audit_trail?.requested_feature || 'N/A' }}</span>
                 </div>
-                <div v-if="selectedRequest.request_type === 'ACCESS'" class="info-item">
+                <div v-if="selectedRequest.request_type === 'ACCESS' || selectedRequest.source === 'tprm'" class="info-item">
                   <label>Required Permission:</label>
-                  <span class="permission-badge" v-if="selectedRequest.audit_trail?.required_permission">
-                    {{ selectedRequest.audit_trail.required_permission }}
+                  <span class="permission-badge" v-if="selectedRequest.required_permission || selectedRequest.audit_trail?.required_permission">
+                    {{ selectedRequest.required_permission || selectedRequest.audit_trail?.required_permission }}
                   </span>
                   <span v-else class="text-muted">N/A</span>
                 </div>
-                <div v-if="selectedRequest.request_type === 'ACCESS' && selectedRequest.audit_trail?.message" class="info-item">
+                <div v-if="(selectedRequest.request_type === 'ACCESS' || selectedRequest.source === 'tprm') && (selectedRequest.message || selectedRequest.audit_trail?.message)" class="info-item">
                   <label>Message:</label>
-                  <span>{{ selectedRequest.audit_trail.message }}</span>
+                  <span>{{ selectedRequest.message || selectedRequest.audit_trail?.message }}</span>
+                </div>
+                <div v-if="selectedRequest.source === 'tprm'" class="info-item">
+                  <label>Source:</label>
+                  <span class="source-badge" style="background: #17a2b8; color: white; padding: 4px 8px; border-radius: 4px;">TPRM</span>
                 </div>
                 <!-- Show info_type for non-ACCESS requests -->
                 <div v-if="selectedRequest.request_type !== 'ACCESS'" class="info-item">
@@ -1945,8 +1953,12 @@ export default {
       retentionPageConfigs: {},
       // Data Subject Requests
       dataSubjectRequests: [],
+      // TPRM Access Requests
+      tprmAccessRequests: [],
       loadingRequests: false,
+      loadingTprmRequests: false,
       requestsError: null,
+      tprmRequestsError: null,
       processingRequestId: null,
       // Edit mode states
       editModePersonal: false,
@@ -2094,10 +2106,25 @@ export default {
       return this.otpDigits.every(digit => digit !== '') && this.otpDigits.join('').length === 6;
     },
     filteredRequests() {
+      // Combine GRC and TPRM requests
+      const allRequests = [
+        ...this.dataSubjectRequests.map(req => ({ ...req, source: 'grc' })),
+        ...this.tprmAccessRequests.map(req => ({ ...req, source: 'tprm', request_type: 'ACCESS', request_type_display: 'TPRM Access' }))
+      ];
+      
       if (!this.riskLevelFilter) {
-        return this.dataSubjectRequests;
+        return allRequests;
       }
-      return this.dataSubjectRequests.filter(request => {
+      
+      // Filter requests based on risk level
+      // TPRM requests don't have risk levels, so always include them
+      return allRequests.filter(request => {
+        // Always include TPRM requests (they don't have risk levels)
+        if (request.source === 'tprm') {
+          return true;
+        }
+        
+        // For GRC requests, apply risk level filter
         const riskLevel = this.getRequestRiskLevel(request);
         if (this.riskLevelFilter === 'N/A') {
           return !riskLevel;
@@ -2132,6 +2159,7 @@ export default {
       } else if (newTab === 'requests') {
         // Load requests when switching to requests tab
         this.loadDataSubjectRequests();
+        this.loadTprmAccessRequests();
       }
     },
     consentSubTab(newSubTab) {
@@ -3719,15 +3747,15 @@ async updatePassword() {
           if (!userId) {
             throw new Error('User ID not found');
           }
-         
+          
           const { API_BASE_URL } = await import('../../config/api.js');
           const axios = (await import('axios')).default;
-         
+          
           const response = await axios.get(
             `${API_BASE_URL}/api/data-subject-requests/${userId}/`,
             { headers: this.getConsentAuthHeaders() }
           );
-         
+          
           if (response.data.status === 'success') {
             this.dataSubjectRequests = response.data.data || [];
           } else {
@@ -3741,6 +3769,105 @@ async updatePassword() {
                              'Failed to load data subject requests. Please try again.';
         } finally {
           this.loadingRequests = false;
+        }
+      },
+      
+      async loadTprmAccessRequests() {
+        this.loadingTprmRequests = true;
+        this.tprmRequestsError = null;
+       
+        try {
+          const userId = this.getCurrentUserId();
+          if (!userId) {
+            throw new Error('User ID not found');
+          }
+          
+          const { API_ENDPOINTS } = await import('../../config/api.js');
+          const axios = (await import('axios')).default;
+          
+          console.log('🔵 [UserProfile] Loading TPRM access requests for user:', userId);
+          console.log('🔵 [UserProfile] API Endpoint:', API_ENDPOINTS.TPRM_ACCESS_REQUESTS(userId));
+          
+          const response = await axios.get(
+            API_ENDPOINTS.TPRM_ACCESS_REQUESTS(userId),
+            { headers: this.getConsentAuthHeaders() }
+          );
+          
+          console.log('🔵 [UserProfile] TPRM access requests response:', response.data);
+          
+          if (response.data.status === 'success') {
+            const rawRequests = response.data.data || [];
+            console.log('🔵 [UserProfile] Raw TPRM requests received:', rawRequests.length, rawRequests);
+            
+            // Transform TPRM requests to match GRC request format
+            this.tprmAccessRequests = rawRequests.map(req => {
+              // Build user name from available fields
+              let userName = 'N/A';
+              if (req.UserName) {
+                userName = req.UserName;
+              } else if (req.FirstName || req.LastName) {
+                userName = `${req.FirstName || ''} ${req.LastName || ''}`.trim();
+              } else if (req.user_id) {
+                userName = `User ${req.user_id}`;
+              }
+              
+              // Build approver name
+              let approvedByName = null;
+              if (req.ApproverFirstName && req.ApproverLastName) {
+                approvedByName = `${req.ApproverFirstName} ${req.ApproverLastName}`;
+              } else if (req.ApproverFirstName) {
+                approvedByName = req.ApproverFirstName;
+              }
+              
+              const transformed = {
+                ...req,
+                request_type: 'ACCESS',
+                request_type_display: 'TPRM Access',
+                status_display: req.status === 'APPROVED' ? 'Approved' : 
+                              req.status === 'REJECTED' ? 'Rejected' : 'Requested',
+                verification_status: 'N/A',
+                verification_status_display: 'N/A',
+                user_name: userName,
+                approved_by_name: approvedByName
+              };
+              
+              console.log('🔵 [UserProfile] Transformed TPRM request:', {
+                id: transformed.id,
+                user_id: transformed.user_id,
+                status: transformed.status,
+                user_name: transformed.user_name
+              });
+              
+              return transformed;
+            });
+            
+            console.log('🔵 [UserProfile] Total TPRM access requests loaded:', this.tprmAccessRequests.length);
+            console.log('🔵 [UserProfile] Combined requests (GRC + TPRM):', 
+              this.dataSubjectRequests.length + this.tprmAccessRequests.length);
+          } else {
+            throw new Error(response.data.message || 'Failed to load TPRM requests');
+          }
+        } catch (error) {
+          console.error('🔴 [UserProfile] Error loading TPRM access requests:', error);
+          console.error('🔴 [UserProfile] Error details:', {
+            status: error.response?.status,
+            message: error.response?.data?.message,
+            url: error.config?.url
+          });
+          
+          // Don't show error if endpoint doesn't exist or table doesn't exist yet
+          if (error.response?.status !== 404 && error.response?.status !== 500) {
+            this.tprmRequestsError = error.response?.data?.message ||
+                                   error.response?.data?.error ||
+                                   error.message ||
+                                   'Failed to load TPRM access requests. Please try again.';
+          } else {
+            // Silently fail if table doesn't exist yet
+            this.tprmAccessRequests = [];
+            console.warn('🔴 [UserProfile] TPRM access requests endpoint returned 404/500, assuming table does not exist yet');
+          }
+        } finally {
+          this.loadingTprmRequests = false;
         }
       },
      
@@ -3794,37 +3921,92 @@ async updatePassword() {
           if (!userId) {
             throw new Error('User ID not found');
           }
-         
-          const { API_BASE_URL } = await import('../../config/api.js');
+          
+          // Check if this is a TPRM request
+          const tprmRequest = this.tprmAccessRequests.find(r => r.id === requestId);
+          const isTprmRequest = !!tprmRequest;
+          
+          const { API_BASE_URL, API_ENDPOINTS } = await import('../../config/api.js');
           const axios = (await import('axios')).default;
-         
+          
+          const endpoint = isTprmRequest 
+            ? API_ENDPOINTS.TPRM_UPDATE_ACCESS_REQUEST_STATUS(requestId)
+            : `${API_BASE_URL}/api/data-subject-requests/${requestId}/update-status/`;
+          
+          const requestBody = isTprmRequest
+            ? { status: status }
+            : {
+                status: status,
+                user_id: userId,
+                apply_changes: applyChanges
+              };
+          
           const response = await axios.put(
-            `${API_BASE_URL}/api/data-subject-requests/${requestId}/update-status/`,
-            {
-              status: status,
-              user_id: userId,
-              apply_changes: applyChanges
-            },
+            endpoint,
+            requestBody,
             { headers: this.getConsentAuthHeaders() }
           );
-         
+          
           if (response.data.status === 'success') {
             // Update the request in the local array
-            const requestIndex = this.dataSubjectRequests.findIndex(r => r.id === requestId);
-            if (requestIndex !== -1) {
-              this.dataSubjectRequests[requestIndex].status = status;
-              this.dataSubjectRequests[requestIndex].status_display = status === 'APPROVED' ? 'Approved' : (status === 'REJECTED' ? 'Rejected' : 'Requested');
-              this.dataSubjectRequests[requestIndex].updated_at = new Date().toISOString();
+            if (isTprmRequest) {
+              const requestIndex = this.tprmAccessRequests.findIndex(r => r.id === requestId);
+              if (requestIndex !== -1) {
+                this.tprmAccessRequests[requestIndex].status = status;
+                this.tprmAccessRequests[requestIndex].status_display = status === 'APPROVED' ? 'Approved' : (status === 'REJECTED' ? 'Rejected' : 'Requested');
+                this.tprmAccessRequests[requestIndex].updated_at = new Date().toISOString();
+              }
+            } else {
+              const requestIndex = this.dataSubjectRequests.findIndex(r => r.id === requestId);
+              if (requestIndex !== -1) {
+                this.dataSubjectRequests[requestIndex].status = status;
+                this.dataSubjectRequests[requestIndex].status_display = status === 'APPROVED' ? 'Approved' : (status === 'REJECTED' ? 'Rejected' : 'Requested');
+                this.dataSubjectRequests[requestIndex].updated_at = new Date().toISOString();
+              }
             }
-           
+            
             // Close the modal if open
             if (this.showRequestDetailsModal) {
               this.closeRequestDetailsModal();
             }
-           
+            
             // Reload requests to get updated data
             await this.loadDataSubjectRequests();
-           
+            if (isTprmRequest) {
+              await this.loadTprmAccessRequests();
+              
+              // If approved, clear frontend permission cache to ensure fresh permission checks
+              if (status === 'APPROVED') {
+                try {
+                  // Clear TPRM permission cache
+                  // The permissionsService is in tprm_frontend, which is a sibling directory
+                  // From grc_frontend/src/components/Login/ to grc_frontend/tprm_frontend/src/services/
+                  const permissionsServiceModule = await import('../../tprm_frontend/src/services/permissionsService.js');
+                  const permissionsService = permissionsServiceModule.default || permissionsServiceModule;
+                  
+                  if (permissionsService) {
+                    // Clear all permission cache
+                    if (typeof permissionsService.clearCache === 'function') {
+                      permissionsService.clearCache();
+                      console.log('🔵 [UserProfile] Cleared TPRM permission cache after approval');
+                    }
+                    
+                    // Also clear any vendor-specific cache for the user who was granted access
+                    if (typeof permissionsService.clearCacheForUser === 'function') {
+                      const requestUserId = tprmRequest.user_id || tprmRequest.UserId;
+                      if (requestUserId) {
+                        permissionsService.clearCacheForUser(requestUserId);
+                        console.log(`🔵 [UserProfile] Cleared permission cache for user ${requestUserId} after approval`);
+                      }
+                    }
+                  }
+                } catch (cacheError) {
+                  console.warn('🔵 [UserProfile] Could not clear permission cache (non-critical):', cacheError.message);
+                  // Non-critical error, continue - the backend will still work with force_refresh=True
+                }
+              }
+            }
+            
             // Show success message
             const statusDisplay = status === 'APPROVED' ? 'approved and changes applied' : (status === 'REJECTED' ? 'rejected' : 'updated');
             this.success = `Request ${statusDisplay} successfully`;
@@ -4404,6 +4586,7 @@ async updatePassword() {
            // Reload requests if on requests tab
            if (this.activeTab === 'requests') {
              this.loadDataSubjectRequests();
+        this.loadTprmAccessRequests();
            }
           
            setTimeout(() => {
