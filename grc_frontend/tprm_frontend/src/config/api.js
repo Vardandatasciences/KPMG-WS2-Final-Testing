@@ -17,6 +17,10 @@ const API_ENDPOINTS = {
     USER_APPROVALS: '/user-approvals/',
     UPDATE_STAGE_STATUS: '/update-stage-status/',
   },
+  // Access Request endpoints
+  CREATE_ACCESS_REQUEST: `${API_CONFIG.BASE_URL}/rbac/access-requests/`,
+  GET_ACCESS_REQUESTS: (userId) => `${API_CONFIG.BASE_URL}/rbac/access-requests/${userId}/`,
+  UPDATE_ACCESS_REQUEST_STATUS: (requestId) => `${API_CONFIG.BASE_URL}/rbac/access-requests/${requestId}/status/`,
   // Add other API endpoints as needed
 }
 

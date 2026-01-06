@@ -31,11 +31,18 @@ class VendorSerializer(serializers.ModelSerializer):
     total_value = serializers.SerializerMethodField()
     last_activity = serializers.SerializerMethodField()
     full_address = serializers.SerializerMethodField()
+    data_inventory = serializers.JSONField(required=False, allow_null=True)
     
     class Meta:
         model = Vendor
         fields = '__all__'
         read_only_fields = ['vendor_id', 'created_at', 'updated_at']
+    
+    def validate_data_inventory(self, value):
+        """Ensure data_inventory is always a dictionary"""
+        if not isinstance(value, dict):
+            return {}
+        return value
     
     def get_geographic_presence_display(self, obj):
         return obj.get_geographic_presence_display()
@@ -128,11 +135,18 @@ class ContractTermSerializer(serializers.ModelSerializer):
     """Serializer for ContractTerm model"""
     
     # Remove user-related fields since created_by/approved_by are now IntegerFields
+    data_inventory = serializers.JSONField(required=False, allow_null=True)
     
     class Meta:
         model = ContractTerm
         fields = '__all__'
         read_only_fields = ['created_at', 'updated_at']  # Removed term_id to allow frontend to provide it
+    
+    def validate_data_inventory(self, value):
+        """Ensure data_inventory is always a dictionary"""
+        if not isinstance(value, dict):
+            return {}
+        return value
     
     def create(self, validated_data):
         """Create contract term with term_id from frontend or auto-generated"""
@@ -213,11 +227,18 @@ class ContractClauseSerializer(serializers.ModelSerializer):
     """Serializer for ContractClause model"""
     
     # Remove user-related fields since created_by is now IntegerField
+    data_inventory = serializers.JSONField(required=False, allow_null=True)
     
     class Meta:
         model = ContractClause
         fields = '__all__'
         read_only_fields = ['clause_id', 'created_at', 'updated_at']
+    
+    def validate_data_inventory(self, value):
+        """Ensure data_inventory is always a dictionary"""
+        if not isinstance(value, dict):
+            return {}
+        return value
     
     def create(self, validated_data):
         """Create contract clause with auto-generated clause_id"""
@@ -427,6 +448,8 @@ class VendorContractCreateSerializer(serializers.ModelSerializer):
     contract_owner = serializers.IntegerField(required=False, allow_null=True)
     legal_reviewer = serializers.IntegerField(required=False, allow_null=True)
     
+    data_inventory = serializers.JSONField(required=False, allow_null=True)
+    
     class Meta:
         model = VendorContract
         fields = [
@@ -439,7 +462,7 @@ class VendorContractCreateSerializer(serializers.ModelSerializer):
             'insurance_requirements', 'data_protection_clauses',
             'dispute_resolution_method', 'governing_law', 'contract_risk_score',
             'assigned_to', 'custom_fields', 'compliance_framework',
-            'contract_owner', 'legal_reviewer', 'file_path'
+            'contract_owner', 'legal_reviewer', 'file_path', 'data_inventory'
         ]
     
     def validate_contract_number(self, value):
@@ -507,6 +530,21 @@ class VendorContractCreateSerializer(serializers.ModelSerializer):
             return {}
         return value
     
+    def validate_data_inventory(self, value):
+        """Validate data_inventory field"""
+        if value is None:
+            return {}
+        if isinstance(value, str):
+            try:
+                import json
+                parsed = json.loads(value)
+                return parsed if isinstance(parsed, dict) else {}
+            except (json.JSONDecodeError, TypeError):
+                return {}
+        if not isinstance(value, dict):
+            return {}
+        return value
+    
     def validate(self, data):
         """Validate the entire contract data"""
         # Handle JSON fields - convert plain text to JSON if needed
@@ -547,6 +585,13 @@ class VendorContractCreateSerializer(serializers.ModelSerializer):
             elif not isinstance(data['custom_fields'], dict):
                 data['custom_fields'] = {}
         
+        # Ensure data_inventory is always a dict
+        if 'data_inventory' in data:
+            if data['data_inventory'] is None:
+                data['data_inventory'] = {}
+            elif not isinstance(data['data_inventory'], dict):
+                data['data_inventory'] = {}
+        
         return data
 
 
@@ -566,7 +611,7 @@ class VendorContractUpdateSerializer(serializers.ModelSerializer):
             'liability_cap', 'insurance_requirements', 'data_protection_clauses',
             'dispute_resolution_method', 'governing_law', 'contract_risk_score',
             'assigned_to', 'custom_fields', 'compliance_framework',
-            'contract_owner', 'legal_reviewer', 'file_path', 'permission_required'
+            'contract_owner', 'legal_reviewer', 'file_path', 'permission_required', 'data_inventory'
         ]
     
     def validate_contract_value(self, value):
@@ -640,6 +685,21 @@ class VendorContractUpdateSerializer(serializers.ModelSerializer):
             return {}
         return value
     
+    def validate_data_inventory(self, value):
+        """Validate data_inventory field"""
+        if value is None:
+            return {}
+        if isinstance(value, str):
+            try:
+                import json
+                parsed = json.loads(value)
+                return parsed if isinstance(parsed, dict) else {}
+            except (json.JSONDecodeError, TypeError):
+                return {}
+        if not isinstance(value, dict):
+            return {}
+        return value
+    
     def validate(self, data):
         """Validate the entire contract data"""
         # Handle JSON fields - convert plain text to JSON if needed
@@ -679,6 +739,13 @@ class VendorContractUpdateSerializer(serializers.ModelSerializer):
                     data['custom_fields'] = {}
             elif not isinstance(data['custom_fields'], dict):
                 data['custom_fields'] = {}
+        
+        # Ensure data_inventory is always a dict
+        if 'data_inventory' in data:
+            if data['data_inventory'] is None:
+                data['data_inventory'] = {}
+            elif not isinstance(data['data_inventory'], dict):
+                data['data_inventory'] = {}
         
         return data
 

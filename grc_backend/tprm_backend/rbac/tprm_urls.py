@@ -4,6 +4,7 @@ URL patterns for TPRM RBAC system
 
 from django.urls import path
 from . import tprm_views
+from . import access_request_views
 
 app_name = 'tprm_rbac'
 
@@ -24,4 +25,9 @@ urlpatterns = [
     
     # Module access checks
     path('module-access/', tprm_views.check_module_access, name='check_module_access'),
+    
+    # Access Request endpoints
+    path('access-requests/', access_request_views.create_access_request, name='create_access_request'),
+    path('access-requests/<int:user_id>/', access_request_views.get_access_requests, name='get_access_requests'),
+    path('access-requests/<int:request_id>/update-status/', access_request_views.update_access_request_status, name='update_access_request_status'),
 ]

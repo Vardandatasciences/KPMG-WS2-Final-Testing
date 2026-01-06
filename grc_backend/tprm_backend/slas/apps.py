@@ -6,5 +6,7 @@ class SlasConfig(AppConfig):
     name = 'tprm_backend.slas'
     label = 'tprm_slas'
     verbose_name = 'TPRM SLAs'
-
+    
+    def ready(self):
+        import tprm_backend.slas.signals  # noqa
 

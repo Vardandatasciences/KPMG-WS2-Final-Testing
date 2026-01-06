@@ -96,6 +96,45 @@ MODULE_PAGES = {
         'create_module', 'create_event_type', 'create_event',
         'update_event', 'attach_evidence', 'upload_event_evidence'
     ],
+    # TPRM Modules
+    'vendor': [
+        'vendor_create', 'vendor_update', 'vendor_category_create',
+        'vendor_contact_create', 'vendor_document_upload', 'vendor_submit_registration'
+    ],
+    'vendor_contract': [
+        'contract_create', 'contract_update', 'contract_archive', 'contract_restore',
+        'contract_version_create', 'contract_amendment_create', 'contract_subcontract_create'
+    ],
+    'contract_term': [
+        'contract_term_create', 'contract_term_update', 'contract_term_delete'
+    ],
+    'contract_clause': [
+        'contract_clause_create', 'contract_clause_update', 'contract_clause_delete'
+    ],
+    'vendor_sla': [
+        'sla_create', 'sla_update', 'sla_submit', 'sla_approve'
+    ],
+    'sla_metric': [
+        'sla_metric_create', 'sla_metric_update', 'sla_metric_delete'
+    ],
+    'rfp': [
+        'rfp_create', 'rfp_update', 'rfp_submit_for_review', 'rfp_publish',
+        'rfp_award', 'rfp_document_upload', 'rfp_version_create'
+    ],
+    'rfp_evaluation_criteria': [
+        'rfp_evaluation_criteria_create', 'rfp_evaluation_criteria_update',
+        'rfp_evaluation_criteria_delete'
+    ],
+    'rfp_type_custom_fields': [
+        'rfp_type_custom_fields_create', 'rfp_type_custom_fields_update'
+    ],
+    'bcp_drp_plan': [
+        'bcp_drp_plan_create', 'bcp_drp_plan_update', 'bcp_drp_plan_upload',
+        'bcp_drp_plan_ocr_extract', 'bcp_drp_plan_approve', 'bcp_drp_plan_reject'
+    ],
+    'bcp_drp_evaluation': [
+        'bcp_drp_evaluation_create', 'bcp_drp_evaluation_update', 'bcp_drp_evaluation_save'
+    ],
 }
 
 # Map RecordType (from RetentionTimeline) to Django app/model for updating retentionExpiry
@@ -110,6 +149,18 @@ RECORD_MODEL_MAP = {
     'audit_document': ('grc', 'AuditDocument'),
     's3_file': ('grc', 'S3File'),
     'file_operations': ('grc', 'FileOperations'),
+    # TPRM Models
+    'vendor': ('tprm_backend.apps.vendor_core', 'Vendors'),
+    'vendor_contract': ('contracts', 'VendorContract'),
+    'contract_term': ('contracts', 'ContractTerm'),
+    'contract_clause': ('contracts', 'ContractClause'),
+    'vendor_sla': ('slas', 'VendorSLA'),
+    'sla_metric': ('slas', 'SLAMetric'),
+    'rfp': ('rfp', 'RFP'),
+    'rfp_evaluation_criteria': ('rfp', 'RFPEvaluationCriteria'),
+    'rfp_type_custom_fields': ('rfp', 'RFPTypeCustomFields'),
+    'bcp_drp_plan': ('bcpdrp', 'Plan'),
+    'bcp_drp_evaluation': ('bcpdrp', 'Evaluation'),
 }
 
 

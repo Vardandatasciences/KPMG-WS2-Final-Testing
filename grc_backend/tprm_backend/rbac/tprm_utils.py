@@ -191,11 +191,75 @@ class RBACTPRMUtils:
         return None
     
     @staticmethod
-    def get_user_rbac_record(user_id):
-        """Get the RBAC TPRM record for a user with extensive debugging"""
+    def get_user_rbac_record(user_id, force_refresh=False):
+        """Get the RBAC TPRM record for a user with extensive debugging
+        
+        Args:
+            user_id: The user ID to look up
+            force_refresh: If True, bypasses any cache and forces a fresh database query
+        """
         try:
-            logger.debug(f"[RBAC TPRM] Looking up RBAC record for user_id: {user_id}")
+            logger.debug(f"[RBAC TPRM] Looking up RBAC record for user_id: {user_id}, force_refresh: {force_refresh}")
             
+            # If force_refresh, clear any potential cache first
+            if force_refresh:
+                try:
+                    from django.core.cache import cache
+                    cache_key = f"rbac_tprm_user_{user_id}"
+                    cache.delete(cache_key)
+                    logger.debug(f"[RBAC TPRM] Cleared cache for user {user_id}")
+                except Exception as cache_error:
+                    logger.debug(f"[RBAC TPRM] Cache clear note: {cache_error}")
+            
+            # If force_refresh, use raw SQL to bypass ORM query cache completely
+            if force_refresh:
+                try:
+                    from django.db import connections
+                    tprm_connection = connections['tprm'] if 'tprm' in connections.databases else connections['default']
+                    
+                    # Use raw SQL to get fresh data, bypassing ORM cache
+                    with tprm_connection.cursor() as raw_cursor:
+                        raw_cursor.execute("""
+                            SELECT RBACId, UserId, UserName, Role, IsActive,
+                                   ViewVendors, CreateVendor, UpdateVendor, DeleteVendor
+                            FROM `rbac_tprm`
+                            WHERE UserId = %s AND IsActive = 'Y'
+                            LIMIT 1
+                        """, [user_id])
+                        raw_row = raw_cursor.fetchone()
+                        
+                        if raw_row:
+                            # Create a temporary RBACTPRM instance with fresh data
+                            # This bypasses ORM query cache
+                            rbac_record = RBACTPRM()
+                            rbac_record.rbac_id = raw_row[0]
+                            rbac_record.user_id = raw_row[1]
+                            rbac_record.username = raw_row[2]
+                            rbac_record.role = raw_row[3]
+                            rbac_record.is_active = raw_row[4]
+                            # Set permission fields directly from database
+                            if len(raw_row) > 5:
+                                rbac_record.view_vendors = bool(raw_row[5]) if raw_row[5] is not None else False
+                                rbac_record.create_vendor = bool(raw_row[6]) if len(raw_row) > 6 and raw_row[6] is not None else False
+                                rbac_record.update_vendor = bool(raw_row[7]) if len(raw_row) > 7 and raw_row[7] is not None else False
+                                rbac_record.delete_vendor = bool(raw_row[8]) if len(raw_row) > 8 and raw_row[8] is not None else False
+                            
+                            logger.debug(f"[RBAC TPRM] Retrieved fresh RBAC data via raw SQL for user {user_id}")
+                            
+                            if not rbac_record:
+                                logger.warning(f"[RBAC TPRM] No active RBAC record found for user {user_id}")
+                                return None
+                            
+                            logger.info(f"[RBAC TPRM] Found active RBAC record for user {user_id}: role={rbac_record.role}")
+                            return rbac_record
+                        else:
+                            logger.warning(f"[RBAC TPRM] No active RBAC record found for user {user_id} (raw SQL)")
+                            return None
+                except Exception as raw_error:
+                    logger.warning(f"[RBAC TPRM] Raw SQL query failed, falling back to ORM: {raw_error}")
+                    # Fall through to ORM query
+            
+            # Standard ORM query (may use cached data)
             rbac_record = RBACTPRM.objects.filter(user_id=user_id, is_active='Y').first()
             
             if not rbac_record:
@@ -223,19 +287,72 @@ class RBACTPRMUtils:
             return None
     
     @staticmethod
-    def check_permission(user_id, permission_name):
+    def check_permission(user_id, permission_name, force_refresh=False):
         """
         Check if user has a specific permission
         
         Args:
             user_id: User ID to check
             permission_name: Name of the permission field to check (can be either db_column name or model field name)
+            force_refresh: If True, forces a fresh database query bypassing any cache
         
         Returns:
             bool: True if user has permission, False otherwise
         """
         try:
-            rbac_record = RBACTPRMUtils.get_user_rbac_record(user_id)
+            # If force_refresh, use raw SQL to completely bypass ORM cache
+            if force_refresh:
+                try:
+                    from django.db import connections
+                    tprm_connection = connections['tprm'] if 'tprm' in connections.databases else connections['default']
+                    
+                    # Convert permission name to database column name
+                    # First try to get from model field mapping
+                    db_column = None
+                    try:
+                        # Check if permission_name is a model field, get its db_column
+                        if hasattr(RBACTPRM, permission_name):
+                            field = RBACTPRM._meta.get_field(permission_name)
+                            db_column = field.db_column
+                    except Exception:
+                        pass
+                    
+                    # If not found, try converting from PascalCase to snake_case and back
+                    if not db_column:
+                        model_field = RBACTPRMUtils.get_model_field_name_from_db_column(permission_name)
+                        if model_field and hasattr(RBACTPRM, model_field):
+                            try:
+                                field = RBACTPRM._meta.get_field(model_field)
+                                db_column = field.db_column
+                            except Exception:
+                                pass
+                    
+                    # If still not found, assume permission_name is already a db_column (PascalCase)
+                    if not db_column:
+                        # Convert snake_case to PascalCase
+                        db_column = ''.join(word.capitalize() for word in permission_name.split('_'))
+                    
+                    # Use raw SQL to check permission directly
+                    with tprm_connection.cursor() as raw_cursor:
+                        raw_cursor.execute(f"""
+                            SELECT `{db_column}` FROM `rbac_tprm`
+                            WHERE UserId = %s AND IsActive = 'Y'
+                            LIMIT 1
+                        """, [user_id])
+                        raw_row = raw_cursor.fetchone()
+                        
+                        if raw_row and raw_row[0] == 1:
+                            logger.debug(f"[RBAC TPRM] Permission {permission_name} ({db_column}) for user {user_id}: True (raw SQL)")
+                            return True
+                        else:
+                            logger.debug(f"[RBAC TPRM] Permission {permission_name} ({db_column}) for user {user_id}: False (raw SQL)")
+                            return False
+                except Exception as raw_error:
+                    logger.warning(f"[RBAC TPRM] Raw SQL permission check failed, falling back to ORM: {raw_error}")
+                    # Fall through to ORM query
+            
+            # Standard ORM-based permission check
+            rbac_record = RBACTPRMUtils.get_user_rbac_record(user_id, force_refresh=force_refresh)
             if not rbac_record:
                 logger.warning(f"[RBAC TPRM] No RBAC record found for user {user_id}")
                 return False
@@ -393,8 +510,14 @@ class RBACTPRMUtils:
             return False
     
     @staticmethod
-    def check_vendor_permission(user_id, permission_type):
-        """Check vendor-related permissions"""
+    def check_vendor_permission(user_id, permission_type, force_refresh=False):
+        """Check vendor-related permissions
+        
+        Args:
+            user_id: User ID to check
+            permission_type: Type of vendor permission ('view', 'create', 'update', 'delete', etc.)
+            force_refresh: If True, forces a fresh database query bypassing any cache
+        """
         # Handle both simplified types and full database column names
         vendor_permissions = {
             # Simplified types for backward compatibility
@@ -454,7 +577,7 @@ class RBACTPRMUtils:
         
         permission_field = vendor_permissions.get(permission_type)
         if permission_field:
-            return RBACTPRMUtils.check_permission(user_id, permission_field)
+            return RBACTPRMUtils.check_permission(user_id, permission_field, force_refresh=force_refresh)
         else:
             logger.warning(f"[RBAC TPRM] Unknown vendor permission type: {permission_type}")
             return False

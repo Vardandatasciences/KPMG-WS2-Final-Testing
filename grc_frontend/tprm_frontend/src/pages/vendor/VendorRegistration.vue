@@ -357,19 +357,139 @@
           <div class="vendor_card-content">
             <div class="vendor_form-grid">
               <div class="vendor_form-item">
-                <label class="vendor_form-label" for="vendor-code">Vendor Code</label>
+                <label class="vendor_form-label vendor_flex vendor_items-center vendor_gap-2" for="vendor-code">
+                  <span>Vendor Code</span>
+                  <div class="vendor_data-type-circle-toggle-wrapper">
+                    <div class="vendor_data-type-circle-toggle">
+                      <div 
+                        class="vendor_circle-option vendor_personal-circle" 
+                        :class="{ active: vendor_getDataType('vendor_code') === 'personal' }"
+                        @click="vendor_setDataType('vendor_code', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_confidential-circle" 
+                        :class="{ active: vendor_getDataType('vendor_code') === 'confidential' }"
+                        @click="vendor_setDataType('vendor_code', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_regular-circle" 
+                        :class="{ active: vendor_getDataType('vendor_code') === 'regular' }"
+                        @click="vendor_setDataType('vendor_code', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <input id="vendor-code" class="vendor_input" v-model="vendor_formData.vendor_code" />
               </div>
               <div class="vendor_form-item">
-                <label class="vendor_form-label" for="company-name">Company Name</label>
+                <label class="vendor_form-label vendor_flex vendor_items-center vendor_gap-2" for="company-name">
+                  <span>Company Name</span>
+                  <div class="vendor_data-type-circle-toggle-wrapper">
+                    <div class="vendor_data-type-circle-toggle">
+                      <div 
+                        class="vendor_circle-option vendor_personal-circle" 
+                        :class="{ active: vendor_getDataType('company_name') === 'personal' }"
+                        @click="vendor_setDataType('company_name', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_confidential-circle" 
+                        :class="{ active: vendor_getDataType('company_name') === 'confidential' }"
+                        @click="vendor_setDataType('company_name', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_regular-circle" 
+                        :class="{ active: vendor_getDataType('company_name') === 'regular' }"
+                        @click="vendor_setDataType('company_name', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <input id="company-name" class="vendor_input" v-model="vendor_formData.company_name" required />
               </div>
               <div class="vendor_form-item">
-                <label class="vendor_form-label" for="legal-name">Legal Name</label>
+                <label class="vendor_form-label vendor_flex vendor_items-center vendor_gap-2" for="legal-name">
+                  <span>Legal Name</span>
+                  <div class="vendor_data-type-circle-toggle-wrapper">
+                    <div class="vendor_data-type-circle-toggle">
+                      <div 
+                        class="vendor_circle-option vendor_personal-circle" 
+                        :class="{ active: vendor_getDataType('legal_name') === 'personal' }"
+                        @click="vendor_setDataType('legal_name', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_confidential-circle" 
+                        :class="{ active: vendor_getDataType('legal_name') === 'confidential' }"
+                        @click="vendor_setDataType('legal_name', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_regular-circle" 
+                        :class="{ active: vendor_getDataType('legal_name') === 'regular' }"
+                        @click="vendor_setDataType('legal_name', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <input id="legal-name" class="vendor_input" v-model="vendor_formData.legal_name" />
               </div>
               <div class="vendor_form-item">
-                <label class="vendor_form-label" for="business-type">Business Type</label>
+                <label class="vendor_form-label vendor_flex vendor_items-center vendor_gap-2" for="business-type">
+                  <span>Business Type</span>
+                  <div class="vendor_data-type-circle-toggle-wrapper">
+                    <div class="vendor_data-type-circle-toggle">
+                      <div 
+                        class="vendor_circle-option vendor_personal-circle" 
+                        :class="{ active: vendor_getDataType('business_type') === 'personal' }"
+                        @click="vendor_setDataType('business_type', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_confidential-circle" 
+                        :class="{ active: vendor_getDataType('business_type') === 'confidential' }"
+                        @click="vendor_setDataType('business_type', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_regular-circle" 
+                        :class="{ active: vendor_getDataType('business_type') === 'regular' }"
+                        @click="vendor_setDataType('business_type', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <select id="business-type" class="vendor_select" v-model="vendor_formData.business_type">
                   <option value="">Select business type</option>
                   <option value="corporation">Corporation</option>
@@ -379,11 +499,71 @@
                 </select>
               </div>
               <div class="vendor_form-item">
-                <label class="vendor_form-label" for="tax-id">Tax ID</label>
+                <label class="vendor_form-label vendor_flex vendor_items-center vendor_gap-2" for="tax-id">
+                  <span>Tax ID</span>
+                  <div class="vendor_data-type-circle-toggle-wrapper">
+                    <div class="vendor_data-type-circle-toggle">
+                      <div 
+                        class="vendor_circle-option vendor_personal-circle" 
+                        :class="{ active: vendor_getDataType('tax_id') === 'personal' }"
+                        @click="vendor_setDataType('tax_id', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_confidential-circle" 
+                        :class="{ active: vendor_getDataType('tax_id') === 'confidential' }"
+                        @click="vendor_setDataType('tax_id', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_regular-circle" 
+                        :class="{ active: vendor_getDataType('tax_id') === 'regular' }"
+                        @click="vendor_setDataType('tax_id', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <input id="tax-id" class="vendor_input" v-model="vendor_formData.tax_id" />
               </div>
               <div class="vendor_form-item">
-                <label class="vendor_form-label" for="duns-number">DUNS Number</label>
+                <label class="vendor_form-label vendor_flex vendor_items-center vendor_gap-2" for="duns-number">
+                  <span>DUNS Number</span>
+                  <div class="vendor_data-type-circle-toggle-wrapper">
+                    <div class="vendor_data-type-circle-toggle">
+                      <div 
+                        class="vendor_circle-option vendor_personal-circle" 
+                        :class="{ active: vendor_getDataType('duns_number') === 'personal' }"
+                        @click="vendor_setDataType('duns_number', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_confidential-circle" 
+                        :class="{ active: vendor_getDataType('duns_number') === 'confidential' }"
+                        @click="vendor_setDataType('duns_number', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_regular-circle" 
+                        :class="{ active: vendor_getDataType('duns_number') === 'regular' }"
+                        @click="vendor_setDataType('duns_number', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <input id="duns-number" class="vendor_input" v-model="vendor_formData.duns_number" />
               </div>
             </div>
@@ -400,7 +580,37 @@
           <div class="vendor_card-content">
             <div class="vendor_form-grid">
               <div class="vendor_form-item">
-                <label class="vendor_form-label" for="incorporation-date">Incorporation Date</label>
+                <label class="vendor_form-label vendor_flex vendor_items-center vendor_gap-2" for="incorporation-date">
+                  <span>Incorporation Date</span>
+                  <div class="vendor_data-type-circle-toggle-wrapper">
+                    <div class="vendor_data-type-circle-toggle">
+                      <div 
+                        class="vendor_circle-option vendor_personal-circle" 
+                        :class="{ active: vendor_getDataType('incorporation_date') === 'personal' }"
+                        @click="vendor_setDataType('incorporation_date', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_confidential-circle" 
+                        :class="{ active: vendor_getDataType('incorporation_date') === 'confidential' }"
+                        @click="vendor_setDataType('incorporation_date', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_regular-circle" 
+                        :class="{ active: vendor_getDataType('incorporation_date') === 'regular' }"
+                        @click="vendor_setDataType('incorporation_date', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <div class="vendor_relative">
                   <input id="incorporation-date" class="vendor_input vendor_pl-10" type="date" v-model="vendor_formData.incorporation_date" />
                   <svg class="vendor_absolute vendor_left-3 vendor_top-half vendor_transform vendor_-translate-y-half vendor_h-4 vendor_w-4 vendor_text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -409,7 +619,37 @@
                 </div>
               </div>
               <div class="vendor_form-item">
-                <label class="vendor_form-label" for="industry-sector">Industry Sector</label>
+                <label class="vendor_form-label vendor_flex vendor_items-center vendor_gap-2" for="industry-sector">
+                  <span>Industry Sector</span>
+                  <div class="vendor_data-type-circle-toggle-wrapper">
+                    <div class="vendor_data-type-circle-toggle">
+                      <div 
+                        class="vendor_circle-option vendor_personal-circle" 
+                        :class="{ active: vendor_getDataType('industry_sector') === 'personal' }"
+                        @click="vendor_setDataType('industry_sector', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_confidential-circle" 
+                        :class="{ active: vendor_getDataType('industry_sector') === 'confidential' }"
+                        @click="vendor_setDataType('industry_sector', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_regular-circle" 
+                        :class="{ active: vendor_getDataType('industry_sector') === 'regular' }"
+                        @click="vendor_setDataType('industry_sector', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <select id="industry-sector" class="vendor_select" v-model="vendor_formData.industry_sector">
                   <option value="">Select industry</option>
                   <option value="technology">Technology</option>
@@ -420,19 +660,139 @@
                 </select>
               </div>
               <div class="vendor_form-item">
-                <label class="vendor_form-label" for="website">Website</label>
+                <label class="vendor_form-label vendor_flex vendor_items-center vendor_gap-2" for="website">
+                  <span>Website</span>
+                  <div class="vendor_data-type-circle-toggle-wrapper">
+                    <div class="vendor_data-type-circle-toggle">
+                      <div 
+                        class="vendor_circle-option vendor_personal-circle" 
+                        :class="{ active: vendor_getDataType('website') === 'personal' }"
+                        @click="vendor_setDataType('website', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_confidential-circle" 
+                        :class="{ active: vendor_getDataType('website') === 'confidential' }"
+                        @click="vendor_setDataType('website', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_regular-circle" 
+                        :class="{ active: vendor_getDataType('website') === 'regular' }"
+                        @click="vendor_setDataType('website', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <input id="website" class="vendor_input" v-model="vendor_formData.website" placeholder="https://example.com" />
               </div>
               <div class="vendor_form-item">
-                <label class="vendor_form-label" for="annual-revenue">Annual Revenue</label>
+                <label class="vendor_form-label vendor_flex vendor_items-center vendor_gap-2" for="annual-revenue">
+                  <span>Annual Revenue</span>
+                  <div class="vendor_data-type-circle-toggle-wrapper">
+                    <div class="vendor_data-type-circle-toggle">
+                      <div 
+                        class="vendor_circle-option vendor_personal-circle" 
+                        :class="{ active: vendor_getDataType('annual_revenue') === 'personal' }"
+                        @click="vendor_setDataType('annual_revenue', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_confidential-circle" 
+                        :class="{ active: vendor_getDataType('annual_revenue') === 'confidential' }"
+                        @click="vendor_setDataType('annual_revenue', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_regular-circle" 
+                        :class="{ active: vendor_getDataType('annual_revenue') === 'regular' }"
+                        @click="vendor_setDataType('annual_revenue', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <input id="annual-revenue" class="vendor_input" type="number" step="0.01" v-model.number="vendor_formData.annual_revenue" placeholder="1000000" />
               </div>
               <div class="vendor_form-item">
-                <label class="vendor_form-label" for="employee-count">Employee Count</label>
+                <label class="vendor_form-label vendor_flex vendor_items-center vendor_gap-2" for="employee-count">
+                  <span>Employee Count</span>
+                  <div class="vendor_data-type-circle-toggle-wrapper">
+                    <div class="vendor_data-type-circle-toggle">
+                      <div 
+                        class="vendor_circle-option vendor_personal-circle" 
+                        :class="{ active: vendor_getDataType('employee_count') === 'personal' }"
+                        @click="vendor_setDataType('employee_count', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_confidential-circle" 
+                        :class="{ active: vendor_getDataType('employee_count') === 'confidential' }"
+                        @click="vendor_setDataType('employee_count', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_regular-circle" 
+                        :class="{ active: vendor_getDataType('employee_count') === 'regular' }"
+                        @click="vendor_setDataType('employee_count', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <input id="employee-count" class="vendor_input" type="number" v-model.number="vendor_formData.employee_count" placeholder="100" />
               </div>
               <div class="vendor_form-item">
-                <label class="vendor_form-label" for="headquarters">Headquarters Address</label>
+                <label class="vendor_form-label vendor_flex vendor_items-center vendor_gap-2" for="headquarters">
+                  <span>Headquarters Address</span>
+                  <div class="vendor_data-type-circle-toggle-wrapper">
+                    <div class="vendor_data-type-circle-toggle">
+                      <div 
+                        class="vendor_circle-option vendor_personal-circle" 
+                        :class="{ active: vendor_getDataType('headquarters_address') === 'personal' }"
+                        @click="vendor_setDataType('headquarters_address', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_confidential-circle" 
+                        :class="{ active: vendor_getDataType('headquarters_address') === 'confidential' }"
+                        @click="vendor_setDataType('headquarters_address', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_regular-circle" 
+                        :class="{ active: vendor_getDataType('headquarters_address') === 'regular' }"
+                        @click="vendor_setDataType('headquarters_address', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <textarea id="headquarters" class="vendor_textarea" v-model="vendor_formData.headquarters_address" placeholder="123 Main St, City, State, ZIP"></textarea>
               </div>
             </div>
@@ -449,7 +809,37 @@
           <div class="vendor_card-content">
             <div class="vendor_form-grid">
               <div class="vendor_form-item">
-                <label class="vendor_form-label" for="vendor-category">Vendor Category</label>
+                <label class="vendor_form-label vendor_flex vendor_items-center vendor_gap-2" for="vendor-category">
+                  <span>Vendor Category</span>
+                  <div class="vendor_data-type-circle-toggle-wrapper">
+                    <div class="vendor_data-type-circle-toggle">
+                      <div 
+                        class="vendor_circle-option vendor_personal-circle" 
+                        :class="{ active: vendor_getDataType('vendor_category') === 'personal' }"
+                        @click="vendor_setDataType('vendor_category', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_confidential-circle" 
+                        :class="{ active: vendor_getDataType('vendor_category') === 'confidential' }"
+                        @click="vendor_setDataType('vendor_category', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_regular-circle" 
+                        :class="{ active: vendor_getDataType('vendor_category') === 'regular' }"
+                        @click="vendor_setDataType('vendor_category', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <select id="vendor-category" class="vendor_select" v-model="vendor_formData.vendor_category">
                   <option value="">Select category</option>
                   <option value="software">Software</option>
@@ -460,7 +850,37 @@
                 </select>
               </div>
               <div class="vendor_form-item">
-                <label class="vendor_form-label" for="risk-level">Risk Level</label>
+                <label class="vendor_form-label vendor_flex vendor_items-center vendor_gap-2" for="risk-level">
+                  <span>Risk Level</span>
+                  <div class="vendor_data-type-circle-toggle-wrapper">
+                    <div class="vendor_data-type-circle-toggle">
+                      <div 
+                        class="vendor_circle-option vendor_personal-circle" 
+                        :class="{ active: vendor_getDataType('risk_level') === 'personal' }"
+                        @click="vendor_setDataType('risk_level', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_confidential-circle" 
+                        :class="{ active: vendor_getDataType('risk_level') === 'confidential' }"
+                        @click="vendor_setDataType('risk_level', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_regular-circle" 
+                        :class="{ active: vendor_getDataType('risk_level') === 'regular' }"
+                        @click="vendor_setDataType('risk_level', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <select id="risk-level" class="vendor_select" v-model="vendor_formData.risk_level">
                   <option value="">Select risk level</option>
                   <option value="low">Low</option>
@@ -470,7 +890,37 @@
                 </select>
               </div>
               <div class="vendor_form-item">
-                <label class="vendor_form-label" for="status">Status</label>
+                <label class="vendor_form-label vendor_flex vendor_items-center vendor_gap-2" for="status">
+                  <span>Status</span>
+                  <div class="vendor_data-type-circle-toggle-wrapper">
+                    <div class="vendor_data-type-circle-toggle">
+                      <div 
+                        class="vendor_circle-option vendor_personal-circle" 
+                        :class="{ active: vendor_getDataType('status') === 'personal' }"
+                        @click="vendor_setDataType('status', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_confidential-circle" 
+                        :class="{ active: vendor_getDataType('status') === 'confidential' }"
+                        @click="vendor_setDataType('status', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_regular-circle" 
+                        :class="{ active: vendor_getDataType('status') === 'regular' }"
+                        @click="vendor_setDataType('status', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <select id="status" class="vendor_select" v-model="vendor_formData.status">
                   <option value="">Select status</option>
                   <option value="active">Active</option>
@@ -480,7 +930,37 @@
                 </select>
               </div>
               <div class="vendor_form-item">
-                <label class="vendor_form-label" for="has-system-access">Has System Access</label>
+                <label class="vendor_form-label vendor_flex vendor_items-center vendor_gap-2" for="has-system-access">
+                  <span>Has System Access</span>
+                  <div class="vendor_data-type-circle-toggle-wrapper">
+                    <div class="vendor_data-type-circle-toggle">
+                      <div 
+                        class="vendor_circle-option vendor_personal-circle" 
+                        :class="{ active: vendor_getDataType('has_system_access') === 'personal' }"
+                        @click="vendor_setDataType('has_system_access', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_confidential-circle" 
+                        :class="{ active: vendor_getDataType('has_system_access') === 'confidential' }"
+                        @click="vendor_setDataType('has_system_access', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_regular-circle" 
+                        :class="{ active: vendor_getDataType('has_system_access') === 'regular' }"
+                        @click="vendor_setDataType('has_system_access', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <div class="vendor_checkbox-container">
                   <input type="checkbox" id="has-system-access" class="vendor_checkbox" v-model="vendor_formData.has_system_access" />
                   <label class="vendor_form-label" for="has-system-access">Has System Access</label>
@@ -489,18 +969,108 @@
             </div>
             
             <div class="vendor_space-y-4">
-              <div class="vendor_checkbox-container">
+              <div class="vendor_checkbox-container vendor_flex vendor_items-center vendor_gap-2">
                 <input type="checkbox" id="critical-vendor" class="vendor_checkbox" v-model="vendor_formData.is_critical_vendor" />
-                <label class="vendor_form-label" for="critical-vendor">Is Critical Vendor</label>
+                <label class="vendor_form-label vendor_flex vendor_items-center vendor_gap-2" for="critical-vendor">
+                  <span>Is Critical Vendor</span>
+                  <div class="vendor_data-type-circle-toggle-wrapper">
+                    <div class="vendor_data-type-circle-toggle">
+                      <div 
+                        class="vendor_circle-option vendor_personal-circle" 
+                        :class="{ active: vendor_getDataType('is_critical_vendor') === 'personal' }"
+                        @click="vendor_setDataType('is_critical_vendor', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_confidential-circle" 
+                        :class="{ active: vendor_getDataType('is_critical_vendor') === 'confidential' }"
+                        @click="vendor_setDataType('is_critical_vendor', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_regular-circle" 
+                        :class="{ active: vendor_getDataType('is_critical_vendor') === 'regular' }"
+                        @click="vendor_setDataType('is_critical_vendor', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
               </div>
-              <div class="vendor_checkbox-container">
+              <div class="vendor_checkbox-container vendor_flex vendor_items-center vendor_gap-2">
                 <input type="checkbox" id="data-access" class="vendor_checkbox" v-model="vendor_formData.has_data_access" />
-                <label class="vendor_form-label" for="data-access">Has Data Access</label>
+                <label class="vendor_form-label vendor_flex vendor_items-center vendor_gap-2" for="data-access">
+                  <span>Has Data Access</span>
+                  <div class="vendor_data-type-circle-toggle-wrapper">
+                    <div class="vendor_data-type-circle-toggle">
+                      <div 
+                        class="vendor_circle-option vendor_personal-circle" 
+                        :class="{ active: vendor_getDataType('has_data_access') === 'personal' }"
+                        @click="vendor_setDataType('has_data_access', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_confidential-circle" 
+                        :class="{ active: vendor_getDataType('has_data_access') === 'confidential' }"
+                        @click="vendor_setDataType('has_data_access', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                      <div 
+                        class="vendor_circle-option vendor_regular-circle" 
+                        :class="{ active: vendor_getDataType('has_data_access') === 'regular' }"
+                        @click="vendor_setDataType('has_data_access', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="vendor_circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
               </div>
             </div>
 
             <div class="vendor_form-item">
-              <label class="vendor_form-label" for="description">Description</label>
+              <label class="vendor_form-label vendor_flex vendor_items-center vendor_gap-2" for="description">
+                <span>Description</span>
+                <div class="vendor_data-type-circle-toggle-wrapper">
+                  <div class="vendor_data-type-circle-toggle">
+                    <div 
+                      class="vendor_circle-option vendor_personal-circle" 
+                      :class="{ active: vendor_getDataType('description') === 'personal' }"
+                      @click="vendor_setDataType('description', 'personal')"
+                      title="Personal Data"
+                    >
+                      <div class="vendor_circle-inner"></div>
+                    </div>
+                    <div 
+                      class="vendor_circle-option vendor_confidential-circle" 
+                      :class="{ active: vendor_getDataType('description') === 'confidential' }"
+                      @click="vendor_setDataType('description', 'confidential')"
+                      title="Confidential Data"
+                    >
+                      <div class="vendor_circle-inner"></div>
+                    </div>
+                    <div 
+                      class="vendor_circle-option vendor_regular-circle" 
+                      :class="{ active: vendor_getDataType('description') === 'regular' }"
+                      @click="vendor_setDataType('description', 'regular')"
+                      title="Regular Data"
+                    >
+                      <div class="vendor_circle-inner"></div>
+                    </div>
+                  </div>
+                </div>
+              </label>
               <textarea 
                 id="description" 
                 class="vendor_textarea"
@@ -960,6 +1530,81 @@ const vendor_tabs = [
 const vendor_contacts = ref([])
 
 const vendor_documents = ref([])
+
+// Data type classification for vendor fields
+// Stores data types (personal, confidential, regular) for each field
+const vendor_fieldDataTypes = reactive({
+  vendor_code: 'regular',
+  company_name: 'regular',
+  legal_name: 'regular',
+  business_type: 'regular',
+  tax_id: 'confidential',
+  duns_number: 'confidential',
+  incorporation_date: 'regular',
+  industry_sector: 'regular',
+  website: 'regular',
+  annual_revenue: 'confidential',
+  employee_count: 'regular',
+  headquarters_address: 'regular',
+  vendor_category: 'regular',
+  risk_level: 'regular',
+  status: 'regular',
+  is_critical_vendor: 'regular',
+  has_data_access: 'regular',
+  has_system_access: 'regular',
+  description: 'regular'
+})
+
+// Method to set data type for a field
+function vendor_setDataType(fieldName, type) {
+  if (vendor_fieldDataTypes.hasOwnProperty(fieldName)) {
+    vendor_fieldDataTypes[fieldName] = type
+    console.log(`Data type selected for ${fieldName}:`, type)
+  }
+}
+
+// Get data type for a field
+function vendor_getDataType(fieldName) {
+  return vendor_fieldDataTypes[fieldName] || 'regular'
+}
+
+// Helper function to build data_inventory JSON for vendor
+function vendor_buildDataInventory() {
+  const fieldLabelMap = {
+    vendor_code: 'Vendor Code',
+    company_name: 'Company Name',
+    legal_name: 'Legal Name',
+    business_type: 'Business Type',
+    tax_id: 'Tax ID',
+    duns_number: 'DUNS Number',
+    incorporation_date: 'Incorporation Date',
+    industry_sector: 'Industry Sector',
+    website: 'Website',
+    annual_revenue: 'Annual Revenue',
+    employee_count: 'Employee Count',
+    headquarters_address: 'Headquarters Address',
+    vendor_category: 'Vendor Category',
+    risk_level: 'Risk Level',
+    status: 'Status',
+    is_critical_vendor: 'Is Critical Vendor',
+    has_data_access: 'Has Data Access',
+    has_system_access: 'Has System Access',
+    description: 'Description'
+  }
+
+  const dataInventory = {}
+  
+  // Build flat structure: {"Field Label": "data_type"}
+  for (const [fieldName, dataType] of Object.entries(vendor_fieldDataTypes)) {
+    if (fieldLabelMap[fieldName]) {
+      const fieldLabel = fieldLabelMap[fieldName]
+      dataInventory[fieldLabel] = dataType
+    }
+  }
+  
+  console.log('📋 Vendor Data Inventory JSON:', JSON.stringify(dataInventory, null, 2))
+  return dataInventory
+}
 
 // Document modal state
 const vendor_showDocumentModal = ref(false)
@@ -1527,7 +2172,8 @@ const vendor_submitRegistration = async () => {
       annual_revenue: vendor_formData.annual_revenue === '' || vendor_formData.annual_revenue === null ? null : Number(vendor_formData.annual_revenue),
       employee_count: vendor_formData.employee_count === '' || vendor_formData.employee_count === null ? null : Number(vendor_formData.employee_count),
       contacts: vendor_contacts.value,
-      documents: vendor_documents.value
+      documents: vendor_documents.value,
+      data_inventory: vendor_buildDataInventory()
     }
 
     // Submit to backend API - include temp_vendor_id if available for update
@@ -1720,7 +2366,8 @@ const vendor_saveDraft = async () => {
       employee_count: vendor_formData.employee_count === '' || vendor_formData.employee_count === null ? null : Number(vendor_formData.employee_count),
       contacts: vendor_contacts.value,
       documents: vendor_documents.value,
-      status: 'draft'
+      status: 'draft',
+      data_inventory: vendor_buildDataInventory()
     }
     
     let response
@@ -3355,5 +4002,114 @@ onMounted(async () => {
     flex: 1 !important;
     min-width: 140px !important;
   }
+}
+
+/* Data Type Classification Toggle Styles */
+.vendor_data-type-circle-toggle-wrapper {
+  display: inline-flex !important;
+  align-items: center !important;
+  margin-left: 12px !important;
+  padding: 4px 8px !important;
+  background-color: white !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 16px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: relative !important;
+  z-index: 1 !important;
+  flex-shrink: 0 !important;
+}
+
+.vendor_data-type-circle-toggle {
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.vendor_circle-option {
+  width: 14px !important;
+  height: 14px !important;
+  border-radius: 50% !important;
+  border: 1.5px solid #d1d5db !important;
+  background-color: white !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.3s ease !important;
+  position: relative !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  flex-shrink: 0 !important;
+}
+
+.vendor_circle-option:hover {
+  transform: scale(1.2) !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12) !important;
+}
+
+.vendor_circle-inner {
+  width: 0 !important;
+  height: 0 !important;
+  border-radius: 50% !important;
+  transition: all 0.3s ease !important;
+  background-color: transparent !important;
+}
+
+.vendor_circle-option.active .vendor_circle-inner {
+  width: 9px !important;
+  height: 9px !important;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Personal Circle - Blue */
+.vendor_circle-option.vendor_personal-circle {
+  border: 1.5px solid #4f7cff !important;
+}
+
+.vendor_circle-option.vendor_personal-circle.active {
+  border: 1.5px solid #4f7cff !important;
+  background-color: rgba(79, 124, 255, 0.1) !important;
+  box-shadow: 0 0 6px rgba(79, 124, 255, 0.2) !important;
+}
+
+.vendor_circle-option.vendor_personal-circle.active .vendor_circle-inner {
+  background-color: #4f7cff !important;
+  box-shadow: 0 0 4px rgba(79, 124, 255, 0.35) !important;
+}
+
+/* Confidential Circle - Red */
+.vendor_circle-option.vendor_confidential-circle {
+  border: 1.5px solid #e63946 !important;
+}
+
+.vendor_circle-option.vendor_confidential-circle.active {
+  border: 1.5px solid #e63946 !important;
+  background-color: rgba(230, 57, 70, 0.1) !important;
+  box-shadow: 0 0 6px rgba(230, 57, 70, 0.2) !important;
+}
+
+.vendor_circle-option.vendor_confidential-circle.active .vendor_circle-inner {
+  background-color: #e63946 !important;
+  box-shadow: 0 0 4px rgba(230, 57, 70, 0.35) !important;
+}
+
+/* Regular Circle - Grey */
+.vendor_circle-option.vendor_regular-circle {
+  border: 1.5px solid #6c757d !important;
+}
+
+.vendor_circle-option.vendor_regular-circle.active {
+  border: 1.5px solid #6c757d !important;
+  background-color: rgba(108, 117, 125, 0.1) !important;
+  box-shadow: 0 0 6px rgba(108, 117, 125, 0.2) !important;
+}
+
+.vendor_circle-option.vendor_regular-circle.active .vendor_circle-inner {
+  background-color: #6c757d !important;
+  box-shadow: 0 0 4px rgba(108, 117, 125, 0.35) !important;
 }
 </style>

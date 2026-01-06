@@ -12,6 +12,25 @@
           <p class="text-muted-foreground">Define service level agreement terms and metrics</p>
         </div>
       </div>
+      <!-- Data Type Legend -->
+      <div class="sla-data-type-legend">
+        <div class="sla-data-type-legend-container">
+          <div class="sla-data-type-options">
+            <div class="sla-data-type-legend-item personal-option">
+              <i class="fas fa-user"></i>
+              <span>Personal</span>
+            </div>
+            <div class="sla-data-type-legend-item confidential-option">
+              <i class="fas fa-shield-alt"></i>
+              <span>Confidential</span>
+            </div>
+            <div class="sla-data-type-legend-item regular-option">
+              <i class="fas fa-file-alt"></i>
+              <span>Regular</span>
+            </div>
+          </div>
+        </div>
+      </div>
       <div class="flex items-center gap-2">
         <Button variant="outline" @click="loadExampleData">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><path d="M14 2v6h6"/></svg>
@@ -193,7 +212,37 @@
           <CardContent class="space-y-4">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label class="text-sm">SLA Name *</label>
+                <label class="text-sm flex items-center gap-2">
+                  <span>SLA Name *</span>
+                  <div class="sla-data-type-circle-toggle-wrapper">
+                    <div class="sla-data-type-circle-toggle">
+                      <div 
+                        class="sla-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.sla_name === 'personal' }"
+                        @click="setDataType('sla_name', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.sla_name === 'confidential' }"
+                        @click="setDataType('sla_name', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.sla_name === 'regular' }"
+                        @click="setDataType('sla_name', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <input 
                   v-model="formData.sla_name" 
                   placeholder="Enter SLA name" 
@@ -201,7 +250,37 @@
                 />
               </div>
               <div>
-                <label class="text-sm">Vendor *</label>
+                <label class="text-sm flex items-center gap-2">
+                  <span>Vendor *</span>
+                  <div class="sla-data-type-circle-toggle-wrapper">
+                    <div class="sla-data-type-circle-toggle">
+                      <div 
+                        class="sla-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.vendor_id === 'personal' }"
+                        @click="setDataType('vendor_id', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.vendor_id === 'confidential' }"
+                        @click="setDataType('vendor_id', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.vendor_id === 'regular' }"
+                        @click="setDataType('vendor_id', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <select 
                   v-model="formData.vendor_id" 
                   :disabled="vendorsLoading"
@@ -219,7 +298,37 @@
                 </div>
               </div>
               <div>
-                <label class="text-sm">Contract *</label>
+                <label class="text-sm flex items-center gap-2">
+                  <span>Contract *</span>
+                  <div class="sla-data-type-circle-toggle-wrapper">
+                    <div class="sla-data-type-circle-toggle">
+                      <div 
+                        class="sla-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.contract_id === 'personal' }"
+                        @click="setDataType('contract_id', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.contract_id === 'confidential' }"
+                        @click="setDataType('contract_id', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.contract_id === 'regular' }"
+                        @click="setDataType('contract_id', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <select 
                   v-model="formData.contract_id" 
                   :disabled="contractsLoading"
@@ -237,7 +346,37 @@
                 </div>
               </div>
               <div>
-                <label class="text-sm">SLA Type *</label>
+                <label class="text-sm flex items-center gap-2">
+                  <span>SLA Type *</span>
+                  <div class="sla-data-type-circle-toggle-wrapper">
+                    <div class="sla-data-type-circle-toggle">
+                      <div 
+                        class="sla-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.sla_type === 'personal' }"
+                        @click="setDataType('sla_type', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.sla_type === 'confidential' }"
+                        @click="setDataType('sla_type', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.sla_type === 'regular' }"
+                        @click="setDataType('sla_type', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <input 
                   v-model="formData.sla_type" 
                   placeholder="e.g., AVAILABILITY, RESPONSE_TIME, RESOLUTION_TIME, QUALITY, CUSTOM" 
@@ -245,7 +384,37 @@
                 />
               </div>
               <div>
-                <label class="text-sm">Effective Date *</label>
+                <label class="text-sm flex items-center gap-2">
+                  <span>Effective Date *</span>
+                  <div class="sla-data-type-circle-toggle-wrapper">
+                    <div class="sla-data-type-circle-toggle">
+                      <div 
+                        class="sla-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.effective_date === 'personal' }"
+                        @click="setDataType('effective_date', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.effective_date === 'confidential' }"
+                        @click="setDataType('effective_date', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.effective_date === 'regular' }"
+                        @click="setDataType('effective_date', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <input 
                   type="date" 
                   v-model="formData.effective_date" 
@@ -253,7 +422,37 @@
                 />
               </div>
               <div>
-                <label class="text-sm">Expiry Date *</label>
+                <label class="text-sm flex items-center gap-2">
+                  <span>Expiry Date *</span>
+                  <div class="sla-data-type-circle-toggle-wrapper">
+                    <div class="sla-data-type-circle-toggle">
+                      <div 
+                        class="sla-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.expiry_date === 'personal' }"
+                        @click="setDataType('expiry_date', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.expiry_date === 'confidential' }"
+                        @click="setDataType('expiry_date', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.expiry_date === 'regular' }"
+                        @click="setDataType('expiry_date', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <input 
                   type="date" 
                   v-model="formData.expiry_date" 
@@ -261,7 +460,37 @@
                 />
               </div>
               <div>
-                <label class="text-sm">Business Service Impacted</label>
+                <label class="text-sm flex items-center gap-2">
+                  <span>Business Service Impacted</span>
+                  <div class="sla-data-type-circle-toggle-wrapper">
+                    <div class="sla-data-type-circle-toggle">
+                      <div 
+                        class="sla-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.business_service_impacted === 'personal' }"
+                        @click="setDataType('business_service_impacted', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.business_service_impacted === 'confidential' }"
+                        @click="setDataType('business_service_impacted', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.business_service_impacted === 'regular' }"
+                        @click="setDataType('business_service_impacted', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <input 
                   v-model="formData.business_service_impacted" 
                   placeholder="e.g., Database Services" 
@@ -269,7 +498,37 @@
                 />
               </div>
               <div>
-                <label class="text-sm">Reporting Frequency</label>
+                <label class="text-sm flex items-center gap-2">
+                  <span>Reporting Frequency</span>
+                  <div class="sla-data-type-circle-toggle-wrapper">
+                    <div class="sla-data-type-circle-toggle">
+                      <div 
+                        class="sla-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.reporting_frequency === 'personal' }"
+                        @click="setDataType('reporting_frequency', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.reporting_frequency === 'confidential' }"
+                        @click="setDataType('reporting_frequency', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.reporting_frequency === 'regular' }"
+                        @click="setDataType('reporting_frequency', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <input 
                   v-model="formData.reporting_frequency" 
                   placeholder="e.g., daily, weekly, monthly, quarterly" 
@@ -279,7 +538,37 @@
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label class="text-sm">Baseline Period</label>
+                <label class="text-sm flex items-center gap-2">
+                  <span>Baseline Period</span>
+                  <div class="sla-data-type-circle-toggle-wrapper">
+                    <div class="sla-data-type-circle-toggle">
+                      <div 
+                        class="sla-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.baseline_period === 'personal' }"
+                        @click="setDataType('baseline_period', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.baseline_period === 'confidential' }"
+                        @click="setDataType('baseline_period', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.baseline_period === 'regular' }"
+                        @click="setDataType('baseline_period', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <input 
                   v-model="formData.baseline_period" 
                   placeholder="e.g., Q1 2024" 
@@ -287,7 +576,37 @@
                 />
               </div>
               <div>
-                <label class="text-sm">Penalty Threshold (%)</label>
+                <label class="text-sm flex items-center gap-2">
+                  <span>Penalty Threshold (%)</span>
+                  <div class="sla-data-type-circle-toggle-wrapper">
+                    <div class="sla-data-type-circle-toggle">
+                      <div 
+                        class="sla-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.penalty_threshold === 'personal' }"
+                        @click="setDataType('penalty_threshold', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.penalty_threshold === 'confidential' }"
+                        @click="setDataType('penalty_threshold', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.penalty_threshold === 'regular' }"
+                        @click="setDataType('penalty_threshold', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <input 
                   v-model="formData.penalty_threshold" 
                   type="number" 
@@ -297,7 +616,37 @@
                 />
               </div>
               <div>
-                <label class="text-sm">Credit Threshold (%)</label>
+                <label class="text-sm flex items-center gap-2">
+                  <span>Credit Threshold (%)</span>
+                  <div class="sla-data-type-circle-toggle-wrapper">
+                    <div class="sla-data-type-circle-toggle">
+                      <div 
+                        class="sla-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.credit_threshold === 'personal' }"
+                        @click="setDataType('credit_threshold', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.credit_threshold === 'confidential' }"
+                        @click="setDataType('credit_threshold', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.credit_threshold === 'regular' }"
+                        @click="setDataType('credit_threshold', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <input 
                   v-model="formData.credit_threshold" 
                   type="number" 
@@ -308,7 +657,37 @@
               </div>
             </div>
             <div>
-              <label class="text-sm">Improvement Targets (JSON)</label>
+              <label class="text-sm flex items-center gap-2">
+                <span>Improvement Targets (JSON)</span>
+                <div class="sla-data-type-circle-toggle-wrapper">
+                  <div class="sla-data-type-circle-toggle">
+                    <div 
+                      class="sla-circle-option personal-circle" 
+                      :class="{ active: fieldDataTypes.improvement_targets === 'personal' }"
+                      @click="setDataType('improvement_targets', 'personal')"
+                      title="Personal Data"
+                    >
+                      <div class="sla-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="sla-circle-option confidential-circle" 
+                      :class="{ active: fieldDataTypes.improvement_targets === 'confidential' }"
+                      @click="setDataType('improvement_targets', 'confidential')"
+                      title="Confidential Data"
+                    >
+                      <div class="sla-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="sla-circle-option regular-circle" 
+                      :class="{ active: fieldDataTypes.improvement_targets === 'regular' }"
+                      @click="setDataType('improvement_targets', 'regular')"
+                      title="Regular Data"
+                    >
+                      <div class="sla-circle-inner"></div>
+                    </div>
+                  </div>
+                </div>
+              </label>
               <textarea
                 class="w-full rounded-md border bg-background p-2 text-sm"
                 rows="2"
@@ -317,7 +696,37 @@
               />
             </div>
             <div>
-              <label class="text-sm">Measurement Methodology</label>
+              <label class="text-sm flex items-center gap-2">
+                <span>Measurement Methodology</span>
+                <div class="sla-data-type-circle-toggle-wrapper">
+                  <div class="sla-data-type-circle-toggle">
+                    <div 
+                      class="sla-circle-option personal-circle" 
+                      :class="{ active: fieldDataTypes.measurement_methodology === 'personal' }"
+                      @click="setDataType('measurement_methodology', 'personal')"
+                      title="Personal Data"
+                    >
+                      <div class="sla-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="sla-circle-option confidential-circle" 
+                      :class="{ active: fieldDataTypes.measurement_methodology === 'confidential' }"
+                      @click="setDataType('measurement_methodology', 'confidential')"
+                      title="Confidential Data"
+                    >
+                      <div class="sla-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="sla-circle-option regular-circle" 
+                      :class="{ active: fieldDataTypes.measurement_methodology === 'regular' }"
+                      @click="setDataType('measurement_methodology', 'regular')"
+                      title="Regular Data"
+                    >
+                      <div class="sla-circle-inner"></div>
+                    </div>
+                  </div>
+                </div>
+              </label>
               <textarea
                 class="w-full rounded-md border bg-background p-2 text-sm"
                 rows="3"
@@ -326,7 +735,37 @@
               />
             </div>
             <div>
-              <label class="text-sm">Exclusions</label>
+              <label class="text-sm flex items-center gap-2">
+                <span>Exclusions</span>
+                <div class="sla-data-type-circle-toggle-wrapper">
+                  <div class="sla-data-type-circle-toggle">
+                    <div 
+                      class="sla-circle-option personal-circle" 
+                      :class="{ active: fieldDataTypes.exclusions === 'personal' }"
+                      @click="setDataType('exclusions', 'personal')"
+                      title="Personal Data"
+                    >
+                      <div class="sla-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="sla-circle-option confidential-circle" 
+                      :class="{ active: fieldDataTypes.exclusions === 'confidential' }"
+                      @click="setDataType('exclusions', 'confidential')"
+                      title="Confidential Data"
+                    >
+                      <div class="sla-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="sla-circle-option regular-circle" 
+                      :class="{ active: fieldDataTypes.exclusions === 'regular' }"
+                      @click="setDataType('exclusions', 'regular')"
+                      title="Regular Data"
+                    >
+                      <div class="sla-circle-inner"></div>
+                    </div>
+                  </div>
+                </div>
+              </label>
               <textarea
                 class="w-full rounded-md border bg-background p-2 text-sm"
                 rows="2"
@@ -335,7 +774,37 @@
               />
             </div>
             <div>
-              <label class="text-sm">Force Majeure Clauses</label>
+              <label class="text-sm flex items-center gap-2">
+                <span>Force Majeure Clauses</span>
+                <div class="sla-data-type-circle-toggle-wrapper">
+                  <div class="sla-data-type-circle-toggle">
+                    <div 
+                      class="sla-circle-option personal-circle" 
+                      :class="{ active: fieldDataTypes.force_majeure_clauses === 'personal' }"
+                      @click="setDataType('force_majeure_clauses', 'personal')"
+                      title="Personal Data"
+                    >
+                      <div class="sla-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="sla-circle-option confidential-circle" 
+                      :class="{ active: fieldDataTypes.force_majeure_clauses === 'confidential' }"
+                      @click="setDataType('force_majeure_clauses', 'confidential')"
+                      title="Confidential Data"
+                    >
+                      <div class="sla-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="sla-circle-option regular-circle" 
+                      :class="{ active: fieldDataTypes.force_majeure_clauses === 'regular' }"
+                      @click="setDataType('force_majeure_clauses', 'regular')"
+                      title="Regular Data"
+                    >
+                      <div class="sla-circle-inner"></div>
+                    </div>
+                  </div>
+                </div>
+              </label>
               <textarea
                 class="w-full rounded-md border bg-background p-2 text-sm"
                 rows="2"
@@ -344,7 +813,37 @@
               />
             </div>
             <div>
-              <label class="text-sm">Audit Requirements</label>
+              <label class="text-sm flex items-center gap-2">
+                <span>Audit Requirements</span>
+                <div class="sla-data-type-circle-toggle-wrapper">
+                  <div class="sla-data-type-circle-toggle">
+                    <div 
+                      class="sla-circle-option personal-circle" 
+                      :class="{ active: fieldDataTypes.audit_requirements === 'personal' }"
+                      @click="setDataType('audit_requirements', 'personal')"
+                      title="Personal Data"
+                    >
+                      <div class="sla-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="sla-circle-option confidential-circle" 
+                      :class="{ active: fieldDataTypes.audit_requirements === 'confidential' }"
+                      @click="setDataType('audit_requirements', 'confidential')"
+                      title="Confidential Data"
+                    >
+                      <div class="sla-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="sla-circle-option regular-circle" 
+                      :class="{ active: fieldDataTypes.audit_requirements === 'regular' }"
+                      @click="setDataType('audit_requirements', 'regular')"
+                      title="Regular Data"
+                    >
+                      <div class="sla-circle-inner"></div>
+                    </div>
+                  </div>
+                </div>
+              </label>
               <textarea
                 class="w-full rounded-md border bg-background p-2 text-sm"
                 rows="2"
@@ -353,7 +852,37 @@
               />
             </div>
               <div>
-                <label class="text-sm">Document Versioning</label>
+                <label class="text-sm flex items-center gap-2">
+                  <span>Document Versioning</span>
+                  <div class="sla-data-type-circle-toggle-wrapper">
+                    <div class="sla-data-type-circle-toggle">
+                      <div 
+                        class="sla-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.document_versioning === 'personal' }"
+                        @click="setDataType('document_versioning', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.document_versioning === 'confidential' }"
+                        @click="setDataType('document_versioning', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.document_versioning === 'regular' }"
+                        @click="setDataType('document_versioning', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <input 
                   v-model="formData.document_versioning" 
                   placeholder="e.g., v1.0" 
@@ -361,7 +890,37 @@
                 />
               </div>
               <div>
-                <label class="text-sm">Priority *</label>
+                <label class="text-sm flex items-center gap-2">
+                  <span>Priority *</span>
+                  <div class="sla-data-type-circle-toggle-wrapper">
+                    <div class="sla-data-type-circle-toggle">
+                      <div 
+                        class="sla-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.priority === 'personal' }"
+                        @click="setDataType('priority', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.priority === 'confidential' }"
+                        @click="setDataType('priority', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.priority === 'regular' }"
+                        @click="setDataType('priority', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <select 
                   v-model="formData.priority" 
                   class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -374,7 +933,37 @@
                 </select>
               </div>
               <div>
-                <label class="text-sm">Approval Status</label>
+                <label class="text-sm flex items-center gap-2">
+                  <span>Approval Status</span>
+                  <div class="sla-data-type-circle-toggle-wrapper">
+                    <div class="sla-data-type-circle-toggle">
+                      <div 
+                        class="sla-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.approval_status === 'personal' }"
+                        @click="setDataType('approval_status', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.approval_status === 'confidential' }"
+                        @click="setDataType('approval_status', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.approval_status === 'regular' }"
+                        @click="setDataType('approval_status', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <input 
                   v-model="formData.approval_status" 
                   readonly
@@ -406,7 +995,37 @@
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label class="text-sm">Metric Name</label>
+                    <label class="text-sm flex items-center gap-2">
+                      <span>Metric Name</span>
+                      <div class="sla-data-type-circle-toggle-wrapper">
+                        <div class="sla-data-type-circle-toggle">
+                          <div 
+                            class="sla-circle-option personal-circle" 
+                            :class="{ active: getMetricDataType(index, 'metric_name') === 'personal' }"
+                            @click="setMetricDataType(index, 'metric_name', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="sla-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="sla-circle-option confidential-circle" 
+                            :class="{ active: getMetricDataType(index, 'metric_name') === 'confidential' }"
+                            @click="setMetricDataType(index, 'metric_name', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="sla-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="sla-circle-option regular-circle" 
+                            :class="{ active: getMetricDataType(index, 'metric_name') === 'regular' }"
+                            @click="setMetricDataType(index, 'metric_name', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="sla-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
                     <div class="relative">
                       <input 
                         v-model="metric.metric_name" 
@@ -429,7 +1048,37 @@
                     </div>
                   </div>
                   <div>
-                    <label class="text-sm">Target Value</label>
+                    <label class="text-sm flex items-center gap-2">
+                      <span>Target Value</span>
+                      <div class="sla-data-type-circle-toggle-wrapper">
+                        <div class="sla-data-type-circle-toggle">
+                          <div 
+                            class="sla-circle-option personal-circle" 
+                            :class="{ active: getMetricDataType(index, 'target_value') === 'personal' }"
+                            @click="setMetricDataType(index, 'target_value', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="sla-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="sla-circle-option confidential-circle" 
+                            :class="{ active: getMetricDataType(index, 'target_value') === 'confidential' }"
+                            @click="setMetricDataType(index, 'target_value', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="sla-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="sla-circle-option regular-circle" 
+                            :class="{ active: getMetricDataType(index, 'target_value') === 'regular' }"
+                            @click="setMetricDataType(index, 'target_value', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="sla-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
                     <input 
                       v-model="metric.target_value" 
                       type="number" 
@@ -439,7 +1088,37 @@
                     />
                   </div>
                   <div>
-                    <label class="text-sm">Measurement Unit</label>
+                    <label class="text-sm flex items-center gap-2">
+                      <span>Measurement Unit</span>
+                      <div class="sla-data-type-circle-toggle-wrapper">
+                        <div class="sla-data-type-circle-toggle">
+                          <div 
+                            class="sla-circle-option personal-circle" 
+                            :class="{ active: getMetricDataType(index, 'measurement_unit') === 'personal' }"
+                            @click="setMetricDataType(index, 'measurement_unit', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="sla-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="sla-circle-option confidential-circle" 
+                            :class="{ active: getMetricDataType(index, 'measurement_unit') === 'confidential' }"
+                            @click="setMetricDataType(index, 'measurement_unit', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="sla-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="sla-circle-option regular-circle" 
+                            :class="{ active: getMetricDataType(index, 'measurement_unit') === 'regular' }"
+                            @click="setMetricDataType(index, 'measurement_unit', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="sla-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
                     <input 
                       v-model="metric.measurement_unit" 
                       placeholder="e.g., %, ms, sec, min, hours, days, count, ratio" 
@@ -447,7 +1126,37 @@
                     />
                   </div>
                   <div>
-                    <label class="text-sm">Measurement Frequency</label>
+                    <label class="text-sm flex items-center gap-2">
+                      <span>Measurement Frequency</span>
+                      <div class="sla-data-type-circle-toggle-wrapper">
+                        <div class="sla-data-type-circle-toggle">
+                          <div 
+                            class="sla-circle-option personal-circle" 
+                            :class="{ active: getMetricDataType(index, 'measurement_frequency') === 'personal' }"
+                            @click="setMetricDataType(index, 'measurement_frequency', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="sla-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="sla-circle-option confidential-circle" 
+                            :class="{ active: getMetricDataType(index, 'measurement_frequency') === 'confidential' }"
+                            @click="setMetricDataType(index, 'measurement_frequency', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="sla-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="sla-circle-option regular-circle" 
+                            :class="{ active: getMetricDataType(index, 'measurement_frequency') === 'regular' }"
+                            @click="setMetricDataType(index, 'measurement_frequency', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="sla-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
                     <select 
                       v-model="metric.measurement_frequency" 
                       class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -460,7 +1169,37 @@
                     </select>
                   </div>
                   <div>
-                    <label class="text-sm">Penalty Clause</label>
+                    <label class="text-sm flex items-center gap-2">
+                      <span>Penalty Clause</span>
+                      <div class="sla-data-type-circle-toggle-wrapper">
+                        <div class="sla-data-type-circle-toggle">
+                          <div 
+                            class="sla-circle-option personal-circle" 
+                            :class="{ active: getMetricDataType(index, 'penalty_clause') === 'personal' }"
+                            @click="setMetricDataType(index, 'penalty_clause', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="sla-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="sla-circle-option confidential-circle" 
+                            :class="{ active: getMetricDataType(index, 'penalty_clause') === 'confidential' }"
+                            @click="setMetricDataType(index, 'penalty_clause', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="sla-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="sla-circle-option regular-circle" 
+                            :class="{ active: getMetricDataType(index, 'penalty_clause') === 'regular' }"
+                            @click="setMetricDataType(index, 'penalty_clause', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="sla-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
                     <input 
                       v-model="metric.penalty_clause" 
                       placeholder="e.g., 5% service credit" 
@@ -468,7 +1207,37 @@
                     />
                   </div>
                   <div>
-                    <label class="text-sm">Measurement Methodology</label>
+                    <label class="text-sm flex items-center gap-2">
+                      <span>Measurement Methodology</span>
+                      <div class="sla-data-type-circle-toggle-wrapper">
+                        <div class="sla-data-type-circle-toggle">
+                          <div 
+                            class="sla-circle-option personal-circle" 
+                            :class="{ active: getMetricDataType(index, 'measurement_methodology') === 'personal' }"
+                            @click="setMetricDataType(index, 'measurement_methodology', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="sla-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="sla-circle-option confidential-circle" 
+                            :class="{ active: getMetricDataType(index, 'measurement_methodology') === 'confidential' }"
+                            @click="setMetricDataType(index, 'measurement_methodology', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="sla-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="sla-circle-option regular-circle" 
+                            :class="{ active: getMetricDataType(index, 'measurement_methodology') === 'regular' }"
+                            @click="setMetricDataType(index, 'measurement_methodology', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="sla-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
                     <input 
                       v-model="metric.measurement_methodology" 
                       placeholder="e.g., Automated monitoring" 
@@ -524,7 +1293,37 @@
           <CardContent class="space-y-4">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label class="text-sm">Compliance Framework *</label>
+                <label class="text-sm flex items-center gap-2">
+                  <span>Compliance Framework *</span>
+                  <div class="sla-data-type-circle-toggle-wrapper">
+                    <div class="sla-data-type-circle-toggle">
+                      <div 
+                        class="sla-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.compliance_framework === 'personal' }"
+                        @click="setDataType('compliance_framework', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.compliance_framework === 'confidential' }"
+                        @click="setDataType('compliance_framework', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.compliance_framework === 'regular' }"
+                        @click="setDataType('compliance_framework', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <select 
                   v-model="formData.compliance_framework" 
                   :disabled="frameworksLoading"
@@ -542,7 +1341,37 @@
                 </div>
               </div>
               <div>
-                <label class="text-sm">Compliance Score (%)</label>
+                <label class="text-sm flex items-center gap-2">
+                  <span>Compliance Score (%)</span>
+                  <div class="sla-data-type-circle-toggle-wrapper">
+                    <div class="sla-data-type-circle-toggle">
+                      <div 
+                        class="sla-circle-option personal-circle" 
+                        :class="{ active: fieldDataTypes.compliance_score === 'personal' }"
+                        @click="setDataType('compliance_score', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option confidential-circle" 
+                        :class="{ active: fieldDataTypes.compliance_score === 'confidential' }"
+                        @click="setDataType('compliance_score', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="sla-circle-option regular-circle" 
+                        :class="{ active: fieldDataTypes.compliance_score === 'regular' }"
+                        @click="setDataType('compliance_score', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="sla-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <input 
                   v-model="formData.compliance_score" 
                   type="number" 
@@ -874,9 +1703,92 @@ const formData = reactive({
   ]
 })
 
+// Data type tracking for each field
+const fieldDataTypes = reactive({
+  sla_name: 'regular',
+  vendor_id: 'regular',
+  contract_id: 'regular',
+  sla_type: 'regular',
+  effective_date: 'regular',
+  expiry_date: 'regular',
+  business_service_impacted: 'regular',
+  reporting_frequency: 'regular',
+  baseline_period: 'regular',
+  penalty_threshold: 'regular',
+  credit_threshold: 'regular',
+  improvement_targets: 'regular',
+  measurement_methodology: 'regular',
+  exclusions: 'regular',
+  force_majeure_clauses: 'regular',
+  compliance_framework: 'regular',
+  audit_requirements: 'regular',
+  document_versioning: 'regular',
+  compliance_score: 'regular',
+  priority: 'regular',
+  approval_status: 'regular',
+  // Metrics fields (will be handled per metric)
+  metrics: {}
+})
+
+// Method to set data type for a field
+function setDataType(fieldName, type) {
+  if (fieldName === 'metrics') {
+    // For metrics, we need to handle per-metric-index
+    console.warn('Metrics data types should be set per metric index')
+    return
+  }
+  if (Object.prototype.hasOwnProperty.call(fieldDataTypes, fieldName)) {
+    fieldDataTypes[fieldName] = type
+    console.log(`Data type selected for ${fieldName}:`, type)
+  }
+}
+
+// Method to set data type for a metric field
+function setMetricDataType(metricIndex, fieldName, type) {
+  // Use string key for consistency
+  const indexKey = String(metricIndex)
+  
+  // Ensure metrics object exists and is reactive
+  if (!fieldDataTypes.metrics) {
+    fieldDataTypes.metrics = {}
+  }
+  
+  // Ensure the metric index object exists
+  if (!fieldDataTypes.metrics[indexKey]) {
+    // Use Vue's reactive assignment to ensure reactivity
+    fieldDataTypes.metrics[indexKey] = {}
+  }
+  
+  // Set the data type
+  fieldDataTypes.metrics[indexKey][fieldName] = type
+  
+  // Force Vue to track the change by accessing the object
+  const currentMetrics = fieldDataTypes.metrics
+  
+  console.log(`✅ Data type selected for metric ${metricIndex} (key: "${indexKey}").${fieldName}:`, type)
+  console.log(`📋 Current fieldDataTypes.metrics:`, JSON.stringify(fieldDataTypes.metrics, null, 2))
+  console.log(`📋 Direct access test - fieldDataTypes.metrics["${indexKey}"]:`, fieldDataTypes.metrics[indexKey])
+  console.log(`📋 Direct access test - fieldDataTypes.metrics[${metricIndex}]:`, fieldDataTypes.metrics[metricIndex])
+}
+
+// Get data type for a metric field
+function getMetricDataType(metricIndex, fieldName) {
+  // Try both string and numeric key access
+  const indexKey = String(metricIndex)
+  return fieldDataTypes.metrics[indexKey]?.[fieldName] || fieldDataTypes.metrics[metricIndex]?.[fieldName] || 'regular'
+}
+
 // Watch form data changes for debugging
 watch(formData, (newData) => {
   console.log('Form data changed:', newData)
+}, { deep: true })
+
+// Watch fieldDataTypes.metrics to debug data type storage
+watch(() => fieldDataTypes.metrics, (newMetrics, oldMetrics) => {
+  console.log('📊 fieldDataTypes.metrics changed!')
+  console.log('📊 Old metrics:', JSON.stringify(oldMetrics, null, 2))
+  console.log('📊 New metrics:', JSON.stringify(newMetrics, null, 2))
+  console.log('📊 Available keys:', Object.keys(newMetrics || {}))
 }, { deep: true })
 
 // Load frameworks on component mount
@@ -1390,6 +2302,7 @@ function applyExtractedData() {
 }
 
 function addMetric() {
+  const newIndex = formData.metrics.length
   formData.metrics.push({ 
     metric_name: '', 
     target_value: '', 
@@ -1398,10 +2311,37 @@ function addMetric() {
     penalty_clause: '', 
     measurement_methodology: '' 
   })
+  // Initialize data types for the new metric (default to 'regular')
+  // This ensures the metric has a data type entry even if user doesn't click toggles
+  if (!fieldDataTypes.metrics[String(newIndex)]) {
+    fieldDataTypes.metrics[String(newIndex)] = {}
+  }
+  console.log(`📋 Added new metric at index ${newIndex}, initialized data types object`)
 }
 
 function removeMetric(index) {
   formData.metrics = formData.metrics.filter((_, i) => i !== index)
+  // Clean up metric data types for removed metric
+  const indexKey = String(index)
+  if (fieldDataTypes.metrics[indexKey] || fieldDataTypes.metrics[index]) {
+    delete fieldDataTypes.metrics[indexKey]
+    delete fieldDataTypes.metrics[index]
+    // Reindex remaining metrics to match new array indices
+    const newMetrics = {}
+    Object.keys(fieldDataTypes.metrics).forEach(oldIndex => {
+      const oldIdx = parseInt(oldIndex)
+      if (oldIdx > index) {
+        // Shift indices down by 1
+        newMetrics[String(oldIdx - 1)] = fieldDataTypes.metrics[oldIndex]
+      } else if (oldIdx < index) {
+        // Keep indices below the removed one as-is
+        newMetrics[String(oldIdx)] = fieldDataTypes.metrics[oldIndex]
+      }
+      // Skip the removed index
+    })
+    fieldDataTypes.metrics = newMetrics
+    console.log(`📋 After removing metric ${index}, reindexed fieldDataTypes.metrics:`, JSON.stringify(fieldDataTypes.metrics, null, 2))
+  }
 }
 
 async function handleSaveDraft() {
@@ -1435,14 +2375,32 @@ async function handleSaveDraft() {
       priority: formData.priority,
       approval_status: formData.approval_status,
       // Metrics will be stored separately in sla_metrics table
-      metrics: formData.metrics.map(metric => ({
-        metric_name: metric.metric_name,
-        threshold: parseFloat(metric.target_value || 0),
-        measurement_unit: metric.measurement_unit,
-        frequency: normalizeFrequency(metric.measurement_frequency),
-        penalty: metric.penalty_clause,
-        measurement_methodology: metric.measurement_methodology
-      }))
+      // Each metric includes its own data_inventory for sla_metrics.data_inventory
+      metrics: formData.metrics.map((metric, index) => {
+        console.log(`📋 [DRAFT] Processing metric ${index + 1} (index: ${index}):`, metric.metric_name)
+        console.log(`📋 [DRAFT] All fieldDataTypes.metrics keys:`, Object.keys(fieldDataTypes.metrics || {}))
+        console.log(`📋 [DRAFT] fieldDataTypes.metrics[${index}]:`, fieldDataTypes.metrics?.[index])
+        console.log(`📋 [DRAFT] fieldDataTypes.metrics["${index}"]:`, fieldDataTypes.metrics?.[String(index)])
+        console.log(`📋 [DRAFT] Full fieldDataTypes object:`, JSON.stringify(fieldDataTypes, null, 2))
+        
+        const metricDataInventory = buildMetricDataInventory(index)
+        const metricData = {
+          metric_name: metric.metric_name,
+          threshold: parseFloat(metric.target_value || 0),
+          measurement_unit: metric.measurement_unit,
+          frequency: normalizeFrequency(metric.measurement_frequency),
+          penalty: metric.penalty_clause,
+          measurement_methodology: metric.measurement_methodology,
+          // Include data_inventory for this specific metric (always include, even if empty object)
+          // Use empty object if metricDataInventory is null/undefined, otherwise use the actual data
+          data_inventory: (metricDataInventory && Object.keys(metricDataInventory).length > 0) ? metricDataInventory : {}
+        }
+        console.log(`📋 [DRAFT] Metric ${index + 1} complete data being sent:`, JSON.stringify(metricData, null, 2))
+        console.log(`📋 [DRAFT] Metric ${index + 1} data_inventory keys:`, Object.keys(metricData.data_inventory))
+        return metricData
+      }),
+      // Include data inventory JSON for main SLA fields (vendor_slas.data_inventory)
+      data_inventory: buildSLADataInventory()
     }
     
     const response = await saveSLA(slaData)
@@ -1517,14 +2475,32 @@ async function handleSubmitForApproval() {
       priority: formData.priority,
       approval_status: 'PENDING',
       // Metrics will be stored separately in sla_metrics table
-      metrics: formData.metrics.map(metric => ({
-        metric_name: metric.metric_name,
-        threshold: parseFloat(metric.target_value || 0),
-        measurement_unit: metric.measurement_unit,
-        frequency: normalizeFrequency(metric.measurement_frequency),
-        penalty: metric.penalty_clause,
-        measurement_methodology: metric.measurement_methodology
-      }))
+      // Each metric includes its own data_inventory for sla_metrics.data_inventory
+      metrics: formData.metrics.map((metric, index) => {
+        console.log(`📋 [SUBMIT] Processing metric ${index + 1} (index: ${index}):`, metric.metric_name)
+        console.log(`📋 [SUBMIT] All fieldDataTypes.metrics keys:`, Object.keys(fieldDataTypes.metrics || {}))
+        console.log(`📋 [SUBMIT] fieldDataTypes.metrics[${index}]:`, fieldDataTypes.metrics?.[index])
+        console.log(`📋 [SUBMIT] fieldDataTypes.metrics["${index}"]:`, fieldDataTypes.metrics?.[String(index)])
+        console.log(`📋 [SUBMIT] Full fieldDataTypes object:`, JSON.stringify(fieldDataTypes, null, 2))
+        
+        const metricDataInventory = buildMetricDataInventory(index)
+        const metricData = {
+          metric_name: metric.metric_name,
+          threshold: parseFloat(metric.target_value || 0),
+          measurement_unit: metric.measurement_unit,
+          frequency: normalizeFrequency(metric.measurement_frequency),
+          penalty: metric.penalty_clause,
+          measurement_methodology: metric.measurement_methodology,
+          // Include data_inventory for this specific metric (always include, even if empty object)
+          // Use empty object if metricDataInventory is null/undefined, otherwise use the actual data
+          data_inventory: (metricDataInventory && Object.keys(metricDataInventory).length > 0) ? metricDataInventory : {}
+        }
+        console.log(`📋 [SUBMIT] Metric ${index + 1} complete data being sent:`, JSON.stringify(metricData, null, 2))
+        console.log(`📋 [SUBMIT] Metric ${index + 1} data_inventory keys:`, Object.keys(metricData.data_inventory))
+        return metricData
+      }),
+      // Include data inventory JSON for main SLA fields (vendor_slas.data_inventory)
+      data_inventory: buildSLADataInventory()
     }
     
     console.log('Normalized SLA Data for submission:', slaData)
@@ -1563,6 +2539,140 @@ async function handleSubmitForApproval() {
     
     PopupService.error('Error submitting SLA. Please try again.', 'Submission Failed')
   }
+}
+
+// Helper function to build data_inventory JSON for main SLA fields only
+// Creates a flat JSON structure matching CreateRisk format: {"Field Label": "data_type"}
+// This will be stored in vendor_slas.data_inventory
+function buildSLADataInventory() {
+  // Field label mapping - matches the exact field names as they appear in the form
+  const fieldLabelMap = {
+    sla_name: 'SLA Name',
+    vendor_id: 'Vendor',
+    contract_id: 'Contract',
+    sla_type: 'SLA Type',
+    effective_date: 'Effective Date',
+    expiry_date: 'Expiry Date',
+    business_service_impacted: 'Business Service Impacted',
+    reporting_frequency: 'Reporting Frequency',
+    baseline_period: 'Baseline Period',
+    penalty_threshold: 'Penalty Threshold',
+    credit_threshold: 'Credit Threshold',
+    improvement_targets: 'Improvement Targets',
+    measurement_methodology: 'Measurement Methodology',
+    exclusions: 'Exclusions',
+    force_majeure_clauses: 'Force Majeure Clauses',
+    compliance_framework: 'Compliance Framework',
+    audit_requirements: 'Audit Requirements',
+    document_versioning: 'Document Versioning',
+    compliance_score: 'Compliance Score',
+    priority: 'Priority',
+    approval_status: 'Approval Status'
+  }
+
+  // Build data inventory object - flat structure like CreateRisk
+  const dataInventory = {}
+  
+  // Add main fields only (exclude metrics) - flat structure: {"Field Label": "data_type"}
+  for (const [fieldName, dataType] of Object.entries(fieldDataTypes)) {
+    if (fieldName !== 'metrics' && fieldLabelMap[fieldName]) {
+      const fieldLabel = fieldLabelMap[fieldName]
+      dataInventory[fieldLabel] = dataType
+    }
+  }
+  
+  // Return flat JSON structure matching CreateRisk format
+  // Example: {"SLA Name": "personal", "Vendor": "regular", "Priority": "confidential", ...}
+  console.log('📋 SLA Data Inventory JSON (vendor_slas):', JSON.stringify(dataInventory, null, 2))
+  return dataInventory
+}
+
+// Helper function to build data_inventory JSON for a specific metric
+// Creates a flat JSON structure: {"Field Label": "data_type"}
+// This will be stored in sla_metrics.data_inventory for each metric
+function buildMetricDataInventory(metricIndex) {
+  const metricLabelMap = {
+    metric_name: 'Metric Name',
+    target_value: 'Target Value',
+    measurement_unit: 'Measurement Unit',
+    measurement_frequency: 'Measurement Frequency',
+    penalty_clause: 'Penalty Clause',
+    measurement_methodology: 'Measurement Methodology'
+  }
+  
+  // Ensure we use string key for consistency (JavaScript objects use string keys)
+  const indexKey = String(metricIndex)
+  
+  // Get a fresh copy of the metrics object to ensure we have the latest data
+  const metricsData = fieldDataTypes.metrics || {}
+  
+  // Debug: Log all available metric indices
+  console.log(`📋 [buildMetricDataInventory] Building for metric index: ${metricIndex} (key: "${indexKey}")`)
+  console.log(`📋 [buildMetricDataInventory] Available metric indices in fieldDataTypes.metrics:`, Object.keys(metricsData))
+  console.log(`📋 [buildMetricDataInventory] Full fieldDataTypes.metrics object:`, JSON.stringify(metricsData, null, 2))
+  console.log(`📋 [buildMetricDataInventory] Type of metricsData:`, typeof metricsData)
+  console.log(`📋 [buildMetricDataInventory] metricsData is array:`, Array.isArray(metricsData))
+  
+  // Try both string and numeric key access, and also try all keys to find a match
+  let metricDataTypes = metricsData[indexKey] || metricsData[metricIndex]
+  
+  // Log what we found
+  if (metricDataTypes) {
+    console.log(`✅ [buildMetricDataInventory] Found metricDataTypes for index ${metricIndex}:`, metricDataTypes)
+  } else {
+    console.log(`⚠️ [buildMetricDataInventory] No direct match found for index ${indexKey} or ${metricIndex}`)
+  }
+  
+  // If not found, try to find by matching all keys (in case of index mismatch)
+  if (!metricDataTypes) {
+    console.log(`⚠️ [buildMetricDataInventory] No data found for index ${indexKey}, checking all keys...`)
+    // Try to find by iterating through all keys
+    for (const key of Object.keys(metricsData)) {
+      const keyNum = parseInt(key)
+      console.log(`🔍 [buildMetricDataInventory] Checking key "${key}" (parsed: ${keyNum}) against index ${metricIndex}`)
+      if (!isNaN(keyNum) && keyNum === metricIndex) {
+        metricDataTypes = metricsData[key]
+        console.log(`✅ [buildMetricDataInventory] Found data under key "${key}" for index ${metricIndex}:`, metricDataTypes)
+        break
+      }
+    }
+  }
+  
+  // Default to empty object if still not found
+  if (!metricDataTypes || typeof metricDataTypes !== 'object') {
+    console.log(`⚠️ [buildMetricDataInventory] No data found for metric index ${metricIndex}, using empty object`)
+    console.log(`⚠️ [buildMetricDataInventory] metricDataTypes value:`, metricDataTypes)
+    console.log(`⚠️ [buildMetricDataInventory] metricDataTypes type:`, typeof metricDataTypes)
+    metricDataTypes = {}
+  }
+  
+  const dataInventory = {}
+  
+  // Build flat structure for this metric's fields
+  if (metricDataTypes && typeof metricDataTypes === 'object') {
+    Object.entries(metricDataTypes).forEach(([fieldName, dataType]) => {
+      if (metricLabelMap[fieldName]) {
+        const fieldLabel = metricLabelMap[fieldName]
+        dataInventory[fieldLabel] = dataType
+        console.log(`✅ [buildMetricDataInventory] Added ${fieldLabel}: ${dataType}`)
+      } else {
+        console.log(`⚠️ [buildMetricDataInventory] Field "${fieldName}" not in metricLabelMap`)
+      }
+    })
+  }
+  
+  // Return flat JSON structure for this metric
+  // Example: {"Metric Name": "personal", "Target Value": "confidential", "Measurement Unit": "regular", ...}
+  // Always return an object (even if empty) to ensure data_inventory field is always present
+  if (Object.keys(dataInventory).length > 0) {
+    console.log(`✅ Metric ${parseInt(metricIndex) + 1} Data Inventory JSON (sla_metrics):`, JSON.stringify(dataInventory, null, 2))
+  } else {
+    console.log(`⚠️ Metric ${parseInt(metricIndex) + 1} has no data_inventory data - fieldDataTypes.metrics[${indexKey}] is empty or missing`)
+    console.log(`⚠️ metricDataTypes was:`, metricDataTypes)
+    console.log(`⚠️ metricDataTypes keys:`, Object.keys(metricDataTypes || {}))
+  }
+  // Return empty object instead of null to ensure field is always present
+  return dataInventory
 }
 
 // Helper function to normalize frequency values
@@ -1643,3 +2753,187 @@ async function createSLANotification(title, message, type = 'info') {
 }
 
 </script>
+
+<style scoped>
+/* Data Type Circle Toggle Styles */
+.sla-data-type-circle-toggle-wrapper {
+  display: inline-flex !important;
+  align-items: center;
+  margin-left: 8px;
+  padding: 4px 8px;
+  background-color: white;
+  border: 1px solid #dee2e6;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+}
+
+.sla-data-type-circle-toggle {
+  display: flex !important;
+  align-items: center;
+  gap: 4px;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.sla-circle-option {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid #dee2e6;
+  background-color: white;
+  cursor: pointer;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  position: relative;
+  visibility: visible !important;
+  opacity: 1 !important;
+  flex-shrink: 0;
+}
+
+.sla-circle-option:hover {
+  transform: scale(1.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12);
+}
+
+.sla-circle-inner {
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  background-color: transparent;
+}
+
+.sla-circle-option.active .sla-circle-inner {
+  width: 9px;
+  height: 9px;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Personal Circle - Blue */
+.sla-circle-option.personal-circle {
+  border-color: #4f7cff;
+}
+
+.sla-circle-option.personal-circle.active {
+  border-color: #4f7cff;
+  background-color: rgba(79, 124, 255, 0.1);
+  box-shadow: 0 0 6px rgba(79, 124, 255, 0.2);
+}
+
+.sla-circle-option.personal-circle.active .sla-circle-inner {
+  background-color: #4f7cff;
+  box-shadow: 0 0 4px rgba(79, 124, 255, 0.35);
+}
+
+/* Confidential Circle - Red */
+.sla-circle-option.confidential-circle {
+  border-color: #e63946;
+}
+
+.sla-circle-option.confidential-circle.active {
+  border-color: #e63946;
+  background-color: rgba(230, 57, 70, 0.1);
+  box-shadow: 0 0 6px rgba(230, 57, 70, 0.2);
+}
+
+.sla-circle-option.confidential-circle.active .sla-circle-inner {
+  background-color: #e63946;
+  box-shadow: 0 0 4px rgba(230, 57, 70, 0.35);
+}
+
+/* Regular Circle - Grey */
+.sla-circle-option.regular-circle {
+  border-color: #6c757d;
+}
+
+.sla-circle-option.regular-circle.active {
+  border-color: #6c757d;
+  background-color: rgba(108, 117, 125, 0.1);
+  box-shadow: 0 0 6px rgba(108, 117, 125, 0.2);
+}
+
+.sla-circle-option.regular-circle.active .sla-circle-inner {
+  background-color: #6c757d;
+  box-shadow: 0 0 4px rgba(108, 117, 125, 0.35);
+}
+
+/* Data Type Legend Styles */
+.sla-data-type-legend {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.sla-data-type-legend-container {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e9ecef;
+  padding: 6px 10px;
+  min-width: 200px;
+  max-width: 240px;
+}
+
+.sla-data-type-options {
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+}
+
+.sla-data-type-legend-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 4px;
+  border-radius: 6px;
+  background-color: #f8f9fa;
+}
+
+.sla-data-type-legend-item i {
+  font-size: 0.9rem;
+  margin-bottom: 2px;
+}
+
+.sla-data-type-legend-item span {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+/* Personal Data Type - Blue */
+.sla-data-type-legend-item.personal-option i {
+  color: #4f7cff;
+}
+
+.sla-data-type-legend-item.personal-option span {
+  color: #4f7cff;
+}
+
+/* Confidential Data Type - Red */
+.sla-data-type-legend-item.confidential-option i {
+  color: #e63946;
+}
+
+.sla-data-type-legend-item.confidential-option span {
+  color: #e63946;
+}
+
+/* Regular Data Type - Gray */
+.sla-data-type-legend-item.regular-option i {
+  color: #6c757d;
+}
+
+.sla-data-type-legend-item.regular-option span {
+  color: #6c757d;
+}
+</style>

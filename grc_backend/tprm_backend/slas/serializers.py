@@ -35,12 +35,13 @@ class ContractSerializer(serializers.ModelSerializer):
 
 class SLAMetricSerializer(serializers.ModelSerializer):
     """Serializer for SLAMetric model."""
+    data_inventory = serializers.JSONField(required=False, allow_null=True)
     
     class Meta:
         model = SLAMetric
         fields = [
             'metric_id', 'sla', 'metric_name', 'threshold', 'measurement_unit', 'frequency',
-            'penalty', 'measurement_methodology'
+            'penalty', 'measurement_methodology', 'data_inventory'
         ]
         read_only_fields = ['metric_id']
 
@@ -60,6 +61,7 @@ class VendorSLASerializer(serializers.ModelSerializer):
         write_only=True
     )
     metrics = SLAMetricSerializer(many=True, read_only=True)
+    data_inventory = serializers.JSONField(required=False, allow_null=True)
     
     class Meta:
         model = VendorSLA
@@ -70,7 +72,7 @@ class VendorSLASerializer(serializers.ModelSerializer):
             'improvement_targets', 'penalty_threshold', 'credit_threshold', 
             'measurement_methodology', 'exclusions', 'force_majeure_clauses', 
             'compliance_framework', 'audit_requirements', 'document_versioning', 
-            'priority', 'approval_status', 'compliance_score', 'metrics'
+            'priority', 'approval_status', 'compliance_score', 'data_inventory', 'metrics'
         ]
         read_only_fields = ['sla_id']
 
@@ -172,7 +174,7 @@ class VendorSLADetailSerializer(serializers.ModelSerializer):
             'penalty_threshold', 'credit_threshold', 'measurement_methodology',
             'exclusions', 'force_majeure_clauses', 'compliance_framework',
             'audit_requirements', 'document_versioning', 'compliance_score',
-            'priority', 'approval_status', 'metrics',
+            'priority', 'approval_status', 'data_inventory', 'metrics',
             'compliance_records', 'violations', 'reviews',
         ]
         read_only_fields = ['sla_id']
@@ -212,13 +214,33 @@ class VendorSLADetailSerializer(serializers.ModelSerializer):
 
 class SLAMetricCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating SLA metrics without requiring sla field."""
+    data_inventory = serializers.JSONField(required=False, allow_null=True)
     
     class Meta:
         model = SLAMetric
         fields = [
             'metric_name', 'threshold', 'measurement_unit', 'frequency',
-            'penalty', 'measurement_methodology'
+            'penalty', 'measurement_methodology', 'data_inventory'
         ]
+    
+    def validate_data_inventory(self, value):
+        """Ensure data_inventory is always a dict (even if empty)."""
+        if value is None:
+            return {}
+        if isinstance(value, dict):
+            return value
+        # If it's not a dict, return empty dict
+        return {}
+    
+    def to_internal_value(self, data):
+        """Override to ensure data_inventory is always included in validated data."""
+        validated_data = super().to_internal_value(data)
+        # Ensure data_inventory is always present (even if None or empty)
+        if 'data_inventory' not in validated_data:
+            validated_data['data_inventory'] = {}
+        elif validated_data.get('data_inventory') is None:
+            validated_data['data_inventory'] = {}
+        return validated_data
 
 
 class VendorSLASubmissionSerializer(serializers.ModelSerializer):
@@ -234,6 +256,7 @@ class VendorSLASubmissionSerializer(serializers.ModelSerializer):
         write_only=True
     )
     metrics = SLAMetricCreateSerializer(many=True, source='sla_metrics')
+    data_inventory = serializers.JSONField(required=False, allow_null=True)
     
     class Meta:
         model = VendorSLA
@@ -244,7 +267,7 @@ class VendorSLASubmissionSerializer(serializers.ModelSerializer):
             'penalty_threshold', 'credit_threshold', 'measurement_methodology',
             'exclusions', 'force_majeure_clauses', 'compliance_framework',
             'audit_requirements', 'document_versioning', 'compliance_score',
-            'priority', 'approval_status', 'metrics'
+            'priority', 'approval_status', 'data_inventory', 'metrics'
         ]
     
     def validate_compliance_score(self, value):
@@ -259,11 +282,69 @@ class VendorSLASubmissionSerializer(serializers.ModelSerializer):
         # Ensure compliance_score has a default value
         if 'compliance_score' not in validated_data or validated_data['compliance_score'] is None:
             validated_data['compliance_score'] = 0.0
+        
+        # Log data_inventory if present for main SLA
+        if 'data_inventory' in validated_data:
+            print(f"📊 [SLA CREATE] Data inventory for vendor_slas: {validated_data.get('data_inventory')}")
+        else:
+            print("⚠️ [SLA CREATE] No data_inventory found in validated_data for vendor_slas")
             
         sla = VendorSLA.objects.create(**validated_data)
         
-        for metric_data in metrics_data:
-            SLAMetric.objects.create(sla=sla, **metric_data)
+        # Create metrics with their individual data_inventory
+        print(f"📊 [SLA CREATE] Processing {len(metrics_data)} metrics")
+        for idx, metric_data in enumerate(metrics_data):
+            # Log all metric data keys for debugging
+            print(f"📊 [SLA CREATE] Metric {idx + 1} data keys: {list(metric_data.keys())}")
+            print(f"📊 [SLA CREATE] Metric {idx + 1} full data: {metric_data}")
+            
+            # Explicitly ensure data_inventory is included and is a dict (not None)
+            metric_to_create = metric_data.copy()
+            
+            # Get data_inventory value
+            data_inv_value = metric_to_create.get('data_inventory')
+            
+            # Normalize data_inventory: ensure it's always a dict (never None)
+            if data_inv_value is None:
+                metric_to_create['data_inventory'] = {}
+                print(f"⚠️ [SLA CREATE] data_inventory was None, setting to empty dict for metric '{metric_data.get('metric_name')}'")
+            elif not isinstance(data_inv_value, dict):
+                # If it's not a dict, convert to empty dict
+                metric_to_create['data_inventory'] = {}
+                print(f"⚠️ [SLA CREATE] data_inventory was not a dict ({type(data_inv_value)}), converting to empty dict for metric '{metric_data.get('metric_name')}'")
+            elif len(data_inv_value) == 0:
+                # Empty dict is fine, but log it
+                print(f"📊 [SLA CREATE] data_inventory is empty dict for metric '{metric_data.get('metric_name')}' - this is OK")
+            else:
+                # Has data, log it
+                print(f"📊 [SLA CREATE] data_inventory for metric '{metric_data.get('metric_name')}': {data_inv_value}")
+                print(f"📊 [SLA CREATE] data_inventory type: {type(data_inv_value)}, keys: {list(data_inv_value.keys())}")
+            
+            # Ensure data_inventory is explicitly set (even if empty dict)
+            # This prevents Django from treating it as "not provided" and setting to None
+            if 'data_inventory' not in metric_to_create:
+                metric_to_create['data_inventory'] = {}
+            
+            # Create the metric with all data including data_inventory
+            print(f"📊 [SLA CREATE] Creating metric '{metric_data.get('metric_name')}' with data_inventory: {metric_to_create.get('data_inventory')}")
+            
+            # Use create with explicit data_inventory to ensure it's saved
+            created_metric = SLAMetric.objects.create(
+                sla=sla,
+                metric_name=metric_to_create.get('metric_name'),
+                threshold=metric_to_create.get('threshold'),
+                measurement_unit=metric_to_create.get('measurement_unit', ''),
+                frequency=metric_to_create.get('frequency'),
+                penalty=metric_to_create.get('penalty', ''),
+                measurement_methodology=metric_to_create.get('measurement_methodology', ''),
+                data_inventory=metric_to_create.get('data_inventory', {})  # Explicitly set, default to {}
+            )
+            
+            print(f"✅ [SLA CREATE] Created metric {created_metric.metric_id} - '{created_metric.metric_name}'")
+            print(f"✅ [SLA CREATE] Saved data_inventory value: {created_metric.data_inventory}")
+            print(f"✅ [SLA CREATE] Saved data_inventory type: {type(created_metric.data_inventory)}")
+            print(f"✅ [SLA CREATE] Saved data_inventory is None: {created_metric.data_inventory is None}")
+            print(f"✅ [SLA CREATE] Saved data_inventory == {{}}: {created_metric.data_inventory == {}}")
         
         return sla
 

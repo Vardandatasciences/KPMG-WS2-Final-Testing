@@ -75,6 +75,13 @@ class Plan(models.Model):
     # Submission tracking
     submitted_by = models.IntegerField(null=True, blank=True)
     submitted_at = models.DateTimeField(auto_now_add=True)
+    
+    # OCR extracted data (JSON field)
+    ocr_extracted_data = models.JSONField(null=True, blank=True)
+    
+    # Data inventory for data type classification
+    data_inventory = models.JSONField(null=True, blank=True, help_text="JSON mapping plan field labels to data types (personal, confidential, regular)")
+    retentionExpiry = models.DateField(blank=True, null=True, db_column='retentionExpiry', help_text="Data retention expiry date")
 
     class Meta:
         db_table = 'bcp_drp_plans'
@@ -223,6 +230,10 @@ class Evaluation(models.Model):
     # Detail
     criteria_json = models.JSONField(default=dict, blank=True)
     evaluator_comments = models.TextField(blank=True, null=True)
+    
+    # Data inventory for data type classification
+    data_inventory = models.JSONField(null=True, blank=True, help_text="JSON mapping evaluation field labels to data types (personal, confidential, regular)")
+    retentionExpiry = models.DateField(blank=True, null=True, db_column='retentionExpiry', help_text="Data retention expiry date")
 
     class Meta:
         db_table = 'bcp_drp_evaluations'

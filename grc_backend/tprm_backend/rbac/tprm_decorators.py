@@ -291,7 +291,9 @@ def rbac_vendor_required(permission_type):
                     }, status=403)
                 
                 # Check vendor permission
-                has_permission = RBACTPRMUtils.check_vendor_permission(user_id, permission_type)
+                # Use force_refresh=True to always get fresh data from database, bypassing ORM cache
+                # This ensures that recently granted permissions are immediately recognized
+                has_permission = RBACTPRMUtils.check_vendor_permission(user_id, permission_type, force_refresh=True)
                 
                 if not has_permission:
                     logger.warning(f"[RBAC TPRM DECORATOR] User {user_id} denied vendor access: {permission_type}")

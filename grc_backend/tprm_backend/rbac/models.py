@@ -326,3 +326,42 @@ class RBACTPRM(models.Model):
             self.generate_compliance_audit_reports, self.review_regulatory_compliance,
             self.audit_compliance_against_regulations, self.generate_legal_compliance_reports
         ])
+
+
+class AccessRequestTPRM(models.Model):
+    """
+    Access Request model for TPRM system
+    Tracks user requests for access permissions that require admin approval
+    """
+    STATUS_CHOICES = [
+        ('REQUESTED', 'Requested'),
+        ('APPROVED', 'Approved'),
+        ('REJECTED', 'Rejected'),
+    ]
+   
+    id = models.AutoField(primary_key=True)
+    user_id = models.IntegerField(db_column='user_id')
+    requested_url = models.CharField(max_length=500, db_column='requested_url', null=True, blank=True)
+    requested_feature = models.CharField(max_length=255, db_column='requested_feature', null=True, blank=True)
+    required_permission = models.CharField(max_length=255, db_column='required_permission', null=True, blank=True)
+    requested_role = models.CharField(max_length=100, db_column='requested_role', null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='REQUESTED', db_column='status')
+    created_at = models.DateTimeField(auto_now_add=True, db_column='created_at')
+    updated_at = models.DateTimeField(auto_now=True, db_column='updated_at')
+    approved_by = models.IntegerField(null=True, blank=True, db_column='approved_by')
+    audit_trail = models.JSONField(null=True, blank=True, db_column='audit_trail', default=dict)
+    message = models.TextField(null=True, blank=True, db_column='message')
+   
+    class Meta:
+        app_label = 'tprm_rbac'
+        db_table = 'AccessRequestTPRM'
+        ordering = ['-created_at']
+        verbose_name = 'TPRM Access Request'
+        verbose_name_plural = 'TPRM Access Requests'
+        indexes = [
+            models.Index(fields=['user_id', 'created_at']),
+            models.Index(fields=['status']),
+        ]
+   
+    def __str__(self):
+        return f"TPRM Access Request {self.id} by User {self.user_id} - {self.status}"

@@ -89,6 +89,7 @@ class Vendors(VendorBaseModel):
     updated_by = models.ForeignKey(Users, models.DO_NOTHING, db_column='updated_by', related_name='vendors_updated_by_set', blank=True, null=True)
     created_at = models.DateTimeField(blank=True, null=True)
     updated_at = models.DateTimeField(blank=True, null=True)
+    retentionExpiry = models.DateField(blank=True, null=True, db_column='retentionExpiry', help_text="Data retention expiry date")
     
     class Meta:
         managed = False
@@ -209,6 +210,7 @@ class TempVendor(VendorBaseModel):
     description = models.TextField(blank=True, null=True)
     contacts = models.JSONField(blank=True, null=True)
     documents = models.JSONField(blank=True, null=True)
+    data_inventory = models.JSONField(null=True, blank=True, help_text="JSON mapping vendor field labels to data types (personal, confidential, regular)")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     response_id = models.BigIntegerField(blank=True, null=True)
