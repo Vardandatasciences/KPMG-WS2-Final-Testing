@@ -21,6 +21,12 @@ from ...rbac.decorators import audit_conduct_required
 from ...rbac.permissions import AuditConductPermission
 from .ai_audit_api import extract_text_from_document
 
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
+
 logger = logging.getLogger(__name__)
 
 class CsrfExemptSessionAuthentication(SessionAuthentication):
@@ -31,10 +37,17 @@ class CsrfExemptSessionAuthentication(SessionAuthentication):
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([IsAuthenticated])
+@audit_conduct_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def analyze_document_relevance(request, audit_id):
     """
     Analyze document relevance to compliance requirements using real AI
+    MULTI-TENANCY: Only analyzes documents for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         logger.info(f"🤖 Starting AI document relevance analysis for audit: {audit_id}")
         
@@ -52,14 +65,25 @@ def analyze_document_relevance(request, audit_id):
                 'error': 'Document ID and compliance requirements are required'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Get document from database using raw SQL
+        # Verify audit exists for tenant
+        from ...models import Audit
+        try:
+            audit = Audit.objects.get(AuditId=audit_id, tenant_id=tenant_id)
+        except Audit.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': 'Audit not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Get document from database using raw SQL, filtered by tenant
         try:
             with connection.cursor() as cursor:
                 cursor.execute("""
-                    SELECT document_id, document_name, document_path, document_type, mime_type, file_size
-                    FROM audit_document 
-                    WHERE document_id = %s AND audit_id = %s
-                """, [int(document_id), int(audit_id) if str(audit_id).isdigit() else audit_id])
+                    SELECT ad.document_id, ad.document_name, ad.document_path, ad.document_type, ad.mime_type, ad.file_size
+                    FROM audit_document ad
+                    JOIN audit a ON ad.audit_id = a.AuditId
+                    WHERE ad.document_id = %s AND ad.audit_id = %s AND a.tenant_id = %s
+                """, [int(document_id), int(audit_id) if str(audit_id).isdigit() else audit_id, tenant_id])
                 
                 row = cursor.fetchone()
                 

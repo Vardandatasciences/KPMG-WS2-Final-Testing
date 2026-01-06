@@ -29,6 +29,12 @@ from ...rbac.decorators import (
 )
 from .framework_filter_helper import get_active_framework_filter, apply_framework_filter_to_audits, get_framework_sql_filter
 
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
+
 # Import compliance mapping engine - REMOVED UNUSED IMPORT
 # The ComplianceMappingEngine module doesn't exist, so we'll use rule-based mapping only
 ComplianceMappingEngine = None
@@ -46,10 +52,16 @@ class CsrfExemptSessionAuthentication(SessionAuthentication):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditConductPermission])
 @audit_conduct_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def map_document_to_compliance(request):
     """
     Map a document to compliance requirements
+    MULTI-TENANCY: Only maps documents for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         data = request.data
         document_text = data.get('document_text', '')
@@ -70,9 +82,9 @@ def map_document_to_compliance(request):
                 'error': 'Policy ID is required'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Verify policy exists
+        # Verify policy exists for tenant
         try:
-            policy = Policy.objects.get(PolicyId=policy_id)
+            policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
         except Policy.DoesNotExist:
             return Response({
                 'success': False,
@@ -122,22 +134,28 @@ def map_document_to_compliance(request):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditConductPermission])
 @audit_conduct_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policy_compliance_summary(request, policy_id):
     """
     Get compliance summary for a policy
+    MULTI-TENANCY: Only returns summary for policies in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
-        # Verify policy exists
+        # Verify policy exists for tenant
         try:
-            policy = Policy.objects.get(PolicyId=policy_id)
+            policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
         except Policy.DoesNotExist:
             return Response({
                 'success': False,
                 'error': 'Policy not found'
             }, status=status.HTTP_404_NOT_FOUND)
         
-        # Use basic summary (AI engine not available)
-        summary = get_basic_compliance_summary(policy_id)
+        # Use basic summary (AI engine not available), filtered by tenant
+        summary = get_basic_compliance_summary(policy_id, tenant_id)
         
         return Response({
             'success': True,
@@ -158,23 +176,29 @@ def get_policy_compliance_summary(request, policy_id):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditConductPermission])
 @audit_conduct_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def map_audit_documents_to_compliance(request, audit_id):
     """
     Map all documents in an audit to compliance requirements
+    MULTI-TENANCY: Only maps documents for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
-        # Verify audit exists
+        # Verify audit exists for tenant
         try:
             from ...models import Audit
-            audit = Audit.objects.get(AuditId=audit_id)
+            audit = Audit.objects.get(AuditId=audit_id, tenant_id=tenant_id)
         except Audit.DoesNotExist:
             return Response({
                 'success': False,
                 'error': 'Audit not found'
             }, status=status.HTTP_404_NOT_FOUND)
         
-        # Get all documents for the audit
-        documents = AuditDocument.objects.filter(AuditId=audit_id)
+        # Get all documents for the audit, filtered by tenant
+        documents = AuditDocument.objects.filter(AuditId=audit_id, tenant_id=tenant_id)
         
         if not documents.exists():
             return Response({
@@ -234,24 +258,30 @@ def map_audit_documents_to_compliance(request, audit_id):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditConductPermission])
 @audit_conduct_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_compliance_requirements(request, policy_id):
     """
     Get compliance requirements for a policy
+    MULTI-TENANCY: Only returns requirements for policies in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
-        # Verify policy exists
+        # Verify policy exists for tenant
         try:
-            policy = Policy.objects.get(PolicyId=policy_id)
+            policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
         except Policy.DoesNotExist:
             return Response({
                 'success': False,
                 'error': 'Policy not found'
             }, status=status.HTTP_404_NOT_FOUND)
         
-        # Get compliance requirements from database
+        # Get compliance requirements from database, filtered by tenant
         try:
             from ...models import Compliance
-            compliances = Compliance.objects.filter(SubPolicy__PolicyId=policy_id)
+            compliances = Compliance.objects.filter(SubPolicy__PolicyId=policy_id, tenant_id=tenant_id)
             
             requirements = []
             for compliance in compliances:
@@ -353,13 +383,14 @@ def get_rule_based_compliance_mapping(document_text: str, document_type: str,
             'recommendations': ['Error in compliance mapping']
         }
 
-def get_basic_compliance_summary(policy_id: int) -> dict:
+def get_basic_compliance_summary(policy_id: int, tenant_id: int) -> dict:
     """
     Basic compliance summary without AI
+    MULTI-TENANCY: Requires tenant_id parameter for data isolation
     """
     try:
         from ...models import Compliance
-        compliances = Compliance.objects.filter(SubPolicy__PolicyId=policy_id)
+        compliances = Compliance.objects.filter(SubPolicy__PolicyId=policy_id, tenant_id=tenant_id)
         
         total_requirements = compliances.count()
         mandatory_requirements = compliances.filter(MandatoryOptional='Mandatory').count()

@@ -68,6 +68,12 @@ except Exception:
 # --- Your models ---
 from grc.models import Incident
 
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
+
 
 # =========================
 # AI PROVIDER CONFIG (OpenAI or Ollama)
@@ -861,7 +867,15 @@ Begin analysis now and return the JSON object:"""
 @parser_classes([MultiPartParser, FormParser])
 @csrf_exempt
 @rate_limit_decorator(requests_per_minute=10, requests_per_hour=100)  # Phase 3: Rate limiting
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def upload_and_process_incident_document(request):
+    """
+    Upload and process incident document
+    MULTI-TENANCY: Extracted incidents will be automatically assigned to user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     """
     Upload a document and process it to extract incident data.
     Phase 2: Uses document preprocessing, few-shot prompts, and caching.
@@ -1014,8 +1028,15 @@ def upload_and_process_incident_document(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def save_extracted_incidents(request):
-    """Save extracted/reviewed incidents to the database."""
+    """
+    Save extracted/reviewed incidents to the database.
+    MULTI-TENANCY: Incidents will be automatically assigned to user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     print(f"💾 Save incidents request received")
     
     try:

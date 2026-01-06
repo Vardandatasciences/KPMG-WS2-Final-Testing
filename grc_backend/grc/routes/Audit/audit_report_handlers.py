@@ -18,13 +18,25 @@ from ...rbac.decorators import (
 )
 from .framework_filter_helper import get_active_framework_filter, apply_framework_filter_to_audits, get_framework_sql_filter
 
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
+
 @api_view(['GET'])
 @permission_classes([AuditViewPermission])
 @audit_view_reports_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def check_audit_reports(request):
     """
     Check for existing audit reports based on framework, policy, and subpolicy IDs
+    MULTI-TENANCY: Only returns reports for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         framework_id = request.GET.get('framework_id')
         policy_id = request.GET.get('policy_id')
@@ -56,7 +68,7 @@ def check_audit_reports(request):
             }
         )
 
-        # Build query based on provided parameters
+        # Build query based on provided parameters, filtered by tenant
         query = """
             SELECT 
                 ar.ReportId,
@@ -65,13 +77,13 @@ def check_audit_reports(request):
                 reviewer.UserName as ReviewerName
             FROM 
                 audit_report ar
-                JOIN audit a ON ar.AuditId = a.AuditId
-                JOIN users auditor ON a.auditor = auditor.UserId
-                LEFT JOIN users reviewer ON a.reviewer = reviewer.UserId
+                JOIN audit a ON ar.AuditId = a.AuditId AND a.tenant_id = %s
+                JOIN users auditor ON a.auditor = auditor.UserId AND auditor.tenant_id = %s
+                LEFT JOIN users reviewer ON a.reviewer = reviewer.UserId AND reviewer.tenant_id = %s
             WHERE 
                 ar.FrameworkId = %s
         """
-        params = [framework_id]
+        params = [tenant_id, tenant_id, tenant_id, framework_id]
 
         if policy_id:
             query += " AND ar.PolicyId = %s"
@@ -127,9 +139,10 @@ def check_audit_reports(request):
         )
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-def handle_selected_reports(audit, selected_reports):
+def handle_selected_reports(audit, selected_reports, tenant_id):
     """
     Handle selected reports for an audit
+    MULTI-TENANCY: Requires tenant_id parameter for data isolation
     """
     try:
         if not selected_reports:
@@ -149,7 +162,13 @@ def handle_selected_reports(audit, selected_reports):
         reports_json = []
         for report_id in selected_reports:
             try:
-                report = AuditReport.objects.get(ReportId=report_id)
+                # Get report filtered by tenant through audit
+                report = AuditReport.objects.filter(
+                    ReportId=report_id,
+                    AuditId__tenant_id=tenant_id
+                ).first()
+                if not report:
+                    continue
                 reports_json.append({
                     'report_id': report.ReportId,
                     'audit_id': report.AuditId.AuditId,
@@ -190,9 +209,9 @@ def handle_selected_reports(audit, selected_reports):
                     cursor.execute("""
                         SELECT u.Email 
                         FROM users u 
-                        JOIN audit a ON u.UserId = a.Auditor 
-                        WHERE a.AuditId = %s
-                    """, [audit.AuditId])
+                        JOIN audit a ON u.UserId = a.Auditor AND u.tenant_id = %s
+                        WHERE a.AuditId = %s AND a.tenant_id = %s
+                    """, [tenant_id, audit.AuditId, tenant_id])
                     auditor_email = cursor.fetchone()[0]
                 
                 if auditor_email:
@@ -247,10 +266,16 @@ def handle_selected_reports(audit, selected_reports):
 @api_view(['GET'])
 @permission_classes([AuditViewPermission])
 @audit_view_reports_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_report_details(request):
     """
     Get details for specific report IDs
+    MULTI-TENANCY: Only returns report details for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         report_ids_str = request.GET.get('report_ids', '')
         user_id = request.session.get('user_id')
@@ -290,7 +315,7 @@ def get_report_details(request):
             additionalInfo={"report_ids": report_ids}
         )
 
-        # Build query to get report details with proper joins
+        # Build query to get report details with proper joins, filtered by tenant
         query = """
             SELECT 
                 ar.ReportId as report_id,
@@ -299,14 +324,14 @@ def get_report_details(request):
                 auditor.UserName as auditor,
                 reviewer.UserName as reviewer
             FROM audit_report ar
-            JOIN audit a ON ar.AuditId = a.AuditId
-            JOIN users auditor ON a.Auditor = auditor.UserId
-            LEFT JOIN users reviewer ON a.Reviewer = reviewer.UserId
+            JOIN audit a ON ar.AuditId = a.AuditId AND a.tenant_id = %s
+            JOIN users auditor ON a.Auditor = auditor.UserId AND auditor.tenant_id = %s
+            LEFT JOIN users reviewer ON a.Reviewer = reviewer.UserId AND reviewer.tenant_id = %s
             WHERE ar.ReportId IN %s
         """
         
         with connection.cursor() as cursor:
-            cursor.execute(query, [tuple(report_ids)])
+            cursor.execute(query, [tenant_id, tenant_id, tenant_id, tuple(report_ids)])
             columns = [col[0] for col in cursor.description]
             reports = [dict(zip(columns, row)) for row in cursor.fetchall()]
             

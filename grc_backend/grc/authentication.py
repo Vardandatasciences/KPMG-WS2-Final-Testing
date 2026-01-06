@@ -532,6 +532,13 @@ def generate_jwt_tokens(user, login_time=None, session_token=None):
         if session_token is None:
             session_token = str(uuid.uuid4())
         
+        # MULTI-TENANCY: Get tenant_id from user
+        tenant_id = None
+        tenant_name = None
+        if hasattr(user, 'tenant') and user.tenant:
+            tenant_id = user.tenant.tenant_id
+            tenant_name = user.tenant.name
+        
         # Create refresh token
         refresh = RefreshToken()
         refresh['user_id'] = user.UserId
@@ -539,6 +546,9 @@ def generate_jwt_tokens(user, login_time=None, session_token=None):
         refresh['email'] = user.Email
         refresh['first_name'] = user.FirstName
         refresh['last_name'] = user.LastName
+        # MULTI-TENANCY: Add tenant info to token
+        refresh['tenant_id'] = tenant_id
+        refresh['tenant_name'] = tenant_name
         refresh['ver'] = latest_version
         refresh['min_ver'] = min_supported
         refresh['login_time'] = login_time  # Store original login time (persists through token refresh)
@@ -551,6 +561,9 @@ def generate_jwt_tokens(user, login_time=None, session_token=None):
         access_token['email'] = user.Email
         access_token['first_name'] = user.FirstName
         access_token['last_name'] = user.LastName
+        # MULTI-TENANCY: Add tenant info to token
+        access_token['tenant_id'] = tenant_id
+        access_token['tenant_name'] = tenant_name
         access_token['ver'] = latest_version
         access_token['min_ver'] = min_supported
         access_token['login_time'] = login_time  # Store original login time
@@ -1056,7 +1069,7 @@ def jwt_login(request):
                     'user_activated': user_was_inactive,
                     'auth_method': 'JWT'
                 },
-                frameworkId=user.FrameworkId.FrameworkId if user.FrameworkId else None
+                frameworkId=None  # Users model doesn't have FrameworkId field
             )
             if log_id:
                 logger.info(f"✅ Successfully logged login to grc_logs with ID: {log_id}")

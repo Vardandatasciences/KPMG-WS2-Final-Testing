@@ -37,12 +37,21 @@ from django.views.decorators.http import require_http_methods
 from ...routes.Global.s3_fucntions import export_data
 import json
 
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
+
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
 @api_view(['POST'])
 @authentication_classes([SessionAuthentication, BasicAuthentication])
 @permission_classes([AllowAny])  # Will be replaced with proper RBAC later
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def export_compliance_management(request):
     """
     Export compliance management data to various formats
@@ -55,6 +64,9 @@ def export_compliance_management(request):
         "file_name": "string"
     }
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         # Log the incoming request
         logger.info(f"Compliance export request received from user: {request.user}")
@@ -163,10 +175,15 @@ def export_compliance_management(request):
 @api_view(['GET'])
 @authentication_classes([SessionAuthentication, BasicAuthentication])
 @permission_classes([AllowAny])  # Will be replaced with proper RBAC later
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_export_status(request, export_id):
     """
     Get the status of an export operation
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         # This would typically query the export status from the database
         # For now, return a simple response
@@ -188,10 +205,15 @@ def get_export_status(request, export_id):
 @api_view(['GET'])
 @authentication_classes([SessionAuthentication, BasicAuthentication])
 @permission_classes([AllowAny])  # Will be replaced with proper RBAC later
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def list_export_history(request):
     """
     List export history for the current user
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         user_id = request.GET.get('user_id', 'default_user')
         

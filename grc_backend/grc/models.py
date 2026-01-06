@@ -8,10 +8,124 @@ from django.apps import apps
 
 from django.contrib.auth.models import User
 
- 
+
+# =========================================================================
+# MULTI-TENANCY MODEL - Tenant Isolation
+# =========================================================================
+
+# =========================================================================
+# MULTI-TENANCY: Base Model Mixin for Automatic Tenant Assignment
+# =========================================================================
+class TenantAwareModel(models.Model):
+    """
+    Abstract base model that automatically sets tenant_id when creating records.
+    
+    Usage:
+        class MyModel(TenantAwareModel):
+            # Your fields here
+            pass
+            
+        # When creating:
+        my_model = MyModel.objects.create(...)  # tenant_id automatically set!
+    """
+    
+    class Meta:
+        abstract = True
+    
+    def save(self, *args, **kwargs):
+        """
+        Override save to automatically set tenant_id if not already set
+        """
+        # Only set tenant if:
+        # 1. Model has tenant field
+        # 2. tenant is not already set
+        # 3. We're creating a new record (pk is None)
+        if hasattr(self, 'tenant') and self.tenant is None and self.pk is None:
+            from .tenant_context import get_current_tenant
+            tenant_id = get_current_tenant()
+            
+            if tenant_id:
+                try:
+                    # Set tenant using the Tenant model (defined in this file)
+                    tenant = Tenant.objects.get(tenant_id=tenant_id)
+                    self.tenant = tenant
+                except Tenant.DoesNotExist:
+                    pass  # Tenant not found, skip auto-assignment
+        
+        super().save(*args, **kwargs)
+
+class Tenant(models.Model):
+    """
+    Tenant model for multi-tenancy support.
+    Each tenant represents an organization/company using the GRC platform.
+    """
+    tenant_id = models.AutoField(primary_key=True, db_column='TenantId')
+    name = models.CharField(max_length=255, db_column='Name', help_text="Organization/Company Name")
+    subdomain = models.CharField(max_length=100, unique=True, db_column='Subdomain', 
+                                  help_text="Unique subdomain for tenant (e.g., 'acmecorp' for acmecorp.grcplatform.com)")
+    license_key = models.CharField(max_length=100, unique=True, null=True, blank=True, db_column='LicenseKey',
+                                    help_text="Unique license key for tenant")
+    subscription_tier = models.CharField(max_length=50, default='starter', db_column='SubscriptionTier',
+                                        choices=[
+                                            ('starter', 'Starter'),
+                                            ('professional', 'Professional'),
+                                            ('enterprise', 'Enterprise')
+                                        ])
+    status = models.CharField(max_length=20, default='trial', db_column='Status',
+                             choices=[
+                                 ('trial', 'Trial'),
+                                 ('active', 'Active'),
+                                 ('suspended', 'Suspended'),
+                                 ('cancelled', 'Cancelled')
+                             ])
+    max_users = models.IntegerField(default=10, db_column='MaxUsers', 
+                                    help_text="Maximum number of users allowed for this tenant")
+    storage_limit_gb = models.IntegerField(default=10, db_column='StorageLimitGB',
+                                          help_text="Storage limit in GB")
+    created_at = models.DateTimeField(auto_now_add=True, db_column='CreatedAt')
+    updated_at = models.DateTimeField(auto_now=True, db_column='UpdatedAt')
+    trial_ends_at = models.DateTimeField(null=True, blank=True, db_column='TrialEndsAt')
+    
+    # Tenant settings (stored as JSON)
+    settings = models.JSONField(default=dict, blank=True, db_column='Settings',
+                               help_text="Tenant-specific configuration settings")
+    
+    # Contact information
+    primary_contact_email = models.EmailField(null=True, blank=True, db_column='PrimaryContactEmail')
+    primary_contact_name = models.CharField(max_length=255, null=True, blank=True, db_column='PrimaryContactName')
+    primary_contact_phone = models.CharField(max_length=50, null=True, blank=True, db_column='PrimaryContactPhone')
+    
+    class Meta:
+        db_table = 'tenants'
+        verbose_name = 'Tenant'
+        verbose_name_plural = 'Tenants'
+        indexes = [
+            models.Index(fields=['subdomain']),
+            models.Index(fields=['license_key']),
+            models.Index(fields=['status']),
+        ]
+    
+    def __str__(self):
+        return f"{self.name} ({self.subdomain})"
+    
+    def is_active(self):
+        """Check if tenant is active"""
+        return self.status == 'active'
+    
+    def is_trial_expired(self):
+        """Check if trial period has expired"""
+        if self.status == 'trial' and self.trial_ends_at:
+            return timezone.now() > self.trial_ends_at
+        return False
+
+
 # Users model (Django built-in User model is used)
 class Users(models.Model):
     UserId = models.AutoField(primary_key=True)
+    # MULTI-TENANCY: Link user to tenant
+    tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='users', null=True, blank=True,
+                               help_text="Tenant this user belongs to")
     UserName = models.CharField(max_length=255)
     Password = models.CharField(max_length=255)
     CreatedAt = models.DateTimeField(auto_now_add=True)
@@ -201,6 +315,11 @@ class Domain(models.Model):
 
 class Framework(models.Model):
     FrameworkId = models.AutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link framework to tenant
+    tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='frameworks', null=True, blank=True,
+                               help_text="Tenant this framework belongs to")
 
     # ✅ FK to domain table (creates domainId column in frameworks)
     domain = models.ForeignKey(
@@ -230,6 +349,7 @@ class Framework(models.Model):
     latestAmmendmentDate = models.DateField(null=True, blank=True)
     latestComparisionCheckDate = models.DateField(null=True, blank=True)
     retentionExpiry = models.DateField(null=True, blank=True)
+    data_inventory = models.JSONField(null=True, blank=True)
 
     class Meta:
         db_table = 'frameworks'
@@ -309,6 +429,10 @@ class FrameworkVersion(models.Model):
  
 class Policy(models.Model):
     PolicyId = models.AutoField(primary_key=True)
+    # MULTI-TENANCY: Link policy to tenant
+    tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='policies', null=True, blank=True,
+                               help_text="Tenant this policy belongs to")
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
     CurrentVersion = models.CharField(max_length=20, default='1.0')
     Status = models.CharField(max_length=50)
@@ -375,6 +499,10 @@ class PolicyCategory(models.Model):
  
 class SubPolicy(models.Model):
     SubPolicyId = models.AutoField(primary_key=True)
+    # MULTI-TENANCY: Link subpolicy to tenant
+    tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='subpolicies', null=True, blank=True,
+                               help_text="Tenant this subpolicy belongs to")
     PolicyId = models.ForeignKey('Policy', on_delete=models.CASCADE, db_column='PolicyId')
     SubPolicyName = models.CharField(max_length=255)
     CreatedByName = models.CharField(max_length=255)
@@ -452,6 +580,10 @@ class FrameworkApproval(models.Model):
 # Users model (Django built-in User model is used)
 class Compliance(models.Model):
     ComplianceId = models.AutoField(primary_key=True)
+    # MULTI-TENANCY: Link compliance to tenant
+    tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='compliance', null=True, blank=True,
+                               help_text="Tenant this compliance belongs to")
     SubPolicy = models.ForeignKey(SubPolicy, on_delete=models.CASCADE, db_column='SubPolicyId', related_name='compliances')
     ComplianceTitle = models.CharField(max_length=145, null=True, blank=True)
     ComplianceItemDescription = models.TextField(null=True, blank=True)
@@ -619,6 +751,10 @@ class ExportTask(models.Model):
 # Audit model
 class Audit(models.Model):
     AuditId = models.AutoField(primary_key=True)
+    # MULTI-TENANCY: Link audit to tenant
+    tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='audit', null=True, blank=True,
+                               help_text="Tenant this audit belongs to")
     Title = models.CharField(max_length=255, null=True, blank=True)
     Scope = models.TextField(null=True, blank=True)
     Objective = models.TextField(null=True, blank=True)
@@ -656,6 +792,10 @@ class Audit(models.Model):
 # AuditFinding model
 class AuditFinding(models.Model):
     AuditFindingsId = models.AutoField(primary_key=True)
+    # MULTI-TENANCY: Link audit finding to tenant
+    tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='audit_findings', null=True, blank=True,
+                               help_text="Tenant this audit finding belongs to")
     AuditId = models.ForeignKey(Audit, on_delete=models.CASCADE, db_column='AuditId', related_name='findings')
     ComplianceId = models.ForeignKey(Compliance, on_delete=models.CASCADE, db_column='ComplianceId')
     UserId = models.ForeignKey(Users, on_delete=models.CASCADE, db_column='UserId')
@@ -691,6 +831,10 @@ class AuditFinding(models.Model):
  
 class Incident(models.Model):
     IncidentId = models.AutoField(primary_key=True)
+    # MULTI-TENANCY: Link incident to tenant
+    tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='incidents', null=True, blank=True,
+                               help_text="Tenant this incident belongs to")
     IncidentTitle = models.CharField(max_length=255)
     Description = models.TextField()
     Mitigation = models.JSONField(null=True, blank=True)
@@ -932,6 +1076,10 @@ class AuditVersion(models.Model):
 
 class Notification(models.Model):
     id = models.AutoField(primary_key=True)
+    # MULTI-TENANCY: Link notification to tenant
+    tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='notifications', null=True, blank=True,
+                               help_text="Tenant this notification belongs to")
     recipient = models.CharField(max_length=255)
     type = models.CharField(max_length=100)
     channel = models.CharField(max_length=20)  # 'email' or 'whatsapp'
@@ -962,6 +1110,10 @@ class S3File(models.Model):
 
 class Risk(models.Model):
     RiskId = models.AutoField(primary_key=True)  # Primary Key
+    # MULTI-TENANCY: Link risk to tenant
+    tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='risk', null=True, blank=True,
+                               help_text="Tenant this risk belongs to")
     ComplianceId = models.IntegerField(null=True)
     RiskTitle = models.TextField(null=True)
     Criticality = models.CharField(max_length=50, null=True)
@@ -1020,6 +1172,10 @@ class RiskInstance(models.Model):
     ]
 
     RiskInstanceId = models.AutoField(primary_key=True)
+    # MULTI-TENANCY: Link risk instance to tenant
+    tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='risk_instance', null=True, blank=True,
+                               help_text="Tenant this risk instance belongs to")
     RiskId = models.IntegerField(null=True)
     IncidentId = models.IntegerField(null=True)
     ComplianceId = models.IntegerField(null=True)
@@ -1854,6 +2010,10 @@ class Category(models.Model):
 
 class Department(models.Model):
     DepartmentId = models.AutoField(primary_key=True)
+    # MULTI-TENANCY: Link department to tenant
+    tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='department', null=True, blank=True,
+                               help_text="Tenant this department belongs to")
     EntityId = models.IntegerField()
     DepartmentName = models.CharField(max_length=255)
     DepartmentHead = models.IntegerField()
@@ -2206,6 +2366,10 @@ class Event(models.Model):
     Event model for GRC Event Management
     """
     EventId = models.AutoField(primary_key=True)
+    # MULTI-TENANCY: Link event to tenant
+    tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='events', null=True, blank=True,
+                               help_text="Tenant this event belongs to")
     EventTitle = models.CharField(max_length=255)
     EventId_Generated = models.CharField(max_length=50, unique=True)  # Auto-generated ID like EVT-2025-1188
     Description = models.TextField(null=True, blank=True)

@@ -106,6 +106,20 @@ export default {
         if (response.data.user.Email) {
           localStorage.setItem('user_email', response.data.user.Email)
         }
+        // MULTI-TENANCY: Store tenant info if available
+        if (response.data.user.tenant_id) {
+          localStorage.setItem('tenant_id', response.data.user.tenant_id)
+        }
+        if (response.data.user.tenant_name) {
+          localStorage.setItem('tenant_name', response.data.user.tenant_name)
+        }
+      }
+      // MULTI-TENANCY: Also check for tenant info in token response
+      if (response.data.tenant_id) {
+        localStorage.setItem('tenant_id', response.data.tenant_id)
+      }
+      if (response.data.tenant_name) {
+        localStorage.setItem('tenant_name', response.data.tenant_name)
       }
       if (response.data.access_token_expires) {
         localStorage.setItem('access_token_expires', response.data.access_token_expires)
@@ -236,6 +250,9 @@ export default {
     localStorage.removeItem('refresh_token_expires')
     localStorage.removeItem('isAuthenticated')
     localStorage.removeItem('is_logged_in')
+    // MULTI-TENANCY: Clear tenant data
+    localStorage.removeItem('tenant_id')
+    localStorage.removeItem('tenant_name')
   },
 
   /**
@@ -350,6 +367,59 @@ export default {
     const user = this.getCurrentUser()
     const grcAuthFlag = localStorage.getItem('isAuthenticated') === 'true' || localStorage.getItem('is_logged_in') === 'true'
     return !!user && (!!token || grcAuthFlag)
+  },
+
+  /**
+   * MULTI-TENANCY: Get current tenant ID
+   */
+  getTenantId() {
+    return localStorage.getItem('tenant_id')
+  },
+
+  /**
+   * MULTI-TENANCY: Get current tenant name
+   */
+  getTenantName() {
+    return localStorage.getItem('tenant_name')
+  },
+
+  /**
+   * MULTI-TENANCY: Get tenant info from token
+   * Decodes JWT token and extracts tenant information
+   */
+  getTenantInfoFromToken() {
+    try {
+      const token = this.getSessionToken()
+      if (!token) return null
+
+      // Decode JWT token (without verification - client-side only)
+      const base64Url = token.split('.')[1]
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split('')
+          .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      )
+      
+      const payload = JSON.parse(jsonPayload)
+      
+      return {
+        tenant_id: payload.tenant_id,
+        tenant_name: payload.tenant_name
+      }
+    } catch (error) {
+      console.error('Error decoding token for tenant info:', error)
+      return null
+    }
+  },
+
+  /**
+   * MULTI-TENANCY: Check if user belongs to a tenant
+   */
+  hasTenant() {
+    const tenantId = this.getTenantId()
+    return !!tenantId
   }
 }
 

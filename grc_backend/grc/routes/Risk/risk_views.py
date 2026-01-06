@@ -25,6 +25,12 @@ from ...rbac.permissions import (
     IncidentEditPermission, ViewAllCompliancePermission,ComplianceViewPermission
 )
 
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
+
 # Framework filtering helper
 from .framework_filter_helper import (
     apply_framework_filter, 
@@ -50,7 +56,12 @@ class CsrfExemptSessionAuthentication(SessionAuthentication):
 @api_view(['POST', 'OPTIONS'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([RiskViewPermission])  # RBAC: Require RiskViewPermission for exporting risk register
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def export_risk_register_v2(request):
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     # Handle CORS preflight requests
     if request.method == 'OPTIONS':
         response = HttpResponse()
@@ -242,7 +253,12 @@ def export_risk_register_v2(request):
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([ComplianceViewPermission])  # RBAC: Require RiskViewPermission for exporting compliance management
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def export_compliance_management(request):
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         data = json.loads(request.body.decode('utf-8')) if request.body else request.data
         export_format = data.get('export_format', 'json')
@@ -428,7 +444,12 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([RiskViewPermission])  # RBAC: Require RiskViewPermission for login
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def login(request):
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     from ...models import Users
     from django.contrib.auth.hashers import check_password
     
@@ -479,7 +500,12 @@ def login(request):
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([RiskCreatePermission])  # RBAC: Require RiskCreatePermission for user registration
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def register(request):
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     send_log(
         module="Auth",
         actionType="REGISTER",
@@ -502,7 +528,12 @@ def register(request):
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def test_connection(request):
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     send_log(
         module="System",
         actionType="TEST",
@@ -515,7 +546,12 @@ def test_connection(request):
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_incident')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def last_incident(request):
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     send_log(
         module="Incident",
         actionType="VIEW",
@@ -534,7 +570,12 @@ def last_incident(request):
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_compliance')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_compliance_by_incident(request, incident_id):
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     send_log(
         module="Compliance",
         actionType="VIEW",
@@ -562,7 +603,12 @@ def get_compliance_by_incident(request, incident_id):
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_risks_by_incident(request, incident_id):
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     send_log(
         module="Risk",
         actionType="VIEW",
@@ -597,6 +643,14 @@ class RiskViewSet(viewsets.ModelViewSet):
     serializer_class = RiskSerializer
     authentication_classes = [CsrfExemptSessionAuthentication, BasicAuthentication]
     
+    # MULTI-TENANCY: Override get_queryset to filter by tenant
+    def get_queryset(self):
+        """Filter queryset by tenant_id"""
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            return Risk.objects.filter(tenant_id=tenant_id)
+        return Risk.objects.none()
+    
     def get_permissions(self):
         """
         Instantiates and returns the list of permissions that this view requires.
@@ -615,6 +669,9 @@ class RiskViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
     
     def list(self, request):
+        # MULTI-TENANCY: Extract tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        
         send_log(
             module="Risk",
             actionType="LIST",
@@ -629,6 +686,7 @@ class RiskViewSet(viewsets.ModelViewSet):
             from django.db import connection
             
             with connection.cursor() as cursor:
+                # MULTI-TENANCY: Add tenant_id filtering to SQL query
                 cursor.execute("""
                     SELECT 
                         r.RiskId,
@@ -655,8 +713,9 @@ class RiskViewSet(viewsets.ModelViewSet):
                     LEFT JOIN users u ON ri.UserId = u.UserId
                     LEFT JOIN department d ON u.DepartmentId = d.DepartmentId
                     LEFT JOIN businessunits bu ON d.BusinessUnitId = bu.BusinessUnitId
+                    WHERE r.tenant_id = %s
                     ORDER BY r.CreatedAt DESC
-                """)
+                """, [tenant_id])
                 
                 columns = [col[0] for col in cursor.description]
                 risks_data = []
@@ -690,6 +749,9 @@ class RiskViewSet(viewsets.ModelViewSet):
     @csrf_exempt
     @require_consent('create_risk')
     def create(self, request):
+        # MULTI-TENANCY: Extract and add tenant_id to request data
+        tenant_id = get_tenant_id_from_request(request)
+        
         print(f"RiskViewSet.create called with data: {request.data}")
         print(f"Request user: {request.user}")
         print(f"Request authenticated: {request.user.is_authenticated}")
@@ -699,6 +761,9 @@ class RiskViewSet(viewsets.ModelViewSet):
         # Make request data mutable
         if hasattr(request.data, '_mutable'):
             request.data._mutable = True
+        
+        # MULTI-TENANCY: Add tenant_id to request data
+        request.data['tenant_id'] = tenant_id
         
         if framework_id:
             # Add framework ID if one is selected
@@ -763,6 +828,14 @@ class IncidentViewSet(viewsets.ModelViewSet):
     queryset = Incident.objects.all()
     serializer_class = IncidentSerializer
     
+    # MULTI-TENANCY: Override get_queryset to filter by tenant
+    def get_queryset(self):
+        """Filter queryset by tenant_id"""
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            return Incident.objects.filter(tenant_id=tenant_id)
+        return Incident.objects.none()
+    
     def get_permissions(self):
         """
         Instantiates and returns the list of permissions that this view requires.
@@ -804,6 +877,12 @@ class IncidentViewSet(viewsets.ModelViewSet):
         return super().retrieve(request, pk)
     
     def create(self, request):
+        # MULTI-TENANCY: Extract and add tenant_id to request data
+        tenant_id = get_tenant_id_from_request(request)
+        if hasattr(request.data, '_mutable'):
+            request.data._mutable = True
+        request.data['tenant_id'] = tenant_id
+        
         send_log(
             module="Incident",
             actionType="CREATE",
@@ -842,6 +921,14 @@ class ComplianceViewSet(viewsets.ModelViewSet):
     queryset = Compliance.objects.all()
     serializer_class = ComplianceSerializer
     lookup_field = 'ComplianceId'
+    
+    # MULTI-TENANCY: Override get_queryset to filter by tenant
+    def get_queryset(self):
+        """Filter queryset by tenant_id"""
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            return Compliance.objects.filter(tenant_id=tenant_id)
+        return Compliance.objects.none()
     
     def get_permissions(self):
         """
@@ -884,6 +971,12 @@ class ComplianceViewSet(viewsets.ModelViewSet):
         return super().retrieve(request, ComplianceId=ComplianceId)
     
     def create(self, request):
+        # MULTI-TENANCY: Extract and add tenant_id to request data
+        tenant_id = get_tenant_id_from_request(request)
+        if hasattr(request.data, '_mutable'):
+            request.data._mutable = True
+        request.data['tenant_id'] = tenant_id
+        
         send_log(
             module="Compliance",
             actionType="CREATE",
@@ -923,6 +1016,14 @@ class RiskInstanceViewSet(viewsets.ModelViewSet):
     serializer_class = RiskInstanceSerializer
     authentication_classes = [CsrfExemptSessionAuthentication, BasicAuthentication]
    
+    # MULTI-TENANCY: Override get_queryset to filter by tenant
+    def get_queryset(self):
+        """Filter queryset by tenant_id"""
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            return RiskInstance.objects.filter(tenant_id=tenant_id)
+        return RiskInstance.objects.none()
+   
     def get_permissions(self):
         """
         Instantiates and returns the list of permissions that this view requires.
@@ -955,6 +1056,9 @@ class RiskInstanceViewSet(viewsets.ModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         """Retrieve a single risk instance by ID"""
         try:
+            # MULTI-TENANCY: Extract tenant_id from request
+            tenant_id = get_tenant_id_from_request(request)
+            
             # Get the risk instance ID from the URL
             instance_id = kwargs.get('pk')
            
@@ -970,11 +1074,12 @@ class RiskInstanceViewSet(viewsets.ModelViewSet):
             )
            
             # Use raw SQL query to avoid ORM date conversion issues
+            # MULTI-TENANCY: Add tenant_id filtering
             from django.db import connection
             with connection.cursor() as cursor:
                 cursor.execute("""
-                    SELECT * FROM risk_instance WHERE RiskInstanceId = %s
-                """, [instance_id])
+                    SELECT * FROM risk_instance WHERE RiskInstanceId = %s AND tenant_id = %s
+                """, [instance_id, tenant_id])
                
                 columns = [col[0] for col in cursor.description]
                 row = cursor.fetchone()
@@ -1003,6 +1108,9 @@ class RiskInstanceViewSet(viewsets.ModelViewSet):
             return Response({"error": str(e)}, status=500)
    
     def create(self, request, *args, **kwargs):
+        # MULTI-TENANCY: Extract tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        
         # Log the create operation
         send_log(
             module="Risk",
@@ -1022,6 +1130,9 @@ class RiskInstanceViewSet(viewsets.ModelViewSet):
         try:
             # Create a mutable copy of the data
             mutable_data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+           
+            # MULTI-TENANCY: Add tenant_id to request data
+            mutable_data['tenant_id'] = tenant_id
            
             # Remove Date field if present as it's been replaced with CreatedAt
             if 'Date' in mutable_data:
@@ -1054,11 +1165,12 @@ class RiskInstanceViewSet(viewsets.ModelViewSet):
            
             if risk_id is not None:
                 # Count existing instances with the same RiskId
+                # MULTI-TENANCY: Add tenant_id filtering
                 from django.db import connection
                 with connection.cursor() as cursor:
                     cursor.execute("""
-                        SELECT COUNT(*) FROM risk_instance WHERE RiskId = %s
-                    """, [risk_id])
+                        SELECT COUNT(*) FROM risk_instance WHERE RiskId = %s AND tenant_id = %s
+                    """, [risk_id, tenant_id])
                     existing_count = cursor.fetchone()[0]
                     # Set recurrence count to existing count + 1
                     mutable_data['RecurrenceCount'] = existing_count + 1
@@ -1143,7 +1255,12 @@ class RiskInstanceViewSet(viewsets.ModelViewSet):
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @rbac_required(required_permission='create_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def analyze_incident(request):
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     send_log(
         module="Incident",
         actionType="ANALYZE",
@@ -1207,10 +1324,15 @@ def analyze_incident(request):
 
 @api_view(['GET'])
 @rbac_required(required_permission='risk_performance_analytics')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_metrics(request):
     """
     Get risk metrics with optional time filter
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     time_range = request.GET.get('timeRange', 'all')
     category = request.GET.get('category', 'all')
     priority = request.GET.get('priority', 'all')
@@ -1218,7 +1340,8 @@ def risk_metrics(request):
     print(f"FILTER REQUEST: timeRange={time_range}, category={category}, priority={priority}")
     
     # Start with all risk instances
-    queryset = RiskInstance.objects.all()
+    # MULTI-TENANCY: Filter by tenant_id
+    queryset = RiskInstance.objects.filter(tenant_id=tenant_id)
     print(f"Initial queryset count: {queryset.count()}")
     
     # Print columns and raw data for debugging
@@ -1322,16 +1445,18 @@ def risk_metrics(request):
                     
                     if mitigation_status_exists:
                         # Count mitigated risks
-                        sql = f"SELECT COUNT(*) FROM risk_instance WHERE RiskInstanceId IN ({risk_ids_str}) AND MitigationStatus = 'Completed'"
+                        # MULTI-TENANCY: Add tenant filtering
+                        sql = f"SELECT COUNT(*) FROM risk_instance WHERE RiskInstanceId IN ({risk_ids_str}) AND MitigationStatus = 'Completed' AND TenantId = %s"
                         print(f"Executing SQL: {sql}")
-                        cursor.execute(sql)
+                        cursor.execute(sql, [tenant_id])
                         row = cursor.fetchone()
                         mitigated_risks = row[0] if row else 0
                         
                         # Count in-progress risks
-                        sql = f"SELECT COUNT(*) FROM risk_instance WHERE RiskInstanceId IN ({risk_ids_str}) AND MitigationStatus = 'Work in Progress'"
+                        # MULTI-TENANCY: Add tenant filtering
+                        sql = f"SELECT COUNT(*) FROM risk_instance WHERE RiskInstanceId IN ({risk_ids_str}) AND MitigationStatus = 'Work in Progress' AND TenantId = %s"
                         print(f"Executing SQL: {sql}")
-                        cursor.execute(sql)
+                        cursor.execute(sql, [tenant_id])
                         row = cursor.fetchone()
                         in_progress_risks = row[0] if row else 0
                         
@@ -1369,7 +1494,12 @@ def generate_dates(days=30):
 
 @api_view(['GET'])
 @permission_classes([RiskViewPermission])  # RBAC: Require RiskViewPermission for viewing users
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_users(request):
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     send_log(
         module="User",
         actionType="VIEW",
@@ -1385,8 +1515,13 @@ def get_users(request):
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_workflow(request):
     """Get all risk instances for the workflow view"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Fetch all risk instances with framework filtering
         risk_instances = apply_framework_filter_to_risk_instances(RiskInstance.objects.all(), request)
@@ -1466,8 +1601,13 @@ def risk_workflow(request):
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @rbac_required(required_permission='assign_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def assign_risk_instance(request):
     """Assign a risk instance to a user from custom user table"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     risk_id = request.data.get('risk_id')
     # Try to get user_id from either field name (UserId or user_id)
     user_id = request.data.get('UserId') or request.data.get('user_id')
@@ -1567,8 +1707,13 @@ def assign_risk_instance(request):
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_custom_users(request):
     """Get users from the custom user table"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     send_log(
         module="User",
         actionType="VIEW",
@@ -1605,8 +1750,13 @@ def get_custom_users(request):
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_custom_user(request, user_id):
     """Get a single user from the custom user table by ID"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     send_log(
         module="User",
         actionType="VIEW",
@@ -1643,8 +1793,13 @@ def get_custom_user(request, user_id):
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_instances_view(request):
     """Simple view to return all risk instances with proper date handling"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         import random
         from django.db import connection
@@ -1687,6 +1842,10 @@ def risk_instances_view(request):
                 # Replace "r.FrameworkId" with "risk.FrameworkId" for this query
                 framework_join_where = framework_where.replace("r.FrameworkId", "risk.FrameworkId")
             
+            # MULTI-TENANCY: Add tenant_id to query parameters
+            query_params = list(framework_params) if framework_params else []
+            query_params.append(tenant_id)
+            
             query = f"""
                 SELECT 
                     ri.*,
@@ -1700,10 +1859,10 @@ def risk_instances_view(request):
                 LEFT JOIN users u ON ri.UserId = u.UserId
                 LEFT JOIN department d ON u.DepartmentId = d.DepartmentId
                 LEFT JOIN businessunits bu ON d.BusinessUnitId = bu.BusinessUnitId
-                WHERE 1=1 {framework_join_where}
+                WHERE ri.TenantId = %s {framework_join_where}
                 ORDER BY ri.CreatedAt DESC
             """
-            cursor.execute(query, framework_params)
+            cursor.execute(query, query_params)
             columns = [col[0] for col in cursor.description]
             risk_instances_data = []
             
@@ -1744,8 +1903,13 @@ def risk_instances_view(request):
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_user_risks(request, user_id):
     """Get all risks assigned to a specific user, including completed ones"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Log the view action
         send_log(
@@ -1783,6 +1947,9 @@ def get_user_risks(request, user_id):
         # Query risks that have the specific user assigned with department and business unit info
         from django.db import connection
         with connection.cursor() as cursor:
+            # MULTI-TENANCY: Add tenant_id to params
+            params['tenant_id'] = tenant_id
+            
             query = f"""
                 SELECT 
                     ri.*,
@@ -1796,6 +1963,7 @@ def get_user_risks(request, user_id):
                 LEFT JOIN businessunits bu ON d.BusinessUnitId = bu.BusinessUnitId
                 LEFT JOIN risk r ON ri.RiskId = r.RiskId
                 WHERE ri.UserId = %(user_id)s
+                AND ri.TenantId = %(tenant_id)s
                 {framework_where.replace('r.FrameworkId', 'r.FrameworkId')}
                 ORDER BY ri.CreatedAt DESC
             """
@@ -1871,8 +2039,13 @@ def get_user_risks(request, user_id):
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @rbac_required(required_permission='edit_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def update_risk_status(request):
     """Update the status of a risk instance"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     risk_id = request.data.get('risk_id')
     status = request.data.get('status')
     
@@ -1910,8 +2083,13 @@ def update_risk_status(request):
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_risk_mitigations(request, risk_id):
     """Get mitigation steps for a specific risk"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     send_log(
         module="Risk",
         actionType="VIEW",
@@ -2036,8 +2214,13 @@ def get_risk_mitigations(request, risk_id):
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @rbac_required(required_permission='approve_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def update_mitigation_approval(request):
     """Update the approval status of a mitigation step"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     approval_id = request.data.get('approval_id')
     mitigation_id = request.data.get('mitigation_id')
     approved = request.data.get('approved')
@@ -2141,8 +2324,12 @@ def get_reviewer_id(reviewer_name):
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @rbac_required(required_permission='assign_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def assign_reviewer(request):
     """Assign a reviewer to a risk instance and create approval record"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
 
     print(request.data,'-------------------------------------------')
     risk_id = request.data.get('risk_id')
@@ -2404,8 +2591,13 @@ def assign_reviewer(request):
 
 @api_view(['GET'])
 @rbac_required(required_permission='evaluate_assigned_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_reviewer_tasks(request, user_id):
     """Get all risks where the user is assigned as a reviewer, including completed ones"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     send_log(
         module="Risk",
         actionType="VIEW",
@@ -2606,8 +2798,13 @@ def get_reviewer_tasks(request, user_id):
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @rbac_required(required_permission='evaluate_assigned_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def complete_review(request):
     """Complete the review process for a risk"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     import json
     import datetime
     import traceback
@@ -2817,9 +3014,14 @@ def complete_review(request):
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_user_notifications(request, user_id):
     """Get notifications for the user about their reviewed tasks"""
     try:
+        # MULTI-TENANCY: Extract tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        
         send_log(
             module="Risk",
             actionType="VIEW",
@@ -2853,6 +3055,7 @@ def get_user_notifications(request, user_id):
         with connection.cursor() as cursor:
             try:
                 # Simplified query that doesn't assume specific schema name
+                # MULTI-TENANCY: Add tenant_id filtering
                 cursor.execute("""
                     SELECT 
                         ra.RiskInstanceId, 
@@ -2867,7 +3070,8 @@ def get_user_notifications(request, user_id):
                     WHERE 
                         ra.UserId = %s 
                         AND ra.version LIKE 'R%%'
-                """, [user_id])
+                        AND ri.tenant_id = %s
+                """, [user_id, tenant_id])
                 
                 columns = [col[0] for col in cursor.description]
                 notifications = []
@@ -2910,8 +3114,13 @@ def get_user_notifications(request, user_id):
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @rbac_required(required_permission='edit_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def update_mitigation_status(request):
     """Update the mitigation status of a risk instance"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     risk_id = request.data.get('risk_id')
     status = request.data.get('status')
     
@@ -2963,8 +3172,13 @@ def update_mitigation_status(request):
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_reviewer_comments(request, risk_id):
     """Get reviewer comments for rejected mitigations"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     send_log(
         module="Risk",
         actionType="VIEW",
@@ -3010,8 +3224,13 @@ def get_reviewer_comments(request, risk_id):
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_latest_review(request, risk_id):
     """Get the latest review data for a risk (latest R version)"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     send_log(
         module="Risk",
         actionType="VIEW",
@@ -3052,8 +3271,13 @@ def get_latest_review(request, risk_id):
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_assigned_reviewer(request, risk_id):
     """Get the assigned reviewer for a risk from the RiskInstance table's Reviewer column"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print(f"Looking for reviewer for risk_id: {risk_id}")
         
@@ -3197,8 +3421,13 @@ def get_assigned_reviewer(request, risk_id):
 @api_view(['PUT'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @rbac_required(required_permission='edit_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def update_risk_mitigation(request, risk_id):
     """Update the mitigation steps for a risk instance"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     mitigation_data = request.data.get('mitigation_data')
     
     # Log the mitigation update
@@ -3217,7 +3446,7 @@ def update_risk_mitigation(request, risk_id):
     
     try:
         # Get the risk instance
-        risk_instance = RiskInstance.objects.get(RiskInstanceId=risk_id)
+        risk_instance = RiskInstance.objects.get(RiskInstanceId=risk_id, tenant_id=tenant_id)
         
         # Only update the ModifiedMitigations field, keep RiskMitigation unchanged
         risk_instance.ModifiedMitigations = mitigation_data
@@ -3235,10 +3464,15 @@ def update_risk_mitigation(request, risk_id):
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_risk_form_details(request, risk_id):
     """Get form details for a risk instance"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
-        risk_instance = RiskInstance.objects.get(RiskInstanceId=risk_id)
+        risk_instance = RiskInstance.objects.get(RiskInstanceId=risk_id, tenant_id=tenant_id)
         form_details = risk_instance.RiskFormDetails
         
         # If no form details exist, return default empty structure
@@ -3269,7 +3503,12 @@ class GRCLogList(generics.ListCreateAPIView):
     permission_classes = [RiskViewPermission]
     
     def get_queryset(self):
-        queryset = GRCLog.objects.all().order_by('-Timestamp')
+        # MULTI-TENANCY: Filter by tenant_id
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            queryset = GRCLog.objects.filter(tenant_id=tenant_id).order_by('-Timestamp')
+        else:
+            queryset = GRCLog.objects.none()
         
         # Filter by module if provided
         module = self.request.query_params.get('module')
@@ -3308,18 +3547,33 @@ class GRCLogDetail(generics.RetrieveAPIView):
     queryset = GRCLog.objects.all()
     serializer_class = GRCLogSerializer
     permission_classes = [RiskViewPermission]
+    
+    # MULTI-TENANCY: Override get_queryset to filter by tenant
+    def get_queryset(self):
+        """Filter queryset by tenant_id"""
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            return GRCLog.objects.filter(tenant_id=tenant_id)
+        return GRCLog.objects.none()
 
 @api_view(['GET'])
 @permission_classes([RiskViewPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_system_logs(request):
     """Get system logs with optional filtering"""
     try:
+        # MULTI-TENANCY: Extract tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        
         from ...rbac.utils import RBACUtils
         user_id = RBACUtils.get_user_id_from_request(request)
         is_admin = False
         if user_id:
             is_admin = RBACUtils.is_system_admin(user_id)
-        queryset = GRCLog.objects.all().order_by('-Timestamp')
+        
+        # MULTI-TENANCY: Filter by tenant_id first
+        queryset = GRCLog.objects.filter(tenant_id=tenant_id).order_by('-Timestamp')
          # If not admin, filter by user_id
         if not is_admin and user_id:
             queryset = queryset.filter(UserId=str(user_id))
@@ -3387,8 +3641,13 @@ def get_system_logs(request):
 
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def generate_test_notification(request, user_id):
     """Generate a test notification for development purposes"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         import json
         from django.db import connection
@@ -3436,31 +3695,33 @@ def generate_test_notification(request, user_id):
                 """)
         
         # Create a test risk instance if none exists
+        # MULTI-TENANCY: Filter by tenant_id
         with connection.cursor() as cursor:
-            cursor.execute("SELECT COUNT(*) FROM risk_instance")
+            cursor.execute("SELECT COUNT(*) FROM risk_instance WHERE TenantId = %s", [tenant_id])
             instance_count = cursor.fetchone()[0]
             
             if instance_count == 0:
                 # Insert test risk instance
+                # MULTI-TENANCY: Set tenant_id when creating
                 cursor.execute("""
-                    INSERT INTO risk_instance (RiskId, RiskDescription, RiskStatus, UserId)
-                    VALUES (1, 'Test Risk for Notification', 'Under Review', %s)
-                """, [user_id])
+                    INSERT INTO risk_instance (RiskId, RiskDescription, RiskStatus, UserId, TenantId)
+                    VALUES (1, 'Test Risk for Notification', 'Under Review', %s, %s)
+                """, [user_id, tenant_id])
                 
                 # Get the newly created risk instance ID
                 cursor.execute("SELECT LAST_INSERT_ID()")
                 risk_instance_id = cursor.fetchone()[0]
             else:
-                # Get existing risk instance ID
-                cursor.execute("SELECT RiskInstanceId FROM risk_instance LIMIT 1")
+                # Get existing risk instance ID for this tenant
+                cursor.execute("SELECT RiskInstanceId FROM risk_instance WHERE TenantId = %s LIMIT 1", [tenant_id])
                 risk_instance_id = cursor.fetchone()[0]
                 
                 # Update the risk instance to be associated with the current user
                 cursor.execute("""
                     UPDATE risk_instance 
                     SET UserId = %s
-                    WHERE RiskInstanceId = %s
-                """, [user_id, risk_instance_id])
+                    WHERE RiskInstanceId = %s AND TenantId = %s
+                """, [user_id, risk_instance_id, tenant_id])
         
         # Create a test approval/notification
         extracted_info = {
@@ -3520,10 +3781,15 @@ def generate_test_notification(request, user_id):
 @api_view(['GET', 'POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AllowAny])  # Temporarily allow all users for testing
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_all_risks_for_dropdown(request):
     """
     Get all risks with essential metadata for dropdown selection
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     print(f"Request method: {request.method}")
     print(f"Request user: {request.user}")
     print(f"Request authenticated: {request.user.is_authenticated}")
@@ -3637,12 +3903,17 @@ def get_all_risks_for_dropdown(request):
 
 @api_view(['GET'])
 @permission_classes([RiskViewPermission])  # RBAC: Require RiskViewPermission for viewing compliances dropdown
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_all_compliances_for_dropdown(request, query=None):
     """
     Get all compliances with essential metadata for dropdown selection
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
-        compliances = Compliance.objects.all().order_by('ComplianceId')
+        compliances = Compliance.objects.filter(tenant_id=tenant_id).order_by('ComplianceId')
         
         # Create a simplified response with only the needed fields
         compliance_data = []
@@ -3661,14 +3932,19 @@ def get_all_compliances_for_dropdown(request, query=None):
 
 @api_view(['GET'])
 @permission_classes([RiskViewPermission])  # RBAC: Require RiskViewPermission for viewing users dropdown
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_users_for_dropdown(request):
     """
     Get all users with essential metadata for dropdown selection from RBAC table
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
-        # Get users from the RBAC table with role information
+        # Get users from the RBAC table with role information (filtered by tenant)
         from ...models import RBAC
-        rbac_users = RBAC.objects.filter(is_active='Y').order_by('username')
+        rbac_users = RBAC.objects.filter(is_active='Y', tenant_id=tenant_id).order_by('username')
         
         # Create response with UserId, UserName, and Role
         user_data = []
@@ -3686,12 +3962,17 @@ def get_users_for_dropdown(request):
 
 @api_view(['GET'])
 @permission_classes([RiskViewPermission])  # RBAC: Require RiskViewPermission for viewing business impacts
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_business_impacts(request):
     """
     Get all business impact values from CategoryBusinessUnit
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
-        business_impacts = CategoryBusinessUnit.objects.filter(source='RiskBusinessImpact')
+        business_impacts = CategoryBusinessUnit.objects.filter(source='RiskBusinessImpact', tenant_id=tenant_id)
         return Response({
             'status': 'success',
             'data': [{'id': impact.id, 'value': impact.value} for impact in business_impacts]
@@ -3706,10 +3987,15 @@ def get_business_impacts(request):
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @rbac_required(required_permission='create_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def add_business_impact(request):
     """
     Add a new business impact value to CategoryBusinessUnit
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         value = request.data.get('value')
         if not value:
@@ -3720,7 +4006,8 @@ def add_business_impact(request):
             
         new_impact = CategoryBusinessUnit.objects.create(
             source='RiskBusinessImpact',
-            value=value
+            value=value,
+            tenant_id=tenant_id
         )
         
         return Response({
@@ -3735,15 +4022,20 @@ def add_business_impact(request):
 
 @api_view(['GET'])
 @permission_classes([RiskViewPermission])  # RBAC: Require RiskViewPermission for viewing departments
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_risk_departments(request):
     """
     Fetch all departments for risk module filtering
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         from ...models import Department
         
-        # Get all active departments
-        departments = Department.objects.filter(IsActive=True).values(
+        # Get all active departments (filtered by tenant)
+        departments = Department.objects.filter(IsActive=True, tenant_id=tenant_id).values(
             'DepartmentId', 
             'DepartmentName'
         ).order_by('DepartmentName')
@@ -3771,15 +4063,20 @@ def get_risk_departments(request):
 
 @api_view(['GET'])
 @permission_classes([RiskViewPermission])  # RBAC: Require RiskViewPermission for viewing business units
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_risk_business_units(request):
     """
     Fetch all business units for risk module filtering
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         from ...models import BusinessUnit
         
-        # Get all active business units
-        business_units = BusinessUnit.objects.filter(IsActive=True).values(
+        # Get all active business units (filtered by tenant)
+        business_units = BusinessUnit.objects.filter(IsActive=True, tenant_id=tenant_id).values(
             'BusinessUnitId', 
             'Name',
             'Code'
@@ -3808,12 +4105,17 @@ def get_risk_business_units(request):
 
 @api_view(['GET'])
 @permission_classes([RiskViewPermission])  # RBAC: Require RiskViewPermission for viewing risk categories
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_risk_categories(request):
     """
     Get all risk category values from CategoryBusinessUnit
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
-        categories = CategoryBusinessUnit.objects.filter(source='RiskCategory')
+        categories = CategoryBusinessUnit.objects.filter(source='RiskCategory', tenant_id=tenant_id)
         return Response({
             'status': 'success',
             'data': [{'id': category.id, 'value': category.value} for category in categories]
@@ -3828,10 +4130,15 @@ def get_risk_categories(request):
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @rbac_required(required_permission='create_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def add_risk_category(request):
     """
     Add a new risk category value to CategoryBusinessUnit
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         value = request.data.get('value')
         if not value:
@@ -3842,7 +4149,8 @@ def add_risk_category(request):
             
         new_category = CategoryBusinessUnit.objects.create(
             source='RiskCategory',
-            value=value
+            value=value,
+            tenant_id=tenant_id
         )
         
         return Response({
@@ -3860,8 +4168,13 @@ def add_risk_category(request):
 
 @api_view(['GET'])
 @rbac_required(required_permission='risk_performance_analytics')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_risk_heatmap_data(request):
     """Get risk heatmap data showing count of risks by impact and likelihood with filters"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print("=== FETCHING RISK HEATMAP DATA ===")
         
@@ -3874,8 +4187,9 @@ def get_risk_heatmap_data(request):
         
         print(f"Heatmap Filters - Framework: {framework_id}, Policy: {policy_id}, Time: {time_range}, Category: {category}, Priority: {priority}")
         
-        # Start with base queryset
+        # Start with base queryset (filtered by tenant)
         queryset = RiskInstance.objects.filter(
+            tenant_id=tenant_id,
             RiskImpact__isnull=False,
             RiskLikelihood__isnull=False
         )
@@ -3963,10 +4277,15 @@ def get_risk_heatmap_data(request):
 
 @api_view(['GET'])
 @rbac_required(required_permission='risk_performance_analytics')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_risks_by_heatmap_coordinates(request, impact, likelihood):
     """
     Get all risk instances for a specific impact-likelihood combination with filters
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print(f"=== FETCHING RISKS BY HEATMAP COORDINATES ===")
         print(f"Impact: {impact}, Likelihood: {likelihood}")
@@ -4056,10 +4375,15 @@ def get_risks_by_heatmap_coordinates(request, impact, likelihood):
  
 @api_view(['GET'])
 @rbac_required(required_permission='risk_performance_analytics')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_trend_over_time(request):
     """
     Get risk trend data over time showing new risks and mitigated risks with filters
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print("\n=== RISK TREND OVER TIME DEBUG ===")
         print("1. Request Parameters:")
@@ -4252,10 +4576,15 @@ def risk_trend_over_time(request):
  
 @api_view(['GET'])
 @rbac_required(required_permission='risk_performance_analytics')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_risks_by_category(request, category):
     """
     Get all risk instances for a specific category
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Use raw SQL query to avoid ORM date conversion issues
         from django.db import connection
@@ -4312,11 +4641,16 @@ def get_risks_by_category(request, category):
 
 @api_view(['GET'])
 @rbac_required(required_permission='risk_performance_analytics')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def custom_risk_analysis(request):
     """
     Endpoint to provide dynamic data for the Custom Risk Analysis chart
     based on selected X and Y axes.
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     print("==== CUSTOM RISK ANALYSIS ENDPOINT CALLED ====")
    
     # Get parameters from request
@@ -4639,10 +4973,15 @@ def custom_risk_analysis(request):
 
 @api_view(['GET'])
 @permission_classes([RiskAnalyticsPermission])  # RBAC: Require RiskAnalyticsPermission for viewing risk metrics
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_metrics(request):
     """
     Get risk metrics with optional time filter
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     time_range = request.GET.get('timeRange', 'all')
     category = request.GET.get('category', 'all')
     priority = request.GET.get('priority', 'all')
@@ -4650,7 +4989,8 @@ def risk_metrics(request):
     print(f"FILTER REQUEST: timeRange={time_range}, category={category}, priority={priority}")
    
     # Start with all risk instances
-    queryset = RiskInstance.objects.all()
+    # MULTI-TENANCY: Filter by tenant_id
+    queryset = RiskInstance.objects.filter(tenant_id=tenant_id)
     print(f"Initial queryset count: {queryset.count()}")
    
     # Print columns and raw data for debugging
@@ -4756,16 +5096,18 @@ def risk_metrics(request):
                    
                     if mitigation_status_exists:
                         # Count mitigated risks
-                        sql = f"SELECT COUNT(*) FROM risk_instance WHERE RiskInstanceId IN ({risk_ids_str}) AND MitigationStatus = 'Completed'"
+                        # MULTI-TENANCY: Add tenant filtering
+                        sql = f"SELECT COUNT(*) FROM risk_instance WHERE RiskInstanceId IN ({risk_ids_str}) AND MitigationStatus = 'Completed' AND TenantId = %s"
                         print(f"Executing SQL: {sql}")
-                        cursor.execute(sql)
+                        cursor.execute(sql, [tenant_id])
                         row = cursor.fetchone()
                         mitigated_risks = row[0] if row else 0
                        
                         # Count in-progress risks
-                        sql = f"SELECT COUNT(*) FROM risk_instance WHERE RiskInstanceId IN ({risk_ids_str}) AND MitigationStatus = 'Work in Progress'"
+                        # MULTI-TENANCY: Add tenant filtering
+                        sql = f"SELECT COUNT(*) FROM risk_instance WHERE RiskInstanceId IN ({risk_ids_str}) AND MitigationStatus = 'Work in Progress' AND TenantId = %s"
                         print(f"Executing SQL: {sql}")
-                        cursor.execute(sql)
+                        cursor.execute(sql, [tenant_id])
                         row = cursor.fetchone()
                         in_progress_risks = row[0] if row else 0
                        
@@ -4790,7 +5132,12 @@ def risk_metrics(request):
  
 @api_view(['GET'])
 @permission_classes([RiskAnalyticsPermission])  # RBAC: Require RiskAnalyticsPermission for viewing risk metrics by category
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_metrics_by_category(request):
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     # Get filter parameters
     framework_id = request.GET.get('framework_id')
     policy_id = request.GET.get('policy_id')
@@ -4907,10 +5254,15 @@ def risk_metrics_by_category(request):
  
 @api_view(['GET'])
 @rbac_required(required_permission='view_all_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_risk_categories_for_dropdown(request):
     """
     Get all risk categories from CategoryBusinessUnit for dropdown selection
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         from ...models import CategoryBusinessUnit
         categories = CategoryBusinessUnit.objects.filter(source='RiskCategory').order_by('value')
@@ -4938,8 +5290,12 @@ def get_risk_categories_for_dropdown(request):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 # @rbac_required(required_permission='create_risk')  # Temporarily disabled for development
 @require_consent('create_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def create_risk_instance(request):
     """Create a new risk instance - function-based view to avoid CSRF issues"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     try:
         print("Received risk creation data:", request.data)
         
@@ -5013,11 +5369,16 @@ def create_risk_instance(request):
 
 @csrf_exempt
 @require_consent('upload_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def upload_risk_evidence_file(request):
     """
     Upload evidence files for risk mitigations.
     Supports multiple file uploads and stores them securely.
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     # Only allow POST requests
     if request.method != 'POST':
         return JsonResponse({
@@ -5188,10 +5549,15 @@ def upload_risk_evidence_file(request):
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AllowAny])  # Temporarily allow all for debugging
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def link_evidence_to_risk(request):
     """
     Link multiple selected events as evidence to a risk instance
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Debug: Print raw request data
         print(f"DEBUG: Request method: {request.method}")
@@ -5388,10 +5754,15 @@ def link_evidence_to_risk(request):
 @api_view(['GET', 'POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AllowAny])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def test_link_evidence_endpoint(request):
     """
     Simple test endpoint to verify the link evidence functionality
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         if request.method == 'GET':
             return JsonResponse({

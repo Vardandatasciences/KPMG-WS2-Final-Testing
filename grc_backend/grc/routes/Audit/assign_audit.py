@@ -33,24 +33,37 @@ from ...rbac.decorators import (
     audit_view_all_required
 )
 
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
+
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AuditAssignPermission])
 @audit_assign_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_frameworks(request):
-    """Return all frameworks (FrameworkId, FrameworkName)"""
+    """Return all frameworks (FrameworkId, FrameworkName)
+    MULTI-TENANCY: Only returns frameworks for user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Apply framework filter if active
         framework_id = get_active_framework_filter(request)
         
         if framework_id:
             print(f"✅ [GET FRAMEWORKS] Framework filter active: {framework_id}")
-            frameworks = Framework.objects.filter(FrameworkId=framework_id).values('FrameworkId', 'FrameworkName')
+            frameworks = Framework.objects.filter(FrameworkId=framework_id, tenant_id=tenant_id).values('FrameworkId', 'FrameworkName')
             print(f"✅ [GET FRAMEWORKS] Returning {frameworks.count()} filtered framework(s)")
         else:
             print(f"✅ [GET FRAMEWORKS] No framework filter - returning ALL frameworks")
-            frameworks = Framework.objects.all().values('FrameworkId', 'FrameworkName')
+            frameworks = Framework.objects.filter(tenant_id=tenant_id).values('FrameworkId', 'FrameworkName')
             print(f"✅ [GET FRAMEWORKS] Returning {frameworks.count()} total frameworks")
         
         frameworks_list = list(frameworks)
@@ -83,13 +96,20 @@ def get_frameworks(request):
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AuditAssignPermission])
 @audit_assign_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policies(request):
-    """Return all policies for a given framework (PolicyId, PolicyName, FrameworkId)"""
+    """Return all policies for a given framework (PolicyId, PolicyName, FrameworkId)
+    MULTI-TENANCY: Only returns policies for user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         framework_id = request.GET.get('framework_id')
         if not framework_id:
             return Response({'error': 'framework_id is required'}, status=status.HTTP_400_BAD_REQUEST)
-        policies = Policy.objects.filter(FrameworkId=framework_id).values('PolicyId', 'PolicyName', 'FrameworkId')
+        policies = Policy.objects.filter(FrameworkId=framework_id, tenant_id=tenant_id).values('PolicyId', 'PolicyName', 'FrameworkId')
         # Log the action
         user_id = request.session.get('user_id')
         send_log(
@@ -118,13 +138,20 @@ def get_policies(request):
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AuditAssignPermission])
 @audit_assign_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_subpolicies(request):
-    """Return all subpolicies for a given policy (SubPolicyId, SubPolicyName, PolicyId)"""
+    """Return all subpolicies for a given policy (SubPolicyId, SubPolicyName, PolicyId)
+    MULTI-TENANCY: Only returns subpolicies for user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         policy_id = request.GET.get('policy_id')
         if not policy_id:
             return Response({'error': 'policy_id is required'}, status=status.HTTP_400_BAD_REQUEST)
-        subpolicies = SubPolicy.objects.filter(PolicyId=policy_id).values('SubPolicyId', 'SubPolicyName', 'PolicyId')
+        subpolicies = SubPolicy.objects.filter(PolicyId=policy_id, tenant_id=tenant_id).values('SubPolicyId', 'SubPolicyName', 'PolicyId')
         # Log the action
         user_id = request.session.get('user_id')
         send_log(
@@ -153,10 +180,17 @@ def get_subpolicies(request):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditAssignPermission])
 @audit_assign_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_users_audit(request):
-    """Return all users (UserId, UserName)"""
+    """Return all users (UserId, UserName)
+    MULTI-TENANCY: Only returns users for user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
-        users = Users.objects.all().values('UserId', 'UserName')
+        users = Users.objects.filter(tenant_id=tenant_id).values('UserId', 'UserName')
         
         # Log the action
         user_id = request.session.get('user_id')
@@ -186,10 +220,16 @@ def get_users_audit(request):
 @permission_classes([AuditAssignPermission])
 @audit_assign_required
 @require_consent('create_audit')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def create_audit(request):
     """
     Create new Audit instances for each team member based on the form submission.
+    MULTI-TENANCY: Only creates audits for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         data = request.data
         print(f"Received audit creation request with data: {data}")
@@ -241,7 +281,7 @@ def create_audit(request):
         framework_obj = None
         if framework_id_to_use:
             try:
-                framework_obj = Framework.objects.get(FrameworkId=framework_id_to_use)
+                framework_obj = Framework.objects.get(FrameworkId=framework_id_to_use, tenant_id=tenant_id)
                 print(f"✅ [AUDIT CREATE] Using FrameworkId: {framework_id_to_use}")
             except Framework.DoesNotExist:
                 return Response({
@@ -255,7 +295,7 @@ def create_audit(request):
         policy_obj = None
         if validated_data.get('policy_id'):
             try:
-                policy_obj = Policy.objects.get(PolicyId=validated_data['policy_id'])
+                policy_obj = Policy.objects.get(PolicyId=validated_data['policy_id'], tenant_id=tenant_id)
             except Policy.DoesNotExist:
                 return Response({
                     'error': 'Invalid policy ID',
@@ -266,7 +306,7 @@ def create_audit(request):
         subpolicy_obj = None
         if validated_data.get('subpolicy_id'):
             try:
-                subpolicy_obj = SubPolicy.objects.get(SubPolicyId=validated_data['subpolicy_id'])
+                subpolicy_obj = SubPolicy.objects.get(SubPolicyId=validated_data['subpolicy_id'], tenant_id=tenant_id)
             except SubPolicy.DoesNotExist:
                 return Response({
                     'error': 'Invalid subpolicy ID',
@@ -280,14 +320,14 @@ def create_audit(request):
         if not validated_data['reviewer'] or validated_data['reviewer'] == '' or validated_data['reviewer'] == '0':
             print("DEBUG: Empty or invalid reviewer, using current user as reviewer")
             try:
-                reviewer_obj = Users.objects.get(UserId=user_id)
+                reviewer_obj = Users.objects.get(UserId=user_id, tenant_id=tenant_id)
                 print(f"DEBUG: Using current user {user_id} as reviewer: {reviewer_obj.UserName}")
             except Users.DoesNotExist:
                 print("DEBUG: Current user not found, using admin.grc as fallback")
-                reviewer_obj = Users.objects.get(UserName='admin.grc')
+                reviewer_obj = Users.objects.get(UserName='admin.grc', tenant_id=tenant_id)
         else:
             try:
-                reviewer_obj = Users.objects.get(UserId=validated_data['reviewer'])
+                reviewer_obj = Users.objects.get(UserId=validated_data['reviewer'], tenant_id=tenant_id)
                 print(f"DEBUG: Using specified reviewer: {reviewer_obj.UserName}")
             except Users.DoesNotExist:
                 return Response({
@@ -317,7 +357,7 @@ def create_audit(request):
                 
                 # Fetch auditor user object
                 try:
-                    auditor_obj = Users.objects.get(UserId=member_id)
+                    auditor_obj = Users.objects.get(UserId=member_id, tenant_id=tenant_id)
                 except Users.DoesNotExist:
                     return Response({
                         'error': 'Invalid auditor ID',
@@ -411,7 +451,8 @@ def create_audit(request):
                 'ReviewStartDate': None,
                 'ReviewDate': None,
                 'CompletionDate': None,
-                'data_inventory': data_inventory  # Store data inventory mapping
+                'data_inventory': data_inventory,  # Store data inventory mapping
+                'tenant_id': tenant_id  # MULTI-TENANCY: Add tenant_id to audit
             }
 
             print(f"Audit fields for member {member_id}: {audit_fields}")
@@ -471,8 +512,8 @@ def create_audit(request):
                             cursor.execute("""
                                 SELECT FrameworkId, FrameworkName 
                                 FROM frameworks 
-                                WHERE FrameworkId = %s
-                            """, [audit.FrameworkId_id])
+                                WHERE FrameworkId = %s AND tenant_id = %s
+                            """, [audit.FrameworkId_id, tenant_id])
                             framework = cursor.fetchone()
                             
                             if not framework:
@@ -492,8 +533,9 @@ def create_audit(request):
                                     WHERE c.SubPolicyId = %s
                                     AND c.PermanentTemporary = 'Permanent'
                                     AND c.Status = 'Approved'
+                                    AND c.tenant_id = %s
                                     AND c.ActiveInactive = 'Active'
-                                """, [audit.SubPolicyId_id])
+                                """, [audit.SubPolicyId_id, tenant_id])
                                 
                             elif audit.PolicyId_id:
                                 print(f"Getting compliances for policy {audit.PolicyId_id}")
@@ -503,9 +545,11 @@ def create_audit(request):
                                     INNER JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
                                     WHERE sp.PolicyId = %s
                                     AND c.PermanentTemporary = 'Permanent'
+                                    AND c.tenant_id = %s
+                                    AND sp.tenant_id = %s
                                     AND c.Status = 'Approved'
                                     AND c.ActiveInactive = 'Active'
-                                """, [audit.PolicyId_id])
+                                """, [audit.PolicyId_id, tenant_id, tenant_id])
                                 
                             else:
                                 print(f"Getting compliances for framework {audit.FrameworkId_id}")
@@ -516,9 +560,12 @@ def create_audit(request):
                                     INNER JOIN policies p ON sp.PolicyId = p.PolicyId
                                     WHERE p.FrameworkId = %s
                                     AND c.PermanentTemporary = 'Permanent'
+                                    AND c.tenant_id = %s
+                                    AND sp.tenant_id = %s
+                                    AND p.tenant_id = %s
                                     AND c.Status = 'Approved'
                                     AND c.ActiveInactive = 'Active'
-                                """, [audit.FrameworkId_id])
+                                """, [audit.FrameworkId_id, tenant_id, tenant_id, tenant_id])
                             
                             compliances = cursor.fetchall()
                             print(f"Found {len(compliances)} compliances")
@@ -532,11 +579,11 @@ def create_audit(request):
                                     cursor.execute("""
                                         INSERT INTO audit_findings (
                                             `AuditId`, `ComplianceId`, `UserId`, `Evidence`, 
-                                            `Check`, `Comments`, `MajorMinor`, `AssignedDate`, `FrameworkId`, `ReviewRejected`
-                                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                            `Check`, `Comments`, `MajorMinor`, `AssignedDate`, `FrameworkId`, `ReviewRejected`, `tenant_id`
+                                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                                     """, [
                                         audit.AuditId, compliance_id, audit.Auditor_id,
-                                        '', '0', '', None, audit.AssignedDate, audit.FrameworkId_id, 0  # Auto-inject framework from parent audit
+                                        '', '0', '', None, audit.AssignedDate, audit.FrameworkId_id, 0, tenant_id  # MULTI-TENANCY: Add tenant_id
                                     ])
                                     findings_created += 1
                                     print(f"Created finding {findings_created} for compliance {compliance_id}")
@@ -639,10 +686,16 @@ def create_audit(request):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditConductPermission])
 @audit_conduct_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_audit_compliances(request, audit_id):
     """
     Get all compliance details for a specific audit through audit findings
+    MULTI-TENANCY: Only returns compliances for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Log the request
         user_id = request.session.get('user_id')
@@ -657,7 +710,7 @@ def get_audit_compliances(request, audit_id):
         
         # Get all audit findings for the given audit ID with related compliance info
         audit_findings = AuditFinding.objects.filter(
-            AuditId=audit_id
+            AuditId=audit_id, tenant_id=tenant_id
         ).select_related(
             'ComplianceId',
             'ComplianceId__SubPolicyId',
@@ -729,10 +782,16 @@ def get_audit_compliances(request, audit_id):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditAssignPermission])
 @audit_assign_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def add_compliance_to_audit(request, audit_id):
     """
     Add a new compliance item to an audit and create the corresponding audit finding.
+    MULTI-TENANCY: Only adds compliances to audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     # Handle preflight OPTIONS request
     if request.method == 'OPTIONS':
         
@@ -773,7 +832,7 @@ def add_compliance_to_audit(request, audit_id):
         
         # Get the audit to extract SubPolicyId
         try:
-            audit = Audit.objects.get(AuditId=validated_audit_id)
+            audit = Audit.objects.get(AuditId=validated_audit_id, tenant_id=tenant_id)
         except Audit.DoesNotExist:
             return Response({
                 'error': f'Audit with ID {validated_audit_id} not found'
@@ -813,12 +872,12 @@ def add_compliance_to_audit(request, audit_id):
         elif audit.PolicyId_id is not None:
             # If audit has PolicyId but no SubPolicyId, get the first SubPolicy for that Policy
             try:
-                sub_policy = SubPolicy.objects.filter(PolicyId_id=audit.PolicyId_id).first()
+                sub_policy = SubPolicy.objects.filter(PolicyId_id=audit.PolicyId_id, tenant_id=tenant_id).first()
                 if sub_policy:
                     compliance_data['SubPolicyId_id'] = sub_policy.SubPolicyId
                 else:
                     # If no SubPolicy found for this Policy, get the first SubPolicy in the system
-                    sub_policy = SubPolicy.objects.first()
+                    sub_policy = SubPolicy.objects.filter(tenant_id=tenant_id).first()
                     if sub_policy:
                         compliance_data['SubPolicyId_id'] = sub_policy.SubPolicyId
                     else:
@@ -849,6 +908,7 @@ def add_compliance_to_audit(request, audit_id):
         # Print debug info
         print(f"Creating compliance with data: {compliance_data}")
         
+        compliance_data['tenant_id'] = tenant_id  # MULTI-TENANCY: Add tenant_id to compliance
         new_compliance = Compliance.objects.create(**compliance_data)
         
         # Get the AssignedDate from the audit
@@ -856,7 +916,7 @@ def add_compliance_to_audit(request, audit_id):
         
         # If audit has no AssignedDate, get it from existing audit findings or use current time
         if not assigned_date:
-            existing_findings = AuditFinding.objects.filter(AuditId=audit_id).order_by('AssignedDate')
+            existing_findings = AuditFinding.objects.filter(AuditId=audit_id, tenant_id=tenant_id).order_by('AssignedDate')
             if existing_findings.exists():
                 assigned_date = existing_findings.first().AssignedDate
             else:
@@ -874,6 +934,7 @@ def add_compliance_to_audit(request, audit_id):
             Evidence='',
             Check='0',  # Default to "Not Compliant"
             Comments='',
+            tenant_id=tenant_id,  # MULTI-TENANCY: Add tenant_id to audit finding
             MajorMinor=None,
             AssignedDate=assigned_date,  # Use the AssignedDate from the audit
             FrameworkId=audit.FrameworkId,  # Auto-inject framework from parent audit
@@ -1080,10 +1141,16 @@ def add_compliance_to_audit(request, audit_id):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditConductPermission])
 @audit_conduct_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def bulk_update_findings(request):
     """
     Bulk update audit findings
+    MULTI-TENANCY: Only updates findings for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         data = request.data
         audit_id = data.get('audit_id')
@@ -1116,7 +1183,7 @@ def bulk_update_findings(request):
 
         # Get the audit
         try:
-            audit = Audit.objects.get(AuditId=audit_id)
+            audit = Audit.objects.get(AuditId=audit_id, tenant_id=tenant_id)
         except Audit.DoesNotExist:
             send_log(
                 module="Audit",
@@ -1136,7 +1203,7 @@ def bulk_update_findings(request):
         for finding_data in findings:
             finding_id = finding_data.get('finding_id')
             try:
-                finding = AuditFinding.objects.get(AuditFindingId=finding_id)
+                finding = AuditFinding.objects.get(AuditFindingId=finding_id, tenant_id=tenant_id)
                 
                 # Update fields
                 finding.Check = finding_data.get('check', finding.Check)
@@ -1176,9 +1243,10 @@ def bulk_update_findings(request):
                 }, status=status.HTTP_404_NOT_FOUND)
 
         # Update audit status if needed
-        total_findings = AuditFinding.objects.filter(AuditId=audit_id).count()
+        total_findings = AuditFinding.objects.filter(AuditId=audit_id, tenant_id=tenant_id).count()
         completed_findings = AuditFinding.objects.filter(
             AuditId=audit_id,
+            tenant_id=tenant_id,
             Check__in=['0', '1']  # Count both compliant and non-compliant as completed
         ).count()
 
@@ -1251,10 +1319,16 @@ def bulk_update_findings(request):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditAssignPermission])
 @audit_assign_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_compliance_count(request):
     """
     Get the count of permanent compliances for a policy or subpolicy
+    MULTI-TENANCY: Only returns counts for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         policy_id = request.GET.get('policy_id')
         subpolicy_id = request.GET.get('subpolicy_id')
@@ -1269,8 +1343,8 @@ def get_compliance_count(request):
             cursor.execute("""
                 SELECT PolicyId, PolicyName 
                 FROM policies 
-                WHERE PolicyId = %s
-            """, [policy_id])
+                WHERE PolicyId = %s AND tenant_id = %s
+            """, [policy_id, tenant_id])
             policy = cursor.fetchone()
             
             if not policy:
@@ -1287,7 +1361,8 @@ def get_compliance_count(request):
                     AND c.PermanentTemporary = 'Permanent'
                     AND c.Status = 'Approved'
                     AND c.ActiveInactive = 'Active'
-                """, [subpolicy_id])
+                    AND c.tenant_id = %s
+                """, [subpolicy_id, tenant_id])
                 
                 count = cursor.fetchone()[0]
                 
@@ -1302,16 +1377,17 @@ def get_compliance_count(request):
                     AND c.PermanentTemporary = 'Permanent'
                     AND c.Status = 'Approved'
                     AND c.ActiveInactive = 'Active'
+                    AND c.tenant_id = %s
                     LIMIT 5
-                """, [subpolicy_id])
+                """, [subpolicy_id, tenant_id])
                 
             else:
                 # Get all subpolicies for the policy
                 cursor.execute("""
                     SELECT sp.SubPolicyId, sp.SubPolicyName
                     FROM subpolicies sp
-                    WHERE sp.PolicyId = %s
-                """, [policy_id])
+                    WHERE sp.PolicyId = %s AND sp.tenant_id = %s
+                """, [policy_id, tenant_id])
                 
                 subpolicies = cursor.fetchall()
                 
@@ -1337,7 +1413,8 @@ def get_compliance_count(request):
                     AND c.PermanentTemporary = 'Permanent'
                     AND c.Status = 'Approved'
                     AND c.ActiveInactive = 'Active'
-                """, subpolicy_ids)
+                    AND c.tenant_id = %s
+                """, subpolicy_ids + [tenant_id])
                 
                 count = cursor.fetchone()[0]
                 
@@ -1352,8 +1429,9 @@ def get_compliance_count(request):
                     AND c.PermanentTemporary = 'Permanent'
                     AND c.Status = 'Approved'
                     AND c.ActiveInactive = 'Active'
+                    AND c.tenant_id = %s
                     LIMIT 5
-                """, subpolicy_ids)
+                """, subpolicy_ids + [tenant_id])
             
             sample_compliances = cursor.fetchall()
             print(f"Sample compliances: {sample_compliances}")
@@ -1392,7 +1470,8 @@ def get_compliance_count(request):
                     WHERE PermanentTemporary = 'Permanent'
                     AND Status = 'Approved'
                     AND ActiveInactive = 'Active'
-                """)
+                    AND tenant_id = %s
+                """, [tenant_id])
                 total_permanent = cursor.fetchone()[0]
                 
                 cursor.execute("""
@@ -1400,7 +1479,8 @@ def get_compliance_count(request):
                     FROM compliance
                     WHERE PermanentTemporary = 'Permanent'
                     AND Status = 'Approved'
-                """)
+                    AND tenant_id = %s
+                """, [tenant_id])
                 total_approved = cursor.fetchone()[0]
                 
                 cursor.execute("""
@@ -1409,7 +1489,8 @@ def get_compliance_count(request):
                     WHERE PermanentTemporary = 'Permanent'
                     AND Status = 'Approved'
                     AND ActiveInactive = 'Active'
-                """)
+                    AND tenant_id = %s
+                """, [tenant_id])
                 total_active = cursor.fetchone()[0]
                 
                 response_data['debug_info']['total_permanent_compliances'] = total_permanent
@@ -1432,8 +1513,15 @@ def get_compliance_count(request):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditViewPermission])
 @audit_view_reports_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_report_details(request):
-    """Get detailed information about specific reports"""
+    """Get detailed information about specific reports
+    MULTI-TENANCY: Only returns report details for user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         report_ids = request.GET.get('report_ids', '').split(',')
         if not report_ids or not report_ids[0]:
@@ -1449,7 +1537,8 @@ def get_report_details(request):
                 FROM reports r
                 LEFT JOIN users u ON r.AuditorId = u.UserId
                 WHERE r.ReportId IN ({placeholders})
-            """, report_ids)
+                AND r.tenant_id = %s
+            """, report_ids + [tenant_id])
             
             columns = [col[0] for col in cursor.description]
             reports = [

@@ -24,6 +24,12 @@ from rest_framework.parsers import MultiPartParser, FormParser
 
 # RBAC imports
 from ...rbac.decorators import rbac_required
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
+
 
 # --- Optional parsers (install as needed) ---
 try:
@@ -809,12 +815,13 @@ def parse_risks_from_text(text: str) -> list[dict]:
 @parser_classes([MultiPartParser, FormParser])
 @csrf_exempt
 @rbac_required(required_permission='create_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def upload_and_process_risk_document_optimized(request):
-    """
-    Upload a document and process it to extract COMPLETE risk data
-    (OPTIMIZED VERSION - uses Ollama with quantized models).
-    """
-    print(f"📤 Upload request for risk document (OPTIMIZED VERSION)")
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
+print(f"📤 Upload request for risk document (OPTIMIZED VERSION)")
 
     if request.method == 'OPTIONS':
         response = HttpResponse()

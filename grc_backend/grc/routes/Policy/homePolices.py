@@ -6,8 +6,16 @@ from django.db.models import Q
 from grc.models import Policy, Framework
 import json
 
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policies_by_status(request):
     """
     Get policies grouped by their compliance status for the home view donut chart
@@ -15,6 +23,9 @@ def get_policies_by_status(request):
     Automatically applies framework filter from session
     """
     from .framework_filter_helper import apply_framework_filter_with_relation, get_framework_filter_info
+    
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     
     try:
         # Define the 14 ISO 27001 policies
@@ -37,6 +48,7 @@ def get_policies_by_status(request):
         
         # Start with all policies, then apply framework filter
         policies_queryset = Policy.objects.filter(
+            tenant_id=tenant_id,
             PolicyName__in=iso27001_policies,
             ActiveInactive='Active'
         )
@@ -120,6 +132,8 @@ def get_policies_by_status(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])  # Allow all users to access policy details on homepage
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policies_by_status_public(request):
     """
     Get policies grouped by their compliance status for the home view donut chart
@@ -127,6 +141,9 @@ def get_policies_by_status_public(request):
     Returns policies categorized as Applied (85%), In Progress (10%), and Pending (5%)
     Automatically applies framework filter from session if available
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Define the 14 ISO 27001 policies
         iso27001_policies = [
@@ -151,6 +168,7 @@ def get_policies_by_status_public(request):
         
         # Start with all policies
         policies_queryset = Policy.objects.filter(
+            tenant_id=tenant_id,
             PolicyName__in=iso27001_policies,
             ActiveInactive='Active'
         )
@@ -236,12 +254,17 @@ def get_policies_by_status_public(request):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policy_details(request, policy_id):
     """
     Get detailed information about a specific policy
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
-        policy = Policy.objects.get(PolicyId=policy_id)
+        policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
         
         policy_data = {
             'id': policy.PolicyId,

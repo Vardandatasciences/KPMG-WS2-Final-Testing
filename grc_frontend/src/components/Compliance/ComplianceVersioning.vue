@@ -377,8 +377,14 @@ export default {
           console.log('✅ [ComplianceVersioning] Using cached framework data');
           const cachedFrameworks = complianceDataService.getData('frameworks') || [];
           
+          // Filter to only show active frameworks
+          const activeFrameworks = cachedFrameworks.filter(fw => {
+            const status = fw.ActiveInactive || fw.status || '';
+            return status.toLowerCase() === 'active';
+          });
+          
           // Map the data to match the expected format in the component
-          this.frameworks = cachedFrameworks.map(fw => ({
+          this.frameworks = activeFrameworks.map(fw => ({
             FrameworkId: fw.FrameworkId || fw.id,
             FrameworkName: fw.FrameworkName || fw.name,
             Category: fw.Category || fw.category || '',

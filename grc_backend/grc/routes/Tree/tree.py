@@ -5,14 +5,27 @@ from grc.models import Framework, Policy, SubPolicy, Compliance, Risk, RiskInsta
 from django.db.models import Q
 import json
 
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access
+)
+
 @csrf_exempt
 @require_http_methods(["GET"])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_all_frameworks(request):
     """
     Get all frameworks for the tree view
+    MULTI-TENANCY: Only returns frameworks for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         frameworks = Framework.objects.filter(
+            tenant_id=tenant_id,
             Status='Approved',
             ActiveInactive='Active'
         ).values(
@@ -37,13 +50,28 @@ def get_all_frameworks(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policies_by_framework(request, framework_id):
     """
     Get all policies for a specific framework
+    MULTI-TENANCY: Only returns policies for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
+        # MULTI-TENANCY: Validate framework belongs to tenant
+        framework = Framework.objects.filter(FrameworkId=framework_id, tenant_id=tenant_id).first()
+        if not framework:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Framework not found in your organization'
+            }, status=404)
+        
         policies = Policy.objects.filter(
             FrameworkId=framework_id,
+            tenant_id=tenant_id,
             Status='Approved',
             ActiveInactive='Active'
         ).values(
@@ -68,13 +96,28 @@ def get_policies_by_framework(request, framework_id):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_subpolicies_by_policy(request, policy_id):
     """
     Get all subpolicies for a specific policy
+    MULTI-TENANCY: Only returns subpolicies for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
+        # MULTI-TENANCY: Validate policy belongs to tenant
+        policy = Policy.objects.filter(PolicyId=policy_id, tenant_id=tenant_id).first()
+        if not policy:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Policy not found in your organization'
+            }, status=404)
+        
         subpolicies = SubPolicy.objects.filter(
             PolicyId=policy_id,
+            tenant_id=tenant_id,
             Status='Approved'
         ).values(
             'SubPolicyId',
@@ -97,13 +140,28 @@ def get_subpolicies_by_policy(request, policy_id):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_compliances_by_subpolicy(request, subpolicy_id):
     """
     Get all compliances for a specific subpolicy
+    MULTI-TENANCY: Only returns compliances for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
+        # MULTI-TENANCY: Validate subpolicy belongs to tenant
+        subpolicy = SubPolicy.objects.filter(SubPolicyId=subpolicy_id, tenant_id=tenant_id).first()
+        if not subpolicy:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'SubPolicy not found in your organization'
+            }, status=404)
+        
         compliances = Compliance.objects.filter(
             SubPolicy_id=subpolicy_id,
+            tenant_id=tenant_id,
             Status='Approved',
             ActiveInactive='Active'
         ).values(
@@ -130,14 +188,29 @@ def get_compliances_by_subpolicy(request, subpolicy_id):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_risks_by_compliance(request, compliance_id):
     """
     Get all risks associated with a specific compliance
+    MULTI-TENANCY: Only returns risks for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
+        # MULTI-TENANCY: Validate compliance belongs to tenant
+        compliance = Compliance.objects.filter(ComplianceId=compliance_id, tenant_id=tenant_id).first()
+        if not compliance:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Compliance not found in your organization'
+            }, status=404)
+        
         # Get risks from Risk table
         risks = Risk.objects.filter(
-            ComplianceId=compliance_id
+            ComplianceId=compliance_id,
+            tenant_id=tenant_id
         ).values(
             'RiskId',
             'RiskTitle',
@@ -153,7 +226,8 @@ def get_risks_by_compliance(request, compliance_id):
         risk_list = []
         for risk in risks:
             risk_instances = RiskInstance.objects.filter(
-                RiskId=risk['RiskId']
+                RiskId=risk['RiskId'],
+                tenant_id=tenant_id
             ).values(
                 'RiskInstanceId',
                 'RiskStatus',
@@ -190,12 +264,19 @@ def get_risks_by_compliance(request, compliance_id):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_tree_hierarchy(request):
     """
     Get complete tree hierarchy (optional - for loading all at once)
+    MULTI-TENANCY: Only returns data for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         frameworks = Framework.objects.filter(
+            tenant_id=tenant_id,
             Status='Approved',
             ActiveInactive='Active'
         ).order_by('FrameworkName')
@@ -218,6 +299,7 @@ def get_tree_hierarchy(request):
             
             policies = Policy.objects.filter(
                 FrameworkId=framework.FrameworkId,
+                tenant_id=tenant_id,
                 Status='Approved',
                 ActiveInactive='Active'
             ).order_by('PolicyName')
@@ -237,6 +319,7 @@ def get_tree_hierarchy(request):
                 
                 subpolicies = SubPolicy.objects.filter(
                     PolicyId=policy.PolicyId,
+                    tenant_id=tenant_id,
                     Status='Approved'
                 ).order_by('SubPolicyName')
                 
@@ -255,6 +338,7 @@ def get_tree_hierarchy(request):
                     
                     compliances = Compliance.objects.filter(
                         SubPolicy_id=subpolicy.SubPolicyId,
+                        tenant_id=tenant_id,
                         Status='Approved',
                         ActiveInactive='Active'
                     ).order_by('ComplianceTitle')
@@ -294,12 +378,18 @@ def get_tree_hierarchy(request):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_framework_metadata(request, framework_id):
     """
     Get detailed metadata for a framework (for hover tooltip)
+    MULTI-TENANCY: Only returns metadata for frameworks in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
-        framework = Framework.objects.get(FrameworkId=framework_id)
+        framework = Framework.objects.get(FrameworkId=framework_id, tenant_id=tenant_id)
         
         metadata = {
             'FrameworkId': framework.FrameworkId,
@@ -325,7 +415,7 @@ def get_framework_metadata(request, framework_id):
     except Framework.DoesNotExist:
         return JsonResponse({
             'status': 'error',
-            'message': 'Framework not found'
+            'message': 'Framework not found in your organization'
         }, status=404)
     except Exception as e:
         return JsonResponse({
@@ -336,12 +426,18 @@ def get_framework_metadata(request, framework_id):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policy_metadata(request, policy_id):
     """
     Get detailed metadata for a policy (for hover tooltip)
+    MULTI-TENANCY: Only returns metadata for policies in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
-        policy = Policy.objects.get(PolicyId=policy_id)
+        policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
         
         metadata = {
             'PolicyId': policy.PolicyId,
@@ -372,7 +468,7 @@ def get_policy_metadata(request, policy_id):
     except Policy.DoesNotExist:
         return JsonResponse({
             'status': 'error',
-            'message': 'Policy not found'
+            'message': 'Policy not found in your organization'
         }, status=404)
     except Exception as e:
         return JsonResponse({
@@ -383,12 +479,18 @@ def get_policy_metadata(request, policy_id):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_subpolicy_metadata(request, subpolicy_id):
     """
     Get detailed metadata for a subpolicy (for hover tooltip)
+    MULTI-TENANCY: Only returns metadata for subpolicies in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
-        subpolicy = SubPolicy.objects.get(SubPolicyId=subpolicy_id)
+        subpolicy = SubPolicy.objects.get(SubPolicyId=subpolicy_id, tenant_id=tenant_id)
         
         metadata = {
             'SubPolicyId': subpolicy.SubPolicyId,
@@ -409,7 +511,7 @@ def get_subpolicy_metadata(request, subpolicy_id):
     except SubPolicy.DoesNotExist:
         return JsonResponse({
             'status': 'error',
-            'message': 'SubPolicy not found'
+            'message': 'SubPolicy not found in your organization'
         }, status=404)
     except Exception as e:
         return JsonResponse({
@@ -420,12 +522,18 @@ def get_subpolicy_metadata(request, subpolicy_id):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_compliance_metadata(request, compliance_id):
     """
     Get detailed metadata for a compliance (for hover tooltip)
+    MULTI-TENANCY: Only returns metadata for compliances in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
-        compliance = Compliance.objects.get(ComplianceId=compliance_id)
+        compliance = Compliance.objects.get(ComplianceId=compliance_id, tenant_id=tenant_id)
         
         metadata = {
             'ComplianceId': compliance.ComplianceId,
@@ -460,7 +568,7 @@ def get_compliance_metadata(request, compliance_id):
     except Compliance.DoesNotExist:
         return JsonResponse({
             'status': 'error',
-            'message': 'Compliance not found'
+            'message': 'Compliance not found in your organization'
         }, status=404)
     except Exception as e:
         return JsonResponse({
@@ -471,15 +579,24 @@ def get_compliance_metadata(request, compliance_id):
 
 @csrf_exempt
 @require_http_methods(["GET"])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_risk_metadata(request, risk_id):
     """
     Get detailed metadata for a risk (for hover tooltip)
+    MULTI-TENANCY: Only returns metadata for risks in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
-        risk = Risk.objects.get(RiskId=risk_id)
+        risk = Risk.objects.get(RiskId=risk_id, tenant_id=tenant_id)
         
         # Get latest risk instance if available
-        latest_instance = RiskInstance.objects.filter(RiskId=risk_id).order_by('-CreatedAt').first()
+        latest_instance = RiskInstance.objects.filter(
+            RiskId=risk_id,
+            tenant_id=tenant_id
+        ).order_by('-CreatedAt').first()
         
         metadata = {
             'RiskId': risk.RiskId,
@@ -513,7 +630,7 @@ def get_risk_metadata(request, risk_id):
     except Risk.DoesNotExist:
         return JsonResponse({
             'status': 'error',
-            'message': 'Risk not found'
+            'message': 'Risk not found in your organization'
         }, status=404)
     except Exception as e:
         return JsonResponse({

@@ -6,6 +6,12 @@ from typing import Optional
 from django.db.models import QuerySet
 from ...framework_context import get_framework_context
 
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
+
 
 def get_active_framework_filter(request) -> Optional[str]:
     """

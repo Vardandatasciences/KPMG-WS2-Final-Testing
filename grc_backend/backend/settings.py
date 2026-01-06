@@ -134,6 +134,9 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "grc.middleware.JWTAuthenticationMiddleware",
+    # MULTI-TENANCY: Add tenant context middleware (after JWT authentication)
+    "grc.tenant_middleware.TenantContextMiddleware",
+    "grc.tenant_middleware.TenantIsolationMiddleware",
     "grc.middleware.AuditLoggingMiddleware",
     # Removed grc.rbac.middleware.GRCRBACMiddleware - using simplified decorator-based RBAC instead
 ]

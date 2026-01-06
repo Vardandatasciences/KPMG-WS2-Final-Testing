@@ -14,6 +14,11 @@ from ...rbac.decorators import compliance_view_required, compliance_audit_requir
 from ...rbac.permissions import ComplianceViewPermission, ComplianceAuditPermission
 from .cross_framework_mapping_service import CrossFrameworkMappingService
 from ...models import AuditDocument, Framework
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +28,8 @@ logger = logging.getLogger(__name__)
 @authentication_classes([SessionAuthentication, BasicAuthentication])
 @permission_classes([ComplianceAuditPermission])
 @compliance_audit_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def cross_framework_check(request):
     """
     Check evidence/document against multiple frameworks
@@ -74,7 +81,7 @@ def cross_framework_check(request):
         
         # Verify primary framework exists
         try:
-            primary_framework = Framework.objects.get(FrameworkId=primary_framework_id)
+            primary_framework = Framework.objects.get(FrameworkId=primary_framework_id, tenant_id=tenant_id)
         except Framework.DoesNotExist:
             return Response({
                 'success': False,
@@ -120,12 +127,17 @@ def cross_framework_check(request):
 @api_view(['GET'])
 @permission_classes([ComplianceViewPermission])
 @compliance_view_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_cross_framework_mappings(request, document_id):
     """
     Get all cross-framework mappings for a document
     
     Returns mappings grouped by framework
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         # Check authentication
         user_id = RBACUtils.get_user_id_from_request(request)
@@ -220,10 +232,15 @@ def get_cross_framework_mappings(request, document_id):
 @api_view(['GET'])
 @permission_classes([ComplianceViewPermission])
 @compliance_view_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_available_frameworks(request):
     """
     Get all available frameworks for cross-framework checking
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         frameworks = CrossFrameworkMappingService.get_active_frameworks()
         

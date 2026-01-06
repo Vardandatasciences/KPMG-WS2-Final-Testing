@@ -14,7 +14,8 @@ from .views import test_jwt_auth, list_users
 
 from .views import serve_document
 
-
+# MULTI-TENANCY: Tenant management views
+from .routes.Global import tenant_views
 
 from .routes.EventHandling import event_views, riskavaire_integration
 
@@ -2709,6 +2710,22 @@ notification_urlpatterns = [
 
 # ============================================================================
 
+# =========================================================================
+# MULTI-TENANCY: Tenant Management URL Patterns
+# =========================================================================
+tenant_urlpatterns = [
+    # Tenant CRUD operations
+    path('tenants/create/', tenant_views.create_tenant, name='create-tenant'),
+    path('tenants/list/', tenant_views.list_tenants, name='list-tenants'),
+    path('tenants/current/', tenant_views.get_tenant_info, name='get-tenant-info'),
+    path('tenants/<int:tenant_id>/update/', tenant_views.update_tenant, name='update-tenant'),
+    path('tenants/<int:tenant_id>/delete/', tenant_views.delete_tenant, name='delete-tenant'),
+    
+    # Tenant status management
+    path('tenants/<int:tenant_id>/activate/', tenant_views.activate_tenant, name='activate-tenant'),
+    path('tenants/<int:tenant_id>/suspend/', tenant_views.suspend_tenant, name='suspend-tenant'),
+]
+
 urlpatterns = [
 
     # ========================================================================
@@ -2720,6 +2737,14 @@ urlpatterns = [
     *auth_urlpatterns,
 
     *rbac_urlpatterns,
+    
+    # ========================================================================
+    
+    # MULTI-TENANCY
+    
+    # ========================================================================
+    
+    *tenant_urlpatterns,
 
     
 

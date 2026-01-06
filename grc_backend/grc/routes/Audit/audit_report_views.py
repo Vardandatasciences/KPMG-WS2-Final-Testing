@@ -14,13 +14,25 @@ from ...rbac.decorators import (
 )
 from .framework_filter_helper import get_active_framework_filter, apply_framework_filter_to_audits, get_framework_sql_filter
 
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
+
 @api_view(['GET'])
 @permission_classes([AuditViewPermission])
 @audit_view_reports_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_audit_reports(request):
     """
     Get all completed audits for report viewing
+    MULTI-TENANCY: Only returns reports for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Get framework SQL filter
         where_clause, params = get_framework_sql_filter(request, 'a')
@@ -35,6 +47,7 @@ def get_audit_reports(request):
                         (SELECT GROUP_CONCAT(sp2.SubPolicyName SEPARATOR ', ') 
                          FROM subpolicies sp2 
                          WHERE sp2.PolicyId = a.PolicyId 
+                         AND sp2.TenantId = %s
                          LIMIT 1)
                     ) as SubPolicy,
                     u_assignee.UserName as Assigned,
@@ -44,25 +57,33 @@ def get_audit_reports(request):
                 FROM 
                     audit a
                 JOIN
-                    frameworks f ON a.FrameworkId = f.FrameworkId
+                    frameworks f ON a.FrameworkId = f.FrameworkId AND f.TenantId = %s
                 LEFT JOIN
-                    policies p ON a.PolicyId = p.PolicyId
+                    policies p ON a.PolicyId = p.PolicyId AND p.TenantId = %s
                 LEFT JOIN
-                    subpolicies sp ON a.SubPolicyId = sp.SubPolicyId
+                    subpolicies sp ON a.SubPolicyId = sp.SubPolicyId AND sp.TenantId = %s
                 JOIN
-                    users u_assignee ON a.assignee = u_assignee.UserId
+                    users u_assignee ON a.assignee = u_assignee.UserId AND u_assignee.TenantId = %s
                 JOIN
-                    users u_auditor ON a.auditor = u_auditor.UserId
+                    users u_auditor ON a.auditor = u_auditor.UserId AND u_auditor.TenantId = %s
                 LEFT JOIN
-                    users u_reviewer ON a.reviewer = u_reviewer.UserId
+                    users u_reviewer ON a.reviewer = u_reviewer.UserId AND u_reviewer.TenantId = %s
                 WHERE
                     a.Status = 'Completed'
+                    AND a.TenantId = %s
                     {where_clause}
                 ORDER BY
                     a.CompletionDate DESC
             """
             
-            cursor.execute(query, params)
+            # Add tenant_id to params
+            if isinstance(params, dict):
+                params['tenant_id'] = tenant_id
+                execute_params = [tenant_id] * 7 + list(params.values())
+            else:
+                execute_params = [tenant_id] * 7 + (params if isinstance(params, list) else [])
+            
+            cursor.execute(query, execute_params)
             columns = [col[0] for col in cursor.description]
             audits = [dict(zip(columns, row)) for row in cursor.fetchall()]
         
@@ -84,14 +105,20 @@ def get_audit_reports(request):
 @api_view(['GET'])
 @permission_classes([AuditViewPermission])
 @audit_view_reports_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_audit_report_versions(request, audit_id):
     """
     Get all report versions (R versions) for a specific audit
+    MULTI-TENANCY: Only returns versions for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Check if the audit exists
         try:
-            audit = Audit.objects.get(AuditId=audit_id)
+            audit = Audit.objects.get(AuditId=audit_id, tenant=tenant_id)
         except Audit.DoesNotExist:
             return Response({'error': 'Audit not found'}, status=status.HTTP_404_NOT_FOUND)
         
@@ -142,14 +169,16 @@ def get_audit_report_versions(request, audit_id):
                     av.ActiveInactive
                 FROM 
                     audit_version av
+                JOIN audit a ON av.AuditId = a.AuditId
                 WHERE 
                     av.AuditId = %s
+                    AND a.TenantId = %s
                     AND av.Version LIKE 'R%%'
                     AND (av.ActiveInactive = 'A' OR av.ActiveInactive IS NULL)
                     AND av.ApprovedRejected IS NOT NULL
                 ORDER BY 
                     av.Version DESC
-            """, [audit_id])
+            """, [audit_id, tenant_id])
             
             columns = [col[0] for col in cursor.description]
             versions = [dict(zip(columns, row)) for row in cursor.fetchall()]
@@ -187,14 +216,20 @@ def get_audit_report_versions(request, audit_id):
 @api_view(['POST'])
 @permission_classes([AuditReviewPermission])
 @audit_review_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def delete_audit_report_version(request, audit_id, version):
     """
     Mark a report version as inactive (soft delete)
+    MULTI-TENANCY: Only deletes versions for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Check if the audit exists
         try:
-            audit = Audit.objects.get(AuditId=audit_id)
+            audit = Audit.objects.get(AuditId=audit_id, tenant=tenant_id)
         except Audit.DoesNotExist:
             return Response({'error': 'Audit not found'}, status=status.HTTP_404_NOT_FOUND)
         
@@ -203,10 +238,11 @@ def delete_audit_report_version(request, audit_id, version):
             print(f"DEBUG: Marking version {version} as inactive for audit_id: {audit_id}")
             
             cursor.execute("""
-                UPDATE audit_version 
-                SET ActiveInactive = 'I'
-                WHERE AuditId = %s AND Version = %s
-            """, [audit_id, version])
+                UPDATE audit_version av
+                JOIN audit a ON av.AuditId = a.AuditId
+                SET av.ActiveInactive = 'I'
+                WHERE av.AuditId = %s AND av.Version = %s AND a.TenantId = %s
+            """, [audit_id, version, tenant_id])
             
             # Check if the update was successful
             if cursor.rowcount == 0:
@@ -220,10 +256,10 @@ def delete_audit_report_version(request, audit_id, version):
                     reviewer.UserName as reviewer_name
                 FROM 
                     audit a
-                JOIN users auditor ON a.auditor = auditor.UserId
-                LEFT JOIN users reviewer ON a.reviewer = reviewer.UserId
-                WHERE a.AuditId = %s
-            """, [audit_id])
+                JOIN users auditor ON a.auditor = auditor.UserId AND auditor.TenantId = %s
+                LEFT JOIN users reviewer ON a.reviewer = reviewer.UserId AND reviewer.TenantId = %s
+                WHERE a.AuditId = %s AND a.TenantId = %s
+            """, [tenant_id, tenant_id, audit_id, tenant_id])
             
             user_row = cursor.fetchone()
             if user_row:
@@ -262,14 +298,20 @@ def delete_audit_report_version(request, audit_id, version):
 @api_view(['GET'])
 @permission_classes([AuditViewPermission])
 @audit_view_reports_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_audit_report_s3_link(request, audit_id, version):
     """
     Get the S3 link for a specific audit report version
+    MULTI-TENANCY: Only returns S3 links for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Check if the audit exists
         try:
-            audit = Audit.objects.get(AuditId=audit_id)
+            audit = Audit.objects.get(AuditId=audit_id, tenant=tenant_id)
         except Audit.DoesNotExist:
             return Response({'error': 'Audit not found'}, status=status.HTTP_404_NOT_FOUND)
         
@@ -277,14 +319,16 @@ def get_audit_report_s3_link(request, audit_id, version):
         with connection.cursor() as cursor:
             cursor.execute("""
                 SELECT 
-                    COALESCE(ApprovedRejected, '') as ApprovedRejected 
+                    COALESCE(av.ApprovedRejected, '') as ApprovedRejected 
                 FROM 
-                    audit_version 
+                    audit_version av
+                JOIN audit a ON av.AuditId = a.AuditId
                 WHERE 
-                    AuditId = %s 
-                    AND Version = %s
-                    AND (ActiveInactive = 'A' OR ActiveInactive IS NULL)
-            """, [audit_id, version])
+                    av.AuditId = %s 
+                    AND av.Version = %s
+                    AND a.TenantId = %s
+                    AND (av.ActiveInactive = 'A' OR av.ActiveInactive IS NULL)
+            """, [audit_id, version, tenant_id])
             
             version_status_row = cursor.fetchone()
             if not version_status_row:
@@ -307,15 +351,17 @@ def get_audit_report_s3_link(request, audit_id, version):
                     'is_approved': False
                 }, status=status.HTTP_403_FORBIDDEN)
             
-            # Get the S3 link from audit_report table
+            # Get the S3 link from audit_report table, filtered by tenant
             cursor.execute("""
                 SELECT 
-                    Report 
+                    ar.Report 
                 FROM 
-                    audit_report 
+                    audit_report ar
+                JOIN audit a ON ar.AuditId = a.AuditId
                 WHERE 
-                    AuditId = %s
-            """, [audit_id])
+                    ar.AuditId = %s
+                    AND a.TenantId = %s
+            """, [audit_id, tenant_id])
             
             report_row = cursor.fetchone()
             if not report_row or not report_row[0]:
@@ -336,20 +382,27 @@ def get_audit_report_s3_link(request, audit_id, version):
 @api_view(['GET'])
 @permission_classes([AuditViewPermission])
 @audit_view_reports_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_audit_report(request, audit_id):
     """
     Get audit report details for a specific audit ID
+    MULTI-TENANCY: Only returns report details for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print(f"DEBUG: get_audit_report called for audit_id: {audit_id}")
         
         with connection.cursor() as cursor:
-            # First, let's check if the report exists
+            # First, let's check if the report exists, filtered by tenant
             cursor.execute("""
                 SELECT COUNT(*) as count
-                FROM audit_report 
-                WHERE AuditId = %s
-            """, [audit_id])
+                FROM audit_report ar
+                JOIN audit a ON ar.AuditId = a.AuditId
+                WHERE ar.AuditId = %s AND a.TenantId = %s
+            """, [audit_id, tenant_id])
             
             count_result = cursor.fetchone()
             report_count = count_result[0] if count_result else 0
@@ -373,12 +426,14 @@ def get_audit_report(request, audit_id):
                     ar.FrameworkId
                 FROM 
                     audit_report ar
+                JOIN audit a ON ar.AuditId = a.AuditId
                 WHERE
                     ar.AuditId = %s
+                    AND a.TenantId = %s
                 ORDER BY
                     ar.ReportId DESC
                 LIMIT 1
-            """, [audit_id])
+            """, [audit_id, tenant_id])
             
             result = cursor.fetchone()
             print(f"DEBUG: Simple query result: {result}")
@@ -411,18 +466,19 @@ def get_audit_report(request, audit_id):
                     FROM 
                         audit a
                     LEFT JOIN
-                        frameworks f ON a.FrameworkId = f.FrameworkId
+                        frameworks f ON a.FrameworkId = f.FrameworkId AND f.TenantId = %s
                     LEFT JOIN
-                        policies p ON a.PolicyId = p.PolicyId
+                        policies p ON a.PolicyId = p.PolicyId AND p.TenantId = %s
                     LEFT JOIN
-                        subpolicies sp ON a.SubPolicyId = sp.SubPolicyId
+                        subpolicies sp ON a.SubPolicyId = sp.SubPolicyId AND sp.TenantId = %s
                     LEFT JOIN
-                        users u_auditor ON a.auditor = u_auditor.UserId
+                        users u_auditor ON a.auditor = u_auditor.UserId AND u_auditor.TenantId = %s
                     LEFT JOIN
-                        users u_reviewer ON a.reviewer = u_reviewer.UserId
+                        users u_reviewer ON a.reviewer = u_reviewer.UserId AND u_reviewer.TenantId = %s
                     WHERE
                         a.AuditId = %s
-                """, [audit_id])
+                        AND a.TenantId = %s
+                """, [tenant_id, tenant_id, tenant_id, tenant_id, tenant_id, audit_id, tenant_id])
                 
                 audit_result = cursor.fetchone()
                 if audit_result:
@@ -482,25 +538,33 @@ def get_audit_report(request, audit_id):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def test_audit_reports(request):
     """
     Test endpoint to check if audit reports exist in the database
+    MULTI-TENANCY: Only returns test reports for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         with connection.cursor() as cursor:
             cursor.execute("""
                 SELECT 
-                    ReportId,
-                    AuditId,
-                    Report,
-                    PolicyId,
-                    SubPolicyId,
-                    FrameworkId
+                    ar.ReportId,
+                    ar.AuditId,
+                    ar.Report,
+                    ar.PolicyId,
+                    ar.SubPolicyId,
+                    ar.FrameworkId
                 FROM 
-                    audit_report
+                    audit_report ar
+                JOIN audit a ON ar.AuditId = a.AuditId
+                WHERE a.TenantId = %s
                 ORDER BY 
-                    ReportId
-            """)
+                    ar.ReportId
+            """, [tenant_id])
             
             columns = [col[0] for col in cursor.description]
             reports = [dict(zip(columns, row)) for row in cursor.fetchall()]

@@ -25,6 +25,12 @@ from ...models import (
     SubPolicy, Users, RiskInstance, RBAC
 )
 
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -204,9 +210,9 @@ class RiskAvaireEventTrigger:
                 'StartDate': timezone.now().date(),
                 'EndDate': risk_instance.MitigationDueDate if risk_instance.MitigationDueDate else (timezone.now().date() + timedelta(days=30)),
                 'RecurrenceType': 'Non-Recurring',
-                'CreatedBy': Users.objects.filter(UserId=risk_instance.UserId).first() if risk_instance.UserId else None,
-                'Owner': Users.objects.filter(UserId=risk_instance.UserId).first() if risk_instance.UserId else None,
-                'Reviewer': Users.objects.filter(UserId=risk_instance.ReviewerId).first() if risk_instance.ReviewerId else None,
+                'CreatedBy': Users.objects.filter(tenant_id=tenant_id, UserId=risk_instance.UserId).first() if risk_instance.UserId else None,
+                'Owner': Users.objects.filter(tenant_id=tenant_id, UserId=risk_instance.UserId).first() if risk_instance.UserId else None,
+                'Reviewer': Users.objects.filter(tenant_id=tenant_id, UserId=risk_instance.ReviewerId).first() if risk_instance.ReviewerId else None,
                 'IsTemplate': False
             }
             
@@ -598,9 +604,9 @@ class RiskAvaireEventTrigger:
                 'StartDate': timezone.now().date(),
                 'EndDate': end_date,
                 'RecurrenceType': 'Non-Recurring',
-                'CreatedBy': Users.objects.filter(UserId=policy.CreatedBy).first() if hasattr(policy, 'CreatedBy') and policy.CreatedBy else None,
-                'Owner': Users.objects.filter(UserId=policy.OwnerId).first() if hasattr(policy, 'OwnerId') and policy.OwnerId else None,
-                'Reviewer': Users.objects.filter(UserId=policy.ReviewerId).first() if hasattr(policy, 'ReviewerId') and policy.ReviewerId else None,
+                'CreatedBy': Users.objects.filter(tenant_id=tenant_id, UserId=policy.CreatedBy).first() if hasattr(policy, 'CreatedBy') and policy.CreatedBy else None,
+                'Owner': Users.objects.filter(tenant_id=tenant_id, UserId=policy.OwnerId).first() if hasattr(policy, 'OwnerId') and policy.OwnerId else None,
+                'Reviewer': Users.objects.filter(tenant_id=tenant_id, UserId=policy.ReviewerId).first() if hasattr(policy, 'ReviewerId') and policy.ReviewerId else None,
                 'IsTemplate': False
             }
             
@@ -742,10 +748,15 @@ def handle_riskavaire_data(data, record_type):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def riskavaire_webhook(request):
     """
     Webhook endpoint for RiskAvaire tool to send event triggers
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         data = request.data
         logger.info(f"RiskAvaire webhook received: {data}")
@@ -784,7 +795,7 @@ def riskavaire_webhook(request):
         
         elif record_type == 'compliance' and record_id:
             try:
-                compliance = Compliance.objects.get(ComplianceId=record_id)
+                compliance = Compliance.objects.get(ComplianceId=record_id, tenant_id=tenant_id)
                 event = RiskAvaireEventTrigger.create_compliance_event(compliance, trigger_type)
                 if event:
                     created_events.append({
@@ -797,7 +808,7 @@ def riskavaire_webhook(request):
         
         elif record_type == 'audit' and record_id:
             try:
-                audit = Audit.objects.get(AuditId=record_id)
+                audit = Audit.objects.get(AuditId=record_id, tenant_id=tenant_id)
                 event = RiskAvaireEventTrigger.create_audit_event(audit, trigger_type)
                 if event:
                     created_events.append({
@@ -810,7 +821,7 @@ def riskavaire_webhook(request):
         
         elif record_type == 'incident' and record_id:
             try:
-                incident = Incident.objects.get(IncidentId=record_id)
+                incident = Incident.objects.get(IncidentId=record_id, tenant_id=tenant_id)
                 event = RiskAvaireEventTrigger.create_incident_event(incident, trigger_type)
                 if event:
                     created_events.append({
@@ -823,7 +834,7 @@ def riskavaire_webhook(request):
         
         elif record_type == 'policy' and record_id:
             try:
-                policy = Policy.objects.get(PolicyId=record_id)
+                policy = Policy.objects.get(PolicyId=record_id, tenant_id=tenant_id)
                 event = RiskAvaireEventTrigger.create_policy_event(policy, trigger_type)
                 if event:
                     created_events.append({
@@ -851,11 +862,16 @@ def riskavaire_webhook(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def check_automated_triggers(request):
     """
     Check for conditions that should trigger automatic events
     This can be called periodically or manually
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         created_events = []
         current_date = timezone.now().date()
@@ -869,7 +885,7 @@ def check_automated_triggers(request):
         
         for risk in overdue_risks:
             # Check if event already exists for this overdue risk
-            existing_event = Event.objects.filter(
+            existing_event = Event.objects.filter(tenant_id=tenant_id, 
                 LinkedRecordType='risk',
                 LinkedRecordId=risk.RiskInstanceId,
                 EventTitle__icontains='Mitigation Overdue'
@@ -892,7 +908,7 @@ def check_automated_triggers(request):
         )
         
         for risk in high_priority_risks:
-            existing_event = Event.objects.filter(
+            existing_event = Event.objects.filter(tenant_id=tenant_id, 
                 LinkedRecordType='risk',
                 LinkedRecordId=risk.RiskInstanceId,
                 EventTitle__icontains='Escalated'
@@ -908,13 +924,13 @@ def check_automated_triggers(request):
                     })
         
         # Check for compliance items that need review
-        compliance_review_needed = Compliance.objects.filter(
+        compliance_review_needed = Compliance.objects.filter(tenant_id=tenant_id, 
             Status='Under Review',
             CreatedByDate__lte=current_date - timedelta(days=90)  # 90 days old
         )
         
         for compliance in compliance_review_needed:
-            existing_event = Event.objects.filter(
+            existing_event = Event.objects.filter(tenant_id=tenant_id, 
                 LinkedRecordType='compliance',
                 LinkedRecordId=compliance.ComplianceId,
                 EventTitle__icontains='Review Required'
@@ -946,10 +962,15 @@ def check_automated_triggers(request):
 @api_view(['GET'])
 @permission_classes([EventViewAllPermission, EventViewModulePermission])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_riskavaire_events(request):
     """
     Get events created by RiskAvaire integration with RBAC filtering
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         # Get user ID for RBAC filtering
         user_id = RBACUtils.get_user_id_from_request(request)
@@ -964,7 +985,7 @@ def get_riskavaire_events(request):
         logger.info(f"[RBAC RISKAVAIRE] User {user_id} accessible modules: {accessible_modules}")
         
         # Get events that are linked to risk, compliance, audit, incident, or policy records
-        events = Event.objects.filter(
+        events = Event.objects.filter(tenant_id=tenant_id, 
             LinkedRecordType__in=['risk', 'compliance', 'audit', 'incident', 'policy']
         ).order_by('-CreatedAt')
         

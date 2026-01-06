@@ -2757,8 +2757,14 @@ export default {
           console.log('✅ [ComplianceApprover] Using cached framework data')
           const cachedFrameworks = complianceDataService.getData('frameworks') || []
           
+          // Filter to only show active frameworks
+          const activeFrameworks = cachedFrameworks.filter(fw => {
+            const status = fw.ActiveInactive || fw.status || '';
+            return status.toLowerCase() === 'active';
+          });
+          
           // Transform the data to match frontend expectations (keep both formats for compatibility)
-          this.frameworks = cachedFrameworks.map(framework => ({
+          this.frameworks = activeFrameworks.map(framework => ({
             FrameworkId: framework.FrameworkId || framework.id,
             FrameworkName: framework.FrameworkName || framework.name,
             Category: framework.Category || framework.FrameworkCategory,
@@ -2777,8 +2783,14 @@ export default {
           console.log('📋 DEBUG: Raw frameworks response:', response.data)
           
           if (response.data) {
+            // Filter to only show active frameworks
+            const activeFrameworks = response.data.filter(fw => {
+              const status = fw.ActiveInactive || fw.status || '';
+              return status.toLowerCase() === 'active';
+            });
+            
             // Transform the data to match frontend expectations (keep both formats for compatibility)
-            this.frameworks = response.data.map(framework => ({
+            this.frameworks = activeFrameworks.map(framework => ({
               FrameworkId: framework.FrameworkId || framework.id,
               FrameworkName: framework.FrameworkName || framework.name,
               Category: framework.Category,

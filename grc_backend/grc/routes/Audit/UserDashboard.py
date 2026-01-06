@@ -14,6 +14,12 @@ from ...rbac.decorators import (
 )
 from .framework_filter_helper import get_active_framework_filter, apply_framework_filter_to_audits
 
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
+
 __all__ = [
     'get_audit_completion_rate',
     'get_total_audits',
@@ -36,7 +42,13 @@ __all__ = [
 @api_view(['GET'])
 @permission_classes([AuditAnalyticsPermission])
 @audit_analytics_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_audit_completion_rate(request):
+    """MULTI-TENANCY: Only returns completion rates for user's tenant"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     # Get the current date
     today = datetime.today()
 
@@ -52,8 +64,8 @@ def get_audit_completion_rate(request):
     framework_id = request.GET.get('framework_id')
     policy_id = request.GET.get('policy_id')
     
-    # Start with all audits
-    base_queryset = Audit.objects.all()
+    # Start with all audits for tenant
+    base_queryset = Audit.objects.filter(tenant_id=tenant_id)
     
     # Apply framework filter if provided
     if framework_id and framework_id != 'all' and framework_id != '':
@@ -92,13 +104,19 @@ def get_audit_completion_rate(request):
 @api_view(['GET'])
 @permission_classes([AuditAnalyticsPermission])
 @audit_analytics_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_total_audits(request):
+    """MULTI-TENANCY: Only returns total audits for user's tenant"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     # Get filter parameters from query string
     framework_id = request.GET.get('framework_id')
     policy_id = request.GET.get('policy_id')
     
-    # Start with ALL audits in database
-    base_queryset = Audit.objects.all()
+    # Start with ALL audits in database for tenant
+    base_queryset = Audit.objects.filter(tenant_id=tenant_id)
     
     # Apply framework filter if provided
     if framework_id and framework_id != 'all' and framework_id != '':
@@ -152,13 +170,19 @@ def get_total_audits(request):
 @api_view(['GET'])
 @permission_classes([AuditAnalyticsPermission])
 @audit_analytics_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_open_audits(request):
+    """MULTI-TENANCY: Only returns open audits for user's tenant"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     # Get filter parameters from query string
     framework_id = request.GET.get('framework_id')
     policy_id = request.GET.get('policy_id')
     
-    # Start with ALL audits in database
-    base_queryset = Audit.objects.all()
+    # Start with ALL audits in database for tenant
+    base_queryset = Audit.objects.filter(tenant_id=tenant_id)
     
     # Apply framework filter if provided
     if framework_id and framework_id != 'all' and framework_id != '':
@@ -201,13 +225,19 @@ def get_open_audits(request):
 @api_view(['GET'])
 @permission_classes([AuditAnalyticsPermission])
 @audit_analytics_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_completed_audits(request):
+    """MULTI-TENANCY: Only returns completed audits for user's tenant"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     # Get filter parameters from query string
     framework_id = request.GET.get('framework_id')
     policy_id = request.GET.get('policy_id')
     
-    # Start with ALL audits in database
-    base_queryset = Audit.objects.all()
+    # Start with ALL audits in database for tenant
+    base_queryset = Audit.objects.filter(tenant_id=tenant_id)
     
     # Apply framework filter if provided
     if framework_id and framework_id != 'all' and framework_id != '':
@@ -250,7 +280,13 @@ def get_completed_audits(request):
 @api_view(['GET'])
 @permission_classes([AuditAnalyticsPermission])
 @audit_analytics_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def audit_completion_trend(request):
+    """MULTI-TENANCY: Only returns completion trends for user's tenant"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     current_year = datetime.today().year
     result = []
 
@@ -258,8 +294,8 @@ def audit_completion_trend(request):
     framework_id = request.GET.get('framework_id')
     policy_id = request.GET.get('policy_id')
     
-    # Start with all audits
-    base_queryset = Audit.objects.all()
+    # Start with all audits for tenant
+    base_queryset = Audit.objects.filter(tenant_id=tenant_id)
     
     # Apply framework filter if provided
     if framework_id and framework_id != 'all' and framework_id != '':
@@ -294,7 +330,13 @@ def audit_completion_trend(request):
 @api_view(['GET'])
 @permission_classes([AuditAnalyticsPermission])
 @audit_analytics_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def audit_compliance_trend(request):
+    """MULTI-TENANCY: Only returns compliance trends for user's tenant"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     current_year = datetime.today().year
     result = []
 
@@ -302,8 +344,8 @@ def audit_compliance_trend(request):
     framework_id = request.GET.get('framework_id')
     policy_id = request.GET.get('policy_id')
     
-    # Start with all audits
-    base_queryset = Audit.objects.all()
+    # Start with all audits for tenant
+    base_queryset = Audit.objects.filter(tenant_id=tenant_id)
     
     # Apply framework filter if provided
     if framework_id and framework_id != 'all' and framework_id != '':
@@ -324,16 +366,17 @@ def audit_compliance_trend(request):
         first_day = datetime(current_year, month, 1)
         last_day = datetime(current_year, month, monthrange(current_year, month)[1])
 
-        # Get all audit findings for this month filtered by framework
+        # Get all audit findings for this month filtered by framework and tenant
         findings = AuditFinding.objects.filter(
             AssignedDate__range=[first_day, last_day],
-            AuditId__in=filtered_audit_ids
+            AuditId__in=filtered_audit_ids,
+            tenant_id=tenant_id
         )
         total_findings = findings.count()
         
         # Using Impact field instead of ComplianceStatus since ComplianceStatus doesn't exist
         # Assuming findings with 'Low' Impact are considered compliant
-        compliant_findings = findings.filter(Impact='Low').count()
+        compliant_findings = findings.filter(Impact='Low', tenant_id=tenant_id).count()
 
         compliance_rate = round((compliant_findings / total_findings) * 100, 2) if total_findings else 0
 
@@ -347,7 +390,13 @@ def audit_compliance_trend(request):
 @api_view(['GET'])
 @permission_classes([AuditAnalyticsPermission])
 @audit_analytics_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def audit_finding_trend(request):
+    """MULTI-TENANCY: Only returns finding trends for user's tenant"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     current_year = datetime.today().year
     result = []
 
@@ -355,8 +404,8 @@ def audit_finding_trend(request):
     framework_id = request.GET.get('framework_id')
     policy_id = request.GET.get('policy_id')
     
-    # Start with all audits
-    base_queryset = Audit.objects.all()
+    # Start with all audits for tenant
+    base_queryset = Audit.objects.filter(tenant_id=tenant_id)
     
     # Apply framework filter if provided
     if framework_id and framework_id != 'all' and framework_id != '':
@@ -377,15 +426,17 @@ def audit_finding_trend(request):
         first_day = datetime(current_year, month, 1)
         last_day = datetime(current_year, month, monthrange(current_year, month)[1])
 
-        # Get all findings for this month filtered by framework
+        # Get all findings for this month filtered by framework and tenant
         total_findings = AuditFinding.objects.filter(
             AssignedDate__range=[first_day, last_day],
-            AuditId__in=filtered_audit_ids
+            AuditId__in=filtered_audit_ids,
+            tenant_id=tenant_id
         ).count()
         major_findings = AuditFinding.objects.filter(
             AssignedDate__range=[first_day, last_day], 
             Impact__in=['Critical', 'Major'],
-            AuditId__in=filtered_audit_ids
+            AuditId__in=filtered_audit_ids,
+            tenant_id=tenant_id
         ).count()
         minor_findings = total_findings - major_findings
 
@@ -401,7 +452,13 @@ def audit_finding_trend(request):
 @api_view(['GET'])
 @permission_classes([AuditAnalyticsPermission])
 @audit_analytics_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def framework_performance(request):
+    """MULTI-TENANCY: Only returns framework performance for user's tenant"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     # Get frameworks from the frameworks table instead of hardcoded values
     from django.db.models import Count, Q
     from ...models import Framework, Audit
@@ -413,8 +470,8 @@ def framework_performance(request):
     # Fallback to session-based filter if no query params
     framework_id_filter = framework_id if (framework_id and framework_id != 'all') else get_active_framework_filter(request)
     
-    # Fetch active frameworks from the database
-    frameworks = Framework.objects.filter(ActiveInactive='Active')
+    # Fetch active frameworks from the database for tenant
+    frameworks = Framework.objects.filter(ActiveInactive='Active', tenant_id=tenant_id)
     
     # If framework filter is active, only include that framework
     if framework_id_filter:
@@ -441,8 +498,8 @@ def framework_performance(request):
         framework_id = framework['FrameworkId']
         framework_name = framework['FrameworkName']
         
-        # Get audits for this framework - use FrameworkId_id instead of Framework
-        audits = Audit.objects.filter(FrameworkId_id=framework_id)
+        # Get audits for this framework - use FrameworkId_id instead of Framework, filtered by tenant
+        audits = Audit.objects.filter(FrameworkId_id=framework_id, tenant_id=tenant_id)
         
         # Apply policy filter if provided
         if policy_id and policy_id != 'all' and policy_id != '':
@@ -477,7 +534,13 @@ def framework_performance(request):
 @api_view(['GET'])
 @permission_classes([AuditAnalyticsPermission])
 @audit_analytics_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def category_performance(request):
+    """MULTI-TENANCY: Only returns category performance for user's tenant"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     # Get unique categories from the frameworks table
     from django.db.models import Count, Q
     from ...models import Framework, Audit
@@ -489,10 +552,10 @@ def category_performance(request):
     # Fallback to session-based filter if no query params
     framework_id_filter = framework_id if (framework_id and framework_id != 'all') else get_active_framework_filter(request)
     
-    # Fetch distinct categories from frameworks
+    # Fetch distinct categories from frameworks for tenant
     try:
         # Get distinct categories from the Framework model
-        frameworks_query = Framework.objects.all()
+        frameworks_query = Framework.objects.filter(tenant_id=tenant_id)
         if framework_id_filter:
             frameworks_query = frameworks_query.filter(FrameworkId=framework_id_filter)
         
@@ -512,14 +575,14 @@ def category_performance(request):
         if not category:  # Skip empty categories
             continue
             
-        # Get audits for this category through the framework
-        framework_query = Framework.objects.filter(Category=category)
+        # Get audits for this category through the framework, filtered by tenant
+        framework_query = Framework.objects.filter(Category=category, tenant_id=tenant_id)
         if framework_id_filter:
             framework_query = framework_query.filter(FrameworkId=framework_id_filter)
         framework_ids = framework_query.values_list('FrameworkId', flat=True)
         
-        # Use FrameworkId_id instead of Framework__in based on error message
-        audits = Audit.objects.filter(FrameworkId_id__in=framework_ids)
+        # Use FrameworkId_id instead of Framework__in based on error message, filtered by tenant
+        audits = Audit.objects.filter(FrameworkId_id__in=framework_ids, tenant_id=tenant_id)
         
         total = audits.count()
         completed = audits.filter(Status='Completed').count()
@@ -542,13 +605,19 @@ def category_performance(request):
 @api_view(['GET'])
 @permission_classes([AuditAnalyticsPermission])
 @audit_analytics_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def status_distribution(request):
+    """MULTI-TENANCY: Only returns status distribution for user's tenant"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     # Get filter parameters from query string
     framework_id = request.GET.get('framework_id')
     policy_id = request.GET.get('policy_id')
     
-    # Start with all audits
-    base_queryset = Audit.objects.all()
+    # Start with all audits for tenant
+    base_queryset = Audit.objects.filter(tenant_id=tenant_id)
     
     # Apply framework filter if provided
     if framework_id and framework_id != 'all' and framework_id != '':
@@ -585,13 +654,19 @@ def status_distribution(request):
 @api_view(['GET'])
 @permission_classes([AuditViewAllPermission])
 @audit_view_all_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def recent_audit_activities(request):
     """
     Fetch recent audit activities including:
     - Recently completed audits
     - Recently received reviews
     - Audits with approaching due dates
+    MULTI-TENANCY: Only returns activities for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         from datetime import datetime, timedelta
         from django.db.models import F, Q
@@ -604,8 +679,8 @@ def recent_audit_activities(request):
         framework_id = request.GET.get('framework_id')
         policy_id = request.GET.get('policy_id')
         
-        # Start with all audits
-        base_queryset = Audit.objects.all()
+        # Start with all audits for tenant
+        base_queryset = Audit.objects.filter(tenant_id=tenant_id)
         
         # Apply framework filter if provided
         if framework_id and framework_id != 'all' and framework_id != '':
@@ -847,11 +922,17 @@ def get_time_ago(date_time, future=False):
 @api_view(['GET'])
 @permission_classes([AuditAnalyticsPermission])
 @audit_analytics_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def category_distribution(request):
     """
     Get category distribution data for line chart
     Returns completion rates by category over time
+    MULTI-TENANCY: Only returns category distribution for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         from django.db.models import Count, Q
         from ...models import Framework, Audit
@@ -863,9 +944,9 @@ def category_distribution(request):
         # Fallback to session-based filter if no query params
         framework_id_filter = framework_id if (framework_id and framework_id != 'all') else get_active_framework_filter(request)
         
-        # Fetch distinct categories from frameworks
+        # Fetch distinct categories from frameworks for tenant
         try:
-            frameworks_query = Framework.objects.all()
+            frameworks_query = Framework.objects.filter(tenant_id=tenant_id)
             if framework_id_filter:
                 frameworks_query = frameworks_query.filter(FrameworkId=framework_id_filter)
             
@@ -884,14 +965,14 @@ def category_distribution(request):
             if not category:  # Skip empty categories
                 continue
                 
-            # Get audits for this category through the framework
-            framework_query = Framework.objects.filter(Category=category)
+            # Get audits for this category through the framework, filtered by tenant
+            framework_query = Framework.objects.filter(Category=category, tenant_id=tenant_id)
             if framework_id_filter:
                 framework_query = framework_query.filter(FrameworkId=framework_id_filter)
             framework_ids = framework_query.values_list('FrameworkId', flat=True)
             
-            # Use FrameworkId_id instead of Framework__in based on error message
-            audits = Audit.objects.filter(FrameworkId_id__in=framework_ids)
+            # Use FrameworkId_id instead of Framework__in based on error message, filtered by tenant
+            audits = Audit.objects.filter(FrameworkId_id__in=framework_ids, tenant_id=tenant_id)
             
             # Apply policy filter if provided
             if policy_id and policy_id != 'all' and policy_id != '':
@@ -921,11 +1002,17 @@ def category_distribution(request):
 @api_view(['GET'])
 @permission_classes([AuditAnalyticsPermission])
 @audit_analytics_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def findings_distribution(request):
     """
     Get findings distribution data for horizontal bar chart
     Returns findings count by severity level
+    MULTI-TENANCY: Only returns findings distribution for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         from django.db.models import Count, Q
         from ...models import AuditFinding, Audit
@@ -934,8 +1021,8 @@ def findings_distribution(request):
         framework_id = request.GET.get('framework_id')
         policy_id = request.GET.get('policy_id')
         
-        # Start with all audits
-        base_queryset = Audit.objects.all()
+        # Start with all audits for tenant
+        base_queryset = Audit.objects.filter(tenant_id=tenant_id)
         
         # Apply framework filter if provided
         if framework_id and framework_id != 'all' and framework_id != '':
@@ -951,8 +1038,8 @@ def findings_distribution(request):
             
         filtered_audit_ids = list(base_queryset.values_list('AuditId', flat=True))
         
-        # Get findings for filtered audits
-        findings = AuditFinding.objects.filter(AuditId__in=filtered_audit_ids)
+        # Get findings for filtered audits, filtered by tenant
+        findings = AuditFinding.objects.filter(AuditId__in=filtered_audit_ids, tenant_id=tenant_id)
         
         # Count findings by severity/impact level
         severity_counts = findings.values('Impact').annotate(count=Count('Impact'))
@@ -981,12 +1068,18 @@ def findings_distribution(request):
 @api_view(['GET'])
 @permission_classes([AuditAnalyticsPermission])
 @audit_analytics_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def criticality_distribution(request):
     """
     Get criticality distribution data for horizontal bar chart
     Returns findings count by Impact level (Critical, High, Medium, Low, Info)
     X-axis: Count, Y-axis: Criticality
+    MULTI-TENANCY: Only returns criticality distribution for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         from django.db.models import Count, Q
         from ...models import AuditFinding, Audit
@@ -995,8 +1088,8 @@ def criticality_distribution(request):
         framework_id = request.GET.get('framework_id')
         policy_id = request.GET.get('policy_id')
         
-        # Start with all audits
-        base_queryset = Audit.objects.all()
+        # Start with all audits for tenant
+        base_queryset = Audit.objects.filter(tenant_id=tenant_id)
         
         # Apply framework filter if provided
         if framework_id and framework_id != 'all' and framework_id != '':
@@ -1012,8 +1105,8 @@ def criticality_distribution(request):
             
         filtered_audit_ids = list(base_queryset.values_list('AuditId', flat=True))
         
-        # Get findings for filtered audits
-        findings = AuditFinding.objects.filter(AuditId__in=filtered_audit_ids)
+        # Get findings for filtered audits, filtered by tenant
+        findings = AuditFinding.objects.filter(AuditId__in=filtered_audit_ids, tenant_id=tenant_id)
         
         total_findings = findings.count()
         
@@ -1093,11 +1186,17 @@ def criticality_distribution(request):
 @api_view(['GET'])
 @permission_classes([AuditAnalyticsPermission])
 @audit_analytics_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def department_performance(request):
     """
     Get department performance data for bar chart
     Returns audit scores by department
+    MULTI-TENANCY: Only returns department performance for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         from django.db.models import Count, Q, Avg
         from ...models import Audit, Framework
@@ -1106,8 +1205,8 @@ def department_performance(request):
         framework_id = request.GET.get('framework_id')
         policy_id = request.GET.get('policy_id')
         
-        # Start with all audits
-        base_queryset = Audit.objects.all()
+        # Start with all audits for tenant
+        base_queryset = Audit.objects.filter(tenant_id=tenant_id)
         
         # Apply framework filter if provided
         if framework_id and framework_id != 'all' and framework_id != '':
@@ -1187,11 +1286,17 @@ def department_performance(request):
 @api_view(['GET'])
 @permission_classes([AuditAnalyticsPermission])
 @audit_analytics_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def compliance_trend(request):
     """
     Get compliance trend data for line chart
     Returns compliance rate over time (last 7 months)
+    MULTI-TENANCY: Only returns compliance trends for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         from django.db.models import Count, Q
         from ...models import AuditFinding, Audit
@@ -1204,8 +1309,8 @@ def compliance_trend(request):
         framework_id = request.GET.get('framework_id')
         policy_id = request.GET.get('policy_id')
         
-        # Start with all audits
-        base_queryset = Audit.objects.all()
+        # Start with all audits for tenant
+        base_queryset = Audit.objects.filter(tenant_id=tenant_id)
         
         # Apply framework filter if provided
         if framework_id and framework_id != 'all' and framework_id != '':
@@ -1232,10 +1337,11 @@ def compliance_trend(request):
             first_day = datetime(year, month, 1)
             last_day = datetime(year, month, monthrange(year, month)[1])
             
-            # Get all audit findings for this month filtered by framework
+            # Get all audit findings for this month filtered by framework and tenant
             findings = AuditFinding.objects.filter(
                 AssignedDate__range=[first_day, last_day],
-                AuditId__in=filtered_audit_ids
+                AuditId__in=filtered_audit_ids,
+                tenant_id=tenant_id
             )
             total_findings = findings.count()
             

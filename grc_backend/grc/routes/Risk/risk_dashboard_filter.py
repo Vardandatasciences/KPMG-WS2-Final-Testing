@@ -14,6 +14,12 @@ from grc.models import RiskInstance, Framework, Policy, SubPolicy
 from grc.rbac.permissions import RiskViewPermission, RiskAnalyticsPermission
 from grc.rbac.decorators import rbac_required
 
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
+
 # Framework filtering helper
 from .framework_filter_helper import (
     apply_framework_filter_to_risk_instances,
@@ -25,8 +31,12 @@ from .framework_filter_helper import (
 @csrf_exempt
 @permission_classes([RiskViewPermission])
 @rbac_required(required_permission='view_all_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_risk_dashboard_with_filters(request):
-    """Get risk dashboard data with framework and policy filters"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Get filter parameters
         framework_id = request.query_params.get('framework_id')
@@ -38,7 +48,7 @@ def get_risk_dashboard_with_filters(request):
         print(f"Risk Dashboard Filters - Framework: {framework_id}, Policy: {policy_id}, Time: {time_range}, Category: {category}, Priority: {priority}")
         
         # Start with all risk instances
-        queryset = RiskInstance.objects.all()
+        queryset = RiskInstance.objects.filter(tenant_id=tenant_id)
         print(f"Starting with all risk instances: {queryset.count()} risks")
         
         # Apply framework filter - RiskInstance has direct ForeignKey to Framework
@@ -53,12 +63,12 @@ def get_risk_dashboard_with_filters(request):
         # Apply policy filter - Need to filter through ComplianceId
         if policy_id and policy_id != 'all':
             try:
-                policy = Policy.objects.get(PolicyId=policy_id)
+                policy = Policy.objects.get(tenant_id=tenant_id, PolicyId=policy_id)
                 # Get all subpolicies in this policy
-                subpolicy_ids = SubPolicy.objects.filter(PolicyId=policy).values_list('SubPolicyId', flat=True)
+                subpolicy_ids = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy).values_list('SubPolicyId', flat=True)
                 # Get all compliance IDs for these subpolicies
                 from grc.models import Compliance
-                compliance_ids = Compliance.objects.filter(SubPolicyId__in=subpolicy_ids).values_list('ComplianceId', flat=True)
+                compliance_ids = Compliance.objects.filter(tenant_id=tenant_id, SubPolicyId__in=subpolicy_ids).values_list('ComplianceId', flat=True)
                 # Filter risks by compliance
                 queryset = queryset.filter(ComplianceId__in=compliance_ids)
                 print(f"Applied policy filter: {policy.PolicyName}, found {queryset.count()} risks")
@@ -164,8 +174,12 @@ def get_risk_dashboard_with_filters(request):
 @csrf_exempt
 @permission_classes([RiskAnalyticsPermission])
 @rbac_required(required_permission='risk_performance_analytics')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_risk_analytics_with_filters(request):
-    """Get risk analytics data with framework and policy filters"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         data = request.data
         x_axis = data.get('xAxis')
@@ -179,7 +193,7 @@ def get_risk_analytics_with_filters(request):
         print(f"Risk Analytics Filters - X: {x_axis}, Y: {y_axis}, Framework: {framework_id}, Policy: {policy_id}")
         
         # Start with all risk instances
-        queryset = RiskInstance.objects.all()
+        queryset = RiskInstance.objects.filter(tenant_id=tenant_id)
         print(f"Starting with all risk instances for analytics: {queryset.count()} risks")
         
         # Apply framework filter - RiskInstance has direct ForeignKey to Framework
@@ -194,10 +208,10 @@ def get_risk_analytics_with_filters(request):
         # Apply policy filter - Need to filter through ComplianceId
         if policy_id and policy_id != 'all':
             try:
-                policy = Policy.objects.get(PolicyId=policy_id)
-                subpolicy_ids = SubPolicy.objects.filter(PolicyId=policy).values_list('SubPolicyId', flat=True)
+                policy = Policy.objects.get(tenant_id=tenant_id, PolicyId=policy_id)
+                subpolicy_ids = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy).values_list('SubPolicyId', flat=True)
                 from grc.models import Compliance
-                compliance_ids = Compliance.objects.filter(SubPolicyId__in=subpolicy_ids).values_list('ComplianceId', flat=True)
+                compliance_ids = Compliance.objects.filter(tenant_id=tenant_id, SubPolicyId__in=subpolicy_ids).values_list('ComplianceId', flat=True)
                 queryset = queryset.filter(ComplianceId__in=compliance_ids)
             except Policy.DoesNotExist:
                 return Response({'error': 'Policy not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -253,8 +267,7 @@ def get_risk_analytics_with_filters(request):
 
 
 def generate_risk_chart_data(queryset, x_axis, y_axis):
-    """Generate chart data based on x_axis and y_axis parameters"""
-    
+    """Helper function - queryset should already be filtered by tenant_id"""
     if x_axis == 'category':
         # Group by risk category
         data = queryset.values('Category').annotate(
@@ -359,7 +372,7 @@ def generate_risk_chart_data(queryset, x_axis, y_axis):
 
 
 def generate_chart_colors(count):
-    """Generate consistent colors for charts"""
+    """Helper function to generate chart colors"""
     colors = [
         '#4ade80', '#f87171', '#fbbf24', '#60a5fa', '#818cf8',
         '#f472b6', '#a78bfa', '#34d399', '#fbbf24', '#fb7185',
@@ -376,12 +389,17 @@ def generate_chart_colors(count):
 @api_view(['GET'])
 @csrf_exempt
 @permission_classes([AllowAny])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_risk_frameworks_for_filter(request):
-    """Get frameworks for risk dashboard filter dropdown with risk counts"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         from django.db import connection
         
         # Get all active frameworks with risk counts using raw SQL
+        # MULTI-TENANCY: Use TenantId (capital T) to match database column name
         with connection.cursor() as cursor:
             cursor.execute("""
                 SELECT 
@@ -390,11 +408,11 @@ def get_risk_frameworks_for_filter(request):
                     f.FrameworkDescription,
                     COUNT(r.RiskInstanceId) as risk_count
                 FROM frameworks f
-                LEFT JOIN risk_instance r ON f.FrameworkId = r.FrameworkId
-                WHERE f.ActiveInactive = 'Active'
+                LEFT JOIN risk_instance r ON f.FrameworkId = r.FrameworkId AND r.TenantId = %s
+                WHERE f.ActiveInactive = 'Active' AND f.TenantId = %s
                 GROUP BY f.FrameworkId, f.FrameworkName, f.FrameworkDescription
                 ORDER BY f.FrameworkName
-            """)
+            """, [tenant_id, tenant_id])
             
             frameworks = []
             for row in cursor.fetchall():
@@ -427,14 +445,18 @@ def get_risk_frameworks_for_filter(request):
 @api_view(['GET'])
 @csrf_exempt
 @permission_classes([AllowAny])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_risk_policies_for_filter(request):
-    """Get policies for risk dashboard filter dropdown"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         framework_id = request.query_params.get('framework_id')
         
         if framework_id and framework_id != 'all':
             # Get policies for specific framework
-            policies = Policy.objects.filter(
+            policies = Policy.objects.filter(tenant_id=tenant_id, 
                 FrameworkId=framework_id,
                 ActiveInactive='Active'
             ).values(
@@ -442,7 +464,7 @@ def get_risk_policies_for_filter(request):
             ).order_by('PolicyName')
         else:
             # Get all active policies
-            policies = Policy.objects.filter(
+            policies = Policy.objects.filter(tenant_id=tenant_id, 
                 ActiveInactive='Active'
             ).values(
                 'PolicyId', 'PolicyName', 'PolicyDescription'

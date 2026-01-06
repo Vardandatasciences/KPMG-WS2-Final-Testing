@@ -347,7 +347,13 @@ export default {
           console.log('✅ [ComplianceTailoring] Using cached framework data');
           const cachedFrameworks = complianceDataService.getData('frameworks') || [];
           
-          this.frameworks = cachedFrameworks.map(fw => ({
+          // Filter to only show active frameworks
+          const activeFrameworks = cachedFrameworks.filter(fw => {
+            const status = fw.ActiveInactive || fw.status || '';
+            return status.toLowerCase() === 'active';
+          });
+          
+          this.frameworks = activeFrameworks.map(fw => ({
             id: fw.FrameworkId || fw.id,
             name: fw.FrameworkName || fw.name
           }));

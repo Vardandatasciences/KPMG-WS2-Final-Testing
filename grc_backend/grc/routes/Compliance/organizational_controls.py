@@ -28,6 +28,12 @@ from ...models import (
     OrganizationalControl, OrganizationalControlDocument, Framework, Policy, SubPolicy, Compliance, Users
 )
 from ...rbac.utils import RBACUtils
+
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
 from ..Audit.ai_audit_api import call_ai_api
 
 logger = logging.getLogger(__name__)
@@ -91,11 +97,16 @@ def table_exists(cursor, table_name):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_framework_controls(request, framework_id):
     """
     Get all controls for a framework organized by Policy > SubPolicy > Compliance
     with organizational control mapping status (if table exists)
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         with connection.cursor() as cursor:
             # Check if organizational_controls table exists
@@ -242,10 +253,15 @@ def get_framework_controls(request, framework_id):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_organizational_control(request, compliance_id):
     """
     Get organizational control details for a specific compliance
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         with connection.cursor() as cursor:
             cursor.execute("""
@@ -325,10 +341,15 @@ def get_organizational_control(request, compliance_id):
 @csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def save_organizational_control(request):
     """
     Save organizational control text for a specific compliance
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         data = request.data
         compliance_id = data.get('compliance_id')
@@ -344,7 +365,7 @@ def save_organizational_control(request):
         user_id = RBACUtils.get_user_id_from_request(request)
         
         # Check if organizational control already exists for this compliance
-        org_control = OrganizationalControl.objects.filter(ComplianceId_id=compliance_id).first()
+        org_control = OrganizationalControl.objects.filter(tenant_id=tenant_id, ComplianceId_id=compliance_id).first()
         
         if org_control:
             # Update existing
@@ -354,7 +375,7 @@ def save_organizational_control(request):
             org_control.save()
         else:
             # Get compliance details
-            compliance = Compliance.objects.get(ComplianceId=compliance_id)
+            compliance = Compliance.objects.get(ComplianceId=compliance_id, tenant_id=tenant_id)
             
             # Create new
             org_control = OrganizationalControl.objects.create(
@@ -391,11 +412,16 @@ def save_organizational_control(request):
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @parser_classes([MultiPartParser, FormParser])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def upload_organizational_document(request):
     """
     Upload organizational control document(s) for one or multiple compliances
     Supports multiple files upload
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         # Handle both single file and multiple files
         files = request.FILES.getlist('files') or request.FILES.getlist('file')
@@ -441,21 +467,21 @@ def upload_organizational_document(request):
                 target_compliance_ids = compliance_ids
         elif upload_type == 'policy' and policy_id:
             # Get all compliances under this policy
-            compliances = Compliance.objects.filter(
+            compliances = Compliance.objects.filter(tenant_id=tenant_id, 
                 SubPolicy__PolicyId=policy_id
             ).values_list('ComplianceId', flat=True)
             target_compliance_ids = list(compliances)
             logger.info(f"Found {len(target_compliance_ids)} compliances for policy_id={policy_id}")
         elif upload_type == 'subpolicy' and subpolicy_id:
             # Get all compliances under this subpolicy
-            compliances = Compliance.objects.filter(
+            compliances = Compliance.objects.filter(tenant_id=tenant_id, 
                 SubPolicy=subpolicy_id
             ).values_list('ComplianceId', flat=True)
             target_compliance_ids = list(compliances)
             logger.info(f"Found {len(target_compliance_ids)} compliances for subpolicy_id={subpolicy_id}")
         elif (upload_type == 'bulk' or upload_type == 'framework') and framework_id:
             # Get all compliances under this framework
-            compliances = Compliance.objects.filter(
+            compliances = Compliance.objects.filter(tenant_id=tenant_id, 
                 SubPolicy__PolicyId__FrameworkId=framework_id
             ).values_list('ComplianceId', flat=True)
             target_compliance_ids = list(compliances)
@@ -465,9 +491,9 @@ def upload_organizational_document(request):
             # Debug: Check if subpolicy exists and has compliances
             if upload_type == 'subpolicy' and subpolicy_id:
                 try:
-                    subpolicy = SubPolicy.objects.filter(SubPolicyId=subpolicy_id).first()
+                    subpolicy = SubPolicy.objects.filter(tenant_id=tenant_id, SubPolicyId=subpolicy_id).first()
                     if subpolicy:
-                        all_compliances = Compliance.objects.filter(SubPolicy=subpolicy_id)
+                        all_compliances = Compliance.objects.filter(tenant_id=tenant_id, SubPolicy=subpolicy_id)
                         logger.error(f"SubPolicy {subpolicy_id} exists but has {all_compliances.count()} compliances. "
                                    f"SubPolicy name: {subpolicy.SubPolicyName}")
                     else:
@@ -513,10 +539,10 @@ def upload_organizational_document(request):
             # Process each compliance
             for comp_id in target_compliance_ids:
                 try:
-                    compliance = Compliance.objects.get(ComplianceId=comp_id)
+                    compliance = Compliance.objects.get(ComplianceId=comp_id, tenant_id=tenant_id)
                     
                     # Get or create org control
-                    org_control = OrganizationalControl.objects.filter(ComplianceId_id=comp_id).first()
+                    org_control = OrganizationalControl.objects.filter(tenant_id=tenant_id, ComplianceId_id=comp_id).first()
                     
                     if not org_control:
                         org_control = OrganizationalControl.objects.create(
@@ -586,10 +612,15 @@ def upload_organizational_document(request):
 @csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def run_control_mapping_audit(request):
     """
     Run AI audit to check if organizational controls satisfy framework controls
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         data = request.data
         org_control_ids = data.get('org_control_ids', [])
@@ -602,25 +633,25 @@ def run_control_mapping_audit(request):
         # Determine which controls to audit
         if compliance_id:
             # Single compliance audit
-            org_controls = OrganizationalControl.objects.filter(ComplianceId_id=compliance_id)
+            org_controls = OrganizationalControl.objects.filter(tenant_id=tenant_id, ComplianceId_id=compliance_id)
         elif policy_id:
             # Audit all compliances under this policy
-            org_controls = OrganizationalControl.objects.filter(
+            org_controls = OrganizationalControl.objects.filter(tenant_id=tenant_id, 
                 PolicyId_id=policy_id
             )
         elif subpolicy_id:
             # Audit all compliances under this subpolicy
-            org_controls = OrganizationalControl.objects.filter(
+            org_controls = OrganizationalControl.objects.filter(tenant_id=tenant_id, 
                 SubPolicyId_id=subpolicy_id
             )
         elif audit_all and framework_id:
             # Audit all controls in framework
-            org_controls = OrganizationalControl.objects.filter(
+            org_controls = OrganizationalControl.objects.filter(tenant_id=tenant_id, 
                 FrameworkId_id=framework_id
             )
         elif org_control_ids:
             # Audit specific org control IDs
-            org_controls = OrganizationalControl.objects.filter(OrgControlId__in=org_control_ids)
+            org_controls = OrganizationalControl.objects.filter(tenant_id=tenant_id, OrgControlId__in=org_control_ids)
         else:
             return Response({
                 'success': False,
@@ -637,7 +668,7 @@ def run_control_mapping_audit(request):
         for org_control in org_controls:
             try:
                 # Get the framework compliance requirement
-                compliance = Compliance.objects.get(ComplianceId=org_control.ComplianceId_id)
+                compliance = Compliance.objects.get(ComplianceId=org_control.ComplianceId_id, tenant_id=tenant_id)
                 
                 # Prepare organizational control content
                 org_content = org_control.ControlText or org_control.ExtractedText or ""
@@ -767,10 +798,15 @@ Respond in this exact JSON format:
 @csrf_exempt
 @api_view(['DELETE'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def delete_organizational_control(request, org_control_id):
     """
     Delete an organizational control
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         org_control = OrganizationalControl.objects.get(OrgControlId=org_control_id)
         
@@ -810,10 +846,15 @@ def delete_organizational_control(request, org_control_id):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_mapping_statistics(request, framework_id):
     """
     Get organizational control mapping statistics for dashboard
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         with connection.cursor() as cursor:
             # Check if organizational_controls table exists
@@ -892,10 +933,15 @@ def get_mapping_statistics(request, framework_id):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_frameworks_with_org_stats(request):
     """
     Get all frameworks with their organizational control statistics
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         with connection.cursor() as cursor:
             cursor.execute("""

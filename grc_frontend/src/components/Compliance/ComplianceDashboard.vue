@@ -633,7 +633,13 @@ export default {
           console.log('✅ [ComplianceDashboard] Using cached framework data')
           const cachedFrameworks = complianceDataService.getData('frameworks') || []
           
-          this.frameworks = cachedFrameworks.map(framework => ({
+          // Filter to only show active frameworks
+          const activeFrameworks = cachedFrameworks.filter(fw => {
+            const status = fw.ActiveInactive || fw.status || '';
+            return status.toLowerCase() === 'active';
+          });
+          
+          this.frameworks = activeFrameworks.map(framework => ({
             id: framework.FrameworkId || framework.id,
             name: framework.FrameworkName || framework.name || 'Unknown Framework'
           }))
@@ -658,7 +664,13 @@ export default {
             return
           }
           
-          this.frameworks = frameworksData.map(framework => ({
+          // Filter to only show active frameworks
+          const activeFrameworks = frameworksData.filter(fw => {
+            const status = fw.ActiveInactive || fw.status || '';
+            return status.toLowerCase() === 'active';
+          });
+          
+          this.frameworks = activeFrameworks.map(framework => ({
             id: framework.id || framework.FrameworkId,
             name: framework.name || framework.FrameworkName || 'Unknown Framework'
           }))
