@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('tprm_notifications', '0001_initial'),
+        ('notifications', '0001_initial'),
     ]
 
     operations = [

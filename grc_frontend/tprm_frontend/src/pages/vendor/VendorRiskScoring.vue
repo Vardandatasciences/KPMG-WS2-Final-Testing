@@ -196,7 +196,7 @@
               @click="handleOpenAiModal"
             >
               <Brain class="h-4 w-4" />
-              Llama 2 Risk Generation
+              Vardaan AI Risk Generation
             </button>
           </div>
         </div>
@@ -854,10 +854,10 @@ import { Download, RotateCcw, Search, Shield, ChevronDown, Check, RefreshCw, Bra
 import { useNotifications } from '@/composables/useNotifications';
 import notificationService from '@/services/notificationService';
 import loggingService from '@/services/loggingService';
-import { getTprmApiUrl } from '@/utils/backendEnv';
+import { getTprmApiV1BaseUrl } from '@/utils/backendEnv';
 
 // ===== INLINED API SERVICE =====
-const API_BASE_URL = getTprmApiUrl('vendor-risk');
+const API_BASE_URL = `${getTprmApiV1BaseUrl()}/vendor-risk`;
 
 // ===== DATA STRUCTURES =====
 // Risk object structure

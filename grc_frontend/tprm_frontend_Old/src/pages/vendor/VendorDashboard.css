@@ -1,0 +1,337 @@
+/* src/pages/vendor/VendorDashboard.css */
+
+/* Enhanced KPI Grid */
+.vendor_kpi-grid {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 1.5rem !important;
+  margin-bottom: 2rem !important;
+}
+
+@media (min-width: 768px) {
+  .vendor_kpi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .vendor_kpi-grid {
+    grid-template-columns: repeat(4, 1fr) !important;
+  }
+}
+
+/* KPI Card Styling */
+.vendor_kpi-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
+  border: 1px solid rgba(226, 232, 240, 0.8) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+  transition: all 0.3s ease !important;
+  overflow: hidden !important;
+}
+
+.vendor_kpi-card:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+}
+
+.vendor_kpi-content {
+  padding: 1.5rem !important;
+}
+
+.vendor_kpi-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  margin-bottom: 1rem !important;
+  gap: 0.75rem !important;
+}
+
+.vendor_kpi-icon-wrapper {
+  width: 2.5rem !important;
+  height: 2.5rem !important;
+  border-radius: 8px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
+  flex-shrink: 0 !important;
+}
+
+.vendor_kpi-icon-wrapper.vendor_text-destructive {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+}
+
+.vendor_kpi-icon-wrapper.vendor_text-success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+}
+
+.vendor_kpi-icon {
+  width: 1.25rem !important;
+  height: 1.25rem !important;
+  color: white !important;
+}
+
+.vendor_kpi-title-wrapper {
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.25rem !important;
+}
+
+.vendor_kpi-title {
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+  color: #64748b !important;
+  margin: 0 !important;
+  line-height: 1.25 !important;
+}
+
+.vendor_kpi-trend {
+  margin-top: 0 !important;
+}
+
+.vendor_trend-text {
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #059669 !important;
+}
+
+.vendor_kpi-trend.vendor_text-destructive .vendor_trend-text {
+  background: transparent !important;
+  color: #dc2626 !important;
+}
+
+.vendor_kpi-value {
+  margin-top: 0.5rem !important;
+}
+
+.vendor_value-number {
+  font-size: 2rem !important;
+  font-weight: 700 !important;
+  color: #1e293b !important;
+  line-height: 1 !important;
+  letter-spacing: -0.025em !important;
+}
+
+/* Main Content Grid */
+.vendor_main-content-grid {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 1.5rem !important;
+}
+
+@media (min-width: 1024px) {
+  .vendor_main-content-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+
+/* Activity Card Styling */
+.vendor_activity-card,
+.vendor_compliance-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
+  border: 1px solid rgba(226, 232, 240, 0.8) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+  transition: all 0.3s ease !important;
+  overflow: hidden !important;
+}
+
+.vendor_card-header {
+  padding: 1.5rem 1.5rem 1rem 1.5rem !important;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.5) !important;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%) !important;
+}
+
+.vendor_card-title {
+  font-size: 1.125rem !important;
+  font-weight: 700 !important;
+  color: #1e293b !important;
+  margin: 0 !important;
+  letter-spacing: -0.025em !important;
+}
+
+.vendor_activity-content,
+.vendor_compliance-content {
+  padding: 1.5rem !important;
+}
+
+/* Vendor Activity Items */
+.vendor_vendor-activity-item {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 1rem !important;
+  border: 1px solid rgba(226, 232, 240, 0.6) !important;
+  border-radius: 12px !important;
+  margin-bottom: 0.75rem !important;
+  background: rgba(255, 255, 255, 0.8) !important;
+  transition: all 0.2s ease !important;
+}
+
+.vendor_vendor-activity-item:hover {
+  border-color: rgba(59, 130, 246, 0.3) !important;
+  background: rgba(255, 255, 255, 1) !important;
+  transform: translateY(-1px) !important;
+}
+
+.vendor_vendor-activity-item:last-child {
+  margin-bottom: 0 !important;
+}
+
+.vendor_vendor-info {
+  flex: 1 !important;
+}
+
+.vendor_vendor-name {
+  font-weight: 600 !important;
+  color: #1e293b !important;
+  font-size: 0.875rem !important;
+  margin-bottom: 0.25rem !important;
+}
+
+.vendor_vendor-meta {
+  font-size: 0.75rem !important;
+  color: #64748b !important;
+}
+
+.vendor_vendor-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.75rem !important;
+}
+
+.vendor_status-badge {
+  font-size: 0.75rem !important;
+  font-weight: 500 !important;
+  padding: 0.25rem 0.5rem !important;
+  border-radius: 6px !important;
+}
+
+.vendor_risk-indicator {
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  padding: 0.25rem 0.5rem !important;
+  border-radius: 6px !important;
+  background: rgba(16, 185, 129, 0.1) !important;
+  color: #059669 !important;
+}
+
+.vendor_risk-indicator.vendor_text-warning {
+  background: rgba(245, 158, 11, 0.1) !important;
+  color: #d97706 !important;
+}
+
+.vendor_risk-indicator.vendor_text-destructive {
+  background: rgba(239, 68, 68, 0.1) !important;
+  color: #dc2626 !important;
+}
+
+.vendor_view-button {
+  border-radius: 8px !important;
+  padding: 0.5rem !important;
+  border: 1px solid rgba(226, 232, 240, 0.8) !important;
+  background: rgba(255, 255, 255, 0.8) !important;
+  transition: all 0.2s ease !important;
+}
+
+.vendor_view-button:hover {
+  background: rgba(59, 130, 246, 0.05) !important;
+  border-color: rgba(59, 130, 246, 0.3) !important;
+}
+
+/* Compliance Progress */
+.vendor_compliance-progress {
+  margin-bottom: 1.5rem !important;
+}
+
+.vendor_compliance-progress:last-child {
+  margin-bottom: 0 !important;
+}
+
+.vendor_progress-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  margin-bottom: 0.5rem !important;
+}
+
+.vendor_progress-label {
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+  color: #374151 !important;
+}
+
+.vendor_progress-value {
+  font-size: 0.875rem !important;
+  font-weight: 700 !important;
+  color: #1e293b !important;
+}
+
+.vendor_progress-bar {
+  height: 8px !important;
+  border-radius: 4px !important;
+  background: rgba(226, 232, 240, 0.5) !important;
+}
+
+.vendor_compliance-summary {
+  margin-top: 1.5rem !important;
+  padding-top: 1.5rem !important;
+  border-top: 1px solid rgba(226, 232, 240, 0.5) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.75rem !important;
+}
+
+.vendor_compliance-item {
+  display: flex !important;
+  align-items: center !important;
+  padding: 0.75rem !important;
+  border-radius: 8px !important;
+  background: rgba(248, 250, 252, 0.8) !important;
+  transition: all 0.2s ease !important;
+}
+
+.vendor_compliance-item:hover {
+  background: rgba(248, 250, 252, 1) !important;
+  transform: translateX(2px) !important;
+}
+
+.vendor_compliance-icon {
+  width: 1rem !important;
+  height: 1rem !important;
+  margin-right: 0.75rem !important;
+}
+
+.vendor_compliance-text {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  color: #374151 !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .vendor_kpi-content {
+    padding: 1rem !important;
+  }
+  
+  .vendor_activity-content,
+  .vendor_compliance-content {
+    padding: 1rem !important;
+  }
+  
+  .vendor_vendor-activity-item {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.75rem !important;
+  }
+  
+  .vendor_vendor-actions {
+    width: 100% !important;
+    justify-content: space-between !important;
+  }
+}

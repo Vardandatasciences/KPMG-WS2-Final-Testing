@@ -87,6 +87,7 @@ urlpatterns = [
     # User Management Endpoints
     path('users/', views.users_list, name='users-list'),
     path('users/legal-reviewers/', views.legal_reviewers_list, name='legal-reviewers-list'),
+    path('users/approval-users/', views.approval_users_list, name='approval-users-list'),
     
     # Contract Versioning Endpoints
     path('contracts/<int:contract_id>/versions/', views.get_contract_versions, name='contract-versions'),

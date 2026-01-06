@@ -67,8 +67,8 @@
               </p>
               <ul class="list-disc list-inside mt-2 space-y-1 text-blue-700">
                 <li>Stored securely in S3</li>
-                <li>Processed with AI-powered OCR</li>
-                <li>Analyzed using LLaMA to extract SLA data</li>
+                <li>Processed with Vardaan AI-powered OCR</li>
+                <li>Analyzed using Vardaan AI to extract SLA data</li>
                 <li>Automatically populate form fields</li>
               </ul>
             </div>
@@ -1627,7 +1627,7 @@ import { PopupService } from '@/popup/popupService'
 import { useNotifications } from '@/composables/useNotifications'
 import { usePermissions } from '@/composables/usePermissions'
 import loggingService from '@/services/loggingService'
-import { getTprmApiUrl } from '@/utils/backendEnv.js'
+import { getTprmApiUrl } from '@/utils/backendEnv'
 
 const router = useRouter()
 const { showSLASuccess, showSLAError, showSLAWarning, showInfo } = useNotifications()
@@ -2161,34 +2161,20 @@ async function handleDocumentUpload() {
     try {
       console.log('Uploading document for OCR processing...')
       
-      // Get authentication token (using 'session_token' as the key)
-      const token = localStorage.getItem('session_token') || sessionStorage.getItem('session_token')
-      
-      if (!token) {
-        console.error('❌ No authentication token found in localStorage or sessionStorage')
-        throw new Error('Authentication token not found. Please log in and try again.')
-      }
-      
       // Create FormData for file upload
-      const uploadFormData = new FormData()
-      uploadFormData.append('file', file)
-      uploadFormData.append('title', file.name)
-      uploadFormData.append('description', 'SLA document for extraction')
-      uploadFormData.append('category', 'SLA')
-      uploadFormData.append('department', 'Compliance')
-      uploadFormData.append('doc_type', file.name.split('.').pop().toUpperCase())
-      uploadFormData.append('module_id', '1')
-      // Include reporting_frequency as fallback (will be overridden by AI extraction if found)
-      uploadFormData.append('reporting_frequency', formData.reporting_frequency || 'monthly')
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('title', file.name)
+      formData.append('description', 'SLA document for extraction')
+      formData.append('category', 'SLA')
+      formData.append('department', 'Compliance')
+      formData.append('doc_type', file.name.split('.').pop().toUpperCase())
+      formData.append('module_id', '1')
 
       // Upload document and process with OCR
-      const uploadUrl = getTprmApiUrl('ocr/upload/')
-      const response = await fetch(uploadUrl, {
+      const response = await fetch(getTprmApiUrl('ocr/upload/'), {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: uploadFormData,
+        body: formData,
         // Don't set Content-Type header - let browser set it with boundary
       })
 

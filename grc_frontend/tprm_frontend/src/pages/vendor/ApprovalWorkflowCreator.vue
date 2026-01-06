@@ -1041,6 +1041,8 @@
                       type="button"
                       class="btn-icon btn-danger" 
                       @click="removeStage(index)"
+                      title="Delete Stage"
+                      aria-label="Delete Stage"
                     >
                       🗑️
                     </button>
@@ -1966,12 +1968,7 @@ export default {
         }
       } catch (error) {
         console.error('Error fetching questionnaires:', error)
-        console.error('Error details:', error.response?.data || error.message)
-        
-        // Check if we have a questionnaire_id from route query that we need to include
-        const routeQuestionnaireId = route.query.questionnaire_id
-        const routeQuestionnaireName = route.query.questionnaire_name
-        const routeQuestionnaireType = route.query.questionnaire_type
+        showMessage('Failed to load questionnaires from database.', 'error')
         
         // Add mock data for testing if API fails
         questionnaires.value = [
@@ -1992,22 +1989,6 @@ export default {
             created_at: new Date().toISOString()
           }
         ]
-        
-        // If we have a questionnaire_id from route query and it's not in mock data, add it
-        if (routeQuestionnaireId && !questionnaires.value.find(q => String(q.questionnaire_id) === String(routeQuestionnaireId))) {
-          console.log('Adding questionnaire from route query to mock data:', routeQuestionnaireId)
-          questionnaires.value.push({
-            questionnaire_id: routeQuestionnaireId,
-            questionnaire_name: routeQuestionnaireName || `Questionnaire ${routeQuestionnaireId}`,
-            questionnaire_type: routeQuestionnaireType || 'ONBOARDING',
-            description: 'Questionnaire loaded from route parameters',
-            version: '1.0',
-            created_at: new Date().toISOString(),
-            vendor_id: route.query.vendor_id
-          })
-        }
-        
-        showMessage('Failed to load questionnaires from database. Using fallback data.', 'warning')
       } finally {
         loadingQuestionnaires.value = false
       }
@@ -2906,12 +2887,12 @@ export default {
 .btn-icon.btn-danger {
   background: white !important;
   color: #dc2626 !important;
-  border: 1px solid #fca5a5 !important;
+  border: 1px solid #d1d5db !important;
 }
 
 .btn-icon.btn-danger:hover {
   background: #fef2f2 !important;
-  border-color: #f87171 !important;
+  border-color: #9ca3af !important;
 }
 
 /* Simplify tags */
@@ -4224,6 +4205,14 @@ export default {
   display: none !important;
 }
 
+/* Show card-header for stage cards (needed for delete button) */
+.tab-content .stage-card .card-header {
+  display: block !important;
+  padding: 0 !important;
+  border-bottom: none !important;
+  background: transparent !important;
+}
+
 /* Alert Styles */
 .alert {
   padding: 16px 20px !important;
@@ -4388,6 +4377,9 @@ export default {
 }
 
 .stage-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
   padding: 0 0 16px 0 !important;
   background: transparent !important;
   border-bottom: 1px solid #e5e7eb !important;
@@ -4398,6 +4390,12 @@ export default {
   font-size: 15px !important;
   font-weight: 600 !important;
   color: #111827 !important;
+}
+
+.stage-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
 }
 
 /* Buttons */

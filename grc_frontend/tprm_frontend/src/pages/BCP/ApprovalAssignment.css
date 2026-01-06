@@ -6,28 +6,6 @@
   margin: 0 auto !important;
 }
 
-.approval-header {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: space-between !important;
-  margin-bottom: var(--sp-6) !important;
-}
-
-.approval-title {
-  font-size: 1.875rem !important; /* text-3xl */
-  font-weight: var(--fw-bold) !important;
-  color: var(--text) !important;
-}
-
-.approval-description {
-  color: var(--text-muted) !important;
-}
-
-.workflow-badge {
-  font-size: var(--fs-sm) !important;
-}
-
-
 /* Form Styles */
 .approval-form {
   display: flex !important;
@@ -484,7 +462,6 @@
   display: flex !important;
   flex-direction: column !important;
   overflow: hidden !important;
-  margin-left: 250px !important;
 }
 
 .modal-header {
@@ -1322,7 +1299,6 @@
   .modal-content {
     max-width: 95vw !important;
     max-height: 95vh !important;
-    margin-left: 0 !important;
   }
   
   .details-grid {

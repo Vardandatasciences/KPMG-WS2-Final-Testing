@@ -78,6 +78,10 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
             '/api/departments/',
             '/api/rbac/roles/',
             '/api/policy-categories/',
+            '/api/user-role/',  # User role endpoint
+            '/api/framework-explorer/',  # Framework explorer endpoint
+            '/api/users-for-reviewer-selection/',  # Users for reviewer selection
+            '/api/entities/',  # Entities endpoint
             '/api/frameworks/',
             '/api/frameworks/rejected/',
             '/api/frameworks/approved-active/',  # Skip authentication for approved frameworks (home page)

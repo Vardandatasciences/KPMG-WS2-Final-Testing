@@ -590,6 +590,16 @@ export default {
         return;
       }
 
+      // For AI audits, don't allow editing - they are done by AI
+      const isAIAudit = (audit.auditType || '').toString().toUpperCase() === 'A' || 
+                        (audit.auditType || '').toString().toUpperCase() === 'AI';
+      
+      if (isAIAudit) {
+        // AI audits cannot be edited - redirect to AI audit document upload page instead
+        this.$router.push(`/ai-audit/${audit.audit_id}/upload`);
+        return;
+      }
+      
       // Navigate to TaskView for Edit Audit
       if (audit.status === 'Work In Progress') {
         this.$router.push(`/audit/${audit.audit_id}/tasks`);
@@ -972,6 +982,16 @@ export default {
     },
     
     onStatusButtonClick(row) {
+      // For AI audits, don't allow editing - they are done by AI
+      const isAIAudit = (row.auditType || '').toString().toUpperCase() === 'A' || 
+                        (row.auditType || '').toString().toUpperCase() === 'AI';
+      
+      if (isAIAudit) {
+        // AI audits cannot be edited - just show message or navigate to view
+        this.$popup?.info('AI audits are processed automatically. Please use the AI Audit Document Upload page to manage documents.');
+        return;
+      }
+      
       const idx = this.audits.findIndex(a => a.audit_id === row.audit_id);
       if (row.status === 'Yet to Start') {
         this.startAudit(idx);

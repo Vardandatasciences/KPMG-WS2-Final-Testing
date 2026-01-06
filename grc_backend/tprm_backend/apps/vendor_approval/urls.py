@@ -11,10 +11,7 @@ urlpatterns = [
     path('users/add-dummy/', views.add_dummy_users, name='add_dummy_users'),
     
     # Questionnaire management
-    # IMPORTANT: questionnaires/active/ must come BEFORE questionnaires/<int:questionnaire_id>/questions/
-    # to avoid matching "active" as a questionnaire_id
     path('questionnaires/active/', views.get_active_questionnaires, name='get_active_questionnaires'),
-    path('questionnaires/active', views.get_active_questionnaires, name='get_active_questionnaires_no_slash'),  # Support both with and without trailing slash
     path('questionnaire-assignments/submitted/', views.get_submitted_questionnaire_assignments, name='get_submitted_questionnaire_assignments'),
     path('reviewer-scores/save/', views.save_reviewer_scores, name='save_reviewer_scores'),
     path('stage-draft/save/', views.save_stage_draft, name='save_stage_draft'),

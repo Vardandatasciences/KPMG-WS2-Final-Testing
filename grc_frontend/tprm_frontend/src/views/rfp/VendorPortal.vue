@@ -73,6 +73,29 @@
         </div>
       </div>
 
+      <!-- Preview Mode Banner -->
+      <div
+        v-if="previewMode"
+        class="mt-6 mb-6 flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-blue-900"
+      >
+        <AlertCircle class="h-5 w-5 text-blue-600 mt-0.5" />
+        <div>
+          <p class="text-sm font-semibold">Vendor Preview Mode</p>
+          <p class="text-xs text-blue-800">
+            This read-only view mirrors the vendor portal experience. Uploads and submissions are disabled.
+          </p>
+        </div>
+        <button
+          v-if="props.previewPayload"
+          type="button"
+          class="ml-auto inline-flex items-center rounded-md border border-blue-200 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50"
+          @click="emit('exit-preview')"
+        >
+          <Icons name="arrow-left" class="mr-1 h-3.5 w-3.5" />
+          Back to Builder
+        </button>
+      </div>
+
       <!-- Custom Fields for Team Section -->
       <div v-if="categoryCustomFieldPanelOpen.team" class="mt-6 border border-blue-200 rounded-lg p-5 space-y-4">
         <div class="flex items-center justify-between flex-wrap gap-2">
@@ -2419,6 +2442,7 @@
         ← Previous: Documents
       </button>
       <button
+        v-if="!isPreviewReadonly"
         type="button"
         @click="handleAutoSave"
         class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -2431,7 +2455,7 @@
     </div><!-- End tab-content -->
 
     <!-- Submission Actions (Always Visible) -->
-    <div class="bg-white border border-gray-200 rounded-lg shadow-sm">
+    <div v-if="!isPreviewReadonly" class="bg-white border border-gray-200 rounded-lg shadow-sm">
       <div class="p-6">
         <!-- Success Banner -->
         <div v-if="submissionStatus === 'SUBMITTED'" class="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
@@ -2455,10 +2479,22 @@
             </p>
           </div>
           <div class="flex gap-2">
-            <button type="button" @click="handleAutoSave" class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+            <button
+              type="button"
+              @click="loadSampleProposal"
+              class="inline-flex items-center px-4 py-2 border border-indigo-200 shadow-sm text-sm font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              <Icons name="wand-2" class="h-4 w-4 mr-2" />
+              Load Sample Proposal
+            </button>
+            <button
+              type="button"
+              @click="handleAutoSave"
+              class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
               <Save class="h-4 w-4 mr-2" />
-                Save Draft
-              </button>
+              Save Draft
+            </button>
             <button 
               type="button"
               @click="handleSubmit"
@@ -2477,7 +2513,7 @@
             <div v-if="overallProgress < 50" class="text-sm text-gray-500 mt-2">
               Complete at least 50% of all sections to enable submission (currently {{ overallProgress }}%)
             </div>
-            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -2891,6 +2927,15 @@ import axios from 'axios'
 // Toast notification
 const { success: showSuccessToast, error: showErrorToast, warning: showWarningToast } = useToast()
 
+const props = defineProps({
+  previewPayload: {
+    type: Object,
+    default: null
+  }
+})
+
+const emit = defineEmits(['exit-preview'])
+
 // Authentication
 const { getAuthHeaders } = useRfpApi()
 
@@ -2923,11 +2968,16 @@ const parseJsonResponse = async (response, fallbackMessage = 'Unexpected server 
   throw new Error(text || fallbackMessage)
 }
 
+const VENDOR_PREVIEW_STORAGE_KEY = 'vendor_portal_preview_payload'
+
 // Loading states
 const { showSuccess, showError, showWarning, showInfo } = useNotifications()
 
 const isLoading = ref(false)
 const isSubmitting = ref(false)
+const previewMode = ref(false)
+const previewPayload = ref(null)
+const appliedStandaloneClasses = ref(false)
 
 // Right panel local toggle
 const rightPanelTab = ref('details')
@@ -2989,7 +3039,7 @@ const isTabCompleted = (tabId) => {
 // Test mode detection
 const isTestMode = computed(() => {
   const currentRoute = window.location.pathname
-  return currentRoute === '/test-vendor-portal'
+  return !previewMode.value && currentRoute === '/test-vendor-portal'
 })
 
 // RFP information
@@ -3662,6 +3712,184 @@ const hiddenCategoryFields = ref({
   responses: {}
 }) // { category: { fieldId: true } }
 
+const hiddenCustomFields = ref(new Set())
+
+const isPreviewReadonly = computed(() => previewMode.value)
+
+// Load realistic sample vendor proposal data (for testing/demo)
+const loadSampleProposal = () => {
+  // Prevent loading into read-only preview
+  if (isPreviewReadonly.value) {
+    return
+  }
+
+  ensureReactiveData()
+
+  // Company & contact info
+  formData.value.companyName = 'Acme Cloud Security Ltd.'
+  formData.value.legalName = 'Acme Cloud Security Limited'
+  formData.value.businessType = 'Private'
+  formData.value.industrySector = 'Cybersecurity & Cloud Services'
+
+  formData.value.contactName = 'Jordan Patel'
+  formData.value.contactTitle = 'Director, Strategic Accounts'
+  formData.value.email = 'jordan.patel@acmecloudsec.com'
+  formData.value.phone = '+1 (415) 555-0198'
+
+  formData.value.website = 'https://www.acmecloudsec.com'
+  formData.value.taxId = '98-7654321'
+  formData.value.dunsNumber = '123-456-789'
+  formData.value.incorporationDate = '2014-06-12'
+
+  formData.value.employeeCount = '320'
+  formData.value.annualRevenue = '78000000'
+  formData.value.headquartersAddress = '600 Market Street, Suite 2100, San Francisco, CA 94104, USA'
+  formData.value.headquartersCountry = 'United States'
+  formData.value.yearsInBusiness = '11'
+  formData.value.companyDescription =
+    'Acme Cloud Security is a specialist provider of cloud security, threat detection, and compliance automation for regulated industries including financial services and healthcare.'
+
+  // Financials
+  formData.value.proposedValue = '680000'
+  formData.value.currency = 'USD'
+  formData.value.pricingBreakdown =
+    'Year 1: $320,000 (implementation & onboarding)\nYears 2–3: $180,000 annually (subscription, support, and managed services).'
+  formData.value.paymentTerms = 'Net 45 days from invoice date.'
+  formData.value.projectDuration = '36 months (12-month rollout + 24-month optimization)'
+  formData.value.creditRating = 'Low credit risk – no material adverse events in the last 5 years.'
+  formData.value.insuranceCoverage =
+    'Professional liability: $5M per claim / $10M aggregate; Cyber liability: $5M aggregate; General liability: $2M aggregate.'
+
+  // Team & delivery
+  formData.value.totalTeamSize = '18'
+  formData.value.teamStructure =
+    '1 Engagement Partner, 1 Program Manager, 3 Solution Architects, 6 Security Engineers, 3 Data Engineers, 4 Support Analysts.'
+  formData.value.projectMethodology =
+    'Hybrid Agile with 3-week sprints, clear exit criteria per phase, and joint governance with your internal PMO.'
+  formData.value.communicationPlan =
+    'Weekly steering committee, bi-weekly sprint reviews, and 24x7 incident escalation via dedicated support channel.'
+
+  // Compliance & certifications
+  formData.value.iso9001 = true
+  formData.value.iso27001 = true
+  formData.value.iso14001 = false
+  formData.value.soc2 = true
+  formData.value.pciDss = true
+  formData.value.hippa = true
+  formData.value.dataSecurityMeasures =
+    'Zero-trust network architecture, just-in-time privileged access, customer data encryption at rest (AES-256) and in transit (TLS 1.2+), and quarterly red-team exercises.'
+  formData.value.complianceStandards =
+    'SOC 2 Type II (renewed annually), ISO 27001, PCI DSS Level 1 service provider, HIPAA BA compliance.'
+  formData.value.professionalLiability = '$10M aggregate coverage through A-rated carrier.'
+  formData.value.generalLiability = '$2M per occurrence / $4M aggregate.'
+
+  // Customer references
+  formData.value.references = [
+    {
+      companyName: 'Northbridge Bank',
+      contactPerson: 'Amelia Chen, VP Technology Risk',
+      email: 'amelia.chen@northbridgebank.com',
+      phone: '+1 (212) 555-0142',
+      projectDescription:
+        'Cloud security posture management and regulatory reporting across AWS and Azure, covering 1,800+ workloads.'
+    },
+    {
+      companyName: 'EuroSure Insurance Group',
+      contactPerson: 'Marc Dubois, Group CISO',
+      email: 'marc.dubois@eurosure.com',
+      phone: '+33 1 44 55 66 77',
+      projectDescription:
+        'Multi-region rollout of continuous compliance monitoring for Solvency II and GDPR across three data centers and two cloud providers.'
+    }
+  ]
+
+  // Key personnel
+  keyPersonnel.value = [
+    {
+      name: 'Priya Nair',
+      role: 'Engagement Partner',
+      email: 'priya.nair@acmecloudsec.com',
+      phone: '+1 (415) 555-0112',
+      experience: '16 years in cloud security and regulatory programs for global banks.',
+      education: 'M.Sc. Information Security, Carnegie Mellon University',
+      relevantExperience:
+        'Led multi-year cloud security transformations for two top-10 global banks and a Tier-1 insurer.',
+      certifications: ['CISSP', 'CCSP', 'CISM']
+    },
+    {
+      name: 'Daniel Martinez',
+      role: 'Program Manager',
+      email: 'daniel.martinez@acmecloudsec.com',
+      phone: '+1 (415) 555-0134',
+      experience: '12 years managing large-scale technology programs across North America and Europe.',
+      education: 'MBA, University of Texas at Austin',
+      relevantExperience:
+        'Delivered 25+ cross-border programs with distributed teams and complex stakeholder landscapes.',
+      certifications: ['PMP', 'SAFe Agilist']
+    }
+  ]
+
+  // Sample responses for each evaluation criterion (if criteria loaded)
+  if (Array.isArray(evaluationCriteria.value) && evaluationCriteria.value.length > 0) {
+    evaluationCriteria.value.forEach((criterion) => {
+      const id = criterion.id || criterion.criteria_id || criterion.name
+      if (!id) return
+
+      let html = ''
+      const name = (criterion.name || criterion.title || '').toLowerCase()
+
+      if (name.includes('technical')) {
+        html =
+          '<p>Our platform is built on a microservices architecture with full support for AWS, Azure, and GCP. We provide 400+ out-of-the-box policies, real-time drift detection, and integration with your SIEM and ticketing tools.</p>'
+      } else if (name.includes('risk') || name.includes('compliance')) {
+        html =
+          '<p>We maintain SOC 2 Type II and ISO 27001, and provide pre-built control mappings for FFIEC, EBA, and GDPR. Evidence collection is automated with exportable regulator-ready reports.</p>'
+      } else if (name.includes('cost') || name.includes('price') || name.includes('commercial')) {
+        html =
+          '<p>Our pricing model is transparent and based on active assets under management. We include training, knowledge transfer, and quarterly optimization reviews at no additional cost.</p>'
+      } else if (name.includes('experience') || name.includes('references')) {
+        html =
+          '<p>We have successfully delivered similar programs for 15+ financial institutions across the US, UK, and EU, with an average CSAT of 4.8/5 over the last 3 years.</p>'
+      } else {
+        html =
+          '<p>We propose a phased, outcome-driven approach with clear milestones, shared KPIs, and joint governance to ensure successful delivery.</p>'
+      }
+
+      responses.value[id] = {
+        htmlContent: html,
+        attachments: []
+      }
+    })
+  }
+
+  // Example uploaded document metadata (no real files attached)
+  uploadedDocuments.value = [
+    {
+      name: 'Technical Proposal',
+      fileName: 'Acme_Cloud_Security_Technical_Proposal.pdf',
+      fileSize: 2.1 * 1024 * 1024,
+      fileType: 'pdf',
+      uploaded: true,
+      s3Id: null,
+      url: null
+    },
+    {
+      name: 'Commercials & Pricing',
+      fileName: 'Acme_Cloud_Security_Commercials.xlsx',
+      fileSize: 420 * 1024,
+      fileType: 'xlsx',
+      uploaded: true,
+      s3Id: null,
+      url: null
+    }
+  ]
+
+  // Recalculate progress
+  updateCompletionStatus()
+
+  showSuccessToast('Sample proposal loaded', 'Realistic example proposal data has been loaded into the form.')
+}
+
 // Function to hide a dynamic field (both RFP-defined and custom)
 const hideDynamicField = (fieldKey, fieldIndex = null) => {
   hiddenDynamicFields.value[fieldKey] = true
@@ -3839,6 +4067,9 @@ const buildDynamicUrl = () => {
 
 // Update URL as form is filled
 const updateUrl = () => {
+  if (previewMode.value) {
+    return
+  }
   if (invitationData.value.isOpenRfp) {
     const newUrl = buildDynamicUrl()
     if (newUrl !== window.location.href) {
@@ -4052,6 +4283,10 @@ const ensureReactiveData = () => {
         compliance: 0
       }
     }
+
+    if (!(hiddenCustomFields.value instanceof Set)) {
+      hiddenCustomFields.value = new Set()
+    }
     
     // Ensure invitationData is always an object
     if (typeof invitationData.value !== 'object' || invitationData.value === null) {
@@ -4241,6 +4476,102 @@ const resolveRfpDocumentTabs = async () => {
   }
 }
 
+const applyPreviewPayload = async (payload) => {
+  if (!payload) return
+  previewMode.value = true
+  previewPayload.value = payload
+
+  if (payload.rfpInfo) {
+    rfpInfo.value = {
+      ...rfpInfo.value,
+      ...payload.rfpInfo
+    }
+  }
+
+  if (payload.timeline?.deadline) {
+    rfpInfo.value.deadline = payload.timeline.deadline
+  }
+
+  if (Array.isArray(payload.evaluationCriteria)) {
+    evaluationCriteria.value = payload.evaluationCriteria.map((criterion, index) => ({
+      id: criterion.id || `preview-criteria-${index}`,
+      title: criterion.title || criterion.name || `Criterion ${index + 1}`,
+      description: criterion.description || '',
+      weight: Number(criterion.weight) || 0,
+      required: Boolean(criterion.required),
+      type: criterion.type || 'text'
+    }))
+    evaluationCriteria.value.forEach(criterion => {
+      setCriteriaResponse(criterion.id, createEmptyResponseEntry())
+    })
+  } else {
+    evaluationCriteria.value = []
+  }
+
+  if (Array.isArray(payload.dynamicResponseFields)) {
+    dynamicResponseFields.value = payload.dynamicResponseFields
+  }
+
+  if (payload.categoryCustomFields) {
+    const categories = ['company', 'financial', 'compliance', 'documents', 'team', 'responses']
+    const nextFields = { ...categoryCustomFields.value }
+    categories.forEach(category => {
+      nextFields[category] = payload.categoryCustomFields[category] || []
+    })
+    categoryCustomFields.value = nextFields
+  }
+
+  if (payload.categoryCustomFieldData) {
+    const categories = ['company', 'financial', 'compliance', 'documents', 'team', 'responses']
+    const nextData = { ...categoryCustomFieldData.value }
+    categories.forEach(category => {
+      nextData[category] = payload.categoryCustomFieldData[category] || {}
+    })
+    categoryCustomFieldData.value = nextData
+  }
+
+  if (payload.hiddenFields) {
+    hiddenFields.value = {
+      ...hiddenFields.value,
+      ...payload.hiddenFields
+    }
+  }
+
+  if (Array.isArray(payload.hiddenCustomFields)) {
+    hiddenCustomFields.value = new Set(payload.hiddenCustomFields)
+  }
+
+  if (Array.isArray(payload.documents)) {
+    rfpDocuments.value = payload.documents
+    await resolveRfpDocumentTabs()
+  } else {
+    rfpDocuments.value = []
+    rfpDocTabs.value = []
+  }
+}
+
+const loadPreviewData = async () => {
+  isLoading.value = true
+  try {
+    const payloadRaw = localStorage.getItem(VENDOR_PREVIEW_STORAGE_KEY)
+    if (!payloadRaw) {
+      showError('Preview Unavailable', 'Preview data not found. Please reopen the preview from the RFP builder.')
+      showErrorToast('Preview data missing. Close this tab and try again.')
+      return
+    }
+
+    const payload = JSON.parse(payloadRaw)
+    await applyPreviewPayload(payload)
+    showInfo('Preview Mode', 'You are viewing the vendor portal preview. Actions are read-only in this mode.')
+  } catch (error) {
+    console.error('Error loading preview data:', error)
+    showError('Preview Error', 'Unable to load preview data. Please reopen the preview from the RFP builder.')
+    showErrorToast('Unable to load preview data.')
+  } finally {
+    isLoading.value = false
+  }
+}
+
 // Document upload methods
 const handleDocumentUpload = async (documentType, file) => {
   try {
@@ -4386,18 +4717,19 @@ const uploadResponseAttachment = async (criteriaId, file, options = {}) => {
     const attachmentFormData = new FormData()
     attachmentFormData.append('file', file)
     attachmentFormData.append('criteriaId', String(criteriaId))
- 
-    if (invitationData.value.rfpId) {
-      attachmentFormData.append('rfpId', invitationData.value.rfpId)
-    }
+    
+    // rfpId is required - we already checked it exists above
+    attachmentFormData.append('rfpId', String(invitationData.value.rfpId))
+    
     if (invitationData.value.vendorId) {
-      attachmentFormData.append('vendorId', invitationData.value.vendorId)
+      attachmentFormData.append('vendorId', String(invitationData.value.vendorId))
     }
     if (invitationData.value.invitationId) {
-      attachmentFormData.append('invitationId', invitationData.value.invitationId)
+      attachmentFormData.append('invitationId', String(invitationData.value.invitationId))
     }
  
-    const storedResponseId = localStorage.getItem('rfp_response_id')
+    // Try to get response ID from scoped localStorage first, then fallback to unscoped for backward compatibility
+    const storedResponseId = localStorage.getItem(getStorageKey('rfp_response_id')) || localStorage.getItem('rfp_response_id')
     if (storedResponseId) {
       attachmentFormData.append('responseId', storedResponseId)
     }
@@ -4422,7 +4754,7 @@ const uploadResponseAttachment = async (criteriaId, file, options = {}) => {
     }
  
     if (data.attachment?.responseId) {
-      localStorage.setItem('rfp_response_id', data.attachment.responseId)
+      localStorage.setItem(getStorageKey('rfp_response_id'), data.attachment.responseId)
     }
  
     if (data.attachment) {
@@ -5542,7 +5874,8 @@ const overallProgress = computed(() => {
 })
 
 // API base URL
-const API_BASE_URL = 'http://localhost:8000/api/tprm/rfp'
+import { getTprmApiV1BaseUrl } from '@/utils/backendEnv'
+const API_BASE_URL = getTprmApiV1BaseUrl()
 
 // Watch for form data changes and update completion status
 watch(formData, () => {
@@ -5563,6 +5896,17 @@ watch(keyPersonnel, () => {
 watch(uploadedDocuments, () => {
   updateCompletionStatus()
 }, { deep: true })
+
+watch(() => props.previewPayload, async (newPayload) => {
+  if (!newPayload) return
+  isLoading.value = true
+  try {
+    await applyPreviewPayload(newPayload)
+    updateCompletionStatus()
+  } finally {
+    isLoading.value = false
+  }
+}, { immediate: false })
 
 // Watch for right panel tab changes to resolve documents when needed
 watch(rightPanelTab, async (newTab) => {
@@ -5610,8 +5954,42 @@ const extractUTMParameters = () => {
 }
 
 const parseQueryParameters = () => {
+  if (props.previewPayload) {
+    previewMode.value = true
+    invitationData.value = {
+      rfpId: null,
+      vendorId: null,
+      invitationId: 'preview',
+      org: '',
+      vendorName: '',
+      contactEmail: '',
+      contactPhone: '',
+      isOpenRfp: false
+    }
+    utmParameters.value = {}
+    return
+  }
+
   const params = new URLSearchParams(window.location.search)
   const pathParts = window.location.pathname.split('/').filter(part => part)
+
+  const isPreviewQuery = params.get('preview') === 'true' || params.get('mode') === 'preview'
+  const isPreviewPath = pathParts.includes('preview') || pathParts.includes('vendor-preview')
+  if (isPreviewQuery || isPreviewPath) {
+    previewMode.value = true
+    invitationData.value = {
+      rfpId: null,
+      vendorId: null,
+      invitationId: 'preview',
+      org: '',
+      vendorName: '',
+      contactEmail: '',
+      contactPhone: '',
+      isOpenRfp: false
+    }
+    console.log('🕶️ Vendor Portal initialized in preview mode')
+    return
+  }
   
   // New parameter format
   let rfpId = params.get('rfpId') || ""
@@ -5799,45 +6177,6 @@ const fetchInvitationDetails = async () => {
         } else {
           console.log('⚠️ No documents field found in open RFP response')
         }
-        
-        // Extract evaluation criteria from RFP details if present
-        console.log('🔍 [fetchInvitationDetails] Checking for evaluation_criteria in RFP data...')
-        console.log('🔍 [fetchInvitationDetails] RFP data keys:', Object.keys(data.rfp || {}))
-        console.log('🔍 [fetchInvitationDetails] Has evaluation_criteria:', !!data.rfp.evaluation_criteria)
-        console.log('🔍 [fetchInvitationDetails] evaluation_criteria type:', typeof data.rfp.evaluation_criteria)
-        console.log('🔍 [fetchInvitationDetails] evaluation_criteria value:', data.rfp.evaluation_criteria)
-        
-        if (data.rfp.evaluation_criteria && Array.isArray(data.rfp.evaluation_criteria) && data.rfp.evaluation_criteria.length > 0) {
-          console.log('✅ [fetchInvitationDetails] Found evaluation criteria in RFP details:', data.rfp.evaluation_criteria.length, 'criteria')
-          evaluationCriteria.value = data.rfp.evaluation_criteria.map(criterion => ({
-            id: criterion.criteria_id,
-            title: criterion.criteria_name,
-            weight: criterion.weight_percentage,
-            description: criterion.criteria_description,
-            type: criterion.evaluation_type === 'narrative' ? 'narrative' : 'text',
-            required: criterion.is_mandatory
-          }))
-          console.log('✅ Loaded evaluation criteria from RFP details:', evaluationCriteria.value.length, 'criteria')
-          console.log('✅ Criteria IDs:', evaluationCriteria.value.map(c => c.id))
-          
-          // Initialize responses for each criterion
-          evaluationCriteria.value.forEach(criterion => {
-            const existing = responses.value?.[criterion.id]
-            setCriteriaResponse(criterion.id, existing || createEmptyResponseEntry())
-          })
-          
-          // Update completion status
-          updateCompletionStatus()
-        } else {
-          console.warn('⚠️ No evaluation criteria found in RFP details')
-          console.warn('⚠️ RFP data structure:', {
-            has_evaluation_criteria: !!data.rfp.evaluation_criteria,
-            evaluation_criteria_type: typeof data.rfp.evaluation_criteria,
-            evaluation_criteria_value: data.rfp.evaluation_criteria,
-            is_array: Array.isArray(data.rfp.evaluation_criteria),
-            length: Array.isArray(data.rfp.evaluation_criteria) ? data.rfp.evaluation_criteria.length : 'N/A'
-          })
-        }
       } else {
         throw new Error(data?.error || 'Failed to load RFP details')
       }
@@ -5940,45 +6279,6 @@ const fetchInvitationDetails = async () => {
           })
         } else {
           console.log('⚠️ [fetchInvitationDetails] No response_fields found in RFP data')
-        }
-        
-        // Extract evaluation criteria from RFP details if present
-        console.log('🔍 [fetchInvitationDetails] Checking for evaluation_criteria in RFP data (invited RFP)...')
-        console.log('🔍 [fetchInvitationDetails] RFP keys:', Object.keys(rfp || {}))
-        console.log('🔍 [fetchInvitationDetails] Has evaluation_criteria:', !!rfp.evaluation_criteria)
-        console.log('🔍 [fetchInvitationDetails] evaluation_criteria type:', typeof rfp.evaluation_criteria)
-        console.log('🔍 [fetchInvitationDetails] evaluation_criteria value:', rfp.evaluation_criteria)
-        
-        if (rfp.evaluation_criteria && Array.isArray(rfp.evaluation_criteria) && rfp.evaluation_criteria.length > 0) {
-          console.log('✅ [fetchInvitationDetails] Found evaluation criteria in RFP details:', rfp.evaluation_criteria.length, 'criteria')
-          evaluationCriteria.value = rfp.evaluation_criteria.map(criterion => ({
-            id: criterion.criteria_id,
-            title: criterion.criteria_name,
-            weight: criterion.weight_percentage,
-            description: criterion.criteria_description,
-            type: criterion.evaluation_type === 'narrative' ? 'narrative' : 'text',
-            required: criterion.is_mandatory
-          }))
-          console.log('✅ Loaded evaluation criteria from RFP details:', evaluationCriteria.value.length, 'criteria')
-          console.log('✅ Criteria IDs:', evaluationCriteria.value.map(c => c.id))
-          
-          // Initialize responses for each criterion
-          evaluationCriteria.value.forEach(criterion => {
-            const existing = responses.value?.[criterion.id]
-            setCriteriaResponse(criterion.id, existing || createEmptyResponseEntry())
-          })
-          
-          // Update completion status
-          updateCompletionStatus()
-        } else {
-          console.warn('⚠️ No evaluation criteria found in RFP details (invited RFP)')
-          console.warn('⚠️ RFP data structure:', {
-            has_evaluation_criteria: !!rfp.evaluation_criteria,
-            evaluation_criteria_type: typeof rfp.evaluation_criteria,
-            evaluation_criteria_value: rfp.evaluation_criteria,
-            is_array: Array.isArray(rfp.evaluation_criteria),
-            length: Array.isArray(rfp.evaluation_criteria) ? rfp.evaluation_criteria.length : 'N/A'
-          })
         }
         
         // Update form data with vendor details - prefill all available fields
@@ -6183,86 +6483,10 @@ const loadExistingResponse = async () => {
 }
 
 const fetchEvaluationCriteria = async () => {
-  // Skip if criteria are already loaded (they should be loaded from RFP details)
-  if (evaluationCriteria.value && Array.isArray(evaluationCriteria.value) && evaluationCriteria.value.length > 0) {
-    console.log('✅ Evaluation criteria already loaded, skipping separate fetch')
-    return
-  }
-  
-  console.log('📋 Starting separate fetch for evaluation criteria...')
-  
-  // Try to get RFP ID first (preferred method - uses new endpoint)
-  const rfpId = invitationData.value?.rfpId
-  
-  // If we have rfpId, use the new endpoint that accepts rfp_id
-  if (rfpId) {
-    console.log('📋 Fetching evaluation criteria for RFP ID:', rfpId)
-    console.log('📋 API URL:', `${API_BASE_URL}/rfp/${rfpId}/evaluation-criteria/`)
-    
-    try {
-      // API_BASE_URL already ends with /rfp, so we use rfp/ to match the URL pattern
-      const response = await fetch(`${API_BASE_URL}/rfp/${rfpId}/evaluation-criteria/`, {
-        headers: getAuthHeaders()
-      })
-      
-      if (!response.ok) {
-        console.error('❌ Failed to fetch evaluation criteria:', response.status, response.statusText)
-        const errorText = await response.text()
-        console.error('Error response:', errorText)
-        // Don't set empty array, keep existing criteria if any
-        return
-      }
-      
-      const data = await response.json()
-      console.log('📥 Evaluation criteria response:', data)
-      
-      if (data.success && data.criteria && Array.isArray(data.criteria) && data.criteria.length > 0) {
-        // Update evaluation criteria with real data
-        evaluationCriteria.value = data.criteria.map(criterion => ({
-          id: criterion.criteria_id,
-          title: criterion.criteria_name,
-          weight: criterion.weight_percentage,
-          description: criterion.criteria_description,
-          type: criterion.evaluation_type === 'narrative' ? 'narrative' : 'text',
-          required: criterion.is_mandatory
-        }))
-        
-        console.log('✅ Loaded evaluation criteria:', evaluationCriteria.value.length, 'criteria')
-        
-        // Initialize responses for each criterion
-        evaluationCriteria.value.forEach(criterion => {
-          const existing = responses.value?.[criterion.id]
-          setCriteriaResponse(criterion.id, existing || createEmptyResponseEntry())
-        })
-        
-        // Update completion status
-        updateCompletionStatus()
-      } else {
-        console.warn('⚠️ No criteria found in response or invalid format:', data)
-        // Don't set empty array if we have existing criteria
-        if (!evaluationCriteria.value || evaluationCriteria.value.length === 0) {
-          evaluationCriteria.value = []
-        }
-      }
-    } catch (error) {
-      // Handle connection errors gracefully
-      if (error.message && (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_REFUSED'))) {
-        console.warn('⚠️ Server connection error - criteria should be loaded from RFP details instead')
-        console.warn('⚠️ If criteria are not showing, check that the RFP details response includes evaluation_criteria')
-      } else {
-        console.error('❌ Error fetching evaluation criteria:', error)
-      }
-      // Don't set empty array, keep existing criteria if any
-      if (!evaluationCriteria.value || evaluationCriteria.value.length === 0) {
-        evaluationCriteria.value = []
-      }
-    }
-    return
-  }
-  
-  // Fallback: Try to get RFP number if rfpId is not available
+  // Try to get RFP number from rfpInfo first
   let rfpNumber = rfpInfo.value?.rfpNumber
   
+  // If not available, try to get it from invitationData
   if (!rfpNumber && invitationData.value?.rfpId) {
     console.log('⚠️ RFP number not in rfpInfo, will try to fetch from RFP ID:', invitationData.value.rfpId)
     // We'll fetch the RFP details to get the number
@@ -6296,7 +6520,6 @@ const fetchEvaluationCriteria = async () => {
   console.log('📋 Fetching evaluation criteria for RFP:', rfpNumber)
   
   try {
-    // Note: API_BASE_URL already ends with /rfp, so we use rfp/ not /rfp/
     const response = await fetch(`${API_BASE_URL}/rfp/${rfpNumber}/evaluation-criteria/`, {
       headers: getAuthHeaders()
     })
@@ -6328,6 +6551,7 @@ const fetchEvaluationCriteria = async () => {
       evaluationCriteria.value.forEach(criterion => {
         const existing = responses.value?.[criterion.id]
         setCriteriaResponse(criterion.id, existing || createEmptyResponseEntry())
+
       })
       
       // Update completion status
@@ -6340,6 +6564,29 @@ const fetchEvaluationCriteria = async () => {
     console.error('❌ Error fetching evaluation criteria:', error)
     evaluationCriteria.value = []
   }
+}
+
+// Helper functions for scoped localStorage keys (scoped to RFP/vendor combination)
+const getStorageKey = (key) => {
+  const rfpId = invitationData.value.rfpId
+  const vendorId = invitationData.value.vendorId || invitationData.value.invitationId
+  if (!rfpId || !vendorId) {
+    // Return unscoped key if we don't have IDs yet (shouldn't happen, but safe fallback)
+    return key
+  }
+  return `${key}_${rfpId}_${vendorId}`
+}
+
+const clearSubmissionStorage = () => {
+  // Clear both scoped and unscoped keys for safety
+  const keys = ['rfp_submission_status', 'rfp_submitted_at', 'rfp_response_id']
+  keys.forEach(key => {
+    // Clear scoped key
+    const scopedKey = getStorageKey(key)
+    localStorage.removeItem(scopedKey)
+    // Also clear unscoped key (for backward compatibility cleanup)
+    localStorage.removeItem(key)
+  })
 }
 
 // Check submission status from backend
@@ -6381,23 +6628,25 @@ const checkSubmissionStatusFromBackend = async () => {
       submissionStatus.value = 'SUBMITTED'
       submittedAt.value = data.submitted_at || new Date().toISOString()
       
-      // Update localStorage with backend data
-      localStorage.setItem('rfp_submission_status', 'SUBMITTED')
-      localStorage.setItem('rfp_submitted_at', submittedAt.value)
-      localStorage.setItem('rfp_response_id', data.response_id)
+      // Update localStorage with backend data (scoped to current RFP/vendor)
+      localStorage.setItem(getStorageKey('rfp_submission_status'), 'SUBMITTED')
+      localStorage.setItem(getStorageKey('rfp_submitted_at'), submittedAt.value)
+      localStorage.setItem(getStorageKey('rfp_response_id'), data.response_id)
     } else if (data.success && data.response_id && data.is_draft) {
       console.log('📝 Found existing draft in database:', data)
       // Don't set as submitted, but keep the response_id for potential updates
-      localStorage.setItem('rfp_response_id', data.response_id)
+      localStorage.setItem(getStorageKey('rfp_response_id'), data.response_id)
       // Clear submission status to allow new submission
-      localStorage.removeItem('rfp_submission_status')
-      localStorage.removeItem('rfp_submitted_at')
+      localStorage.removeItem(getStorageKey('rfp_submission_status'))
+      localStorage.removeItem(getStorageKey('rfp_submitted_at'))
+      // Ensure status is not SUBMITTED
+      submissionStatus.value = 'DRAFT'
     } else {
       console.log('ℹ️ No valid existing submission found in database')
-      // Clear any stale localStorage data
-      localStorage.removeItem('rfp_submission_status')
-      localStorage.removeItem('rfp_submitted_at')
-      localStorage.removeItem('rfp_response_id')
+      // Clear any stale localStorage data for this RFP/vendor
+      clearSubmissionStorage()
+      // Ensure status is DRAFT
+      submissionStatus.value = 'DRAFT'
     }
   } catch (error) {
     console.error('❌ Error checking submission status:', error)
@@ -6682,7 +6931,7 @@ const loadExistingDraft = async () => {
         lastSavedAt.value = data.draft.last_saved_at
       }
       if (data.draft.response_id) {
-      localStorage.setItem('rfp_response_id', data.draft.response_id)
+        localStorage.setItem(getStorageKey('rfp_response_id'), data.draft.response_id)
       }
  
       
@@ -6939,7 +7188,7 @@ const handleAutoSave = async () => {
       lastSavedAt.value = new Date().toISOString()
       showSuccessToast('Draft saved successfully')
       if (data.response_id) {
-        localStorage.setItem('rfp_response_id', data.response_id)
+        localStorage.setItem(getStorageKey('rfp_response_id'), data.response_id)
       }
     } else {
       console.error('Draft save failed:', data.error)
@@ -7608,10 +7857,10 @@ const handleSubmit = async () => {
       completionStatus.value.compliance = 100
       completionStatus.value.financial = 100
       
-      // Store submission status in localStorage to persist across page reloads
-      localStorage.setItem('rfp_submission_status', 'SUBMITTED')
-      localStorage.setItem('rfp_submitted_at', submittedAt.value)
-      localStorage.setItem('rfp_response_id', data.response_id || '')
+      // Store submission status in localStorage to persist across page reloads (scoped to current RFP/vendor)
+      localStorage.setItem(getStorageKey('rfp_submission_status'), 'SUBMITTED')
+      localStorage.setItem(getStorageKey('rfp_submitted_at'), submittedAt.value)
+      localStorage.setItem(getStorageKey('rfp_response_id'), data.response_id || '')
       
       // Trigger risk analysis after successful submission
       // The backend should trigger it automatically in a background thread, but we'll also trigger it here as a backup
@@ -7743,7 +7992,7 @@ const handleVueError = (error, instance, info) => {
 
 // Initialize component
 onMounted(async () => {
-  if (hasAuthToken()) {
+  if (!props.previewPayload && hasAuthToken()) {
     try {
       await loggingService.logPageView('RFP', 'Vendor Portal')
     } catch (error) {
@@ -7751,11 +8000,13 @@ onMounted(async () => {
     }
   }
   try {
-    // Apply standalone class to body and html
-    document.body.classList.add('standalone-route')
-    document.documentElement.classList.add('standalone-route')
-    document.body.classList.add('vendor-portal')
-    document.documentElement.classList.add('vendor-portal')
+    if (!props.previewPayload) {
+      document.body.classList.add('standalone-route')
+      document.documentElement.classList.add('standalone-route')
+      document.body.classList.add('vendor-portal')
+      document.documentElement.classList.add('vendor-portal')
+      appliedStandaloneClasses.value = true
+    }
     
     // Ensure all reactive data is properly initialized first
     ensureReactiveData()
@@ -7763,72 +8014,77 @@ onMounted(async () => {
     // Parse query parameters first to get RFP and vendor info
     parseQueryParameters()
     
+    if (previewMode.value) {
+      if (props.previewPayload) {
+        isLoading.value = true
+        await applyPreviewPayload(props.previewPayload)
+        isLoading.value = false
+      } else {
+        await loadPreviewData()
+      }
+      updateCompletionStatus()
+      return
+    }
+    
     // Only check for existing submissions if we have valid RFP and vendor IDs
     if (invitationData.value.rfpId && (invitationData.value.vendorId || invitationData.value.invitationId)) {
-      // Check backend for submission status first (more reliable than localStorage)
+      // Clear any old unscoped localStorage keys (legacy cleanup)
+      const oldKeys = ['rfp_submission_status', 'rfp_submitted_at', 'rfp_response_id']
+      oldKeys.forEach(key => {
+        const oldValue = localStorage.getItem(key)
+        if (oldValue) {
+          console.log(`🧹 Cleaning up legacy unscoped localStorage key: ${key}`)
+          localStorage.removeItem(key)
+        }
+      })
+      
+      // Check backend for submission status first (this is the source of truth)
       await checkSubmissionStatusFromBackend()
       
-      // Only check localStorage if backend check didn't find a submission
+      // Only check localStorage if backend check didn't find a submission AND we have scoped keys
+      // This provides a fallback only for the current RFP/vendor combination
       if (submissionStatus.value !== 'SUBMITTED') {
-        const savedSubmissionStatus = localStorage.getItem('rfp_submission_status')
-        const savedSubmittedAt = localStorage.getItem('rfp_submitted_at')
-        const savedResponseId = localStorage.getItem('rfp_response_id')
+        const savedSubmissionStatus = localStorage.getItem(getStorageKey('rfp_submission_status'))
+        const savedSubmittedAt = localStorage.getItem(getStorageKey('rfp_submitted_at'))
+        const savedResponseId = localStorage.getItem(getStorageKey('rfp_response_id'))
         
-        // Only restore from localStorage if we have a valid response ID and it matches current session
-        if (savedSubmissionStatus === 'SUBMITTED' && savedResponseId) {
-          // Double-check that this response ID is valid for current RFP/vendor
-          if (savedResponseId && savedResponseId !== '') {
-            submissionStatus.value = 'SUBMITTED'
-            submittedAt.value = savedSubmittedAt || new Date().toISOString()
-            console.log('📋 Restored submission status from localStorage:', {
-              status: savedSubmissionStatus,
-              submittedAt: savedSubmittedAt,
-              responseId: savedResponseId
-            })
-          } else {
-            // Clear invalid localStorage data
-            localStorage.removeItem('rfp_submission_status')
-            localStorage.removeItem('rfp_submitted_at')
-            localStorage.removeItem('rfp_response_id')
-            console.log('🧹 Cleared invalid localStorage submission data')
+        // Only restore from localStorage if we have a valid response ID and status
+        // Since keys are now scoped, this should only match the current RFP/vendor
+        if (savedSubmissionStatus === 'SUBMITTED' && savedResponseId && savedResponseId !== '') {
+          // Verify one more time with backend before restoring (safety check)
+          console.log('📋 Found submission status in localStorage, verifying with backend...')
+          // The backend check already ran, so if we're here, backend said no submission
+          // This means localStorage is stale - clear it
+          console.log('🧹 Clearing stale localStorage data (backend says no submission)')
+          clearSubmissionStorage()
+          submissionStatus.value = 'DRAFT'
+        } else {
+          // Clear any incomplete or invalid localStorage data
+          if (savedSubmissionStatus === 'SUBMITTED' && !savedResponseId) {
+            console.log('🧹 Clearing invalid localStorage data (status without response ID)')
+            clearSubmissionStorage()
           }
         }
       }
     } else {
       console.log('⚠️ No valid RFP ID or vendor information found, skipping submission status check')
       // Clear any stale localStorage data when no valid IDs are present
-      localStorage.removeItem('rfp_submission_status')
-      localStorage.removeItem('rfp_submitted_at')
-      localStorage.removeItem('rfp_response_id')
+      clearSubmissionStorage()
     }
     
     // Fetch RFP details first (this also loads draft and response data)
     await fetchInvitationDetails()
     
-    // Evaluation criteria should already be loaded from fetchInvitationDetails
-    // Check if criteria were loaded
-    console.log('🔍 [onMounted] Checking evaluation criteria status...')
-    console.log('🔍 [onMounted] evaluationCriteria.value:', evaluationCriteria.value)
-    console.log('🔍 [onMounted] evaluationCriteria.value type:', typeof evaluationCriteria.value)
-    console.log('🔍 [onMounted] evaluationCriteria.value is array:', Array.isArray(evaluationCriteria.value))
-    console.log('🔍 [onMounted] evaluationCriteria.value length:', Array.isArray(evaluationCriteria.value) ? evaluationCriteria.value.length : 'N/A')
+    // Fetch evaluation criteria (needed for responses)
+    // Wait a bit to ensure rfpInfo is populated
+    await new Promise(resolve => setTimeout(resolve, 100))
+    await fetchEvaluationCriteria()
     
-    // Only fetch separately if not already loaded
-    if (!evaluationCriteria.value || !Array.isArray(evaluationCriteria.value) || evaluationCriteria.value.length === 0) {
-      console.log('⚠️ Criteria not loaded from RFP details, attempting separate fetch...')
-      console.log('⚠️ This may fail if server is not running - criteria should be in RFP details response')
-      await new Promise(resolve => setTimeout(resolve, 100))
+    // If criteria still not loaded, try again after a short delay
+    if (!evaluationCriteria.value || evaluationCriteria.value.length === 0) {
+      console.log('⚠️ Criteria not loaded on first attempt, retrying...')
+      await new Promise(resolve => setTimeout(resolve, 500))
       await fetchEvaluationCriteria()
-      
-      // If criteria still not loaded, try again after a short delay
-      if (!evaluationCriteria.value || !Array.isArray(evaluationCriteria.value) || evaluationCriteria.value.length === 0) {
-        console.log('⚠️ Criteria not loaded on first attempt, retrying...')
-        await new Promise(resolve => setTimeout(resolve, 500))
-        await fetchEvaluationCriteria()
-      }
-    } else {
-      console.log('✅ Evaluation criteria already loaded from RFP details, skipping separate fetch')
-      console.log('✅ Criteria count:', evaluationCriteria.value.length)
     }
     
     // Load existing documents
@@ -8220,9 +8476,12 @@ const debugSubmissionStatus = () => {
     isSubmitting: isSubmitting.value,
     showSuccessModal: showSuccessModal.value,
     localStorage: {
-      status: localStorage.getItem('rfp_submission_status'),
-      submittedAt: localStorage.getItem('rfp_submitted_at'),
-      responseId: localStorage.getItem('rfp_response_id')
+      status: localStorage.getItem(getStorageKey('rfp_submission_status')),
+      submittedAt: localStorage.getItem(getStorageKey('rfp_submitted_at')),
+      responseId: localStorage.getItem(getStorageKey('rfp_response_id')),
+      // Also show unscoped keys for debugging
+      unscopedStatus: localStorage.getItem('rfp_submission_status'),
+      unscopedResponseId: localStorage.getItem('rfp_response_id')
     },
     invitationData: {
       rfpId: invitationData.value.rfpId,
@@ -8248,6 +8507,9 @@ const debugInvitationData = () => {
 
 // Clean up when component unmounts
 onUnmounted(() => {
+  if (!appliedStandaloneClasses.value) {
+    return
+  }
   document.body.classList.remove('standalone-route')
   document.documentElement.classList.remove('standalone-route')
   document.body.classList.remove('vendor-portal')

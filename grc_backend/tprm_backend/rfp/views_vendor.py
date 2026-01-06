@@ -22,11 +22,11 @@ from .forms import (
     VendorSearchForm, VendorManualEntryForm, 
     VendorBulkUploadForm, RFPVendorSelectionForm
 )
-from .rfp_authentication import UnifiedJWTAuthentication, SimpleAuthenticatedPermission
+from .rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required
 
 
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def vendor_selection(request, rfp_id):
@@ -137,7 +137,7 @@ def vendor_selection(request, rfp_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('edit_rfp')
 def update_vendor_selection(request, rfp_id):
@@ -173,7 +173,7 @@ def update_vendor_selection(request, rfp_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
 def bulk_select_vendors(request, rfp_id):
@@ -227,7 +227,7 @@ def bulk_select_vendors(request, rfp_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
 def generate_vendor_urls(request, rfp_id):
@@ -249,7 +249,23 @@ def generate_vendor_urls(request, rfp_id):
             # Generate new-style URL with query parameters
             vendor = selection.vendor
             from django.conf import settings
-            base_url = f"{settings.EXTERNAL_BASE_URL}/submit"
+            import re
+            
+            # Get external base URL and ensure it uses localhost (not ngrok)
+            external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
+            
+            # Replace any ngrok URLs with localhost:3000
+            if 'ngrok' in external_base_url.lower():
+                external_base_url = 'http://localhost:3000'
+            
+            # Ensure it's localhost (not 127.0.0.1 or other variations)
+            if not external_base_url.startswith('http://localhost') and not external_base_url.startswith('https://localhost'):
+                # Extract port if present, otherwise use 3000
+                port_match = re.search(r':(\d+)', external_base_url)
+                port = port_match.group(1) if port_match else '3000'
+                external_base_url = f'http://localhost:{port}'
+            
+            base_url = f"{external_base_url}/submit"
             
             # URL encode the parameters
             from urllib.parse import urlencode
@@ -295,7 +311,23 @@ def generate_unmatched_vendor_url(rfp_id, org_name="", vendor_name="", contact_e
     Generate URL for unmatched vendors (not in system)
     """
     from django.conf import settings
-    base_url = f"{settings.EXTERNAL_BASE_URL}/submit"
+    import re
+    
+    # Get external base URL and ensure it uses localhost (not ngrok)
+    external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
+    
+    # Replace any ngrok URLs with localhost:3000
+    if 'ngrok' in external_base_url.lower():
+        external_base_url = 'http://localhost:3000'
+    
+    # Ensure it's localhost (not 127.0.0.1 or other variations)
+    if not external_base_url.startswith('http://localhost') and not external_base_url.startswith('https://localhost'):
+        # Extract port if present, otherwise use 3000
+        port_match = re.search(r':(\d+)', external_base_url)
+        port = port_match.group(1) if port_match else '3000'
+        external_base_url = f'http://localhost:{port}'
+    
+    base_url = f"{external_base_url}/submit"
     from urllib.parse import urlencode
     
     params = {
@@ -318,7 +350,22 @@ def generate_open_rfp_url(rfp_id):
     Generate URL for open/public RFPs
     """
     from django.conf import settings
-    base_url = f"{settings.EXTERNAL_BASE_URL}/submit/open"
+    # Get external base URL and ensure it uses localhost (not ngrok)
+    import re
+    external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
+    
+    # Replace any ngrok URLs with localhost:3000
+    if 'ngrok' in external_base_url.lower():
+        external_base_url = 'http://localhost:3000'
+    
+    # Ensure it's localhost (not 127.0.0.1 or other variations)
+    if not external_base_url.startswith('http://localhost') and not external_base_url.startswith('https://localhost'):
+        # Extract port if present, otherwise use 3000
+        port_match = re.search(r':(\d+)', external_base_url)
+        port = port_match.group(1) if port_match else '3000'
+        external_base_url = f'http://localhost:{port}'
+    
+    base_url = f"{external_base_url}/submit/open"
     from urllib.parse import urlencode
     
     params = {
@@ -328,7 +375,7 @@ def generate_open_rfp_url(rfp_id):
     return f"{base_url}?{urlencode(params)}"
 
 
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def vendor_invitation(request, rfp_id):
@@ -352,7 +399,7 @@ def vendor_invitation(request, rfp_id):
 
 @csrf_exempt
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_unmatched_vendors(request, rfp_id):
@@ -383,7 +430,7 @@ def get_unmatched_vendors(request, rfp_id):
 
 @csrf_exempt
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
 def create_unmatched_vendor(request, rfp_id):
@@ -426,7 +473,7 @@ def create_unmatched_vendor(request, rfp_id):
 
 @csrf_exempt
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_approved_vendors(request, rfp_id):
@@ -529,7 +576,7 @@ def get_approved_vendors(request, rfp_id):
         return JsonResponse({'error': f'Failed to fetch approved vendors: {str(e)}'}, status=500)
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_all_approved_vendors(request):

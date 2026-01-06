@@ -122,6 +122,12 @@
       <CardContent class="p-4 lg:p-6">
         <!-- Audit Data Review -->
         <div v-if="normalizedExtendedInfo" class="space-y-6">
+          <!-- Debug: Show all documents -->
+          <div v-if="normalizedExtendedInfo.documents && Object.keys(normalizedExtendedInfo.documents).length > 0" class="border border-blue-300 rounded-lg p-4 bg-blue-50 text-xs">
+            <p class="font-medium text-blue-800 mb-2">Debug: Documents Structure</p>
+            <pre class="text-xs overflow-auto max-h-40">{{ JSON.stringify(normalizedExtendedInfo.documents, null, 2) }}</pre>
+          </div>
+          
           <!-- Display data for each metric -->
           <div
             v-for="termId in normalizedTermIds"
@@ -142,9 +148,59 @@
                   :key="questionId"
                   class="bg-background p-3 rounded border"
                 >
-                  <div class="text-sm font-medium text-primary mb-1">Question {{ questionId }}:</div>
-                  <div class="text-sm text-foreground bg-green-50 p-2 rounded">
-                    {{ response }}
+                  <div class="text-sm font-medium text-primary mb-1">
+                    {{ getQuestionText(questionId) || `Question ${questionId}` }}
+                  </div>
+                  <div class="text-sm text-foreground bg-green-50 p-2 rounded mb-2">
+                    {{ formatResponse(response, questionId) }}
+                  </div>
+                  <div v-if="getQuestionMultipleChoice(questionId)" class="text-xs text-muted-foreground mb-2">
+                    Available options: {{ getQuestionMultipleChoice(questionId).join(', ') }}
+                  </div>
+                  
+                  <!-- Documents Section - Always check for documents regardless of document_upload setting -->
+                  <div v-if="getQuestionDocuments(termId, questionId).length > 0" class="mt-2 pt-2 border-t border-border">
+                    <div class="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+                      <Upload class="w-3.5 h-3.5" />
+                      <span class="font-medium">Uploaded Documents ({{ getQuestionDocuments(termId, questionId).length }})</span>
+                    </div>
+                    <div class="space-y-1">
+                      <div 
+                        v-for="(doc, docIndex) in getQuestionDocuments(termId, questionId)" 
+                        :key="docIndex" 
+                        class="flex items-center justify-between text-xs bg-muted p-2 rounded border border-border hover:bg-muted/80 transition-colors group"
+                      >
+                        <div class="flex items-center gap-2 flex-1 min-w-0">
+                          <FileText class="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                          <span class="text-foreground truncate" :title="doc.name || doc.filename || 'Document'">{{ doc.name || doc.filename || 'Document' }}</span>
+                        </div>
+                        <div class="flex items-center gap-2 flex-shrink-0">
+                          <span class="text-muted-foreground">{{ formatFileSize(doc.size) }}</span>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            @click="viewDocument(doc)"
+                            class="h-7 px-2 text-xs flex items-center gap-1 bg-background hover:bg-primary hover:text-primary-foreground"
+                            title="View document"
+                          >
+                            <Eye class="h-3.5 w-3.5 mr-1" />
+                            View
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <!-- Document Upload Info - Show if enabled but no documents yet -->
+                  <div v-else-if="getQuestionDocumentUpload(questionId)" class="mt-2 pt-2 border-t border-border">
+                    <div class="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+                      <Upload class="w-3.5 h-3.5" />
+                      <span class="font-medium">Multiple Document Upload Enabled</span>
+                    </div>
+                    <p class="text-xs text-muted-foreground mt-1">
+                      This question allows multiple supporting document uploads for evidence.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -216,7 +272,7 @@
             <div class="flex flex-col sm:flex-row gap-3">
               <Button 
                 @click="handleApprove"
-                :disabled="loading || !reviewComments.trim()"
+                :disabled="loading"
                 class="bg-gradient-to-r from-green-600 to-green-700 hover:shadow-hover transition-all"
               >
                 <CheckCircle class="mr-2 h-4 w-4" />
@@ -225,7 +281,7 @@
               <Button 
                 variant="destructive"
                 @click="handleReject"
-                :disabled="loading || !reviewComments.trim()"
+                :disabled="loading"
               >
                 <X class="mr-2 h-4 w-4" />
                 Reject & Request Changes
@@ -310,7 +366,8 @@ import {
   X,
   AlertCircle,
   Target,
-  AlertTriangle
+  AlertTriangle,
+  Upload
 } from 'lucide-vue-next'
 import contractAuditApi from '@/services/contractAuditApi.js'
 import loggingService from '@/services/loggingService'
@@ -330,6 +387,7 @@ const contract = ref(null)
 const auditor = ref(null)
 const reviewer = ref(null)
 const contractTerms = ref([])
+const questionnaires = ref([])
 const versions = ref([])
 const currentVersion = ref(null)
 const selectedVersion = ref(null)
@@ -353,6 +411,7 @@ const canReview = computed(() => {
 // Parse extended information JSON
 const rawExtendedInfo = computed(() => {
   if (!selectedVersion.value?.extended_information) {
+    console.log('[rawExtendedInfo] No extended_information in selectedVersion')
     return null
   }
   
@@ -362,9 +421,12 @@ const rawExtendedInfo = computed(() => {
       ? JSON.parse(selectedVersion.value.extended_information)
       : selectedVersion.value.extended_information
     
+    console.log('[rawExtendedInfo] Parsed extended_information:', info)
+    console.log('[rawExtendedInfo] Documents in extended_info:', info?.documents)
+    
     return info
   } catch (error) {
-    console.error('Error parsing extended_information:', error)
+    console.error('[rawExtendedInfo] Error parsing extended_information:', error)
     return null
   }
 })
@@ -433,12 +495,43 @@ const normalizedExtendedInfo = computed(() => {
     return candidateKey
   }
 
+  // Normalize documents section (nested structure: documents[termId][questionId])
+  const normalizeDocuments = (documents) => {
+    const result = {}
+    if (!documents || typeof documents !== 'object') {
+      console.log('[normalizeDocuments] No documents or invalid format:', documents)
+      return result
+    }
+    
+    console.log('[normalizeDocuments] Processing documents:', documents)
+    console.log('[normalizeDocuments] Document keys:', Object.keys(documents))
+    
+    Object.entries(documents).forEach(([termKey, questionDocs]) => {
+      const normalizedTermKey = resolveTermKey(termKey)
+      if (!normalizedTermKey) {
+        console.log(`[normalizeDocuments] Could not resolve termKey: ${termKey}`)
+        return
+      }
+      
+      if (questionDocs && typeof questionDocs === 'object') {
+        result[normalizedTermKey] = questionDocs // Keep questionId structure as-is
+        console.log(`[normalizeDocuments] Added documents for termKey ${termKey} (normalized: ${normalizedTermKey}):`, questionDocs)
+      } else {
+        console.log(`[normalizeDocuments] Invalid questionDocs for termKey ${termKey}:`, questionDocs)
+      }
+    })
+    
+    console.log('[normalizeDocuments] Final normalized documents result:', result)
+    return result
+  }
+
   const normalized = {
     responses: normalizeSection(rawExtendedInfo.value.responses),
     evidence: normalizeSection(rawExtendedInfo.value.evidence),
     verification_methods: normalizeSection(rawExtendedInfo.value.verification_methods),
     recommendations: normalizeSection(rawExtendedInfo.value.recommendations),
     comments: normalizeSection(rawExtendedInfo.value.comments),
+    documents: normalizeDocuments(rawExtendedInfo.value.documents || {}),
     metadata: { terms: {} }
   }
 
@@ -531,6 +624,23 @@ const loadAuditData = async () => {
     auditor.value = usersData.find(u => u.user_id === auditData.auditor_id) || null
     reviewer.value = usersData.find(u => u.user_id === auditData.reviewer_id) || null
     
+    // Load questionnaires for question details
+    try {
+      const questionnairesResponse = await contractAuditApi.getContractAuditQuestionnaires()
+      const questionnairesData = questionnairesResponse.success ? questionnairesResponse.data : null
+      if (Array.isArray(questionnairesData)) {
+        questionnaires.value = questionnairesData
+      } else if (questionnairesData && questionnairesData.results && Array.isArray(questionnairesData.results)) {
+        questionnaires.value = questionnairesData.results
+      } else {
+        questionnaires.value = []
+      }
+      console.log('Loaded questionnaires for review:', questionnaires.value.length)
+    } catch (error) {
+      console.error('Error loading questionnaires:', error)
+      questionnaires.value = []
+    }
+    
     // Load versions
     const versionsResponse = await contractAuditApi.getContractAuditVersions({ audit_id: auditId })
     const versionsData = versionsResponse.success ? versionsResponse.data : []
@@ -586,9 +696,10 @@ const selectVersion = (version) => {
 }
 
 const handleApprove = async () => {
-  if (!reviewComments.value.trim()) {
-    PopupService.warning('Please provide review comments before approving.', 'Missing Comments')
-    return
+  // Comments are optional for approval, but use default if not provided
+  const comments = (reviewComments.value || '').trim()
+  if (!comments) {
+    reviewComments.value = 'Audit approved by reviewer'
   }
 
   // Check if we have a selected version
@@ -818,7 +929,28 @@ const handleApprove = async () => {
 }
 
 const handleReject = async () => {
-  if (!reviewComments.value.trim()) {
+  // Get the current value from the reactive ref
+  let comments = String(reviewComments.value || '').trim()
+  
+  // Fallback: If ref value is empty, try reading directly from DOM element
+  if (!comments || comments.length === 0) {
+    const textareaElement = document.getElementById('review-comments')
+    if (textareaElement) {
+      comments = String(textareaElement.value || '').trim()
+      // Update the ref with the DOM value if found
+      if (comments) {
+        reviewComments.value = comments
+      }
+    }
+  }
+  
+  console.log('[handleReject] Review comments value:', {
+    refValue: reviewComments.value,
+    comments: comments,
+    commentsLength: comments.length
+  })
+  
+  if (!comments || comments.length === 0) {
     PopupService.warning('Please provide review comments before rejecting.', 'Missing Comments')
     return
   }
@@ -924,6 +1056,213 @@ const formatDate = (dateString) => {
 }
 
 const navigateToMyAudits = () => router.push('/contract-audit/all')
+
+// Helper functions to get question details
+const getQuestionText = (questionId) => {
+  const question = questionnaires.value.find(q => q.question_id === parseInt(questionId))
+  return question?.question_text || null
+}
+
+const getQuestionDocumentUpload = (questionId) => {
+  const question = questionnaires.value.find(q => q.question_id === parseInt(questionId))
+  return question?.document_upload || false
+}
+
+const getQuestionMultipleChoice = (questionId) => {
+  const question = questionnaires.value.find(q => q.question_id === parseInt(questionId))
+  if (question?.question_type === 'multiple_choice' && question?.multiple_choice) {
+    return Array.isArray(question.multiple_choice) ? question.multiple_choice : []
+  }
+  return null
+}
+
+const formatResponse = (response, questionId) => {
+  const question = questionnaires.value.find(q => q.question_id === parseInt(questionId))
+  if (question?.question_type === 'multiple_choice' && question?.multiple_choice) {
+    // If response matches one of the options, display it nicely
+    const options = Array.isArray(question.multiple_choice) ? question.multiple_choice : []
+    const matchingOption = options.find(opt => {
+      const optValue = typeof opt === 'string' ? opt : opt.value || opt
+      return String(optValue) === String(response)
+    })
+    if (matchingOption) {
+      return typeof matchingOption === 'string' ? matchingOption : matchingOption.label || matchingOption.value || matchingOption
+    }
+  }
+  return response
+}
+
+const getQuestionDocuments = (termId, questionId) => {
+  console.log(`[getQuestionDocuments] Called with termId: ${termId}, questionId: ${questionId}`)
+  console.log(`[getQuestionDocuments] normalizedExtendedInfo.value:`, normalizedExtendedInfo.value)
+  
+  if (!normalizedExtendedInfo.value) {
+    console.log('[getQuestionDocuments] No normalizedExtendedInfo.value')
+    return []
+  }
+  
+  if (!normalizedExtendedInfo.value.documents) {
+    console.log('[getQuestionDocuments] No documents in normalizedExtendedInfo', {
+      availableKeys: Object.keys(normalizedExtendedInfo.value || {})
+    })
+    return []
+  }
+  
+  console.log('[getQuestionDocuments] Documents structure:', normalizedExtendedInfo.value.documents)
+  console.log('[getQuestionDocuments] Available termIds in documents:', Object.keys(normalizedExtendedInfo.value.documents))
+  
+  // Try both string and number versions of questionId
+  const questionIdStr = String(questionId)
+  const questionIdNum = parseInt(questionId)
+  
+  const termDocs = normalizedExtendedInfo.value.documents[termId]
+  if (!termDocs) {
+    console.log(`[getQuestionDocuments] No documents for termId: ${termId}`, {
+      availableTermIds: Object.keys(normalizedExtendedInfo.value.documents || {}),
+      termIdType: typeof termId,
+      termIdValue: termId
+    })
+    return []
+  }
+  
+  console.log(`[getQuestionDocuments] Found termDocs for termId ${termId}:`, termDocs)
+  console.log(`[getQuestionDocuments] Available questionIds in termDocs:`, Object.keys(termDocs))
+  
+  // Try to find documents with either questionId format
+  let docs = termDocs[questionIdStr] || termDocs[questionIdNum]
+  
+  // If not found, try to find in all questionIds (in case of mismatch)
+  if (!docs || (Array.isArray(docs) && docs.length === 0)) {
+    // Check all questionIds in this term
+    const allQuestionIds = Object.keys(termDocs)
+    console.log(`[getQuestionDocuments] QuestionId ${questionId} not found directly, available questionIds:`, allQuestionIds)
+    
+    // Try to find by matching any questionId that might be similar
+    for (const qId of allQuestionIds) {
+      if (String(qId) === questionIdStr || parseInt(qId) === questionIdNum) {
+        docs = termDocs[qId]
+        console.log(`[getQuestionDocuments] Found match with questionId: ${qId}`)
+        break
+      }
+    }
+  }
+  
+  const result = Array.isArray(docs) ? docs : (docs ? [docs] : [])
+  
+  console.log(`[getQuestionDocuments] Final result for termId: ${termId}, questionId: ${questionId}`, {
+    questionIdStr,
+    questionIdNum,
+    foundDocs: result,
+    resultLength: result.length,
+    docsStructure: docs
+  })
+  
+  return result
+}
+
+const formatFileSize = (bytes) => {
+  if (!bytes && bytes !== 0) return '—'
+  const value = typeof bytes === 'string' ? parseInt(bytes, 10) : bytes
+  if (!value || Number.isNaN(value)) return '—'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(value) / Math.log(k))
+  return Math.round(value / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
+}
+
+const viewDocument = (doc) => {
+  console.log('Viewing document:', doc)
+  
+  if (doc.url) {
+    window.open(doc.url, '_blank')
+    return
+  }
+  
+  // Check if document has base64 content
+  if (doc.content) {
+    try {
+      // Determine file type and handle accordingly
+      const fileName = doc.name || doc.filename || 'document'
+      const fileType = doc.type || ''
+      
+      // For PDFs, open directly in new tab
+      if (fileType.includes('pdf') || fileName.toLowerCase().endsWith('.pdf')) {
+        const newWindow = window.open('', '_blank')
+        if (newWindow) {
+          newWindow.document.write(`
+            <html>
+              <head>
+                <title>${fileName}</title>
+                <style>
+                  body { margin: 0; padding: 0; }
+                  iframe { width: 100vw; height: 100vh; border: none; }
+                </style>
+              </head>
+              <body>
+                <iframe src="${doc.content}" type="application/pdf"></iframe>
+              </body>
+            </html>
+          `)
+          newWindow.document.close()
+        } else {
+          // Popup blocked, trigger download instead
+          triggerDownload(doc.content, fileName)
+        }
+      } else if (fileType.startsWith('image/')) {
+        // For images, open in new tab
+        const newWindow = window.open('', '_blank')
+        if (newWindow) {
+          newWindow.document.write(`
+            <html>
+              <head>
+                <title>${fileName}</title>
+                <style>
+                  body { margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #f5f5f5; }
+                  img { max-width: 100%; max-height: 90vh; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+                </style>
+              </head>
+              <body>
+                <img src="${doc.content}" alt="${fileName}" />
+              </body>
+            </html>
+          `)
+          newWindow.document.close()
+        } else {
+          triggerDownload(doc.content, fileName)
+        }
+      } else {
+        // For other file types, trigger download
+        triggerDownload(doc.content, fileName)
+      }
+    } catch (error) {
+      console.error('Error viewing document:', error)
+      PopupService.error('Failed to view document. Please try downloading it instead.', 'Error')
+    }
+  } else if (doc.url) {
+    // If document has a URL, open it
+    window.open(doc.url, '_blank')
+  } else {
+    // If no content or URL, show warning
+    console.warn('Document has no content or URL:', doc)
+    PopupService.warning('Document content not available for viewing. The document may need to be re-uploaded.', 'Cannot View Document')
+  }
+}
+
+const triggerDownload = (content, fileName) => {
+  try {
+    const link = document.createElement('a')
+    link.href = content
+    link.download = fileName
+    link.target = '_blank'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  } catch (error) {
+    console.error('Error downloading document:', error)
+    PopupService.error('Failed to download document', 'Error')
+  }
+}
+
 
 onMounted(async () => {
   await loggingService.logPageView('Contract', 'Contract Audit Review')

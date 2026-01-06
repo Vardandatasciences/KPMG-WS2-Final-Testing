@@ -1,14 +1,5 @@
 <template>
   <div class="p-6 max-w-7xl mx-auto space-y-6">
-    <div class="flex items-center justify-between">
-      <div>
-        <h1 class="text-3xl font-bold text-foreground">Answer Questionnaire</h1>
-        <p class="text-muted-foreground">Complete assigned questionnaires</p>
-      </div>
-      <span class="badge badge--outline text-sm">Testing Phase</span>
-    </div>
-
-
     <!-- Assignments Dropdown Section -->
     <div class="assignments-dropdown-section">
       <div class="assignments-dropdown">
@@ -77,14 +68,13 @@
                           @change="toggleSelectAllAssignments"
                         />
                       </th>
-                      <th>Assignment ID</th>
-                      <th>Plan ID</th>
-                      <th>Questionnaire ID</th>
-                      <th>Questions</th>
-                      <th>Due Date</th>
-                      <th>Status</th>
-                      <th>Assigned Date</th>
-                      <th>Action</th>
+                      <th class="assignment-id-cell">Assignment ID</th>
+                      <th class="plan-id-cell">Plan ID</th>
+                      <th class="questionnaire-id-cell">Questionnaire ID</th>
+                      <th class="questions-cell">Questions</th>
+                      <th class="due-date-cell">Due Date</th>
+                      <th class="status-cell">Status</th>
+                      <th class="assigned-date-cell">Assigned Date</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -107,26 +97,12 @@
                       <td class="questionnaire-id-cell">{{ assignment.questionnaire_id }}</td>
                       <td class="questions-cell">{{ assignment.total_questions || 0 }}</td>
                       <td class="due-date-cell">{{ formatDate(assignment.due_date) }}</td>
-                      <td>
+                      <td class="status-cell">
                         <span :class="['badge', getAssignmentStatusBadgeClass(assignment.status)]">
                           {{ assignment.status }}
                         </span>
                       </td>
                       <td class="assigned-date-cell">{{ formatDate(assignment.assigned_at) }}</td>
-                      <td class="action-cell">
-                        <button 
-                          class="select-assignment-btn"
-                          @click="selectAssignment(assignment)"
-                        >
-                          Select
-                        </button>
-                        <button 
-                          class="btn btn--ghost btn--sm ml-2"
-                          @click="openAssignmentForAnswer(assignment)"
-                        >
-                          Answer ▶
-                        </button>
-                      </td>
                     </tr>
                   </tbody>
                 </table>
@@ -311,8 +287,8 @@
             Load Data
           </button>
           <button 
-            class="btn btn--outline" 
-            @click="saveDraft"
+            class="btn btn--primary"
+            @click="submitAnswers"
             :disabled="isSubmitting"
           >
             <svg v-if="!isSubmitting" class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -321,20 +297,7 @@
             <svg v-else class="h-4 w-4 mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
             </svg>
-            {{ isSubmitting ? 'Saving...' : 'Save Draft' }}
-          </button>
-          <button 
-            class="btn btn--primary"
-            @click="submitAnswers"
-            :disabled="isSubmitting"
-          >
-            <svg v-if="!isSubmitting" class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-            </svg>
-            <svg v-else class="h-4 w-4 mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-            </svg>
-            {{ isSubmitting ? 'Submitting...' : 'Submit Answers' }}
+            {{ isSubmitting ? 'Saving...' : 'Save Answers' }}
           </button>
         </div>
       </div>
@@ -411,10 +374,11 @@ const closeAssignmentsDropdown = () => {
   }, 150)
 }
 
-const selectAssignment = (assignment: any) => {
+const selectAssignment = async (assignment: any) => {
   selectedAssignmentId.value = assignment.assignment_response_id.toString()
   selectedAssignment.value = assignment
   isAssignmentsDropdownOpen.value = false
+  await loadAssignmentQuestions(assignment)
 }
 
 const toggleSelectAllAssignments = () => {
@@ -439,13 +403,6 @@ const getSelectedAssignmentDisplay = () => {
 const getSelectedAssignmentStatus = () => {
   const assignment = availableAssignments.value.find(a => a.assignment_response_id.toString() === selectedAssignmentId.value)
   return assignment ? assignment.status : ""
-}
-
-const openAssignmentForAnswer = async (assignment: any) => {
-  console.log('Opening assignment for answer:', assignment)
-  selectedAssignmentId.value = assignment.assignment_response_id.toString()
-  selectedAssignment.value = assignment
-  await loadAssignmentQuestions(assignment)
 }
 
 // API functions
@@ -652,63 +609,7 @@ const saveDraft = async () => {
 
 const submitAnswers = async () => {
   if (!selectedAssignment.value) {
-    await showWarning('No Assignment Selected', 'Please select an assignment first.', {
-      action: 'no_assignment_selected'
-    })
-    PopupService.warning('Please select an assignment first.', 'No Assignment Selected')
-    return
-  }
-  
-  // Validate that all questions have answers and reasons
-  const unansweredQuestions = []
-  const questionsWithoutReasons = []
-  
-  assignmentQuestions.value.forEach(question => {
-    const answer = answers.value[question.id]
-    
-    // Check if answer is provided
-    let hasAnswer = false
-    if (answer?.answer) {
-      if (Array.isArray(answer.answer)) {
-        hasAnswer = answer.answer.length > 0
-      } else {
-        hasAnswer = answer.answer.trim().length > 0
-      }
-    }
-    
-    if (!answer || !hasAnswer) {
-      unansweredQuestions.push(question.id)
-    }
-    if (!answer || !answer.reason.trim()) {
-      questionsWithoutReasons.push(question.id)
-    }
-  })
-  
-  if (unansweredQuestions.length > 0) {
-    await showWarning('Incomplete Answers', `Please answer all questions. Missing answers for questions: ${unansweredQuestions.join(', ')}`, {
-      action: 'incomplete_answers',
-      unanswered_questions: unansweredQuestions,
-      assignment_id: selectedAssignment.value.id
-    })
-    PopupService.warning(`Please answer all questions. Missing answers for questions: ${unansweredQuestions.join(', ')}`, 'Incomplete Answers')
-    // Create notification
-    await notificationService.createQuestionnaireNotification('incomplete_answers', {
-      unanswered_questions: unansweredQuestions
-    })
-    return
-  }
-  
-  if (questionsWithoutReasons.length > 0) {
-    await showWarning('Missing Reasons', `Please provide reasons for all answers. Missing reasons for questions: ${questionsWithoutReasons.join(', ')}`, {
-      action: 'missing_reasons',
-      questions_without_reasons: questionsWithoutReasons,
-      assignment_id: selectedAssignment.value.id
-    })
-    PopupService.warning(`Please provide reasons for all answers. Missing reasons for questions: ${questionsWithoutReasons.join(', ')}`, 'Missing Reasons')
-    // Create notification
-    await notificationService.createQuestionnaireNotification('missing_reasons', {
-      questions_without_reasons: questionsWithoutReasons
-    })
+    PopupService.warning('Please select an assignment first', 'No Assignment Selected')
     return
   }
   
@@ -722,16 +623,16 @@ const submitAnswers = async () => {
     
     if (response) {
       // Show success notification
-      await showSuccess('Answers Submitted', 'Answers submitted successfully!', {
-        action: 'answers_submitted',
-        assignment_id: selectedAssignment.value.id,
+      await showSuccess('Answers Saved', 'Answers saved successfully!', {
+        action: 'answers_saved',
+        assignment_id: selectedAssignment.value.assignment_response_id,
         questions_answered: Object.keys(answers.value).length
       })
       
       // Show success popup
-      PopupService.success('Answers submitted successfully!', 'Answers Submitted')
+      PopupService.success('Answers saved successfully!', 'Answers Saved')
       
-      // Create additional notification service notification
+      // Create notification service notification
       await notificationService.createQuestionnaireNotification('answers_submitted', {
         assignment_id: selectedAssignment.value.assignment_response_id,
         questions_answered: Object.keys(answers.value).length
@@ -739,27 +640,21 @@ const submitAnswers = async () => {
       
       // Refresh the assignment data to show updated status
       await fetchAssignments()
-      // Clear the form
-      answers.value = {}
-      assignmentQuestions.value = []
-      reviewerComment.value = ""
-      selectedAssignment.value = null
-      selectedAssignmentId.value = ""
     }
   } catch (error) {
-    console.error('Error submitting answers:', error)
+    console.error('Error saving answers:', error)
     
     // Show error notification
-    await showError('Submission Failed', 'Failed to submit answers. Please try again.', {
-      action: 'answers_submission_failed',
-      assignment_id: selectedAssignment.value?.id,
+    await showError('Save Failed', 'Failed to save answers. Please try again.', {
+      action: 'answers_save_failed',
+      assignment_id: selectedAssignment.value?.assignment_response_id,
       error_message: error.message
     })
     
     // Show error popup
-    PopupService.error('Failed to submit answers. Please try again.', 'Submission Failed')
+    PopupService.error('Failed to save answers. Please try again.', 'Save Failed')
     
-    // Create additional notification service notification
+    // Create notification service notification
     await notificationService.createQuestionnaireNotification('submission_failed', {
       assignment_id: selectedAssignment.value?.assignment_response_id,
       error: error.message

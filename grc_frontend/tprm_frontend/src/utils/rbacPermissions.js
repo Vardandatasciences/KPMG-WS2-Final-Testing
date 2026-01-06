@@ -43,7 +43,7 @@ export const VENDOR_PERMISSIONS = {
  */
 export function getUserPermissions() {
   try {
-    const userStr = localStorage.getItem('current_user') || localStorage.getItem('user');
+    const userStr = localStorage.getItem('user');
     if (!userStr) return {};
     
     const user = JSON.parse(userStr);
@@ -95,7 +95,7 @@ export function hasAllPermissions(permissionList) {
  */
 export function getUserRole() {
   try {
-    const userStr = localStorage.getItem('current_user') || localStorage.getItem('user');
+    const userStr = localStorage.getItem('user');
     if (!userStr) return '';
     
     const user = JSON.parse(userStr);

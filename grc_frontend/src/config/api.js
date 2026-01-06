@@ -8,7 +8,7 @@ const ENVIRONMENT = 'development';
 // API Base URLs for different environments
 const API_URLS = {
   // aws: 'https://grc-backend.vardaands.com',
-  aws: 'https://grc-backend.vardaands.com',
+  aws: 'https://grc-tprm.vardaands.com',
   local: 'http://127.0.0.1:8000',
   development: 'http://127.0.0.1:8000'
 };
@@ -173,6 +173,11 @@ export const API_ENDPOINTS = {
  
   // Framework Management
   FRAMEWORK_EXPLORER: `${API_BASE_URL}/api/framework-explorer/`,
+  
+  // Domain Management
+  GET_DOMAINS_WITH_FRAMEWORKS: `${API_BASE_URL}/api/domains/`,
+  UPDATE_FRAMEWORK_DOMAIN: `${API_BASE_URL}/api/domains/update-framework/`,
+  BULK_UPDATE_FRAMEWORK_DOMAINS: `${API_BASE_URL}/api/domains/bulk-update/`,
   FRAMEWORK_DETAILS: (frameworkId) => `${API_BASE_URL}/api/frameworks/${frameworkId}/details/`,
   FRAMEWORK_POLICY_COUNTS: (frameworkId) => `${API_BASE_URL}/api/frameworks/${frameworkId}/policy-counts/`,
   FRAMEWORK_TOGGLE_STATUS: (frameworkId) => `${API_BASE_URL}/api/frameworks/${frameworkId}/toggle-status/`,

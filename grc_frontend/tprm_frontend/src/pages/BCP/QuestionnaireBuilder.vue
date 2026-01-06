@@ -1,13 +1,5 @@
 <template>
   <div class="p-6 max-w-7xl mx-auto space-y-6">
-    <div class="flex items-center justify-between">
-    <div>
-        <h1 class="text-3xl font-bold text-foreground">Build & Review Questionnaire</h1>
-        <p class="text-muted-foreground">Create and review testing questionnaires for BCP/DRP plans</p>
-      </div>
-      <div class="badge badge--outline text-sm">Testing Phase</div>
-    </div>
-
     <!-- REVIEWER VIEW -->
     <div class="space-y-6">
         <!-- Questionnaire Selection Dropdown -->

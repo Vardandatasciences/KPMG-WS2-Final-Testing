@@ -1,30 +1,46 @@
 <template>
   <div class="page">
     <div>
-      <div class="page-header">
-        <div class="header-content">
-          <h1 class="page-title">Upload Plan (Vendor Portal)</h1>
-          <p class="page-subtitle">Submit BCP/DRP plans for review and evaluation</p>
-        </div>
-      </div>
 
-    <!-- Plan Type Toggle -->
-    <div class="toggle-container">
-      <div class="plan-type-toggle">
-        <button
-          type="button"
-          :class="['toggle-option', planType === 'BCP' ? 'toggle-option--active' : '']"
-          @click="planType = 'BCP'"
-        >
-          BCP (Business Continuity)
-        </button>
-        <button
-          type="button"
-          :class="['toggle-option', planType === 'DRP' ? 'toggle-option--active' : '']"
-          @click="planType = 'DRP'"
-        >
-          DRP (Disaster Recovery)
-        </button>
+    <!-- Add Plan Type Modal -->
+    <div v-if="showAddPlanTypeModal" class="modal-overlay" @click="closeAddPlanTypeModal">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3 class="modal-title">Add New Plan Type</h3>
+          <button class="modal-close" @click="closeAddPlanTypeModal">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="new-plan-type" class="form-label">
+              Plan Type Name <span class="required-asterisk">*</span>
+            </label>
+            <input
+              id="new-plan-type"
+              type="text"
+              class="form-input"
+              v-model="newPlanTypeValue"
+              placeholder="e.g., CRP, ERP, etc."
+              @keyup.enter="saveNewPlanType"
+              ref="newPlanTypeInput"
+            />
+            <p class="form-hint">Enter a unique plan type name (e.g., Crisis Recovery Plan, Emergency Response Plan)</p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn--outline" @click="closeAddPlanTypeModal">Cancel</button>
+          <button 
+            class="btn btn--primary" 
+            @click="saveNewPlanType"
+            :disabled="!newPlanTypeValue.trim() || isSavingPlanType"
+          >
+            <span v-if="isSavingPlanType">Saving...</span>
+            <span v-else>Save Plan Type</span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -111,6 +127,65 @@
                       </div>
                     </div>
                   </label>
+                  <label for="plan-type-select" class="label">Plan Type *</label>
+                  <div class="custom-dropdown-wrapper">
+                    <div 
+                      class="custom-dropdown"
+                      :class="{ 'is-open': isPlanTypeDropdownOpen, 'has-value': currentDoc.planType }"
+                      @click="togglePlanTypeDropdown"
+                      @blur="closePlanTypeDropdown"
+                      tabindex="0"
+                    >
+                      <div class="dropdown-selected">
+                        <span v-if="currentDoc.planType" class="selected-value">{{ currentDoc.planType }}</span>
+                        <span v-else class="placeholder">Select plan type</span>
+                        <svg 
+                          class="dropdown-arrow" 
+                          :class="{ 'rotated': isPlanTypeDropdownOpen }"
+                          fill="none" 
+                          stroke="currentColor" 
+                          viewBox="0 0 24 24"
+                        >
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                      </div>
+                      <Transition name="dropdown">
+                        <div v-if="isPlanTypeDropdownOpen" class="dropdown-menu">
+                          <div 
+                            v-for="pt in planTypes" 
+                            :key="pt.id" 
+                            class="dropdown-item"
+                            :class="{ 'is-selected': currentDoc.planType === pt.value }"
+                            @click.stop="selectPlanType(pt.value)"
+                          >
+                            <span class="item-text">{{ pt.value }}</span>
+                            <svg 
+                              v-if="currentDoc.planType === pt.value"
+                              class="check-icon"
+                              fill="none" 
+                              stroke="currentColor" 
+                              viewBox="0 0 24 24"
+                            >
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                          </div>
+                          <div class="dropdown-divider"></div>
+                          <div 
+                            class="dropdown-item add-new-item"
+                            @click.stop="openAddPlanTypeModal"
+                          >
+                            <svg class="add-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                            </svg>
+                            <span class="item-text">Add New Plan Type</span>
+                          </div>
+                        </div>
+                      </Transition>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label for="plan-name" class="label">Plan Name *</label>
                   <input
                     id="plan-name"
                     class="input"
@@ -118,6 +193,9 @@
                     v-model="currentDoc.planName"
                   />
                 </div>
+              </div>
+
+              <div class="form-row">
                 <div>
                   <label for="scope" class="label flex items-center gap-2">
                     <span>Scope</span>
@@ -204,6 +282,100 @@
                     <option value="HIGH">HIGH</option>
                     <option value="CRITICAL">CRITICAL</option>
                   </select>
+                  <label for="scope-select" class="label">Scope</label>
+                  <div class="custom-dropdown-wrapper">
+                    <div 
+                      class="custom-dropdown"
+                      :class="{ 'is-open': isScopeDropdownOpen, 'has-value': currentDoc.scope }"
+                      @click="toggleScopeDropdown"
+                      @blur="closeScopeDropdown"
+                      tabindex="0"
+                    >
+                      <div class="dropdown-selected">
+                        <span v-if="currentDoc.scope" class="selected-value">{{ currentDoc.scope }}</span>
+                        <span v-else class="placeholder">Select scope</span>
+                        <svg 
+                          class="dropdown-arrow" 
+                          :class="{ 'rotated': isScopeDropdownOpen }"
+                          fill="none" 
+                          stroke="currentColor" 
+                          viewBox="0 0 24 24"
+                        >
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                      </div>
+                      <Transition name="dropdown">
+                        <div v-if="isScopeDropdownOpen" class="dropdown-menu">
+                          <div 
+                            v-for="scope in scopeOptions" 
+                            :key="scope.id" 
+                            class="dropdown-item"
+                            :class="{ 'is-selected': currentDoc.scope === scope.value }"
+                            @click.stop="selectScope(scope.value)"
+                          >
+                            <span class="item-text">{{ scope.value }}</span>
+                            <svg 
+                              v-if="currentDoc.scope === scope.value"
+                              class="check-icon"
+                              fill="none" 
+                              stroke="currentColor" 
+                              viewBox="0 0 24 24"
+                            >
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                          </div>
+                        </div>
+                      </Transition>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label for="criticality-select" class="label">Criticality *</label>
+                  <div class="custom-dropdown-wrapper">
+                    <div 
+                      class="custom-dropdown"
+                      :class="{ 'is-open': isCriticalityDropdownOpen, 'has-value': currentDoc.criticality }"
+                      @click="toggleCriticalityDropdown"
+                      @blur="closeCriticalityDropdown"
+                      tabindex="0"
+                    >
+                      <div class="dropdown-selected">
+                        <span v-if="currentDoc.criticality" class="selected-value">{{ currentDoc.criticality }}</span>
+                        <span v-else class="placeholder">Select criticality</span>
+                        <svg 
+                          class="dropdown-arrow" 
+                          :class="{ 'rotated': isCriticalityDropdownOpen }"
+                          fill="none" 
+                          stroke="currentColor" 
+                          viewBox="0 0 24 24"
+                        >
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                      </div>
+                      <Transition name="dropdown">
+                        <div v-if="isCriticalityDropdownOpen" class="dropdown-menu">
+                          <div 
+                            v-for="option in criticalityOptions" 
+                            :key="option.value" 
+                            class="dropdown-item"
+                            :class="{ 'is-selected': currentDoc.criticality === option.value }"
+                            @click.stop="selectCriticality(option.value)"
+                          >
+                            <span class="item-text">{{ option.label }}</span>
+                            <svg 
+                              v-if="currentDoc.criticality === option.value"
+                              class="check-icon"
+                              fill="none" 
+                              stroke="currentColor" 
+                              viewBox="0 0 24 24"
+                            >
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                          </div>
+                        </div>
+                      </Transition>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -257,6 +429,15 @@
                   <button type="button" class="btn btn--outline btn--sm">Choose File</button>
                 </div>
               </div>
+
+              <div class="mt-4">
+                <button @click="addDocument" class="btn btn--primary w-full">
+                  <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                  </svg>
+                  Add Document
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -287,7 +468,7 @@
                 <div class="document-details">
                   <div class="detail-row">
                     <span class="detail-label">Type:</span>
-                    <span class="detail-value">{{ planType }}</span>
+                    <span class="detail-value">{{ doc.planType || 'N/A' }}</span>
                   </div>
                   <div class="detail-row">
                     <span class="detail-label">File Name:</span>
@@ -314,12 +495,6 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
             </svg>
             Load Data
-          </button>
-          <button @click="addDocument" class="btn btn--primary flex-1">
-            <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-            </svg>
-            Add Document
           </button>
           <button @click="submitDocuments" class="btn btn--primary flex-1">
             Submit
@@ -351,13 +526,29 @@ export default {
   setup() {
     const { showSuccess, showError, showWarning, showInfo } = useNotifications()
 
-    const planType = ref('BCP')
+    const planTypes = ref([])
+    const isPlanTypeDropdownOpen = ref(false)
+    const isScopeDropdownOpen = ref(false)
+    const isCriticalityDropdownOpen = ref(false)
+    const showAddPlanTypeModal = ref(false)
+    const newPlanTypeValue = ref('')
+    const isSavingPlanType = ref(false)
     const strategyName = ref('')
     const selectedFile = ref(null)
     const fileInput = ref(null)
     const scopeOptions = ref([])
+    const newPlanTypeInput = ref(null)
+    
+    // Criticality options
+    const criticalityOptions = [
+      { value: 'LOW', label: 'LOW' },
+      { value: 'MEDIUM', label: 'MEDIUM' },
+      { value: 'HIGH', label: 'HIGH' },
+      { value: 'CRITICAL', label: 'CRITICAL' }
+    ]
     
     const currentDoc = reactive({
+      planType: '',
       planName: '',
       criticality: '',
       scope: ''
@@ -409,11 +600,132 @@ export default {
       
       console.log('📋 Plan Data Inventory JSON:', JSON.stringify(dataInventory, null, 2))
       return dataInventory
+    const fetchPlanTypes = async () => {
+      try {
+        console.log('Fetching plan types from API')
+        const response = await api.planTypes.list()
+        console.log('Plan types API Response:', response)
+        
+        // The response interceptor should have unwrapped the data
+        planTypes.value = response.data?.plan_types || []
+        console.log('Plan types loaded:', planTypes.value)
+        
+        // Don't auto-select - let user choose from dropdown
+      } catch (error) {
+        console.error('Error fetching plan types:', error)
+        console.error('Error details:', error.message)
+        planTypes.value = []
+      }
+    }
+
+    const togglePlanTypeDropdown = () => {
+      isPlanTypeDropdownOpen.value = !isPlanTypeDropdownOpen.value
+    }
+
+    const closePlanTypeDropdown = () => {
+      setTimeout(() => {
+        isPlanTypeDropdownOpen.value = false
+      }, 200)
+    }
+
+    const selectPlanType = (value) => {
+      currentDoc.planType = value
+      isPlanTypeDropdownOpen.value = false
+    }
+
+    const toggleScopeDropdown = () => {
+      isScopeDropdownOpen.value = !isScopeDropdownOpen.value
+    }
+
+    const closeScopeDropdown = () => {
+      setTimeout(() => {
+        isScopeDropdownOpen.value = false
+      }, 200)
+    }
+
+    const selectScope = (value) => {
+      currentDoc.scope = value
+      isScopeDropdownOpen.value = false
+    }
+
+    const toggleCriticalityDropdown = () => {
+      isCriticalityDropdownOpen.value = !isCriticalityDropdownOpen.value
+    }
+
+    const closeCriticalityDropdown = () => {
+      setTimeout(() => {
+        isCriticalityDropdownOpen.value = false
+      }, 200)
+    }
+
+    const selectCriticality = (value) => {
+      currentDoc.criticality = value
+      isCriticalityDropdownOpen.value = false
+    }
+
+    const openAddPlanTypeModal = () => {
+      showAddPlanTypeModal.value = true
+      newPlanTypeValue.value = ''
+      isPlanTypeDropdownOpen.value = false
+      // Focus input after modal opens
+      setTimeout(() => {
+        if (newPlanTypeInput.value) {
+          newPlanTypeInput.value.focus()
+        }
+      }, 100)
+    }
+
+    const closeAddPlanTypeModal = () => {
+      showAddPlanTypeModal.value = false
+      newPlanTypeValue.value = ''
+    }
+
+    const saveNewPlanType = async () => {
+      const trimmedValue = newPlanTypeValue.value.trim()
+      
+      if (!trimmedValue) {
+        PopupService.warning('Please enter a plan type name', 'Validation Error')
+        return
+      }
+
+      // Check if plan type already exists
+      if (planTypes.value.some(pt => pt.value.toUpperCase() === trimmedValue.toUpperCase())) {
+        PopupService.warning(`Plan type "${trimmedValue}" already exists`, 'Duplicate Plan Type')
+        return
+      }
+
+      isSavingPlanType.value = true
+      try {
+        const response = await api.planTypes.create({ value: trimmedValue })
+        console.log('Plan type created:', response)
+        
+        // Refresh plan types list
+        await fetchPlanTypes()
+        
+        // Select the newly created plan type
+        currentDoc.planType = trimmedValue
+        
+        // Close modal
+        closeAddPlanTypeModal()
+        
+        PopupService.success(`Plan type "${trimmedValue}" has been added successfully`, 'Plan Type Added')
+        await notificationService.createBCPSuccessNotification('plan_type_added', {
+          plan_type: trimmedValue
+        })
+      } catch (error) {
+        console.error('Error creating plan type:', error)
+        PopupService.error(
+          error.response?.data?.message || `Failed to add plan type "${trimmedValue}"`,
+          'Error'
+        )
+      } finally {
+        isSavingPlanType.value = false
+      }
     }
 
     const fetchScopeOptions = async () => {
       try {
-        console.log('Fetching scope options from: http://localhost:8000/api/tprm/bcpdrp/dropdowns/?source=plan_scope')
+        console.log('Fetching scope options from: http://localhost:8000/api/bcpdrp/dropdowns/?source=plan_scope')
         const response = await api.dropdowns({ source: 'plan_scope' })
         console.log('API Response:', response)
         console.log('Response data:', response.data)
@@ -464,8 +776,8 @@ export default {
 
 
     const addDocument = () => {
-      if (!currentDoc.planName || !currentDoc.criticality || !selectedFile.value) {
-        PopupService.warning('Please fill in all required fields and select a file', 'Missing Information')
+      if (!currentDoc.planType || !currentDoc.planName || !currentDoc.criticality || !selectedFile.value) {
+        PopupService.warning('Please fill in all required fields (Plan Type, Plan Name, Criticality) and select a file', 'Missing Information')
         return
       }
 
@@ -473,7 +785,8 @@ export default {
         fileName: selectedFile.value.name,
         fileType: selectedFile.value.type,
         fileSize: selectedFile.value.size,
-        fileObject: selectedFile.value
+        fileObject: selectedFile.value,
+        planType: currentDoc.planType
       })
 
       documents.value.push({
@@ -484,6 +797,7 @@ export default {
       })
 
       // Reset form
+      currentDoc.planType = ''
       currentDoc.planName = ''
       currentDoc.criticality = ''
       currentDoc.scope = ''
@@ -495,6 +809,7 @@ export default {
 
     const editDocument = (index) => {
       const doc = documents.value[index]
+      currentDoc.planType = doc.planType || ''
       currentDoc.planName = doc.planName
       currentDoc.criticality = doc.criticality
       currentDoc.scope = doc.scope
@@ -530,14 +845,12 @@ export default {
         // Create FormData for file upload
         const formData = new FormData()
         formData.append('strategyName', strategyName.value)
-        formData.append('planType', planType.value)
         
         // Add document metadata with data_inventory
+        // Add document metadata with planType per document
         formData.append('documents', JSON.stringify(documents.value.map(doc => ({
           planName: doc.planName,
-          scope: doc.scope,
           criticality: doc.criticality,
-          fileName: doc.fileName,
           data_inventory: buildPlanDataInventory()
         }))))
         
@@ -596,8 +909,7 @@ export default {
           // Create notification
           await notificationService.createPlanUploadNotification('plan_uploaded', {
             plan_count: responseData.plans.length,
-            strategy_name: responseData.strategy_name,
-            plan_type: planType.value
+            strategy_name: responseData.strategy_name
           })
         } else {
           console.error('Unexpected response structure:', responseData)
@@ -612,6 +924,7 @@ export default {
         // Reset everything
         strategyName.value = ''
         documents.value = []
+        currentDoc.planType = ''
         currentDoc.planName = ''
         currentDoc.criticality = ''
         currentDoc.scope = ''
@@ -709,39 +1022,77 @@ export default {
     }
 
     const performLoadMockData = () => {
+      // Use generic mock data structure with different plan types
+      const availablePlanTypes = planTypes.value.length > 0 
+        ? planTypes.value.map(pt => pt.value) 
+        : ['BCP', 'DRP']
+      
       let mockData
-      if (planType.value === 'BCP') {
-        mockData = getBCPMockData()
-        console.log('Loading BCP mock data')
-      } else if (planType.value === 'DRP') {
-        mockData = getDRPMockData()
-        console.log('Loading DRP mock data')
-      } else {
-        PopupService.warning('Please select a plan type (BCP or DRP) first', 'No Plan Type Selected')
-        return
+      // Create mock data with different plan types for variety
+      mockData = {
+        strategyName: 'Business Continuity Strategy',
+        documents: [
+          {
+            planType: availablePlanTypes[0] || 'BCP',
+            planName: `${availablePlanTypes[0] || 'BCP'} Plan 1`,
+            scope: 'Core systems, operations, infrastructure',
+            criticality: 'CRITICAL',
+            fileName: `${availablePlanTypes[0] || 'BCP'}_Plan_1.pdf`,
+            file: createMockFile(`${availablePlanTypes[0] || 'BCP'}_Plan_1.pdf`, 'application/pdf')
+          },
+          {
+            planType: availablePlanTypes.length > 1 ? availablePlanTypes[1] : availablePlanTypes[0] || 'DRP',
+            planName: `${availablePlanTypes.length > 1 ? availablePlanTypes[1] : availablePlanTypes[0] || 'DRP'} Plan 2`,
+            scope: 'Supporting systems, services, applications',
+            criticality: 'HIGH',
+            fileName: `${availablePlanTypes.length > 1 ? availablePlanTypes[1] : availablePlanTypes[0] || 'DRP'}_Plan_2.pdf`,
+            file: createMockFile(`${availablePlanTypes.length > 1 ? availablePlanTypes[1] : availablePlanTypes[0] || 'DRP'}_Plan_2.pdf`, 'application/pdf')
+          }
+        ]
       }
 
       // Load the mock data
       strategyName.value = mockData.strategyName
       documents.value = [...mockData.documents]
       
-      PopupService.success(`Mock data loaded for ${planType.value} strategy with ${mockData.documents.length} plans. You can now review and modify the documents before submitting.`, 'Mock Data Loaded')
+      PopupService.success(`Mock data loaded with ${mockData.documents.length} plans of different types. You can now review and modify the documents before submitting.`, 'Mock Data Loaded')
     }
 
-    // Fetch scope options on component mount
+    // Fetch plan types and scope options on component mount
     onMounted(async () => {
       await loggingService.logPageView('BCP', 'Vendor Upload')
+      await fetchPlanTypes()
       await fetchScopeOptions()
     })
 
     return {
-      planType,
+      planTypes,
+      isPlanTypeDropdownOpen,
+      isScopeDropdownOpen,
+      isCriticalityDropdownOpen,
+      showAddPlanTypeModal,
+      newPlanTypeValue,
+      isSavingPlanType,
+      newPlanTypeInput,
       strategyName,
       currentDoc,
       documents,
       selectedFile,
       fileInput,
       scopeOptions,
+      criticalityOptions,
+      togglePlanTypeDropdown,
+      closePlanTypeDropdown,
+      selectPlanType,
+      toggleScopeDropdown,
+      closeScopeDropdown,
+      selectScope,
+      toggleCriticalityDropdown,
+      closeCriticalityDropdown,
+      selectCriticality,
+      openAddPlanTypeModal,
+      closeAddPlanTypeModal,
+      saveNewPlanType,
       triggerFileUpload,
       handleFileSelect,
       addDocument,

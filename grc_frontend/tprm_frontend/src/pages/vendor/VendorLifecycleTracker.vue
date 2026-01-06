@@ -281,6 +281,7 @@ import PopupModal from '@/popup/PopupModal.vue'
 import { PopupService } from '@/popup/popupService'
 import { useNotifications } from '@/composables/useNotifications'
 import notificationService from '@/services/notificationService'
+import { getTprmApiV1BaseUrl } from '@/utils/backendEnv'
 const { showSuccess, showError, showWarning, showInfo } = useNotifications()
 
 // Component state
@@ -297,7 +298,7 @@ const vendorTimeline = ref([])
 const analyticsData = ref(null)
 
 // API configuration
-const API_BASE_URL = 'http://localhost:8000/api/tprm'
+const API_BASE_URL = getTprmApiV1BaseUrl()
 
 // Get headers with auth token
 const getHeaders = () => {

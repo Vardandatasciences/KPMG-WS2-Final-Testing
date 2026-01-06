@@ -1,30 +1,25 @@
 <template>
   <div class="min-h-screen bg-background">
     <div class="container mx-auto p-6 space-y-6">
-      <!-- Header -->
-      <div class="flex flex-col space-y-4">
-        <div class="flex items-center justify-between">
-          <div>
-            <h1 class="text-3xl font-bold text-foreground">Questionnaire Library</h1>
-            <p class="text-muted-foreground">Manage and organize all questionnaire templates</p>
-          </div>
-          <div class="flex gap-2">
-            <button class="btn btn--primary" @click="navigateToQuestionnaireWorkflow">
-              <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-              </svg>
-              Create New Questionnaire
-            </button>
-            <button class="btn btn--outline" @click="navigateToWorkflow">
-              <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-              </svg>
-              Assignment Workflow
-            </button>
-          </div>
+      <!-- Action Buttons -->
+      <div class="flex items-center justify-end">
+        <div class="flex gap-2">
+          <button class="btn btn--primary" @click="navigateToQuestionnaireWorkflow">
+            <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+            </svg>
+            Create New Questionnaire
+          </button>
+          <button class="btn btn--outline" @click="navigateToWorkflow">
+            <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+            </svg>
+            Assignment Workflow
+          </button>
         </div>
+      </div>
 
-        <!-- Search and Filters -->
+      <!-- Search and Filters -->
         <div class="card">
           <div class="card-header">
             <h3 class="card-title text-lg">Search & Filters</h3>
@@ -89,8 +84,6 @@
             </div>
           </div>
         </div>
-      </div>
-
 
       <!-- Assignment Form (replaces table when shown) -->
       <div v-if="showAssignment && selectedQuestionnaire" class="card">
@@ -763,7 +756,7 @@ const handleApprovalAssignment = (questionnaire: any) => {
     path: '/bcp/approval-assignment',
     query: {
       planId: questionnaire.questionnaire_id,
-      objectType: 'QUESTIONNAIRE',
+      objectType: 'NEW QUESTIONNAIRE',
       planType: questionnaire.planType
     }
   })

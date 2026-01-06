@@ -2,8 +2,9 @@
  * Service for handling the new URI-based invitation system
  */
 import api from '@/utils/api_rfp.js'
+import { getTprmApiV1BaseUrl } from '@/utils/backendEnv'
 
-const API_BASE = 'http://localhost:8000/api/tprm/rfp'
+const API_BASE = getTprmApiV1BaseUrl()
 
 const newInvitationService = {
   /**

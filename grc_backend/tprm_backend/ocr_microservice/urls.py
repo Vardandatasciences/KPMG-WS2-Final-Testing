@@ -8,8 +8,8 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/', include('ocr_app.urls')),
-    path('', include('ocr_app.urls')),  # Include app URLs at root level
+    path('api/', include('tprm_backend.ocr_app.urls')),
+    path('', include('tprm_backend.ocr_app.urls')),  # Include app URLs at root level
 ]
 
 if settings.DEBUG:

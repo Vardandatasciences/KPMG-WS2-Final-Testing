@@ -1,23 +1,17 @@
 import axios from 'axios'
+import { getTprmApiBaseUrl } from '@/utils/backendEnv'
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api/tprm',
+  baseURL: getTprmApiBaseUrl(),
   headers: {
     'Content-Type': 'application/json',
   },
 })
 
-// Helper function to get stored token (check multiple keys)
-const getStoredToken = () => {
-  return localStorage.getItem('access_token') || 
-         localStorage.getItem('session_token') || 
-         localStorage.getItem('jwt_token')
-}
-
 // Add request interceptor to inject JWT token
 api.interceptors.request.use(
   (config) => {
-    const token = getStoredToken()
+    const token = localStorage.getItem('session_token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -28,57 +22,16 @@ api.interceptors.request.use(
   }
 )
 
-// Helper function to refresh token
-const refreshTokenIfNeeded = async () => {
-  const refreshToken = localStorage.getItem('refresh_token')
-  if (!refreshToken) {
-    return null
-  }
-
-  try {
-    const response = await axios.post(
-      `${import.meta.env.VITE_API_URL || 'http://localhost:8000/api'}/jwt/refresh/`,
-      { refresh: refreshToken }
-    )
-    
-    if (response.data && response.data.access) {
-      localStorage.setItem('access_token', response.data.access)
-      if (response.data.refresh) {
-        localStorage.setItem('refresh_token', response.data.refresh)
-      }
-      return response.data.access
-    }
-    return null
-  } catch (error) {
-    console.error('Token refresh failed:', error)
-    return null
-  }
-}
-
 // Add response interceptor to handle authentication and permission errors
 api.interceptors.response.use(
   (response) => response,
-  async (error) => {
-    const originalRequest = error.config
-
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      // Token expired or invalid - try to refresh
-      originalRequest._retry = true
-      
-      const newToken = await refreshTokenIfNeeded()
-      if (newToken) {
-        // Retry the original request with new token
-        originalRequest.headers.Authorization = `Bearer ${newToken}`
-        return api(originalRequest)
-      } else {
-        // Refresh failed - clear tokens and redirect to login
-        localStorage.removeItem('access_token')
-        localStorage.removeItem('session_token')
-        localStorage.removeItem('refresh_token')
-        localStorage.removeItem('current_user')
-        if (window.location.pathname !== '/login') {
-          window.location.href = '/login'
-        }
+  (error) => {
+    if (error.response?.status === 401) {
+      // Token expired or invalid
+      localStorage.removeItem('session_token')
+      localStorage.removeItem('current_user')
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login'
       }
     } else if (error.response?.status === 403) {
       // Permission denied - RBAC check failed

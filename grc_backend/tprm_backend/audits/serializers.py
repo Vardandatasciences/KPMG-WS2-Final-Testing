@@ -77,12 +77,10 @@ class AuditSerializer(serializers.ModelSerializer):
         """Get SLA name from sla_id using cross-database lookup."""
         if obj.sla_id:
             try:
-                # VendorSLA is already imported at the top of the file
+                from slas.models import VendorSLA
                 sla = VendorSLA.objects.get(sla_id=obj.sla_id)
                 return sla.sla_name
-            except VendorSLA.DoesNotExist:
-                return "Unknown SLA"
-            except Exception:
+            except:
                 return "Unknown SLA"
         return None
 
@@ -116,23 +114,25 @@ class AuditCreateSerializer(serializers.ModelSerializer):
             validated_data['review_status'] = 'pending'
         
         # Validate that the SLA exists (but don't create ForeignKey relationship)
-        # Use the top-level import instead of local import to avoid shadowing issues
         try:
-            # VendorSLA is already imported at the top of the file
+            from slas.models import VendorSLA
             VendorSLA.objects.get(sla_id=sla_id)
         except VendorSLA.DoesNotExist:
             raise serializers.ValidationError(f"SLA with ID {sla_id} does not exist")
-        except Exception as e:
-            # Handle any other exceptions (e.g., import errors, database connection issues)
-            raise serializers.ValidationError(f"Error validating SLA: {str(e)}")
+        
+        # Store sla_id as integer in the database (bypassing ForeignKey due to cross-database routing)
+        # We'll use raw SQL to insert the sla_id directly
+        from django.db import connections
         
         # Create the audit object without the sla field using the correct database
         audit = Audit.objects.create(**validated_data)
         
-        # Update sla_id using Django ORM instead of raw SQL
-        # This ensures proper primary key handling regardless of the actual column name
-        # Use pk instead of audit_id to let Django handle the primary key column name
-        Audit.objects.filter(pk=audit.pk).update(sla_id=sla_id)
+        # Update the sla_id directly using raw SQL to bypass the ForeignKey constraint
+        with connections['default'].cursor() as cursor:
+            cursor.execute(
+                "UPDATE audits SET sla_id = %s WHERE audit_id = %s",
+                [sla_id, audit.audit_id]
+            )
         
         # Refresh the audit object to get the updated sla_id
         audit.refresh_from_db()
@@ -159,12 +159,10 @@ class AuditListSerializer(serializers.ModelSerializer):
         """Get SLA name from sla_id using cross-database lookup."""
         if obj.sla_id:
             try:
-                # VendorSLA is already imported at the top of the file
+                from slas.models import VendorSLA
                 sla = VendorSLA.objects.get(sla_id=obj.sla_id)
                 return sla.sla_name
-            except VendorSLA.DoesNotExist:
-                return "Unknown SLA"
-            except Exception:
+            except:
                 return "Unknown SLA"
         return None
     
@@ -172,12 +170,10 @@ class AuditListSerializer(serializers.ModelSerializer):
         """Get SLA type from sla_id using cross-database lookup."""
         if obj.sla_id:
             try:
-                # VendorSLA is already imported at the top of the file
+                from slas.models import VendorSLA
                 sla = VendorSLA.objects.get(sla_id=obj.sla_id)
                 return sla.sla_type
-            except VendorSLA.DoesNotExist:
-                return "Unknown Type"
-            except Exception:
+            except:
                 return "Unknown Type"
         return None
     

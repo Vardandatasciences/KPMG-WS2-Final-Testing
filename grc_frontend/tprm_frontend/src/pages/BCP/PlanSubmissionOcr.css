@@ -7,33 +7,6 @@
   padding: var(--sp-6);
 }
 
-/* Page Header */
-.page-header {
-  margin-bottom: var(--sp-6);
-}
-
-.header-content {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-}
-
-.page-title {
-  font-size: 1.875rem; /* 30px */
-  font-weight: 700;
-  color: var(--foreground);
-  margin: 0;
-  line-height: 1.2;
-  letter-spacing: -0.025em;
-}
-
-.page-subtitle {
-  font-size: var(--fs-base);
-  color: var(--muted-foreground);
-  margin: 0;
-}
-
-
 /* Breadcrumb Navigation */
 .breadcrumb-container {
   margin-bottom: var(--sp-8);
@@ -59,6 +32,28 @@
   border-radius: var(--r-lg);
   transition: all 0.2s ease;
   min-width: 200px;
+  cursor: pointer;
+}
+
+.breadcrumb-item:hover {
+  background: hsl(var(--muted) / 0.5);
+  transform: translateY(-1px);
+}
+
+.breadcrumb-item--active:hover {
+  background: hsl(var(--primary) / 0.9);
+  transform: translateY(-1px);
+}
+
+.breadcrumb-item--disabled {
+  opacity: 0.5;
+  cursor: not-allowed !important;
+  pointer-events: auto;
+}
+
+.breadcrumb-item--disabled:hover {
+  background: transparent !important;
+  transform: none !important;
 }
 
 .breadcrumb-item--active {
@@ -273,11 +268,29 @@
   transition: all 0.2s ease;
 }
 
+/* Textarea with visible outline - using primary color with opacity matching focus state */
+.plan-submission-ocr .textarea,
+.extraction-form-content .textarea,
+.assignment-form-content .textarea {
+  border: 2px solid var(--border) !important;
+  outline: 2px solid hsl(var(--primary) / 0.4) !important;
+  outline-offset: 2px !important;
+}
+
 .input:focus,
-.select:focus,
-.textarea:focus {
+.select:focus {
   outline: none;
   border-color: var(--primary);
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.2);
+}
+
+/* Textarea focus state - keep outline visible */
+.plan-submission-ocr .textarea:focus,
+.extraction-form-content .textarea:focus,
+.assignment-form-content .textarea:focus {
+  border: 2px solid var(--primary) !important;
+  outline: 2px solid var(--primary) !important;
+  outline-offset: 2px !important;
   box-shadow: 0 0 0 2px hsl(var(--primary) / 0.2);
 }
 
@@ -308,6 +321,24 @@
   gap: var(--sp-3);
   padding-top: var(--sp-4);
   border-top: 1px solid var(--border);
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.save-action-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  align-items: flex-end;
+}
+
+.save-help-text {
+  font-size: var(--fs-xs);
+  color: var(--muted-foreground);
+  margin: 0;
+  font-style: italic;
+  line-height: 1.4;
+  text-align: right;
 }
 
 /* Document Queue */
@@ -470,6 +501,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--sp-8);
+  width: 100%;
 }
 
 .extraction-form-card {
@@ -479,8 +511,8 @@
   overflow: hidden;
   box-shadow: var(--shadow-lg);
   animation: fadeInUp 0.4s ease-out;
+  width: 100%;
   max-width: 100%;
-  margin: 0 auto;
 }
 
 .form-card-header {
@@ -516,8 +548,8 @@
 
 .extraction-form-content {
   padding: var(--sp-8);
+  width: 100%;
   max-width: 100%;
-  margin: 0 auto;
 }
 
 .extraction-fields {
@@ -536,20 +568,69 @@
   padding-bottom: 0;
 }
 
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-6);
+  padding-bottom: var(--sp-2);
+  border-bottom: 2px solid var(--primary);
+}
+
 .field-section .section-title {
   font-size: var(--fs-lg);
   font-weight: var(--fw-semibold);
   color: var(--foreground);
-  margin: 0 0 var(--sp-6) 0;
-  padding-bottom: var(--sp-2);
-  border-bottom: 2px solid var(--primary);
+  margin: 0;
   display: inline-block;
+}
+
+.btn-remove-section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  border-radius: var(--r-sm);
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.btn-remove-section:hover {
+  background: hsl(var(--destructive) / 0.1);
+  color: var(--destructive);
 }
 
 .field-grid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr 1fr;
   gap: var(--sp-6);
+}
+
+.field-grid--2cols {
+  grid-template-columns: 1fr 1fr;
+}
+
+/* Override any rules that might make the last field span all columns in 2-col grid */
+.field-grid--2cols .field-group,
+.field-grid--2cols .field-group:nth-child(odd):last-child {
+  grid-column: auto;
+}
+
+.field-grid--3cols {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+/* Override any rules that might make the last field span all columns in 3-col grid */
+.field-grid--3cols .field-group,
+.field-grid--3cols .field-group:nth-child(odd):last-child {
+  grid-column: auto;
 }
 
 .field-group {
@@ -594,8 +675,14 @@
 
 .form-grid-3 {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr;
-  gap: var(--sp-6);
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+@media (max-width: 768px) {
+  .form-grid-3 {
+    grid-template-columns: 1fr;
+  }
 }
 
 
@@ -1346,4 +1433,268 @@
   background-color: hsl(var(--muted));
   color: hsl(var(--muted-foreground));
   border: 1px solid hsl(var(--border));
+}
+
+/* Dynamic Field Management Styles */
+.field-management-header {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-6);
+  padding-bottom: var(--sp-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.btn--active {
+  background: hsl(var(--primary) / 0.1);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.field-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
+}
+
+.btn-remove-field {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  border-radius: var(--r-sm);
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.btn-remove-field:hover {
+  background: hsl(var(--destructive) / 0.1);
+  color: var(--destructive);
+}
+
+.field-hint {
+  font-size: var(--fs-xs);
+  color: var(--muted-foreground);
+  margin-top: var(--sp-1);
+  margin-bottom: 0;
+}
+
+/* Add Field Modal */
+.add-field-modal {
+  max-width: 600px;
+}
+
+.add-field-modal .modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.add-field-modal .form-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.add-field-modal .form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-4);
+}
+
+/* Field Group with Remove Button */
+.field-group {
+  position: relative;
+}
+
+.field-group .field-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.field-group .field-label {
+  flex: 1;
+  margin: 0;
+}
+
+/* Ensure textarea takes full width in field group */
+.field-group .textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+/* Duller placeholder colors */
+.plan-submission-ocr .textarea::placeholder,
+.extraction-form-content .textarea::placeholder,
+.assignment-form-content .textarea::placeholder {
+  color: #9ca3af;
+  opacity: 0.6;
+}
+
+.plan-submission-ocr .input::placeholder,
+.extraction-form-content .input::placeholder,
+.assignment-form-content .input::placeholder {
+  color: #9ca3af;
+  opacity: 0.6;
+}
+
+/* Removed Fields Section */
+.removed-fields-section {
+  border-top: 2px dashed var(--border);
+  padding-top: var(--sp-6);
+  margin-top: var(--sp-6);
+  opacity: 0.7;
+}
+
+.removed-section-title {
+  color: var(--muted-foreground) !important;
+  font-style: italic;
+}
+
+.removed-fields-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: var(--sp-6);
+}
+
+.removed-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  position: relative;
+}
+
+.removed-field-label {
+  color: var(--muted-foreground) !important;
+  text-decoration: line-through;
+}
+
+.removed-badge {
+  padding: var(--sp-1) var(--sp-2);
+  background: hsl(var(--muted));
+  color: var(--muted-foreground);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.removed-field-textarea {
+  background: hsl(var(--muted) / 0.3) !important;
+  border-color: var(--border) !important;
+  color: var(--muted-foreground) !important;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.removed-field-textarea:focus {
+  outline: none !important;
+  border-color: var(--border) !important;
+  box-shadow: none !important;
+}
+
+/* Card Styles (matching Questionnaire Workflow) */
+.card {
+  background-color: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+}
+
+.card-header {
+  padding: 1.5rem 1.5rem 0 1.5rem;
+}
+
+.card-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  margin: 0;
+}
+
+.card-content {
+  padding: 1.5rem;
+}
+
+/* Space Utilities */
+.space-y-2 > * + * {
+  margin-top: 0.5rem;
+}
+
+.space-y-4 > * + * {
+  margin-top: 1rem;
+}
+
+.space-y-6 > * + * {
+  margin-top: 1.5rem;
+}
+
+/* Text Utilities */
+.block {
+  display: block;
+}
+
+.text-sm {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.text-xs {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.text-gray-500 {
+  color: #6b7280;
+}
+
+.ml-6 {
+  margin-left: 1.5rem;
+}
+
+.pt-4 {
+  padding-top: 1rem;
+}
+
+/* Input and Select Styles (matching Questionnaire Workflow) */
+.plan-submission-ocr .input,
+.plan-submission-ocr .select {
+  display: flex;
+  width: 100%;
+  border-radius: 0.375rem;
+  border: 1px solid hsl(var(--border));
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  transition: border-color 0.2s;
+}
+
+.plan-submission-ocr .input:focus,
+.plan-submission-ocr .select:focus {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  border-color: hsl(var(--ring));
+}
+
+.plan-submission-ocr .input:disabled,
+.plan-submission-ocr .select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background-color: hsl(var(--muted));
+}
+
+.plan-submission-ocr .input[readonly] {
+  background-color: hsl(var(--muted) / 0.5);
+  cursor: not-allowed;
 }

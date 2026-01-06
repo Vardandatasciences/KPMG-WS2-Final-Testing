@@ -37,12 +37,25 @@ const api = {
     },
   },
 
+  // Risks endpoints
+  risks: {
+    getPlanRisks: (planId) => http.get(`/bcpdrp/plans/${planId}/risks/`),
+  },
+
   // Vendor upload endpoint
   vendorUpload: (data) => http.post('/bcpdrp/vendor-upload/', data),
 
   // Dropdowns endpoint
   dropdowns: (params) => http.get('/bcpdrp/dropdowns/', { params }),
 
+  // Plan types endpoints
+  planTypes: {
+    list: () => http.get('/bcpdrp/plan-types/'),
+    create: (data) => http.post('/bcpdrp/plan-types/create/', data),
+    update: (id, data) => http.put(`/bcpdrp/plan-types/${id}/update/`, data),
+    delete: (id) => http.delete(`/bcpdrp/plan-types/${id}/delete/`),
+  },
+  
   // Questionnaires endpoints
   questionnaires: {
     list: (params) => http.get('/bcpdrp/questionnaires/', { params }),
@@ -85,6 +98,7 @@ const api = {
     list: (params) => http.get('/bcpdrp/approvals/', { params }),
     createAssignment: (data) => http.post('/bcpdrp/approvals/assignments/', data),
     myApprovals: (params) => http.get('/bcpdrp/my-approvals/', { params }),
+    updateStatus: (approvalId, data) => http.patch(`/bcpdrp/approvals/${approvalId}/status/`, data),
   },
 
   // Assignment responses endpoints

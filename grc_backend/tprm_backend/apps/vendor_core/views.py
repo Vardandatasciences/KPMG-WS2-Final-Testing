@@ -36,22 +36,10 @@ from tprm_backend.utils.vendor_validators import vendor_validate_input
 
 # RBAC imports
 from tprm_backend.rbac.tprm_decorators import rbac_vendor_required
-from .vendor_authentication import UnifiedJWTAuthentication, SimpleAuthenticatedPermission, VendorAuthenticationMixin
+from .vendor_authentication import JWTAuthentication, SimpleAuthenticatedPermission, VendorAuthenticationMixin
 
 # Initialize logger
 vendor_logger = logging.getLogger('vendor_security')
-
-# Database connection helper - Use tprm_integration database for all vendor operations
-from django.db import connections
-
-def get_db_connection():
-    """
-    Get the correct database connection for tprm_integration database.
-    Returns 'tprm' if available, otherwise falls back to 'default'.
-    """
-    if 'tprm' in connections.databases:
-        return connections['tprm']
-    return connections['default']
 
 
 class VendorCategoriesViewSet(VendorAuthenticationMixin, viewsets.ReadOnlyModelViewSet):
@@ -1242,8 +1230,8 @@ class TempVendorViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
         """Get user data based on UserId from temp_vendor and rfp_responses tables"""
         try:
             # Import RFPResponses from vendor_questionnaire and RBAC model
-            from tprm_backend.apps.vendor_questionnaire.models import RFPResponses
-            from tprm_backend.rbac.models import RBACTPRM
+            from apps.vendor_questionnaire.models import RFPResponses
+            from rbac.models import RBACTPRM
             from django.db import connection
             
             # Get UserId from query params, default to 64 (logged in user)
@@ -1260,11 +1248,11 @@ class TempVendorViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
             
             vendor_logger.info(f"Fetching user data for logged-in UserId: {user_id}")
             
-            # Get user role from rbac_tprm table (in tprm_integration database)
+            # Get user role from rbac_tprm table
             user_role = None
             user_rbac_permissions = None
             try:
-                rbac_entry = RBACTPRM.objects.using('tprm').filter(user_id=user_id).first()
+                rbac_entry = RBACTPRM.objects.filter(user_id=user_id).first()
                 if rbac_entry:
                     user_role = rbac_entry.role
                     # Get relevant vendor permissions
@@ -1280,8 +1268,8 @@ class TempVendorViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
             except Exception as rbac_error:
                 vendor_logger.error(f"Error fetching RBAC data for user {user_id}: {str(rbac_error)}")
             
-            # Step 1: Get temp_vendor record by UserId from tprm_integration database
-            temp_vendor = TempVendor.objects.using('tprm').filter(userid=user_id).first()
+            # Step 1: Get temp_vendor record by UserId
+            temp_vendor = TempVendor.objects.filter(userid=user_id).first()
             response_id = None
             
             if temp_vendor:
@@ -1313,16 +1301,16 @@ class TempVendorViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
                         current_stage = None
                         if temp_vendor.lifecycle_stage:
                             try:
-                                current_stage = VendorLifecycleStages.objects.using('tprm').get(stage_id=temp_vendor.lifecycle_stage)
+                                current_stage = VendorLifecycleStages.objects.get(stage_id=temp_vendor.lifecycle_stage)
                             except VendorLifecycleStages.DoesNotExist:
                                 pass
                         
-                        tracker_entries = LifecycleTracker.objects.using('tprm').filter(vendor_id=temp_vendor.id).order_by('started_at')
+                        tracker_entries = LifecycleTracker.objects.filter(vendor_id=temp_vendor.id).order_by('started_at')
                         tracker_data = []
                         for entry in tracker_entries:
                             stage_info = None
                             try:
-                                stage_info = VendorLifecycleStages.objects.using('tprm').get(stage_id=entry.lifecycle_stage)
+                                stage_info = VendorLifecycleStages.objects.get(stage_id=entry.lifecycle_stage)
                             except VendorLifecycleStages.DoesNotExist:
                                 pass
                             
@@ -1369,7 +1357,7 @@ class TempVendorViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
             # Step 3: Get RFP response data using response_id
             try:
                 # Query rfp_responses table directly using raw SQL to get all fields
-                with get_db_connection().cursor() as cursor:
+                with connection.cursor() as cursor:
                     # First, get the column names to avoid unknown column errors
                     cursor.execute("SHOW COLUMNS FROM rfp_responses")
                     available_columns = [row[0] for row in cursor.fetchall()]
@@ -1519,17 +1507,17 @@ class TempVendorViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
                         current_stage = None
                         if temp_vendor.lifecycle_stage:
                             try:
-                                current_stage = VendorLifecycleStages.objects.using('tprm').get(stage_id=temp_vendor.lifecycle_stage)
+                                current_stage = VendorLifecycleStages.objects.get(stage_id=temp_vendor.lifecycle_stage)
                             except VendorLifecycleStages.DoesNotExist:
                                 pass
                         
                         # Get lifecycle tracker entries
-                        tracker_entries = LifecycleTracker.objects.using('tprm').filter(vendor_id=temp_vendor.id).order_by('started_at')
+                        tracker_entries = LifecycleTracker.objects.filter(vendor_id=temp_vendor.id).order_by('started_at')
                         tracker_data = []
                         for entry in tracker_entries:
                             stage_info = None
                             try:
-                                stage_info = VendorLifecycleStages.objects.using('tprm').get(stage_id=entry.lifecycle_stage)
+                                stage_info = VendorLifecycleStages.objects.get(stage_id=entry.lifecycle_stage)
                             except VendorLifecycleStages.DoesNotExist:
                                 pass
                             

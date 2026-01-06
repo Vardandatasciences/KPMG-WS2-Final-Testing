@@ -23,7 +23,7 @@ class User(models.Model):
     class Meta:
         db_table = "users"
         managed = False  # set to True only if Django should manage this table
-        app_label = 'tprm_mfa_auth'
+        app_label = 'mfa_auth'
 
     def __str__(self):
         return self.username

@@ -1,0 +1,234 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Phase 4: Vendor Invitation - RFP #{{ rfp.rfp_number }}{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 p-6">
+  <div class="max-w-6xl mx-auto space-y-8">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div class="space-y-2">
+        <h1 class="text-3xl font-bold text-gray-900">Phase 4: Vendor Invitation</h1>
+        <p class="text-gray-600">
+          Send invitations to selected vendors to participate in the RFP.
+        </p>
+      </div>
+      <div class="flex-shrink-0">
+        <div class="status-badge active">
+          Phase 4 of 10
+        </div>
+      </div>
+    </div>
+
+    <!-- Invitation Summary -->
+    <div class="phase-card">
+      <div class="p-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+          <div>
+            <h3 class="font-semibold text-lg">Invitation Summary</h3>
+            <p class="text-gray-600">
+              {{ selected_vendors.count }} vendors selected for invitation
+            </p>
+          </div>
+          <div>
+            <button type="button" class="btn-primary flex items-center gap-2" id="send-all-btn">
+              <i class="fas fa-paper-plane h-4 w-4"></i>
+              Send All Invitations
+            </button>
+          </div>
+        </div>
+        
+        <!-- Invitation Table -->
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Vendor
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Contact
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Invitation URL
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              {% for selection in selected_vendors %}
+              <tr>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <div class="flex items-center">
+                    <div class="flex-shrink-0 h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center">
+                      <i class="fas fa-building text-gray-500"></i>
+                    </div>
+                    <div class="ml-4">
+                      <div class="text-sm font-medium text-gray-900">
+                        {{ selection.vendor.company_name }}
+                      </div>
+                      <div class="text-sm text-gray-500">
+                        {{ selection.vendor.location }}
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <div class="text-sm text-gray-900">{{ selection.vendor.email }}</div>
+                  <div class="text-sm text-gray-500">{{ selection.vendor.phone }}</div>
+                </td>
+                <td class="px-6 py-4">
+                  <div class="text-sm text-gray-900 max-w-xs truncate">
+                    {% if selection.invitation_url %}
+                    <span class="text-blue-600">{{ selection.invitation_url }}</span>
+                    {% else %}
+                    <span class="text-gray-500">Not generated</span>
+                    {% endif %}
+                  </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                    {% if selection.invitation_sent %}
+                      bg-green-100 text-green-800
+                    {% else %}
+                      bg-yellow-100 text-yellow-800
+                    {% endif %}
+                  ">
+                    {{ selection.invitation_sent|yesno:"Sent,Pending" }}
+                  </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <button type="button" class="text-blue-600 hover:text-blue-900 mr-3 copy-url-btn" data-url="{{ selection.invitation_url }}">
+                    <i class="fas fa-copy"></i> Copy
+                  </button>
+                  {% if not selection.invitation_sent %}
+                  <button type="button" class="text-green-600 hover:text-green-900 send-invitation-btn" data-selection-id="{{ selection.selection_id }}">
+                    <i class="fas fa-paper-plane"></i> Send
+                  </button>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation Buttons -->
+    <div class="flex justify-between">
+      <a href="{% url 'vendor_selection' rfp.rfp_id %}" class="btn-outline">
+        Back to Vendor Selection
+      </a>
+      <a href="#" class="gradient-primary flex items-center">
+        Next Phase
+        <i class="fas fa-arrow-right h-4 w-4 ml-2"></i>
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.phase-card {
+  @apply bg-white border border-gray-200 rounded-lg shadow-sm;
+}
+
+.status-badge {
+  @apply px-3 py-1 rounded-full text-sm font-medium;
+}
+
+.status-badge.active {
+  @apply bg-green-100 text-green-800 border border-green-200;
+}
+
+.btn-primary {
+  @apply px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700;
+}
+
+.btn-outline {
+  @apply px-4 py-2 bg-white text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50;
+}
+
+.gradient-primary {
+  @apply px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Copy URL buttons
+  const copyUrlButtons = document.querySelectorAll('.copy-url-btn');
+  
+  copyUrlButtons.forEach(button => {
+    button.addEventListener('click', function() {
+      const url = this.dataset.url;
+      
+      if (url) {
+        navigator.clipboard.writeText(url).then(() => {
+          // Change button text temporarily
+          const originalHTML = this.innerHTML;
+          this.innerHTML = '<i class="fas fa-check"></i> Copied!';
+          
+          setTimeout(() => {
+            this.innerHTML = originalHTML;
+          }, 2000);
+        });
+      }
+    });
+  });
+  
+  // Send invitation buttons
+  const sendInvitationButtons = document.querySelectorAll('.send-invitation-btn');
+  
+  sendInvitationButtons.forEach(button => {
+    button.addEventListener('click', function() {
+      const selectionId = this.dataset.selectionId;
+      
+      // Here you would normally send an AJAX request to send the invitation
+      // For demo purposes, we'll just update the UI
+      this.innerHTML = '<i class="fas fa-check"></i> Sent!';
+      this.disabled = true;
+      this.classList.remove('text-green-600', 'hover:text-green-900');
+      this.classList.add('text-gray-400');
+      
+      // Update the status badge
+      const row = this.closest('tr');
+      const statusBadge = row.querySelector('td:nth-child(4) span');
+      statusBadge.classList.remove('bg-yellow-100', 'text-yellow-800');
+      statusBadge.classList.add('bg-green-100', 'text-green-800');
+      statusBadge.textContent = 'Sent';
+    });
+  });
+  
+  // Send all invitations button
+  const sendAllButton = document.querySelector('#send-all-btn');
+  
+  sendAllButton.addEventListener('click', function() {
+    // Send all pending invitations
+    sendInvitationButtons.forEach(button => {
+      if (!button.disabled) {
+        button.click();
+      }
+    });
+    
+    // Update button text temporarily
+    const originalHTML = this.innerHTML;
+    this.innerHTML = '<i class="fas fa-check"></i> All Invitations Sent!';
+    
+    setTimeout(() => {
+      this.innerHTML = originalHTML;
+    }, 2000);
+  });
+});
+</script>
+{% endblock %}

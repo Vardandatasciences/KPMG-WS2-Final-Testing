@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.postgres.fields import JSONField
 from django.core.serializers.json import DjangoJSONEncoder
 import json
 

@@ -9,7 +9,9 @@ const authModule = {
     isAuthenticated: false,
     sessionToken: null,
     loading: false,
-    error: null
+    error: null,
+    otpUser: null, // Store user info during OTP flow
+    requiresOtp: false
   },
  
   getters: {
@@ -18,41 +20,39 @@ const authModule = {
     sessionToken: state => state.sessionToken,
     isLoading: state => state.loading,
     hasError: state => !!state.error,
-    error: state => state.error
+    error: state => state.error,
+    otpUser: state => state.otpUser,
+    requiresOtp: state => state.requiresOtp
   },
  
   mutations: {
-    SET_AUTH(state, { user, token, accessToken, refreshToken }) {
+    SET_AUTH(state, { user, token }) {
       state.currentUser = user
       state.sessionToken = token
       state.isAuthenticated = true
+      state.requiresOtp = false
+      state.otpUser = null
       if (token) {
         localStorage.setItem('session_token', token)
         localStorage.setItem('current_user', JSON.stringify(user))
-      }
-      if (typeof accessToken !== 'undefined') {
-        if (accessToken) {
-          localStorage.setItem('access_token', accessToken)
-        } else {
-          localStorage.removeItem('access_token')
-        }
-      }
-      if (typeof refreshToken !== 'undefined') {
-        if (refreshToken) {
-          localStorage.setItem('refresh_token', refreshToken)
-        } else {
-          localStorage.removeItem('refresh_token')
-        }
       }
       // Clear permission cache on login to force fresh permission checks
       console.log('[Auth] Clearing permission cache on login')
       permissionsService.clearCache()
     },
    
+    SET_OTP_REQUIRED(state, { user, requiresOtp }) {
+      state.otpUser = user
+      state.requiresOtp = requiresOtp
+      state.isAuthenticated = false
+    },
+   
     CLEAR_AUTH(state) {
       state.currentUser = null
       state.sessionToken = null
       state.isAuthenticated = false
+      state.otpUser = null
+      state.requiresOtp = false
       localStorage.removeItem('session_token')
       localStorage.removeItem('access_token')
       localStorage.removeItem('refresh_token')
@@ -83,6 +83,10 @@ const authModule = {
   },
  
   actions: {
+    /**
+     * Step 1: Login with username and password
+     * This will trigger OTP to be sent
+     */
     async login({ commit }, { username, password }) {
       try {
         commit('SET_LOADING', true)
@@ -93,16 +97,30 @@ const authModule = {
         const result = await authService.login(username, password)
        
         if (result.success) {
-          commit('SET_AUTH', {
-            user: result.user,
-            token: result.token,
-            accessToken: result.accessToken,
-            refreshToken: result.refreshToken
-          })
-          return {
-            success: true,
-            user: result.user,
-            message: result.message
+          if (result.requiresOtp) {
+            // OTP required, store user info for OTP verification
+            commit('SET_OTP_REQUIRED', {
+              user: result.user,
+              requiresOtp: true
+            })
+            console.log('Auth module: OTP required, check your email')
+            return {
+              success: true,
+              requiresOtp: true,
+              message: result.message,
+              user: result.user
+            }
+          } else {
+            // Direct login without OTP (shouldn't happen with MFA)
+            commit('SET_AUTH', {
+              user: result.user,
+              token: result.data.session_token
+            })
+            return {
+              success: true,
+              requiresOtp: false,
+              user: result.user
+            }
           }
         } else {
           commit('SET_ERROR', result.error)
@@ -124,6 +142,96 @@ const authModule = {
       }
     },
    
+    /**
+     * Step 2: Verify OTP code
+     */
+    async verifyOtp({ commit, state }, otp) {
+      try {
+        commit('SET_LOADING', true)
+        commit('CLEAR_ERROR')
+       
+        if (!state.otpUser) {
+          const error = 'No user found for OTP verification. Please login again.'
+          commit('SET_ERROR', error)
+          return { success: false, error }
+        }
+       
+        console.log('Auth module: Verifying OTP for user:', state.otpUser.username)
+       
+        const result = await authService.verifyOtp(state.otpUser.username, otp)
+       
+        if (result.success) {
+          commit('SET_AUTH', {
+            user: result.user,
+            token: result.token
+          })
+          console.log('Auth module: OTP verification successful')
+          return {
+            success: true,
+            user: result.user
+          }
+        } else {
+          commit('SET_ERROR', result.error)
+          return {
+            success: false,
+            error: result.error
+          }
+        }
+      } catch (error) {
+        console.error('Auth module: OTP verification error:', error)
+        const errorMessage = error.message || 'OTP verification failed'
+        commit('SET_ERROR', errorMessage)
+        return {
+          success: false,
+          error: errorMessage
+        }
+      } finally {
+        commit('SET_LOADING', false)
+      }
+    },
+   
+    /**
+     * Resend OTP code
+     */
+    async resendOtp({ commit, state }) {
+      try {
+        commit('SET_LOADING', true)
+        commit('CLEAR_ERROR')
+       
+        if (!state.otpUser) {
+          const error = 'No user found for OTP resend. Please login again.'
+          commit('SET_ERROR', error)
+          return { success: false, error }
+        }
+       
+        console.log('Auth module: Resending OTP for user:', state.otpUser.username)
+       
+        const result = await authService.resendOtp(state.otpUser.username)
+       
+        if (result.success) {
+          return {
+            success: true,
+            message: result.message
+          }
+        } else {
+          commit('SET_ERROR', result.error)
+          return {
+            success: false,
+            error: result.error
+          }
+        }
+      } catch (error) {
+        console.error('Auth module: Resend OTP error:', error)
+        const errorMessage = error.message || 'Failed to resend OTP'
+        commit('SET_ERROR', errorMessage)
+        return {
+          success: false,
+          error: errorMessage
+        }
+      } finally {
+        commit('SET_LOADING', false)
+      }
+    },
    
     /**
      * Validate current session

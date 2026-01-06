@@ -46,7 +46,7 @@
               >
                 <div class="option-content">
                   <div class="option-header">
-                    <span class="option-title">{{ audit.title || audit.policy || 'Audit' }}</span>
+                    <span class="option-title">{{ audit.title || 'Audit' }}</span>
                     <span class="option-id">ID: {{ audit.audit_id }}</span>
                   </div>
                   <div class="option-meta">
@@ -279,25 +279,9 @@
         Documents automatically processed for this audit. Documents uploaded via Document Handling are automatically analyzed and linked to this audit when relevant.
       </p>
 
-      <!-- Assigned Policy/Sub-policy Display -->
-      <div class="policy-selection">
-        <label>Assigned Policy/Sub-policy</label>
-        <div class="policy-display">
-          <div class="policy-info">
-            <div class="policy-item">
-              <span class="policy-label">Policy:</span>
-              <span class="policy-value">{{ selectedPolicyName }}</span>
-            </div>
-            <div class="policy-item">
-              <span class="policy-label">Sub-policy:</span>
-              <span class="policy-value">{{ selectedSubPolicyName }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Multi-select for Policies / Sub-policies / Compliances -->
-        <!-- Show whenever an audit is selected; inner lists handle empty states -->
-        <div class="multi-mapping-container" v-if="hasSelectedAudit">
+      <!-- Multi-select for Policies / Sub-policies / Compliances -->
+      <!-- Show whenever an audit is selected; inner lists handle empty states -->
+      <div class="multi-mapping-container" v-if="hasSelectedAudit">
           <h4 class="multi-mapping-title">Select scope for this AI audit upload (Optional)</h4>
           <p class="multi-mapping-help">
             <strong>Optional:</strong> Choose one or more <strong>policies</strong>, their <strong>sub‑policies</strong> and specific
@@ -450,7 +434,6 @@
             </p>
           </div>
         </div>
-      </div>
 
       <!-- File Upload Area -->
       <div class="file-upload-area" @click="triggerFileUpload" @dragover.prevent @drop.prevent="handleDrop">
@@ -1307,7 +1290,7 @@ export default {
     getSelectedAuditTitle() {
       const selectedAudit = this.availableAIAudits.find(a => a.audit_id === this.selectedExistingAuditId)
       if (selectedAudit) {
-        return selectedAudit.title || selectedAudit.policy || 'Audit'
+        return selectedAudit.title || 'Audit'
       }
       return 'Select Assigned AI Audit...'
     },
@@ -1908,14 +1891,17 @@ export default {
         this.availableAudits = deduped
         // Do not filter by audit type because some AI audits may be stored as 'I'.
         // Show all assigned audits and indicate type in the label.
-        this.availableAIAudits = this.availableAudits.map(a => ({
-          audit_id: a.audit_id || a.AuditId || a.id,
-          title: a.title || a.Title || null,
-          policy: a.policy || a.Policy || a.title || a.Title || 'Audit',
-          duedate: a.duedate || a.due_date || a.DueDate || null,
-          framework: a.framework || a.FrameworkName || null,
-          audit_type: (a.audit_type || a.AuditType || '').toString().toUpperCase() || 'UNKNOWN'
-        })).sort((a) => (a.audit_type === 'A' ? -1 : 1))
+        this.availableAIAudits = this.availableAudits.map(a => {
+          const title = (a.title || a.Title || '').toString().trim()
+          return {
+            audit_id: a.audit_id || a.AuditId || a.id,
+            title: title || 'Audit',
+            policy: a.policy || a.Policy || title || 'Audit',
+            duedate: a.duedate || a.due_date || a.DueDate || null,
+            framework: a.framework || a.FrameworkName || null,
+            audit_type: (a.audit_type || a.AuditType || '').toString().toUpperCase() || 'UNKNOWN'
+          }
+        }).sort((a) => (a.audit_type === 'A' ? -1 : 1))
         console.log('🔍 Loaded AI audits:', this.availableAIAudits)
       } catch (e) {
         console.error('Error loading assigned audits:', e)
@@ -4397,11 +4383,22 @@ export default {
       
       // Track if we've seen any processing documents to continue polling for a bit after completion
       let hasSeenProcessingDocs = false
-      let consecutiveNoProcessingCount = 0
+      let consecutiveCompletedCount = 0
+      const MAX_CONSECUTIVE_COMPLETED = 3 // Stop after 3 consecutive checks showing all completed
       
       // Poll for document status updates every 5 seconds
       // This ensures Details button appears as soon as documents are completed
       this.pollingInterval = setInterval(() => {
+        // If no documents at all, stop polling immediately
+        if (!this.uploadedDocuments || this.uploadedDocuments.length === 0) {
+          console.log('✅ No documents found, stopping status polling')
+          if (this.pollingInterval) {
+            clearInterval(this.pollingInterval)
+            this.pollingInterval = null
+          }
+          return
+        }
+        
         // Check if we have documents that might be processing
         const hasProcessingDocs = this.uploadedDocuments.some(fg => 
           fg.mappings && fg.mappings.some(m => {
@@ -4410,24 +4407,47 @@ export default {
           })
         )
         
+        // Check if all documents are completed
+        const allCompleted = this.uploadedDocuments.every(fg => 
+          this.areAllMappingsCompleted(fg)
+        )
+        
         if (hasProcessingDocs) {
+          // Still have processing documents, continue polling
           hasSeenProcessingDocs = true
-          consecutiveNoProcessingCount = 0
+          consecutiveCompletedCount = 0
           console.log('🔄 Polling for document status updates (processing documents found)...')
           this.loadUploadedDocuments().catch(err => {
             console.warn('⚠️ Error during status polling:', err)
           })
-        } else if (hasSeenProcessingDocs && consecutiveNoProcessingCount < 3) {
-          // Continue polling for 3 more cycles (15 seconds) after processing stops
-          // This ensures the UI has time to update with completed status
-          consecutiveNoProcessingCount++
-          console.log(`🔄 Polling for document status updates (post-processing check ${consecutiveNoProcessingCount}/3)...`)
+        } else if (allCompleted) {
+          // All documents are completed
+          consecutiveCompletedCount++
+          console.log(`✅ All documents completed (check ${consecutiveCompletedCount}/${MAX_CONSECUTIVE_COMPLETED})...`)
+          
+          if (consecutiveCompletedCount >= MAX_CONSECUTIVE_COMPLETED) {
+            // Stop polling after confirming all are completed for 3 cycles
+            console.log('✅ All documents confirmed completed, stopping status polling')
+            if (this.pollingInterval) {
+              clearInterval(this.pollingInterval)
+              this.pollingInterval = null
+            }
+          } else {
+            // Do one final refresh to ensure UI is up to date
+            this.loadUploadedDocuments().catch(err => {
+              console.warn('⚠️ Error during final status polling:', err)
+            })
+          }
+        } else if (hasSeenProcessingDocs) {
+          // Had processing docs before, but now none are processing and not all are completed
+          // This shouldn't happen normally, but continue polling just in case
+          console.log('🔄 Polling for document status updates (transition state)...')
           this.loadUploadedDocuments().catch(err => {
             console.warn('⚠️ Error during status polling:', err)
           })
-        } else if (consecutiveNoProcessingCount >= 3) {
-          // Stop polling after 3 cycles with no processing docs
-          console.log('✅ All documents completed, stopping status polling')
+        } else {
+          // No processing docs and never had any - stop immediately
+          console.log('✅ No processing documents found, stopping status polling')
           if (this.pollingInterval) {
             clearInterval(this.pollingInterval)
             this.pollingInterval = null

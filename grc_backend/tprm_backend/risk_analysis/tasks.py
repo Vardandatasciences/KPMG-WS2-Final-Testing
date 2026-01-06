@@ -229,9 +229,14 @@ def generate_comprehensive_risks_task(plan_id, evaluation_id=None):
     """
     Background task to generate comprehensive risks for BCP/DRP plans
     
+    This task is typically triggered when OCR extraction is saved for a plan.
+    It analyzes plan information and extracted OCR details, optionally including
+    evaluation data if available.
+    
     Args:
         plan_id: Plan ID to analyze
-        evaluation_id: Optional evaluation ID to include in analysis
+        evaluation_id: Optional evaluation ID to include in analysis. 
+                      If None, risks are generated from plan info + extracted OCR details only.
         
     Returns:
         dict: Task result with risk generation status

@@ -117,6 +117,7 @@
                 <TableHead>Start Date</TableHead>
                 <TableHead>End Date</TableHead>
                 <TableHead>Value</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -138,6 +139,17 @@
                 <TableCell>{{ contract.start_date ? new Date(contract.start_date).toLocaleDateString() : 'N/A' }}</TableCell>
                 <TableCell>{{ contract.end_date ? new Date(contract.end_date).toLocaleDateString() : 'N/A' }}</TableCell>
                 <TableCell class="font-medium">${{ (contract.contract_value || 0).toLocaleString() }}</TableCell>
+                <TableCell>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    @click="viewContract(contract.contract_id)"
+                    class="gap-2"
+                  >
+                    <Eye class="w-4 h-4" />
+                    View
+                  </Button>
+                </TableCell>
               </TableRow>
             </TableBody>
           </Table>
@@ -147,20 +159,16 @@
 
     <!-- Main Vendors List View -->
     <div v-else class="space-y-6">
-      <div class="flex justify-between items-center">
-        <div>
-          <h1 class="text-3xl font-bold text-foreground">Vendor Contracts</h1>
-          <p class="text-muted-foreground">Manage vendor relationships and their associated contracts</p>
-        </div>
-        <Button class="gap-2">
-          <Plus class="w-4 h-4" />
-          Add Vendor
-        </Button>
+      <div>
+        <h1 class="text-3xl font-bold text-foreground">Vendor Contracts</h1>
+        <p class="text-muted-foreground">
+          {{ isVendor ? 'View your vendor information and associated contracts' : 'Manage vendor relationships and their associated contracts' }}
+        </p>
       </div>
 
       <!-- Stats Cards -->
       <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card>
+        <Card v-if="!isVendor">
           <CardHeader class="pb-2">
             <CardTitle class="text-sm font-medium text-muted-foreground">Total Vendors</CardTitle>
           </CardHeader>
@@ -169,7 +177,7 @@
           </CardContent>
         </Card>
         
-        <Card>
+        <Card v-if="!isVendor">
           <CardHeader class="pb-2">
             <CardTitle class="text-sm font-medium text-muted-foreground">Active Vendors</CardTitle>
           </CardHeader>
@@ -182,7 +190,9 @@
 
         <Card>
           <CardHeader class="pb-2">
-            <CardTitle class="text-sm font-medium text-muted-foreground">Total Contracts</CardTitle>
+            <CardTitle class="text-sm font-medium text-muted-foreground">
+              {{ isVendor ? 'My Contracts' : 'Total Contracts' }}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div class="text-2xl font-bold text-foreground">
@@ -193,7 +203,9 @@
 
         <Card>
           <CardHeader class="pb-2">
-            <CardTitle class="text-sm font-medium text-muted-foreground">Total Value</CardTitle>
+            <CardTitle class="text-sm font-medium text-muted-foreground">
+              {{ isVendor ? 'Total Contract Value' : 'Total Value' }}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div class="text-2xl font-bold text-foreground">
@@ -243,7 +255,9 @@
       <Card>
         <CardHeader>
            <CardTitle>Vendor Contracts Directory</CardTitle>
-           <CardDescription>Complete list of vendor contract partners</CardDescription>
+           <CardDescription>
+             {{ isVendor ? 'Your vendor information and contracts' : 'Complete list of vendor contract partners' }}
+           </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -317,6 +331,8 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
+import { useStore } from 'vuex'
+import { useRouter } from 'vue-router'
 import { 
   Card, CardContent, CardDescription, CardHeader, CardTitle,
   Badge, Button, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -328,6 +344,19 @@ import {
 } from 'lucide-vue-next'
 import vendorcontractsApi from '../../services/vendorcontractsApi'
 import loggingService from '@/services/loggingService'
+
+const store = useStore()
+const router = useRouter()
+
+// Get current user from store
+const currentUser = computed(() => store.getters['auth/currentUser'])
+
+// Check if user is a vendor
+const isVendor = computed(() => {
+  if (!currentUser.value) return false
+  const role = currentUser.value.role || currentUser.value.user_role || ''
+  return role.toLowerCase() === 'vendor'
+})
 
 // State
 const selectedVendor = ref(null)
@@ -450,6 +479,15 @@ const handleVendorSelect = (vendor) => {
 
 const handleBackToList = () => {
   selectedVendor.value = null
+}
+
+const viewContract = (contractId) => {
+  if (contractId) {
+    router.push({
+      path: `/contracts/${contractId}`,
+      query: { returnTo: 'vendor-contracts' }
+    })
+  }
 }
 
 // Watch for search changes

@@ -47,6 +47,7 @@ try:
             'trigger_ocr': 'Trigger OCR',
             'get_nlp_clauses': 'Get NLP Clauses',
             'create_contract_audit': 'Create Contract Audit',
+            'perform_contract_audit': 'Perform Contract Audit',
             'validate_contract_data': 'Validate Contract Data'
         }
         
@@ -96,14 +97,14 @@ INSERT INTO rbac_tprm (UserId, UserName, Role,
     ApproveContract, RejectContract,
     ListContractTerms, CreateContractTerm, UpdateContractTerm, DeleteContractTerm,
     ListContractRenewals, CreateContractRenewal, ApproveContractRenewal, RejectContractRenewal,
-    ContractDashboard, ContractSearch, TriggerOCR, GetNLPClauses, ValidateContractData,
+    ContractDashboard, ContractSearch, TriggerOCR, GetNLPClauses, CreateContractAudit, PerformContractAudit, ValidateContractData,
     IsActive, CreatedAt, UpdatedAt
 ) VALUES (
     {user.userid}, '{user.username}', 'Contract Manager',
     1, 1, 1, 1, 1, 1,
     1, 1, 1, 1,
     1, 1, 1, 1,
-    1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1,
     'Y', NOW(), NOW()
 );
         """)

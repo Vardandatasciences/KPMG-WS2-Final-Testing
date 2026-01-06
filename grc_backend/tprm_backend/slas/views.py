@@ -8,7 +8,7 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.authentication import BaseAuthentication
-from rest_framework.permissions import BasePermission, AllowAny
+from rest_framework.permissions import BasePermission
 from django.shortcuts import get_object_or_404
 from django.db.models import Q, Avg, Count, Sum
 from django_filters.rest_framework import DjangoFilterBackend
@@ -18,9 +18,6 @@ from django.conf import settings
 from datetime import datetime, timedelta
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
-
-# Use Unified JWT Authentication from GRC
-from grc.jwt_auth import UnifiedJWTAuthentication
 
 # RBAC imports
 from tprm_backend.rbac.tprm_decorators import rbac_sla_required
@@ -71,16 +68,66 @@ class RBACPermission(BasePermission):
 
 
 class SimpleAuthenticatedPermission(BasePermission):
-    """Custom permission class that checks for authenticated users - SIMPLIFIED"""
+    """Custom permission class that checks for authenticated users"""
     def has_permission(self, request, view):
-        # Just check if user object exists and is authenticated
-        # UnifiedJWTAuthentication handles GRC/TPRM user verification
-        if request.user and hasattr(request.user, 'is_authenticated'):
-            return request.user.is_authenticated
-        return False
+        # Check if user is authenticated
+        return bool(
+            request.user and 
+            hasattr(request.user, 'userid') and
+            getattr(request.user, 'is_authenticated', False)
+        )
 
 
-# REMOVED BUGGY LOCAL JWT CLASS - Using UnifiedJWTAuthentication from grc.jwt_auth instead
+class JWTAuthentication(BaseAuthentication):
+    """Custom JWT authentication class for DRF"""
+    def authenticate(self, request):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return None
+        
+        try:
+            token = auth_header.split(' ')[1]
+            # Use JWT_SECRET_KEY from settings
+            secret_key = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+            payload = jwt.decode(token, secret_key, algorithms=['HS256'])
+            user_id = payload.get('user_id')
+            
+            if user_id:
+                try:
+                    from mfa_auth.models import User
+                    user = User.objects.get(userid=user_id)
+                    # Add is_authenticated attribute for DRF compatibility
+                    user.is_authenticated = True
+                    return (user, token)
+                except ImportError:
+                    # If User model import fails, create a mock user
+                    logger.warning(f"User model import failed, creating mock user for user_id: {user_id}")
+                    class MockUser:
+                        def __init__(self, user_id):
+                            self.userid = user_id
+                            self.username = f"user_{user_id}"
+                            self.is_authenticated = True
+                    
+                    return (MockUser(user_id), token)
+                except Exception as e:
+                    # If User model doesn't exist or other error, create a mock user
+                    logger.warning(f"User {user_id} not found or error: {e}, creating mock user")
+                    class MockUser:
+                        def __init__(self, user_id):
+                            self.userid = user_id
+                            self.username = f"user_{user_id}"
+                            self.is_authenticated = True
+                    
+                    return (MockUser(user_id), token)
+        except jwt.ExpiredSignatureError:
+            logger.warning("JWT token expired")
+            return None
+        except jwt.InvalidTokenError:
+            logger.warning("Invalid JWT token")
+            return None
+        except Exception as e:
+            logger.error(f"JWT authentication error: {str(e)}")
+            return None
 
 
 class RateLimiter:
@@ -111,7 +158,7 @@ class VendorListView(generics.ListCreateAPIView):
     """List and create vendors."""
     queryset = Vendor.objects.all()
     serializer_class = VendorSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [RBACPermission]
     rbac_permission_type = 'ViewSLA'  # Vendors are part of SLA module
     filter_backends = [SearchFilter, OrderingFilter]
@@ -135,7 +182,7 @@ class VendorDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Retrieve, update and delete vendor."""
     queryset = Vendor.objects.all()
     serializer_class = VendorSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [RBACPermission]
     rbac_permission_type = 'ViewSLA'
     
@@ -158,7 +205,7 @@ class ContractListView(generics.ListCreateAPIView):
     """List and create contracts."""
     queryset = Contract.objects.all()
     serializer_class = ContractSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [RBACPermission]
     rbac_permission_type = 'ViewSLA'
     filter_backends = [SearchFilter, OrderingFilter]
@@ -182,7 +229,7 @@ class ContractDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Retrieve, update and delete contract."""
     queryset = Contract.objects.all()
     serializer_class = ContractSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [RBACPermission]
     rbac_permission_type = 'ViewSLA'
     
@@ -204,7 +251,7 @@ class ContractDetailView(generics.RetrieveUpdateDestroyAPIView):
 class VendorSLAListView(generics.ListCreateAPIView):
     """List and create vendor SLAs."""
     queryset = VendorSLA.objects.all()
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [RBACPermission]
     rbac_permission_type = 'ViewSLA'
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
@@ -234,7 +281,7 @@ class VendorSLADetailView(generics.RetrieveUpdateDestroyAPIView):
     """Retrieve, update and delete vendor SLA."""
     queryset = VendorSLA.objects.select_related('vendor', 'contract').prefetch_related('sla_metrics')
     serializer_class = VendorSLADetailSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [RBACPermission]
     rbac_permission_type = 'ViewSLA'
     
@@ -267,7 +314,7 @@ class VendorSLADetailView(generics.RetrieveUpdateDestroyAPIView):
 
 class VendorSLASubmitView(APIView):
     """Submit VendorSLA for review."""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [RBACPermission]
     rbac_permission_type = 'UpdateSLA'
     
@@ -291,7 +338,7 @@ class VendorSLASubmitView(APIView):
 
 class VendorSLAApproveView(APIView):
     """Approve or reject VendorSLA."""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [RBACPermission]
     rbac_permission_type = 'ActivateDeactivateSLA'
     
@@ -318,7 +365,7 @@ class SLAMetricListView(generics.ListCreateAPIView):
     """List and create SLA metrics."""
     queryset = SLAMetric.objects.all()
     serializer_class = SLAMetricSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [RBACPermission]
     rbac_permission_type = 'ViewSLA'
     filter_backends = [DjangoFilterBackend, SearchFilter]
@@ -339,7 +386,7 @@ class SLAMetricDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Retrieve, update and delete SLA metric."""
     queryset = SLAMetric.objects.all()
     serializer_class = SLAMetricSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [RBACPermission]
     rbac_permission_type = 'ViewSLA'
     
@@ -358,7 +405,7 @@ class SLAMetricDetailView(generics.RetrieveUpdateDestroyAPIView):
 class SLAMetricsBySLAView(generics.ListAPIView):
     """Get all metrics for a specific SLA."""
     serializer_class = SLAMetricSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [RBACPermission]
     rbac_permission_type = 'ViewSLA'
     
@@ -375,7 +422,7 @@ class SLADocumentListView(generics.ListCreateAPIView):
     """List and create SLA documents."""
     queryset = SLADocument.objects.all()
     serializer_class = SLADocumentSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [RBACPermission]
     rbac_permission_type = 'ViewSLA'
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
@@ -398,7 +445,7 @@ class SLADocumentDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Retrieve, update and delete SLA document."""
     queryset = SLADocument.objects.all()
     serializer_class = SLADocumentSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [RBACPermission]
     rbac_permission_type = 'ViewSLA'
     
@@ -419,7 +466,7 @@ class SLAComplianceListView(generics.ListCreateAPIView):
     """List and create SLA compliance records."""
     queryset = SLACompliance.objects.all()
     serializer_class = SLAComplianceSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [RBACPermission]
     rbac_permission_type = 'ViewSLA'
     filter_backends = [DjangoFilterBackend, OrderingFilter]
@@ -441,7 +488,7 @@ class SLAComplianceDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Retrieve, update and delete SLA compliance record."""
     queryset = SLACompliance.objects.all()
     serializer_class = SLAComplianceSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [RBACPermission]
     rbac_permission_type = 'ViewSLA'
     
@@ -462,7 +509,7 @@ class SLAViolationListView(generics.ListCreateAPIView):
     """List and create SLA violations."""
     queryset = SLAViolation.objects.all()
     serializer_class = SLAViolationSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [RBACPermission]
     rbac_permission_type = 'ViewSLA'
     filter_backends = [DjangoFilterBackend, OrderingFilter]
@@ -484,7 +531,7 @@ class SLAViolationDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Retrieve, update and delete SLA violation."""
     queryset = SLAViolation.objects.all()
     serializer_class = SLAViolationSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [RBACPermission]
     rbac_permission_type = 'ViewSLA'
     
@@ -505,7 +552,7 @@ class SLAReviewListView(generics.ListCreateAPIView):
     """List and create SLA reviews."""
     queryset = SLAReview.objects.all()
     serializer_class = SLAReviewSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [RBACPermission]
     rbac_permission_type = 'ViewSLA'
     filter_backends = [DjangoFilterBackend, OrderingFilter]
@@ -527,7 +574,7 @@ class SLAReviewDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Retrieve, update and delete SLA review."""
     queryset = SLAReview.objects.all()
     serializer_class = SLAReviewSerializer
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [RBACPermission]
     rbac_permission_type = 'ViewSLA'
     
@@ -545,7 +592,7 @@ class SLAReviewDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 # Analytics and Summary Views
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_sla_required('ViewSLA')
 def sla_compliance_summary(request):
@@ -588,7 +635,7 @@ def sla_compliance_summary(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_sla_required('ViewSLA')
 def vendor_summary(request):
@@ -641,7 +688,7 @@ def vendor_summary(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_sla_required('ViewSLA')
 def sla_dashboard_stats(request):
@@ -668,7 +715,7 @@ def sla_dashboard_stats(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_sla_required('ViewSLA')
 def sla_trends(request):
@@ -713,7 +760,7 @@ def sla_trends(request):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_sla_required('CreateSLA')
 def bulk_sla_upload(request):
@@ -724,7 +771,7 @@ def bulk_sla_upload(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_sla_required('ViewSLA')
 def sla_export(request):
@@ -735,7 +782,7 @@ def sla_export(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_sla_required('ViewSLA')
 def sla_performance_dashboard(request):
@@ -1055,7 +1102,7 @@ def sla_performance_dashboard(request):
 # Dashboard API Views
 class SLADashboardSummaryView(APIView):
     """Get summary statistics for SLA dashboard."""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [RBACPermission]
     rbac_permission_type = 'ViewSLA'
     
@@ -1087,7 +1134,7 @@ class SLADashboardSummaryView(APIView):
 
 class SLAFrameworkDistributionView(APIView):
     """Get SLA distribution by compliance framework."""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [RBACPermission]
     rbac_permission_type = 'ViewSLA'
     
@@ -1131,7 +1178,7 @@ class SLAFrameworkDistributionView(APIView):
 
 class SLAStatusDistributionView(APIView):
     """Get SLA status distribution."""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [RBACPermission]
     rbac_permission_type = 'ViewSLA'
     
@@ -1178,7 +1225,7 @@ class SLAStatusDistributionView(APIView):
 
 class SLATypesDistributionView(APIView):
     """Get SLA types distribution."""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [RBACPermission]
     rbac_permission_type = 'ViewSLA'
     
@@ -1219,7 +1266,7 @@ class SLATypesDistributionView(APIView):
 
 class SLARiskLevelDistributionView(APIView):
     """Get risk level distribution based on compliance scores."""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [RBACPermission]
     rbac_permission_type = 'ViewSLA'
     
@@ -1266,7 +1313,7 @@ class SLARiskLevelDistributionView(APIView):
 
 class SLATopPerformingVendorsView(APIView):
     """Get top performing vendors by compliance score."""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [RBACPermission]
     rbac_permission_type = 'ViewSLA'
     
@@ -1294,7 +1341,7 @@ class SLATopPerformingVendorsView(APIView):
 
 class SLAComplianceMetricsView(APIView):
     """Get overall compliance metrics."""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [RBACPermission]
     rbac_permission_type = 'ViewSLA'
     
@@ -1332,7 +1379,7 @@ class SLAComplianceMetricsView(APIView):
 
 class SLAPerformanceCategoriesView(APIView):
     """Get SLA performance by categories."""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [RBACPermission]
     rbac_permission_type = 'ViewSLA'
     
@@ -1352,7 +1399,7 @@ class SLAPerformanceCategoriesView(APIView):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_sla_required('ViewSLA')
 def sla_kpi_data(request):

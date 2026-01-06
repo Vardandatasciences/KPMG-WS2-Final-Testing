@@ -176,153 +176,177 @@
       <!-- Tab Content -->
       <div class="vendor_toggle-tab-content">
         <!-- Overview Tab -->
-        <div v-if="vendor_toggleActiveTab === 'overview'" class="vendor_data-grid">
-          <!-- RFP Response Summary - Company/Vendor Details -->
-          <div class="vendor_data-section">
-            <h4 class="vendor_data-section-title">Vendor Details</h4>
-            <div class="vendor_data-item">
-              <span class="vendor_data-label">Company Name:</span>
-              <span class="vendor_data-value">{{ (vendor_formData.rfp_response_data.response_documents && vendor_formData.rfp_response_data.response_documents.companyInfo && vendor_formData.rfp_response_data.response_documents.companyInfo.companyName) || 'Not provided' }}</span>
+        <div v-if="vendor_toggleActiveTab === 'overview'" class="vendor_overview-container">
+          <div class="vendor_overview-content">
+            <!-- RFP Response Summary - Company/Vendor Details -->
+            <div class="vendor_overview-section">
+              <h4 class="vendor_overview-section-title">Vendor Details</h4>
+              <div class="vendor_overview-items">
+                <div class="vendor_overview-item">
+                  <span class="vendor_overview-label">Company Name:</span>
+                  <span class="vendor_overview-value">{{ (vendor_formData.rfp_response_data.response_documents && vendor_formData.rfp_response_data.response_documents.companyInfo && vendor_formData.rfp_response_data.response_documents.companyInfo.companyName) || 'Not provided' }}</span>
+                </div>
+                <div class="vendor_overview-item">
+                  <span class="vendor_overview-label">Contact Name:</span>
+                  <span class="vendor_overview-value">{{ (vendor_formData.rfp_response_data.response_documents && vendor_formData.rfp_response_data.response_documents.companyInfo && vendor_formData.rfp_response_data.response_documents.companyInfo.contactName) || 'Not provided' }}</span>
+                </div>
+                <div class="vendor_overview-item">
+                  <span class="vendor_overview-label">Contact Email:</span>
+                  <span class="vendor_overview-value">{{ (vendor_formData.rfp_response_data.response_documents && vendor_formData.rfp_response_data.response_documents.companyInfo && vendor_formData.rfp_response_data.response_documents.companyInfo.email) || 'Not provided' }}</span>
+                </div>
+                <div class="vendor_overview-item">
+                  <span class="vendor_overview-label">Contact Phone:</span>
+                  <span class="vendor_overview-value">{{ (vendor_formData.rfp_response_data.response_documents && vendor_formData.rfp_response_data.response_documents.companyInfo && vendor_formData.rfp_response_data.response_documents.companyInfo.phone) || 'Not provided' }}</span>
+                </div>
+                <div class="vendor_overview-item">
+                  <span class="vendor_overview-label">Submission Date:</span>
+                  <span class="vendor_overview-value">{{ vendor_formatDate(vendor_formData.rfp_response_data.submission_date) }}</span>
+                </div>
+              </div>
             </div>
-            <div class="vendor_data-item">
-              <span class="vendor_data-label">Contact Name:</span>
-              <span class="vendor_data-value">{{ (vendor_formData.rfp_response_data.response_documents && vendor_formData.rfp_response_data.response_documents.companyInfo && vendor_formData.rfp_response_data.response_documents.companyInfo.contactName) || 'Not provided' }}</span>
-            </div>
-            <div class="vendor_data-item">
-              <span class="vendor_data-label">Contact Email:</span>
-              <span class="vendor_data-value">{{ (vendor_formData.rfp_response_data.response_documents && vendor_formData.rfp_response_data.response_documents.companyInfo && vendor_formData.rfp_response_data.response_documents.companyInfo.email) || 'Not provided' }}</span>
-            </div>
-            <div class="vendor_data-item">
-              <span class="vendor_data-label">Contact Phone:</span>
-              <span class="vendor_data-value">{{ (vendor_formData.rfp_response_data.response_documents && vendor_formData.rfp_response_data.response_documents.companyInfo && vendor_formData.rfp_response_data.response_documents.companyInfo.phone) || 'Not provided' }}</span>
-            </div>
-            <div class="vendor_data-item">
-              <span class="vendor_data-label">Submission Date:</span>
-              <span class="vendor_data-value">{{ vendor_formatDate(vendor_formData.rfp_response_data.submission_date) }}</span>
-            </div>
-          </div>
 
-          <!-- Financial/Scoring Summary from RFP Response -->
-          <div class="vendor_data-section">
-            <h4 class="vendor_data-section-title">Proposal & Financial Details</h4>
-            <div class="vendor_data-item">
-              <span class="vendor_data-label">Proposed Value:</span>
-              <span class="vendor_data-value">{{ vendor_formData.rfp_response_data.proposed_value ? `$${Number(vendor_formData.rfp_response_data.proposed_value).toLocaleString()}` : 'Not provided' }}</span>
+            <!-- Financial/Scoring Summary from RFP Response -->
+            <div class="vendor_overview-section">
+              <h4 class="vendor_overview-section-title">Proposal & Financial Details</h4>
+              <div class="vendor_overview-items">
+                <div class="vendor_overview-item">
+                  <span class="vendor_overview-label">Proposed Value:</span>
+                  <span class="vendor_overview-value vendor_overview-value-highlight">{{ vendor_formData.rfp_response_data.proposed_value ? `$${Number(vendor_formData.rfp_response_data.proposed_value).toLocaleString()}` : 'Not provided' }}</span>
+                </div>
+                <div class="vendor_overview-item">
+                  <span class="vendor_overview-label">Business Type:</span>
+                  <span class="vendor_overview-value">{{ (vendor_formData.rfp_response_data.response_documents && vendor_formData.rfp_response_data.response_documents.companyInfo && vendor_formData.rfp_response_data.response_documents.companyInfo.businessType) || 'Not provided' }}</span>
+                </div>
+                <div class="vendor_overview-item">
+                  <span class="vendor_overview-label">Annual Revenue:</span>
+                  <span class="vendor_overview-value">{{ (vendor_formData.rfp_response_data.response_documents && vendor_formData.rfp_response_data.response_documents.companyInfo && vendor_formData.rfp_response_data.response_documents.companyInfo.annualRevenue) || 'Not provided' }}</span>
+                </div>
+                <div class="vendor_overview-item">
+                  <span class="vendor_overview-label">Employee Count:</span>
+                  <span class="vendor_overview-value">{{ (vendor_formData.rfp_response_data.response_documents && vendor_formData.rfp_response_data.response_documents.companyInfo && vendor_formData.rfp_response_data.response_documents.companyInfo.employeeCount) || 'Not provided' }}</span>
+                </div>
+              </div>
             </div>
-            <div class="vendor_data-item">
-              <span class="vendor_data-label">Business Type:</span>
-              <span class="vendor_data-value">{{ (vendor_formData.rfp_response_data.response_documents && vendor_formData.rfp_response_data.response_documents.companyInfo && vendor_formData.rfp_response_data.response_documents.companyInfo.businessType) || 'Not provided' }}</span>
-            </div>
-            <div class="vendor_data-item">
-              <span class="vendor_data-label">Annual Revenue:</span>
-              <span class="vendor_data-value">{{ (vendor_formData.rfp_response_data.response_documents && vendor_formData.rfp_response_data.response_documents.companyInfo && vendor_formData.rfp_response_data.response_documents.companyInfo.annualRevenue) || 'Not provided' }}</span>
-            </div>
-            <div class="vendor_data-item">
-              <span class="vendor_data-label">Employee Count:</span>
-              <span class="vendor_data-value">{{ (vendor_formData.rfp_response_data.response_documents && vendor_formData.rfp_response_data.response_documents.companyInfo && vendor_formData.rfp_response_data.response_documents.companyInfo.employeeCount) || 'Not provided' }}</span>
-            </div>
-          </div>
 
-          <!-- Status Summary from RFP Response -->
-          <div class="vendor_data-section">
-            <h4 class="vendor_data-section-title">Status & Evaluation</h4>
-            <div class="vendor_data-item">
-              <span class="vendor_data-label">Evaluation Status:</span>
-              <span class="vendor_data-value vendor_data-badge" :class="`vendor_data-badge-${(vendor_formData.rfp_response_data.evaluation_status || 'default').toLowerCase()}`">
-                {{ vendor_formData.rfp_response_data.evaluation_status || 'Not evaluated' }}
-              </span>
+            <!-- Status Summary from RFP Response -->
+            <div class="vendor_overview-section">
+              <h4 class="vendor_overview-section-title">Status & Evaluation</h4>
+              <div class="vendor_overview-items">
+                <div class="vendor_overview-item">
+                  <span class="vendor_overview-label">Evaluation Status:</span>
+                  <span class="vendor_overview-value vendor_data-badge" :class="`vendor_data-badge-${(vendor_formData.rfp_response_data.evaluation_status || 'default').toLowerCase()}`">
+                    {{ vendor_formData.rfp_response_data.evaluation_status || 'Not evaluated' }}
+                  </span>
+                </div>
+                <div class="vendor_overview-item">
+                  <span class="vendor_overview-label">Submission Status:</span>
+                  <span class="vendor_overview-value vendor_data-badge" :class="`vendor_data-badge-${(vendor_formData.rfp_response_data.submission_status || 'default').toLowerCase()}`">
+                    {{ vendor_formData.rfp_response_data.submission_status || 'Not submitted' }}
+                  </span>
+                </div>
+                <div class="vendor_overview-item">
+                  <span class="vendor_overview-label">Completion %:</span>
+                  <span class="vendor_overview-value">{{ vendor_formData.rfp_response_data.completion_percentage ? `${vendor_formData.rfp_response_data.completion_percentage}%` : '0%' }}</span>
+                </div>
+              </div>
             </div>
-            <div class="vendor_data-item">
-              <span class="vendor_data-label">Submission Status:</span>
-              <span class="vendor_data-value vendor_data-badge" :class="`vendor_data-badge-${(vendor_formData.rfp_response_data.submission_status || 'default').toLowerCase()}`">
-                {{ vendor_formData.rfp_response_data.submission_status || 'Not submitted' }}
-              </span>
-            </div>
-            <div class="vendor_data-item">
-              <span class="vendor_data-label">Completion %:</span>
-              <span class="vendor_data-value">{{ vendor_formData.rfp_response_data.completion_percentage ? `${vendor_formData.rfp_response_data.completion_percentage}%` : '0%' }}</span>
-            </div>
-          </div>
 
-          <!-- Company Information from RFP Response -->
-          <div class="vendor_data-section">
-            <h4 class="vendor_data-section-title">Company Information</h4>
-            <div class="vendor_data-item">
-              <span class="vendor_data-label">Legal Name:</span>
-              <span class="vendor_data-value">{{ (vendor_formData.rfp_response_data.response_documents && vendor_formData.rfp_response_data.response_documents.companyInfo && vendor_formData.rfp_response_data.response_documents.companyInfo.legalName) || 'Not provided' }}</span>
+            <!-- Company Information from RFP Response -->
+            <div class="vendor_overview-section">
+              <h4 class="vendor_overview-section-title">Company Information</h4>
+              <div class="vendor_overview-items">
+                <div class="vendor_overview-item">
+                  <span class="vendor_overview-label">Legal Name:</span>
+                  <span class="vendor_overview-value">{{ (vendor_formData.rfp_response_data.response_documents && vendor_formData.rfp_response_data.response_documents.companyInfo && vendor_formData.rfp_response_data.response_documents.companyInfo.legalName) || 'Not provided' }}</span>
+                </div>
+                <div class="vendor_overview-item">
+                  <span class="vendor_overview-label">Tax ID:</span>
+                  <span class="vendor_overview-value">{{ (vendor_formData.rfp_response_data.response_documents && vendor_formData.rfp_response_data.response_documents.companyInfo && vendor_formData.rfp_response_data.response_documents.companyInfo.taxId) || 'Not provided' }}</span>
+                </div>
+                <div class="vendor_overview-item">
+                  <span class="vendor_overview-label">DUNS Number:</span>
+                  <span class="vendor_overview-value">{{ (vendor_formData.rfp_response_data.response_documents && vendor_formData.rfp_response_data.response_documents.companyInfo && vendor_formData.rfp_response_data.response_documents.companyInfo.dunsNumber) || 'Not provided' }}</span>
+                </div>
+                <div class="vendor_overview-item">
+                  <span class="vendor_overview-label">Industry Sector:</span>
+                  <span class="vendor_overview-value">{{ (vendor_formData.rfp_response_data.response_documents && vendor_formData.rfp_response_data.response_documents.companyInfo && vendor_formData.rfp_response_data.response_documents.companyInfo.industrySector) || 'Not provided' }}</span>
+                </div>
+              </div>
             </div>
-            <div class="vendor_data-item">
-              <span class="vendor_data-label">Tax ID:</span>
-              <span class="vendor_data-value">{{ (vendor_formData.rfp_response_data.response_documents && vendor_formData.rfp_response_data.response_documents.companyInfo && vendor_formData.rfp_response_data.response_documents.companyInfo.taxId) || 'Not provided' }}</span>
-            </div>
-            <div class="vendor_data-item">
-              <span class="vendor_data-label">DUNS Number:</span>
-              <span class="vendor_data-value">{{ (vendor_formData.rfp_response_data.response_documents && vendor_formData.rfp_response_data.response_documents.companyInfo && vendor_formData.rfp_response_data.response_documents.companyInfo.dunsNumber) || 'Not provided' }}</span>
-            </div>
-            <div class="vendor_data-item">
-              <span class="vendor_data-label">Industry Sector:</span>
-              <span class="vendor_data-value">{{ (vendor_formData.rfp_response_data.response_documents && vendor_formData.rfp_response_data.response_documents.companyInfo && vendor_formData.rfp_response_data.response_documents.companyInfo.industrySector) || 'Not provided' }}</span>
-            </div>
-          </div>
 
-          <!-- Documents Summary -->
-          <div class="vendor_data-section">
-            <h4 class="vendor_data-section-title">Documents Summary</h4>
-            <div class="vendor_data-item">
-              <span class="vendor_data-label">Available Documents:</span>
-              <span class="vendor_data-value">{{ vendor_formData.rfp_response_data.document_urls ? Object.keys(vendor_formData.rfp_response_data.document_urls).length : 0 }}</span>
+            <!-- Documents Summary -->
+            <div class="vendor_overview-section">
+              <h4 class="vendor_overview-section-title">Documents Summary</h4>
+              <div class="vendor_overview-items">
+                <div class="vendor_overview-item">
+                  <span class="vendor_overview-label">Available Documents:</span>
+                  <span class="vendor_overview-value">{{ vendor_formData.rfp_response_data.document_urls ? Object.keys(vendor_formData.rfp_response_data.document_urls).length : 0 }}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         <!-- Documents Tab -->
         <div v-if="vendor_toggleActiveTab === 'documents'" class="vendor_documents-tab-content">
-          <div v-if="vendor_formData.rfp_response_data && vendor_formData.rfp_response_data.document_urls" class="vendor_documents-grid">
-            <div v-for="(url, key) in vendor_formData.rfp_response_data.document_urls" :key="key" class="vendor_document-card">
-              <div class="vendor_document-card-header">
-                <div class="vendor_document-icon">
-                  <svg class="vendor_w-8 vendor_h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <div v-if="vendor_formData.rfp_response_data && vendor_formData.rfp_response_data.document_urls" class="vendor_documents-grid-modern">
+            <div v-for="(url, key) in vendor_formData.rfp_response_data.document_urls" :key="key" class="vendor_document-card-modern">
+              <div class="vendor_document-card-modern-header">
+                <div class="vendor_document-card-modern-icon">
+                  <svg class="vendor_w-10 vendor_h-10" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                 </div>
-                <div class="vendor_document-info">
-                  <h5 class="vendor_document-title">{{ key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) }}</h5>
-                  <p class="vendor_document-type">PDF Document</p>
+                <div class="vendor_document-card-modern-badge">
+                  <svg class="vendor_w-4 vendor_h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                  Available
                 </div>
               </div>
-              <div class="vendor_document-card-content">
-                <div class="vendor_document-actions">
-                  <button class="vendor_btn vendor_btn-primary" @click="vendor_openDocumentInModal(typeof url === 'object' && url.url ? url.url : url, key)" title="View Document">
+              <div class="vendor_document-card-modern-body">
+                <h5 class="vendor_document-card-modern-title">{{ key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) }}</h5>
+                <p class="vendor_document-card-modern-type">PDF Document</p>
+                <div class="vendor_document-card-modern-meta">
+                  <span class="vendor_document-card-modern-meta-item">
                     <svg class="vendor_w-4 vendor_h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                    View Document
-                  </button>
-                  <button class="vendor_btn vendor_btn-outline" @click="vendor_copyUrl(typeof url === 'object' && url.url ? url.url : url)" title="Copy URL">
-                    <svg class="vendor_w-4 vendor_h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                    Copy URL
-                  </button>
-                  <button class="vendor_btn vendor_btn-outline" @click="vendor_downloadDocumentUrl(typeof url === 'object' && url.url ? url.url : url, key)" title="Download Document">
-                    <svg class="vendor_w-4 vendor_h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    Download
-                  </button>
+                    PDF Format
+                  </span>
                 </div>
+              </div>
+              <div class="vendor_document-card-modern-footer">
+                <button class="vendor_btn vendor_btn-primary vendor_btn-modern" @click="vendor_openDocumentInModal(typeof url === 'object' && url.url ? url.url : url, key)" title="View Document">
+                  <svg class="vendor_w-4 vendor_h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  View
+                </button>
+                <button class="vendor_btn vendor_btn-outline vendor_btn-modern" @click="vendor_copyUrl(typeof url === 'object' && url.url ? url.url : url)" title="Copy URL">
+                  <svg class="vendor_w-4 vendor_h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  Copy
+                </button>
+                <button class="vendor_btn vendor_btn-outline vendor_btn-modern" @click="vendor_downloadDocumentUrl(typeof url === 'object' && url.url ? url.url : url, key)" title="Download Document">
+                  <svg class="vendor_w-4 vendor_h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Download
+                </button>
               </div>
             </div>
           </div>
-          <div v-else class="vendor_no-documents">
-            <div class="vendor_no-documents-icon">
-              <svg class="vendor_w-16 vendor_h-16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <div v-else class="vendor_no-documents-modern">
+            <div class="vendor_no-documents-modern-icon">
+              <svg class="vendor_w-20 vendor_h-20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
             </div>
-            <h3 class="vendor_no-documents-title">No Documents Available</h3>
-            <p class="vendor_no-documents-text">There are no documents associated with this RFP response.</p>
+            <h3 class="vendor_no-documents-modern-title">No Documents Available</h3>
+            <p class="vendor_no-documents-modern-text">There are no documents associated with this RFP response.</p>
           </div>
         </div>
       </div>
@@ -1465,16 +1489,13 @@ import { useNotifications } from '@/composables/useNotifications'
 import notificationService from '@/services/notificationService'
 import loggingService from '@/services/loggingService'
 import { useAuthStore } from '@/stores/auth_vendor'
+import { getTprmApiV1BaseUrl, getTprmApiUrl } from '@/utils/backendEnv'
 import { useVendorPermissions } from '@/composables/useVendorPermissions'
-import { getTprmApiUrl } from '@/utils/backendEnv'
 
 const { showSuccess, showError, showWarning, showInfo } = useNotifications()
 // Initialize router and auth store
 const router = useRouter()
 const authStore = useAuthStore()
-
-// API base URL for vendor-core endpoints
-const VENDOR_CORE_API_BASE_URL = getTprmApiUrl('vendor-core')
 
 // Initialize RBAC permissions
 const { permissions, canPerformAction, showDeniedAlert } = useVendorPermissions()
@@ -1723,7 +1744,7 @@ const vendor_fetchUserData = async () => {
       console.warn('No user ID found in localStorage or auth store')
       console.log('Available localStorage keys:', Object.keys(localStorage))
       console.log('current_user:', localStorage.getItem('current_user'))
-  console.log('user:', localStorage.getItem('current_user') || localStorage.getItem('user'))
+      console.log('user:', localStorage.getItem('user'))
       PopupService.warning('No user session found. Please log in again.', 'Session Error')
       return
     }
@@ -1737,8 +1758,7 @@ const vendor_fetchUserData = async () => {
       headers['Authorization'] = `Bearer ${token}`
     }
     
-    // Use correct API endpoint: /api/tprm/vendor-core/ (not /api/v1/vendor-core/)
-    const response = await fetch(`${VENDOR_CORE_API_BASE_URL}/temp-vendors/get_user_data/?user_id=${userId}`, {
+    const response = await fetch(getTprmApiUrl(`v1/vendor-core/temp-vendors/get_user_data/?user_id=${userId}`), {
       headers
     })
     
@@ -2025,7 +2045,7 @@ const vendor_saveDocument = async (id) => {
       formData.append('user_id', vendor_formData.user_id.toString())
       
       const token = localStorage.getItem('session_token')
-      const response = await fetch(`${VENDOR_CORE_API_BASE_URL}/temp-vendors/upload_document/`, {
+      const response = await fetch(getTprmApiUrl('v1/vendor-core/temp-vendors/upload_document/'), {
         method: 'POST',
         body: formData,
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
@@ -2197,7 +2217,7 @@ const vendor_submitRegistration = async () => {
       headers['Authorization'] = `Bearer ${token}`
     }
     
-    const response = await fetch(`${VENDOR_CORE_API_BASE_URL}/temp-vendors/vendor_submit_registration/`, {
+    const response = await fetch(getTprmApiUrl('v1/vendor-core/temp-vendors/vendor_submit_registration/'), {
       method: 'POST',
       headers,
       body: JSON.stringify(submissionData)
@@ -2386,7 +2406,7 @@ const vendor_saveDraft = async () => {
         headers['Authorization'] = `Bearer ${token}`
       }
       
-      response = await fetch(`${VENDOR_CORE_API_BASE_URL}/temp-vendors/${vendor_formData.temp_vendor_id}/`, {
+      response = await fetch(getTprmApiUrl(`v1/vendor-core/temp-vendors/${vendor_formData.temp_vendor_id}/`), {
         method: 'PUT',
         headers,
         body: JSON.stringify(vendor_draftData)
@@ -2421,7 +2441,7 @@ const vendor_saveDraft = async () => {
         headers['Authorization'] = `Bearer ${token}`
       }
       
-      response = await fetch(`${VENDOR_CORE_API_BASE_URL}/temp-vendors/`, {
+      response = await fetch(getTprmApiUrl('v1/vendor-core/temp-vendors/'), {
         method: 'POST',
         headers,
         body: JSON.stringify(vendor_draftData)
@@ -2581,7 +2601,7 @@ const vendor_resetForm = () => {
 // Clear old cached user data and force refresh
 const vendor_clearCachedUserData = () => {
   // Clear localStorage to remove old cached user data
-  localStorage.removeItem('current_user')
+  localStorage.removeItem('user')
   localStorage.removeItem('isAuthenticated')
   
   // Force reinitialize the auth store with new user data
@@ -2623,8 +2643,7 @@ const vendor_getUserIdFromStorage = () => {
     if (userData) {
       try {
         const parsedUser = JSON.parse(userData)
-        // Check multiple possible user ID field names (case variations)
-        const userId = parsedUser.id || parsedUser.userid || parsedUser.UserId || parsedUser.user_id || parsedUser.userId
+        const userId = parsedUser.id || parsedUser.userid
         if (userId) {
           console.log(`Found user ID ${userId} in localStorage key: ${key}`)
           return userId
@@ -2636,12 +2655,9 @@ const vendor_getUserIdFromStorage = () => {
   }
   
   // Fallback to auth store
-  if (authStore.user) {
-    const userId = authStore.user.id || authStore.user.UserId || authStore.user.userId
-    if (userId) {
-      console.log('Using userId from auth store as fallback:', userId)
-      return userId
-    }
+  if (authStore.user?.id) {
+    console.log('Using userId from auth store as fallback:', authStore.user.id)
+    return authStore.user.id
   }
   
   return null
@@ -2661,8 +2677,9 @@ const vendor_viewProgress = () => {
     console.log('Navigating to lifecycle tracker for vendor:', vendorId)
     
     // Navigate to the lifecycle tracker with vendor ID as query parameter
+    // Use path instead of name to avoid route name mismatch issues
     router.push({
-      name: 'VendorLifecycleTracker',
+      path: '/vendor-lifecycle',
       query: {
         vendorId: vendorId,
         fromRegistration: 'true'
@@ -2724,7 +2741,7 @@ onMounted(async () => {
       console.warn('No user ID found in localStorage or auth store on mount')
       console.log('Available localStorage keys:', Object.keys(localStorage))
       console.log('current_user:', localStorage.getItem('current_user'))
-      console.log('user:', localStorage.getItem('current_user') || localStorage.getItem('user'))
+      console.log('user:', localStorage.getItem('user'))
       PopupService.warning('No user session found. Please log in to access your vendor registration data.', 'Session Required')
     }
     

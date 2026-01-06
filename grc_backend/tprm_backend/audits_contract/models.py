@@ -109,6 +109,8 @@ class ContractStaticQuestionnaire(models.Model):
     )
     is_required = models.BooleanField(default=False)
     scoring_weightings = models.DecimalField(max_digits=5, decimal_places=2, default=10.00)
+    document_upload = models.BooleanField(default=False)
+    multiple_choice = models.JSONField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:

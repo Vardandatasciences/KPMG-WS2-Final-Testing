@@ -1,0 +1,17 @@
+/* Progress header line below title */
+.pr-meta{display:flex;gap:14px;color:var(--muted-foreground);font-size:.85rem}
+
+/* Question card look */
+.q-card{border:1px solid var(--border);border-radius:12px;background:#fff}
+.q-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.q-meta{display:flex;align-items:center;gap:8px;color:var(--muted-foreground);font-size:.85rem}
+.q-title{font-size:1.05rem;line-height:1.5}
+
+/* Upload box dashed */
+.upload-box{border:2px dashed var(--border);border-radius:12px;padding:24px;text-align:center}
+
+/* Submit footer box */
+.submit-box{border:1px solid var(--border);border-radius:12px;background:#fff}
+
+/* Keep the page readable on wide screens */
+.stack{display:grid;gap:24px}

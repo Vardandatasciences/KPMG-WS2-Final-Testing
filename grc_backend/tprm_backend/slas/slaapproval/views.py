@@ -3,7 +3,6 @@ from rest_framework.permissions import IsAuthenticated, BasePermission
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.authentication import BaseAuthentication
-from rest_framework.exceptions import AuthenticationFailed
 from django.utils import timezone
 from django.db.models import Q, Count, Avg
 from django.core.paginator import Paginator
@@ -13,7 +12,7 @@ import logging
 import jwt
 
 # RBAC imports
-from tprm_backend.rbac.tprm_decorators import rbac_sla_required
+from tprm_backend.rbac.tprm_decorators import rbac_sla_required, rbac_contract_required
 from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
 
 from .models import SLAApproval
@@ -27,13 +26,32 @@ from .serializers import (
 logger = logging.getLogger(__name__)
 
 
+def get_authenticated_user_id(request):
+    """
+    Helper to extract the authenticated user's ID.
+    """
+    try:
+        if hasattr(request, 'user') and hasattr(request.user, 'userid'):
+            return int(request.user.userid)
+    except Exception:
+        pass
+
+    try:
+        user_id = RBACTPRMUtils.get_user_id_from_request(request)
+        if user_id is not None:
+            return int(user_id)
+    except Exception:
+        logger.debug("Unable to extract user id from RBAC utils", exc_info=True)
+
+    return None
+
+
 class JWTAuthentication(BaseAuthentication):
     """Custom JWT authentication class for DRF"""
     def authenticate(self, request):
         auth_header = request.headers.get('Authorization')
         if not auth_header or not auth_header.startswith('Bearer '):
-            # No token provided - raise AuthenticationFailed to return 401
-            raise AuthenticationFailed('Authentication credentials were not provided.')
+            return None
         
         try:
             token = auth_header.split(' ')[1]
@@ -43,9 +61,12 @@ class JWTAuthentication(BaseAuthentication):
             user_id = payload.get('user_id')
             
             if user_id:
-                # Try to import User model
                 try:
                     from mfa_auth.models import User
+                    user = User.objects.get(userid=user_id)
+                    # Add is_authenticated attribute for DRF compatibility
+                    user.is_authenticated = True
+                    return (user, token)
                 except ImportError:
                     # If User model import fails, create a mock user
                     logger.warning(f"User model import failed, creating mock user for user_id: {user_id}")
@@ -56,16 +77,9 @@ class JWTAuthentication(BaseAuthentication):
                             self.is_authenticated = True
                     
                     return (MockUser(user_id), token)
-                
-                # If import succeeded, try to get the user
-                try:
-                    user = User.objects.get(userid=user_id)
-                    # Add is_authenticated attribute for DRF compatibility
-                    user.is_authenticated = True
-                    return (user, token)
-                except User.DoesNotExist:
-                    # If user not found, create a mock user
-                    logger.warning(f"User not found for user_id {user_id}, creating mock user")
+                except Exception as e:
+                    # If User model doesn't exist or other error, create a mock user
+                    logger.warning(f"User {user_id} not found or error: {e}, creating mock user")
                     class MockUser:
                         def __init__(self, user_id):
                             self.userid = user_id
@@ -73,20 +87,15 @@ class JWTAuthentication(BaseAuthentication):
                             self.is_authenticated = True
                     
                     return (MockUser(user_id), token)
-            else:
-                raise AuthenticationFailed('Invalid token: user_id not found in token payload.')
         except jwt.ExpiredSignatureError:
             logger.warning("JWT token expired")
-            raise AuthenticationFailed('Token has expired.')
-        except jwt.InvalidTokenError as e:
-            logger.warning(f"Invalid JWT token: {str(e)}")
-            raise AuthenticationFailed('Invalid token.')
-        except AuthenticationFailed:
-            # Re-raise AuthenticationFailed exceptions
-            raise
+            return None
+        except jwt.InvalidTokenError:
+            logger.warning("Invalid JWT token")
+            return None
         except Exception as e:
             logger.error(f"JWT authentication error: {str(e)}")
-            raise AuthenticationFailed(f'Authentication failed: {str(e)}')
+            return None
 
 
 class SimpleAuthenticatedPermission(BasePermission):
@@ -113,7 +122,7 @@ def health_check(request):
 @api_view(['GET'])
 @authentication_classes([JWTAuthentication])
 @permission_classes_decorator([SimpleAuthenticatedPermission])
-@rbac_sla_required('ViewSLA')
+@rbac_contract_required('ApproveContract')
 def approval_list(request):
     """
     List all SLA approvals with filtering and pagination
@@ -132,22 +141,15 @@ def approval_list(request):
         
         logger.info(f"SLA approval list request - assignee_id: {assignee_id}, filters: {request.GET}")
         
-        # Build query - if assignee_id is provided, allow users to view their own approvals
+        current_user_id = get_authenticated_user_id(request)
+
+        # Build query - if assignee_id is provided, filter by it, otherwise use current_user_id
         if assignee_id:
-            # User is requesting their own approvals - allow this
-            try:
-                assignee_id_int = int(assignee_id)
-                queryset = SLAApproval.objects.filter(assignee_id=assignee_id_int)
-                
-                # If no results with int, try string
-                if queryset.count() == 0:
-                    queryset = SLAApproval.objects.filter(assignee_id=str(assignee_id))
-                    
-            except ValueError:
-                queryset = SLAApproval.objects.filter(assignee_id=assignee_id)
+            queryset = SLAApproval.objects.filter(assignee_id=assignee_id)
+        elif current_user_id is not None:
+            queryset = SLAApproval.objects.filter(assignee_id=current_user_id)
         else:
-            # User is requesting all approvals - allow for now (can add RBAC later)
-            queryset = SLAApproval.objects.all()
+            queryset = SLAApproval.objects.none()
         
         # Apply additional filters
         if object_type:
@@ -208,7 +210,7 @@ def approval_list(request):
 @api_view(['GET'])
 @authentication_classes([JWTAuthentication])
 @permission_classes_decorator([SimpleAuthenticatedPermission])
-@rbac_sla_required('ViewSLA')
+@rbac_contract_required('ApproveContract')
 def approval_detail(request, pk):
     """
     Get details of a specific SLA approval
@@ -232,7 +234,7 @@ def approval_detail(request, pk):
 @api_view(['POST'])
 @authentication_classes([JWTAuthentication])
 @permission_classes_decorator([SimpleAuthenticatedPermission])
-@rbac_sla_required('CreateSLA')
+@rbac_contract_required('ApproveContract')
 def approval_create(request):
     """
     Create a new SLA approval
@@ -288,7 +290,7 @@ def approval_create(request):
 @api_view(['POST'])
 @authentication_classes([JWTAuthentication])
 @permission_classes_decorator([SimpleAuthenticatedPermission])
-@rbac_sla_required('CreateSLA')
+@rbac_contract_required('ApproveContract')
 def approval_bulk_create(request):
     """
     Create multiple SLA approvals at once
@@ -333,13 +335,20 @@ def approval_bulk_create(request):
 @api_view(['PUT', 'PATCH'])
 @authentication_classes([JWTAuthentication])
 @permission_classes_decorator([SimpleAuthenticatedPermission])
-@rbac_sla_required('UpdateSLA')
+@rbac_contract_required('ApproveContract')
 def approval_update(request, pk):
     """
     Update a SLA approval (status, comments)
     """
     try:
         approval = SLAApproval.objects.get(approval_id=pk)
+        current_user_id = get_authenticated_user_id(request)
+
+        if current_user_id is None or current_user_id != int(approval.assignee_id):
+            return Response(
+                {'error': 'Only the assigned approver can update this SLA approval'},
+                status=status.HTTP_403_FORBIDDEN
+            )
         
         # Only allow updating status and comment_text
         allowed_fields = ['status', 'comment_text']
@@ -370,7 +379,7 @@ def approval_update(request, pk):
 @api_view(['DELETE'])
 @authentication_classes([JWTAuthentication])
 @permission_classes_decorator([SimpleAuthenticatedPermission])
-@rbac_sla_required('DeleteSLA')
+@rbac_contract_required('ApproveContract')
 def approval_delete(request, pk):
     """
     Delete a SLA approval
@@ -394,7 +403,7 @@ def approval_delete(request, pk):
 @api_view(['GET'])
 @authentication_classes([JWTAuthentication])
 @permission_classes_decorator([SimpleAuthenticatedPermission])
-@rbac_sla_required('ViewSLA')
+@rbac_contract_required('ApproveContract')
 def approval_stats(request):
     """
     Get SLA approval statistics
@@ -478,7 +487,7 @@ def approval_stats(request):
 @api_view(['GET'])
 @authentication_classes([JWTAuthentication])
 @permission_classes_decorator([SimpleAuthenticatedPermission])
-@rbac_sla_required('ViewSLA')
+@rbac_contract_required('ApproveContract')
 def sla_approvals_list(request, sla_id):
     """
     Get all approvals for a specific SLA
@@ -521,7 +530,7 @@ def sla_approvals_list(request, sla_id):
 @api_view(['GET'])
 @authentication_classes([JWTAuthentication])
 @permission_classes_decorator([SimpleAuthenticatedPermission])
-@rbac_sla_required('ViewSLA')
+@rbac_contract_required('ApproveContract')
 def get_assigner_approvals(request):
     """
     Get SLA approvals where the current user is the assigner (for review)
@@ -536,12 +545,15 @@ def get_assigner_approvals(request):
         page = int(request.GET.get('page', 1))
         page_size = min(int(request.GET.get('page_size', 20)), 100)
         
-        # Build query - if assigner_id is provided, filter by assigner, otherwise show all (admin view)
+        current_user_id = get_authenticated_user_id(request)
+
+        # Build query - if assigner_id is provided, filter by assigner, otherwise use current user
         if assigner_id:
             queryset = SLAApproval.objects.filter(assigner_id=assigner_id)
+        elif current_user_id is not None:
+            queryset = SLAApproval.objects.filter(assigner_id=current_user_id)
         else:
-            # Admin view - show all approvals
-            queryset = SLAApproval.objects.all()
+            queryset = SLAApproval.objects.none()
         
         # Apply additional filters
         if status_filter:
@@ -582,9 +594,56 @@ def get_assigner_approvals(request):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes_decorator([SimpleAuthenticatedPermission])
+@rbac_contract_required('ApproveContract')
+def available_users(request):
+    """
+    Get users with ApproveContract permission for SLA approval assignment
+    Returns users who can be assigned as assigner or assignee for SLA approvals
+    """
+    try:
+        from mfa_auth.models import User
+        
+        # Get all active users
+        all_users = User.objects.filter(
+            is_active_raw__in=['Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true']
+        ).order_by('userid')
+        
+        users_with_permission = []
+        for user in all_users:
+            user_id = user.userid
+            
+            # Check if user has ApproveContract permission
+            has_approve_permission = RBACTPRMUtils.check_contract_permission(user_id, 'ApproveContract')
+            
+            if has_approve_permission:
+                full_name = f"{user.first_name} {user.last_name}".strip()
+                display_name = full_name if full_name else user.username
+                
+                user_data = {
+                    'user_id': user_id,
+                    'username': user.username,
+                    'name': display_name,
+                    'display_name': display_name,
+                    'role': 'approver'
+                }
+                users_with_permission.append(user_data)
+        
+        logger.info(f"Returning {len(users_with_permission)} users with ApproveContract permission")
+        
+        return Response(users_with_permission)
+        
+    except Exception as e:
+        logger.error(f"Error getting available users: {str(e)}")
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @api_view(['POST'])
 @authentication_classes([JWTAuthentication])
 @permission_classes_decorator([SimpleAuthenticatedPermission])
+@rbac_contract_required('ApproveContract')
 @rbac_sla_required('ActivateDeactivateSLA')
 def approve_sla(request, approval_id):
     """
@@ -596,6 +655,13 @@ def approve_sla(request, approval_id):
             approval = SLAApproval.objects.get(approval_id=approval_id)
         except SLAApproval.DoesNotExist:
             return Response({'error': 'Approval not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        current_user_id = get_authenticated_user_id(request)
+        if current_user_id is None or current_user_id != int(approval.assignee_id):
+            return Response(
+                {'error': 'Only the assigned approver can approve this SLA'},
+                status=status.HTTP_403_FORBIDDEN
+            )
         
         # Update approval status to APPROVED
         approval.status = 'APPROVED'
@@ -631,6 +697,7 @@ def approve_sla(request, approval_id):
 @api_view(['POST'])
 @authentication_classes([JWTAuthentication])
 @permission_classes_decorator([SimpleAuthenticatedPermission])
+@rbac_contract_required('RejectContract')
 @rbac_sla_required('ActivateDeactivateSLA')
 def reject_sla(request, approval_id):
     """
@@ -642,6 +709,13 @@ def reject_sla(request, approval_id):
             approval = SLAApproval.objects.get(approval_id=approval_id)
         except SLAApproval.DoesNotExist:
             return Response({'error': 'Approval not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        current_user_id = get_authenticated_user_id(request)
+        if current_user_id is None or current_user_id != int(approval.assignee_id):
+            return Response(
+                {'error': 'Only the assigned approver can reject this SLA'},
+                status=status.HTTP_403_FORBIDDEN
+            )
         
         # Get rejection reason
         rejection_reason = request.data.get('rejection_reason', '')

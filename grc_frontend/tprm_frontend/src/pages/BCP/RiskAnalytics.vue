@@ -3,23 +3,6 @@
     
     <!-- Full-Screen Heatmap View -->
     <div v-if="isFullScreenHeatmap" class="fullscreen-heatmap-container" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
-      <!-- Use existing header layout -->
-      <div class="page-header">
-        <div class="header-content">
-          <h1 class="text-2xl font-bold text-gray-900">TPRM – Risk Dashboard</h1>
-          <p class="text-gray-600">Analyze and manage third-party risk assessments with AI-powered insights</p>
-        </div>
-        <div class="header-actions">
-          <button 
-            class="back-to-table-button"
-            @click="backToTableView"
-          >
-            <ChevronLeft class="h-4 w-4" />
-            Back to Table
-          </button>
-      </div>
-    </div>
-    
       <!-- Full-Screen Heatmap Content -->
       <div class="fullscreen-heatmap-content">
         <div v-if="dashboardLoading" class="flex items-center justify-center py-16">
@@ -167,14 +150,6 @@
 
     <!-- Main Application Container (Table View) -->
     <div v-else class="risk-app-container">
-      <!-- Page Header -->
-      <div class="page-header">
-        <div class="header-content">
-          <h1 class="text-2xl font-bold text-gray-900">TPRM – Risk Dashboard</h1>
-          <p class="text-gray-600">Analyze and manage third-party risk assessments with AI-powered insights</p>
-        </div>
-      </div>
-
       <!-- Filters Section - Separate Layout -->
       <div class="filters-top-section">
       <div class="filters-container">
@@ -367,9 +342,9 @@
             </div>
             
             <!-- Risk Table -->
-            <div v-else class="relative overflow-auto">
+            <div v-else class="relative overflow-auto flex-1 min-h-0" style="flex: 1; min-height: 0;">
               <!-- Inlined Table component -->
-              <div class="relative w-full overflow-auto">
+              <div class="relative w-full overflow-auto" style="height: 100%;">
                 <table class="w-full caption-bottom text-sm">
                     <!-- Inlined TableHeader component -->
                     <thead class="[&_tr]:border-b">
@@ -498,7 +473,7 @@
                   </table>
                 </div>
                 <!-- Pagination Controls -->
-                <div class="mt-4 flex items-center justify-between">
+                <div class="mt-2 flex items-center justify-between flex-shrink-0" style="margin-top: 0.5rem;">
                   <div class="text-sm text-muted-foreground">
                     Showing {{ ((currentPage - 1) * pageSize) + 1 }} to {{ Math.min(currentPage * pageSize, risksData?.count || 0) }} of {{ risksData?.count || 0 }} results
                   </div>
@@ -711,9 +686,10 @@ import { Download, RotateCcw, Search, Shield, ChevronDown, Check, RefreshCw, Che
 import { useNotifications } from '@/composables/useNotifications';
 import { PopupService } from '@/popup/popupService';
 import loggingService from '@/services/loggingService';
+import { getTprmApiBaseUrl } from '@/utils/backendEnv';
 
 // ===== INLINED API SERVICE =====
-const API_BASE_URL = 'http://localhost:8000/api/tprm';
+const API_BASE_URL = getTprmApiBaseUrl();
 
 interface Risk {
   id: string;

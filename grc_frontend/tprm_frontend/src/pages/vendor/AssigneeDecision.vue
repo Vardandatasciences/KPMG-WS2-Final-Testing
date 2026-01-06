@@ -970,13 +970,18 @@
     <div v-if="showRiskGenerationPopup" class="risk-generation-overlay">
       <div class="risk-generation-modal">
         <div class="risk-modal-header">
-          <h3>{{ riskGenerationStatus.status === 'completed' ? '✅ Risk Analysis Complete' : '⚙️ Generating Risk Analysis' }}</h3>
+          <h3>{{ riskGenerationStatus.status === 'completed' ? '✅ Risk Analysis Complete' : riskGenerationStatus.status === 'timeout' ? '⏳ Risk Analysis in Progress' : '⚙️ Generating Risk Analysis' }}</h3>
         </div>
         <div class="risk-modal-body">
-          <div v-if="riskGenerationStatus.status === 'in_progress'" class="progress-container">
+          <div v-if="riskGenerationStatus.status === 'in_progress' || riskGenerationStatus.status === 'timeout'" class="progress-container">
             <div class="spinner-large"></div>
             <p class="progress-message">{{ riskGenerationStatus.message }}</p>
-            <p class="progress-detail">This may take 30-60 seconds. Please wait...</p>
+            <p class="progress-detail" v-if="riskGenerationStatus.status === 'in_progress'">
+              This may take 30-60 seconds. Please wait...
+            </p>
+            <p class="progress-detail" v-else>
+              The process is still running in the background. You can safely close this popup.
+            </p>
           </div>
           <div v-else-if="riskGenerationStatus.status === 'completed'" class="completion-container">
             <div class="success-icon">✓</div>
@@ -1002,7 +1007,7 @@
             class="btn btn-info"
             @click="closeRiskGenerationPopup"
           >
-            Run in Background
+            {{ riskGenerationStatus.status === 'timeout' ? 'Close' : 'Run in Background' }}
           </button>
         </div>
       </div>
@@ -1054,6 +1059,7 @@ export default {
       risk_count: 0
     })
     const riskGenerationInterval = ref(null)
+    const riskGenerationStartTime = ref(null)
     const decisionForm = reactive({
       decision_type: '',
       decision_reason: '',
@@ -1333,7 +1339,10 @@ export default {
 
     const checkRiskGenerationStatus = async (approvalId) => {
       try {
-        const response = await api.get(`/api/v1/vendor-approval/risk-generation-status/${approvalId}/`)
+        // Increase timeout for the API call to 30 seconds
+        const response = await api.get(`/api/v1/vendor-approval/risk-generation-status/${approvalId}/`, {
+          timeout: 30000 // 30 seconds timeout (increased from default 20 seconds)
+        })
         
         riskGenerationStatus.value = {
           status: response.data.status,
@@ -1354,6 +1363,12 @@ export default {
         return response.data.status
       } catch (error) {
         console.error('Error checking risk generation status:', error)
+        // Don't show error if still in progress - just log it
+        // Only return error if we're sure it's failed
+        if (riskGenerationStatus.value.status === 'in_progress') {
+          console.log('Status check failed but risk generation may still be in progress, will retry...')
+          return 'in_progress' // Keep polling
+        }
         return 'error'
       }
     }
@@ -1365,18 +1380,53 @@ export default {
       showRiskGenerationPopup.value = true
       riskGenerationStatus.value = {
         status: 'in_progress',
-        message: 'Analyzing vendor responses and generating risk assessment...',
+        message: 'Analyzing vendor responses and generating risk assessment... This may take 30-60 seconds.',
         risk_count: 0
       }
       
-      // Start polling for status updates every 3 seconds
-      riskGenerationInterval.value = setInterval(async () => {
-        const status = await checkRiskGenerationStatus(approvalId)
-        if (status === 'completed') {
-          // Keep popup open to show completion message
-          console.log('Risk generation completed')
+      // Store start time for timeout calculation
+      riskGenerationStartTime.value = Date.now()
+      
+      // Wait 5 seconds before first check to give backend time to start
+      setTimeout(() => {
+        // Do initial check
+        checkRiskGenerationStatus(approvalId)
+        
+        // Start polling for status updates every 5 seconds (increased from 3)
+        riskGenerationInterval.value = setInterval(async () => {
+          const status = await checkRiskGenerationStatus(approvalId)
+          if (status === 'completed') {
+            // Keep popup open to show completion message
+            console.log('Risk generation completed')
+          } else if (status === 'error') {
+            // Only show error if we've been polling for a while (2 minutes)
+            const elapsedTime = Date.now() - (riskGenerationStartTime.value || Date.now())
+            if (elapsedTime > 120000) { // 2 minutes
+              riskGenerationStatus.value = {
+                status: 'error',
+                message: 'Risk generation is taking longer than expected. It may continue in the background.',
+                risk_count: 0
+              }
+            }
+          }
+        }, 5000) // Poll every 5 seconds instead of 3
+      }, 5000) // Wait 5 seconds before starting checks
+      
+      // Set maximum polling duration to 3 minutes
+      setTimeout(() => {
+        if (riskGenerationInterval.value && riskGenerationStatus.value.status === 'in_progress') {
+          console.log('Risk generation polling timeout reached (3 minutes), stopping automatic checks')
+          if (riskGenerationInterval.value) {
+            clearInterval(riskGenerationInterval.value)
+            riskGenerationInterval.value = null
+          }
+          riskGenerationStatus.value = {
+            status: 'timeout',
+            message: 'Risk generation is still in progress. It will continue in the background. You can close this popup.',
+            risk_count: 0
+          }
         }
-      }, 3000)
+      }, 180000) // 3 minutes maximum
     }
 
     const closeRiskGenerationPopup = () => {
@@ -1385,6 +1435,7 @@ export default {
         clearInterval(riskGenerationInterval.value)
         riskGenerationInterval.value = null
       }
+      riskGenerationStartTime.value = null
     }
 
     const handleRequesterFinalDecision = async (request) => {
@@ -1445,7 +1496,10 @@ export default {
         console.log('Making API call to:', apiUrl)
         console.log('Request data:', requestData)
         
-        const response = await api.post(apiUrl, requestData)
+        // Increase timeout to 90 seconds for final decision (risk generation may take time)
+        const response = await api.post(apiUrl, requestData, {
+          timeout: 90000 // 90 seconds timeout for final decision submission
+        })
         
         console.log('API response received:', response)
         console.log('Response status:', response.status)
@@ -1512,9 +1566,53 @@ export default {
         console.error('Error status:', error.response?.status)
         console.error('Error data:', error.response?.data)
         
+        // Check if this is a timeout error
+        const isTimeoutError = error.code === 'ECONNABORTED' || 
+                               error.message?.includes('timeout') ||
+                               error.message?.includes('exceeded')
+        
+        // If timeout error, the request might have actually succeeded on the backend
+        // Check if this is a response approval that triggers risk generation
+        if (isTimeoutError && isParallelResponseApproval(request) && finalDecisionForm.decision_type === 'FINAL_APPROVE') {
+          console.log('Timeout error detected, but request may have succeeded. Checking status...')
+          
+          // Show a warning instead of error, and start risk generation tracking
+          PopupService.warning(
+            'Request submitted but response timed out. The decision may have been processed successfully. Risk generation is starting in the background.',
+            'Request Processing'
+          )
+          
+          // Start risk generation tracking anyway (backend may have already started it)
+          startRiskGenerationTracking(request.approval_id)
+          
+          // Try to refresh the data to see if the request actually succeeded
+          setTimeout(async () => {
+            try {
+              await fetchRequesterData()
+              if (selectedApprovalId.value) {
+                await fetchSingleRequest(selectedApprovalId.value)
+              }
+            } catch (refreshError) {
+              console.error('Error refreshing data after timeout:', refreshError)
+            }
+          }, 2000)
+          
+          // Reset form
+          Object.assign(finalDecisionForm, {
+            decision_type: '',
+            decision_reason: '',
+            override_score: false,
+            custom_overall_score: 0
+          })
+          
+          return // Exit early, don't show error popup
+        }
+        
         let errorMessage = 'Failed to submit final decision'
         
-        if (error.response?.data?.error) {
+        if (isTimeoutError) {
+          errorMessage = 'Request timed out. The decision may have been processed. Please refresh the page to check the status.'
+        } else if (error.response?.data?.error) {
           errorMessage = error.response.data.error
         } else if (error.response?.status === 400) {
           errorMessage = 'Invalid request data. Please check your input.'

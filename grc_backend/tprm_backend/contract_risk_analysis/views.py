@@ -12,9 +12,6 @@ from rest_framework.permissions import BasePermission
 from django.conf import settings
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
-
-# Use Unified JWT Authentication from GRC
-from grc.jwt_auth import UnifiedJWTAuthentication
 import jwt
 
 from .models import Risk
@@ -32,17 +29,72 @@ logger = logging.getLogger(__name__)
 class SimpleAuthenticatedPermission(BasePermission):
     """Custom permission class that checks for authenticated users"""
     def has_permission(self, request, view):
-        # Just check if user object exists and is authenticated
-        # UnifiedJWTAuthentication handles GRC/TPRM user verification
-        if request.user and hasattr(request.user, 'is_authenticated'):
-            return request.user.is_authenticated
-        return False
+        # Check if user is authenticated
+        return bool(
+            request.user and 
+            hasattr(request.user, 'userid') and
+            getattr(request.user, 'is_authenticated', False)
+        )
 
+
+class JWTAuthentication(BaseAuthentication):
+    """Custom JWT authentication class for DRF"""
+    def authenticate(self, request):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return None
+        
+        try:
+            token = auth_header.split(' ')[1]
+            # Use JWT_SECRET_KEY from settings
+            secret_key = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+            payload = jwt.decode(token, secret_key, algorithms=['HS256'])
+            user_id = payload.get('user_id')
+            
+            if user_id:
+                try:
+                    from mfa_auth.models import User
+                    user = User.objects.get(userid=user_id)
+                    # Add is_authenticated attribute for DRF compatibility
+                    user.is_authenticated = True
+                    return (user, token)
+                except ImportError:
+                    # If User model import fails, create a mock user
+                    logger.warning(f"User model import failed, creating mock user for user_id: {user_id}")
+                    class MockUser:
+                        def __init__(self, user_id):
+                            self.userid = user_id
+                            self.username = f"user_{user_id}"
+                            self.is_authenticated = True
+                    
+                    return (MockUser(user_id), token)
+                except Exception as e:
+                    # If User model doesn't exist or other error, create a mock user
+                    logger.warning(f"User {user_id} not found or error: {e}, creating mock user")
+                    class MockUser:
+                        def __init__(self, user_id):
+                            self.userid = user_id
+                            self.username = f"user_{user_id}"
+                            self.is_authenticated = True
+                    
+                    return (MockUser(user_id), token)
+        except jwt.ExpiredSignatureError:
+            logger.warning("JWT token expired")
+            return None
+        except jwt.InvalidTokenError:
+            logger.warning("Invalid JWT token")
+            return None
+        except Exception as e:
+            logger.error(f"JWT authentication error: {str(e)}")
+            return None
+
+
+# Removed TPRMModuleViewSet and ModuleDataViewSet - using entity-data-row approach
 
 
 class RiskViewSet(viewsets.ModelViewSet):
     """ViewSet for Risks"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [SimpleAuthenticatedPermission]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['priority', 'status', 'risk_type', 'assigned_to']
@@ -157,7 +209,7 @@ class RiskViewSet(viewsets.ModelViewSet):
 
 class RiskHeatmapViewSet(viewsets.ViewSet):
     """ViewSet for Risk Heatmap - dynamically generated from Risk data"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [SimpleAuthenticatedPermission]
     
     def list(self, request):
@@ -187,7 +239,7 @@ class RiskHeatmapViewSet(viewsets.ViewSet):
 
 class RiskStatisticsAPIView(APIView):
     """API view for risk statistics"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [SimpleAuthenticatedPermission]
     
     def get(self, request):
@@ -210,7 +262,7 @@ class RiskStatisticsAPIView(APIView):
 
 class DashboardAPIView(APIView):
     """API view for dashboard data"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [SimpleAuthenticatedPermission]
     
     def get(self, request):
@@ -252,7 +304,7 @@ class DashboardAPIView(APIView):
 
 class EntityDataDropdownAPIView(APIView):
     """API view for entity-data-row dropdown functionality"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [SimpleAuthenticatedPermission]
     
     def get(self, request):
@@ -353,7 +405,7 @@ class EntityRiskGenerationAPIView(APIView):
     
     See INTEGRATION_GUIDE.md for complete examples!
     """
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [SimpleAuthenticatedPermission]
     
     def post(self, request):
@@ -475,7 +527,7 @@ class EntityRiskGenerationAPIView(APIView):
 
 class TaskStatusAPIView(APIView):
     """API view for checking background task status"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [SimpleAuthenticatedPermission]
     
     def get(self, request, task_id):

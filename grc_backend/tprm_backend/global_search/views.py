@@ -8,15 +8,12 @@ from django.views.decorators.cache import cache_page
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny, IsAuthenticated, BasePermission
+from rest_framework.permissions import AllowAny
 from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django.db import IntegrityError, DataError
 from django.core.exceptions import ValidationError
-
-# Use Unified JWT Authentication from GRC
-from grc.jwt_auth import UnifiedJWTAuthentication
 
 from .models import SearchIndex, SearchAnalytics
 from .serializers import (
@@ -36,22 +33,11 @@ class SearchPagination(PageNumberPagination):
     max_page_size = 10000  # Increased maximum page size
 
 
-class SimpleAuthenticatedPermission(BasePermission):
-    """Custom permission class that checks for authenticated users"""
-    def has_permission(self, request, view):
-        # Just check if user object exists and is authenticated
-        # UnifiedJWTAuthentication handles GRC/TPRM user verification
-        if request.user and hasattr(request.user, 'is_authenticated'):
-            return request.user.is_authenticated
-        return False
-
-
 class GlobalSearchViewSet(viewsets.ViewSet):
     """
     Global Search API ViewSet for searching across all TPRM modules.
     """
-    authentication_classes = [UnifiedJWTAuthentication]
-    permission_classes = [SimpleAuthenticatedPermission]
+    permission_classes = [AllowAny]
     pagination_class = SearchPagination
     
     @action(detail=False, methods=['post'], url_path='query')
@@ -232,15 +218,6 @@ class GlobalSearchViewSet(viewsets.ViewSet):
         if modules:
             table_configs = {k: v for k, v in table_configs.items() if k in modules}
         
-        # Map old app names to correct app labels
-        app_label_mapping = {
-            'vendor_core': 'tprm_vendor_core',
-            'rfp': 'tprm_rfp',
-            'contracts': 'tprm_contracts',
-            'slas': 'tprm_slas',
-            'bcpdrp': 'tprm_bcpdrp',
-        }
-        
         for table_name, config in table_configs.items():
             try:
                 # Get the model - handle different model name formats
@@ -263,9 +240,6 @@ class GlobalSearchViewSet(viewsets.ViewSet):
                     # Simple format: ModelName (assume current app)
                     app_label = 'global_search'
                     model_class = model_name
-                
-                # Map to correct app label if needed
-                app_label = app_label_mapping.get(app_label, app_label)
                 
                 model = apps.get_model(app_label, model_class)
                 
@@ -999,19 +973,22 @@ class GlobalSearchViewSet(viewsets.ViewSet):
         """
         try:
             from django.apps import apps
+            import logging
+            logger = logging.getLogger(__name__)
             
             # Get all models that have these fields
+            models_with_filters = {}
             try:
                 models_with_filters = {
-                    'vendor': apps.get_model('tprm_vendor_core', 'Vendors'),
-                    'rfp': apps.get_model('tprm_rfp', 'RFP'),
-                    'contract': apps.get_model('tprm_contracts', 'VendorContract'),
-                    'sla': apps.get_model('tprm_slas', 'VendorSLA'),
-                    'bcp_drp_plans': apps.get_model('tprm_bcpdrp', 'Plan'),
-                    'bcp_drp_evaluations': apps.get_model('tprm_bcpdrp', 'Evaluation'),
+                    'vendor': apps.get_model('vendor_core', 'Vendors'),
+                    'rfp': apps.get_model('rfp', 'RFP'),
+                    'contract': apps.get_model('contracts', 'VendorContract'),
+                    'sla': apps.get_model('slas', 'VendorSLA'),
+                    'bcp_drp_plans': apps.get_model('bcpdrp', 'Plan'),
+                    'bcp_drp_evaluations': apps.get_model('bcpdrp', 'Evaluation'),
                 }
             except Exception as e:
-                print(f"Error loading models for filter options: {e}")
+                logger.warning(f"Error loading models for filter options: {e}")
                 models_with_filters = {}
             
             filter_options = {
@@ -1022,24 +999,26 @@ class GlobalSearchViewSet(viewsets.ViewSet):
             
             # Collect all unique values from each model
             for model_name, model in models_with_filters.items():
+                if model is None:
+                    continue
                 try:
                     # Get status values
                     if hasattr(model, 'status'):
                         status_values = model.objects.values_list('status', flat=True).distinct()
-                        filter_options['status'].update(status_values)
+                        filter_options['status'].update([v for v in status_values if v])
                     
                     # Get category values
                     if hasattr(model, 'category'):
                         category_values = model.objects.values_list('category', flat=True).distinct()
-                        filter_options['category'].update(category_values)
+                        filter_options['category'].update([v for v in category_values if v])
                     
                     # Get risk_level values
                     if hasattr(model, 'risk_level'):
                         risk_level_values = model.objects.values_list('risk_level', flat=True).distinct()
-                        filter_options['risk_level'].update(risk_level_values)
+                        filter_options['risk_level'].update([v for v in risk_level_values if v])
                         
                 except Exception as e:
-                    print(f"Error getting filter options from {model_name}: {e}")
+                    logger.warning(f"Error getting filter options from {model_name}: {e}")
                     continue
             
             # Convert sets to sorted lists
@@ -1052,6 +1031,9 @@ class GlobalSearchViewSet(viewsets.ViewSet):
             return Response(response_data, status=status.HTTP_200_OK)
             
         except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to get filter options: {str(e)}", exc_info=True)
             return Response(
                 {'error': f'Failed to get filter options: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

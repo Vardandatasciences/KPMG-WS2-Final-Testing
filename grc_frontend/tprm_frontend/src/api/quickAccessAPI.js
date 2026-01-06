@@ -1,4 +1,6 @@
-const API_BASE_URL = 'http://localhost:8000/api/tprm/quick-access'
+import { getTprmApiUrl } from '@/utils/backendEnv'
+
+const API_BASE_URL = getTprmApiUrl('quick-access')
 
 class QuickAccessAPI {
   constructor() {

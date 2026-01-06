@@ -1,11 +1,7 @@
 <template>
   <div class="space-y-6">
-    <!-- Main Header - Hidden when plan detail is shown -->
-    <div v-if="!showPlanDetail" class="flex items-center justify-between">
-      <div>
-        <h1 class="text-2xl font-bold text-foreground">Plan Library — Strategies</h1>
-        <p class="text-muted-foreground">Browse and manage BCP/DRP strategies and their plans</p>
-      </div>
+    <!-- View Toggle Button - Hidden when plan detail is shown -->
+    <div v-if="!showPlanDetail" class="flex items-center justify-end">
       <div class="flex gap-2">
         <button class="btn btn--outline" @click="toggleView">
           <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1088,7 +1084,7 @@ const handleApprovalAssignment = (plan: any) => {
       createNew: 'true',
       planId: plan.plan_id,
       objectId: plan.plan_id,
-      objectType: 'PLAN',
+      objectType: 'PLAN EVALUATION',
       planType: plan.plan_type
     }
   })
@@ -1102,7 +1098,7 @@ const handleAssignTesting = (plan: any) => {
       createNew: 'true',
       planId: plan.plan_id,
       objectId: plan.plan_id,
-      objectType: 'PLAN',
+      objectType: 'PLAN EVALUATION',
       planType: plan.plan_type
     }
   })

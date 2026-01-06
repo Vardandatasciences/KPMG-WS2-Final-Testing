@@ -1,0 +1,308 @@
+/* BCP/DRP Component Styles Import */
+
+/* Import all BCP component CSS files */
+@import '../pages/BCP/VendorUpload.css';
+@import '../pages/BCP/PlanLibrary.css';
+@import '../pages/BCP/OcrExtraction.css';
+@import '../pages/BCP/PlanEvaluation.css';
+@import '../pages/BCP/MyApprovals.css';
+@import '../pages/BCP/QuestionnaireBuilder.css';
+@import '../pages/BCP/ApprovalAssignment.css';
+@import '../pages/BCP/QuestionnaireLibrary.css';
+@import '../pages/BCP/QuestionnaireAssignment.css';
+@import '../pages/BCP/RiskAnalytics.css';
+@import '../pages/BCP/Dashboard.css';
+@import '../pages/BCP/KPIDashboard.css';
+@import '../pages/BCP/TestingLibrary.css';
+@import '../pages/BCP/VendorHub.css';
+@import '../pages/BCP/VendorOverview.css';
+
+/* BCP/DRP Global Styles */
+.bcp-page {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--foreground);
+}
+
+.bcp-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--sp-6);
+}
+
+.bcp-header {
+  margin-bottom: var(--sp-8);
+  text-align: center;
+}
+
+.bcp-title {
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-bold);
+  color: var(--foreground);
+  margin-bottom: var(--sp-2);
+}
+
+.bcp-subtitle {
+  font-size: var(--fs-lg);
+  color: var(--muted-foreground);
+}
+
+/* BCP Card Styles */
+.bcp-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--sp-6);
+  box-shadow: var(--shadow-sm);
+}
+
+.bcp-card-header {
+  margin-bottom: var(--sp-4);
+  padding-bottom: var(--sp-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.bcp-card-title {
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-semibold);
+  color: var(--foreground);
+}
+
+/* BCP Button Styles */
+.bcp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-6);
+  border-radius: var(--radius);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  border: none;
+}
+
+.bcp-btn--primary {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.bcp-btn--primary:hover {
+  background: var(--primary-hover);
+}
+
+.bcp-btn--secondary {
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  border: 1px solid var(--border);
+}
+
+.bcp-btn--secondary:hover {
+  background: var(--muted);
+}
+
+.bcp-btn--success {
+  background: var(--success);
+  color: var(--success-foreground);
+}
+
+.bcp-btn--warning {
+  background: var(--warning);
+  color: var(--warning-foreground);
+}
+
+.bcp-btn--destructive {
+  background: var(--destructive);
+  color: var(--destructive-foreground);
+}
+
+/* BCP Form Styles */
+.bcp-form-group {
+  margin-bottom: var(--sp-4);
+}
+
+.bcp-label {
+  display: block;
+  font-weight: var(--fw-medium);
+  color: var(--foreground);
+  margin-bottom: var(--sp-2);
+}
+
+.bcp-input {
+  width: 100%;
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--input);
+  color: var(--foreground);
+  font-size: var(--fs-sm);
+}
+
+.bcp-input:focus {
+  outline: none;
+  border-color: var(--ring);
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.bcp-textarea {
+  width: 100%;
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--input);
+  color: var(--foreground);
+  font-size: var(--fs-sm);
+  min-height: 100px;
+  resize: vertical;
+}
+
+.bcp-select {
+  width: 100%;
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--input);
+  color: var(--foreground);
+  font-size: var(--fs-sm);
+}
+
+/* BCP Status Badges */
+.bcp-status {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--radius);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+}
+
+.bcp-status--active {
+  background: var(--success);
+  color: var(--success-foreground);
+}
+
+.bcp-status--pending {
+  background: var(--warning);
+  color: var(--warning-foreground);
+}
+
+.bcp-status--inactive {
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+
+.bcp-status--error {
+  background: var(--destructive);
+  color: var(--destructive-foreground);
+}
+
+/* BCP Table Styles */
+.bcp-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--card);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.bcp-table th {
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-weight: var(--fw-semibold);
+  padding: var(--sp-3);
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.bcp-table td {
+  padding: var(--sp-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.bcp-table tr:hover {
+  background: var(--muted);
+}
+
+/* BCP Grid Layouts */
+.bcp-grid {
+  display: grid;
+  gap: var(--sp-4);
+}
+
+.bcp-grid--2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.bcp-grid--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.bcp-grid--4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+@media (max-width: 768px) {
+  .bcp-grid--2,
+  .bcp-grid--3,
+  .bcp-grid--4 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* BCP Loading States */
+.bcp-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-8);
+  color: var(--muted-foreground);
+}
+
+.bcp-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border);
+  border-top: 2px solid var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: var(--sp-2);
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* BCP Alert Styles */
+.bcp-alert {
+  padding: var(--sp-4);
+  border-radius: var(--radius);
+  margin-bottom: var(--sp-4);
+  border-left: 4px solid;
+}
+
+.bcp-alert--info {
+  background: var(--info);
+  color: var(--info-foreground);
+  border-left-color: var(--info);
+}
+
+.bcp-alert--success {
+  background: var(--success);
+  color: var(--success-foreground);
+  border-left-color: var(--success);
+}
+
+.bcp-alert--warning {
+  background: var(--warning);
+  color: var(--warning-foreground);
+  border-left-color: var(--warning);
+}
+
+.bcp-alert--error {
+  background: var(--destructive);
+  color: var(--destructive-foreground);
+  border-left-color: var(--destructive);
+}

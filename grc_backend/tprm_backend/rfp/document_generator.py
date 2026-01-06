@@ -101,7 +101,7 @@ class RFPDocumentGenerator:
             ['Criticality Level', self.rfp_data.get('criticality_level', 'N/A')],
             ['Geographical Scope', self.rfp_data.get('geographical_scope', 'N/A')],
             ['Allow Late Submissions', 'Yes' if self.rfp_data.get('allow_late_submissions') else 'No'],
-            ['Auto-publish when approved', 'Yes' if self.rfp_data.get('auto_publish') else 'No'],
+            ['Auto-approve when approved', 'Yes' if self.rfp_data.get('auto_approve') else 'No'],
         ]
         
         self._add_table(doc, process_info, 'Process Settings')
@@ -223,7 +223,7 @@ class RFPDocumentGenerator:
             ['Criticality Level', self.rfp_data.get('criticality_level', 'N/A')],
             ['Geographical Scope', self.rfp_data.get('geographical_scope', 'N/A')],
             ['Allow Late Submissions', 'Yes' if self.rfp_data.get('allow_late_submissions') else 'No'],
-            ['Auto-publish when approved', 'Yes' if self.rfp_data.get('auto_publish') else 'No'],
+            ['Auto-approve when approved', 'Yes' if self.rfp_data.get('auto_approve') else 'No'],
         ]
         story.append(self._create_pdf_table(process_data))
         story.append(Spacer(1, 20))

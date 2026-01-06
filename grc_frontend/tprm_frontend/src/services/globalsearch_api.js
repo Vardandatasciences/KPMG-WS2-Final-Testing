@@ -1,32 +1,18 @@
 import axios from 'axios'
+import { getTprmApiBaseUrl } from '@/utils/backendEnv'
 
 // Create axios instance with default configuration
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api/tprm',
+  baseURL: getTprmApiBaseUrl(),
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
   },
 })
 
-// Helper to get token from any of the storage keys
-function getStoredToken() {
-  const keys = ['session_token', 'token', 'access_token', 'jwt_token']
-  for (const key of keys) {
-    const val = localStorage.getItem(key)
-    if (val) return val
-  }
-  return null
-}
-
-// Add request interceptor to add JWT authentication
+// Add request interceptor to prevent infinite retries
 api.interceptors.request.use(
   (config) => {
-    // Add JWT token from localStorage (check multiple keys for compatibility)
-    const token = getStoredToken()
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
     return config
   },
   (error) => {

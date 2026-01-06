@@ -32,6 +32,41 @@ axios.defaults.timeout = 120000  // 2 minutes timeout (increased for long-runnin
 axios.defaults.withCredentials = true
 console.log('🍪 Axios configured to send cookies with requests (withCredentials: true)')
 
+// ============================================================================
+// GLOBAL AXIOS INTERCEPTOR - Applies to ALL axios instances
+// This ensures JWT tokens are ALWAYS sent, even for direct axios calls
+// ============================================================================
+axios.interceptors.request.use(
+  (config) => {
+    // Skip JWT token for cookie preferences endpoints (they work without authentication)
+    const isCookiePreferencesEndpoint = config.url && (
+      config.url.includes('/api/cookie/preferences/') ||
+      config.url.includes('/cookie/preferences/')
+    );
+    
+    // Get JWT token from localStorage (check multiple keys for compatibility)
+    const token = localStorage.getItem('access_token') || 
+                  localStorage.getItem('token') || 
+                  localStorage.getItem('session_token') ||
+                  localStorage.getItem('jwt_token');
+    
+    if (token && !isCookiePreferencesEndpoint) {
+      config.headers = config.headers || {};
+      config.headers.Authorization = `Bearer ${token}`;
+      console.log(`🔐 [GLOBAL INTERCEPTOR] Adding JWT token to request: ${config.method?.toUpperCase()} ${config.url}`);
+    } else if (!token && !isCookiePreferencesEndpoint) {
+      console.warn(`⚠️ [GLOBAL INTERCEPTOR] No JWT token found for request: ${config.method?.toUpperCase()} ${config.url}`);
+    }
+    
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+console.log('✅ GLOBAL Axios interceptor configured - JWT tokens will be added to ALL requests');
+
 // Initialize JWT authentication service - import will set up axios interceptors automatically
 import './services/authService.js'
 

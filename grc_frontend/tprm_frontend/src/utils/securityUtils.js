@@ -162,7 +162,12 @@ export class CSRFProtection {
 export class SecureHttpClient {
   constructor() {
     this.authManager = new AuthManager();
-    this.baseURL = process.env.VUE_APP_API_URL || 'http://localhost:3000/api';
+    // Use backendEnv utility for base URL
+    import('@/utils/backendEnv').then(({ getTprmApiBaseUrl }) => {
+      this.baseURL = getTprmApiBaseUrl();
+    }).catch(() => {
+      this.baseURL = 'https://grc-tprm.vardaands.com/api/tprm';
+    });
     this.timeout = 30000; // 30 seconds
   }
   
@@ -228,8 +233,9 @@ export class SecureHttpClient {
       const allowedHosts = [
         'localhost:8000',
         'localhost:3000',
-        'localhost:8000',
-        'localhost:3000'
+        'grc-tprm.vardaands.com',
+        '127.0.0.1:8000',
+        '127.0.0.1:3000'
       ];
       
       try {

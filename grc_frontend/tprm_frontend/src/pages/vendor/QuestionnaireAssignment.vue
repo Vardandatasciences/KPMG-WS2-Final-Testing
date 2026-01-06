@@ -254,10 +254,6 @@ import { apiCall } from '@/utils/api'
 import PopupModal from '@/popup/PopupModal.vue'
 import { PopupService } from '@/popup/popupService'
 import loggingService from '@/services/loggingService'
-import { getTprmApiUrl } from '@/utils/backendEnv'
-
-// API base URL for vendor-questionnaire endpoints
-const VENDOR_QUESTIONNAIRE_API_BASE_URL = getTprmApiUrl('vendor-questionnaire')
 
 // Reactive data
 const assignments = ref([])
@@ -350,7 +346,7 @@ const getProgressPercentage = (assignment) => {
 const loadAssignments = async () => {
   try {
     loading.value = true
-    const response = await apiCall(`${VENDOR_QUESTIONNAIRE_API_BASE_URL}/assignments/`)
+    const response = await apiCall('/api/v1/vendor-questionnaire/assignments/')
     // Ensure we always set an array, handle both paginated and direct array responses
     assignments.value = Array.isArray(response.data) ? response.data : (response.data.results || [])
   } catch (error) {
@@ -363,7 +359,7 @@ const loadAssignments = async () => {
 
 const loadVendors = async () => {
   try {
-    const response = await apiCall(`${VENDOR_QUESTIONNAIRE_API_BASE_URL}/assignments/get_vendors/`)
+    const response = await apiCall('/api/v1/vendor-questionnaire/assignments/get_vendors/')
     vendors.value = Array.isArray(response.data) ? response.data : []
   } catch (error) {
     console.error('Error loading vendors:', error)
@@ -373,13 +369,13 @@ const loadVendors = async () => {
 
 const loadQuestionnaires = async () => {
   try {
-    const response = await apiCall(`${VENDOR_QUESTIONNAIRE_API_BASE_URL}/assignments/get_active_questionnaires/`)
+    const response = await apiCall('/api/v1/vendor-questionnaire/assignments/get_active_questionnaires/')
     questionnaires.value = Array.isArray(response.data) ? response.data : []
   } catch (error) {
     console.error('Error loading questionnaires:', error)
     // Fallback to load all questionnaires if no active ones
     try {
-      const fallbackResponse = await apiCall(`${VENDOR_QUESTIONNAIRE_API_BASE_URL}/questionnaires/`)
+      const fallbackResponse = await apiCall('/api/v1/vendor-questionnaire/questionnaires/')
       const results = fallbackResponse.data.results || []
       questionnaires.value = results.map(q => ({
         questionnaire_id: q.questionnaire_id,
@@ -413,7 +409,7 @@ const createAssignment = async () => {
     }
     delete assignmentData.vendor_id
     
-    const response = await apiCall(`${VENDOR_QUESTIONNAIRE_API_BASE_URL}/assignments/assign_questionnaire/`, {
+    const response = await apiCall('/api/v1/vendor-questionnaire/assignments/assign_questionnaire/', {
       method: 'POST',
       data: assignmentData
     })

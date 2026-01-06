@@ -18,12 +18,12 @@ from .models import RFP, RFPEvaluationCriteria, RFPVersions
 from .serializers import RFPSerializer
 
 # RBAC imports
-from tprm_backend.rfp.rfp_authentication import UnifiedJWTAuthentication, SimpleAuthenticatedPermission
+from tprm_backend.rfp.rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
 def edit_rfp_with_versioning(request):
@@ -82,7 +82,7 @@ def edit_rfp_with_versioning(request):
                 'criticality_level': rfp.criticality_level,
                 'geographical_scope': rfp.geographical_scope,
                 'approval_workflow_id': rfp.approval_workflow_id,
-                'auto_publish': rfp.auto_publish,
+                'auto_approve': rfp.auto_approve,
                 'allow_late_submissions': rfp.allow_late_submissions,
                 'compliance_requirements': rfp.compliance_requirements,
                 'custom_fields': rfp.custom_fields,
@@ -131,7 +131,7 @@ def edit_rfp_with_versioning(request):
             rfp.evaluation_method = rfp_data.get('evaluation_method', rfp.evaluation_method)
             rfp.criticality_level = rfp_data.get('criticality_level', rfp.criticality_level)
             rfp.geographical_scope = rfp_data.get('geographical_scope', rfp.geographical_scope)
-            rfp.auto_publish = rfp_data.get('auto_publish', rfp.auto_publish)
+            rfp.auto_approve = rfp_data.get('auto_approve', rfp.auto_approve)
             rfp.allow_late_submissions = rfp_data.get('allow_late_submissions', rfp.allow_late_submissions)
             rfp.compliance_requirements = rfp_data.get('compliance_requirements', rfp.compliance_requirements)
             rfp.custom_fields = rfp_data.get('custom_fields', rfp.custom_fields)
@@ -178,7 +178,7 @@ def edit_rfp_with_versioning(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_rfp_version_history(request, rfp_id):
@@ -218,7 +218,7 @@ def get_rfp_version_history(request, rfp_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_rfp_version(request, version_id):
@@ -259,7 +259,7 @@ def get_rfp_version(request, version_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
 def rollback_rfp_version(request):
@@ -317,7 +317,7 @@ def rollback_rfp_version(request):
                 'criticality_level': rfp.criticality_level,
                 'geographical_scope': rfp.geographical_scope,
                 'approval_workflow_id': rfp.approval_workflow_id,
-                'auto_publish': rfp.auto_publish,
+                'auto_approve': rfp.auto_approve,
                 'allow_late_submissions': rfp.allow_late_submissions,
                 'compliance_requirements': rfp.compliance_requirements,
                 'custom_fields': rfp.custom_fields,
@@ -367,7 +367,7 @@ def rollback_rfp_version(request):
             rfp.evaluation_method = version_data.get('evaluation_method', rfp.evaluation_method)
             rfp.criticality_level = version_data.get('criticality_level', rfp.criticality_level)
             rfp.geographical_scope = version_data.get('geographical_scope', rfp.geographical_scope)
-            rfp.auto_publish = version_data.get('auto_publish', rfp.auto_publish)
+            rfp.auto_approve = version_data.get('auto_approve', rfp.auto_approve)
             rfp.allow_late_submissions = version_data.get('allow_late_submissions', rfp.allow_late_submissions)
             rfp.compliance_requirements = version_data.get('compliance_requirements', rfp.compliance_requirements)
             rfp.custom_fields = version_data.get('custom_fields', rfp.custom_fields)
@@ -406,7 +406,7 @@ def rollback_rfp_version(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_rfp_change_requests(request, rfp_id):

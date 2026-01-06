@@ -49,6 +49,7 @@ from ...utils.model_router import (
     track_system_load,
     get_current_system_load
 )
+from ...utils.file_compression import decompress_if_needed
 from ...utils.request_queue import (
     rate_limit_decorator,
     process_with_queue,
@@ -1221,6 +1222,15 @@ def upload_and_process_risk_document(request):
         
         print(f"✅ File saved to: {file_path}")
 
+        # Decompress if needed (client-side compression)
+        compression_metadata = None
+        file_path, was_compressed, compression_stats = decompress_if_needed(file_path)
+        if was_compressed:
+            compression_metadata = compression_stats
+            # Update extension after decompression (remove .gz)
+            ext = os.path.splitext(file_path)[1].lower()
+            print(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
+
         try:
             # Step 1: Extract text from the saved file
             print(f"🔍 STEP 1: Starting text extraction from {ext} file...")
@@ -1324,7 +1334,7 @@ def upload_and_process_risk_document(request):
                 "model_routing": "enabled"
             }
             
-            resp = JsonResponse({
+            response_data = {
                 'status': 'success',
                 'message': f'Successfully extracted {len(risks)} risk(s)',
                 'document_name': file_name,
@@ -1333,7 +1343,13 @@ def upload_and_process_risk_document(request):
                 'preprocessing_metadata': preprocess_metadata,
                 'phase3_metadata': phase3_metadata,  # Phase 3 stats
                 'risks': risks
-            })
+            }
+            
+            # Include compression metadata if file was compressed
+            if compression_metadata:
+                response_data['compression_metadata'] = compression_metadata
+            
+            resp = JsonResponse(response_data)
             resp['Access-Control-Allow-Origin'] = '*'
             return resp
         except Exception as process_error:

@@ -418,7 +418,6 @@ const parentContract = ref({})
 const isSubcontract = ref(false)
 const allTermQuestionnaires = ref([]) // Store questionnaires loaded from sessionStorage
 const selectedTemplates = ref({}) // Store selected template_id by term_id: { term_id: template_id }
-const templateQuestionsCache = ref({}) // OPTIMIZATION: Cache for template questions { template_id: questions[] }
 
 // Methods
 const goBack = () => {
@@ -857,7 +856,6 @@ async function loadQuestionnairesInBackground(terms) {
 
 // Get questionnaires for a specific term (used when saving)
 // Now uses selected template if available, otherwise falls back to direct questionnaires
-// OPTIMIZED: Uses cached data to avoid API calls
 const getQuestionnairesForTerm = async (termId, termCategory, termTitle) => {
   const termIdStr = String(termId || '')
   
@@ -866,37 +864,32 @@ const getQuestionnairesForTerm = async (termId, termCategory, termTitle) => {
   if (selectedTemplateId) {
     try {
       console.log(`📋 Using selected template ${selectedTemplateId} for term ${termIdStr} in preview`)
-      
-      // OPTIMIZATION: Check cache first to avoid API call
-      if (templateQuestionsCache.value[selectedTemplateId]) {
-        console.log(`✅ Using CACHED questions for template ${selectedTemplateId} (${templateQuestionsCache.value[selectedTemplateId].length} questions)`)
-        return templateQuestionsCache.value[selectedTemplateId]
-      }
-      
-      // If not cached, fetch from API (fallback for older data)
-      console.log(`⚠️ Template ${selectedTemplateId} not in cache, fetching from API...`)
+      // When a template is selected, fetch ALL questions from that template
+      // Don't pass term_id or term_category to get ALL questions (not filtered)
       const response = await apiService.getTemplateQuestions(selectedTemplateId, null, null)
       const questions = response.questions || []
       
       console.log(`✅ Retrieved ${questions.length} questions from template ${selectedTemplateId} in preview`)
       
       // Convert template questions to the format expected by backend
-      const formattedQuestions = questions.map(q => ({
-        question_id: q.question_id,
-        question_text: q.question_text || '',
-        question_type: mapAnswerTypeToQuestionType(q.answer_type || 'TEXT'),
-        is_required: q.is_required || false,
-        scoring_weightings: q.weightage || 10.0,
-        question_category: q.question_category || 'Contract',
-        options: q.options || [],
-        help_text: q.help_text || '',
-        metric_name: q.metric_name || null,
-        allow_document_upload: q.allow_document_upload || false,
-        template_id: selectedTemplateId // Include template_id for reference
-      }))
-      
-      // Cache for next time
-      templateQuestionsCache.value[selectedTemplateId] = formattedQuestions
+      const formattedQuestions = questions.map(q => {
+        const questionType = mapAnswerTypeToQuestionType(q.answer_type || 'TEXT')
+        return {
+          question_id: q.question_id,
+          question_text: q.question_text || '',
+          question_type: questionType,
+          is_required: q.is_required || false,
+          scoring_weightings: q.weightage || 10.0,
+          question_category: q.question_category || 'Contract',
+          options: q.options || [],
+          help_text: q.help_text || '',
+          metric_name: q.metric_name || null,
+          allow_document_upload: q.allow_document_upload || false,
+          document_upload: q.allow_document_upload || false, // Map allow_document_upload to document_upload
+          multiple_choice: questionType === 'multiple_choice' ? (q.options || []) : null, // Only set when question_type is multiple_choice
+          template_id: selectedTemplateId // Include template_id for reference
+        }
+      })
       
       console.log(`📋 Returning ${formattedQuestions.length} formatted questions from selected template in preview`)
       return formattedQuestions
@@ -935,18 +928,23 @@ const getQuestionnairesForTerm = async (termId, termCategory, termTitle) => {
   })
   
   // Return questionnaires in the format expected by backend
-  return matchingQuestionnaires.map(q => ({
-    question_id: q.question_id,
-    question_text: q.question_text || '',
-    question_type: q.question_type || 'text',
-    is_required: q.is_required || false,
-    scoring_weightings: q.scoring_weightings || 10.0,
-    question_category: q.question_category || 'Contract',
-    options: q.options || [],
-    help_text: q.help_text || '',
-    metric_name: q.metric_name || null,
-    allow_document_upload: q.allow_document_upload || false
-  }))
+  return matchingQuestionnaires.map(q => {
+    const questionType = q.question_type || 'text'
+    return {
+      question_id: q.question_id,
+      question_text: q.question_text || '',
+      question_type: questionType,
+      is_required: q.is_required || false,
+      scoring_weightings: q.scoring_weightings || 10.0,
+      question_category: q.question_category || 'Contract',
+      options: q.options || [],
+      help_text: q.help_text || '',
+      metric_name: q.metric_name || null,
+      allow_document_upload: q.allow_document_upload || false,
+      document_upload: q.allow_document_upload || false, // Map allow_document_upload to document_upload
+      multiple_choice: questionType === 'multiple_choice' ? (q.options || []) : null // Only set when question_type is multiple_choice
+    }
+  })
 }
 
 // Helper function to map answer_type to question_type (same as in CreateContract.vue)
@@ -1088,12 +1086,10 @@ onMounted(async () => {
       contractClauses.value = data.contractClauses || []
       allTermQuestionnaires.value = data.allTermQuestionnaires || []
       selectedTemplates.value = data.selectedTemplates || {} // Load selected templates
-      templateQuestionsCache.value = data.templateQuestionsCache || {} // OPTIMIZATION: Load cached template questions
       console.log('🔍 Contract terms:', contractTerms.value)
       console.log('🔍 Contract clauses:', contractClauses.value)
       console.log(`📋 Loaded ${allTermQuestionnaires.value.length} questionnaires from sessionStorage`)
       console.log(`📋 Loaded selected templates:`, selectedTemplates.value)
-      console.log(`📋 Loaded ${Object.keys(templateQuestionsCache.value).length} cached template question sets`)
       
       // If questionnaires are missing and we have terms, load them in background
       if (allTermQuestionnaires.value.length === 0 && contractTerms.value.length > 0) {

@@ -183,11 +183,6 @@ class DocumentUploadView(APIView):
                     except:
                         pass
                     
-                    # Ensure reporting_frequency is not empty or None
-                    reporting_freq = extraction_data.get('reporting_frequency', '') or 'monthly'
-                    if not reporting_freq or reporting_freq.strip() == '':
-                        reporting_freq = 'monthly'
-                    
                     extracted_data = ExtractedData.objects.create(
                         DocumentId_id=document.DocumentId,  # Pass integer ID
                         OcrResultId_id=ocr_result.OcrResultId,  # Pass integer ID
@@ -199,7 +194,7 @@ class DocumentUploadView(APIView):
                         expiry_date=expiry_date,
                         status=extraction_data.get('status', 'PENDING'),
                         business_service_impacted=extraction_data.get('business_service_impacted', ''),
-                        reporting_frequency=reporting_freq,
+                        reporting_frequency=extraction_data.get('reporting_frequency', 'monthly'),
                         baseline_period=extraction_data.get('baseline_period', ''),
                         improvement_targets=extraction_data.get('improvement_targets', {}),
                         penalty_threshold=penalty_threshold,
@@ -486,81 +481,47 @@ class BcpDrpOcrRunView(APIView):
     def post(self, request, plan_id):
         """Run OCR on a BCP/DRP plan document"""
         try:
-            # Ensure plan_id is an integer
-            try:
-                plan_id = int(plan_id)
-            except (ValueError, TypeError):
-                logger.error(f"[ERROR] Invalid plan_id type: {plan_id}")
-                return Response({
-                    'success': False,
-                    'error': f'Invalid plan_id: {plan_id}. Must be an integer.'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            logger.info(f"[INFO] BCP/DRP OCR run request for plan_id: {plan_id} (type: {type(plan_id).__name__})")
+            logger.info(f"[INFO] BCP/DRP OCR run request for plan_id: {plan_id}")
             
             # Get plan document from BCP/DRP database first
             try:
-                # Import here to avoid circular imports - use full module path
-                from tprm_backend.bcpdrp.models import Plan
+                # Import here to avoid circular imports
+                from bcpdrp.models import Plan
                 plan = Plan.objects.get(plan_id=plan_id)
                 plan_type = plan.plan_type
                 file_uri = plan.file_uri
                 
-                logger.info(f"[INFO] Found plan: {plan_id}, type: {plan_type}, file_uri: {file_uri}")
-                
-                if not file_uri or (isinstance(file_uri, str) and file_uri.strip() == ''):
-                    logger.error(f"[ERROR] No file_uri found for plan {plan_id}")
+                if not file_uri:
                     return Response({
                         'success': False,
-                        'error': f'No document file found for plan {plan_id}. Please ensure the plan has a file uploaded.'
+                        'error': f'No document file found for plan {plan_id}'
                     }, status=status.HTTP_404_NOT_FOUND)
                 
                 logger.info(f"[INFO] Processing {plan_type} plan {plan_id} with file: {file_uri}")
                 
-            except ImportError as e:
-                logger.error(f"[ERROR] Failed to import Plan model: {e}", exc_info=True)
-                return Response({
-                    'success': False,
-                    'error': f'Failed to import Plan model: {str(e)}'
-                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             except Plan.DoesNotExist:
-                logger.error(f"[ERROR] Plan {plan_id} not found in database")
                 return Response({
                     'success': False,
                     'error': f'Plan {plan_id} not found'
                 }, status=status.HTTP_404_NOT_FOUND)
-            except Exception as e:
-                logger.error(f"[ERROR] Error retrieving plan {plan_id}: {e}", exc_info=True)
-                return Response({
-                    'success': False,
-                    'error': f'Error retrieving plan: {str(e)}'
-                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
             # Validate request data (optional validation)
-            try:
-                serializer = BcpDrpOcrRunSerializer(data={
-                    'plan_id': plan_id,
-                    'plan_type': plan_type,
-                    'file_uri': file_uri
-                })
-                
-                if not serializer.is_valid():
-                    logger.error(f"[ERROR] Invalid request data: {serializer.errors}")
-                    return Response({
-                        'success': False,
-                        'error': 'Invalid request data',
-                        'details': serializer.errors
-                    }, status=status.HTTP_400_BAD_REQUEST)
-            except Exception as e:
-                logger.error(f"[ERROR] Serializer validation error: {e}", exc_info=True)
+            serializer = BcpDrpOcrRunSerializer(data={
+                'plan_id': plan_id,
+                'plan_type': plan_type,
+                'file_uri': file_uri
+            })
+            
+            if not serializer.is_valid():
+                logger.error(f"[ERROR] Invalid request data: {serializer.errors}")
                 return Response({
                     'success': False,
-                    'error': f'Validation error: {str(e)}'
+                    'error': 'Invalid request data',
+                    'details': serializer.errors
                 }, status=status.HTTP_400_BAD_REQUEST)
             
             # Process document with OCR and AI extraction
             try:
-                logger.info(f"[INFO] Starting OCR processing for plan {plan_id}")
                 # Run OCR and AI extraction
                 result = document_service.process_bcp_drp_document(
                     plan_id=plan_id,
@@ -568,9 +529,7 @@ class BcpDrpOcrRunView(APIView):
                     file_uri=file_uri
                 )
                 
-                logger.info(f"[INFO] OCR processing result: success={result.get('success')}")
-                
-                if result.get('success'):
+                if result['success']:
                     logger.info(f"[SUCCESS] OCR processing completed for plan {plan_id}")
                     response_data = {
                         'success': True,
@@ -579,37 +538,29 @@ class BcpDrpOcrRunView(APIView):
                             'extracted_data': result.get('extracted_data', {}),
                             'ocr_text': result.get('ocr_text', ''),
                             'confidence': result.get('confidence', 0.0)
-                        },
-                        'extracted_data': result.get('extracted_data', {})  # Also include at top level for frontend compatibility
+                        }
                     }
-                    logger.info(f"[DEBUG] Returning response data with extracted_data keys: {list(result.get('extracted_data', {}).keys())}")
+                    logger.info(f"[DEBUG] Returning response data: {response_data}")
                     return Response(response_data, content_type='application/json')
                 else:
-                    error_msg = result.get('error', 'OCR processing failed')
-                    logger.error(f"[ERROR] OCR processing failed: {error_msg}")
+                    logger.error(f"[ERROR] OCR processing failed: {result.get('error')}")
                     return Response({
                         'success': False,
-                        'error': error_msg
+                        'error': result.get('error', 'OCR processing failed')
                     }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                     
             except Exception as e:
-                logger.error(f"[ERROR] OCR processing exception: {e}", exc_info=True)
-                import traceback
-                error_trace = traceback.format_exc()
-                logger.error(f"[ERROR] Full traceback: {error_trace}")
+                logger.error(f"[ERROR] OCR processing error: {e}")
                 return Response({
                     'success': False,
                     'error': f'OCR processing failed: {str(e)}'
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 
         except Exception as e:
-            logger.error(f"[ERROR] BCP/DRP OCR run exception: {e}", exc_info=True)
-            import traceback
-            error_trace = traceback.format_exc()
-            logger.error(f"[ERROR] Full traceback: {error_trace}")
+            logger.error(f"[ERROR] BCP/DRP OCR run error: {e}")
             return Response({
                 'success': False,
-                'error': f'Server error: {str(e)}'
+                'error': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -637,98 +588,133 @@ class BcpDrpExtractDataView(APIView):
             
             # Get plan type from BCP/DRP database
             try:
-                from tprm_backend.bcpdrp.models import Plan
+                from bcpdrp.models import Plan
                 plan = Plan.objects.get(plan_id=plan_id)
                 plan_type = plan.plan_type
-            except ImportError as e:
-                logger.error(f"[ERROR] Failed to import Plan model: {e}", exc_info=True)
-                return Response({
-                    'success': False,
-                    'error': f'Failed to import Plan model: {str(e)}'
-                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             except Plan.DoesNotExist:
                 return Response({
                     'success': False,
                     'error': f'Plan {plan_id} not found'
                 }, status=status.HTTP_404_NOT_FOUND)
             
-            # Save extracted data to appropriate table
+            # Save extracted data to ocr_extracted_data field (unified for all plan types)
             try:
-                if plan_type == 'BCP':
-                    # Save to BCP extracted details table
-                    from tprm_backend.bcpdrp.models import BcpDetails
-                    bcp_data, created = BcpDetails.objects.update_or_create(
-                        plan_id=plan_id,
-                        defaults={
-                            'purpose_scope': extracted_data.get('purpose_scope', ''),
-                            'regulatory_references': extracted_data.get('regulatory_references', []),
-                            'critical_services': extracted_data.get('critical_services', []),
-                            'dependencies_internal': extracted_data.get('dependencies_internal', []),
-                            'dependencies_external': extracted_data.get('dependencies_external', []),
-                            'risk_assessment_summary': extracted_data.get('risk_assessment_summary', ''),
-                            'bia_summary': extracted_data.get('bia_summary', ''),
-                            'rto_targets': extracted_data.get('rto_targets', {}),
-                            'rpo_targets': extracted_data.get('rpo_targets', {}),
-                            'incident_types': extracted_data.get('incident_types', []),
-                            'alternate_work_locations': extracted_data.get('alternate_work_locations', []),
-                            'communication_plan_internal': extracted_data.get('communication_plan_internal', ''),
-                            'communication_plan_bank': extracted_data.get('communication_plan_bank', ''),
-                            'roles_responsibilities': extracted_data.get('roles_responsibilities', []),
-                            'training_testing_schedule': extracted_data.get('training_testing_schedule', ''),
-                            'maintenance_review_cycle': extracted_data.get('maintenance_review_cycle', ''),
-                            'extractor_version': 'AI_LLAMA'
-                        }
-                    )
-                    
-                    # Update plan status
-                    plan.ocr_extracted = True
-                    plan.ocr_extracted_at = datetime.now()
-                    plan.save()
-                    
-                    logger.info(f"[SUCCESS] BCP data saved for plan {plan_id}")
-                    
-                elif plan_type == 'DRP':
-                    # Save to DRP extracted details table
-                    from tprm_backend.bcpdrp.models import DrpDetails
-                    drp_data, created = DrpDetails.objects.update_or_create(
-                        plan_id=plan_id,
-                        defaults={
-                            'purpose_scope': extracted_data.get('purpose_scope', ''),
-                            'regulatory_references': extracted_data.get('regulatory_references', []),
-                            'critical_systems': extracted_data.get('critical_systems', []),
-                            'critical_applications': extracted_data.get('critical_applications', []),
-                            'databases_list': extracted_data.get('databases_list', []),
-                            'supporting_infrastructure': extracted_data.get('supporting_infrastructure', []),
-                            'third_party_services': extracted_data.get('third_party_services', []),
-                            'rto_targets': extracted_data.get('rto_targets', {}),
-                            'rpo_targets': extracted_data.get('rpo_targets', {}),
-                            'disaster_scenarios': extracted_data.get('disaster_scenarios', []),
-                            'disaster_declaration_process': extracted_data.get('disaster_declaration_process', ''),
-                            'data_backup_strategy': extracted_data.get('data_backup_strategy', ''),
-                            'recovery_site_details': extracted_data.get('recovery_site_details', ''),
-                            'failover_procedures': extracted_data.get('failover_procedures', ''),
-                            'failback_procedures': extracted_data.get('failback_procedures', ''),
-                            'network_recovery_steps': extracted_data.get('network_recovery_steps', ''),
-                            'application_restoration_order': extracted_data.get('application_restoration_order', []),
-                            'testing_validation_schedule': extracted_data.get('testing_validation_schedule', ''),
-                            'maintenance_review_cycle': extracted_data.get('maintenance_review_cycle', ''),
-                            'extractor_version': 'AI_LLAMA'
-                        }
-                    )
-                    
-                    # Update plan status
-                    plan.ocr_extracted = True
-                    plan.ocr_extracted_at = datetime.now()
-                    plan.save()
-                    
-                    logger.info(f"[SUCCESS] DRP data saved for plan {plan_id}")
+                # Helper function to check if a value is empty/null
+                def is_empty_value(val):
+                    if val is None:
+                        return True
+                    if isinstance(val, str) and val.strip() == '':
+                        return True
+                    if isinstance(val, list) and len(val) == 0:
+                        return True
+                    if isinstance(val, dict) and len(val) == 0:
+                        return True
+                    return False
                 
-                return Response({
+                # Prepare unified data structure - include all fields from extracted_data (including custom fields)
+                # Only include fields that have non-empty values
+                unified_data = {'plan_id': plan_id}
+                
+                # Process all fields from extracted_data (including custom fields)
+                for key, value in extracted_data.items():
+                    # Skip plan_id as it's already set
+                    if key == 'plan_id':
+                        continue
+                    
+                    # Only add non-empty values
+                    if not is_empty_value(value):
+                        unified_data[key] = value
+                
+                logger.info(f"[INFO] Saving {len(unified_data) - 1} non-empty fields for plan {plan_id} (including custom fields)")
+                
+                # Check if data already exists
+                created = plan.ocr_extracted_data is None or not plan.ocr_extracted_data
+                
+                # Save to ocr_extracted_data field
+                plan.ocr_extracted_data = unified_data
+                plan.ocr_extracted = True
+                if not plan.ocr_extracted_at:
+                    plan.ocr_extracted_at = datetime.now()
+                plan.save()
+                
+                logger.info(f"[SUCCESS] Unified extracted data saved for {plan_type} plan {plan_id}")
+                
+                # Generate risks after OCR data is saved (background task)
+                task_info = None
+                try:
+                    logger.info(f"[INFO] Triggering background comprehensive risk generation for OCR completed plan {plan_id}")
+                    
+                    # Import the background task
+                    from risk_analysis.tasks import generate_comprehensive_risks_task
+                    
+                    # Start background task - analyze plan with extracted OCR data (no evaluation yet)
+                    task = generate_comprehensive_risks_task.delay(
+                        plan_id=plan_id,
+                        evaluation_id=None  # No evaluation at OCR stage, only plan + extracted details
+                    )
+                    
+                    task_info = {
+                        'task_id': task.id,
+                        'status': 'started',
+                        'message': 'Comprehensive risk generation started in background'
+                    }
+                    
+                    logger.info(f"[SUCCESS] Started background risk generation task {task.id} for OCR completed plan {plan_id}")
+                    
+                except Exception as task_error:
+                    logger.warning(f"[WARNING] Background task system not available, will generate risks after response: {task_error}")
+                    
+                    # Instead of blocking, we'll generate risks after sending the response
+                    task_info = {
+                        'task_id': 'deferred',
+                        'status': 'deferred',
+                        'message': 'Risk generation will start after OCR save completes'
+                    }
+                
+                response_data = {
                     'success': True,
                     'message': f'Extracted data saved successfully for {plan_type} plan {plan_id}',
                     'plan_type': plan_type,
                     'created': created
-                })
+                }
+                
+                # Include background task info in response
+                if task_info:
+                    response_data['risk_generation'] = task_info
+                    if task_info['status'] == 'deferred':
+                        response_data['risk_message'] = "OCR data saved! Comprehensive risk generation will start shortly - check Risk Analytics in a few minutes"
+                    else:
+                        response_data['risk_message'] = "Comprehensive risk generation started in background - risks will appear in Risk Analytics shortly"
+                
+                # Create response
+                response = Response(response_data)
+                
+                # Start deferred risk generation after response (if needed)
+                if task_info and task_info['status'] == 'deferred':
+                    import threading
+                    
+                    def deferred_ocr_risk_generation():
+                        try:
+                            logger.info(f"[INFO] Starting deferred risk generation for OCR completed plan {plan_id}")
+                            from bcpdrp.views import generate_risks_for_plan_evaluation
+                            sync_result = generate_risks_for_plan_evaluation(
+                                plan_id=plan_id,
+                                evaluation_id=None  # No evaluation at OCR stage
+                            )
+                            if sync_result:
+                                logger.info(f"[SUCCESS] Deferred OCR risk generation completed: {len(sync_result.get('risks', []))} risks created")
+                            else:
+                                logger.error("[ERROR] Deferred OCR risk generation failed")
+                        except Exception as e:
+                            logger.error(f"[ERROR] Error in deferred OCR risk generation: {str(e)}")
+                    
+                    # Start the risk generation in a separate thread
+                    thread = threading.Thread(target=deferred_ocr_risk_generation)
+                    thread.daemon = True  # Thread will die when main process dies
+                    thread.start()
+                    logger.info(f"[INFO] Started deferred OCR risk generation thread for plan {plan_id}")
+                
+                return response
                 
             except Exception as e:
                 logger.error(f"[ERROR] Failed to save extracted data: {e}")
@@ -759,103 +745,33 @@ class BcpDrpExtractedDataView(APIView):
             
             # Get plan type from BCP/DRP database
             try:
-                from tprm_backend.bcpdrp.models import Plan
+                from bcpdrp.models import Plan
                 plan = Plan.objects.get(plan_id=plan_id)
                 plan_type = plan.plan_type
-            except ImportError as e:
-                logger.error(f"[ERROR] Failed to import Plan model: {e}", exc_info=True)
-                return Response({
-                    'success': False,
-                    'error': f'Failed to import Plan model: {str(e)}'
-                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             except Plan.DoesNotExist:
                 return Response({
                     'success': False,
                     'error': f'Plan {plan_id} not found'
                 }, status=status.HTTP_404_NOT_FOUND)
             
-            # Get extracted data from appropriate table
+            # Get extracted data from ocr_extracted_data field (unified for all plan types)
             try:
-                if plan_type == 'BCP':
-                    try:
-                        from tprm_backend.bcpdrp.models import BcpDetails
-                        bcp_data = BcpDetails.objects.get(plan_id=plan_id)
-                        # Convert model instance to dictionary
-                        extracted_data = {
-                            'purpose_scope': bcp_data.purpose_scope,
-                            'regulatory_references': bcp_data.regulatory_references,
-                            'critical_services': bcp_data.critical_services,
-                            'dependencies_internal': bcp_data.dependencies_internal,
-                            'dependencies_external': bcp_data.dependencies_external,
-                            'risk_assessment_summary': bcp_data.risk_assessment_summary,
-                            'bia_summary': bcp_data.bia_summary,
-                            'rto_targets': bcp_data.rto_targets,
-                            'rpo_targets': bcp_data.rpo_targets,
-                            'incident_types': bcp_data.incident_types,
-                            'alternate_work_locations': bcp_data.alternate_work_locations,
-                            'communication_plan_internal': bcp_data.communication_plan_internal,
-                            'communication_plan_bank': bcp_data.communication_plan_bank,
-                            'roles_responsibilities': bcp_data.roles_responsibilities,
-                            'training_testing_schedule': bcp_data.training_testing_schedule,
-                            'maintenance_review_cycle': bcp_data.maintenance_review_cycle,
-                            'extracted_at': bcp_data.extracted_at,
-                            'extractor_version': bcp_data.extractor_version
-                        }
-                        return Response({
-                            'success': True,
-                            'plan_type': plan_type,
-                            'extracted_data': extracted_data
-                        })
-                    except BcpDetails.DoesNotExist:
-                        return Response({
-                            'success': False,
-                            'error': f'No extracted data found for BCP plan {plan_id}'
-                        }, status=status.HTTP_404_NOT_FOUND)
-                        
-                elif plan_type == 'DRP':
-                    try:
-                        from tprm_backend.bcpdrp.models import DrpDetails
-                        drp_data = DrpDetails.objects.get(plan_id=plan_id)
-                        # Convert model instance to dictionary
-                        extracted_data = {
-                            'purpose_scope': drp_data.purpose_scope,
-                            'regulatory_references': drp_data.regulatory_references,
-                            'critical_systems': drp_data.critical_systems,
-                            'critical_applications': drp_data.critical_applications,
-                            'databases_list': drp_data.databases_list,
-                            'supporting_infrastructure': drp_data.supporting_infrastructure,
-                            'third_party_services': drp_data.third_party_services,
-                            'rto_targets': drp_data.rto_targets,
-                            'rpo_targets': drp_data.rpo_targets,
-                            'disaster_scenarios': drp_data.disaster_scenarios,
-                            'disaster_declaration_process': drp_data.disaster_declaration_process,
-                            'data_backup_strategy': drp_data.data_backup_strategy,
-                            'recovery_site_details': drp_data.recovery_site_details,
-                            'failover_procedures': drp_data.failover_procedures,
-                            'failback_procedures': drp_data.failback_procedures,
-                            'network_recovery_steps': drp_data.network_recovery_steps,
-                            'application_restoration_order': drp_data.application_restoration_order,
-                            'testing_validation_schedule': drp_data.testing_validation_schedule,
-                            'maintenance_review_cycle': drp_data.maintenance_review_cycle,
-                            'extracted_at': drp_data.extracted_at,
-                            'extractor_version': drp_data.extractor_version
-                        }
-                        return Response({
-                            'success': True,
-                            'plan_type': plan_type,
-                            'extracted_data': extracted_data
-                        })
-                    except DrpDetails.DoesNotExist:
-                        return Response({
-                            'success': False,
-                            'error': f'No extracted data found for DRP plan {plan_id}'
-                        }, status=status.HTTP_404_NOT_FOUND)
-                
+                if plan.ocr_extracted_data:
+                    extracted_data = plan.ocr_extracted_data.copy()
+                    # Add metadata
+                    extracted_data['extracted_at'] = plan.ocr_extracted_at.isoformat() if plan.ocr_extracted_at else None
+                    extracted_data['extractor_version'] = 'AI_LLAMA'
+                    
+                    return Response({
+                        'success': True,
+                        'plan_type': plan_type,
+                        'extracted_data': extracted_data
+                    })
                 else:
                     return Response({
                         'success': False,
-                        'error': f'Invalid plan type: {plan_type}'
-                    }, status=status.HTTP_400_BAD_REQUEST)
+                        'error': f'No extracted data found for plan {plan_id}'
+                    }, status=status.HTTP_404_NOT_FOUND)
                     
             except Exception as e:
                 logger.error(f"[ERROR] Failed to retrieve extracted data: {e}")

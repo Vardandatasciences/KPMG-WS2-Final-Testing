@@ -1,23 +1,53 @@
 <template>
   <div class="questionnaire-workflow-page p-6 max-w-7xl mx-auto space-y-6">
-    <div class="flex items-center justify-between">
-      <div>
-        <h1 class="text-3xl font-bold text-foreground">Questionnaire Workflow</h1>
-        <p class="text-muted-foreground">Create questionnaire and assign for testing</p>
-      </div>
-      <div class="badge badge--outline text-sm">Two-Step Process</div>
-    </div>
-
-    <!-- Progress Steps -->
-    <div class="progress-steps">
-      <div class="step" :class="{ 'active': currentStep === 1, 'completed': currentStep > 1 }">
-        <div class="step-number">1</div>
-        <div class="step-label">Create Questionnaire</div>
-      </div>
-      <div class="step" :class="{ 'active': currentStep === 2, 'completed': currentStep > 2 }">
-        <div class="step-number">2</div>
-        <div class="step-label">Assign for Testing</div>
-      </div>
+    <!-- Breadcrumb Navigation -->
+    <div class="breadcrumb-container">
+      <nav class="breadcrumb">
+        <div 
+          class="breadcrumb-item" 
+          :class="{ 'breadcrumb-item--active': currentStep === 1 }"
+          @click="goToStep(1)"
+        >
+          <div class="breadcrumb-icon">
+            <svg v-if="currentStep === 1" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2V7a2 2 0 00-2-2H9z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9h10m-10 4h10m-10 4h10"/>
+            </svg>
+            <span v-else class="breadcrumb-number">1</span>
+          </div>
+          <div class="breadcrumb-content">
+            <span class="breadcrumb-title">Create Questionnaire</span>
+            <span class="breadcrumb-description">Create and configure your questionnaire</span>
+          </div>
+        </div>
+        
+        <div class="breadcrumb-separator">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+          </svg>
+        </div>
+        
+        <div 
+          class="breadcrumb-item" 
+          :class="{ 
+            'breadcrumb-item--active': currentStep === 2,
+            'breadcrumb-item--disabled': !canProceedToStep2 && currentStep !== 2
+          }"
+          @click="handleStep2Click"
+          :title="!canProceedToStep2 ? 'Please complete questionnaire creation in Step 1 first' : ''"
+        >
+          <div class="breadcrumb-icon">
+            <svg v-if="currentStep === 2" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"/>
+            </svg>
+            <span v-else class="breadcrumb-number">2</span>
+          </div>
+          <div class="breadcrumb-content">
+            <span class="breadcrumb-title">Assign for Testing</span>
+            <span class="breadcrumb-description">Assign questionnaire for testing</span>
+          </div>
+        </div>
+      </nav>
     </div>
 
     <!-- Step 1: Create Questionnaire -->
@@ -33,6 +63,41 @@
           </h3>
         </div>
         <div class="card-content space-y-6">
+          <!-- Template Actions -->
+          <div class="flex gap-3 flex-wrap justify-end">
+            <button 
+              type="button" 
+              class="btn btn--outline" 
+              @click="openTemplateSelector"
+            >
+              <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+              </svg>
+              Select a Template
+            </button>
+            <button 
+              type="button" 
+              class="btn btn--outline" 
+              @click="navigateToTemplateScreen"
+            >
+              <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+              </svg>
+              Create a Template
+            </button>
+            <button 
+              type="button" 
+              class="btn btn--outline" 
+              @click="saveAsTemplate"
+              :disabled="!canSaveAsTemplate"
+            >
+              <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
+              </svg>
+              Save as Template
+            </button>
+          </div>
+
           <!-- Plan Selection -->
           <div class="plans-dropdown-section">
             <div class="plans-dropdown">
@@ -93,6 +158,14 @@
                       <table v-else class="plans-table">
                         <thead>
                           <tr>
+                            <th class="checkbox-column">
+                              <input 
+                                type="checkbox" 
+                                class="select-all-checkbox"
+                                :checked="isAllSelected"
+                                @change="toggleSelectAll"
+                              />
+                            </th>
                             <th>Plan ID</th>
                             <th>Plan Name</th>
                             <th>Type</th>
@@ -100,7 +173,6 @@
                             <th>Vendor</th>
                             <th>Criticality</th>
                             <th>Status</th>
-                            <th>Action</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -110,6 +182,14 @@
                             class="plan-row"
                             :class="{ 'selected': selectedPlanId === plan.plan_id.toString() }"
                           >
+                            <td class="checkbox-column">
+                              <input 
+                                type="checkbox" 
+                                class="plan-checkbox"
+                                :checked="selectedPlanId === plan.plan_id.toString()"
+                                @change="selectPlan(plan)"
+                              />
+                            </td>
                             <td class="plan-id-cell">{{ plan.plan_id }}</td>
                             <td class="plan-name-cell">{{ plan.plan_name }}</td>
                             <td>
@@ -129,14 +209,6 @@
                                 {{ typeof plan.status === 'string' ? plan.status.replace(/_/g, ' ') : 'N/A' }}
                               </span>
                             </td>
-                            <td class="action-cell">
-                              <button 
-                                class="select-plan-btn"
-                                @click="selectPlan(plan)"
-                              >
-                                Select
-                              </button>
-                            </td>
                           </tr>
                         </tbody>
                       </table>
@@ -144,46 +216,6 @@
                   </div>
                 </Transition>
               </div>
-            </div>
-          </div>
-
-          <!-- Template Actions -->
-          <div class="template-actions-section">
-            <div class="flex items-center gap-4 mb-4">
-              <h4 class="font-medium text-foreground">Template Management</h4>
-            </div>
-            <div class="flex gap-3 flex-wrap">
-              <button 
-                type="button" 
-                class="btn btn--outline" 
-                @click="openTemplateSelector"
-              >
-                <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                </svg>
-                Select a Template
-              </button>
-              <button 
-                type="button" 
-                class="btn btn--outline" 
-                @click="navigateToTemplateScreen"
-              >
-                <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                </svg>
-                Create a Template
-              </button>
-              <button 
-                type="button" 
-                class="btn btn--outline" 
-                @click="saveAsTemplate"
-                :disabled="!canSaveAsTemplate"
-              >
-                <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
-                </svg>
-                Save as Template
-              </button>
             </div>
           </div>
 
@@ -200,10 +232,60 @@
             </div>
             <div class="space-y-2">
               <label class="label" for="planType">Plan Type</label>
-              <select class="select" v-model="questionnaire.planType" :disabled="!!selectedPlanId">
-                <option value="BCP">BCP</option>
-                <option value="DRP">DRP</option>
-              </select>
+              <div class="plan-type-dropdown-wrapper">
+                <div 
+                  class="plan-type-dropdown-select"
+                  :class="{ 'is-open': isPlanTypeDropdownOpen, 'has-value': questionnaire.planType, 'is-disabled': !!selectedPlanId }"
+                  @click="!selectedPlanId && togglePlanTypeDropdown()"
+                  @blur="closePlanTypeDropdown"
+                  :tabindex="selectedPlanId ? -1 : 0"
+                >
+                  <span v-if="questionnaire.planType" class="selected-plan-type">{{ questionnaire.planType }}</span>
+                  <span v-else class="placeholder-plan-type">Select plan type</span>
+                  <svg 
+                    v-if="!selectedPlanId"
+                    class="plan-type-arrow" 
+                    :class="{ 'rotated': isPlanTypeDropdownOpen }"
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                  </svg>
+                </div>
+                <Transition name="dropdown">
+                  <div v-if="isPlanTypeDropdownOpen && !selectedPlanId" class="plan-type-dropdown-menu">
+                    <div 
+                      v-for="pt in planTypes" 
+                      :key="pt.id" 
+                      class="plan-type-dropdown-item"
+                      :class="{ 'is-selected': questionnaire.planType === pt.value }"
+                      @click.stop="selectPlanTypeValue(pt.value)"
+                    >
+                      <span>{{ pt.value }}</span>
+                      <svg 
+                        v-if="questionnaire.planType === pt.value"
+                        class="check-icon-small"
+                        fill="none" 
+                        stroke="currentColor" 
+                        viewBox="0 0 24 24"
+                      >
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                      </svg>
+                    </div>
+                    <div class="plan-type-divider"></div>
+                    <div 
+                      class="plan-type-dropdown-item add-new-plan-type"
+                      @click.stop="openAddPlanTypeModal"
+                    >
+                      <svg class="add-icon-small" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                      </svg>
+                      <span>Add New Plan Type</span>
+                    </div>
+                  </div>
+                </Transition>
+              </div>
             </div>
             <div class="space-y-2">
               <label class="label" for="description">Description</label>
@@ -382,17 +464,11 @@
                 </svg>
                 Load Data
               </button>
-              <button class="btn btn--outline" @click="saveQuestionnaire">
+              <button class="btn btn--primary" @click="proceedToStep2" :disabled="!canProceedToStep2">
                 <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
                 </svg>
-                Save Questionnaire
-              </button>
-              <button class="btn btn--primary" @click="proceedToStep2" :disabled="!canProceedToStep2">
-                <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                </svg>
-                Proceed to Assignment
+                Save and Assign
               </button>
             </div>
           </div>
@@ -419,8 +495,9 @@
                 <label for="planType" class="block text-sm font-medium">Plan Type <span class="text-destructive">*</span></label>
                 <select v-model="assignmentForm.plan_type" id="planType" class="input" required>
                   <option value="">Select plan type</option>
-                  <option value="BCP">Business Continuity Plan</option>
-                  <option value="DRP">Disaster Recovery Plan</option>
+                  <option v-for="pt in planTypes" :key="pt.id" :value="pt.value">
+                    {{ pt.value }}
+                  </option>
                 </select>
               </div>
               <div class="space-y-2">
@@ -438,9 +515,9 @@
                 <label for="objectType" class="block text-sm font-medium">Object Type <span class="text-destructive">*</span></label>
                 <select v-model="assignmentForm.object_type" id="objectType" class="input" required>
                   <option value="">Select object type</option>
-                  <option value="PLAN">Plan</option>
-                  <option value="QUESTIONNAIRE">Questionnaire</option>
-                  <option value="ASSIGNMENT_RESPONSE">Assignment Response</option>
+                  <option value="PLAN EVALUATION">Plan Evaluation</option>
+                  <option value="NEW QUESTIONNAIRE">New Questionnaire</option>
+                  <option value="QUESTIONNAIRE RESPONSE">Questionnaire Response</option>
                 </select>
               </div>
             </div>
@@ -588,8 +665,11 @@
                 <div class="template-card-title-section">
                   <h4 class="template-card-name">{{ template.template_name }}</h4>
                   <div class="template-card-badges">
-                    <span :class="['badge', template.module_type === 'BCP' ? 'badge--default' : 'badge--secondary']">
+                    <span :class="['badge', template.module_type === 'PLANS' ? 'badge--default' : 'badge--secondary']">
                       {{ template.module_type }}
+                    </span>
+                    <span v-if="template.module_subtype" :class="['badge', 'badge--subtype']">
+                      {{ template.module_subtype }}
                     </span>
                     <span class="badge badge--secondary">{{ template.template_type }}</span>
                   </div>
@@ -619,12 +699,6 @@
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
                     </svg>
                     <span class="text-sm">v{{ template.template_version || '1.0' }}</span>
-                  </div>
-                  <div v-if="template.module_subtype" class="template-detail-item">
-                    <svg class="h-4 w-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
-                    </svg>
-                    <span class="text-sm">{{ template.module_subtype }}</span>
                   </div>
                 </div>
                 
@@ -797,12 +871,54 @@
         </div>
       </div>
     </div>
+
+    <!-- Add Plan Type Modal -->
+    <div v-if="showAddPlanTypeModal" class="modal-overlay" @click="closeAddPlanTypeModal">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3 class="modal-title">Add New Plan Type</h3>
+          <button class="modal-close" @click="closeAddPlanTypeModal">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="new-plan-type" class="form-label">
+              Plan Type Name <span class="required-asterisk">*</span>
+            </label>
+            <input
+              id="new-plan-type"
+              type="text"
+              class="form-input"
+              v-model="newPlanTypeValue"
+              placeholder="e.g., CRP, ERP, etc."
+              @keyup.enter="saveNewPlanType"
+              ref="newPlanTypeInput"
+            />
+            <p class="form-hint">Enter a unique plan type name (e.g., Crisis Recovery Plan, Emergency Response Plan)</p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn--outline" @click="closeAddPlanTypeModal">Cancel</button>
+          <button 
+            class="btn btn--primary" 
+            @click="saveNewPlanType"
+            :disabled="!newPlanTypeValue.trim() || isSavingPlanType"
+          >
+            <span v-if="isSavingPlanType">Saving...</span>
+            <span v-else>Save Plan Type</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import './QuestionnaireWorkflow.css'
-import { ref, computed, onMounted, reactive } from 'vue'
+import { ref, computed, onMounted, reactive, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import http from '../../api/http'
 import api from '../../services/api_bcp.js'
@@ -828,11 +944,19 @@ const selectedPlanId = ref<string>("")
 const isPlanDropdownOpen = ref(false)
 const isLoadingPlans = ref(false)
 
+// Plan types data
+const planTypes = ref<any[]>([])
+const isPlanTypeDropdownOpen = ref(false)
+const showAddPlanTypeModal = ref(false)
+const newPlanTypeValue = ref('')
+const isSavingPlanType = ref(false)
+const newPlanTypeInput = ref(null)
+
 // Questionnaire data
 const questionnaire = ref({
   questionnaire_id: null, // Store ID for updates
   title: '',
-  planType: 'BCP',
+  planType: '',
   description: ''
 })
 
@@ -870,7 +994,7 @@ const assignmentForm = ref({
   assigner_name: '',
   assignee_id: '',
   assignee_name: '',
-  object_type: 'QUESTIONNAIRE',
+  object_type: 'NEW QUESTIONNAIRE',
   object_id: '',
   due_date: ''
 })
@@ -907,6 +1031,12 @@ const saveAsTemplateForm = ref({
 })
 
 // Computed properties
+const isAllSelected = computed(() => {
+  return availablePlans.value.length > 0 && availablePlans.value.every(plan => 
+    selectedPlanId.value === plan.plan_id.toString()
+  )
+})
+
 const canProceedToStep2 = computed(() => {
   return selectedPlanId.value && 
          questionnaire.value.title && 
@@ -920,11 +1050,34 @@ const canSaveAsTemplate = computed(() => {
          questionnaire.value.description
 })
 
+// Plan type fetching - extract from plans table
+const fetchPlanTypes = async () => {
+  try {
+    console.log('Fetching plan types from plans table')
+    const response = await api.plans.list()
+    console.log('Plans API Response:', response)
+    
+    const plans = (response as any).plans || (response as any).data?.plans || []
+    
+    // Update plan types from the fetched plans
+    updatePlanTypesFromPlans(plans)
+    
+    // Set default to first plan type if available
+    if (planTypes.value.length > 0 && !questionnaire.value.planType) {
+      questionnaire.value.planType = planTypes.value[0].value
+    }
+  } catch (error) {
+    console.error('Error fetching plan types:', error)
+    console.error('Error details:', error.message)
+    planTypes.value = []
+  }
+}
+
 // Plan selection methods
 const fetchPlans = async () => {
   isLoadingPlans.value = true
   try {
-    console.log('Fetching plans from API endpoint: http://localhost:8000/api/tprm/bcpdrp/plans/')
+    console.log('Fetching plans from API endpoint: http://localhost:8000/api/bcpdrp/plans/')
     const response = await api.plans.list()
     
     console.log('API response data:', response)
@@ -935,6 +1088,9 @@ const fetchPlans = async () => {
     if (plans && Array.isArray(plans)) {
       availablePlans.value = plans
       console.log('Successfully fetched plans:', plans.length, 'plans')
+      
+      // Update plan types from the fetched plans
+      await updatePlanTypesFromPlans(plans)
     } else {
       console.error('API returned no plans data or plans is not an array')
       availablePlans.value = []
@@ -946,6 +1102,25 @@ const fetchPlans = async () => {
   } finally {
     isLoadingPlans.value = false
   }
+}
+
+// Helper function to update plan types from plans
+const updatePlanTypesFromPlans = (plans: any[]) => {
+  // Extract unique plan types from plans table
+  const uniquePlanTypes = [...new Set(plans.map((plan: any) => plan.plan_type).filter(Boolean))]
+  
+  // If questionnaire already has a plan type, ensure it's included
+  if (questionnaire.value.planType && !uniquePlanTypes.includes(questionnaire.value.planType)) {
+    uniquePlanTypes.push(questionnaire.value.planType)
+  }
+  
+  // Transform to match the expected format
+  planTypes.value = uniquePlanTypes.map((pt: string) => ({
+    id: pt,
+    value: pt
+  })).sort((a, b) => a.value.localeCompare(b.value))
+  
+  console.log('Plan types updated from plans:', planTypes.value)
 }
 
 const togglePlanDropdown = () => {
@@ -964,6 +1139,16 @@ const selectPlan = (plan: any) => {
   isPlanDropdownOpen.value = false
 }
 
+const toggleSelectAll = () => {
+  if (isAllSelected.value) {
+    selectedPlanId.value = ""
+  } else {
+    if (availablePlans.value.length > 0) {
+      selectPlan(availablePlans.value[0])
+    }
+  }
+}
+
 const getSelectedPlanDisplay = () => {
   const plan = availablePlans.value.find(p => p.plan_id.toString() === selectedPlanId.value)
   if (plan) {
@@ -975,6 +1160,79 @@ const getSelectedPlanDisplay = () => {
 const getSelectedPlanType = () => {
   const plan = availablePlans.value.find(p => p.plan_id.toString() === selectedPlanId.value)
   return plan ? plan.plan_type : ""
+}
+
+const togglePlanTypeDropdown = () => {
+  if (!selectedPlanId.value) {
+    isPlanTypeDropdownOpen.value = !isPlanTypeDropdownOpen.value
+  }
+}
+
+const closePlanTypeDropdown = () => {
+  setTimeout(() => {
+    isPlanTypeDropdownOpen.value = false
+  }, 200)
+}
+
+const selectPlanTypeValue = (value: string) => {
+  questionnaire.value.planType = value
+  isPlanTypeDropdownOpen.value = false
+}
+
+const openAddPlanTypeModal = () => {
+  showAddPlanTypeModal.value = true
+  newPlanTypeValue.value = ''
+  isPlanTypeDropdownOpen.value = false
+  setTimeout(() => {
+    if (newPlanTypeInput.value) {
+      (newPlanTypeInput.value as HTMLInputElement).focus()
+    }
+  }, 100)
+}
+
+const closeAddPlanTypeModal = () => {
+  showAddPlanTypeModal.value = false
+  newPlanTypeValue.value = ''
+}
+
+const saveNewPlanType = async () => {
+  const trimmedValue = newPlanTypeValue.value.trim()
+  
+  if (!trimmedValue) {
+    PopupService.warning('Please enter a plan type name', 'Validation Error')
+    return
+  }
+
+  // Check if plan type already exists
+  if (planTypes.value.some(pt => pt.value.toUpperCase() === trimmedValue.toUpperCase())) {
+    PopupService.warning(`Plan type "${trimmedValue}" already exists`, 'Duplicate Plan Type')
+    return
+  }
+
+  isSavingPlanType.value = true
+  try {
+    const response = await api.planTypes.create({ value: trimmedValue })
+    console.log('Plan type created:', response)
+    
+    // Refresh plan types list
+    await fetchPlanTypes()
+    
+    // Select the newly created plan type
+    questionnaire.value.planType = trimmedValue
+    
+    // Close modal
+    closeAddPlanTypeModal()
+    
+    PopupService.success(`Plan type "${trimmedValue}" has been added successfully`, 'Plan Type Added')
+  } catch (error: any) {
+    console.error('Error creating plan type:', error)
+    PopupService.error(
+      error.response?.data?.message || `Failed to add plan type "${trimmedValue}"`,
+      'Error'
+    )
+  } finally {
+    isSavingPlanType.value = false
+  }
 }
 
 const getCriticalityBadgeClass = (criticality: string) => {
@@ -1188,13 +1446,63 @@ const proceedToStep2 = async () => {
   // Save the questionnaire first
   await saveQuestionnaire()
   
+  // Ensure plan types are loaded before proceeding
+  if (planTypes.value.length === 0) {
+    await fetchPlanTypes()
+  }
+  
   // Auto-fill assignment form with questionnaire data
-  assignmentForm.value.plan_type = questionnaire.value.planType
+  assignmentForm.value.plan_type = questionnaire.value.planType || ''
   assignmentForm.value.workflow_name = `${questionnaire.value.title} - Testing Assignment`
+  
+  // Ensure object_id is set if questionnaire was saved
+  if (questionnaire.value.questionnaire_id) {
+    assignmentForm.value.object_id = questionnaire.value.questionnaire_id.toString()
+  }
+  
+  console.log('Proceeding to Step 2 with plan type:', questionnaire.value.planType)
+  console.log('Available plan types:', planTypes.value)
+  console.log('Assignment form plan_type:', assignmentForm.value.plan_type)
   
   // Move to step 2
   currentStep.value = 2
 }
+
+const handleStep2Click = () => {
+  if (!canProceedToStep2.value) {
+    PopupService.warning(
+      'Please complete questionnaire creation in Step 1 before accessing Step 2.',
+      'Step 2 Disabled'
+    )
+    return
+  }
+  proceedToStep2()
+}
+
+const goToStep = (step: number) => {
+  // Prevent navigation to Step 2 if conditions aren't met
+  if (step === 2 && !canProceedToStep2.value) {
+    PopupService.warning(
+      'Please complete questionnaire creation in Step 1 before accessing Step 2.',
+      'Step 2 Disabled'
+    )
+    return
+  }
+  
+  if (step === 2) {
+    proceedToStep2()
+  } else {
+    currentStep.value = step
+  }
+}
+
+// Watch for plan type changes and update assignment form when on Step 2
+watch(() => questionnaire.value.planType, (newPlanType) => {
+  if (newPlanType && currentStep.value === 2) {
+    assignmentForm.value.plan_type = newPlanType
+    console.log('Plan type updated in assignment form:', newPlanType)
+  }
+})
 
 // Assignment form methods
 const fetchUsers = async () => {
@@ -1257,34 +1565,22 @@ const handleNoApprovalChange = () => {
       }
     }
     
-    // Handle multiple property name formats (PascalCase from store, snake_case from localStorage, etc.)
-    const userId = currentUser?.UserId || 
-                   currentUser?.userId || 
-                   currentUser?.user_id || 
-                   currentUser?.userid || 
-                   currentUser?.id
-    
-    const userName = currentUser?.UserName || 
-                     currentUser?.username || 
-                     `${currentUser?.FirstName || currentUser?.first_name || ''} ${currentUser?.LastName || currentUser?.last_name || ''}`.trim() || 
-                     currentUser?.Email || 
-                     currentUser?.email ||
-                     currentUser?.name
+    // Handle both user_id and userid property names (backend returns userid)
+    const userId = currentUser?.user_id || currentUser?.userid
+    const userName = currentUser?.username || `${currentUser?.first_name || ''} ${currentUser?.last_name || ''}`.trim() || currentUser?.email
     
     if (currentUser && userId) {
       // Auto-fill assigner
       assignmentForm.value.assigner_id = userId.toString()
-      assignmentForm.value.assigner_name = userName || 'Current User'
+      assignmentForm.value.assigner_name = userName
       
       // Set assignee to same as assigner
       assignmentForm.value.assignee_id = userId.toString()
-      assignmentForm.value.assignee_name = userName || 'Current User'
+      assignmentForm.value.assignee_name = userName
     } else {
       console.error('No current user found in store or localStorage')
       console.log('Store state:', store.getters['auth/currentUser'])
       console.log('localStorage current_user:', localStorage.getItem('current_user'))
-      console.log('Current user object:', currentUser)
-      console.log('Resolved userId:', userId)
       PopupService.warning('Unable to get current user information. Please log in again or select assignee manually.', 'User Not Found')
       noApprovalNeeded.value = false
     }
@@ -1355,7 +1651,7 @@ const resetAssignmentForm = () => {
     assigner_name: '',
     assignee_id: '',
     assignee_name: '',
-    object_type: 'QUESTIONNAIRE',
+    object_type: 'NEW QUESTIONNAIRE',
     object_id: '',
     due_date: ''
   }
@@ -1386,8 +1682,9 @@ const fetchTemplates = async (moduleType?: string) => {
     const params: any = { is_active: 'true' }
     if (moduleType) {
       params.module_type = moduleType
-    } else if (questionnaire.value.planType) {
-      params.module_type = questionnaire.value.planType
+    } else {
+      // Always fetch templates with module_type as 'PLANS'
+      params.module_type = 'PLANS'
     }
     
     const response = await api.questionnaireTemplates.list(params)
@@ -1422,14 +1719,25 @@ const selectTemplate = async (template: any) => {
     const templateData = (response as any).data || response
     
     // Load template data into questionnaire form
+    // Fetch title and description from questionnaire template table
     if (templateData.template_name) {
       questionnaire.value.title = templateData.template_name
     }
     if (templateData.template_description) {
       questionnaire.value.description = templateData.template_description
     }
-    if (templateData.module_type) {
+    
+    // Plan type should come from selected plan, not from template
+    // Only set plan type from template if no plan is selected
+    if (!selectedPlanId.value && templateData.module_type) {
       questionnaire.value.planType = templateData.module_type
+    }
+    // If a plan is selected, keep the plan type from the selected plan
+    else if (selectedPlanId.value) {
+      const selectedPlan = availablePlans.value.find(p => p.plan_id.toString() === selectedPlanId.value)
+      if (selectedPlan && selectedPlan.plan_type) {
+        questionnaire.value.planType = selectedPlan.plan_type
+      }
     }
     
     // Convert template questions to questionnaire format
@@ -1535,7 +1843,7 @@ const createTemplate = async () => {
       template_description: newTemplateForm.value.template_description || null,
       template_version: newTemplateForm.value.template_version || '1.0',
       template_type: newTemplateForm.value.template_type,
-      module_type: questionnaire.value.planType || 'BCP',
+      module_type: 'PLANS',
       template_questions_json: templateQuestions,
       status: newTemplateForm.value.status,
       is_active: true,
@@ -1630,7 +1938,7 @@ const confirmSaveAsTemplate = async () => {
       template_description: saveAsTemplateForm.value.template_description || null,
       template_version: saveAsTemplateForm.value.template_version || '1.0',
       template_type: saveAsTemplateForm.value.template_type,
-      module_type: questionnaire.value.planType || 'BCP',
+      module_type: 'PLANS',
       template_questions_json: templateQuestions,
       status: saveAsTemplateForm.value.status,
       is_active: true,
@@ -1937,6 +2245,7 @@ onMounted(async () => {
   tomorrow.setDate(tomorrow.getDate() + 1)
   assignmentForm.value.due_date = tomorrow.toISOString().slice(0, 16)
   
+  await fetchPlanTypes()
   await fetchPlans()
   await fetchUsers()
 })

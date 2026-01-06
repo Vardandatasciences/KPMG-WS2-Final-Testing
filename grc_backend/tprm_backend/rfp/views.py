@@ -3,7 +3,6 @@ from rest_framework.decorators import action, api_view, authentication_classes, 
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
-from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db.models import Q, Count, Avg
 from django.utils import timezone
 from django.core.files.storage import default_storage
@@ -12,7 +11,7 @@ from django.shortcuts import get_object_or_404, render, redirect
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_http_methods, require_GET
-from django.db import transaction, connection, connections
+from django.db import transaction, connection
 from django.core.mail import send_mail, EmailMessage
 from django.template.loader import render_to_string
 from django.conf import settings
@@ -62,7 +61,7 @@ from .forms import (
 
 # RBAC imports
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required
-from .rfp_authentication import UnifiedJWTAuthentication, SimpleAuthenticatedPermission, RFPAuthenticationMixin
+from .rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission, RFPAuthenticationMixin
 
 
 class RFPViewSet(RFPAuthenticationMixin, viewsets.ModelViewSet):
@@ -74,32 +73,7 @@ class RFPViewSet(RFPAuthenticationMixin, viewsets.ModelViewSet):
     search_fields = ['rfp_title', 'description', 'rfp_number']
     ordering_fields = ['created_at', 'updated_at', 'submission_deadline', 'rfp_title']
     ordering = ['-created_at']
-    
-    # Use rfp_id as lookup field since that's the primary key
-    lookup_field = 'rfp_id'
-    lookup_url_kwarg = 'pk'  # URL parameter name (can be pk or rfp_id)
-    
-    # Explicitly set authentication and permission classes
-    authentication_classes = [UnifiedJWTAuthentication]
-    permission_classes = [SimpleAuthenticatedPermission]
 
-    def retrieve(self, request, *args, **kwargs):
-        """
-        Override retrieve method to add debug logging
-        """
-        try:
-            print(f"[RFPViewSet.retrieve] Retrieving RFP with pk={kwargs.get('pk')}")
-            print(f"[RFPViewSet.retrieve] lookup_field={self.lookup_field}, lookup_url_kwarg={self.lookup_url_kwarg}")
-            response = super().retrieve(request, *args, **kwargs)
-            if hasattr(response, 'data'):
-                print(f"[RFPViewSet.retrieve] Retrieved RFP: rfp_id={response.data.get('rfp_id')}, rfp_title={response.data.get('rfp_title')}")
-            return response
-        except Exception as e:
-            print(f"[RFPViewSet.retrieve] Error retrieving RFP: {str(e)}")
-            import traceback
-            print(traceback.format_exc())
-            raise
-    
     def get_serializer_class(self):
         if self.action == 'list':
             return RFPListSerializer
@@ -109,36 +83,10 @@ class RFPViewSet(RFPAuthenticationMixin, viewsets.ModelViewSet):
         
     def list(self, request, *args, **kwargs):
         """
-        Override list method to handle errors better and add debug logging
+        Override list method to handle errors better
         """
         try:
-            # Get queryset before pagination
-            queryset = self.filter_queryset(self.get_queryset())
-            print(f"[RFPViewSet.list] Queryset count: {queryset.count()}")
-            print(f"[RFPViewSet.list] Query params: {dict(request.query_params)}")
-            
-            # Call parent list method which handles pagination
-            response = super().list(request, *args, **kwargs)
-            
-            # Log response structure
-            if hasattr(response, 'data'):
-                response_type = type(response.data).__name__
-                print(f"[RFPViewSet.list] Response data type: {response_type}")
-                if isinstance(response.data, dict):
-                    print(f"[RFPViewSet.list] Response data keys: {list(response.data.keys())}")
-                    if 'results' in response.data:
-                        print(f"[RFPViewSet.list] Results count: {len(response.data['results'])}")
-                        if len(response.data['results']) > 0:
-                            first_rfp = response.data['results'][0]
-                            print(f"[RFPViewSet.list] First RFP: rfp_id={first_rfp.get('rfp_id')}, rfp_title={first_rfp.get('rfp_title')}, rfp_number={first_rfp.get('rfp_number')}")
-                elif isinstance(response.data, list):
-                    print(f"[RFPViewSet.list] Response is a list with {len(response.data)} items")
-                    if len(response.data) > 0:
-                        print(f"[RFPViewSet.list] First RFP: {response.data[0]}")
-                else:
-                    print(f"[RFPViewSet.list] Response data: {response.data}")
-            
-            return response
+            return super().list(request, *args, **kwargs)
         except Exception as e:
             print("Exception during RFP listing:", str(e))
             import traceback
@@ -149,54 +97,23 @@ class RFPViewSet(RFPAuthenticationMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         """
         Filter RFPs based on user role and permissions
-        Also handle query parameter filters for created_by and status
         """
-        queryset = RFP.objects.all().order_by('-created_at')
+        # For development, return all RFPs
+        return RFP.objects.all()
         
-        # Filter by created_by if provided in query parameters
-        created_by = self.request.query_params.get('created_by')
-        if created_by:
-            try:
-                created_by_id = int(created_by)
-                queryset = queryset.filter(created_by=created_by_id)
-                print(f"[RFPViewSet.get_queryset] Filtered by created_by={created_by_id}, count: {queryset.count()}")
-            except (ValueError, TypeError):
-                pass  # Ignore invalid created_by parameter
-        
-        # Filter by status if provided in query parameters
-        status = self.request.query_params.get('status')
-        if status:
-            queryset = queryset.filter(status=status)
-            print(f"[RFPViewSet.get_queryset] Filtered by status={status}, count: {queryset.count()}")
-        
-        # Log total count for debugging
-        total_count = queryset.count()
-        print(f"[RFPViewSet.get_queryset] Final queryset count: {total_count}")
-        if total_count == 0:
-            # Log all available RFPs and their statuses for debugging
-            all_rfps = RFP.objects.all()
-            print(f"[RFPViewSet.get_queryset] Total RFPs in database: {all_rfps.count()}")
-            if all_rfps.exists():
-                statuses = all_rfps.values_list('status', flat=True).distinct()
-                print(f"[RFPViewSet.get_queryset] Available statuses: {list(statuses)}")
-                created_by_values = all_rfps.values_list('created_by', flat=True).distinct()
-                print(f"[RFPViewSet.get_queryset] Available created_by values: {list(created_by_values)}")
-        
-        # In production, we would also filter by user role
+        # In production, we would filter by user
         # user = self.request.user
         # 
         # # Superusers can see all RFPs
         # if user.is_superuser:
-        #     return queryset
+        #     return RFP.objects.all()
         # 
         # # Filter RFPs based on user's role
-        # return queryset.filter(
+        # return RFP.objects.filter(
         #     Q(created_by=user) |
         #     Q(primary_reviewer_id=user.id) |
         #     Q(executive_reviewer_id=user.id)
         # )
-        
-        return queryset
 
     def create(self, request, *args, **kwargs):
         """
@@ -311,23 +228,41 @@ class RFPViewSet(RFPAuthenticationMixin, viewsets.ModelViewSet):
     def approve(self, request, pk=None):
         """
         Approve an RFP
+        If auto_approve is True, set status to APPROVED directly without requiring approval workflow
         """
         rfp = self.get_object()
         
-        # Check if RFP is in review status
+        # If auto_approve is enabled, allow approval from any status (except CANCELLED/ARCHIVED)
+        if rfp.auto_approve:
+            if rfp.status in ['CANCELLED', 'ARCHIVED']:
+                return Response(
+                    {"error": "Cannot approve a cancelled or archived RFP"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            # Directly approve without requiring IN_REVIEW status
+            rfp.status = 'APPROVED'
+            rfp.approved_by = request.user.id if hasattr(request.user, 'id') else 1
+            rfp.approval_workflow_id = None  # No approval workflow needed for auto-approve
+            rfp.save()
+            return Response({
+                "status": "RFP auto-approved",
+                "message": "RFP has been automatically approved without approval workflow"
+            })
+        
+        # For non-auto-approve RFPs, require IN_REVIEW status
         if rfp.status != 'IN_REVIEW':
             return Response(
                 {"error": "Only RFPs in IN_REVIEW status can be approved"},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Update status to PUBLISHED or SUBMISSION_OPEN based on auto_publish flag
-        rfp.status = 'SUBMISSION_OPEN' if rfp.auto_publish else 'PUBLISHED'
-        rfp.approved_by = request.user.id
+        # Update status to PUBLISHED for normal approval workflow
+        rfp.status = 'PUBLISHED'
+        rfp.approved_by = request.user.id if hasattr(request.user, 'id') else 1
         rfp.save()
         
         # Update approval workflows
-        current_user_id = request.user.id
+        current_user_id = request.user.id if hasattr(request.user, 'id') else 1
         for workflow in rfp.approval_workflows.all():
             if workflow.approver_id == current_user_id:
                 workflow.status = 'approved'
@@ -757,7 +692,7 @@ class RFPViewSet(RFPAuthenticationMixin, viewsets.ModelViewSet):
                 'approval_workflow_id': rfp.approval_workflow_id,
                 
                 # Configuration
-                'auto_publish': rfp.auto_publish,
+                'auto_approve': rfp.auto_approve,
                 'allow_late_submissions': rfp.allow_late_submissions,
                 
                 # JSON fields
@@ -960,51 +895,22 @@ class RFPTypeCustomFieldsViewSet(RFPAuthenticationMixin, viewsets.ReadOnlyModelV
     filter_backends = [filters.SearchFilter]
     search_fields = ['rfp_type']
     
-    
-    def get_queryset(self):
-        """
-        Return all RFP type custom fields
-        """
-        queryset = RFPTypeCustomFields.objects.all()
-        logger.info(f'[RFPTypeCustomFieldsViewSet.get_queryset] Total records: {queryset.count()}')
-        return queryset
-    
-    @action(detail=False, methods=['get'], authentication_classes=[], permission_classes=[AllowAny])
+    @action(detail=False, methods=['get'])
     def types(self, request):
         """
         Get list of unique RFP types (just the rfp_type values)
-        Uses AllowAny permission and no authentication since these are read-only public data
         """
-        try:
-            logger.info('[RFPTypeCustomFieldsViewSet.types] Fetching RFP types from database')
-            
-            # Query for distinct RFP types
-            rfp_types = RFPTypeCustomFields.objects.values_list('rfp_type', flat=True).distinct().order_by('rfp_type')
-            rfp_types_list = list(rfp_types)
-            
-            logger.info(f'[RFPTypeCustomFieldsViewSet.types] Found {len(rfp_types_list)} RFP types: {rfp_types_list}')
-            
-            # Always return success, even if list is empty
-            return Response({
-                'success': True,
-                'rfp_types': rfp_types_list
-            })
-        except Exception as e:
-            logger.error(f'[RFPTypeCustomFieldsViewSet.types] Error fetching RFP types: {str(e)}')
-            import traceback
-            logger.error(traceback.format_exc())
-            return Response({
-                'success': False,
-                'error': f'Error fetching RFP types: {str(e)}',
-                'rfp_types': []
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        rfp_types = RFPTypeCustomFields.objects.values_list('rfp_type', flat=True).distinct().order_by('rfp_type')
+        return Response({
+            'success': True,
+            'rfp_types': list(rfp_types)
+        })
     
-    @action(detail=False, methods=['get'], authentication_classes=[], permission_classes=[AllowAny])
+    @action(detail=False, methods=['get'])
     def custom_fields(self, request):
         """
         Get custom fields for a specific RFP type
         Query parameter: rfp_type (required)
-        Uses AllowAny permission and no authentication since these are read-only public data
         """
         rfp_type = request.query_params.get('rfp_type', None)
         
@@ -1044,9 +950,8 @@ class DocumentUploadView(APIView):
     """
     API endpoint for uploading documents to S3
     """
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [SimpleAuthenticatedPermission]
-    parser_classes = [MultiPartParser, FormParser, JSONParser]  # Support multipart/form-data for file uploads
     
     def post(self, request):
         """
@@ -1165,16 +1070,9 @@ class DocumentUploadView(APIView):
                     print(f"[SUCCESS] Document uploaded successfully: {document_name} (S3 ID: {s3_file.id})")
                     print(f"[SUCCESS] S3 file saved to database with ID: {s3_file.id}")
                     
-                    # Check how many documents exist for this RFP (only if rfp_id is provided)
-                    rfp_docs_count = 0
-                    if rfp_id:
-                        try:
-                            rfp_docs_count = S3Files.objects.filter(metadata__rfp_id=rfp_id).count()
-                            print(f"[INFO] Total documents for RFP {rfp_id}: {rfp_docs_count}")
-                        except Exception as count_error:
-                            print(f"[WARN] Could not count RFP documents: {str(count_error)}")
-                    else:
-                        print(f"[INFO] No RFP ID provided, skipping document count")
+                    # Check how many documents exist for this RFP
+                    rfp_docs_count = S3Files.objects.filter(metadata__rfp_id=rfp_id).count()
+                    print(f"[INFO] Total documents for RFP {rfp_id}: {rfp_docs_count}")
                     
                     return Response({
                         'success': True,
@@ -1598,7 +1496,6 @@ class MergeDocumentsView(APIView):
     """
     authentication_classes = []  # Allow anonymous access for vendor portal
     permission_classes = [AllowAny]  # Allow anonymous access for vendor portal
-    parser_classes = [MultiPartParser, FormParser, JSONParser]  # Support multipart/form-data for file uploads - MultiPartParser must be first
    
     def post(self, request):
         """
@@ -1607,33 +1504,15 @@ class MergeDocumentsView(APIView):
         try:
             from .models import S3Files
            
-            # Debug: Print request information
-            print(f"[MERGE] Request method: {request.method}")
-            print(f"[MERGE] Content-Type: {request.content_type}")
-            print(f"[MERGE] Request data keys: {list(request.data.keys())}")
-            print(f"[MERGE] Request FILES keys: {list(request.FILES.keys())}")
-            print(f"[MERGE] Request data: {request.data}")
-           
             document_ids = request.data.get('document_ids', [])
             document_order = request.data.get('document_order', [])
-            
-            # Try multiple ways to get files
             files = request.FILES.getlist('files')  # For direct file uploads
-            if not files:
-                # Try getting files directly from FILES dict
-                if 'files' in request.FILES:
-                    files = [request.FILES['files']] if not isinstance(request.FILES.getlist('files'), list) else request.FILES.getlist('files')
-                # Try getting all files
-                if not files and request.FILES:
-                    files = list(request.FILES.values())
-            
             rfp_id = request.data.get('rfp_id')  # Optional
             user_id = request.data.get('user_id', '1')
            
             print(f"[MERGE] Standalone merge request received")
             print(f"   Document IDs: {document_ids}")
             print(f"   Files: {len(files) if files else 0}")
-            print(f"   File names: {[f.name for f in files] if files else 'None'}")
             print(f"   RFP ID: {rfp_id or 'None (standalone merge)'}")
            
             # Determine merge method
@@ -2087,7 +1966,7 @@ class AwardNotificationView(APIView):
     """
     API endpoint for managing award notifications
     """
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [SimpleAuthenticatedPermission]
     
     def post(self, request, rfp_id):
@@ -2131,13 +2010,13 @@ class AwardNotificationView(APIView):
                     'error': 'RFP response not found'
                 }, status=status.HTTP_404_NOT_FOUND)
             
-            # Extract email - Priority: 1) Frontend provided email, 2) response_documents, 3) vendor_contacts table, 4) default
+            # Extract email - Priority: 1) Frontend provided email, 2) response_documents, 3) default
             recipient_email = 'vendor@example.com'  # Default fallback
             
             # Priority 1: Use email from frontend if provided
-            if vendor_email and vendor_email != 'vendor@example.com' and vendor_email.strip():
-                recipient_email = vendor_email.strip()
-                print(f"[AWARD NOTIFICATION] Using email from frontend: {recipient_email}")
+            if vendor_email and vendor_email != 'vendor@example.com':
+                recipient_email = vendor_email
+                print(f"Using email from frontend: {recipient_email}")
             # Priority 2: Try to extract from response_documents
             elif response.response_documents:
                 try:
@@ -2145,77 +2024,26 @@ class AwardNotificationView(APIView):
                     response_docs = json.loads(response.response_documents) if isinstance(response.response_documents, str) else response.response_documents
                     
                     # Check multiple possible locations for email
-                    if response_docs.get('contact_email') and response_docs.get('contact_email') != 'vendor@example.com':
-                        recipient_email = response_docs['contact_email'].strip()
-                        print(f"[AWARD NOTIFICATION] Found email in response_docs.contact_email: {recipient_email}")
-                    elif response_docs.get('companyInfo', {}).get('contactEmail') and response_docs.get('companyInfo', {}).get('contactEmail') != 'vendor@example.com':
-                        recipient_email = response_docs['companyInfo']['contactEmail'].strip()
-                        print(f"[AWARD NOTIFICATION] Found email in companyInfo.contactEmail: {recipient_email}")
-                    elif response_docs.get('companyInfo', {}).get('email') and response_docs.get('companyInfo', {}).get('email') != 'vendor@example.com':
-                        recipient_email = response_docs['companyInfo']['email'].strip()
-                        print(f"[AWARD NOTIFICATION] Found email in companyInfo.email: {recipient_email}")
-                    elif response_docs.get('email') and response_docs.get('email') != 'vendor@example.com':
-                        recipient_email = response_docs['email'].strip()
-                        print(f"[AWARD NOTIFICATION] Found email in response_docs.email: {recipient_email}")
-                    elif response_docs.get('proposalData', {}).get('companyInfo', {}).get('email') and response_docs.get('proposalData', {}).get('companyInfo', {}).get('email') != 'vendor@example.com':
-                        recipient_email = response_docs['proposalData']['companyInfo']['email'].strip()
-                        print(f"[AWARD NOTIFICATION] Found email in proposalData.companyInfo.email: {recipient_email}")
+                    if response_docs.get('contact_email'):
+                        recipient_email = response_docs['contact_email']
+                        print(f"Found email in response_docs.contact_email: {recipient_email}")
+                    elif response_docs.get('companyInfo', {}).get('email'):
+                        recipient_email = response_docs['companyInfo']['email']
+                        print(f"Found email in companyInfo.email: {recipient_email}")
+                    elif response_docs.get('companyInfo', {}).get('contactEmail'):
+                        recipient_email = response_docs['companyInfo']['contactEmail']
+                        print(f"Found email in companyInfo.contactEmail: {recipient_email}")
+                    elif response_docs.get('email'):
+                        recipient_email = response_docs['email']
+                        print(f"Found email in response_docs.email: {recipient_email}")
+                    elif response_docs.get('proposalData', {}).get('companyInfo', {}).get('email'):
+                        recipient_email = response_docs['proposalData']['companyInfo']['email']
+                        print(f"Found email in proposalData.companyInfo.email: {recipient_email}")
                 except Exception as e:
-                    print(f"[AWARD NOTIFICATION] Error parsing response_documents: {e}")
+                    print(f"Error parsing response_documents: {e}")
                     pass
             
-            # Priority 3: If still not found and vendor_id exists, try fetching from vendor_contacts table
-            if (not recipient_email or recipient_email == 'vendor@example.com') and response.vendor_id:
-                try:
-                    from django.db import connection
-                    with connection.cursor() as cursor:
-                        # Try to get primary contact email from vendor_contacts table
-                        try:
-                            cursor.execute('''
-                                SELECT email
-                                FROM tprm_integration.vendor_contacts
-                                WHERE vendor_id = %s 
-                                AND (contact_type = 'PRIMARY' OR is_primary = 1 OR is_primary = '1' OR is_primary = 'Y')
-                                AND (is_active = 1 OR is_active = '1' OR is_active = 'Y' OR is_active IS NULL)
-                                AND email IS NOT NULL AND email != ''
-                                ORDER BY is_primary DESC, contact_id ASC
-                                LIMIT 1
-                            ''', [response.vendor_id])
-                            contact = cursor.fetchone()
-                            if contact and contact[0] and contact[0].strip() and contact[0] != 'vendor@example.com':
-                                recipient_email = contact[0].strip()
-                                print(f"[AWARD NOTIFICATION] Found email from vendor_contacts table: {recipient_email}")
-                        except Exception as schema_error:
-                            # Fallback: try without schema prefix
-                            try:
-                                cursor.execute('''
-                                    SELECT email
-                                    FROM vendor_contacts
-                                    WHERE vendor_id = %s 
-                                    AND (contact_type = 'PRIMARY' OR is_primary = 1 OR is_primary = '1')
-                                    AND (is_active = 1 OR is_active = '1' OR is_active = 'Y' OR is_active IS NULL)
-                                    AND email IS NOT NULL AND email != ''
-                                    ORDER BY is_primary DESC, contact_id ASC
-                                    LIMIT 1
-                                ''', [response.vendor_id])
-                                contact = cursor.fetchone()
-                                if contact and contact[0] and contact[0].strip() and contact[0] != 'vendor@example.com':
-                                    recipient_email = contact[0].strip()
-                                    print(f"[AWARD NOTIFICATION] Found email from vendor_contacts table (fallback): {recipient_email}")
-                            except Exception as fallback_error:
-                                print(f"[AWARD NOTIFICATION] Could not fetch email from vendor_contacts: {fallback_error}")
-                except Exception as e:
-                    print(f"[AWARD NOTIFICATION] Error fetching vendor contact: {e}")
-            
-            print(f"[AWARD NOTIFICATION] Final recipient email: {recipient_email}")
-            
-            # Validate email before proceeding
-            if not recipient_email or recipient_email == 'vendor@example.com' or not recipient_email.strip():
-                return Response({
-                    'success': False,
-                    'error': 'Vendor email not found. Please ensure the vendor has provided their contact email in the RFP response or in the vendor profile.',
-                    'details': 'Email could not be found in response_documents or vendor_contacts table'
-                }, status=status.HTTP_400_BAD_REQUEST)
+            print(f"Final recipient email: {recipient_email}")
             
             # Generate secure token for response
             import secrets
@@ -2270,7 +2098,20 @@ class AwardNotificationView(APIView):
                 subject = f"Congratulations! Your Proposal Has Been Selected - RFP {rfp_id}"
                 
                 # Create response URL (use frontend URL from settings)
+                import re
                 frontend_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
+                
+                # Replace any ngrok URLs with localhost:3000
+                if 'ngrok' in frontend_url.lower():
+                    frontend_url = 'http://localhost:3000'
+                
+                # Ensure it's localhost (not 127.0.0.1 or other variations)
+                if not frontend_url.startswith('http://localhost') and not frontend_url.startswith('https://localhost'):
+                    # Extract port if present, otherwise use 3000
+                    port_match = re.search(r':(\d+)', frontend_url)
+                    port = port_match.group(1) if port_match else '3000'
+                    frontend_url = f'http://localhost:{port}'
+                
                 response_url = f"{frontend_url}/award-response/{accept_reject_token}"
                 
                 # Email body
@@ -2300,54 +2141,27 @@ If you have questions, please contact the RFP team directly.
 """
                 
                 # Send email
-                try:
-                    email_sent = send_mail(
-                        subject=subject,
-                        message=email_body,
-                        from_email=settings.DEFAULT_FROM_EMAIL if hasattr(settings, 'DEFAULT_FROM_EMAIL') else 'noreply@tprm.com',
-                        recipient_list=[recipient_email],
-                        fail_silently=False
-                    )
-                    
-                    if email_sent:
-                        print(f"[AWARD NOTIFICATION] ✅ Email sent successfully to {recipient_email}")
-                        notification.notification_status = 'sent'
-                        notification.sent_date = timezone.now()
-                    else:
-                        print(f"[AWARD NOTIFICATION] ❌ Failed to send email to {recipient_email}")
-                        notification.notification_status = 'pending'
-                        notification.save()
-                        # Return error response
-                        return Response({
-                            'success': False,
-                            'error': f'Failed to send email to {recipient_email}. Please check email configuration.',
-                            'recipient_email': recipient_email
-                        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-                except Exception as send_error:
-                    print(f"[AWARD NOTIFICATION] ❌ Error sending email: {str(send_error)}")
-                    import traceback
-                    traceback.print_exc()
+                email_sent = send_mail(
+                    subject=subject,
+                    message=email_body,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[recipient_email],
+                    fail_silently=False
+                )
+                
+                if email_sent:
+                    print(f"Email sent successfully to {recipient_email}")
+                    notification.notification_status = 'sent'
+                    notification.sent_date = timezone.now()
+                else:
+                    print(f"Failed to send email to {recipient_email}")
                     notification.notification_status = 'pending'
-                    notification.save()
-                    # Return error response
-                    return Response({
-                        'success': False,
-                        'error': f'Error sending email: {str(send_error)}',
-                        'recipient_email': recipient_email
-                    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 
             except Exception as email_error:
-                print(f"[AWARD NOTIFICATION] ❌ Error in email sending block: {str(email_error)}")
-                import traceback
-                traceback.print_exc()
-                # Don't mark as sent if there was an error
-                notification.notification_status = 'pending'
-                notification.save()
-                return Response({
-                    'success': False,
-                    'error': f'Error sending email notification: {str(email_error)}',
-                    'recipient_email': recipient_email
-                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                print(f"Error sending email: {str(email_error)}")
+                # Still mark as sent for now, but log the error
+                notification.notification_status = 'sent'
+                notification.sent_date = timezone.now()
             
             notification.save()
             
@@ -2586,80 +2400,6 @@ class AwardResponseView(APIView):
                 'error': f'Failed to get award notification: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    def _get_next_vendor_user_id(self):
-        """
-        Get the next available user_id for a vendor by querying rbac_tprm table
-        in tprm_integration schema. Searches all vendors, sorts user_ids, and
-        returns the next auto-incremented user_id.
-        
-        Also checks the users table to ensure the user_id doesn't already exist.
-        
-        Returns:
-            int: The next available user_id for a vendor
-        """
-        try:
-            # Use tprm connection to access tprm_integration schema
-            tprm_connection = connections['tprm'] if 'tprm' in connections.databases else connection
-            
-            with tprm_connection.cursor() as cursor:
-                # Query rbac_tprm table for all vendors (Role = 'Vendor')
-                # Get all user_ids and sort them
-                cursor.execute("""
-                    SELECT UserId 
-                    FROM rbac_tprm 
-                    WHERE Role = 'Vendor'
-                    ORDER BY UserId ASC
-                """)
-                
-                vendor_user_ids = [row[0] for row in cursor.fetchall()]
-                
-                # Determine the next user_id
-                if not vendor_user_ids:
-                    # No vendors exist yet, start with user_id = 1
-                    candidate_user_id = 1
-                    print(f"[INFO] No existing vendors found in rbac_tprm. Starting with user_id: {candidate_user_id}")
-                else:
-                    # Sort user_ids (they should already be sorted from query, but ensure it)
-                    vendor_user_ids.sort()
-                    # Get the maximum user_id and increment by 1
-                    max_user_id = max(vendor_user_ids)
-                    candidate_user_id = max_user_id + 1
-                    print(f"[INFO] Found {len(vendor_user_ids)} vendors in rbac_tprm. Max user_id: {max_user_id}, Candidate user_id: {candidate_user_id}")
-                
-                # Check if this user_id already exists in users table
-                # Use default connection for users table (users table is in default database)
-                with connection.cursor() as users_cursor:
-                    users_cursor.execute("SELECT UserId FROM users WHERE UserId = %s", [candidate_user_id])
-                    existing_user = users_cursor.fetchone()
-                    
-                    if existing_user:
-                        # User_id already exists in users table, find the next available
-                        print(f"[WARN] UserId {candidate_user_id} already exists in users table. Finding next available...")
-                        # Get max user_id from users table
-                        users_cursor.execute("SELECT MAX(UserId) FROM users")
-                        max_users_id = users_cursor.fetchone()[0]
-                        if max_users_id:
-                            candidate_user_id = max(max_users_id, candidate_user_id) + 1
-                        else:
-                            candidate_user_id += 1
-                        print(f"[INFO] Adjusted candidate user_id to: {candidate_user_id}")
-                
-                return candidate_user_id
-                
-        except Exception as e:
-            print(f"[ERROR] Failed to get next vendor user_id from rbac_tprm: {str(e)}")
-            # Fallback: if query fails, try to get max from users table
-            try:
-                with connection.cursor() as cursor:
-                    cursor.execute("SELECT MAX(UserId) FROM users")
-                    max_id = cursor.fetchone()[0]
-                    if max_id:
-                        return max_id + 1
-            except:
-                pass
-            # Final fallback: start with 1
-            return 1
-
     def _create_vendor_credentials(self, notification):
         """
         Create vendor user credentials, RBAC permissions, and temp_vendor record
@@ -2735,68 +2475,7 @@ class AwardResponseView(APIView):
                     user_id, existing_username = existing_user
                     username = get_unique_username(normalized_username, user_id)
                     print(f"[INFO] User already exists with UserId: {user_id}")
-                    
-                    # Get tprm connection for tprm_integration database
-                    tprm_connection = connections['tprm'] if 'tprm' in connections.databases else connection
-                    
-                    # Update user in tprm_integration.users table
-                    try:
-                        with tprm_connection.cursor() as tprm_users_cursor:
-                            # Check if user exists in tprm_integration
-                            tprm_users_cursor.execute("SELECT UserId FROM users WHERE UserId = %s", [user_id])
-                            existing_tprm_user = tprm_users_cursor.fetchone()
-                            
-                            if existing_tprm_user:
-                                # Update existing user in tprm_integration
-                                tprm_users_cursor.execute(
-                                    """
-                                    UPDATE users
-                                    SET UserName = %s,
-                                        Password = %s,
-                                        Email = %s,
-                                        FirstName = %s,
-                                        LastName = %s,
-                                        UpdatedAt = %s
-                                    WHERE UserId = %s
-                                    """,
-                                    [
-                                        username,
-                                        generated_password,
-                                        vendor_email,
-                                        vendor_name.split(' ')[0] if ' ' in vendor_name else vendor_name,
-                                        vendor_name.split(' ')[-1] if ' ' in vendor_name else '',
-                                        timezone.now(),
-                                        user_id,
-                                    ],
-                                )
-                                print(f"[INFO] Updated user with UserId: {user_id} in tprm_integration.users table")
-                            else:
-                                # Create user in tprm_integration if it doesn't exist
-                                tprm_users_cursor.execute(
-                                    """
-                                    INSERT INTO users (
-                                        UserId, UserName, Email, Password, FirstName, LastName,
-                                        IsActive, CreatedAt, UpdatedAt
-                                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                                    """,
-                                    [
-                                        user_id,
-                                        username,
-                                        vendor_email,
-                                        generated_password,
-                                        vendor_name.split(' ')[0] if ' ' in vendor_name else vendor_name,
-                                        vendor_name.split(' ')[-1] if ' ' in vendor_name else '',
-                                        'Y',
-                                        timezone.now(),
-                                        timezone.now()
-                                    ],
-                                )
-                                print(f"[INFO] Created user with UserId: {user_id} in tprm_integration.users table")
-                    except Exception as tprm_user_error:
-                        print(f"[WARN] Failed to update/create user in tprm_integration.users: {str(tprm_user_error)}")
-                        logger.warning(f"Failed to sync user to tprm_integration: {str(tprm_user_error)}")
-                    
-                    # Also update username and password for existing user in grc2 with newly generated credentials
+                    # Update username and password for existing user with newly generated credentials
                     cursor.execute(
                         """
                         UPDATE users
@@ -2812,342 +2491,142 @@ class AwardResponseView(APIView):
                             user_id,
                         ],
                     )
-                    
-                    # Also update user in grc2 database with SHA256 hashed password
-                    try:
-                        # Hash password with SHA256 for grc2 database
-                        password_hash_sha256 = hashlib.sha256(generated_password.encode()).hexdigest()
-                        
-                        # Use default connection (grc2 database) to update user
-                        with connection.cursor() as grc2_cursor:
-                            grc2_cursor.execute("""
-                                UPDATE users
-                                SET UserName = %s,
-                                    Password = %s,
-                                    Email = %s,
-                                    FirstName = %s,
-                                    LastName = %s,
-                                    UpdatedAt = %s
-                                WHERE UserId = %s
-                            """, [
-                                username,
-                                password_hash_sha256,  # SHA256 hashed password
-                                vendor_email,
-                                vendor_name.split(' ')[0] if ' ' in vendor_name else vendor_name,
-                                vendor_name.split(' ')[-1] if ' ' in vendor_name else '',
-                                timezone.now(),
-                                user_id
-                            ])
-                            
-                            # If no rows were updated, user doesn't exist in grc2, so create it
-                            if grc2_cursor.rowcount == 0:
-                                grc2_cursor.execute("""
-                                    INSERT INTO users (
-                                        UserId, UserName, Email, Password, FirstName, LastName,
-                                        IsActive, CreatedAt, UpdatedAt
-                                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                                """, [
-                                    user_id,
-                                    username,
-                                    vendor_email,
-                                    password_hash_sha256,  # SHA256 hashed password
-                                    vendor_name.split(' ')[0] if ' ' in vendor_name else vendor_name,
-                                    vendor_name.split(' ')[-1] if ' ' in vendor_name else '',
-                                    'Y',
-                                    timezone.now(),
-                                    timezone.now()
-                                ])
-                                print(f"[INFO] Created user with UserId: {user_id} in grc2 database (user existed in tprm_integration but not in grc2)")
-                            else:
-                                print(f"[INFO] Updated user with UserId: {user_id} in grc2 database with SHA256 hashed password")
-                                
-                            # Create/Update RBAC entry in grc2.rbac table for existing user
-                            try:
-                                grc2_cursor.execute("SELECT RBACId FROM rbac WHERE UserId = %s", [user_id])
-                                existing_rbac_grc2 = grc2_cursor.fetchone()
-                                
-                                if not existing_rbac_grc2:
-                                    # Insert new RBAC entry for vendor in grc2
-                                    grc2_cursor.execute("""
-                                        INSERT INTO rbac (
-                                            UserId, UserName, Role, IsActive, CreatedAt, UpdatedAt
-                                        ) VALUES (%s, %s, %s, %s, %s, %s)
-                                    """, [
-                                        user_id,
-                                        username,
-                                        'End User',  # Default role for vendor users in GRC system
-                                        'Y',
-                                        timezone.now(),
-                                        timezone.now()
-                                    ])
-                                    print(f"[INFO] Created RBAC entry in grc2.rbac for existing UserId: {user_id}")
-                                else:
-                                    # Update existing RBAC entry
-                                    grc2_cursor.execute("""
-                                        UPDATE rbac
-                                        SET UserName = %s,
-                                            UpdatedAt = %s
-                                        WHERE UserId = %s
-                                    """, [
-                                        username,
-                                        timezone.now(),
-                                        user_id
-                                    ])
-                                    print(f"[INFO] Updated RBAC entry in grc2.rbac for existing UserId: {user_id}")
-                            except Exception as rbac_error:
-                                # Log error but don't fail the entire operation
-                                print(f"[WARN] Failed to create/update RBAC entry in grc2.rbac for existing user: {str(rbac_error)}")
-                                logger.warning(f"Failed to create RBAC entry in grc2 for existing vendor user: {str(rbac_error)}")
-                                
-                    except Exception as grc2_error:
-                        # Log error but don't fail the entire operation
-                        print(f"[WARN] Failed to update/create user in grc2 database: {str(grc2_error)}")
-                        logger.warning(f"Failed to sync existing vendor user to grc2 database: {str(grc2_error)}")
                 else:
-                    # 1. Get next vendor user_id from rbac_tprm table
-                    user_id = self._get_next_vendor_user_id()
-                    
-                    # 2. Create user in users table of tprm_integration database
+                    # 1. Create user in users table
                     username = get_unique_username(normalized_username)
 
-                    # Get tprm connection for tprm_integration database
-                    tprm_connection = connections['tprm'] if 'tprm' in connections.databases else connection
-                    
-                    # Create user in tprm_integration.users table
-                    with tprm_connection.cursor() as tprm_users_cursor:
-                        tprm_users_cursor.execute("""
-                            INSERT INTO users (
-                                UserId, UserName, Email, Password, FirstName, LastName,
-                                IsActive, CreatedAt, UpdatedAt
-                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        """, [
-                            user_id,
-                            username,
-                            vendor_email,
-                            generated_password,  # In production, this should be hashed
-                            vendor_name.split(' ')[0] if ' ' in vendor_name else vendor_name,
-                            vendor_name.split(' ')[-1] if ' ' in vendor_name else '',
-                            'Y',
-                            timezone.now(),
-                            timezone.now()
-                        ])
-                        print(f"[INFO] Created user with UserId: {user_id} in tprm_integration.users table")
-                    
-                    # 3. Also create user in grc2 database with SHA256 hashed password
-                    try:
-                        # Hash password with SHA256 for grc2 database
-                        password_hash_sha256 = hashlib.sha256(generated_password.encode()).hexdigest()
-                        
-                        # Use default connection (grc2 database) to insert user
-                        with connection.cursor() as grc2_cursor:
-                            # Check if user already exists in grc2 database
-                            grc2_cursor.execute("SELECT UserId FROM users WHERE UserId = %s OR Email = %s", [user_id, vendor_email])
-                            existing_grc2_user = grc2_cursor.fetchone()
-                            
-                            if not existing_grc2_user:
-                                # Insert user into grc2 database users table
-                                grc2_cursor.execute("""
-                                    INSERT INTO users (
-                                        UserId, UserName, Email, Password, FirstName, LastName,
-                                        IsActive, CreatedAt, UpdatedAt
-                                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                                """, [
-                                    user_id,
-                                    username,
-                                    vendor_email,
-                                    password_hash_sha256,  # SHA256 hashed password
-                                    vendor_name.split(' ')[0] if ' ' in vendor_name else vendor_name,
-                                    vendor_name.split(' ')[-1] if ' ' in vendor_name else '',
-                                    'Y',
-                                    timezone.now(),
-                                    timezone.now()
-                                ])
-                                print(f"[INFO] Created user with UserId: {user_id} in grc2 database with SHA256 hashed password")
-                            else:
-                                # Update existing user in grc2 database
-                                grc2_cursor.execute("""
-                                    UPDATE users
-                                    SET UserName = %s,
-                                        Password = %s,
-                                        Email = %s,
-                                        FirstName = %s,
-                                        LastName = %s,
-                                        UpdatedAt = %s
-                                    WHERE UserId = %s
-                                """, [
-                                    username,
-                                    password_hash_sha256,  # SHA256 hashed password
-                                    vendor_email,
-                                    vendor_name.split(' ')[0] if ' ' in vendor_name else vendor_name,
-                                    vendor_name.split(' ')[-1] if ' ' in vendor_name else '',
-                                    timezone.now(),
-                                    user_id
-                                ])
-                                print(f"[INFO] Updated user with UserId: {user_id} in grc2 database with SHA256 hashed password")
-                                
-                            # Create/Update RBAC entry in grc2.rbac table
-                            try:
-                                grc2_cursor.execute("SELECT RBACId FROM rbac WHERE UserId = %s", [user_id])
-                                existing_rbac_grc2 = grc2_cursor.fetchone()
-                                
-                                if not existing_rbac_grc2:
-                                    # Insert new RBAC entry for vendor in grc2
-                                    grc2_cursor.execute("""
-                                        INSERT INTO rbac (
-                                            UserId, UserName, Role, IsActive, CreatedAt, UpdatedAt
-                                        ) VALUES (%s, %s, %s, %s, %s, %s)
-                                    """, [
-                                        user_id,
-                                        username,
-                                        'End User',  # Default role for vendor users in GRC system
-                                        'Y',
-                                        timezone.now(),
-                                        timezone.now()
-                                    ])
-                                    print(f"[INFO] Created RBAC entry in grc2.rbac for UserId: {user_id}")
-                                else:
-                                    # Update existing RBAC entry
-                                    grc2_cursor.execute("""
-                                        UPDATE rbac
-                                        SET UserName = %s,
-                                            UpdatedAt = %s
-                                        WHERE UserId = %s
-                                    """, [
-                                        username,
-                                        timezone.now(),
-                                        user_id
-                                    ])
-                                    print(f"[INFO] Updated RBAC entry in grc2.rbac for UserId: {user_id}")
-                            except Exception as rbac_error:
-                                # Log error but don't fail the entire operation
-                                print(f"[WARN] Failed to create/update RBAC entry in grc2.rbac: {str(rbac_error)}")
-                                logger.warning(f"Failed to create RBAC entry in grc2 for vendor user: {str(rbac_error)}")
-                                
-                    except Exception as grc2_error:
-                        # Log error but don't fail the entire operation
-                        print(f"[WARN] Failed to create/update user in grc2 database: {str(grc2_error)}")
-                        logger.warning(f"Failed to sync vendor user to grc2 database: {str(grc2_error)}")
+                    cursor.execute("""
+                        INSERT INTO users (
+                            UserName, Email, Password, FirstName, LastName,
+                            IsActive, CreatedAt, UpdatedAt
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """, [
+                        username,
+                        vendor_email,
+                        generated_password,  # In production, this should be hashed
+                        vendor_name.split(' ')[0] if ' ' in vendor_name else vendor_name,
+                        vendor_name.split(' ')[-1] if ' ' in vendor_name else '',
+                        'Y',
+                        timezone.now(),
+                        timezone.now()
+                    ])
+                    user_id = cursor.lastrowid
+                    print(f"[INFO] Created user with UserId: {user_id}")
                
-                # 2. Create RBAC permissions in rbac_tprm table (in tprm_integration database)
-                # Use tprm connection for rbac_tprm table queries
-                tprm_connection = connections['tprm'] if 'tprm' in connections.databases else connection
-                
-                with tprm_connection.cursor() as rbac_cursor:
-                    # Check if RBAC record already exists for this user
-                    rbac_cursor.execute("SELECT RBACId FROM rbac_tprm WHERE UserId = %s", [user_id])
-                    existing_rbac = rbac_cursor.fetchone()
-                   
-                    if not existing_rbac:
-                        # Set vendor-specific permissions (limited access)
-                        rbac_cursor.execute("""
-                            INSERT INTO rbac_tprm (
-                                UserId, UserName, Role,
-                                ViewRFP, ViewRFPResponses, SubmitRFPResponse, WithdrawRFPResponse,
-                                DownloadRFPDocuments, PreviewRFPDocuments, UploadDocumentsForRFP,
-                                ViewVendors, ViewContactsDocuments, ViewQuestionnaires,
-                                SubmitQuestionnaireResponses, ViewRiskAssessments,
-                                ViewPerformance, ViewDashboardTrend,
-                                CreatedAt, UpdatedAt, IsActive
-                            ) VALUES (
-                                %s, %s, %s,
-                                1, 1, 1, 1,
-                                1, 1, 1,
-                                1, 1, 1,
-                                1, 1,
-                                1, 1,
-                                %s, %s, 'Y'
-                            )
-                        """, [
-                            user_id,
-                            vendor_name,
-                            'Vendor',
-                            timezone.now(),
-                            timezone.now()
-                        ])
-                        print(f"[INFO] Created RBAC permissions for UserId: {user_id}")
-                    else:
-                        print(f"[INFO] RBAC record already exists for UserId: {user_id}")
-
-                    # Ensure essential vendor permissions are enabled
-                    rbac_cursor.execute("""
-                        UPDATE rbac_tprm
-                        SET
-                            ViewVendors = 1,
-                            CreateVendor = 1,
-                            UpdateVendor = 1,
-                            SubmitVendorForApproval = 1,
-                            ViewContactsDocuments = 1,
-                            AddUpdateContactsDocuments = 1,
-                            ViewQuestionnaires = 1,
-                            SubmitQuestionnaireResponses = 1,
-                            ViewRiskAssessments = 1,
-                            ViewPerformance = 1,
-                            ViewDashboardTrend = 1
-                        WHERE UserId = %s
-                    """, [user_id])
+                # 2. Create RBAC permissions in rbac_tprm table
+                # Check if RBAC record already exists for this user
+                cursor.execute("SELECT RBACId FROM rbac_tprm WHERE UserId = %s", [user_id])
+                existing_rbac = cursor.fetchone()
                
-                # 3. Create temp_vendor record (in tprm_integration database)
-                # Use tprm connection for temp_vendor table queries
-                with tprm_connection.cursor() as temp_vendor_cursor:
-                    # Check if temp_vendor record already exists
-                    temp_vendor_cursor.execute("SELECT id FROM temp_vendor WHERE response_id = %s", [notification.response_id])
-                    existing_temp_vendor = temp_vendor_cursor.fetchone()
-                   
-                    if not existing_temp_vendor:
-                        # Generate vendor code
-                        vendor_code = f"VEN-{str(uuid.uuid4())[:8].upper()}"
-                       
-                        temp_vendor_cursor.execute("""
-                            INSERT INTO temp_vendor (
-                                UserId, vendor_code, company_name, legal_name,
-                                lifecycle_stage, status, vendor_category,
-                                risk_level, is_critical_vendor, created_at, updated_at,
-                                response_id
-                            ) VALUES (
-                                %s, %s, %s, %s,
-                                %s, %s, %s,
-                                %s, %s, %s, %s,
-                                %s
-                            )
-                        """, [
-                            user_id,
-                            vendor_code,
-                            company_name,
-                            company_name,
-                            1,  # Initial lifecycle stage
-                            'pending_onboarding',
-                            'New Vendor',
-                            'Medium',
-                            0,  # Not critical initially
-                            timezone.now(),
-                            timezone.now(),
-                            notification.response_id
-                        ])
-                        temp_vendor_id = temp_vendor_cursor.lastrowid
-                        print(f"[INFO] Created temp_vendor record with id: {temp_vendor_id}")
-                    else:
-                        temp_vendor_id = existing_temp_vendor[0]
-                        print(f"[INFO] temp_vendor record already exists with id: {temp_vendor_id}")
-                        # Ensure temp_vendor record is linked to the latest user and reflects key vendor info
-                        temp_vendor_cursor.execute(
-                            """
-                            UPDATE temp_vendor
-                            SET UserId = %s,
-                                company_name = %s,
-                                legal_name = %s,
-                                vendor_category = COALESCE(vendor_category, %s),
-                                updated_at = %s
-                            WHERE id = %s
-                            """,
-                            [
-                                user_id,
-                                company_name,
-                                company_name,
-                                'New Vendor',
-                                timezone.now(),
-                                temp_vendor_id,
-                            ],
+                if not existing_rbac:
+                    # Set vendor-specific permissions (limited access)
+                    cursor.execute("""
+                        INSERT INTO rbac_tprm (
+                            UserId, UserName, Role,
+                            ViewRFP, ViewRFPResponses, SubmitRFPResponse, WithdrawRFPResponse,
+                            DownloadRFPDocuments, PreviewRFPDocuments, UploadDocumentsForRFP,
+                            ViewVendors, ViewContactsDocuments, ViewQuestionnaires,
+                            SubmitQuestionnaireResponses, ViewRiskAssessments,
+                            ViewPerformance, ViewDashboardTrend,
+                            CreatedAt, UpdatedAt, IsActive
+                        ) VALUES (
+                            %s, %s, %s,
+                            1, 1, 1, 1,
+                            1, 1, 1,
+                            1, 1, 1,
+                            1, 1,
+                            1, 1,
+                            %s, %s, 'Y'
                         )
+                    """, [
+                        user_id,
+                        vendor_name,
+                        'Vendor',
+                        timezone.now(),
+                        timezone.now()
+                    ])
+                    print(f"[INFO] Created RBAC permissions for UserId: {user_id}")
+                else:
+                    print(f"[INFO] RBAC record already exists for UserId: {user_id}")
+
+                # Ensure essential vendor permissions are enabled
+                cursor.execute("""
+                    UPDATE rbac_tprm
+                    SET
+                        ViewVendors = 1,
+                        CreateVendor = 1,
+                        UpdateVendor = 1,
+                        SubmitVendorForApproval = 1,
+                        ViewContactsDocuments = 1,
+                        AddUpdateContactsDocuments = 1,
+                        ViewQuestionnaires = 1,
+                        SubmitQuestionnaireResponses = 1,
+                        ViewRiskAssessments = 1,
+                        ViewPerformance = 1,
+                        ViewDashboardTrend = 1
+                    WHERE UserId = %s
+                """, [user_id])
+               
+                # 3. Create temp_vendor record
+                # Check if temp_vendor record already exists
+                cursor.execute("SELECT id FROM temp_vendor WHERE response_id = %s", [notification.response_id])
+                existing_temp_vendor = cursor.fetchone()
+               
+                if not existing_temp_vendor:
+                    # Generate vendor code
+                    vendor_code = f"VEN-{str(uuid.uuid4())[:8].upper()}"
+                   
+                    cursor.execute("""
+                        INSERT INTO temp_vendor (
+                            UserId, vendor_code, company_name, legal_name,
+                            lifecycle_stage, status, vendor_category,
+                            risk_level, is_critical_vendor, created_at, updated_at,
+                            response_id
+                        ) VALUES (
+                            %s, %s, %s, %s,
+                            %s, %s, %s,
+                            %s, %s, %s, %s,
+                            %s
+                        )
+                    """, [
+                        user_id,
+                        vendor_code,
+                        company_name,
+                        company_name,
+                        1,  # Initial lifecycle stage
+                        'pending_onboarding',
+                        'New Vendor',
+                        'Medium',
+                        0,  # Not critical initially
+                        timezone.now(),
+                        timezone.now(),
+                        notification.response_id
+                    ])
+                    temp_vendor_id = cursor.lastrowid
+                    print(f"[INFO] Created temp_vendor record with id: {temp_vendor_id}")
+                else:
+                    temp_vendor_id = existing_temp_vendor[0]
+                    print(f"[INFO] temp_vendor record already exists with id: {temp_vendor_id}")
+                    # Ensure temp_vendor record is linked to the latest user and reflects key vendor info
+                    cursor.execute(
+                        """
+                        UPDATE temp_vendor
+                        SET UserId = %s,
+                            company_name = %s,
+                            legal_name = %s,
+                            vendor_category = COALESCE(vendor_category, %s),
+                            updated_at = %s
+                        WHERE id = %s
+                        """,
+                        [
+                            user_id,
+                            company_name,
+                            company_name,
+                            'New Vendor',
+                            timezone.now(),
+                            temp_vendor_id,
+                        ],
+                    )
            
             # 4. Send credentials email to vendor
             try:
@@ -3233,7 +2712,7 @@ class VendorCredentialsView(APIView):
     """
     API endpoint for managing vendor credentials creation
     """
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [SimpleAuthenticatedPermission]
    
     def post(self, request, notification_id):
@@ -3286,7 +2765,7 @@ class VendorCredentialsView(APIView):
 # ============================================================================
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_primary_contacts(request):
@@ -3307,57 +2786,31 @@ def get_primary_contacts(request):
         # Import Django's database connection
         from django.db import connection
         
-        # Query to get primary contacts from vendor_contacts table using tprm_integration schema
+        # Query to get primary contacts from vendor_contacts table
         with connection.cursor() as cursor:
             # First, get vendor information
             vendor_placeholders = ','.join(['%s'] * len(vendor_ids))
-            try:
-                # Try with tprm_integration schema
-                cursor.execute(f"""
-                    SELECT 
-                        v.vendor_id,
-                        v.company_name,
-                        vc.contact_id,
-                        vc.first_name,
-                        vc.last_name,
-                        vc.email,
-                        vc.phone,
-                        vc.mobile,
-                        vc.designation,
-                        vc.department,
-                        vc.contact_type
-                    FROM tprm_integration.vendors v
-                    LEFT JOIN tprm_integration.vendor_contacts vc ON v.vendor_id = vc.vendor_id 
-                        AND (vc.contact_type = 'PRIMARY' OR vc.is_primary = 1 OR vc.is_primary = '1' OR vc.is_primary = 'Y')
-                        AND (vc.is_active = 1 OR vc.is_active = '1' OR vc.is_active = 'Y' OR vc.is_active IS NULL)
-                    WHERE v.vendor_id IN ({vendor_placeholders})
-                        AND v.status = 'APPROVED'
-                    ORDER BY vc.is_primary DESC, vc.contact_id ASC
-                """, vendor_ids)
-            except Exception as schema_error:
-                # Fallback: try without schema prefix
-                print(f"[WARNING] Failed to query with tprm_integration schema: {str(schema_error)}")
-                cursor.execute(f"""
-                    SELECT 
-                        v.vendor_id,
-                        v.company_name,
-                        vc.contact_id,
-                        vc.first_name,
-                        vc.last_name,
-                        vc.email,
-                        vc.phone,
-                        vc.mobile,
-                        vc.designation,
-                        vc.department,
-                        vc.contact_type
-                    FROM vendors v
-                    LEFT JOIN vendor_contacts vc ON v.vendor_id = vc.vendor_id 
-                        AND (vc.contact_type = 'PRIMARY' OR vc.is_primary = 1 OR vc.is_primary = '1')
-                        AND (vc.is_active = 1 OR vc.is_active = '1' OR vc.is_active = 'Y' OR vc.is_active IS NULL)
-                    WHERE v.vendor_id IN ({vendor_placeholders})
-                        AND v.status = 'APPROVED'
-                    ORDER BY vc.is_primary DESC, vc.contact_id ASC
-                """, vendor_ids)
+            cursor.execute(f"""
+                SELECT 
+                    v.vendor_id,
+                    v.company_name,
+                    vc.contact_id,
+                    vc.first_name,
+                    vc.last_name,
+                    vc.email,
+                    vc.phone,
+                    vc.mobile,
+                    vc.designation,
+                    vc.department,
+                    vc.contact_type
+                FROM vendors v
+                LEFT JOIN vendor_contacts vc ON v.vendor_id = vc.vendor_id 
+                    AND vc.contact_type = 'PRIMARY' 
+                    AND vc.is_active = 1
+                WHERE v.vendor_id IN ({vendor_placeholders})
+                    AND v.status = 'APPROVED'
+                ORDER BY vc.is_primary DESC, vc.contact_id ASC
+            """, vendor_ids)
             
             rows = cursor.fetchall()
         
@@ -3413,7 +2866,7 @@ def get_primary_contacts(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_invitations_by_rfp(request, rfp_id):
@@ -3457,7 +2910,7 @@ def get_invitations_by_rfp(request, rfp_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_invitation_stats(request, rfp_id):
@@ -3530,7 +2983,20 @@ def generate_unique_token():
 
 def generate_invitation_urls(token, rfp_id):
     """Generate base invitation URLs (token-based) for a vendor."""
-    base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000')
+    import re
+    base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
+    
+    # Replace any ngrok URLs with localhost:3000
+    if 'ngrok' in base_url.lower():
+        base_url = 'http://localhost:3000'
+    
+    # Ensure it's localhost (not 127.0.0.1 or other variations)
+    if not base_url.startswith('http://localhost') and not base_url.startswith('https://localhost'):
+        # Extract port if present, otherwise use 3000
+        port_match = re.search(r':(\d+)', base_url)
+        port = port_match.group(1) if port_match else '3000'
+        base_url = f'http://localhost:{port}'
+    
     return {
         'invitation_url': f"{base_url}/invitation/{token}",
         'acknowledgment_url': f"{base_url}/acknowledge/{token}",
@@ -3540,8 +3006,21 @@ def generate_invitation_urls(token, rfp_id):
 
 def generate_tracking_urls(rfp_id: int, invitation_id: int):
     """Generate acknowledge/decline tracking URLs that include rfp_id and invitation_id."""
+    import re
     # Use backend API URL for API endpoints
     backend_url = getattr(settings, 'BACKEND_API_URL', 'http://localhost:8000').rstrip('/')
+    
+    # Replace any ngrok URLs with localhost:8000
+    if 'ngrok' in backend_url.lower():
+        backend_url = 'http://localhost:8000'
+    
+    # Ensure it's localhost (not 127.0.0.1 or other variations)
+    if not backend_url.startswith('http://localhost') and not backend_url.startswith('https://localhost'):
+        # Extract port if present, otherwise use 8000
+        port_match = re.search(r':(\d+)', backend_url)
+        port = port_match.group(1) if port_match else '8000'
+        backend_url = f'http://localhost:{port}'
+    
     # Point to API endpoints that record the status
     acknowledge_url = f"{backend_url}/api/v1/vendor-invitations/ack/{rfp_id}/{invitation_id}/"
     decline_url = f"{backend_url}/api/v1/vendor-invitations/decline/{rfp_id}/{invitation_id}/"
@@ -3549,7 +3028,7 @@ def generate_tracking_urls(rfp_id: int, invitation_id: int):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
 def create_vendor_invitations(request, rfp_id):
@@ -3559,8 +3038,8 @@ def create_vendor_invitations(request, rfp_id):
     try:
         rfp = get_object_or_404(RFP, rfp_id=rfp_id)
         
-        # Parse request data - use request.data (DRF) to avoid RawPostDataException
-        data = request.data if hasattr(request, 'data') else json.loads(request.body)
+        # Parse request data
+        data = json.loads(request.body)
         vendors = data.get('vendors', [])
         custom_message = data.get('customMessage', '')
         utm_parameters = data.get('utmParameters', {})
@@ -3672,7 +3151,7 @@ def create_vendor_invitations(request, rfp_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
 def send_vendor_invitations(request, rfp_id):
@@ -3866,7 +3345,7 @@ Procurement Team
 
 
 @api_view(['GET', 'POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def acknowledge_invitation(request, token):
@@ -3912,7 +3391,7 @@ def acknowledge_invitation(request, token):
 
 
 @api_view(['GET', 'POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def decline_invitation(request, token):
@@ -3962,7 +3441,7 @@ def decline_invitation(request, token):
 
 
 @api_view(['GET', 'POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def ack_invitation_with_ids(request, rfp_id, invitation_id):
@@ -4010,7 +3489,7 @@ def ack_invitation_with_ids(request, rfp_id, invitation_id):
 
 
 @api_view(['GET', 'POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def decline_invitation_with_ids(request, rfp_id, invitation_id):
@@ -4067,7 +3546,7 @@ def decline_invitation_with_ids(request, rfp_id, invitation_id):
 # VENDOR VIEWS (from views_vendor.py)
 # ============================================================================
 
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def vendor_selection(request, rfp_id):
@@ -4178,7 +3657,7 @@ def vendor_selection(request, rfp_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
 def vendor_manual_entry(request, rfp_id):
@@ -4220,7 +3699,7 @@ def vendor_manual_entry(request, rfp_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
 def vendor_bulk_upload(request, rfp_id):
@@ -4313,7 +3792,7 @@ def vendor_bulk_upload(request, rfp_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('edit_rfp')
 def update_vendor_selection(request, rfp_id):
@@ -4349,7 +3828,7 @@ def update_vendor_selection(request, rfp_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
 def bulk_select_vendors(request, rfp_id):
@@ -4403,7 +3882,7 @@ def bulk_select_vendors(request, rfp_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
 def generate_vendor_urls(request, rfp_id):
@@ -4425,7 +3904,22 @@ def generate_vendor_urls(request, rfp_id):
             # Generate new-style URL with query parameters
             vendor = selection.vendor
             from django.conf import settings
-            external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000')
+            import re
+            
+            # Get external base URL and ensure it uses localhost (not ngrok)
+            external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
+            
+            # Replace any ngrok URLs with localhost:3000
+            if 'ngrok' in external_base_url.lower():
+                external_base_url = 'http://localhost:3000'
+            
+            # Ensure it's localhost (not 127.0.0.1 or other variations)
+            if not external_base_url.startswith('http://localhost') and not external_base_url.startswith('https://localhost'):
+                # Extract port if present, otherwise use 3000
+                port_match = re.search(r':(\d+)', external_base_url)
+                port = port_match.group(1) if port_match else '3000'
+                external_base_url = f'http://localhost:{port}'
+            
             base_url = f"{external_base_url}/submit"
             
             # URL encode the parameters
@@ -4472,7 +3966,22 @@ def generate_unmatched_vendor_url(rfp_id, org_name="", vendor_name="", contact_e
     Generate URL for unmatched vendors (not in system)
     """
     from django.conf import settings
-    external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000')
+    import re
+    
+    # Get external base URL and ensure it uses localhost (not ngrok)
+    external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
+    
+    # Replace any ngrok URLs with localhost:3000
+    if 'ngrok' in external_base_url.lower():
+        external_base_url = 'http://localhost:3000'
+    
+    # Ensure it's localhost (not 127.0.0.1 or other variations)
+    if not external_base_url.startswith('http://localhost') and not external_base_url.startswith('https://localhost'):
+        # Extract port if present, otherwise use 3000
+        port_match = re.search(r':(\d+)', external_base_url)
+        port = port_match.group(1) if port_match else '3000'
+        external_base_url = f'http://localhost:{port}'
+    
     base_url = f"{external_base_url}/submit"
     from urllib.parse import urlencode
     
@@ -4496,7 +4005,22 @@ def generate_open_rfp_url(rfp_id):
     Generate URL for open/public RFPs
     """
     from django.conf import settings
-    external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000')
+    import re
+    
+    # Get external base URL and ensure it uses localhost (not ngrok)
+    external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
+    
+    # Replace any ngrok URLs with localhost:3000
+    if 'ngrok' in external_base_url.lower():
+        external_base_url = 'http://localhost:3000'
+    
+    # Ensure it's localhost (not 127.0.0.1 or other variations)
+    if not external_base_url.startswith('http://localhost') and not external_base_url.startswith('https://localhost'):
+        # Extract port if present, otherwise use 3000
+        port_match = re.search(r':(\d+)', external_base_url)
+        port = port_match.group(1) if port_match else '3000'
+        external_base_url = f'http://localhost:{port}'
+    
     base_url = f"{external_base_url}/submit/open"
     from urllib.parse import urlencode
     
@@ -4507,7 +4031,7 @@ def generate_open_rfp_url(rfp_id):
     return f"{base_url}?{urlencode(params)}"
 
 
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def vendor_invitation(request, rfp_id):
@@ -4530,7 +4054,7 @@ def vendor_invitation(request, rfp_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_unmatched_vendors(request, rfp_id):
@@ -4560,7 +4084,7 @@ def get_unmatched_vendors(request, rfp_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
 def create_unmatched_vendor(request, rfp_id):
@@ -4568,84 +4092,41 @@ def create_unmatched_vendor(request, rfp_id):
     API endpoint to create a new unmatched vendor
     """
     try:
-        import traceback
-        print(f"[DEBUG] create_unmatched_vendor called for rfp_id: {rfp_id}")
-        
-        # Get RFP
         rfp = get_object_or_404(RFP, rfp_id=rfp_id)
-        print(f"[DEBUG] RFP found: {rfp.rfp_id} - {rfp.rfp_title}")
-        
-        # Parse request data
-        # Since we're using @api_view decorator, request.data is always available (DRF)
-        # DO NOT access request.body after request.data has been read, as it will raise RawPostDataException
-        try:
-            # Use request.data directly (DRF handles JSON parsing automatically)
-            data = request.data
-            print(f"[DEBUG] Using request.data: {data}")
-        except Exception as e:
-            print(f"[ERROR] Failed to access request.data: {str(e)}")
-            import traceback
-            print(f"[ERROR] Traceback: {traceback.format_exc()}")
-            return JsonResponse({'error': 'Invalid request data format'}, status=400)
+        data = json.loads(request.body)
         
         # Validate required fields
         required_fields = ['vendor_name', 'vendor_email', 'vendor_phone', 'company_name']
-        missing_fields = []
         for field in required_fields:
             if not data.get(field):
-                missing_fields.append(field)
-        
-        if missing_fields:
-            error_msg = f'Missing required fields: {", ".join(missing_fields)}'
-            print(f"[ERROR] {error_msg}")
-            return JsonResponse({'error': error_msg, 'missing_fields': missing_fields}, status=400)
-        
-        print(f"[DEBUG] Creating unmatched vendor with data: vendor_name={data['vendor_name']}, email={data['vendor_email']}, phone={data['vendor_phone']}, company={data['company_name']}")
+                return JsonResponse({'error': f'{field} is required'}, status=400)
         
         # Create unmatched vendor
-        # Note: RFPUnmatchedVendor model doesn't have an rfp ForeignKey field
         unmatched_vendor = RFPUnmatchedVendor.objects.create(
-            vendor_name=str(data['vendor_name']).strip(),
-            vendor_email=str(data['vendor_email']).strip(),
-            vendor_phone=str(data.get('vendor_phone', '')).strip() if data.get('vendor_phone') else '',
-            company_name=str(data['company_name']).strip(),
+            vendor_name=data['vendor_name'],
+            vendor_email=data['vendor_email'],
+            vendor_phone=data['vendor_phone'],
+            company_name=data['company_name'],
             submission_data=data.get('submission_data', {}),
             matching_status=data.get('matching_status', 'unmatched')
         )
-        
-        print(f"[DEBUG] Unmatched vendor created successfully: unmatched_id={unmatched_vendor.unmatched_id}")
         
         return JsonResponse({
             'success': True,
             'message': 'Unmatched vendor created successfully',
             'unmatched_id': unmatched_vendor.unmatched_id,
             'vendor_name': unmatched_vendor.vendor_name,
-            'company_name': unmatched_vendor.company_name,
-            'vendor_email': unmatched_vendor.vendor_email,
-            'matching_status': unmatched_vendor.matching_status
+            'company_name': unmatched_vendor.company_name
         })
         
-    except json.JSONDecodeError as e:
-        error_msg = f'Invalid JSON data: {str(e)}'
-        print(f"[ERROR] {error_msg}")
-        import traceback
-        print(f"[ERROR] Traceback: {traceback.format_exc()}")
-        return JsonResponse({'error': error_msg}, status=400)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON data'}, status=400)
     except Exception as e:
-        error_msg = f'Failed to create unmatched vendor: {str(e)}'
-        print(f"[ERROR] {error_msg}")
-        import traceback
-        error_trace = traceback.format_exc()
-        print(f"[ERROR] Traceback: {error_trace}")
-        return JsonResponse({
-            'error': error_msg,
-            'detail': str(e),
-            'traceback': error_trace if settings.DEBUG else None
-        }, status=500)
+        return JsonResponse({'error': f'Failed to create unmatched vendor: {str(e)}'}, status=500)
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_approved_vendors(request, rfp_id):
@@ -4671,9 +4152,9 @@ def get_approved_vendors(request, rfp_id):
         
         vendor_data = []
         for vendor in approved_vendors:
-            # Only fetch actual capabilities and certifications from database - no defaults
-            capabilities = []  # Must be fetched from vendor_capabilities table if exists
-            certifications = []  # Must be fetched from vendor_certifications table if exists
+            # Use default values for capabilities and certifications since tables don't exist
+            capabilities = ['Software Development', 'Cloud Services']  # Default capabilities
+            certifications = ['ISO 27001', 'SOC 2']  # Default certifications
             
             # Format employee count for display
             employee_display = "Unknown"
@@ -4730,16 +4211,16 @@ def get_approved_vendors(request, rfp_id):
                 'updated_by': vendor['updated_by'],
                 'created_at': vendor['created_at'].isoformat(),
                 'updated_at': vendor['updated_at'].isoformat(),
-                # Only return actual data from database - no fallback/default values
-                'email': None,  # Must be fetched from vendor_contacts table
-                'phone': None,  # Must be fetched from vendor_contacts table
-                'location': vendor['headquarters_country'] or None,  # Only actual location
-                'match_score': float(vendor.get('match_score', 0)) if vendor.get('match_score') else 0,  # Only actual match score
-                'rating': None,  # No default - must be calculated or stored
-                'experience_years': None,  # No default - must be calculated from dates
-                'capabilities': [],  # Only actual capabilities from database
-                'certifications': [],  # Only actual certifications from database
-                'category': category  # Calculated from employee_count, not default
+                # Additional fields for UI (using default values since fields don't exist in DB)
+                'email': 'contact@example.com',  # Default email
+                'phone': '+1-555-0000',  # Default phone
+                'location': vendor['headquarters_country'] or 'Unknown',  # Use headquarters as location
+                'match_score': 85.0,  # Default match score
+                'rating': 4.5,  # Default rating
+                'experience_years': 5,  # Default experience
+                'capabilities': capabilities,
+                'certifications': certifications,
+                'category': category
             })
         
         return JsonResponse(vendor_data, safe=False)
@@ -4749,7 +4230,7 @@ def get_approved_vendors(request, rfp_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_sample_csv(request):
@@ -4769,7 +4250,7 @@ def get_sample_csv(request):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
 def vendor_manual_entry(request, rfp_id):
@@ -4779,8 +4260,8 @@ def vendor_manual_entry(request, rfp_id):
     try:
         rfp = get_object_or_404(RFP, rfp_id=rfp_id)
         
-        # Parse JSON data from request - use request.data (DRF) to avoid RawPostDataException
-        data = request.data if hasattr(request, 'data') else json.loads(request.body)
+        # Parse JSON data from request
+        data = json.loads(request.body)
         
         # Extract vendor data
         company_name = data.get('company_name', '').strip()
@@ -4820,8 +4301,8 @@ def vendor_manual_entry(request, rfp_id):
             'certifications': certifications
         }
         
-        # Note: RFPUnmatchedVendor model doesn't have an rfp ForeignKey field
         unmatched_vendor = RFPUnmatchedVendor.objects.create(
+            rfp=rfp,
             vendor_name=company_name,  # Use company_name as vendor_name
             vendor_email=email,
             vendor_phone=phone,
@@ -4845,7 +4326,7 @@ def vendor_manual_entry(request, rfp_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
 def vendor_bulk_upload(request, rfp_id):
@@ -4932,8 +4413,8 @@ def vendor_bulk_upload(request, rfp_id):
                 }
                 
                 # Create unmatched vendor entry
-                # Note: RFPUnmatchedVendor model doesn't have an rfp ForeignKey field
                 unmatched_vendor = RFPUnmatchedVendor.objects.create(
+                    rfp=rfp,
                     vendor_name=company_name,
                     vendor_email=email,
                     vendor_phone=phone,
@@ -4959,7 +4440,7 @@ def vendor_bulk_upload(request, rfp_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
 def unmatched_vendor_bulk_upload(request, rfp_id):
@@ -5048,7 +4529,7 @@ def unmatched_vendor_bulk_upload(request, rfp_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_all_approved_vendors(request):
@@ -5072,50 +4553,23 @@ def get_all_approved_vendors(request):
         
         vendor_data = []
         for vendor in approved_vendors:
-            # Only fetch actual capabilities and certifications from database - no defaults
-            capabilities = []  # Must be fetched from vendor_capabilities table if exists
-            certifications = []  # Must be fetched from vendor_certifications table if exists
+            # Use default values for capabilities and certifications since tables don't exist
+            capabilities = ['Software Development', 'Cloud Services']  # Default capabilities
+            certifications = ['ISO 27001', 'SOC 2']  # Default certifications
             
-            # Fetch primary contact from vendor_contacts table - no placeholder generation
-            primary_email = None
-            primary_phone = None
-            try:
-                with connection.cursor() as cursor:
-                    # Try with flexible conditions to find primary contact
-                    try:
-                        cursor.execute('''
-                            SELECT email, phone, mobile
-                            FROM tprm_integration.vendor_contacts
-                            WHERE vendor_id = %s 
-                            AND (contact_type = 'PRIMARY' OR is_primary = 1 OR is_primary = '1' OR is_primary = 'Y')
-                            AND (is_active = 1 OR is_active = '1' OR is_active = 'Y' OR is_active IS NULL)
-                            ORDER BY is_primary DESC, contact_id ASC
-                            LIMIT 1
-                        ''', [vendor['vendor_id']])
-                        contact = cursor.fetchone()
-                    except Exception as schema_error:
-                        # Fallback: try without schema prefix
-                        cursor.execute('''
-                            SELECT email, phone, mobile
-                            FROM vendor_contacts
-                            WHERE vendor_id = %s 
-                            AND (contact_type = 'PRIMARY' OR is_primary = 1 OR is_primary = '1')
-                            AND (is_active = 1 OR is_active = '1' OR is_active = 'Y' OR is_active IS NULL)
-                            ORDER BY is_primary DESC, contact_id ASC
-                            LIMIT 1
-                        ''', [vendor['vendor_id']])
-                        contact = cursor.fetchone()
-                    
-                    if contact:
-                        primary_email = contact[0] or None
-                        primary_phone = contact[1] or contact[2] if len(contact) > 2 else None
-            except Exception as contact_error:
-                # If contact fetch fails, leave as None - no fallback
-                print(f"[WARNING] Could not fetch contact for vendor {vendor['vendor_id']}: {str(contact_error)}")
-                import traceback
-                print(f"[WARNING] Traceback: {traceback.format_exc()}")
-                primary_email = None
-                primary_phone = None
+            # Generate primary contact information if not available
+            primary_email = vendor.get('email', '')
+            primary_phone = vendor.get('phone', '')
+            
+            # If no email/phone in vendor record, generate placeholder contact info
+            if not primary_email:
+                # Generate email based on company name
+                company_clean = vendor['company_name'].lower().replace(' ', '').replace('inc', '').replace('llc', '').replace('corp', '')
+                primary_email = f"contact@{company_clean}.com"
+            
+            if not primary_phone:
+                # Generate placeholder phone number
+                primary_phone = "+1 (555) 000-0000"
             
             vendor_info = {
                 'vendor_id': vendor['vendor_id'],
@@ -5140,12 +4594,12 @@ def get_all_approved_vendors(request):
                 'phone': primary_phone,
                 'contact_email': primary_email,  # Alias for compatibility
                 'contact_phone': primary_phone,  # Alias for compatibility
-                # Only return actual data from database - no fallback/default values
-                'match_score': float(vendor.get('match_score', 0)) if vendor.get('match_score') else 0,
-                'rating': None,  # No default rating - must be calculated or stored
-                'experience_years': None,  # No default - must be calculated from dates
-                'capabilities': capabilities if capabilities else [],  # Only actual capabilities
-                'certifications': certifications if certifications else [],  # Only actual certifications
+                # Default values for missing fields
+                'match_score': 85.0,  # Default match score
+                'rating': 4.5,        # Default rating
+                'experience_years': 5, # Default experience
+                'capabilities': capabilities,    # Default capabilities list
+                'certifications': certifications,  # Default certifications list
             }
             vendor_data.append(vendor_info)
         
@@ -5167,115 +4621,50 @@ def get_all_approved_vendors(request):
 # ============================================================================
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_vendor_primary_contact(request, vendor_id):
     """Get primary contact for a vendor"""
     try:
-        import traceback
-        print(f"[DEBUG] Fetching primary contact for vendor_id: {vendor_id}")
-        
-        # Query vendor_contacts table for primary contact using tprm_integration schema
+        # Query vendor_contacts table for primary contact
         with connection.cursor() as cursor:
-            contact = None
-            schema_used = None
-            
-            # Try with tprm_integration schema first
-            try:
-                print(f"[DEBUG] Trying tprm_integration.vendor_contacts for vendor_id: {vendor_id}")
-                
-                # First, try to get any contact for this vendor (most permissive query)
-                # This will help us see what data actually exists
-                cursor.execute('''
-                    SELECT contact_id, first_name, last_name, email, phone, mobile, designation, department,
-                           contact_type, is_primary, is_active
-                    FROM tprm_integration.vendor_contacts
-                    WHERE vendor_id = %s
-                    ORDER BY 
-                        CASE WHEN is_primary = 1 OR is_primary = '1' OR is_primary = 'Y' THEN 0 ELSE 1 END,
-                        CASE WHEN contact_type = 'PRIMARY' THEN 0 ELSE 1 END,
-                        contact_id ASC
-                    LIMIT 1
-                ''', [vendor_id])
-                contact = cursor.fetchone()
-                schema_used = 'tprm_integration'
-                
-                if contact:
-                    print(f"[DEBUG] Found contact with permissive query: contact_id={contact[0]}, contact_type={contact[8] if len(contact) > 8 else 'N/A'}, is_primary={contact[9] if len(contact) > 9 else 'N/A'}, is_active={contact[10] if len(contact) > 10 else 'N/A'}")
-                else:
-                    print(f"[DEBUG] No contact found for vendor_id: {vendor_id} in tprm_integration.vendor_contacts")
-                        
-            except Exception as schema_error:
-                # Fallback: try without schema prefix
-                print(f"[WARNING] Failed to query with tprm_integration schema: {str(schema_error)}")
-                import traceback
-                print(f"[WARNING] Schema error traceback: {traceback.format_exc()}")
-                try:
-                    cursor.execute('''
-                        SELECT contact_id, first_name, last_name, email, phone, mobile, designation, department,
-                               contact_type, is_primary, is_active
-                        FROM vendor_contacts
-                        WHERE vendor_id = %s
-                        ORDER BY 
-                            CASE WHEN is_primary = 1 OR is_primary = '1' THEN 0 ELSE 1 END,
-                            CASE WHEN contact_type = 'PRIMARY' THEN 0 ELSE 1 END,
-                            contact_id ASC
-                        LIMIT 1
-                    ''', [vendor_id])
-                    contact = cursor.fetchone()
-                    schema_used = 'default'
-                    if contact:
-                        print(f"[DEBUG] Found contact without schema prefix")
-                except Exception as fallback_error:
-                    print(f"[ERROR] Fallback query also failed: {str(fallback_error)}")
-                    import traceback
-                    print(f"[ERROR] Fallback error traceback: {traceback.format_exc()}")
-                    raise fallback_error
+            cursor.execute('''
+                SELECT contact_id, first_name, last_name, email, phone, mobile, designation
+                FROM vendor_contacts
+                WHERE vendor_id = %s AND contact_type = 'PRIMARY' AND is_primary = 1 AND is_active = 1
+                LIMIT 1
+            ''', [vendor_id])
+            contact = cursor.fetchone()
             
             if contact:
-                print(f"[DEBUG] Contact found: contact_id={contact[0]}, name={contact[1]} {contact[2]}, email={contact[3]}")
-                # Handle cases where department might not be in the result
-                # Extract only the first 8 fields (contact_id through department)
                 contact_data = {
                     'contact_id': contact[0],
-                    'first_name': contact[1] or '' if contact[1] is not None else '',
-                    'last_name': contact[2] or '' if contact[2] is not None else '',
-                    'email': contact[3] or '' if contact[3] is not None else '',
-                    'phone': contact[4] or '' if contact[4] is not None else '',
-                    'mobile': contact[5] or '' if contact[5] is not None else '',
-                    'designation': contact[6] or '' if contact[6] is not None else '',
-                    'department': contact[7] or '' if len(contact) > 7 and contact[7] is not None else ''
+                    'first_name': contact[1],
+                    'last_name': contact[2],
+                    'email': contact[3],
+                    'phone': contact[4],
+                    'mobile': contact[5],
+                    'designation': contact[6]
                 }
-                print(f"[DEBUG] Returning contact data: {contact_data}")
                 return JsonResponse({
                     'success': True,
                     'contact': contact_data
                 })
             else:
-                print(f"[DEBUG] No contact found for vendor_id: {vendor_id}")
-                # Return success but with no contact found (not an error)
                 return JsonResponse({
                     'success': False,
-                    'error': 'No primary contact found for vendor',
-                    'contact': None
+                    'error': 'No primary contact found for vendor'
                 })
     except Exception as e:
-        import traceback
-        error_trace = traceback.format_exc()
-        print(f"[ERROR] get_vendor_primary_contact error: {str(e)}")
-        print(f"[ERROR] Traceback: {error_trace}")
         return JsonResponse({
             'success': False,
-            'error': str(e),
-            'contact': None
+            'error': str(e)
         }, status=500)
 
 
-@api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
-@permission_classes([SimpleAuthenticatedPermission])
-@rbac_rfp_required('view_rfp')
+@csrf_exempt
+@require_http_methods(["POST"])
 def calculate_vendor_match_scores(request, rfp_id):
     """
     Calculate match scores for vendors based on RFP requirements
@@ -5300,14 +4689,9 @@ def calculate_vendor_match_scores(request, rfp_id):
                 'error': 'RFP not found'
             }, status=404)
         
-        # Get vendor IDs from request body (JSON)
-        if hasattr(request, 'data'):
-            # DRF request - use request.data
-            vendor_ids = request.data.get('vendor_ids', [])
-        else:
-            # Plain Django request - parse JSON body
-            data = json.loads(request.body) if request.body else {}
-            vendor_ids = data.get('vendor_ids', [])
+        # Get vendor IDs from request
+        data = json.loads(request.body) if request.body else {}
+        vendor_ids = data.get('vendor_ids', [])
         
         if not vendor_ids:
             return JsonResponse({

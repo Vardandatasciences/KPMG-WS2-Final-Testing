@@ -182,9 +182,35 @@ class CategoryBusinessUnit(models.Model):
     def __str__(self):
         return f"{self.source} - {self.value}"
 
+class Domain(models.Model):
+    domain_id = models.AutoField(primary_key=True)
+    domain_name = models.CharField(max_length=150, unique=True)
+    IsActive = models.CharField(max_length=1, default='Y', choices=[('Y', 'Yes'), ('N', 'No')], db_column='isActive')
+
+    class Meta:
+        db_table = 'domain'
+
+    def __str__(self):
+        return self.domain_name
+    
+    @property
+    def is_active(self):
+        """Helper property to check if domain is active"""
+        return self.IsActive.upper() == 'Y'
+
 
 class Framework(models.Model):
     FrameworkId = models.AutoField(primary_key=True)
+
+    # ✅ FK to domain table (creates domainId column in frameworks)
+    domain = models.ForeignKey(
+        Domain,
+        on_delete=models.PROTECT,   # similar to ON DELETE RESTRICT
+        db_column='domainId',       # ensures column name is domainId
+        null=True,
+        blank=True
+    )
+
     FrameworkName = models.CharField(max_length=255)
     CurrentVersion = models.FloatField(default=1.0)
     FrameworkDescription = models.TextField()
@@ -199,15 +225,12 @@ class Framework(models.Model):
     Status = models.CharField(max_length=45, null=True, blank=True)
     ActiveInactive = models.CharField(max_length=45, null=True, blank=True)
     Reviewer = models.CharField(max_length=255)
-    InternalExternal= models.CharField(max_length=45, null=True, blank=True)
-    Amendment = models.JSONField(null=True, blank=True, default=list)  # Store amendment history
-    latestAmmendmentDate= models.DateField(null=True, blank=True)
-    latestComparisionCheckDate= models.DateField(null=True, blank=True)
-    # Data Inventory - JSON field mapping field labels to data types (personal, confidential, regular)
-    data_inventory = models.JSONField(null=True, blank=True)
+    InternalExternal = models.CharField(max_length=45, null=True, blank=True)
+    Amendment = models.JSONField(null=True, blank=True, default=list)
+    latestAmmendmentDate = models.DateField(null=True, blank=True)
+    latestComparisionCheckDate = models.DateField(null=True, blank=True)
     retentionExpiry = models.DateField(null=True, blank=True)
-    
- 
+
     class Meta:
         db_table = 'frameworks'
  
@@ -1073,6 +1096,42 @@ class RiskAssignment(models.Model):
     
     class Meta:
         db_table = 'risk_assignments'
+
+
+class RiskAssessment(models.Model):
+    """
+    Tracks async risk document processing jobs.
+    Used for background processing with AI microservice.
+    """
+    STATUS_PROCESSING = 'processing'
+    STATUS_COMPLETED = 'completed'
+    STATUS_FAILED = 'failed'
+    STATUS_PENDING = 'pending'
+    
+    STATUS_CHOICES = [
+        (STATUS_PROCESSING, 'Processing'),
+        (STATUS_COMPLETED, 'Completed'),
+        (STATUS_FAILED, 'Failed'),
+        (STATUS_PENDING, 'Pending'),
+    ]
+    
+    job_id = models.CharField(max_length=255, unique=True, primary_key=True)
+    document_url = models.URLField(max_length=500, null=True, blank=True)  # S3 URL
+    filename = models.CharField(max_length=255)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    uploaded_by = models.IntegerField(null=True, blank=True)  # User ID
+    organization_id = models.IntegerField(null=True, blank=True)
+    error_message = models.TextField(null=True, blank=True)
+    processing_metadata = models.JSONField(null=True, blank=True)  # Compression stats, etc.
+    
+    class Meta:
+        db_table = 'risk_assessments'
+        ordering = ['-uploaded_at']
+    
+    def __str__(self):
+        return f"RiskAssessment {self.job_id} - {self.status}"
     
     def __str__(self):
         return f"Risk {self.risk.RiskId} assigned to {self.assigned_to.UserName}"
@@ -3099,7 +3158,6 @@ class MfaEmailChallenge(models.Model):
         import secrets
         import string
         return ''.join(secrets.choice(string.digits) for _ in range(6))
-
     @classmethod
     def hash_otp(cls, otp):
         """Hash OTP using SHA-256"""

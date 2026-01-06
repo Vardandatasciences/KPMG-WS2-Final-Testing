@@ -44,7 +44,7 @@ class Migration(migrations.Migration):
                 ('ip_address', models.CharField(blank=True, db_column='IpAddress', max_length=45, null=True)),
                 ('user_agent', models.CharField(blank=True, db_column='UserAgent', max_length=400, null=True)),
                 ('created_at', models.DateTimeField(db_column='CreatedAt', default=django.utils.timezone.now)),
-                ('user', models.ForeignKey(db_column='UserId', on_delete=django.db.models.deletion.CASCADE, related_name='mfa_audit_events', to='tprm_mfa_auth.user')),
+                ('user', models.ForeignKey(db_column='UserId', on_delete=django.db.models.deletion.CASCADE, related_name='mfa_audit_events', to='mfa_auth.user')),
             ],
             options={
                 'db_table': 'mfa_audit_log',
@@ -63,7 +63,7 @@ class Migration(migrations.Migration):
                 ('user_agent', models.CharField(blank=True, db_column='UserAgent', max_length=400, null=True)),
                 ('created_at', models.DateTimeField(db_column='CreatedAt', default=django.utils.timezone.now)),
                 ('used_at', models.DateTimeField(blank=True, db_column='UsedAt', null=True)),
-                ('user', models.ForeignKey(db_column='UserId', on_delete=django.db.models.deletion.CASCADE, related_name='mfa_challenges', to='tprm_mfa_auth.user')),
+                ('user', models.ForeignKey(db_column='UserId', on_delete=django.db.models.deletion.CASCADE, related_name='mfa_challenges', to='mfa_auth.user')),
             ],
             options={
                 'db_table': 'mfa_email_challenges',

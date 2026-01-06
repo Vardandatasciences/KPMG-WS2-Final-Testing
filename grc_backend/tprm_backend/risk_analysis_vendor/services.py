@@ -243,10 +243,7 @@ class RiskAnalysisService:
             # Get vendor data from approval request
             from django.db import connections
             
-            # Use tprm_integration database connection (tprm alias or default if it's tprm_integration)
-            db_connection = 'tprm' if 'tprm' in connections.databases else 'default'
-            
-            with connections[db_connection].cursor() as cursor:
+            with connections['default'].cursor() as cursor:
                 cursor.execute("""
                     SELECT request_data FROM approval_requests 
                     WHERE approval_id = %s
@@ -348,10 +345,7 @@ class RiskAnalysisService:
             # Get vendor data for context
             from django.db import connections
             
-            # Use tprm_integration database connection (tprm alias or default if it's tprm_integration)
-            db_connection = 'tprm' if 'tprm' in connections.databases else 'default'
-            
-            with connections[db_connection].cursor() as cursor:
+            with connections['default'].cursor() as cursor:
                 cursor.execute("""
                     SELECT company_name, business_type, industry_sector, risk_level, 
                            is_critical_vendor, has_data_access, has_system_access

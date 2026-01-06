@@ -632,6 +632,12 @@ const routes = [
     name: 'FrameworkExplorer',
     component: FrameworkExplorer
   },
+    {
+    path: '/domains',
+    name: 'Domains',
+    component: () => import('../components/Login/domian.vue'),
+    meta: { requiresAuth: true }
+  },
   {
     path: '/policy/performance/dashboard',
     name: 'PolicyPerformanceDashboard',

@@ -44,6 +44,7 @@
           @change="onUserChange" 
           class="framework_filter_dropdown"
         >
+          <option value="" disabled>Select a user...</option>
           <option v-for="user in availableUsers" :key="user.UserId" :value="user.UserId">
             {{ user.UserName }} ({{ user.Role }}) - ID: {{ user.UserId }}
           </option>
@@ -1422,8 +1423,26 @@ const initializeUserData = async () => {
       
       if (isAdministrator.value) {
         // Fetch available users for administrator dropdown
-        const response = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION)
-        availableUsers.value = response.data
+        // Don't exclude current user for administrators - they should see all users including themselves
+        const response = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+          params: {
+            module: 'policy' // Status change requests are for policies/frameworks
+            // Note: Not excluding current_user_id so administrators can see themselves
+          }
+        })
+        let fetchedUsers = response.data || []
+        
+        // Add current user to the list if not already present (for administrators)
+        const currentUserInList = fetchedUsers.find(u => u.UserId === currentUserId.value)
+        if (!currentUserInList && currentUserId.value) {
+          fetchedUsers.unshift({
+            UserId: currentUserId.value,
+            UserName: currentUserName,
+            Role: userRole
+          })
+        }
+        
+        availableUsers.value = fetchedUsers
         console.log('Available users:', availableUsers.value)
         
         // Set default user to current logged-in administrator
@@ -1462,10 +1481,18 @@ const initializeUserData = async () => {
 // Fetch reviewers for dropdown
 const fetchReviewers = async () => {
   try {
-    const response = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION)
-    reviewers.value = response.data
+    // Get current user ID to exclude from list
+    const currentUserIdStr = currentUserId.value ? String(currentUserId.value) : ''
+    const response = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+      params: {
+        module: 'policy', // Status change requests are for policies/frameworks
+        current_user_id: currentUserIdStr
+      }
+    })
+    reviewers.value = response.data || []
   } catch (error) {
     console.error('Error fetching reviewers:', error)
+    reviewers.value = []
   }
 }
 

@@ -4,8 +4,9 @@
  * This service sends all user actions to the backend grc_logs table
  * for audit trail and activity tracking purposes.
  */
+import { getTprmApiUrl } from '@/utils/backendEnv'
 
-const LOGGING_API_URL = 'http://localhost:8000/api/tprm/quick-access/logs/';
+const LOGGING_API_URL = getTprmApiUrl('quick-access/logs/');
 
 class LoggingService {
   constructor() {
@@ -30,7 +31,7 @@ class LoggingService {
     }
 
     // Try to get from localStorage
-    const storedUser = localStorage.getItem('current_user') || localStorage.getItem('user');
+    const storedUser = localStorage.getItem('user');
     if (storedUser) {
       try {
         this.currentUser = JSON.parse(storedUser);

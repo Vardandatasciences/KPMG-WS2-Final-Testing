@@ -25,6 +25,8 @@ urlpatterns = [
     # Audit Reports
     path('contractreports/', views.ContractAuditReportListView.as_view(), name='contract-audit-report-list'),
     path('contractreports/<int:pk>/', views.ContractAuditReportDetailView.as_view(), name='contract-audit-report-detail'),
+    path('contractreports/upload/', views.upload_contract_audit_report, name='upload-contract-audit-report'),
+    path('contractdocuments/upload/', views.upload_contract_audit_document, name='upload-contract-audit-document'),
     
     # Dashboard and utilities
     path('contractdashboard/stats/', views.contract_audit_dashboard_stats, name='contract-audit-dashboard-stats'),

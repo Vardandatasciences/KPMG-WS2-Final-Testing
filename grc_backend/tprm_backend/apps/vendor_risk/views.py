@@ -21,10 +21,8 @@ from .serializers import (
 )
 
 # RBAC imports
-from tprm_backend.apps.vendor_core.vendor_authentication import VendorAuthenticationMixin, SimpleAuthenticatedPermission, VendorPermission
+from tprm_backend.apps.vendor_core.vendor_authentication import VendorAuthenticationMixin, JWTAuthentication, SimpleAuthenticatedPermission, VendorPermission
 from tprm_backend.rbac.tprm_decorators import rbac_vendor_required
-# Use Unified JWT Authentication from GRC
-from grc.jwt_auth import UnifiedJWTAuthentication
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +80,7 @@ class VendorLifecycleStageViewSet(VendorAuthenticationMixin, viewsets.ModelViewS
 
 class VendorRiskDashboardAPIView(APIView):
     """API view for vendor risk dashboard data with RBAC protection"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
     @rbac_vendor_required('ViewRiskProfile')
@@ -191,14 +189,12 @@ class VendorRiskDashboardAPIView(APIView):
 
 class VendorRisksAPIView(APIView):
     """API view for vendor risks with filtering and pagination with RBAC protection"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
     @rbac_vendor_required('ViewRiskProfile')
     def get(self, request):
         """Get vendor risks with filtering"""
-        data_query = None  # Initialize to avoid UnboundLocalError
-        params = []  # Initialize to avoid UnboundLocalError
         try:
             # Get query parameters
             page = int(request.query_params.get('page', 1))
@@ -214,6 +210,7 @@ class VendorRisksAPIView(APIView):
             
             # Build WHERE clause - always filter by data='temp_vendor'
             where_conditions = ["entity IN ('vendor', 'vendor_management')", "`data` = 'temp_vendor'"]
+            params = []
             
             # Add filters
             if priority and priority != 'All':
@@ -260,7 +257,7 @@ class VendorRisksAPIView(APIView):
             logger.info(f"WHERE clause: {where_clause}")
             logger.info(f"SQL parameters: {params}")
             
-            with connections['tprm'].cursor() as cursor:
+            with connections['default'].cursor() as cursor:
                 # First, log what data we have in the database
                 cursor.execute("SELECT DISTINCT `data`, COUNT(*) as cnt FROM risk_tprm GROUP BY `data`")
                 db_data_types = cursor.fetchall()
@@ -353,7 +350,7 @@ class VendorRisksAPIView(APIView):
 
 class VendorModulesAPIView(APIView):
     """API view for vendor modules with RBAC protection"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
     def get(self, request):
@@ -397,13 +394,13 @@ class VendorModulesAPIView(APIView):
 
 class VendorListAPIView(APIView):
     """API view for getting list of vendors with RBAC protection"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
     def get(self, request):
         """Get list of vendors prioritizing temp_vendor (for risk filtering) with fallback to main vendors table"""
         try:
-            with connections['tprm'].cursor() as cursor:
+            with connections['default'].cursor() as cursor:
                 vendors = []
                 vendor_ids_seen = set()
                 
@@ -443,7 +440,6 @@ class VendorListAPIView(APIView):
                             business_type, industry_sector, vendor_category_id,
                             risk_level, status, is_critical_vendor,
                             created_at, updated_at
-                        FROM vendors
                         ORDER BY company_name ASC
                     """)
                     
@@ -478,7 +474,7 @@ class VendorListAPIView(APIView):
 
 class VendorRiskGenerationAPIView(APIView):
     """API view for generating vendor risks using AI with RBAC protection"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
     def post(self, request):
@@ -517,7 +513,7 @@ class VendorRiskGenerationAPIView(APIView):
 
 class VendorRiskDebugAPIView(APIView):
     """API view for debugging vendor risk data matching"""
-    authentication_classes = [UnifiedJWTAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
     def get(self, request):
@@ -525,7 +521,7 @@ class VendorRiskDebugAPIView(APIView):
         try:
             vendor_id = request.query_params.get('vendor_id', '10')
             
-            with connections['tprm'].cursor() as cursor:
+            with connections['default'].cursor() as cursor:
                 # Check temp_vendor table
                 cursor.execute("SELECT id, company_name FROM temp_vendor WHERE id = %s", [vendor_id])
                 vendor_data = cursor.fetchone()

@@ -104,17 +104,17 @@ class RenderS3Client:
                 **mysql_config
             )
             
-            print("SUCCESS: MySQL connection pool initialized successfully")
+            print("✅ MySQL connection pool initialized successfully")
             
             # Create table if it doesn't exist
             self._create_table_if_not_exists()
             
         except mysql.connector.Error as e:
-            print(f"[ERROR] MySQL connection failed: {str(e)}")
-            print("[HINT] Make sure MySQL is running and credentials are correct")
+            print(f"❌ MySQL connection failed: {str(e)}")
+            print("💡 Make sure MySQL is running and credentials are correct")
             self.db_pool = None
         except Exception as e:
-            print(f"[ERROR] Database setup error: {str(e)}")
+            print(f"❌ Database setup error: {str(e)}")
             self.db_pool = None
     
     def _create_table_if_not_exists(self):
@@ -166,12 +166,12 @@ class RenderS3Client:
             
             cursor.execute(create_table_query)
             conn.commit()
-            print("SUCCESS: Database table verified/created successfully")
+            print("✅ Database table verified/created successfully")
             
         except mysql.connector.Error as e:
-            print(f"[ERROR] Table creation error: {str(e)}")
+            print(f"❌ Table creation error: {str(e)}")
         except Exception as e:
-            print(f"[ERROR] Unexpected error creating table: {str(e)}")
+            print(f"❌ Unexpected error creating table: {str(e)}")
         finally:
             cursor.close()
             conn.close()
@@ -186,7 +186,7 @@ class RenderS3Client:
         try:
             return self.db_pool.get_connection()
         except Exception as e:
-            print(f"[ERROR] Failed to get DB connection: {str(e)}")
+            print(f"❌ Failed to get DB connection: {str(e)}")
             return None
     
     def _save_operation_record(self, operation_type: str, operation_data: Dict) -> Optional[int]:
@@ -236,14 +236,14 @@ class RenderS3Client:
             conn.commit()
             operation_id = cursor.lastrowid
             
-            print(f"[DB] Operation recorded in MySQL: ID {operation_id}")
+            print(f"📝 Operation recorded in MySQL: ID {operation_id}")
             return operation_id
             
         except mysql.connector.Error as e:
-            print(f"[ERROR] MySQL save error: {str(e)}")
+            print(f"❌ MySQL save error: {str(e)}")
             return None
         except Exception as e:
-            print(f"[ERROR] Database save error: {str(e)}")
+            print(f"❌ Database save error: {str(e)}")
             return None
         finally:
             cursor.close()
@@ -308,12 +308,12 @@ class RenderS3Client:
             cursor.execute(query, update_values)
             conn.commit()
             
-            print(f"[DB] Operation {operation_id} updated in MySQL")
+            print(f"📝 Operation {operation_id} updated in MySQL")
             
         except mysql.connector.Error as e:
-            print(f"[ERROR] MySQL update error: {str(e)}")
+            print(f"❌ MySQL update error: {str(e)}")
         except Exception as e:
-            print(f"[ERROR] Database update error: {str(e)}")
+            print(f"❌ Database update error: {str(e)}")
         finally:
             cursor.close()
             conn.close()
@@ -357,10 +357,10 @@ class RenderS3Client:
             return results
             
         except mysql.connector.Error as e:
-            print(f"[ERROR] MySQL query error: {str(e)}")
+            print(f"❌ MySQL query error: {str(e)}")
             return []
         except Exception as e:
-            print(f"[ERROR] Database query error: {str(e)}")
+            print(f"❌ Database query error: {str(e)}")
             return []
         finally:
             cursor.close()
@@ -418,10 +418,10 @@ class RenderS3Client:
             return stats
             
         except mysql.connector.Error as e:
-            print(f"[ERROR] MySQL stats query error: {str(e)}")
+            print(f"❌ MySQL stats query error: {str(e)}")
             return {}
         except Exception as e:
-            print(f"[ERROR] Database stats error: {str(e)}")
+            print(f"❌ Database stats error: {str(e)}")
             return {}
         finally:
             cursor.close()
@@ -437,27 +437,27 @@ class RenderS3Client:
         
         # Test Direct microservice
         try:
-            print("[TEST] Testing Direct microservice connection...")
+            print("🧪 Testing Direct microservice connection...")
             response = requests.get(f"{self.api_base_url}/health", timeout=30)
             response.raise_for_status()
             
             health_info = response.json()
             result['direct_status'] = 'connected'
             result['direct_info'] = health_info
-            print("SUCCESS: Direct microservice: Connected")
+            print("✅ Direct microservice: Connected")
             
         except requests.exceptions.Timeout:
             result['direct_status'] = 'timeout'
             result['direct_error'] = 'Connection timed out (Direct service may be unavailable)'
-            print("[WARN] Direct microservice: Timeout (may be unavailable)")
+            print("⏳ Direct microservice: Timeout (may be unavailable)")
         except Exception as e:
             result['direct_status'] = 'failed'
             result['direct_error'] = str(e)
-            print(f"[ERROR] Direct microservice: Failed - {str(e)}")
+            print(f"❌ Direct microservice: Failed - {str(e)}")
         
         # Test MySQL database
         try:
-            print("[TEST] Testing MySQL database connection...")
+            print("🧪 Testing MySQL database connection...")
             if self.db_pool:
                 conn = self._get_db_connection()
                 if conn:
@@ -468,11 +468,11 @@ class RenderS3Client:
                     conn.close()
                     
                     result['mysql_status'] = 'connected'
-                    print("SUCCESS: MySQL database: Connected")
+                    print("✅ MySQL database: Connected")
                 else:
                     result['mysql_status'] = 'failed'
                     result['mysql_error'] = 'Failed to get connection from pool'
-                    print("[ERROR] MySQL database: Connection pool failed")
+                    print("❌ MySQL database: Connection pool failed")
             else:
                 result['mysql_status'] = 'not_configured'
                 result['mysql_error'] = 'Database pool not initialized'

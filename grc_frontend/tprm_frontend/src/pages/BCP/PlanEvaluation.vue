@@ -1,12 +1,5 @@
 <template>
   <div class="space-y-6">
-    <div class="page-header">
-      <div class="header-content">
-        <h1 class="page-title">Plan Evaluation Workspace</h1>
-        <p class="page-subtitle">Evaluate assigned BCP/DRP plans for compliance and quality</p>
-      </div>
-    </div>
-
     <div class="plans-dropdown-section">
       <div class="plans-dropdown">
         <label class="modern-label">
@@ -156,172 +149,40 @@
         <div v-else class="evaluation-section">
           <!-- Two-Column Layout: Extracted Data (Left) + Evaluation Form (Right) -->
           <div class="evaluation-workspace-two-column">
-          <!-- Left Column: Extracted Data -->
+          <!-- Left Column: Extracted Data and Risks -->
           <div class="extracted-data-column">
-            <h3 class="column-title">Extracted Plan Data</h3>
-            <div v-if="isLoadingPlanDetails" class="loading-state">
-              <div class="loading-spinner"></div>
-              <span>Loading extracted data...</span>
+            <!-- Toggle Buttons -->
+            <div class="data-toggle-buttons">
+              <button
+                :class="['toggle-button', { 'active': activeDataTab === 'extracted' }]"
+                @click="activeDataTab = 'extracted'"
+              >
+                Extracted Plan Data
+              </button>
+              <button
+                :class="['toggle-button', { 'active': activeDataTab === 'risks' }]"
+                @click="activeDataTab = 'risks'; fetchPlanRisks()"
+              >
+                Risks
+                <span v-if="planRisks.length > 0" class="risk-count-badge">{{ planRisks.length }}</span>
+              </button>
             </div>
+
+            <!-- Extracted Plan Data Tab -->
+            <div v-show="activeDataTab === 'extracted'">
+              <h3 class="column-title">Extracted Plan Data</h3>
+              <div v-if="isLoadingPlanDetails" class="loading-state">
+                <div class="loading-spinner"></div>
+                <span>Loading extracted data...</span>
+              </div>
             <div v-else-if="selectedEvaluationData && selectedEvaluationData.extracted_data" class="extracted-data-list">
-              <!-- Purpose and Scope -->
-              <div v-if="selectedEvaluationData.extracted_data.purpose_scope" class="data-item">
-                <span class="data-label">Purpose & Scope:</span>
-                <span class="data-value">{{ selectedEvaluationData.extracted_data.purpose_scope }}</span>
-              </div>
-              
-              <!-- Regulatory References -->
-              <div v-if="selectedEvaluationData.extracted_data.regulatory_references && (Array.isArray(selectedEvaluationData.extracted_data.regulatory_references) ? selectedEvaluationData.extracted_data.regulatory_references.length > 0 : selectedEvaluationData.extracted_data.regulatory_references)" class="data-item">
-                <span class="data-label">Regulatory References:</span>
-                <span class="data-value">{{ Array.isArray(selectedEvaluationData.extracted_data.regulatory_references) ? selectedEvaluationData.extracted_data.regulatory_references.join(', ') : selectedEvaluationData.extracted_data.regulatory_references }}</span>
-              </div>
-              
-              <!-- Critical Services (BCP) -->
-              <div v-if="selectedEvaluationData.extracted_data.critical_services && (Array.isArray(selectedEvaluationData.extracted_data.critical_services) ? selectedEvaluationData.extracted_data.critical_services.length > 0 : selectedEvaluationData.extracted_data.critical_services)" class="data-item">
-                <span class="data-label">Critical Services:</span>
-                <span class="data-value">{{ Array.isArray(selectedEvaluationData.extracted_data.critical_services) ? selectedEvaluationData.extracted_data.critical_services.join(', ') : selectedEvaluationData.extracted_data.critical_services }}</span>
-              </div>
-              
-              <!-- Critical Systems (DRP) -->
-              <div v-if="selectedEvaluationData.extracted_data.critical_systems && (Array.isArray(selectedEvaluationData.extracted_data.critical_systems) ? selectedEvaluationData.extracted_data.critical_systems.length > 0 : selectedEvaluationData.extracted_data.critical_systems)" class="data-item">
-                <span class="data-label">Critical Systems:</span>
-                <span class="data-value">{{ Array.isArray(selectedEvaluationData.extracted_data.critical_systems) ? selectedEvaluationData.extracted_data.critical_systems.join(', ') : selectedEvaluationData.extracted_data.critical_systems }}</span>
-              </div>
-              
-              <!-- Dependencies -->
-              <div v-if="selectedEvaluationData.extracted_data.dependencies_internal && (Array.isArray(selectedEvaluationData.extracted_data.dependencies_internal) ? selectedEvaluationData.extracted_data.dependencies_internal.length > 0 : selectedEvaluationData.extracted_data.dependencies_internal)" class="data-item">
-                <span class="data-label">Internal Dependencies:</span>
-                <span class="data-value">{{ Array.isArray(selectedEvaluationData.extracted_data.dependencies_internal) ? selectedEvaluationData.extracted_data.dependencies_internal.join(', ') : selectedEvaluationData.extracted_data.dependencies_internal }}</span>
-              </div>
-              <div v-if="selectedEvaluationData.extracted_data.dependencies_external && (Array.isArray(selectedEvaluationData.extracted_data.dependencies_external) ? selectedEvaluationData.extracted_data.dependencies_external.length > 0 : selectedEvaluationData.extracted_data.dependencies_external)" class="data-item">
-                <span class="data-label">External Dependencies:</span>
-                <span class="data-value">{{ Array.isArray(selectedEvaluationData.extracted_data.dependencies_external) ? selectedEvaluationData.extracted_data.dependencies_external.join(', ') : selectedEvaluationData.extracted_data.dependencies_external }}</span>
-              </div>
-              
-              <!-- Risk Assessment -->
-              <div v-if="selectedEvaluationData.extracted_data.risk_assessment_summary" class="data-item">
-                <span class="data-label">Risk Assessment:</span>
-                <span class="data-value">{{ selectedEvaluationData.extracted_data.risk_assessment_summary }}</span>
-              </div>
-              
-              <!-- Recovery Objectives -->
-              <div v-if="formattedRtoTargets" class="data-item">
-                <span class="data-label">RTO Targets:</span>
-                <span class="data-value">{{ formattedRtoTargets }}</span>
-              </div>
-              <div v-if="formattedRpoTargets" class="data-item">
-                <span class="data-label">RPO Targets:</span>
-                <span class="data-value">{{ formattedRpoTargets }}</span>
-              </div>
-              
-              <!-- Communication Plans -->
-              <div v-if="selectedEvaluationData.extracted_data.communication_plan_internal" class="data-item">
-                <span class="data-label">Internal Communication:</span>
-                <span class="data-value">{{ selectedEvaluationData.extracted_data.communication_plan_internal }}</span>
-              </div>
-              <div v-if="selectedEvaluationData.extracted_data.communication_plan_bank" class="data-item">
-                <span class="data-label">Bank Communication:</span>
-                <span class="data-value">{{ selectedEvaluationData.extracted_data.communication_plan_bank }}</span>
-              </div>
-              
-              <!-- Roles and Responsibilities -->
-              <div v-if="selectedEvaluationData.extracted_data.roles_responsibilities && (Array.isArray(selectedEvaluationData.extracted_data.roles_responsibilities) ? selectedEvaluationData.extracted_data.roles_responsibilities.length > 0 : selectedEvaluationData.extracted_data.roles_responsibilities)" class="data-item">
-                <span class="data-label">Roles & Responsibilities:</span>
-                <span class="data-value">{{ Array.isArray(selectedEvaluationData.extracted_data.roles_responsibilities) ? selectedEvaluationData.extracted_data.roles_responsibilities.join(', ') : selectedEvaluationData.extracted_data.roles_responsibilities }}</span>
-              </div>
-              
-              <!-- Training and Testing -->
-              <div v-if="selectedEvaluationData.extracted_data.training_testing_schedule" class="data-item">
-                <span class="data-label">Training & Testing:</span>
-                <span class="data-value">{{ selectedEvaluationData.extracted_data.training_testing_schedule }}</span>
-              </div>
-              
-              <!-- DRP Specific Fields -->
-              <div v-if="selectedEvaluationData.plan_type === 'DRP'">
-                <!-- Critical Applications -->
-                <div v-if="selectedEvaluationData.extracted_data.critical_applications && (Array.isArray(selectedEvaluationData.extracted_data.critical_applications) ? selectedEvaluationData.extracted_data.critical_applications.length > 0 : selectedEvaluationData.extracted_data.critical_applications)" class="data-item">
-                  <span class="data-label">Critical Applications:</span>
-                  <span class="data-value">{{ Array.isArray(selectedEvaluationData.extracted_data.critical_applications) ? selectedEvaluationData.extracted_data.critical_applications.join(', ') : selectedEvaluationData.extracted_data.critical_applications }}</span>
+              <!-- Dynamic display of all extracted fields (including custom fields) -->
+              <template v-for="(value, key) in selectedEvaluationData.extracted_data" :key="key">
+                <div v-if="key !== 'plan_id' && value !== null && value !== undefined && !isEmptyValue(value)" class="data-item">
+                  <span class="data-label">{{ formatFieldLabel(key) }}:</span>
+                  <span class="data-value">{{ formatFieldValue(value) }}</span>
                 </div>
-                
-                <!-- Databases -->
-                <div v-if="selectedEvaluationData.extracted_data.databases_list && (Array.isArray(selectedEvaluationData.extracted_data.databases_list) ? selectedEvaluationData.extracted_data.databases_list.length > 0 : selectedEvaluationData.extracted_data.databases_list)" class="data-item">
-                  <span class="data-label">Databases:</span>
-                  <span class="data-value">{{ Array.isArray(selectedEvaluationData.extracted_data.databases_list) ? selectedEvaluationData.extracted_data.databases_list.join(', ') : selectedEvaluationData.extracted_data.databases_list }}</span>
-                </div>
-                
-                <!-- Supporting Infrastructure -->
-                <div v-if="selectedEvaluationData.extracted_data.supporting_infrastructure && (Array.isArray(selectedEvaluationData.extracted_data.supporting_infrastructure) ? selectedEvaluationData.extracted_data.supporting_infrastructure.length > 0 : selectedEvaluationData.extracted_data.supporting_infrastructure)" class="data-item">
-                  <span class="data-label">Supporting Infrastructure:</span>
-                  <span class="data-value">{{ Array.isArray(selectedEvaluationData.extracted_data.supporting_infrastructure) ? selectedEvaluationData.extracted_data.supporting_infrastructure.join(', ') : selectedEvaluationData.extracted_data.supporting_infrastructure }}</span>
-                </div>
-                
-                <!-- Third Party Services -->
-                <div v-if="selectedEvaluationData.extracted_data.third_party_services && (Array.isArray(selectedEvaluationData.extracted_data.third_party_services) ? selectedEvaluationData.extracted_data.third_party_services.length > 0 : selectedEvaluationData.extracted_data.third_party_services)" class="data-item">
-                  <span class="data-label">Third Party Services:</span>
-                  <span class="data-value">{{ Array.isArray(selectedEvaluationData.extracted_data.third_party_services) ? selectedEvaluationData.extracted_data.third_party_services.join(', ') : selectedEvaluationData.extracted_data.third_party_services }}</span>
-                </div>
-                
-                <!-- Disaster Scenarios -->
-                <div v-if="selectedEvaluationData.extracted_data.disaster_scenarios && (Array.isArray(selectedEvaluationData.extracted_data.disaster_scenarios) ? selectedEvaluationData.extracted_data.disaster_scenarios.length > 0 : selectedEvaluationData.extracted_data.disaster_scenarios)" class="data-item">
-                  <span class="data-label">Disaster Scenarios:</span>
-                  <span class="data-value">{{ Array.isArray(selectedEvaluationData.extracted_data.disaster_scenarios) ? selectedEvaluationData.extracted_data.disaster_scenarios.join(', ') : selectedEvaluationData.extracted_data.disaster_scenarios }}</span>
-                </div>
-                
-                <!-- Disaster Declaration Process -->
-                <div v-if="selectedEvaluationData.extracted_data.disaster_declaration_process" class="data-item">
-                  <span class="data-label">Disaster Declaration Process:</span>
-                  <span class="data-value">{{ selectedEvaluationData.extracted_data.disaster_declaration_process }}</span>
-                </div>
-                
-                <!-- Data Backup Strategy -->
-                <div v-if="selectedEvaluationData.extracted_data.data_backup_strategy" class="data-item">
-                  <span class="data-label">Data Backup Strategy:</span>
-                  <span class="data-value">{{ selectedEvaluationData.extracted_data.data_backup_strategy }}</span>
-                </div>
-                
-                <!-- Recovery Site Details -->
-                <div v-if="selectedEvaluationData.extracted_data.recovery_site_details" class="data-item">
-                  <span class="data-label">Recovery Site Details:</span>
-                  <span class="data-value">{{ selectedEvaluationData.extracted_data.recovery_site_details }}</span>
-                </div>
-                
-                <!-- Failover Procedures -->
-                <div v-if="selectedEvaluationData.extracted_data.failover_procedures" class="data-item">
-                  <span class="data-label">Failover Procedures:</span>
-                  <span class="data-value">{{ selectedEvaluationData.extracted_data.failover_procedures }}</span>
-                </div>
-                
-                <!-- Failback Procedures -->
-                <div v-if="selectedEvaluationData.extracted_data.failback_procedures" class="data-item">
-                  <span class="data-label">Failback Procedures:</span>
-                  <span class="data-value">{{ selectedEvaluationData.extracted_data.failback_procedures }}</span>
-                </div>
-                
-                <!-- Network Recovery Steps -->
-                <div v-if="selectedEvaluationData.extracted_data.network_recovery_steps" class="data-item">
-                  <span class="data-label">Network Recovery Steps:</span>
-                  <span class="data-value">{{ selectedEvaluationData.extracted_data.network_recovery_steps }}</span>
-                </div>
-                
-                <!-- Application Restoration Order -->
-                <div v-if="selectedEvaluationData.extracted_data.application_restoration_order && (Array.isArray(selectedEvaluationData.extracted_data.application_restoration_order) ? selectedEvaluationData.extracted_data.application_restoration_order.length > 0 : selectedEvaluationData.extracted_data.application_restoration_order)" class="data-item">
-                  <span class="data-label">Application Restoration Order:</span>
-                  <span class="data-value">{{ Array.isArray(selectedEvaluationData.extracted_data.application_restoration_order) ? selectedEvaluationData.extracted_data.application_restoration_order.join(', ') : selectedEvaluationData.extracted_data.application_restoration_order }}</span>
-                </div>
-                
-                <!-- Testing Validation Schedule -->
-                <div v-if="selectedEvaluationData.extracted_data.testing_validation_schedule" class="data-item">
-                  <span class="data-label">Testing & Validation Schedule:</span>
-                  <span class="data-value">{{ selectedEvaluationData.extracted_data.testing_validation_schedule }}</span>
-                </div>
-                
-                <!-- Maintenance Review Cycle -->
-                <div v-if="selectedEvaluationData.extracted_data.maintenance_review_cycle" class="data-item">
-                  <span class="data-label">Maintenance Review Cycle:</span>
-                  <span class="data-value">{{ selectedEvaluationData.extracted_data.maintenance_review_cycle }}</span>
-                </div>
-              </div>
+              </template>
               
               <!-- Fallback message if no data fields are populated -->
               <div v-if="!hasAnyExtractedData" class="no-data">
@@ -334,6 +195,59 @@
               <div class="no-data-icon">📄</div>
               <p>No extracted data available for this plan.</p>
               <p class="no-data-subtitle">The plan may not have been processed through OCR extraction yet.</p>
+            </div>
+            </div>
+
+            <!-- Risks Tab -->
+            <div v-show="activeDataTab === 'risks'">
+              <h3 class="column-title">Risks</h3>
+              <div v-if="isLoadingRisks" class="loading-state">
+                <div class="loading-spinner"></div>
+                <span>Loading risks...</span>
+              </div>
+              <div v-else-if="planRisks.length > 0" class="risks-list">
+                <div v-for="(risk, index) in planRisks" :key="risk.id" class="risk-item">
+                  <div class="risk-number">{{ index + 1 }}</div>
+                  <div class="risk-header">
+                    <div class="risk-title-row">
+                      <h4 class="risk-title">{{ risk.title }}</h4>
+                      <span :class="['risk-priority-badge', `priority-${risk.priority?.toLowerCase()}`]">
+                        {{ risk.priority }}
+                      </span>
+                    </div>
+                    <div class="risk-meta">
+                      <span class="risk-score">Score: {{ risk.score }}</span>
+                      <span class="risk-likelihood">Likelihood: {{ risk.likelihood }}</span>
+                      <span class="risk-impact">Impact: {{ risk.impact }}</span>
+                    </div>
+                  </div>
+                  <div v-if="risk.description" class="risk-description">
+                    <span class="risk-label">Description:</span>
+                    <span class="risk-value">{{ risk.description }}</span>
+                  </div>
+                  <div v-if="risk.ai_explanation" class="risk-explanation">
+                    <span class="risk-label">AI Explanation:</span>
+                    <span class="risk-value">{{ risk.ai_explanation }}</span>
+                  </div>
+                  <div v-if="risk.suggested_mitigations && risk.suggested_mitigations.length > 0" class="risk-mitigations">
+                    <span class="risk-label">Suggested Mitigations:</span>
+                    <ul class="mitigation-list">
+                      <li v-for="(mitigation, index) in risk.suggested_mitigations" :key="index" class="mitigation-item">
+                        {{ mitigation }}
+                      </li>
+                    </ul>
+                  </div>
+                  <div class="risk-footer">
+                    <span class="risk-status">Status: {{ risk.status }}</span>
+                    <span class="risk-type">Type: {{ risk.risk_type }}</span>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="no-data">
+                <div class="no-data-icon">⚠️</div>
+                <p>No risks found for this plan.</p>
+                <p class="no-data-subtitle">Risks will appear here once they are generated for this plan.</p>
+              </div>
             </div>
           </div>
 
@@ -1200,12 +1114,6 @@
               </svg>
               Load Data
             </button>
-            <button class="btn btn--outline btn--sm" @click="saveDraft">
-              <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3-3m0 0l-3 3m3-3v12"/>
-              </svg>
-              Save Draft
-            </button>
             <button class="btn btn--primary btn--sm" @click="submitEvaluation" :disabled="isSubmitting">
               <svg v-if="!isSubmitting" class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
@@ -1238,11 +1146,6 @@ interface ApiResponse {
   data?: {
     plans?: any[]
   }
-  risk_generation?: {
-    status: string
-    task_id: string
-  }
-  risk_message?: string
 }
 
 // Force TypeScript recompilation
@@ -1259,6 +1162,9 @@ const availablePlans = ref<any[]>([])
 const isDropdownOpen = ref(false)
 const isLoadingPlans = ref(false)
 const activeTab = ref("coverage")
+const activeDataTab = ref("extracted") // Toggle between 'extracted' and 'risks'
+const planRisks = ref<any[]>([])
+const isLoadingRisks = ref(false)
 const evaluationData = ref<any>({
   // Main scores (0-100) - Initialize with 0 instead of null
   overall_score: 0,
@@ -1423,58 +1329,17 @@ const hasAnyExtractedData = computed(() => {
   if (!selectedEvaluationData.value?.extracted_data) return false
   
   const data = selectedEvaluationData.value.extracted_data
-  const fieldsToCheck = [
-    'purpose_scope',
-    'regulatory_references', 
-    'critical_services',
-    'critical_systems',
-    'dependencies_internal',
-    'dependencies_external',
-    'risk_assessment_summary',
-    'rto_targets',
-    'rpo_targets',
-    'communication_plan_internal',
-    'communication_plan_bank',
-    'roles_responsibilities',
-    'training_testing_schedule',
-    // DRP specific fields
-    'critical_applications',
-    'databases_list',
-    'supporting_infrastructure',
-    'third_party_services',
-    'disaster_scenarios',
-    'disaster_declaration_process',
-    'data_backup_strategy',
-    'recovery_site_details',
-    'failover_procedures',
-    'failback_procedures',
-    'network_recovery_steps',
-    'application_restoration_order',
-    'testing_validation_schedule',
-    'maintenance_review_cycle'
-  ]
   
-  return fieldsToCheck.some(field => {
-    const value = data[field]
-    if (!value) return false
-    if (Array.isArray(value)) return value.length > 0
-    if (typeof value === 'object') return Object.keys(value).length > 0
-    return value.toString().trim().length > 0
+  // Check all fields dynamically (including custom fields)
+  return Object.keys(data).some(key => {
+    if (key === 'plan_id') return false
+    
+    const value = data[key]
+    return !isEmptyValue(value)
   })
 })
 
-// Computed properties for formatted RTO/RPO targets - Fixed TypeScript errors
-const formattedRtoTargets = computed(() => {
-  if (!selectedEvaluationData.value?.extracted_data?.rto_targets) return ''
-  const targets = selectedEvaluationData.value.extracted_data.rto_targets
-  return Object.entries(targets).map(([key, value]) => `${key}: ${value}`).join(', ')
-})
-
-const formattedRpoTargets = computed(() => {
-  if (!selectedEvaluationData.value?.extracted_data?.rpo_targets) return ''
-  const targets = selectedEvaluationData.value.extracted_data.rpo_targets
-  return Object.entries(targets).map(([key, value]) => `${key}: ${value}`).join(', ')
-})
+// Note: RTO/RPO targets are now formatted dynamically using formatFieldValue function
 
 // Utility functions
 const getStatusColor = (status: string) => {
@@ -1521,6 +1386,87 @@ const formatDate = (dateString: string) => {
   })
 }
 
+// Helper function to format field labels (convert snake_case to Title Case)
+const formatFieldLabel = (key: string): string => {
+  // Handle special cases with custom labels
+  const labelMap: { [key: string]: string } = {
+    'purpose_scope': 'Purpose & Scope',
+    'regulatory_references': 'Regulatory References',
+    'critical_services': 'Critical Services',
+    'critical_systems': 'Critical Systems',
+    'dependencies_internal': 'Internal Dependencies',
+    'dependencies_external': 'External Dependencies',
+    'risk_assessment_summary': 'Risk Assessment Summary',
+    'bia_summary': 'Business Impact Analysis Summary',
+    'rto_targets': 'RTO Targets',
+    'rpo_targets': 'RPO Targets',
+    'communication_plan_internal': 'Internal Communication Plan',
+    'communication_plan_bank': 'Bank Communication Plan',
+    'roles_responsibilities': 'Roles & Responsibilities',
+    'training_testing_schedule': 'Training & Testing Schedule',
+    'testing_validation_schedule': 'Testing & Validation Schedule',
+    'maintenance_review_cycle': 'Maintenance & Review Cycle',
+    'critical_applications': 'Critical Applications',
+    'databases_list': 'Databases',
+    'supporting_infrastructure': 'Supporting Infrastructure',
+    'third_party_services': 'Third Party Services',
+    'disaster_scenarios': 'Disaster Scenarios',
+    'disaster_declaration_process': 'Disaster Declaration Process',
+    'data_backup_strategy': 'Data Backup Strategy',
+    'recovery_site_details': 'Recovery Site Details',
+    'failover_procedures': 'Failover Procedures',
+    'failback_procedures': 'Failback Procedures',
+    'network_recovery_steps': 'Network Recovery Steps',
+    'application_restoration_order': 'Application Restoration Order',
+    'incident_types': 'Incident Types',
+    'alternate_work_locations': 'Alternate Work Locations'
+  }
+  
+  // Return mapped label if exists, otherwise format the key
+  if (labelMap[key]) {
+    return labelMap[key]
+  }
+  
+  // Convert snake_case to Title Case
+  return key
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+}
+
+// Helper function to format field values (handle arrays, objects, strings)
+const formatFieldValue = (value: any): string => {
+  if (value === null || value === undefined) return ''
+  
+  // Handle arrays
+  if (Array.isArray(value)) {
+    return value.length > 0 ? value.join(', ') : ''
+  }
+  
+  // Handle objects (like RTO/RPO targets)
+  if (typeof value === 'object' && value !== null) {
+    // Check if it's an empty object
+    if (Object.keys(value).length === 0) return ''
+    
+    // Format as key-value pairs
+    return Object.entries(value)
+      .map(([key, val]) => `${key}: ${val}`)
+      .join(', ')
+  }
+  
+  // Handle strings and other primitives
+  return String(value)
+}
+
+// Helper function to check if a value is empty
+const isEmptyValue = (value: any): boolean => {
+  if (value === null || value === undefined) return true
+  if (typeof value === 'string' && value.trim() === '') return true
+  if (Array.isArray(value) && value.length === 0) return true
+  if (typeof value === 'object' && Object.keys(value).length === 0) return true
+  return false
+}
+
 
 
 // Load plans on component mount
@@ -1553,7 +1499,7 @@ onMounted(async () => {
 const fetchPlans = async () => {
   isLoadingPlans.value = true
   try {
-    console.log('Fetching plans from API endpoint: http://localhost:8000/api/tprm/bcpdrp/plans/')
+    console.log('Fetching plans from API endpoint: http://localhost:8000/api/bcpdrp/plans/')
     const response = await api.plans.list()
     
     console.log('API response data:', response)
@@ -1740,10 +1686,6 @@ const submitEvaluation = async () => {
   isSubmitting.value = true
   
   try {
-    // Show progress message
-    const progressMessage = "Submitting evaluation... Risk generation will continue in the background."
-    PopupService.success(progressMessage, 'Submitting')
-    
     const submitData = {
       ...evaluationData.value,
       is_final_submission: true,
@@ -1754,46 +1696,19 @@ const submitEvaluation = async () => {
     const response = await api.evaluations.save(selectedEvaluation.value, submitData)
 
     if (response) {
-      let successMessage = "✅ Evaluation Submitted Successfully!"
-      successMessage += "\n\nYour evaluation has been saved and submitted for review."
-      successMessage += "\n\n🔄 Redirecting to Approval Assignment in 2 seconds..."
-      
-      // Add background risk generation info
-      const apiResponse = response as ApiResponse
-      if (apiResponse.risk_generation) {
-        successMessage += "\n\n🤖 AI Risk Analysis!"
-        if (apiResponse.risk_generation.status === 'started') {
-          successMessage += "\n• Comprehensive risks are being generated in background"
-          successMessage += "\n• You can navigate away - the process will continue"
-        } else if (apiResponse.risk_generation.status === 'deferred') {
-          successMessage += "\n• Comprehensive risk generation will start shortly"
-          successMessage += "\n• You can navigate away safely"
-        }
-        successMessage += "\n• Check Risk Analytics in a few minutes to see the results"
-        
-        // Store task ID for potential status checking
-        if (apiResponse.risk_generation.task_id !== 'deferred') {
-          localStorage.setItem(`risk_task_${selectedEvaluation.value}`, apiResponse.risk_generation.task_id)
-        }
-      } else if (apiResponse.risk_message) {
-        successMessage += `\n\n📋 ${apiResponse.risk_message}`
-      }
-      
       // Show success notification
-      await showSuccess('Evaluation Submitted', 'Evaluation submitted successfully! Risk generation will continue in the background.', {
+      await showSuccess('Evaluation Submitted', 'Evaluation submitted successfully!', {
         action: 'evaluation_submitted',
-        evaluation_id: selectedEvaluation.value,
-        risk_generation_status: apiResponse.risk_generation?.status || 'unknown'
+        evaluation_id: selectedEvaluation.value
       })
       
       // Show success popup
-      PopupService.success('Evaluation submitted successfully! Risk generation will continue in the background.', 'Evaluation Submitted')
+      PopupService.success('Evaluation submitted successfully!', 'Evaluation Submitted')
       
       // Create additional notification service notification
       await notificationService.createEvaluationNotification('evaluation_submitted', {
         plan_id: selectedEvaluation.value,
-        evaluation_id: selectedEvaluation.value,
-        risk_generation_status: apiResponse.risk_generation?.status || 'unknown'
+        evaluation_id: selectedEvaluation.value
       })
       
       // Refresh the evaluation data to show the updated status
@@ -1874,6 +1789,29 @@ const openPlanForEvaluation = async (plan: any) => {
   selectedEvaluation.value = plan.plan_id.toString()
   selectedPlanId.value = plan.plan_id.toString()
   await fetchPlanDetails(plan.plan_id)
+}
+
+const fetchPlanRisks = async () => {
+  if (!selectedEvaluation.value) return
+  
+  isLoadingRisks.value = true
+  try {
+    console.log('Fetching risks for plan ID:', selectedEvaluation.value)
+    const response = await api.risks.getPlanRisks(parseInt(selectedEvaluation.value))
+    
+    if (response && response.data) {
+      planRisks.value = response.data.risks || []
+      console.log(`Loaded ${planRisks.value.length} risks for plan ${selectedEvaluation.value}`)
+    } else {
+      planRisks.value = []
+    }
+  } catch (error) {
+    console.error('Error fetching plan risks:', error)
+    planRisks.value = []
+    PopupService.error(`Failed to load risks: ${error.message || 'Unknown error'}`, 'Loading Failed')
+  } finally {
+    isLoadingRisks.value = false
+  }
 }
 
 const fetchPlanDetails = async (planId: number) => {
@@ -1981,6 +1919,10 @@ const fetchPlanDetails = async (planId: number) => {
       }
       
       console.log('Successfully loaded plan details')
+      
+      // Reset active data tab to extracted when loading new plan
+      activeDataTab.value = 'extracted'
+      planRisks.value = []
     } else {
       console.error('API returned no plan data')
       PopupService.error('Failed to load plan details', 'Loading Failed')

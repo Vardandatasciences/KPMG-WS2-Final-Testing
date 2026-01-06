@@ -45,14 +45,9 @@ http.interceptors.response.use(
         }
       } else {
         // Error response - throw an error
-        // Handle both string and object error formats
-        const errorMessage = typeof response.data.error === 'string' 
-          ? response.data.error 
-          : (response.data.error?.message || 'Unknown error')
-        const error = new Error(errorMessage)
-        error.code = typeof response.data.error === 'object' ? response.data.error?.code : undefined
-        error.details = typeof response.data.error === 'object' ? response.data.error?.details : undefined
-        error.response = response  // Preserve original response for error handling
+        const error = new Error(response.data.error?.message || 'Unknown error')
+        error.code = response.data.error?.code
+        error.details = response.data.error?.details
         throw error
       }
     }
@@ -61,16 +56,37 @@ http.interceptors.response.use(
   (error) => {
     // Handle 401 Unauthorized - token expired or invalid
     if (error.response?.status === 401) {
-      // Clear authentication data
-      localStorage.removeItem('session_token')
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('refresh_token')
-      localStorage.removeItem('current_user')
+      // Only clear tokens and redirect if we're not in an iframe (TPRM context)
+      // In TPRM iframe, the parent GRC app manages authentication
+      const isInIframe = window.self !== window.top
       
-      // Redirect to login if not already there
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login'
+      // Check if token exists - if it does, this might be a server-side auth error, not a missing token
+      const hasToken = localStorage.getItem('session_token') || localStorage.getItem('access_token')
+      
+      // Only clear and redirect if:
+      // 1. Not in iframe AND no token exists, OR
+      // 2. Error message indicates token is actually expired/invalid (not a server error)
+      const errorMessage = error.response?.data?.error || error.response?.data?.detail || ''
+      const isTokenExpired = errorMessage.includes('expired') || errorMessage.includes('invalid') || errorMessage.includes('Token')
+      
+      if (!isInIframe && (!hasToken || isTokenExpired)) {
+        // Clear authentication data
+        localStorage.removeItem('session_token')
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('refresh_token')
+        localStorage.removeItem('current_user')
+        
+        // Redirect to login if not already there
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login'
+        }
+      } else if (isInIframe && !hasToken) {
+        // In iframe but no token - request auth from parent
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: 'TPRM_AUTH_REQUEST' }, '*')
+        }
       }
+      // If we have a token and it's a server error, don't clear tokens - just throw the error
     }
     
     // Handle 403 Forbidden - permission denied
@@ -100,27 +116,10 @@ http.interceptors.response.use(
     if (error.response) {
       // Server responded with error status
       const errorData = error.response.data
-      if (errorData) {
-        // Handle both string and object error formats
-        let errorMessage = 'Server error'
-        let errorCode = undefined
-        let errorDetails = undefined
-        
-        if (errorData.error) {
-          if (typeof errorData.error === 'string') {
-            errorMessage = errorData.error
-          } else if (typeof errorData.error === 'object') {
-            errorMessage = errorData.error.message || errorData.error.error || 'Server error'
-            errorCode = errorData.error.code
-            errorDetails = errorData.error.details
-          }
-        } else if (errorData.message) {
-          errorMessage = errorData.message
-        }
-        
-        const newError = new Error(errorMessage)
-        newError.code = errorCode || errorData.code
-        newError.details = errorDetails || errorData.details
+      if (errorData && errorData.error) {
+        const newError = new Error(errorData.error.message || 'Server error')
+        newError.code = errorData.error.code
+        newError.details = errorData.error.details
         newError.response = error.response
         throw newError
       }

@@ -5,7 +5,7 @@ from typing import Dict, List
 # Removed TPRMModule dependency - using direct entity-data-row approach
 from .llama_service import LlamaService
 # Import BCP/DRP models for direct database access
-from tprm_backend.bcpdrp.models import Plan, Evaluation
+from bcpdrp.models import Plan, Evaluation
 
 logger = logging.getLogger(__name__)
 

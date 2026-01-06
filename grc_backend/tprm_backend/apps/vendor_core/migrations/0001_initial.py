@@ -207,7 +207,7 @@ class Migration(migrations.Migration):
                 ('review_date', models.DateTimeField(blank=True, null=True)),
                 ('review_comments', models.TextField(blank=True)),
                 ('reviewed_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL)),
-                ('vendor', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='screening_results', to='tprm_vendor_core.tempvendor')),
+                ('vendor', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='screening_results', to='vendor_core.tempvendor')),
             ],
             options={
                 'verbose_name': 'External Screening Result',
@@ -229,7 +229,7 @@ class Migration(migrations.Migration):
                 ('resolved_date', models.DateTimeField(blank=True, null=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('resolved_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL)),
-                ('screening', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='matches', to='tprm_vendor_core.externalscreeningresult')),
+                ('screening', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='matches', to='vendor_core.externalscreeningresult')),
             ],
             options={
                 'verbose_name': 'Screening Match',

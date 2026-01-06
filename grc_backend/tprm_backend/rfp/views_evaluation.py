@@ -12,12 +12,12 @@ from decimal import Decimal
 import json
 from .models import RFPEvaluationScore, RFPResponse
 from tprm_backend.rfp_approval.models import ApprovalRequestVersions
-from .rfp_authentication import UnifiedJWTAuthentication, SimpleAuthenticatedPermission
+from .rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('evaluate_rfp')
 def save_committee_evaluation(request, rfp_id):
@@ -102,7 +102,7 @@ def save_committee_evaluation(request, rfp_id):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('evaluate_rfp')
 def save_evaluation_scores(request, response_id):
@@ -295,7 +295,7 @@ def save_evaluation_scores(request, response_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_evaluation_scores(request, response_id):
@@ -382,7 +382,7 @@ def get_evaluation_scores(request, response_id):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_evaluation_scores_bulk(request):

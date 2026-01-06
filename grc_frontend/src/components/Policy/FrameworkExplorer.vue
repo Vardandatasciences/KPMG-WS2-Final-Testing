@@ -330,83 +330,175 @@
                                 v-if="policy.versions && policy.versions.length > 0"
                                 class="inline-policy-versions-list"
                               >
-                                <div
-                                  v-for="pVersion in policy.versions"
-                                  :key="pVersion.id"
-                                  class="inline-policy-version-item"
-                                >
-                                  <div
-                                    class="inline-policy-version-header"
-                                    @click="toggleInlinePolicyVersionExpansion(pVersion, policy, version.id, fw.id)"
-                                  >
-                                    <div class="inline-policy-version-main">
-                                      <span class="inline-policy-version-name">
-                                        {{ pVersion.name }}
-                                      </span>
-                                    </div>
-                                    <div class="inline-policy-version-meta">
-                                      <span
-                                        v-if="pVersion.previous_version_name"
-                                        class="previous-version"
-                                      >
-                                        Previous: {{ pVersion.previous_version_name }}
-                                      </span>
-                                      <i
-                                        :class="expandedPolicyVersions.includes(pVersion.id) ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"
-                                        class="expand-arrow"
-                                      ></i>
-                                    </div>
-                                  </div>
-
-                                  <!-- Subpolicies for this policy version -->
-                                  <div
-                                    v-if="expandedPolicyVersions.includes(pVersion.id)"
-                                    class="inline-subpolicies-container"
-                                  >
+                                <!-- Recursive version display -->
+                                <template v-for="pVersion in policy.versions" :key="pVersion.id">
+                                  <div class="inline-policy-version-item">
                                     <div
-                                      v-if="pVersion.subpolicies && pVersion.subpolicies.length > 0"
-                                      class="inline-subpolicies-list"
+                                      class="inline-policy-version-header"
+                                      @click="toggleInlinePolicyVersionExpansion(pVersion, policy, version.id, fw.id)"
                                     >
-                                      <div
-                                        v-for="subpolicy in pVersion.subpolicies"
-                                        :key="subpolicy.id"
-                                        class="inline-subpolicy-item"
-                                      >
-                                        <div class="inline-subpolicy-main">
-                                          <div class="inline-subpolicy-name">
-                                            {{ subpolicy.name }}
-                                          </div>
-                                          <div class="inline-subpolicy-meta">
-                                            <span class="inline-subpolicy-category">
-                                              {{ subpolicy.category || 'Subpolicy' }}
-                                            </span>
-                                            <span
-                                              class="inline-subpolicy-status"
-                                              :class="statusClass(subpolicy.status)"
-                                            >
-                                              {{ subpolicy.status }}
-                                            </span>
-                                          </div>
-                                        </div>
-                                        <div
-                                          v-if="subpolicy.description"
-                                          class="inline-subpolicy-description"
+                                      <div class="inline-policy-version-main">
+                                        <span class="inline-policy-version-name">
+                                          {{ pVersion.name }}
+                                        </span>
+                                      </div>
+                                      <div class="inline-policy-version-meta">
+                                        <span
+                                          v-if="pVersion.previous_version_name"
+                                          class="previous-version"
                                         >
-                                          {{ subpolicy.description }}
-                                        </div>
+                                          Previous: {{ pVersion.previous_version_name }}
+                                        </span>
+                                        <i
+                                          :class="expandedPolicyVersions.includes(pVersion.id) ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"
+                                          class="expand-arrow"
+                                        ></i>
                                       </div>
                                     </div>
+
+                                    <!-- Expanded content: child versions and subpolicies -->
                                     <div
-                                      v-else-if="inlineSubpoliciesLoading[pVersion.id]"
-                                      class="loading-message"
+                                      v-if="expandedPolicyVersions.includes(pVersion.id)"
+                                      class="inline-version-expanded-content"
                                     >
-                                      <p>Loading subpolicies...</p>
-                                    </div>
-                                    <div v-else class="no-data-message">
-                                      <p>No subpolicies found for this version.</p>
+                                      <!-- Child versions (nested versions) -->
+                                      <div
+                                        v-if="pVersion.child_versions && pVersion.child_versions.length > 0"
+                                        class="inline-child-versions-container"
+                                      >
+                                        <div
+                                          v-for="childVersion in pVersion.child_versions"
+                                          :key="childVersion.id"
+                                          class="inline-policy-version-item nested-version"
+                                        >
+                                          <div
+                                            class="inline-policy-version-header"
+                                            @click="toggleInlinePolicyVersionExpansion(childVersion, policy, version.id, fw.id)"
+                                          >
+                                            <div class="inline-policy-version-main">
+                                              <span class="inline-policy-version-name">
+                                                {{ childVersion.name }}
+                                              </span>
+                                            </div>
+                                            <div class="inline-policy-version-meta">
+                                              <span
+                                                v-if="childVersion.previous_version_name"
+                                                class="previous-version"
+                                              >
+                                                Previous: {{ childVersion.previous_version_name }}
+                                              </span>
+                                              <i
+                                                :class="expandedPolicyVersions.includes(childVersion.id) ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"
+                                                class="expand-arrow"
+                                              ></i>
+                                            </div>
+                                          </div>
+
+                                          <!-- Child version expanded content -->
+                                          <div
+                                            v-if="expandedPolicyVersions.includes(childVersion.id)"
+                                            class="inline-version-expanded-content"
+                                          >
+                                            <!-- Subpolicies for child version -->
+                                            <div
+                                              v-if="childVersion.subpolicies && childVersion.subpolicies.length > 0"
+                                              class="inline-subpolicies-container"
+                                            >
+                                              <div class="inline-subpolicies-list">
+                                                <div
+                                                  v-for="subpolicy in childVersion.subpolicies"
+                                                  :key="subpolicy.id"
+                                                  class="inline-subpolicy-item"
+                                                >
+                                                  <div class="inline-subpolicy-main">
+                                                    <div class="inline-subpolicy-name">
+                                                      {{ subpolicy.name }}
+                                                    </div>
+                                                    <div class="inline-subpolicy-meta">
+                                                      <span class="inline-subpolicy-category">
+                                                        {{ subpolicy.category || 'Subpolicy' }}
+                                                      </span>
+                                                      <span
+                                                        class="inline-subpolicy-status"
+                                                        :class="statusClass(subpolicy.status)"
+                                                      >
+                                                        {{ subpolicy.status }}
+                                                      </span>
+                                                    </div>
+                                                  </div>
+                                                  <div
+                                                    v-if="subpolicy.description"
+                                                    class="inline-subpolicy-description"
+                                                  >
+                                                    {{ subpolicy.description }}
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            </div>
+                                            <div
+                                              v-else-if="inlineSubpoliciesLoading[childVersion.id]"
+                                              class="loading-message"
+                                            >
+                                              <p>Loading subpolicies...</p>
+                                            </div>
+                                            <div v-else class="no-data-message">
+                                              <p>No subpolicies found for this version.</p>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <!-- Subpolicies for this version -->
+                                      <div
+                                        v-if="pVersion.subpolicies && pVersion.subpolicies.length > 0"
+                                        class="inline-subpolicies-container"
+                                      >
+                                        <div class="inline-subpolicies-list">
+                                          <div
+                                            v-for="subpolicy in pVersion.subpolicies"
+                                            :key="subpolicy.id"
+                                            class="inline-subpolicy-item"
+                                          >
+                                            <div class="inline-subpolicy-main">
+                                              <div class="inline-subpolicy-name">
+                                                {{ subpolicy.name }}
+                                              </div>
+                                              <div class="inline-subpolicy-meta">
+                                                <span class="inline-subpolicy-category">
+                                                  {{ subpolicy.category || 'Subpolicy' }}
+                                                </span>
+                                                <span
+                                                  class="inline-subpolicy-status"
+                                                  :class="statusClass(subpolicy.status)"
+                                                >
+                                                  {{ subpolicy.status }}
+                                                </span>
+                                              </div>
+                                            </div>
+                                            <div
+                                              v-if="subpolicy.description"
+                                              class="inline-subpolicy-description"
+                                            >
+                                              {{ subpolicy.description }}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <div
+                                        v-else-if="inlineSubpoliciesLoading[pVersion.id]"
+                                        class="loading-message"
+                                      >
+                                        <p>Loading subpolicies...</p>
+                                      </div>
+                                      <div
+                                        v-else-if="!pVersion.child_versions || pVersion.child_versions.length === 0"
+                                        class="no-data-message"
+                                      >
+                                        <p>No subpolicies found for this version.</p>
+                                      </div>
                                     </div>
                                   </div>
-                                </div>
+                                </template>
                               </div>
                               <div v-else class="no-data-message">
                                 <p>No versions found for this policy.</p>
@@ -508,7 +600,7 @@ import { PopupService } from '@/modules/popus/popupService'
 import PopupModal from '@/modules/popus/PopupModal.vue'
 import CustomDropdown from '@/components/CustomDropdown.vue'
 import CreateAcknowledgementModal from './CreateAcknowledgementModal.vue'
-import { API_ENDPOINTS } from '@/config/api.js'
+import { API_ENDPOINTS, API_BASE_URL, axiosInstance } from '@/config/api.js'
 
 // Add view state
 const currentView = ref('list') // 'list' or 'card'
@@ -784,7 +876,7 @@ const fetchFrameworks = async () => {
       params.entity = selectedEntity.value
     }
 
-    const response = await axios.get(API_ENDPOINTS.FRAMEWORK_EXPLORER, { params })
+    const response = await axiosInstance.get(API_ENDPOINTS.FRAMEWORK_EXPLORER.replace(API_ENDPOINTS.API_BASE_URL || '', ''), { params })
     frameworks.value = response.data.frameworks || []
     summary.value = response.data.summary || {
       active_frameworks: 0,
@@ -823,7 +915,7 @@ const fetchFrameworks = async () => {
 // Fetch entities from API
 const fetchEntities = async () => {
   try {
-    const response = await axios.get(API_ENDPOINTS.ENTITIES)
+    const response = await axiosInstance.get(API_ENDPOINTS.ENTITIES.replace(API_ENDPOINTS.API_BASE_URL || '', ''))
     entities.value = response.data.entities || []
   } catch (error) {
     console.error('Error fetching entities:', error)
@@ -1046,6 +1138,23 @@ const toggleInlinePolicyVersionExpansion = async (policyVersion, policy, framewo
   }
 }
 
+// Helper function to find a version recursively in nested structure
+const findVersionInNestedStructure = (versions, versionId) => {
+  for (const version of versions) {
+    if (version.id === versionId) {
+      return version
+    }
+    // Check child versions recursively
+    if (version.child_versions && version.child_versions.length > 0) {
+      const found = findVersionInNestedStructure(version.child_versions, versionId)
+      if (found) {
+        return found
+      }
+    }
+  }
+  return null
+}
+
 // Fetch subpolicies for a specific policy version (inline view)
 const fetchPolicyVersionSubpolicies = async (versionId, policyId, frameworkVersionId, frameworkId) => {
   inlineSubpoliciesLoading.value[versionId] = true
@@ -1066,14 +1175,14 @@ const fetchPolicyVersionSubpolicies = async (versionId, policyId, frameworkVersi
         }))
       : []
 
-    // Update policy version within the frameworks structure
+    // Update policy version within the frameworks structure (handles nested versions)
     const framework = frameworks.value.find((fw) => fw.id === frameworkId)
     if (framework && framework.versions) {
       const frameworkVersion = framework.versions.find((v) => v.id === frameworkVersionId)
       if (frameworkVersion && frameworkVersion.policies) {
         const policy = frameworkVersion.policies.find((p) => p.id === policyId)
         if (policy && policy.versions) {
-          const version = policy.versions.find((pv) => pv.id === versionId)
+          const version = findVersionInNestedStructure(policy.versions, versionId)
           if (version) {
             version.subpolicies = subpolicies
           }
@@ -1089,7 +1198,7 @@ const fetchPolicyVersionSubpolicies = async (versionId, policyId, frameworkVersi
       if (frameworkVersion && frameworkVersion.policies) {
         const policy = frameworkVersion.policies.find((p) => p.id === policyId)
         if (policy && policy.versions) {
-          const version = policy.versions.find((pv) => pv.id === versionId)
+          const version = findVersionInNestedStructure(policy.versions, versionId)
           if (version) {
             version.subpolicies = []
           }
@@ -1119,7 +1228,7 @@ const togglePolicyStatus = async (policy, versionId, frameworkId) => {
         // Get current user ID to exclude from reviewer list
         const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || ''
         // Fetch reviewers filtered by RBAC permissions (ApprovePolicy) for policy module
-        const response = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+        const response = await axiosInstance.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION.replace(API_ENDPOINTS.API_BASE_URL || '', ''), {
           params: {
             module: 'policy',
             current_user_id: currentUserId
@@ -1287,7 +1396,7 @@ const toggleStatus = async (fw) => {
         // Get current user ID to exclude from reviewer list
         const currentUserId = sessionStorage.getItem('user_id') || localStorage.getItem('user_id') || ''
         // Fetch reviewers filtered by RBAC permissions (ApproveFramework) for framework module
-        const reviewersResponse = await axios.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION, {
+        const reviewersResponse = await axiosInstance.get(API_ENDPOINTS.USERS_FOR_REVIEWER_SELECTION.replace(API_BASE_URL || '', ''), {
           params: {
             module: 'framework',
             current_user_id: currentUserId
@@ -2698,6 +2807,23 @@ h1 {
   border-radius: 8px;
   border: 1px solid #e5e7eb;
   overflow: hidden;
+}
+
+.inline-policy-version-item.nested-version {
+  margin-left: 24px;
+  margin-top: 8px;
+  border-left: 3px solid #4f6cff;
+  background: #f9fafb;
+}
+
+.inline-version-expanded-content {
+  padding: 12px;
+  background: #fafbfc;
+  border-top: 1px solid #e5e7eb;
+}
+
+.inline-child-versions-container {
+  margin-bottom: 12px;
 }
 
 .inline-policy-version-header {

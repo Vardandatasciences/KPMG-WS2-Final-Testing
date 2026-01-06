@@ -1,0 +1,3 @@
+company_name,legal_name,email,phone,website,location,industry_sector,employee_count,experience_years,description,capabilities,certifications
+TechCorp Solutions,TechCorp Inc.,contact@techcorp.com,+1 (555) 123-4567,www.techcorp.com,"San Francisco, CA",Technology,750,8,"Leading technology solutions provider specializing in cloud infrastructure and security.","AWS Certified, Cloud Expert, DevOps, Security","ISO 27001, SOC 2, AWS Advanced"
+CloudTech Inc,CloudTech LLC,hello@cloudtech.com,+1 (555) 987-6543,www.cloudtech.com,"Austin, TX",Cloud Services,350,6,"Cloud migration and optimization specialists with focus on Azure.","Azure Expert, Cloud Migration, Analytics, AI/ML","Microsoft Gold, Azure Expert, PCI DSS"

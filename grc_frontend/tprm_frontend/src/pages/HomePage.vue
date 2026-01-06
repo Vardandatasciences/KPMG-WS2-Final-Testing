@@ -281,8 +281,8 @@
                       <Zap class="h-5 w-5 text-blue-600" />
                     </div>
                     <div>
-                      <h4 class="font-semibold text-gray-900">AI-Powered Risk Analysis</h4>
-                      <p class="text-sm text-gray-600">LLaMA-based risk assessment with 95% accuracy</p>
+                      <h4 class="font-semibold text-gray-900">Vardaan AI-Powered Risk Analysis</h4>
+                      <p class="text-sm text-gray-600"> Vardaan LLaMA-based risk assessment with 95% accuracy</p>
                     </div>
                   </div>
                   <div class="flex items-start gap-3">

@@ -6,13 +6,13 @@ from django.utils import timezone
 import json
 
 from .models import RFPEvaluatorAssignment, RFP, RFPResponse, CustomUser
-from .rfp_authentication import UnifiedJWTAuthentication, SimpleAuthenticatedPermission
+from .rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required
 from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('assign_rfp_evaluators')
 def bulk_assign_evaluators(request):
@@ -88,7 +88,7 @@ def bulk_assign_evaluators(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_evaluator_assignments(request, evaluator_id):
@@ -129,7 +129,7 @@ def get_evaluator_assignments(request, evaluator_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_proposal_assignments(request, proposal_id):
@@ -165,7 +165,7 @@ def get_proposal_assignments(request, proposal_id):
 
 
 @api_view(['PUT'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('edit_rfp')
 def update_assignment_status(request, assignment_id):
@@ -217,7 +217,7 @@ def update_assignment_status(request, assignment_id):
 
 
 @api_view(['DELETE'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('delete_rfp')
 def remove_assignment(request, assignment_id):
@@ -246,7 +246,7 @@ def remove_assignment(request, assignment_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_available_evaluators(request):

@@ -23,10 +23,20 @@ ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,*').split('
 
 # External URL for generating invitation links (frontend URL where vendors submit)
 # Default to localhost:3000 for frontend, can be overridden via environment variable
-EXTERNAL_BASE_URL = os.environ.get('EXTERNAL_BASE_URL', 'http://localhost:3000')
+# Force localhost (no ngrok) - replace ngrok URLs with localhost
+_external_base_url = os.environ.get('EXTERNAL_BASE_URL', 'http://localhost:3000')
+if 'ngrok' in _external_base_url.lower():
+    EXTERNAL_BASE_URL = 'http://localhost:3000'
+else:
+    EXTERNAL_BASE_URL = _external_base_url
 
 # Backend API URL for API endpoints (used for tracking URLs)
-BACKEND_API_URL = os.environ.get('BACKEND_API_URL', 'http://localhost:8000')
+# Force localhost (no ngrok) - replace ngrok URLs with localhost
+_backend_api_url = os.environ.get('BACKEND_API_URL', 'http://localhost:8000')
+if 'ngrok' in _backend_api_url.lower():
+    BACKEND_API_URL = 'http://localhost:8000'
+else:
+    BACKEND_API_URL = _backend_api_url
 
 # Silence system checks for shared tables (intentionally sharing tables across modules)
 SILENCED_SYSTEM_CHECKS = [

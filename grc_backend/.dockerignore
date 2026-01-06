@@ -1,9 +1,41 @@
-__pycache__
+# Python
+__pycache__/
 *.pyc
 *.pyo
 *.pyd
-*.db
-*.sqlite3
 *.log
+*.sqlite3
 .env
-*.git
+.venv/
+venv/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Django / build artifacts
+staticfiles/
+media/
+uploads/
+logs/
+
+# Node / frontend (if exists inside)
+node_modules/
+dist/
+build/
+
+# Archives / dumps
+*.zip
+*.tar
+*.gz
+*.7z
+*.bak
+*.dump
+
+# OS
+.DS_Store
+Thumbs.db

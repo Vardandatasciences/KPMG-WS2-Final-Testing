@@ -8,18 +8,6 @@
 }
 
 /* Header Section */
-.dashboard-header {
-  margin-bottom: var(--sp-6);
-}
-
-.dashboard-title {
-  font-size: var(--fs-3xl);
-  font-weight: var(--fw-bold);
-  color: var(--text);
-  margin: 0;
-  letter-spacing: -0.025em;
-}
-
 /* Error Message */
 .error-message {
   margin-bottom: var(--sp-6);

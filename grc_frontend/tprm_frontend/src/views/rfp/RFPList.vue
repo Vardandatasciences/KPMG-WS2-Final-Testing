@@ -371,8 +371,8 @@
                     <div class="space-y-3">
                       <div>
                         <Label class="text-xs font-medium text-gray-500 uppercase tracking-wide">Auto Publish</Label>
-                        <Badge :class="rfpFullDetails.auto_publish ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'" class="mt-1">
-                          {{ rfpFullDetails.auto_publish ? 'Enabled' : 'Disabled' }}
+                        <Badge :class="rfpFullDetails.auto_approve ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'" class="mt-1">
+                          {{ rfpFullDetails.auto_approve ? 'Enabled' : 'Disabled' }}
                         </Badge>
                       </div>
                       <div>
@@ -564,6 +564,7 @@ import { rfpUseToast } from '@/composables/rfpUseToast'
 import { useNotifications } from '@/composables/useNotifications'
 import { useRfpApi } from '@/composables/useRfpApi'
 import loggingService from '@/services/loggingService'
+import { getTprmApiV1BaseUrl, getTprmApiUrl } from '@/utils/backendEnv'
 
 // Components
 import Card from '@/components_rfp/Card.vue'
@@ -698,13 +699,13 @@ const shareRFP = async (rfp) => {
   
   try {
     // Generate open RFP invitation link using the new format
-    const baseUrl = 'http://localhost:3000' // Frontend base URL
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://grc-tprm.vardaands.com' // Frontend base URL
     const openRfpUrl = `${baseUrl}/submit/open?rfpId=${rfp.id}`
     
     // Also try to generate the invitation record in the backend
     try {
       const { getAuthHeaders } = useRfpApi()
-      const response = await fetch('http://localhost:8000/api/tprm/rfp/generate-open-invitation/', {
+      const response = await fetch(getTprmApiUrl('v1/generate-open-invitation/'), {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -742,7 +743,7 @@ const viewRFP = async (rfp) => {
   
   try {
     const { getAuthHeaders } = useRfpApi()
-    const response = await fetch(`http://localhost:8000/api/tprm/rfp/rfps/${rfp.id}/get_full_details/`, {
+    const response = await fetch(getTprmApiUrl(`v1/rfps/${rfp.id}/get_full_details/`), {
       method: 'GET',
       headers: getAuthHeaders(),
     })
@@ -813,7 +814,7 @@ const editRFP = async (rfp) => {
   // Check if there are specific change requests for this RFP
   try {
     const { getAuthHeaders } = useRfpApi()
-    const response = await fetch(`http://localhost:8000/api/tprm/rfp/rfp-change-requests/${rfp.id}/`, {
+    const response = await fetch(getTprmApiUrl(`v1/rfp-change-requests/${rfp.id}/`), {
       method: 'GET',
       headers: getAuthHeaders()
     })
@@ -860,8 +861,8 @@ const downloadRFPFromList = async (rfp, format) => {
   try {
     const rfpId = rfp.id
     const endpoint = format === 'pdf' 
-      ? `http://localhost:8000/api/tprm/rfp/rfps/${rfpId}/download/pdf/`
-      : `http://localhost:8000/api/tprm/rfp/rfps/${rfpId}/download/word/`
+      ? getTprmApiUrl(`v1/rfps/${rfpId}/download/pdf/`)
+      : getTprmApiUrl(`v1/rfps/${rfpId}/download/word/`)
     
     const { getAuthHeaders } = useRfpApi()
     const response = await fetch(endpoint, {
@@ -956,7 +957,7 @@ const formatBudget = (min, max) => {
 const testBackendConnection = async () => {
   try {
     const { getAuthHeaders } = useRfpApi()
-    const response = await fetch('http://localhost:8000/api/tprm/rfp/rfps/', {
+    const response = await fetch(getTprmApiUrl('v1/rfps/'), {
       method: 'GET',
       headers: getAuthHeaders(),
     })

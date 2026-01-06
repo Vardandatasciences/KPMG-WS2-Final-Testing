@@ -584,6 +584,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import api from '@/utils/api_rfp'
 import axios from 'axios'
 import { useRfpApi } from '@/composables/useRfpApi'
@@ -591,6 +592,9 @@ import PopupModal from '@/popup/PopupModal.vue'
 import { PopupService } from '@/popup/popupService'
 import { useNotifications } from '@/composables/useNotifications'
 import loggingService from '@/services/loggingService'
+import { getTprmApiV1BaseUrl, getTprmApiUrl } from '@/utils/backendEnv'
+
+const router = useRouter()
 
 // Form data
 const workflowForm = reactive({
@@ -758,7 +762,7 @@ const addCommitteeEvaluationStages = async () => {
     }
     
     // Fetch committee members from backend
-    const response = await fetch(`http://localhost:8000/api/tprm/rfp/rfp/${rfpId}/committee/get/`, {
+    const response = await fetch(getTprmApiUrl(`v1/rfp/${rfpId}/committee/get/`), {
       method: 'GET',
       headers: getAuthHeaders()
     })
@@ -1016,7 +1020,7 @@ const submitWorkflow = async () => {
     console.log('Workflow Type Hint:', submitData.rfp_data?.workflow_type_hint)
     console.log('Stages being sent:', submitData.stages_config)
     
-    const response = await axios.post('http://localhost:8000/api/approval/workflows/', submitData, {
+    const response = await axios.post(getTprmApiUrl('approval/workflows/'), submitData, {
       headers: {
         ...getAuthHeaders(),
         'Content-Type': 'application/json',
@@ -1102,85 +1106,21 @@ const fetchUsers = async () => {
     }
     
     // Build URL with workflow_type parameter
-    // Try multiple URL paths in case one doesn't work
-    let baseUrls = [
-      'http://localhost:8000/api/rfp-approval/users/',
-      'http://localhost:8000/api/tprm/rfp-approval/users/',
-      'http://localhost:8000/api/approval/users/'
-    ]
-    
-    let url = baseUrls[0] // Start with the most likely working path
+    let url = getTprmApiUrl('approval/users/')
     if (workflowType) {
       url += `?workflow_type=${workflowType}`
     }
     
-    console.log('📡 Fetching users for workflow type:', workflowType)
-    console.log('📡 API URL:', url)
-    
-    let response
-    let lastError
-    
-    // Try each URL path until one works
-    for (const baseUrl of baseUrls) {
-      try {
-        const testUrl = workflowType ? `${baseUrl}?workflow_type=${workflowType}` : baseUrl
-        console.log(`🔄 Trying URL: ${testUrl}`)
-        response = await axios.get(testUrl, {
-          headers: getAuthHeaders()
-        })
-        console.log(`✅ Success with URL: ${testUrl}`)
-        break // Success, exit loop
-      } catch (error) {
-        console.log(`❌ Failed with URL: ${baseUrl}`, error.response?.status)
-        lastError = error
-        // Continue to next URL
-      }
-    }
-    
-    // If all URLs failed, throw the last error
-    if (!response) {
-      throw lastError || new Error('All URL paths failed')
-    }
-    
-    console.log('📊 Users API response:', response.data)
-    
-    // Check if response has error field (backend returns error in response body)
-    if (response.data && response.data.error) {
-      console.error('❌ Backend returned error:', response.data.error)
-      console.error('   Allowed roles:', response.data.allowed_roles)
-      console.error('   Total users in DB:', response.data.total_users_in_db)
-      users.value = []
-      // Show error notification
-      showError('No Users Available', response.data.error)
-    } else if (Array.isArray(response.data)) {
-      // Normal response - array of users
-      users.value = response.data
-      console.log(`✅ Fetched ${users.value.length} users from backend:`, users.value)
-      
-      if (users.value.length === 0) {
-        showWarning('No Users Found', `No users found with the required roles for ${workflowType || 'this workflow type'}. Please ensure users have the correct roles assigned in the rbac_tprm table.`)
-      }
-    } else if (response.data && response.data.users) {
-      // Response wrapped in object
-      users.value = response.data.users
-      console.log(`✅ Fetched ${users.value.length} users from backend:`, users.value)
-    } else {
-      console.warn('⚠️ Unexpected response format:', response.data)
-      users.value = []
-    }
+    console.log('Fetching users for workflow type:', workflowType)
+    const response = await axios.get(url, {
+      headers: getAuthHeaders()
+    })
+    users.value = response.data
+    console.log('Fetched users from backend:', users.value)
   } catch (error) {
-    console.error('❌ Error fetching users:', error)
-    console.error('   Error response:', error.response?.data)
-    console.error('   Error status:', error.response?.status)
-    
+    console.error('Error fetching users:', error)
+    // Fallback to empty array if API fails
     users.value = []
-    
-    // Show user-friendly error message
-    const errorMessage = error.response?.data?.error || 
-                        error.response?.data?.message || 
-                        error.message || 
-                        'Failed to fetch users from the server'
-    showError('Error Loading Users', errorMessage)
   } finally {
     loadingUsers.value = false
   }
@@ -1189,7 +1129,7 @@ const fetchUsers = async () => {
 const fetchRFPFromDatabase = async (rfpId: string) => {
   try {
     console.log('Fetching RFP data from database for ID:', rfpId)
-    const response = await axios.get(`http://localhost:8000/api/tprm/rfp/rfps/${rfpId}/`, {
+    const response = await axios.get(getTprmApiUrl(`v1/rfps/${rfpId}/`), {
       headers: getAuthHeaders()
     })
     console.log('Fetched RFP data from database:', response.data)
@@ -1229,8 +1169,8 @@ const fetchRFPFromDatabase = async (rfpId: string) => {
         complianceRequirements: response.data.compliance_requirements, // Add frontend field name
         allow_late_submissions: response.data.allow_late_submissions,
         allowLateSubmissions: response.data.allow_late_submissions, // Add frontend field name
-        auto_publish: response.data.auto_publish,
-        autoPublish: response.data.auto_publish, // Add frontend field name
+        auto_approve: response.data.auto_approve,
+        autoApprove: response.data.auto_approve, // Add frontend field name
         status: response.data.status,
         created_at: response.data.created_at,
         updated_at: response.data.updated_at
@@ -1252,7 +1192,7 @@ const fetchRFPFromDatabase = async (rfpId: string) => {
 const fetchEvaluationCriteria = async (rfpNumber: string) => {
   try {
     console.log('Fetching evaluation criteria for RFP:', rfpNumber)
-    const response = await axios.get(`http://localhost:8000/api/tprm/rfp/rfp/${rfpNumber}/evaluation-criteria/`, {
+    const response = await axios.get(getTprmApiUrl(`v1/rfp/${rfpNumber}/evaluation-criteria/`), {
       headers: getAuthHeaders()
     })
     console.log('Fetched evaluation criteria:', response.data)
@@ -1398,6 +1338,8 @@ onMounted(async () => {
     // Call fetchRFPFromDatabase without await to avoid blocking onMounted
     fetchRFPFromDatabase(rfpIdToFetch).then(() => {
       console.log('RFP data fetched from database successfully')
+      // Check if auto-approve is enabled after fetching
+      checkAutoApproveStatus(rfpRequestData.value)
     }).catch((error) => {
       console.error('Failed to fetch RFP data from database:', error)
     })
@@ -1410,7 +1352,88 @@ onMounted(async () => {
       console.error('Failed to fetch evaluation criteria:', error)
     })
   }
+  
+  // Check if auto-approve is enabled - if so, redirect back
+  if (rfpRequestData.value) {
+    checkAutoApproveStatus(rfpRequestData.value)
+  }
 })
+
+// Function to check auto-approve status and redirect if needed
+const checkAutoApproveStatus = async (rfpData: any) => {
+  try {
+    // Check both auto_approve and autoApprove fields
+    const isAutoApprove = Boolean(rfpData?.auto_approve || rfpData?.autoApprove)
+    const rfpId = rfpData?.rfp_id
+    
+    if (isAutoApprove && rfpId) {
+      console.log('⚠️ Auto-approve is enabled for this RFP - approval workflow not needed')
+      
+      // Fetch current status to verify
+      try {
+        const response = await axios.get(getTprmApiUrl(`v1/rfps/${rfpId}/`), {
+          headers: getAuthHeaders()
+        })
+        
+        // If already approved, redirect
+        if (response.data.status === 'APPROVED') {
+          showWarning('RFP Already Approved', 'This RFP has been auto-approved and does not require an approval workflow.')
+          setTimeout(() => {
+            router.push('/rfp-list')
+          }, 2000)
+          return
+        }
+        
+        // If auto-approve is enabled but not yet approved, auto-approve it now
+        if (response.data.status !== 'APPROVED' && response.data.auto_approve) {
+          console.log('🔄 Auto-approving RFP now...')
+          try {
+            // Call the approve endpoint to auto-approve
+            await axios.post(getTprmApiUrl(`v1/rfps/${rfpId}/approve/`), {}, {
+              headers: getAuthHeaders()
+            })
+            
+            // Verify it was approved
+            const verifyResponse = await axios.get(getTprmApiUrl(`v1/rfps/${rfpId}/`), {
+              headers: getAuthHeaders()
+            })
+            
+            if (verifyResponse.data.status === 'APPROVED') {
+              showSuccess('RFP Auto-Approved', 'This RFP has been automatically approved. No approval workflow is required.')
+              setTimeout(() => {
+                router.push('/rfp-list')
+              }, 2000)
+              return
+            }
+          } catch (approveError) {
+            console.error('Error auto-approving RFP:', approveError)
+            // If approve fails, still redirect with warning
+            showWarning('Auto-Approve Enabled', 'This RFP is set to auto-approve. No approval workflow is required.')
+            setTimeout(() => {
+              router.push('/rfp-list')
+            }, 2000)
+            return
+          }
+        }
+        
+        // Fallback: If auto-approve is enabled but approval failed, show message
+        showWarning('Auto-Approve Enabled', 'This RFP is set to auto-approve. No approval workflow is required.')
+        setTimeout(() => {
+          router.push('/rfp-list')
+        }, 2000)
+      } catch (error) {
+        console.error('Error checking RFP status:', error)
+        // Even if we can't check status, if auto_approve is true, redirect
+        showWarning('Auto-Approve Enabled', 'This RFP is set to auto-approve. No approval workflow is required.')
+        setTimeout(() => {
+          router.push('/rfp-list')
+        }, 2000)
+      }
+    }
+  } catch (error) {
+    console.error('Error checking auto-approve status:', error)
+  }
+}
 
 // Watch for changes to business_object_type and ensure it stays "RFP" for RFP-related workflows
 watch(() => isRfpCreation.value, (isRfpCreationWorkflow) => {

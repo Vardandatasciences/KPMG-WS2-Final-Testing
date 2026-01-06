@@ -1,0 +1,1342 @@
+/* Approval Assignment specific styles - Important declarations to override external CSS */
+
+.approval-container {
+  padding: var(--sp-6) !important;
+  max-width: 112rem !important; /* max-w-7xl */
+  margin: 0 auto !important;
+}
+
+.approval-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  margin-bottom: var(--sp-6) !important;
+}
+
+.approval-title {
+  font-size: 1.875rem !important; /* text-3xl */
+  font-weight: var(--fw-bold) !important;
+  color: var(--text) !important;
+}
+
+.approval-description {
+  color: var(--text-muted) !important;
+}
+
+.workflow-badge {
+  font-size: var(--fs-sm) !important;
+}
+
+
+/* Form Styles */
+.approval-form {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: var(--sp-6) !important;
+}
+
+.form-section {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: var(--sp-4) !important;
+}
+
+.section-title {
+  font-size: 1.125rem !important; /* text-lg */
+  font-weight: var(--fw-semibold) !important;
+  color: var(--text) !important;
+}
+
+.form-grid {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: var(--sp-4) !important;
+}
+
+.form-grid-3 {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 1rem !important;
+}
+
+@media (max-width: 768px) {
+  .form-grid-3 {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+.form-group {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: var(--sp-2) !important;
+}
+
+.form-label {
+  display: block !important;
+  font-size: var(--fs-sm) !important;
+  font-weight: var(--fw-med) !important;
+}
+
+.required-asterisk {
+  color: var(--destructive) !important;
+}
+
+.form-input {
+  width: 100% !important;
+  padding: var(--sp-2) var(--sp-3) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--r-md) !important;
+  background-color: var(--background) !important;
+  color: var(--text) !important;
+  font-size: var(--fs-sm) !important;
+  transition: border-color 0.2s ease !important;
+}
+
+.form-input:focus {
+  outline: none !important;
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 2px var(--primary/20) !important;
+}
+
+.form-select {
+  width: 100% !important;
+  padding: var(--sp-2) var(--sp-3) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--r-md) !important;
+  background-color: var(--background) !important;
+  color: var(--text) !important;
+  font-size: var(--fs-sm) !important;
+  cursor: pointer !important;
+}
+
+.form-select:disabled {
+  opacity: 0.6 !important;
+  cursor: not-allowed !important;
+  background-color: var(--muted) !important;
+}
+
+.form-textarea {
+  width: 100% !important;
+  padding: var(--sp-2) var(--sp-3) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--r-md) !important;
+  background-color: var(--background) !important;
+  color: var(--text) !important;
+  font-size: var(--fs-sm) !important;
+  resize: vertical !important;
+  min-height: 4rem !important;
+}
+
+.form-textarea:focus {
+  outline: none !important;
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 2px var(--primary/20) !important;
+}
+
+/* Action Buttons */
+.action-buttons {
+  display: flex !important;
+  gap: var(--sp-4) !important;
+  padding-top: var(--sp-4) !important;
+}
+
+/* Loading States */
+.btn:disabled {
+  opacity: 0.6 !important;
+  cursor: not-allowed !important;
+}
+
+/* Form Validation */
+.form-input:invalid,
+.form-select:invalid,
+.form-textarea:invalid {
+  border-color: var(--destructive) !important;
+}
+
+.form-input:valid,
+.form-select:valid,
+.form-textarea:valid {
+  border-color: var(--success) !important;
+}
+
+/* Icon Styles */
+.icon {
+  width: 1.25rem !important;
+  height: 1.25rem !important;
+  stroke: currentColor !important;
+  fill: none !important;
+  stroke-width: 2 !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+}
+
+.icon-sm {
+  width: 1rem !important;
+  height: 1rem !important;
+}
+
+/* Animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0 !important;
+    transform: translateY(10px) !important;
+  }
+  to {
+    opacity: 1 !important;
+    transform: translateY(0) !important;
+  }
+}
+
+/* Focus States */
+.btn:focus-visible {
+  outline: 2px solid var(--primary) !important;
+  outline-offset: 2px !important;
+}
+
+.form-input:focus-visible,
+.form-select:focus-visible,
+.form-textarea:focus-visible {
+  outline: 2px solid var(--primary) !important;
+  outline-offset: 2px !important;
+}
+
+/* Table Styles */
+.approval-table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+  font-size: var(--fs-sm) !important;
+}
+
+.approval-table th,
+.approval-table td {
+  padding: var(--sp-3) !important;
+  text-align: left !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+.approval-table th {
+  background-color: var(--muted) !important;
+  font-weight: var(--fw-med) !important;
+  color: var(--text-muted) !important;
+  font-size: var(--fs-xs) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+}
+
+.approval-table tr:hover {
+  background-color: var(--muted/50) !important;
+}
+
+.approval-table td:first-child {
+  font-weight: var(--fw-med) !important;
+}
+
+/* Status Badge Styles */
+.status-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  padding: var(--sp-1) var(--sp-2) !important;
+  border-radius: var(--r-full) !important;
+  font-size: var(--fs-xs) !important;
+  font-weight: var(--fw-med) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+}
+
+.status-assigned {
+  background-color: var(--blue-100) !important;
+  color: var(--blue-800) !important;
+}
+
+.status-in-progress {
+  background-color: var(--yellow-100) !important;
+  color: var(--yellow-800) !important;
+}
+
+.status-commented {
+  background-color: var(--purple-100) !important;
+  color: var(--purple-800) !important;
+}
+
+.status-skipped {
+  background-color: var(--gray-100) !important;
+  color: var(--gray-800) !important;
+}
+
+.status-expired {
+  background-color: var(--red-100) !important;
+  color: var(--red-800) !important;
+}
+
+.status-cancelled {
+  background-color: var(--red-100) !important;
+  color: var(--red-800) !important;
+}
+
+.status-default {
+  background-color: var(--muted) !important;
+  color: var(--text-muted) !important;
+}
+
+/* Button Size Variants */
+.btn--sm {
+  padding: var(--sp-1) var(--sp-2) !important;
+  font-size: var(--fs-xs) !important;
+}
+
+.btn--sm .icon {
+  width: 0.875rem !important;
+  height: 0.875rem !important;
+}
+
+/* Loading Animation */
+.animate-spin {
+  animation: spin 1s linear infinite !important;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg) !important;
+  }
+  to {
+    transform: rotate(360deg) !important;
+  }
+}
+
+/* Skeleton Loading Fix */
+.skeleton-loader {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%) !important;
+  background-size: 200% 100% !important;
+  animation: loading 1.5s infinite !important;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0 !important;
+  }
+  100% {
+    background-position: -200% 0 !important;
+  }
+}
+
+/* Override external CSS that might be causing skeleton issues */
+.p-6 {
+  padding: 1.5rem !important;
+}
+
+.max-w-7xl {
+  max-width: 80rem !important;
+}
+
+.mx-auto {
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+.space-y-6 > * + * {
+  margin-top: 1.5rem !important;
+}
+
+.flex {
+  display: flex !important;
+}
+
+.items-center {
+  align-items: center !important;
+}
+
+.justify-between {
+  justify-content: space-between !important;
+}
+
+.text-3xl {
+  font-size: 1.875rem !important;
+  line-height: 2.25rem !important;
+}
+
+.font-bold {
+  font-weight: 700 !important;
+}
+
+.text-foreground {
+  color: hsl(var(--foreground)) !important;
+}
+
+.text-muted-foreground {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+.badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  border-radius: 9999px !important;
+  border: 1px solid transparent !important;
+  padding: 0.25rem 0.75rem !important;
+  font-size: 0.75rem !important;
+  font-weight: 500 !important;
+  transition: colors !important;
+}
+
+.badge--outline {
+  border-color: hsl(var(--border)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+.btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 0.375rem !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  transition: colors !important;
+  border: 1px solid transparent !important;
+  padding: 0.5rem 1rem !important;
+  cursor: pointer !important;
+}
+
+.btn--primary {
+  background-color: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+}
+
+.btn--outline {
+  border-color: hsl(var(--border)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+.btn--sm {
+  padding: 0.25rem 0.5rem !important;
+  font-size: 0.75rem !important;
+}
+
+.card {
+  border-radius: 0.5rem !important;
+  border: 1px solid hsl(var(--border)) !important;
+  background-color: hsl(var(--card)) !important;
+  color: hsl(var(--card-foreground)) !important;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1) !important;
+}
+
+.card-header {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 1.5rem !important;
+  padding: 1.5rem !important;
+}
+
+.card-title {
+  font-size: 1.5rem !important;
+  font-weight: 600 !important;
+  line-height: 1 !important;
+  letter-spacing: -0.025em !important;
+}
+
+.card-content {
+  padding: 1.5rem !important;
+}
+
+.input {
+  display: flex !important;
+  height: 2.5rem !important;
+  width: 100% !important;
+  border-radius: 0.375rem !important;
+  border: 1px solid hsl(var(--border)) !important;
+  background-color: hsl(var(--background)) !important;
+  padding: 0.5rem 0.75rem !important;
+  font-size: 0.875rem !important;
+  transition: border-color 0.2s !important;
+}
+
+.input:focus {
+  outline: 2px solid transparent !important;
+  outline-offset: 2px !important;
+  border-color: hsl(var(--ring)) !important;
+}
+
+.overflow-x-auto {
+  overflow-x: auto !important;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  background-color: rgba(0, 0, 0, 0.5) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 1000 !important;
+  padding: 1rem !important;
+}
+
+.modal-content {
+  background-color: hsl(var(--card)) !important;
+  border-radius: 0.5rem !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+  max-width: 90vw !important;
+  max-height: 90vh !important;
+  width: 100% !important;
+  max-width: 1200px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  margin-left: 250px !important;
+}
+
+.modal-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 1.5rem !important;
+  border-bottom: 1px solid hsl(var(--border)) !important;
+  background-color: hsl(var(--card)) !important;
+}
+
+.modal-title {
+  font-size: 1.25rem !important;
+  font-weight: 600 !important;
+  color: hsl(var(--foreground)) !important;
+  margin: 0 !important;
+}
+
+.modal-close-btn {
+  background: none !important;
+  border: none !important;
+  color: hsl(var(--muted-foreground)) !important;
+  cursor: pointer !important;
+  padding: 0.5rem !important;
+  border-radius: 0.375rem !important;
+  transition: all 0.2s !important;
+}
+
+.modal-close-btn:hover {
+  background-color: hsl(var(--muted)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+.modal-body {
+  flex: 1 !important;
+  overflow-y: auto !important;
+  padding: 1.5rem !important;
+  max-height: calc(90vh - 120px) !important;
+}
+
+.modal-footer {
+  display: flex !important;
+  justify-content: flex-end !important;
+  padding: 1.5rem !important;
+  border-top: 1px solid hsl(var(--border)) !important;
+  background-color: hsl(var(--card)) !important;
+}
+
+/* Details Section Styles */
+.details-section {
+  margin-bottom: 2rem !important;
+}
+
+.section-title {
+  font-size: 1.125rem !important;
+  font-weight: 600 !important;
+  color: hsl(var(--foreground)) !important;
+  margin-bottom: 1rem !important;
+  padding-bottom: 0.5rem !important;
+  border-bottom: 1px solid hsl(var(--border)) !important;
+}
+
+.details-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)) !important;
+  gap: 1rem !important;
+}
+
+.detail-item {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.25rem !important;
+}
+
+.detail-item label {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+.detail-item span {
+  color: hsl(var(--foreground)) !important;
+  font-weight: 500 !important;
+}
+
+/* Evaluation Card Styles */
+.evaluation-card {
+  background-color: hsl(var(--muted) / 0.3) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.5rem !important;
+  padding: 1rem !important;
+  margin-bottom: 1rem !important;
+}
+
+.evaluation-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  margin-bottom: 1rem !important;
+}
+
+.evaluation-header h5 {
+  margin: 0 !important;
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+.evaluation-scores {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) !important;
+  gap: 0.75rem !important;
+  margin-bottom: 1rem !important;
+}
+
+.score-item {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 0.5rem !important;
+  background-color: hsl(var(--background)) !important;
+  border-radius: 0.375rem !important;
+}
+
+.score-item label {
+  font-size: 0.875rem !important;
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+.score-value {
+  font-weight: 600 !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+.evaluation-comments {
+  margin-top: 1rem !important;
+}
+
+.evaluation-comments label {
+  display: block !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  color: hsl(var(--muted-foreground)) !important;
+  margin-bottom: 0.5rem !important;
+}
+
+.comments-text {
+  background-color: hsl(var(--muted) / 0.3) !important;
+  padding: 0.75rem !important;
+  border-radius: 0.375rem !important;
+  border: 1px solid hsl(var(--border)) !important;
+  color: hsl(var(--foreground)) !important;
+  line-height: 1.5 !important;
+  margin: 0 !important;
+}
+
+/* Questionnaire Styles */
+.questionnaire-info {
+  background-color: hsl(var(--muted) / 0.3) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.5rem !important;
+  padding: 1rem !important;
+  margin-bottom: 1rem !important;
+}
+
+.responses-section {
+  margin-top: 1rem !important;
+}
+
+.responses-section h5 {
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  color: hsl(var(--foreground)) !important;
+  margin-bottom: 1rem !important;
+}
+
+.response-card {
+  background-color: hsl(var(--muted) / 0.3) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.5rem !important;
+  padding: 1rem !important;
+  margin-bottom: 1rem !important;
+}
+
+.response-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  margin-bottom: 1rem !important;
+}
+
+.response-header h6 {
+  margin: 0 !important;
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+.response-comments,
+.review-answers {
+  margin-top: 1rem !important;
+}
+
+.response-comments label,
+.review-answers label {
+  display: block !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  color: hsl(var(--muted-foreground)) !important;
+  margin-bottom: 0.5rem !important;
+}
+
+.answers-list {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.5rem !important;
+}
+
+.answer-item {
+  background-color: hsl(var(--background)) !important;
+  padding: 0.5rem !important;
+  border-radius: 0.375rem !important;
+  border: 1px solid hsl(var(--border)) !important;
+  font-size: 0.875rem !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+/* Assignment Response Styles */
+.assignment-info {
+  background-color: hsl(var(--muted) / 0.3) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.5rem !important;
+  padding: 1rem !important;
+  margin-bottom: 1rem !important;
+}
+
+.response-details {
+  margin-top: 1rem !important;
+}
+
+.response-item {
+  background-color: hsl(var(--muted) / 0.3) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.5rem !important;
+  padding: 1rem !important;
+  margin-bottom: 0.75rem !important;
+}
+
+.question-label {
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+  color: hsl(var(--muted-foreground)) !important;
+  margin-bottom: 0.5rem !important;
+}
+
+.answer-content {
+  color: hsl(var(--foreground)) !important;
+  line-height: 1.5 !important;
+}
+
+.answer-content pre {
+  background-color: hsl(var(--muted) / 0.3) !important;
+  padding: 0.75rem !important;
+  border-radius: 0.375rem !important;
+  border: 1px solid hsl(var(--border)) !important;
+  font-family: 'Courier New', monospace !important;
+  font-size: 0.875rem !important;
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+  max-height: 300px !important;
+  overflow-y: auto !important;
+}
+
+.answer-text {
+  margin-top: 1rem !important;
+}
+
+.answer-text label {
+  display: block !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  color: hsl(var(--muted-foreground)) !important;
+  margin-bottom: 0.5rem !important;
+}
+
+/* Questionnaire Question Styles */
+.questions-section {
+  margin-top: 1rem !important;
+}
+
+.questions-section h5 {
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  color: hsl(var(--foreground)) !important;
+  margin-bottom: 1rem !important;
+}
+
+.questions-list {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 1rem !important;
+}
+
+.question-card {
+  background-color: hsl(var(--muted) / 0.3) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.5rem !important;
+  padding: 1rem !important;
+}
+
+.question-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  margin-bottom: 1rem !important;
+  padding-bottom: 0.5rem !important;
+  border-bottom: 1px solid hsl(var(--border)) !important;
+}
+
+.question-header h6 {
+  margin: 0 !important;
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+.question-badges {
+  display: flex !important;
+  gap: 0.5rem !important;
+}
+
+.question-content {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 1rem !important;
+}
+
+.question-text {
+  margin-bottom: 0.75rem !important;
+}
+
+.question-text label {
+  display: block !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  color: hsl(var(--muted-foreground)) !important;
+  margin-bottom: 0.5rem !important;
+}
+
+.question-text p {
+  font-size: 0.875rem !important;
+  color: hsl(var(--foreground)) !important;
+  line-height: 1.5 !important;
+  margin: 0 !important;
+  padding: 0.75rem !important;
+  background-color: hsl(var(--background)) !important;
+  border-radius: 0.375rem !important;
+  border: 1px solid hsl(var(--border)) !important;
+}
+
+.choice-options {
+  margin-top: 0.75rem !important;
+}
+
+.choice-options label {
+  display: block !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  color: hsl(var(--muted-foreground)) !important;
+  margin-bottom: 0.5rem !important;
+}
+
+.options-grid {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.5rem !important;
+}
+
+.option-item {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 0.5rem !important;
+  background-color: hsl(var(--background)) !important;
+  padding: 0.75rem !important;
+  border-radius: 0.375rem !important;
+  border: 1px solid hsl(var(--border)) !important;
+  font-size: 0.875rem !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+.option-number {
+  font-weight: 600 !important;
+  color: hsl(var(--primary)) !important;
+  min-width: 1.5rem !important;
+}
+
+.option-text {
+  flex: 1 !important;
+  line-height: 1.4 !important;
+}
+
+.question-type {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+}
+
+.question-type label {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  color: hsl(var(--muted-foreground)) !important;
+  margin: 0 !important;
+}
+
+.type-badge {
+  background-color: hsl(var(--primary) / 0.1) !important;
+  color: hsl(var(--primary)) !important;
+  padding: 0.25rem 0.5rem !important;
+  border-radius: 0.25rem !important;
+  font-size: 0.75rem !important;
+  font-weight: 500 !important;
+}
+
+.badge--info {
+  background-color: hsl(var(--info) / 0.1) !important;
+  color: hsl(var(--info)) !important;
+  border: 1px solid hsl(var(--info) / 0.3) !important;
+}
+
+/* Plan Info Styles */
+.plan-info {
+  background-color: hsl(var(--muted) / 0.3) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.5rem !important;
+  padding: 1rem !important;
+  margin-bottom: 1rem !important;
+}
+
+.evaluations-section {
+  margin-top: 1rem !important;
+}
+
+.evaluations-section h5 {
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  color: hsl(var(--foreground)) !important;
+  margin-bottom: 1rem !important;
+}
+
+.no-evaluations {
+  text-align: center !important;
+  padding: 1rem !important;
+  color: hsl(var(--muted-foreground)) !important;
+  font-style: italic !important;
+}
+
+
+/* Assignment Response Styles */
+.responses-section {
+  margin-top: 1rem !important;
+}
+
+.responses-section h5 {
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  color: hsl(var(--foreground)) !important;
+  margin-bottom: 1rem !important;
+}
+
+.responses-list {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 1rem !important;
+}
+
+.response-card {
+  background-color: hsl(var(--muted) / 0.3) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.5rem !important;
+  padding: 1rem !important;
+}
+
+.response-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  margin-bottom: 1rem !important;
+  padding-bottom: 0.5rem !important;
+  border-bottom: 1px solid hsl(var(--border)) !important;
+}
+
+.response-header h6 {
+  margin: 0 !important;
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+.response-status {
+  background-color: hsl(var(--success) / 0.1) !important;
+  color: hsl(var(--success)) !important;
+  padding: 0.25rem 0.5rem !important;
+  border-radius: 0.25rem !important;
+  font-size: 0.75rem !important;
+  font-weight: 500 !important;
+}
+
+.response-content {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.5rem !important;
+}
+
+.response-content label {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+.response-text {
+  background-color: hsl(var(--background)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.375rem !important;
+  padding: 0.75rem !important;
+  font-size: 0.875rem !important;
+  color: hsl(var(--foreground)) !important;
+  line-height: 1.5 !important;
+  min-height: 2rem !important;
+}
+
+/* Raw Answer Text Styles */
+.raw-answers-section {
+  margin-top: 1rem !important;
+}
+
+.raw-answers-section h5 {
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  color: hsl(var(--foreground)) !important;
+  margin-bottom: 1rem !important;
+}
+
+.raw-answer-content {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.5rem !important;
+}
+
+.raw-answer-content label {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+.answer-text-box {
+  background-color: hsl(var(--background)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.375rem !important;
+  padding: 0.75rem !important;
+  font-family: 'Courier New', monospace !important;
+  font-size: 0.75rem !important;
+  color: hsl(var(--foreground)) !important;
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+  max-height: 200px !important;
+  overflow-y: auto !important;
+  line-height: 1.4 !important;
+}
+
+/* Comments Section Styles */
+.comments-section {
+  margin-top: 1rem !important;
+}
+
+/* Reviewer Comment Styles */
+.comment-content {
+  background-color: hsl(var(--muted) / 0.3) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.375rem !important;
+  padding: 0.75rem !important;
+  font-size: 0.875rem !important;
+  color: hsl(var(--foreground)) !important;
+  line-height: 1.5 !important;
+  margin-top: 0.5rem !important;
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+}
+
+.comments-section h5 {
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  color: hsl(var(--foreground)) !important;
+  margin-bottom: 1rem !important;
+}
+
+.comments-list {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 1rem !important;
+}
+
+.comment-card {
+  background-color: hsl(var(--muted) / 0.3) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.5rem !important;
+  padding: 1rem !important;
+}
+
+.comment-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  margin-bottom: 0.75rem !important;
+  padding-bottom: 0.5rem !important;
+  border-bottom: 1px solid hsl(var(--border)) !important;
+}
+
+.comment-header h6 {
+  margin: 0 !important;
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+.comment-badge {
+  background-color: hsl(var(--primary) / 0.1) !important;
+  color: hsl(var(--primary)) !important;
+  padding: 0.25rem 0.5rem !important;
+  border-radius: 0.25rem !important;
+  font-size: 0.75rem !important;
+  font-weight: 500 !important;
+}
+
+.comment-content {
+  background-color: hsl(var(--background)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.375rem !important;
+  padding: 0.75rem !important;
+  font-size: 0.875rem !important;
+  color: hsl(var(--foreground)) !important;
+  line-height: 1.5 !important;
+}
+
+/* Structured Response Styles */
+.structured-response {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 1rem !important;
+}
+
+.simple-response {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.5rem !important;
+}
+
+.response-field {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.5rem !important;
+}
+
+.response-field label {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+.field-value {
+  background-color: hsl(var(--background)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.375rem !important;
+  padding: 0.75rem !important;
+  font-size: 0.875rem !important;
+  color: hsl(var(--foreground)) !important;
+  line-height: 1.5 !important;
+  min-height: 2rem !important;
+}
+
+.raw-response {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.5rem !important;
+}
+
+.raw-response label {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+.raw-response pre {
+  background-color: hsl(var(--muted) / 0.3) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.375rem !important;
+  padding: 0.75rem !important;
+  font-family: 'Courier New', monospace !important;
+  font-size: 0.75rem !important;
+  color: hsl(var(--foreground)) !important;
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+  max-height: 300px !important;
+  overflow-y: auto !important;
+  line-height: 1.4 !important;
+}
+
+/* Status Badge Styles */
+.status-pending {
+  background-color: hsl(var(--yellow) / 0.1) !important;
+  color: hsl(var(--yellow)) !important;
+}
+
+.status-completed {
+  background-color: hsl(var(--success) / 0.1) !important;
+  color: hsl(var(--success)) !important;
+}
+
+.status-answered {
+  background-color: hsl(var(--blue) / 0.1) !important;
+  color: hsl(var(--blue)) !important;
+}
+
+.status-submitted {
+  background-color: hsl(var(--green) / 0.1) !important;
+  color: hsl(var(--green)) !important;
+}
+
+.status-unknown {
+  background-color: hsl(var(--muted) / 0.1) !important;
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+/* Documents List Styles */
+.documents-list {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.5rem !important;
+}
+
+.document-item {
+  background-color: hsl(var(--background)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.375rem !important;
+  padding: 0.5rem !important;
+  font-size: 0.875rem !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+/* Modal Footer Styles */
+.footer-actions {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  width: 100% !important;
+}
+
+.action-buttons {
+  display: flex !important;
+  gap: 0.75rem !important;
+  align-items: center !important;
+}
+
+/* Button Loading States */
+.btn--loading {
+  position: relative !important;
+  pointer-events: none !important;
+}
+
+.btn__spinner {
+  display: inline-block !important;
+  width: 1rem !important;
+  height: 1rem !important;
+  border: 2px solid transparent !important;
+  border-top: 2px solid currentColor !important;
+  border-radius: 50% !important;
+  animation: spin 1s linear infinite !important;
+  margin-right: 0.5rem !important;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg) !important; }
+  100% { transform: rotate(360deg) !important; }
+}
+
+/* Success and Danger Button Styles */
+.btn--success {
+  background-color: hsl(var(--success)) !important;
+  color: hsl(var(--success-foreground)) !important;
+  border: 1px solid hsl(var(--success)) !important;
+}
+
+.btn--success:hover:not(:disabled) {
+  background-color: hsl(var(--success) / 0.9) !important;
+}
+
+.btn--success:disabled {
+  background-color: hsl(var(--success) / 0.5) !important;
+  color: hsl(var(--success-foreground) / 0.5) !important;
+  cursor: not-allowed !important;
+}
+
+.btn--danger {
+  background-color: hsl(var(--destructive)) !important;
+  color: hsl(var(--destructive-foreground)) !important;
+  border: 1px solid hsl(var(--destructive)) !important;
+}
+
+.btn--danger:hover:not(:disabled) {
+  background-color: hsl(var(--destructive) / 0.9) !important;
+}
+
+.btn--danger:disabled {
+  background-color: hsl(var(--destructive) / 0.5) !important;
+  color: hsl(var(--destructive-foreground) / 0.5) !important;
+  cursor: not-allowed !important;
+}
+
+/* Loading and No Data States */
+.loading-container {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 2rem !important;
+}
+
+.no-details {
+  text-align: center !important;
+  padding: 2rem !important;
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .modal-content {
+    max-width: 95vw !important;
+    max-height: 95vh !important;
+    margin-left: 0 !important;
+  }
+  
+  .details-grid {
+    grid-template-columns: 1fr !important;
+  }
+  
+  .evaluation-scores {
+    grid-template-columns: 1fr !important;
+  }
+  
+  .modal-header,
+  .modal-body,
+  .modal-footer {
+    padding: 1rem !important;
+  }
+}
+

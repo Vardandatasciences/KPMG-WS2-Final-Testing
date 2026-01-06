@@ -45,17 +45,6 @@ from tprm_backend.rbac.tprm_decorators import rbac_vendor_required
 from tprm_backend.apps.vendor_core.vendor_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 
 
-# Database connection helper - Use tprm_integration database for all vendor approval operations
-def get_db_connection():
-    """
-    Get the correct database connection for tprm_integration database.
-    Returns 'tprm' if available, otherwise falls back to 'default'.
-    """
-    if 'tprm' in connections.databases:
-        return connections['tprm']
-    return connections['default']
-
-
 
 def compute_exponent_normalized_weights(raw_values, target_sum=10.0, max_iterations=40):
     """
@@ -182,7 +171,7 @@ def migrate_vendor_from_temp_to_main(temp_vendor_id, user_id=None):
 
             if temp_vendor.vendor_code:
 
-                with get_db_connection().cursor() as cursor:
+                with connections['default'].cursor() as cursor:
 
                     cursor.execute("SELECT vendor_id FROM vendors WHERE vendor_code = %s", [temp_vendor.vendor_code])
 
@@ -262,7 +251,7 @@ def migrate_vendor_from_temp_to_main(temp_vendor_id, user_id=None):
 
             # Insert into main vendors table
 
-            with get_db_connection().cursor() as cursor:
+            with connections['default'].cursor() as cursor:
 
                 # Build the INSERT query dynamically
 
@@ -344,7 +333,7 @@ def migrate_vendor_from_temp_to_main(temp_vendor_id, user_id=None):
 
                             # Insert contact
 
-                            with get_db_connection().cursor() as cursor:
+                            with connections['default'].cursor() as cursor:
 
                                 contact_columns = list(contact_data.keys())
 
@@ -432,7 +421,7 @@ def migrate_vendor_from_temp_to_main(temp_vendor_id, user_id=None):
 
                             # Insert document
 
-                            with get_db_connection().cursor() as cursor:
+                            with connections['default'].cursor() as cursor:
 
                                 doc_columns = list(document_data.keys())
 
@@ -608,7 +597,7 @@ def create_approval_version(approval_id, version_type, version_label, json_paylo
 
     try:
 
-        with get_db_connection().cursor() as cursor:
+        with connections['default'].cursor() as cursor:
 
             # Get the maximum version number to ensure proper incrementation
 
@@ -714,7 +703,7 @@ def create_approval_version(approval_id, version_type, version_label, json_paylo
 
             
             # CRITICAL: Commit the transaction to persist the version changes
-            get_db_connection().commit()
+            connections['default'].commit()
             
             print(f"✓ Version created and committed: {version_id} (v{next_version_number})")
             print(f"  - Approval ID: {approval_id}")
@@ -757,7 +746,7 @@ def check_sequential_approval_ready(approval_id, stage_order):
 
     try:
 
-        with get_db_connection().cursor() as cursor:
+        with connections['default'].cursor() as cursor:
 
             # Get workflow type
 
@@ -853,7 +842,7 @@ def get_my_approvals(request):
 
 
 
-        with get_db_connection().cursor() as cursor:
+        with connections['default'].cursor() as cursor:
 
             if include_statuses:
 
@@ -1085,7 +1074,7 @@ def get_stage_reviewers(request):
 
     try:
 
-        with get_db_connection().cursor() as cursor:
+        with connections['default'].cursor() as cursor:
 
             cursor.execute(
 
@@ -1143,7 +1132,7 @@ def get_user_assigned_stages(request, user_id):
 
     try:
 
-        with get_db_connection().cursor() as cursor:
+        with connections['default'].cursor() as cursor:
 
             cursor.execute(
 
@@ -1259,7 +1248,7 @@ def post_stage_action(request, stage_id):
 
 
 
-        with get_db_connection().cursor() as cursor:
+        with connections['default'].cursor() as cursor:
 
             # Get current stage + related info + workflow type
 
@@ -1767,7 +1756,7 @@ def post_stage_action(request, stage_id):
 
 
 
-        get_db_connection().commit()
+        connection.commit()
 
         return Response({'message': 'Action processed successfully'}, status=status.HTTP_200_OK)
 
@@ -1803,7 +1792,7 @@ def get_questionnaire_questions(request, questionnaire_id: int):
 
     try:
 
-        with get_db_connection().cursor() as cursor:
+        with connections['default'].cursor() as cursor:
 
             cursor.execute(
 
@@ -1919,7 +1908,7 @@ def get_approvals_by_requester(request):
 
 
 
-        with get_db_connection().cursor() as cursor:
+        with connections['default'].cursor() as cursor:
 
             sql = (
 
@@ -2042,99 +2031,120 @@ def get_approvals_by_requester(request):
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
 def get_users(request):
-    """Get all users for dropdown selection from tprm_integration database"""
+
+    """Get all users for dropdown selection"""
 
     try:
-        # Import RBAC model
-        from tprm_backend.rbac.models import RBACTPRM
-        
-        # Get active users from tprm_integration database using ORM
-        # Filter for active users if is_active field exists
-        users_queryset = Users.objects.using('tprm').all()
-        
-        # Try to filter by is_active if the field exists
-        try:
-            users_queryset = users_queryset.filter(is_active__in=['Y', 'y', '1', 'Yes', 'YES'])
-        except:
-            # If is_active filtering fails, continue with all users
-            pass
-        
-        users_queryset = users_queryset.order_by('user_name')
-        
-        # Get role information from rbac_tprm table
-        user_role_map = {}
-        
-        try:
-            # Query rbac_tprm to get role information
-            with get_db_connection().cursor() as cursor:
-                cursor.execute("""
-                    SELECT DISTINCT UserId, Role
-                    FROM rbac_tprm
-                    WHERE (IsActive = 'Y' OR IsActive = 'y' OR IsActive = '1' OR UPPER(IsActive) = 'Y')
-                """)
-                
-                for row in cursor.fetchall():
-                    user_id = row[0]
-                    role = row[1] if len(row) > 1 and row[1] else None
-                    
-                    if user_id and role:
-                        user_role_map[user_id] = role
-        except Exception as rbac_error:
-            print(f"[USERS_API] Warning: Could not fetch role from rbac_tprm: {str(rbac_error)}")
-            # Continue without role data
-        
-        # Build user list with proper formatting
-        users_list = []
-        for user in users_queryset:
-            user_id = user.user_id
-            username = user.user_name or ''
+
+        with connections['default'].cursor() as cursor:
+
+            cursor.execute("""
+
+                SELECT UserId, UserName, Email, CreatedAt 
+
+                FROM users 
+
+                ORDER BY UserName
+
+            """)
+
+            columns = [col[0] for col in cursor.description]
+
+            users = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
             
-            # Split username into first and last name
-            name_parts = username.split(' ', 1)
-            first_name = name_parts[0] if name_parts else username
-            last_name = name_parts[1] if len(name_parts) > 1 else ''
+
+            # Add mock data for additional fields needed by frontend
+
+            for user in users:
+
+                user['id'] = user['UserId']
+
+                user['first_name'] = user['UserName'].split(' ')[0] if ' ' in user['UserName'] else user['UserName']
+
+                user['last_name'] = user['UserName'].split(' ')[1] if ' ' in user['UserName'] else ''
+
+                user['role'] = 'Manager' if 'admin' in user['UserName'].lower() else 'Employee'
+
+                user['department'] = 'IT' if 'admin' in user['UserName'].lower() else 'Operations'
+
             
-            # Get role from rbac_tprm, fallback to parsing username
-            role = user_role_map.get(user_id)
-            if not role:
-                # Fallback: try to infer from username
-                if 'admin' in username.lower():
-                    role = 'Manager'
-                else:
-                    role = 'Employee'
+
+            return Response(users, status=status.HTTP_200_OK)
+
             
-            # Get department from user's department_id, fallback to default
-            if user.department_id:
-                department = f'Department {user.department_id}'
-            else:
-                department = 'General'
-            
-            user_data = {
-                'id': user_id,
-                'UserId': user_id,
-                'UserName': username,
-                'Email': user.email or '',
-                'first_name': first_name,
-                'last_name': last_name,
-                'role': role,
-                'department': department,
-                'CreatedAt': user.created_at.isoformat() if user.created_at else None
-            }
-            users_list.append(user_data)
-        
-        print(f"[USERS_API] Successfully fetched {len(users_list)} users from tprm_integration database")
-        return Response(users_list, status=status.HTTP_200_OK)
 
     except Exception as e:
-        print(f"[USERS_API] Error fetching users: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        
-        # Return error response instead of mock data
-        return Response({
-            'error': f'Failed to fetch users from database: {str(e)}',
-            'message': 'Please ensure the users table exists in tprm_integration database and is accessible.'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        print(f"Error fetching users: {str(e)}")
+
+        # Return mock data if database fails
+
+        mock_users = [
+
+            {
+
+                'id': 1,
+
+                'UserId': 1,
+
+                'UserName': 'John Admin',
+
+                'Email': 'john.admin@company.com',
+
+                'first_name': 'John',
+
+                'last_name': 'Admin',
+
+                'role': 'Manager',
+
+                'department': 'IT'
+
+            },
+
+            {
+
+                'id': 2,
+
+                'UserId': 2,
+
+                'UserName': 'Jane Manager',
+
+                'Email': 'jane.manager@company.com',
+
+                'first_name': 'Jane',
+
+                'last_name': 'Manager',
+
+                'role': 'Manager',
+
+                'department': 'Operations'
+
+            },
+
+            {
+
+                'id': 3,
+
+                'UserId': 3,
+
+                'UserName': 'Bob Employee',
+
+                'Email': 'bob.employee@company.com',
+
+                'first_name': 'Bob',
+
+                'last_name': 'Employee',
+
+                'role': 'Employee',
+
+                'department': 'Finance'
+
+            }
+
+        ]
+
+        return Response(mock_users, status=status.HTTP_200_OK)
 
 
 
@@ -2150,7 +2160,7 @@ def get_request_with_stages(request, approval_id: str):
 
     try:
 
-        with get_db_connection().cursor() as cursor:
+        with connections['default'].cursor() as cursor:
 
             # Get the approval request with workflow info
 
@@ -2394,7 +2404,7 @@ def requester_final_decision(request, approval_id: str):
 
 
 
-        with get_db_connection().cursor() as cursor:
+        with connections['default'].cursor() as cursor:
 
             cursor.execute("SELECT workflow_id, overall_status, request_data FROM approval_requests WHERE approval_id=%s", [approval_id])
 
@@ -2610,7 +2620,7 @@ def requester_final_decision(request, approval_id: str):
 
             
 
-            get_db_connection().commit()
+            cursor.connection.commit()
 
 
 
@@ -2648,7 +2658,7 @@ def requester_final_decision(request, approval_id: str):
 
                                 # Get all stages and calculate average scores
 
-                                with get_db_connection().cursor() as score_cursor:
+                                with connections['default'].cursor() as score_cursor:
 
                                     score_cursor.execute("""
 
@@ -3004,7 +3014,7 @@ def requester_final_decision(request, approval_id: str):
 
                         # Import and trigger the threading-based async risk generation
 
-                        from tprm_backend.risk_analysis_vendor.services import RiskAnalysisService
+                        from risk_analysis_vendor.services import RiskAnalysisService
 
                         
 
@@ -3016,6 +3026,10 @@ def requester_final_decision(request, approval_id: str):
 
                         print(f"Vendor risk generation started in background thread: {result}")
 
+                        
+                        # Initialize migration_info if it doesn't exist
+                        if 'migration_info' not in locals():
+                            migration_info = {}
                         
                         # Store the risk generation task info for status checking
                         migration_info['risk_generation'] = {
@@ -3124,7 +3138,7 @@ def admin_handle_rejection(request, approval_id):
 
 
 
-        with get_db_connection().cursor() as cursor:
+        with connections['default'].cursor() as cursor:
 
             # Get workflow details
 
@@ -3471,7 +3485,7 @@ def admin_handle_rejection(request, approval_id):
 
 
 
-        get_db_connection().commit()
+        connection.commit()
 
         return Response({'message': message}, status=status.HTTP_200_OK)
 
@@ -3503,7 +3517,7 @@ def get_request_versions(request, approval_id):
 
     try:
 
-        with get_db_connection().cursor() as cursor:
+        with connections['default'].cursor() as cursor:
 
             cursor.execute("""
 
@@ -3592,7 +3606,7 @@ def debug_version_data(request, approval_id):
     Use this to verify version creation and data integrity.
     """
     try:
-        with get_db_connection().cursor() as cursor:
+        with connections['default'].cursor() as cursor:
             # Get all versions with full details
             cursor.execute("""
                 SELECT 
@@ -3731,7 +3745,7 @@ def create_workflow(request):
 
         try:
 
-            with get_db_connection().cursor() as cursor:
+            with connections['default'].cursor() as cursor:
 
                 # Temporarily disable foreign key checks
 
@@ -3883,7 +3897,7 @@ def create_workflow(request):
 
                 cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
 
-                get_db_connection().commit()
+                connection.commit()
 
                 
 
@@ -3943,7 +3957,7 @@ def get_workflows(request):
 
     try:
 
-        with get_db_connection().cursor() as cursor:
+        with connections['default'].cursor() as cursor:
 
             cursor.execute("""
 
@@ -3993,7 +4007,7 @@ def get_workflow_stages(request, workflow_id):
 
     try:
 
-        with get_db_connection().cursor() as cursor:
+        with connections['default'].cursor() as cursor:
 
             cursor.execute("""
 
@@ -4075,7 +4089,7 @@ def create_workflow_request(request):
 
         try:
 
-            with get_db_connection().cursor() as cursor:
+            with connections['default'].cursor() as cursor:
 
                 # Temporarily disable foreign key checks
 
@@ -4231,7 +4245,7 @@ def create_workflow_request(request):
 
                 cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
 
-                get_db_connection().commit()
+                connection.commit()
 
                 
 
@@ -4337,11 +4351,7 @@ def create_comprehensive_workflow(request):
 
         try:
 
-            # Use 'tprm' database connection for tprm_integration database
-            # Try 'tprm' first, fall back to 'default' if not available
-            db_connection = 'tprm' if 'tprm' in connections.databases else 'default'
-            
-            with connections[db_connection].cursor() as cursor:
+            with connections['default'].cursor() as cursor:
 
                 # Temporarily disable foreign key checks
 
@@ -4745,7 +4755,7 @@ def create_comprehensive_workflow(request):
                                         
                                         # Use the helper function to ensure lifecycle stage exists
                                         # First commit the current transaction to avoid conflicts
-                                        connections[db_connection].commit()
+                                        connection.commit()
                                         
                                         # Ensure lifecycle stage exists (for tracking only, not for approval_stages)
                                         from django.db import transaction
@@ -4901,7 +4911,7 @@ def create_comprehensive_workflow(request):
 
                 cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
 
-                connections[db_connection].commit()
+                connection.commit()
 
                 
 
@@ -5080,7 +5090,7 @@ def get_active_questionnaires(request):
 
     try:
 
-        with get_db_connection().cursor() as cursor:
+        with connections['default'].cursor() as cursor:
 
             # First check if questionnaires table exists and has data
 
@@ -5184,7 +5194,7 @@ def add_dummy_users(request):
 
     try:
 
-        with get_db_connection().cursor() as cursor:
+        with connections['default'].cursor() as cursor:
 
             # Check if users already exist
 
@@ -5244,7 +5254,7 @@ def add_dummy_users(request):
 
             
 
-            get_db_connection().commit()
+            connection.commit()
 
             
 
@@ -5506,7 +5516,7 @@ def dashboard_stats(request):
 
         from django.db import connections
 
-        cursor = get_db_connection().cursor()
+        cursor = connections['default'].cursor()
 
         
 
@@ -5670,7 +5680,7 @@ def dashboard_stats(request):
 
         # Fallback to basic counts filtered by business_object_type = 'Vendor'
 
-        cursor = get_db_connection().cursor()
+        cursor = connections['default'].cursor()
 
         cursor.execute("""
 
@@ -5744,7 +5754,7 @@ def recent_requests(request):
 
     try:
 
-        cursor = get_db_connection().cursor()
+        cursor = connections['default'].cursor()
 
         
 
@@ -5854,7 +5864,7 @@ def user_tasks(request, user_id):
 
     try:
 
-        cursor = get_db_connection().cursor()
+        cursor = connections['default'].cursor()
 
         
 
@@ -6002,7 +6012,7 @@ def user_requests(request, user_id):
 
     try:
 
-        cursor = get_db_connection().cursor()
+        cursor = connections['default'].cursor()
 
         
 
@@ -6672,7 +6682,7 @@ def save_reviewer_scores(request):
 
         
 
-        with get_db_connection().cursor() as cursor:
+        with connections['default'].cursor() as cursor:
 
             cursor.execute("""
 
@@ -6722,7 +6732,7 @@ def save_reviewer_scores(request):
         # If we found an approval_id, attempt to detect approval_type from approval_requests.request_data
         if approval_id:
             try:
-                with get_db_connection().cursor() as cursor:
+                with connections['default'].cursor() as cursor:
                     cursor.execute(
                         """
                         SELECT request_data
@@ -6776,7 +6786,7 @@ def save_reviewer_scores(request):
 
                 # Save scores to the stage's response_data field
 
-                with get_db_connection().cursor() as cursor:
+                with connections['default'].cursor() as cursor:
 
                     # Get current response_data
 
@@ -6870,7 +6880,7 @@ def save_reviewer_scores(request):
 
                     
 
-                    get_db_connection().commit()
+                    connection.commit()
 
                     
 
@@ -6966,7 +6976,7 @@ def save_reviewer_scores(request):
 
             try:
 
-                with get_db_connection().cursor() as cursor:
+                with connections['default'].cursor() as cursor:
 
                     # Get the approval_id associated with this assignment
 
@@ -7180,7 +7190,7 @@ def save_reviewer_scores(request):
 
                         
 
-                        get_db_connection().commit()
+                        connection.commit()
 
                         
 
@@ -7258,7 +7268,7 @@ def save_stage_draft(request):
 
         
 
-        with get_db_connection().cursor() as cursor:
+        with connections['default'].cursor() as cursor:
 
             # Check if stage exists and is assigned to user
 
@@ -7412,7 +7422,7 @@ def load_stage_draft(request, stage_id):
 
         
 
-        with get_db_connection().cursor() as cursor:
+        with connections['default'].cursor() as cursor:
 
             # Get the stage with draft data
 
@@ -7508,7 +7518,7 @@ def get_parallel_approval_scoring_data(request, approval_id):
 
     try:
 
-        with get_db_connection().cursor() as cursor:
+        with connections['default'].cursor() as cursor:
 
             # Get the approval request and verify it's a parallel response approval
 
@@ -8274,7 +8284,7 @@ def save_final_assignee_scores(request):
 
             workflow_type = None
 
-            with get_db_connection().cursor() as wf_cursor:
+            with connection.cursor() as wf_cursor:
 
                 wf_cursor.execute("""
 
@@ -8308,7 +8318,7 @@ def save_final_assignee_scores(request):
 
             
 
-            with get_db_connection().cursor() as avg_cursor:
+            with connection.cursor() as avg_cursor:
 
                 # Get all approved stages for this assignment
 
@@ -8734,7 +8744,7 @@ def save_final_assignee_scores(request):
 
             try:
 
-                with get_db_connection().cursor() as cursor:
+                with connections['default'].cursor() as cursor:
 
                     # Get the approval_id associated with this assignment
 
@@ -8988,7 +8998,7 @@ def save_final_assignee_scores(request):
 
                         
 
-                        get_db_connection().commit()
+                        connection.commit()
 
                         
 
@@ -9028,7 +9038,7 @@ def save_final_assignee_scores(request):
                             
                             # Try to get actual user name from database
                             try:
-                                with get_db_connection().cursor() as user_cursor:
+                                with connections['default'].cursor() as user_cursor:
                                     user_cursor.execute("""
                                         SELECT username FROM users_user WHERE id = %s
                                     """, [assignee_id])
@@ -9159,7 +9169,7 @@ def update_question_scores_in_json(request):
 
         
 
-        with get_db_connection().cursor() as cursor:
+        with connections['default'].cursor() as cursor:
 
             # Get the approval_id associated with this assignment
 
@@ -9381,7 +9391,7 @@ def update_question_scores_in_json(request):
 
                 
 
-                get_db_connection().commit()
+                connection.commit()
 
                 
 
@@ -9770,100 +9780,55 @@ def test_lifecycle_stage_3(request, vendor_id):
 def check_risk_generation_status(request, approval_id):
     """Check the status of risk generation for a given approval ID"""
     try:
-        from tprm_backend.risk_analysis_vendor.models import Risk
-        import json
+        from risk_analysis_vendor.models import Risk
         
-        # First, get the approval request to extract vendor_id
-        with get_db_connection().cursor() as cursor:
-            cursor.execute("""
-                SELECT overall_status, request_data 
-                FROM approval_requests 
-                WHERE approval_id = %s
-            """, [approval_id])
-            
-            result = cursor.fetchone()
-            
-            if not result:
-                return Response({
-                    'status': 'not_found',
-                    'message': 'Approval request not found'
-                }, status=status.HTTP_404_NOT_FOUND)
-            
-            overall_status, request_data = result
-            
-            # Parse request_data to get vendor_id
-            vendor_id = None
-            if request_data:
-                try:
-                    if isinstance(request_data, str):
-                        request_data_obj = json.loads(request_data)
-                    else:
-                        request_data_obj = request_data
-                    
-                    # Extract vendor_id from request_data
-                    rd = request_data_obj.get('request_data', request_data_obj)
-                    vendor_id = rd.get('vendor_id')
-                    approval_type = rd.get('approval_type', '').lower()
-                    
-                    # For response_approval, check vendor_information
-                    if not vendor_id and approval_type == 'response_approval' and 'vendor_information' in rd:
-                        vendor_info = rd['vendor_information']
-                        if isinstance(vendor_info, dict):
-                            vendor_id = vendor_info.get('vendor_id') or vendor_info.get('id')
-                    
-                    # For response_approval, also check assignment_summary
-                    if not vendor_id and approval_type == 'response_approval' and 'assignment_summary' in rd:
-                        assignment_summary = rd['assignment_summary']
-                        if isinstance(assignment_summary, dict):
-                            vendor_id = assignment_summary.get('vendor_id') or assignment_summary.get('vendor_temp_id')
-                            
-                except Exception as parse_error:
-                    print(f"Error parsing request_data: {str(parse_error)}")
-            
-            # If approval is not approved yet, return pending status
-            if overall_status != 'APPROVED':
-                return Response({
-                    'status': 'pending',
-                    'message': 'Approval not yet completed'
-                }, status=status.HTTP_200_OK)
-            
-            # If we have vendor_id, check for risks
-            if vendor_id:
-                # Check if risks have been generated for this vendor
-                # Risks are stored with entity='vendor_management' and row=vendor_id
-                risks = Risk.objects.filter(
-                    entity='vendor_management',
-                    row=str(vendor_id)
-                )
+        # Check if risks have been generated for this approval
+        risks = Risk.objects.filter(
+            source_type='vendor_management',
+            source_approval_id=approval_id
+        )
+        
+        risk_count = risks.count()
+        
+        if risk_count > 0:
+            return Response({
+                'status': 'completed',
+                'risk_count': risk_count,
+                'message': f'Risk generation completed. {risk_count} risks identified.'
+            }, status=status.HTTP_200_OK)
+        else:
+            # Check if the approval exists and is approved
+            with connections['default'].cursor() as cursor:
+                cursor.execute("""
+                    SELECT overall_status, request_data 
+                    FROM approval_requests 
+                    WHERE approval_id = %s
+                """, [approval_id])
                 
-                risk_count = risks.count()
+                result = cursor.fetchone()
                 
-                if risk_count > 0:
+                if not result:
                     return Response({
-                        'status': 'completed',
-                        'risk_count': risk_count,
-                        'vendor_id': vendor_id,
-                        'message': f'Risk generation completed. {risk_count} risks identified.'
-                    }, status=status.HTTP_200_OK)
-                else:
-                    # Approval is approved but no risks found yet - generation in progress
+                        'status': 'not_found',
+                        'message': 'Approval request not found'
+                    }, status=status.HTTP_404_NOT_FOUND)
+                
+                overall_status, request_data = result
+                
+                if overall_status == 'APPROVED':
                     return Response({
                         'status': 'in_progress',
                         'risk_count': 0,
-                        'vendor_id': vendor_id,
                         'message': 'Risk generation is in progress...'
                     }, status=status.HTTP_200_OK)
-            else:
-                # Approval is approved but vendor_id not found
-                return Response({
-                    'status': 'error',
-                    'message': 'Vendor ID not found in approval request data'
-                }, status=status.HTTP_200_OK)
+                else:
+                    return Response({
+                        'status': 'pending',
+                        'message': 'Approval not yet completed'
+                    }, status=status.HTTP_200_OK)
     
     except Exception as e:
         print(f"Error checking risk generation status: {str(e)}")
-        import traceback
-        print(f"Traceback: {traceback.format_exc()}")
         return Response({
             'error': 'Failed to check risk generation status',
             'details': str(e)
@@ -9882,7 +9847,7 @@ def get_approval_version_history(request, approval_id):
     Each approval, rejection, and decision is recorded with an incremented version number.
     """
     try:
-        with get_db_connection().cursor() as cursor:
+        with connections['default'].cursor() as cursor:
             # First, verify the approval exists
             cursor.execute("""
                 SELECT ar.approval_id, ar.request_title, ar.overall_status, aw.workflow_type, ar.created_at
@@ -9967,3 +9932,5 @@ def get_approval_version_history(request, approval_id):
             'error': 'Failed to retrieve version history',
             'details': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+

@@ -36,6 +36,7 @@ urlpatterns = [
     
     # RBAC APIs
     path('api/rbac/', include('rbac.tprm_urls')),
+    path('api/tprm/rbac/', include('rbac.tprm_urls')),  # TPRM API prefix for frontend compatibility
     path('rbac/', include('rbac.tprm_urls')),  # Legacy endpoint for backward compatibility
     path('rbac/example/', include('rbac.example_urls')),
     
@@ -54,6 +55,7 @@ urlpatterns = [
     # SLA Management APIs
     path('api/slas/', include('slas.urls')),
     path('api/v1/sla-dashboard/', include('slas.urls')),
+    path('api/tprm/v1/sla-dashboard/', include('slas.urls')),  # TPRM API prefix for frontend compatibility
     
     
     # Audit Management APIs
@@ -111,6 +113,41 @@ urlpatterns = [
     path('api/approval/', include('rfp_approval.urls')),
     path('api/rfp-approval/', include('rfp_approval.urls')),  # Add this line for compatibility
     path('api/auth/', include('tprm_project.auth_urls')),
+    
+    # TPRM API prefix routes (for frontend compatibility - /api/tprm/*)
+    path('api/tprm/rfp/', include('rfp.urls')),  # Maps /api/tprm/rfp/* to rfp.urls
+    path('api/tprm/v1/', include('rfp.urls')),  # Maps /api/tprm/v1/* to rfp.urls (for frontend compatibility - /api/tprm/v1/rfps/)
+    path('api/tprm/global-search/', include('global_search.urls')),  # Maps /api/tprm/global-search/* to global_search.urls
+    path('api/tprm/vendor-core/', include('apps.vendor_core.urls')),  # Maps /api/tprm/vendor-core/* to vendor_core.urls
+    path('api/tprm/v1/vendor-core/', include('apps.vendor_core.urls')),  # Maps /api/tprm/v1/vendor-core/* to vendor_core.urls (for frontend compatibility)
+    path('api/tprm/vendor-auth/', include('apps.vendor_auth.urls')),
+    path('api/tprm/v1/vendor-auth/', include('apps.vendor_auth.urls')),  # Maps /api/tprm/v1/vendor-auth/* to vendor_auth.urls
+    path('api/tprm/vendor-risk/', include('apps.vendor_risk.urls')),
+    path('api/tprm/v1/vendor-risk/', include('apps.vendor_risk.urls')),  # Maps /api/tprm/v1/vendor-risk/* to vendor_risk.urls
+    path('api/tprm/vendor-questionnaire/', include('apps.vendor_questionnaire.urls')),
+    path('api/tprm/v1/vendor-questionnaire/', include('apps.vendor_questionnaire.urls')),  # Maps /api/tprm/v1/vendor-questionnaire/* to vendor_questionnaire.urls
+    path('api/tprm/vendor-dashboard/', include('apps.vendor_dashboard.urls')),
+    path('api/tprm/v1/vendor-dashboard/', include('apps.vendor_dashboard.urls')),  # Maps /api/tprm/v1/vendor-dashboard/* to vendor_dashboard.urls
+    path('api/tprm/vendor-lifecycle/', include('apps.vendor_lifecycle.urls')),
+    path('api/tprm/v1/vendor-lifecycle/', include('apps.vendor_lifecycle.urls')),  # Maps /api/tprm/v1/vendor-lifecycle/* to vendor_lifecycle.urls
+    path('api/tprm/vendor-approval/', include('apps.vendor_approval.urls')),
+    path('api/tprm/v1/vendor-approval/', include('apps.vendor_approval.urls')),  # Maps /api/tprm/v1/vendor-approval/* to vendor_approval.urls
+    path('api/tprm/risk-analysis-vendor/', include('risk_analysis_vendor.urls')),
+    path('api/tprm/v1/risk-analysis-vendor/', include('risk_analysis_vendor.urls')),  # Maps /api/tprm/v1/risk-analysis-vendor/* to risk_analysis_vendor.urls
+    path('api/tprm/slas/', include('slas.urls')),
+    path('api/tprm/audits/', include('audits.urls')),
+    path('api/tprm/notifications/', include('notifications.urls')),
+    path('api/tprm/quick-access/', include('quick_access.urls')),
+    path('api/tprm/compliance/', include('compliance.urls')),
+    path('api/tprm/bcpdrp/', include('bcpdrp.urls')),
+    path('api/tprm/risk-analysis/', include('risk_analysis.urls')),
+    path('api/tprm/contracts/', include('contracts.urls')),
+    path('api/tprm/audits-contract/', include('audits_contract.urls')),
+    path('api/tprm/contract-risk-analysis/', include('contract_risk_analysis.urls')),
+    path('api/tprm/rfp-approval/', include('rfp_approval.urls')),
+    
+    # Additional vendor-approval route for /api/tprm/vendor-approval/ (without /api/v1/)
+    path('api/tprm/vendor-approval/', include('apps.vendor_approval.urls')),
     
     # MPA Routes - serve HTML files for RFP
     path('rfp-dashboard/', TemplateView.as_view(template_name='rfp-dashboard.html'), name='rfp-dashboard'),

@@ -1,16 +1,7 @@
 import axios from 'axios'
+import { getTprmApiBaseUrl } from '@/utils/backendEnv'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/tprm'
-
-// Helper to get token from any of the storage keys (compatible with GRC auth)
-function getStoredToken() {
-  const keys = ['access_token', 'session_token', 'token', 'jwt_token']
-  for (const key of keys) {
-    const val = localStorage.getItem(key)
-    if (val) return val
-  }
-  return null
-}
+const API_BASE_URL = getTprmApiBaseUrl()
 
 // Create axios instance with default config
 const api = axios.create({
@@ -21,55 +12,12 @@ const api = axios.create({
   },
 })
 
-// Helper to refresh token using JWT refresh endpoint
-async function refreshTokenIfNeeded() {
-  try {
-    const refreshToken = localStorage.getItem('refresh_token')
-    if (!refreshToken) {
-      console.warn('⚠️ [contractAuditApi] No refresh token available')
-      return false
-    }
-    
-    // Construct JWT refresh URL - remove /api/tprm suffix if present, then add /api/jwt/refresh/
-    let jwtRefreshUrl = API_BASE_URL
-    if (jwtRefreshUrl.endsWith('/api/tprm')) {
-      jwtRefreshUrl = jwtRefreshUrl.replace('/api/tprm', '')
-    }
-    jwtRefreshUrl = `${jwtRefreshUrl}/api/jwt/refresh/`
-    
-    const refreshResponse = await axios.post(jwtRefreshUrl, {
-      refresh_token: refreshToken
-    })
-    
-    if (refreshResponse.data.status === 'success') {
-      const { access_token, refresh_token: newRefreshToken } = refreshResponse.data
-      localStorage.setItem('access_token', access_token)
-      if (newRefreshToken) {
-        localStorage.setItem('refresh_token', newRefreshToken)
-      }
-      console.log('✅ [contractAuditApi] Token refreshed successfully')
-      return true
-    }
-    
-    return false
-  } catch (error) {
-    // Don't log errors for refresh failures - they're expected if token is expired
-    if (error.response?.status !== 401) {
-      console.warn('⚠️ [contractAuditApi] Token refresh failed:', error.message)
-    }
-    return false
-  }
-}
-
 // Add request interceptor to inject JWT token
 api.interceptors.request.use(
   (config) => {
-    // Get token from localStorage (check multiple keys for compatibility)
-    const token = getStoredToken()
+    const token = localStorage.getItem('session_token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
-    } else {
-      console.warn('⚠️ [contractAuditApi] No token found for request:', config.url)
     }
     return config
   },
@@ -81,42 +29,12 @@ api.interceptors.request.use(
 // Add response interceptor for error handling
 api.interceptors.response.use(
   (response) => response,
-  async (error) => {
-    const originalRequest = error.config
-    
-    // CRITICAL: Don't try to refresh if the refresh endpoint itself failed
-    if (originalRequest.url && originalRequest.url.includes('/api/jwt/refresh/')) {
-      console.error('❌ [contractAuditApi] Refresh endpoint returned 401 - refresh token is invalid/expired')
-      return Promise.reject(error)
-    }
-    
-    // Handle 401 errors (token expired) - attempt token refresh
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      console.log('🔄 [contractAuditApi] 401 error detected - attempting token refresh...')
-      originalRequest._retry = true
-      
-      try {
-        // Try to refresh token using the helper function
-        // This will try local authService first, then fall back to direct JWT refresh
-        const refreshSuccess = await refreshTokenIfNeeded()
-        
-        if (refreshSuccess) {
-          console.log('✅ [contractAuditApi] Token refreshed successfully, retrying request')
-          const newToken = getStoredToken()
-          if (newToken) {
-            originalRequest.headers.Authorization = `Bearer ${newToken}`
-          }
-          return api(originalRequest)
-        }
-      } catch (refreshError) {
-        console.error('❌ [contractAuditApi] Error during token refresh:', refreshError)
-      }
-      
-      // If refresh failed, don't force logout - let the component handle the error gracefully
-      console.warn('⚠️ [contractAuditApi] Token refresh failed - request will fail')
-    } else if (error.response?.status === 401) {
-      // Already retried, don't try again
-      console.error('❌ [contractAuditApi] Token refresh already attempted, request failed')
+  (error) => {
+    if (error.response?.status === 401) {
+      // Token expired or invalid
+      localStorage.removeItem('session_token')
+      localStorage.removeItem('current_user')
+      window.location.href = '/login'
     } else if (error.response?.status === 403) {
       // Permission denied - RBAC check failed
       const errorMessage = error.response?.data?.error || error.response?.data?.message || 'You do not have permission to access this resource.'
@@ -576,6 +494,40 @@ const contractAuditApi = {
       return {
         success: false,
         error: error.response?.data?.error || 'Failed to fetch available users',
+        message: error.response?.data?.message || error.message
+      }
+    }
+  },
+
+  async uploadAuditReport(payload) {
+    try {
+      const response = await api.post('/audits-contract/contractreports/upload/', payload)
+      return {
+        success: true,
+        data: response.data
+      }
+    } catch (error) {
+      console.error('Error uploading audit report:', error)
+      return {
+        success: false,
+        error: error.response?.data?.error || 'Failed to upload audit report',
+        message: error.response?.data?.message || error.message
+      }
+    }
+  },
+
+  async uploadAuditDocument(documentData) {
+    try {
+      const response = await api.post('/audits-contract/contractdocuments/upload/', documentData)
+      return {
+        success: true,
+        data: response.data
+      }
+    } catch (error) {
+      console.error('Error uploading audit document:', error)
+      return {
+        success: false,
+        error: error.response?.data?.error || 'Failed to upload audit document',
         message: error.response?.data?.message || error.message
       }
     }

@@ -17,12 +17,18 @@
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
       <div>
         <h1 class="text-2xl lg:text-3xl font-bold tracking-tight text-foreground">{{ audit.title }}</h1>
-        <p class="text-sm lg:text-base text-muted-foreground">SLA: {{ sla?.sla_name || 'Unknown SLA' }} (Admin View)</p>
+        <p class="text-sm lg:text-base text-muted-foreground">SLA: {{ sla?.sla_name || 'Unknown SLA' }} 
+          <span v-if="isAssignedAuditor">(Auditor Access)</span>
+          <span v-else>(View Only)</span>
+        </p>
       </div>
       <div class="flex items-center gap-4">
-        <!-- Admin Badge -->
-        <Badge variant="default" class="bg-purple-600 text-white">
-          Admin Access
+        <!-- Access Badge -->
+        <Badge v-if="isAssignedAuditor" variant="default" class="bg-blue-600 text-white">
+          Auditor Access
+        </Badge>
+        <Badge v-else variant="outline" class="bg-yellow-100 text-yellow-800">
+          View Only
         </Badge>
       <StatusBadge :status="audit.status" />
     </div>
@@ -119,7 +125,7 @@
     
 
     <!-- Audit Workspace with Tabs -->
-    <Card v-if="workspaceData.length > 0" class="shadow-card">
+    <Card v-if="workspaceData.length > 0 && isAssignedAuditor" class="shadow-card">
       <CardHeader>
         <CardTitle class="flex items-center">
           <Target class="mr-2 h-5 w-5 text-primary" />
@@ -375,8 +381,24 @@
       </CardContent>
     </Card>
 
+    <!-- Access Denied Message -->
+    <Card v-if="!isAssignedAuditor" class="shadow-card border-red-200 bg-red-50">
+      <CardContent class="p-6">
+        <div class="text-center">
+          <AlertCircle class="w-12 h-12 mx-auto mb-4 text-red-500" />
+          <h3 class="text-lg font-medium mb-2 text-red-800">Access Denied</h3>
+          <p class="text-muted-foreground mb-4">
+            You are not the assigned auditor for this audit. Only the assigned auditor can perform audit actions.
+          </p>
+          <Button @click="navigateToMyAudits" variant="outline">
+            Back to My Audits
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+
     <!-- Actions -->
-    <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
+    <div v-else class="flex flex-col sm:flex-row justify-between items-center gap-4">
       <Button variant="outline" @click="navigateToMyAudits" class="w-full sm:w-auto">
         Back to My Audits
       </Button>
@@ -394,7 +416,7 @@
           </Button>
         </template>
         
-        <!-- Admin Actions - Can perform all operations -->
+        <!-- Auditor Actions - Can perform all operations -->
         <template v-else-if="audit.status === 'in_progress'">
           <Button
             variant="outline"
@@ -436,36 +458,7 @@
           </Button>
         </template>
         
-        <!-- Admin Review Actions (when status is under_review) -->
-        <template v-else-if="audit.status === 'under_review'">
-          <Button
-            @click="handleApprove"
-            :disabled="isLoading"
-            class="bg-gradient-to-r from-green-600 to-green-700 hover:shadow-hover transition-all w-full sm:w-auto"
-          >
-            <CheckCircle class="mr-2 h-4 w-4" />
-            Approve Audit
-          </Button>
-          <Button
-            variant="destructive"
-            @click="handleReject"
-            :disabled="isLoading"
-            class="w-full sm:w-auto"
-          >
-            <X class="mr-2 h-4 w-4" />
-            Reject Audit
-          </Button>
-          <Button
-            variant="outline"
-            @click="() => router.push(`/audit/${audit.audit_id}/review`)"
-            class="w-full sm:w-auto"
-          >
-            <FileText class="mr-2 h-4 w-4" />
-            Go to Review Page
-          </Button>
-        </template>
-        
-        <!-- Admin View Actions (when completed) -->
+        <!-- View Only Actions (when status is under_review or completed) -->
         <template v-else>
           <Button
             variant="outline"
@@ -498,6 +491,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useStore } from 'vuex'
 import { 
   FileText, 
   Save, 
@@ -514,8 +508,7 @@ import {
   Play,
   Paperclip,
   Download,
-  Loader2,
-  Trash2
+  Loader2
 } from 'lucide-vue-next'
 import apiService from '@/services/api.js'
 import Card from '@/components/ui/card.vue'
@@ -537,7 +530,18 @@ import loggingService from '@/services/loggingService'
 
 const route = useRoute()
 const router = useRouter()
+const store = useStore()
 const { showSuccess, showError, showWarning, showInfo } = useNotifications()
+
+// Get current user from store
+const currentUser = computed(() => store.state.auth.currentUser)
+
+// Check if current user is the assigned auditor
+const isAssignedAuditor = computed(() => {
+  if (!currentUser.value || !audit.value) return false
+  const userId = currentUser.value.id || currentUser.value.user_id || currentUser.value.userid
+  return userId && userId === audit.value.auditor_id
+})
 
 const evidenceStorageKey = 'auditEvidenceDocuments'
 const evidenceBroadcastEvent = 'audit-evidence-updated'
@@ -659,8 +663,10 @@ const persistEvidenceState = () => {
   window.dispatchEvent(new CustomEvent(evidenceBroadcastEvent, { detail: { auditId: audit.value.audit_id } }))
 }
 
-// Admin mode - no user restrictions
-const isAdmin = ref(true) // Always true for admin interface
+// Check if user has access to perform audit actions
+const canPerformAudit = computed(() => {
+  return isAssignedAuditor.value && audit.value?.status !== 'completed'
+})
 
 // Parse extended information JSON for reviewer actions
 const parsedExtendedInfo = computed(() => {

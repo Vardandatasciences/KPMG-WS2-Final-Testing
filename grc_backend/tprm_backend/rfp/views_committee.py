@@ -10,12 +10,12 @@ from django.utils import timezone
 from decimal import Decimal
 import json
 from .models import RFP, RFPCommittee, RFPFinalEvaluation, RFPResponse
-from .rfp_authentication import UnifiedJWTAuthentication, SimpleAuthenticatedPermission
+from .rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
 def create_committee(request, rfp_id):
@@ -96,7 +96,7 @@ def create_committee(request, rfp_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_committee(request, rfp_id):
@@ -130,7 +130,7 @@ def get_committee(request, rfp_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('evaluate_rfp')
 def save_final_evaluation(request, rfp_id):
@@ -227,7 +227,7 @@ def save_final_evaluation(request, rfp_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_final_evaluations(request, rfp_id):
@@ -266,7 +266,7 @@ def get_final_evaluations(request, rfp_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_consensus_ranking(request, rfp_id):
@@ -339,7 +339,7 @@ def get_consensus_ranking(request, rfp_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('approve_rfp')
 def declare_award(request, rfp_id):

@@ -12,9 +12,6 @@ from django.conf import settings
 import logging
 import jwt
 
-# Use Unified JWT Authentication from GRC
-from grc.jwt_auth import UnifiedJWTAuthentication
-
 from tprm_backend.contracts.models import ContractApproval, VendorContract, ContractTerm, ContractClause
 from tprm_backend.contracts.contractapproval.serializers import (
     ContractApprovalAssignmentSerializer,
@@ -45,13 +42,24 @@ class JWTAuthentication(BaseAuthentication):
             
             if user_id:
                 try:
-                    from tprm_backend.mfa_auth.models import User
+                    from mfa_auth.models import User
                     user = User.objects.get(userid=user_id)
                     # Add is_authenticated attribute for DRF compatibility
                     user.is_authenticated = True
                     return (user, token)
-                except (User.DoesNotExist, ImportError):
-                    # If User model doesn't exist or user not found, create a mock user
+                except ImportError:
+                    # If User model import fails, create a mock user
+                    logger.warning(f"User model import failed, creating mock user for user_id: {user_id}")
+                    class MockUser:
+                        def __init__(self, user_id):
+                            self.userid = user_id
+                            self.username = f"user_{user_id}"
+                            self.is_authenticated = True
+                    
+                    return (MockUser(user_id), token)
+                except Exception as e:
+                    # If User model doesn't exist or other error, create a mock user
+                    logger.warning(f"User {user_id} not found or error: {e}, creating mock user")
                     class MockUser:
                         def __init__(self, user_id):
                             self.userid = user_id
@@ -92,9 +100,9 @@ def health_check(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
-@rbac_contract_required('ListContracts')
+@rbac_contract_required('approve')
 def approval_list(request):
     """
     List contract approvals with filtering and pagination.
@@ -213,6 +221,7 @@ def approval_list(request):
 @api_view(['GET'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
+@rbac_contract_required('approve')
 def approval_detail(request, pk):
     """
     Get details of a specific contract approval
@@ -236,6 +245,7 @@ def approval_detail(request, pk):
 @api_view(['POST'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
+@rbac_contract_required('approve')
 def approval_create(request):
     """
     Create a new contract approval
@@ -255,7 +265,7 @@ def approval_create(request):
             data['assigned_date'] = timezone.now()
         
         # Auto-populate assigner_name and assignee_name from user IDs
-        from tprm_backend.mfa_auth.models import User
+        from mfa_auth.models import User
         
         if data.get('assigner_id') and not data.get('assigner_name'):
             try:
@@ -279,7 +289,7 @@ def approval_create(request):
             # Update contract status to UNDER_REVIEW if it's a contract creation approval
             if approval.object_type == 'CONTRACT_CREATION' and approval.object_id:
                 try:
-                    # VendorContract is already imported at the top of the file
+                    from tprm_backend.contracts.models import VendorContract
                     contract = VendorContract.objects.get(contract_id=approval.object_id)
                     if contract.status == 'PENDING_ASSIGNMENT':
                         contract.status = 'UNDER_REVIEW'
@@ -311,6 +321,7 @@ def approval_create(request):
 @api_view(['POST'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
+@rbac_contract_required('approve')
 def approval_bulk_create(request):
     """
     Create multiple contract approvals at once
@@ -329,7 +340,7 @@ def approval_bulk_create(request):
             for approval in approvals:
                 if approval.object_type == 'CONTRACT_CREATION' and approval.object_id:
                     try:
-                        # VendorContract is already imported at the top of the file
+                        from tprm_backend.contracts.models import VendorContract
                         contract = VendorContract.objects.get(contract_id=approval.object_id)
                         if contract.status == 'PENDING_ASSIGNMENT':
                             contract.status = 'UNDER_REVIEW'
@@ -361,6 +372,7 @@ def approval_bulk_create(request):
 @api_view(['PUT', 'PATCH'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
+@rbac_contract_required('approve')
 def approval_update(request, pk):
     """
     Update a contract approval (status, comments)
@@ -397,6 +409,7 @@ def approval_update(request, pk):
 @api_view(['DELETE'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
+@rbac_contract_required('approve')
 def approval_delete(request, pk):
     """
     Delete a contract approval
@@ -420,6 +433,7 @@ def approval_delete(request, pk):
 @api_view(['GET'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
+@rbac_contract_required('approve')
 def approval_stats(request):
     """
     Get contract approval statistics.
@@ -522,6 +536,7 @@ def approval_stats(request):
 @api_view(['GET'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
+@rbac_contract_required('approve')
 def contract_approvals_list(request, contract_id):
     """
     Get all approvals for a specific contract
@@ -563,6 +578,7 @@ def contract_approvals_list(request, contract_id):
 @api_view(['GET'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
+@rbac_contract_required('approve')
 def get_contract_approvals(request):
     """
     Get contract approvals for a specific contract by object_id
@@ -599,8 +615,9 @@ def get_contract_approvals(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
+@rbac_contract_required('approve')
 def get_assigner_approvals(request):
     """
     Get contract approvals where the current user is the assigner (for review)
@@ -645,16 +662,7 @@ def get_assigner_approvals(request):
         logger.info(f"Assigner approvals request - User: {request.user.userid if hasattr(request.user, 'userid') else 'N/A'}, assigner_id: {assigner_id}, filters: {request.GET}")
         
         # Build query for approvals where user is the assigner
-        # Try both int and string conversion to handle potential type mismatches
-        try:
-            assigner_id_int = int(assigner_id)
-            queryset = ContractApproval.objects.filter(assigner_id=assigner_id_int)
-            
-            # If no results with int, try string
-            if queryset.count() == 0:
-                queryset = ContractApproval.objects.filter(assigner_id=str(assigner_id))
-        except (ValueError, TypeError):
-            queryset = ContractApproval.objects.filter(assigner_id=assigner_id)
+        queryset = ContractApproval.objects.filter(assigner_id=assigner_id)
         
         # Apply additional filters
         if status_filter:
@@ -698,6 +706,7 @@ def get_assigner_approvals(request):
 @api_view(['POST'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
+@rbac_contract_required('approve')
 def approve_contract(request, approval_id):
     """
     Approve a contract after review
@@ -730,7 +739,7 @@ def approve_contract(request, approval_id):
         if approval.object_type == 'CONTRACT_CREATION' and approval.object_id:
             try:
                 # Update main contract status to APPROVED
-                # VendorContract, ContractTerm, and ContractClause are already imported at the top of the file
+                from tprm_backend.contracts.models import VendorContract, ContractTerm, ContractClause
                 contract = VendorContract.objects.get(contract_id=approval.object_id)
                 contract.status = 'APPROVED'
                 contract.save()
@@ -801,7 +810,7 @@ def approve_contract(request, approval_id):
                 backup_file = backup_dir / f'contracts_backup_{timestamp}.json'
                 
                 # Export contracts data
-                # VendorContract, ContractTerm, and ContractClause are already imported at the top of the file
+                from tprm_backend.contracts.models import VendorContract, ContractTerm, ContractClause
                 contracts_data = {
                     'backup_type': 'post_approval',
                     'approval_id': approval_id,
@@ -838,6 +847,7 @@ def approve_contract(request, approval_id):
 @api_view(['POST'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
+@rbac_contract_required('reject')
 def reject_contract(request, approval_id):
     """
     Reject a contract after review
@@ -872,7 +882,7 @@ def reject_contract(request, approval_id):
         # Update contract, terms, clauses, and subcontracts status to REJECTED
         if approval.object_type == 'CONTRACT_CREATION' and approval.object_id:
             try:
-                # VendorContract, ContractTerm, and ContractClause are already imported at the top of the file
+                from tprm_backend.contracts.models import VendorContract, ContractTerm, ContractClause
                 contract = VendorContract.objects.get(contract_id=approval.object_id)
                 contract.status = 'REJECTED'
                 contract.save()
@@ -939,7 +949,7 @@ def reject_contract(request, approval_id):
                 backup_file = backup_dir / f'contracts_backup_{timestamp}.json'
                 
                 # Export contracts data
-                # VendorContract, ContractTerm, and ContractClause are already imported at the top of the file
+                from tprm_backend.contracts.models import VendorContract, ContractTerm, ContractClause
                 contracts_data = {
                     'backup_type': 'post_rejection',
                     'approval_id': approval_id,
@@ -975,7 +985,7 @@ def reject_contract(request, approval_id):
 
 @api_view(['GET'])
 @authentication_classes([JWTAuthentication])
-@permission_classes([SimpleAuthenticatedPermission])
+@rbac_contract_required('approve')
 def contract_comprehensive_detail(request, contract_id):
     """Get comprehensive contract details including terms, clauses, and sub-contracts for contract approval"""
     try:

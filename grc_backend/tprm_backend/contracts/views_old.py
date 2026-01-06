@@ -39,7 +39,7 @@ import shutil
 from pathlib import Path
 
 # RBAC imports
-from tprm_backend.rbac.tprm_decorators import rbac_contract_required
+from rbac.tprm_decorators import rbac_contract_required
 
 # Import models and serializers
 from .models import Vendor, VendorContract, ContractTerm, ContractClause, VendorContact, ContractAmendment, ContractRenewal
@@ -678,8 +678,8 @@ def contract_create(request):
         # Create contract approval if contract status is UNDER_REVIEW
         if contract.status == 'UNDER_REVIEW':
             try:
-                from contracts.contractapproval.serializers import ContractApprovalCreateAssignmentSerializer
-                from contracts.models import ContractApproval
+                from tprm_backend.contracts.contractapproval.serializers import ContractApprovalCreateAssignmentSerializer
+                from tprm_backend.contracts.models import ContractApproval
                 
                 # Create approval data
                 approval_data = {

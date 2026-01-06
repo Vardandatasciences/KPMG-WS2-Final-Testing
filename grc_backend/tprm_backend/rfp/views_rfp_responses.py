@@ -12,11 +12,10 @@ from django.utils import timezone
 from django.core.mail import send_mail, EmailMessage
 from django.template.loader import render_to_string
 from django.conf import settings
-from rest_framework.decorators import api_view, authentication_classes, permission_classes, parser_classes
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.permissions import AllowAny
-from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from .models import RFP, Vendor, VendorInvitation, RFPResponse, RFPUnmatchedVendor
-from .rfp_authentication import UnifiedJWTAuthentication, SimpleAuthenticatedPermission
+from .rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required, rbac_rfp_optional
 
 # Import risk analysis service for automatic risk generation
@@ -175,25 +174,13 @@ def build_dynamic_urls(base_url, utm_params=None, vendor_data=None, rfp_id=None)
 @api_view(['POST'])
 @authentication_classes([])
 @permission_classes([AllowAny])
+@rbac_rfp_optional('create_rfp')
 def create_unmatched_vendor(request):
     """
     Create an unmatched vendor record for open RFP submissions
     """
     try:
-        # Use request.data for DRF requests, fallback to request.body for plain Django requests
-        if hasattr(request, 'data') and request.data:
-            data = request.data
-            # If data is a QueryDict, convert to dict
-            if hasattr(data, 'dict'):
-                data = data.dict()
-        else:
-            try:
-                data = json.loads(request.body)
-            except (json.JSONDecodeError, AttributeError):
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Invalid request data format'
-                }, status=400)
+        data = json.loads(request.body)
         
         # Required fields
         rfp_id = data.get('rfpId')
@@ -307,6 +294,7 @@ def create_unmatched_vendor(request):
 @api_view(['POST'])
 @authentication_classes([])
 @permission_classes([AllowAny])
+@rbac_rfp_optional('create_rfp_response')
 def create_rfp_response(request):
     """
     Create a new RFP response from vendor portal
@@ -391,6 +379,40 @@ def create_rfp_response(request):
             
             if proposal_data.get('documents'):
                 response_documents['uploadedDocuments'] = proposal_data.get('documents')
+        
+        # CRITICAL: Preserve metadata, customDynamicFields, and uploadedDocuments from response_documents
+        # These are sent directly in responseDocuments and should be preserved as-is
+        if isinstance(response_documents, dict):
+            # Preserve metadata if present
+            if 'metadata' in response_documents:
+                logger.info('[create_rfp_response] Preserving metadata from response_documents')
+            else:
+                # If metadata not in response_documents, try to get from proposal_data
+                if proposal_data and isinstance(proposal_data, dict) and proposal_data.get('metadata'):
+                    response_documents['metadata'] = proposal_data.get('metadata')
+                    logger.info('[create_rfp_response] Added metadata from proposal_data')
+            
+            # Preserve customDynamicFields if present
+            if 'customDynamicFields' in response_documents:
+                logger.info(f'[create_rfp_response] Preserving customDynamicFields from response_documents: {len(response_documents.get("customDynamicFields", []))} fields')
+            else:
+                # If customDynamicFields not in response_documents, try to get from proposal_data
+                if proposal_data and isinstance(proposal_data, dict) and proposal_data.get('customDynamicFields'):
+                    response_documents['customDynamicFields'] = proposal_data.get('customDynamicFields')
+                    logger.info(f'[create_rfp_response] Added customDynamicFields from proposal_data: {len(proposal_data.get("customDynamicFields", []))} fields')
+            
+            # Preserve uploadedDocuments if present (don't overwrite if already exists)
+            if 'uploadedDocuments' not in response_documents or not response_documents.get('uploadedDocuments'):
+                # Try to get from proposal_data if not in response_documents
+                if proposal_data and isinstance(proposal_data, dict):
+                    if proposal_data.get('documents'):
+                        response_documents['uploadedDocuments'] = proposal_data.get('documents')
+                        logger.info('[create_rfp_response] Added uploadedDocuments from proposal_data')
+                    elif proposal_data.get('uploadedDocuments'):
+                        response_documents['uploadedDocuments'] = proposal_data.get('uploadedDocuments')
+                        logger.info('[create_rfp_response] Added uploadedDocuments from proposal_data (uploadedDocuments key)')
+            else:
+                logger.info(f'[create_rfp_response] Preserving uploadedDocuments from response_documents: {len(response_documents.get("uploadedDocuments", {}))} documents')
         
         # Ensure vendor contact info is in companyInfo (merge if needed)
         if 'companyInfo' not in response_documents:
@@ -487,7 +509,7 @@ def create_rfp_response(request):
             # Get RFP
             if rfp_id:
                 # New format: use rfpId directly
-                from .models import RFP
+                from rfp.models import RFP
                 try:
                     rfp = RFP.objects.get(rfp_id=rfp_id)
                 except RFP.DoesNotExist:
@@ -521,7 +543,6 @@ def create_rfp_response(request):
                     }, status=400)
                 
                 # CRITICAL: vendor_id comes from invitation table OR from request (for open RFPs)
-                # IMPORTANT: Validate vendor_id exists in vendors table before using it
                 if invitation:
                     # Get vendor_id from invitation if it has a matched vendor
                     if invitation.vendor:
@@ -529,22 +550,14 @@ def create_rfp_response(request):
                         print(f"[CRITICAL] Using vendor_id from invitation.vendor: {vendor_id}")
                     else:
                         # For open RFPs, invitation.vendor might be NULL
-                        # Use vendor_id from request if provided, but validate it exists
+                        # Use vendor_id from request if provided (it should match the invitation)
                         if vendor_id:
-                            # CRITICAL: Validate vendor_id exists in vendors table
-                            try:
-                                vendor_check = Vendor.objects.get(vendor_id=vendor_id)
-                                print(f"[CRITICAL] Validated vendor_id {vendor_id} exists in vendors table")
-                            except Vendor.DoesNotExist:
-                                # Vendor doesn't exist - this is an unmatched vendor scenario
-                                # Set vendor_id to None and store vendor info in response_documents
-                                print(f"[WARN] vendor_id {vendor_id} does not exist in vendors table - treating as unmatched vendor")
-                                print(f"[WARN] Setting vendor_id to None for unmatched vendor submission")
-                                vendor_id = None
+                            print(f"[CRITICAL] Invitation has no matched vendor, using vendor_id from request: {vendor_id}")
                         else:
-                            # No vendor_id provided - this is fine for unmatched vendors
-                            vendor_id = None
-                            print(f"[INFO] No vendor_id provided - treating as unmatched vendor submission")
+                            return JsonResponse({
+                                'success': False,
+                                'error': 'Invitation does not have a matched vendor and no vendorId provided in request. Please provide vendorId for open RFP submissions.'
+                            }, status=400)
                 else:
                     return JsonResponse({
                         'success': False,
@@ -571,29 +584,17 @@ def create_rfp_response(request):
             # CRITICAL: Use select_for_update to prevent race conditions and duplicate entries
             existing_response = None
             if rfp:
-                # Build filter conditions - prioritize invitation_id for unmatched vendors
+                # Only check for existing responses for invited submissions
+                # Build filter conditions
                 filter_conditions = {'rfp': rfp}
                 
-                # CRITICAL: For unmatched vendors (vendor_id=None), use invitation_id to find existing response
-                # For matched vendors, use vendor_id
+                # Add vendor_id if available
+                if vendor_id:
+                    filter_conditions['vendor_id'] = vendor_id
+                
+                # Add invitation_id if we found one
                 if invitation:
                     filter_conditions['invitation_id'] = invitation.invitation_id
-                    # Also add vendor_id if it exists and is valid
-                    if vendor_id:
-                        try:
-                            vendor_check = Vendor.objects.get(vendor_id=vendor_id)
-                            filter_conditions['vendor_id'] = vendor_id
-                        except Vendor.DoesNotExist:
-                            # vendor_id doesn't exist - don't filter by it
-                            pass
-                elif vendor_id:
-                    # No invitation but vendor_id provided - validate it exists
-                    try:
-                        vendor_check = Vendor.objects.get(vendor_id=vendor_id)
-                        filter_conditions['vendor_id'] = vendor_id
-                    except Vendor.DoesNotExist:
-                        # vendor_id doesn't exist - can't filter by it
-                        print(f"[WARN] Cannot filter by vendor_id {vendor_id} - it doesn't exist")
                 
                 # CRITICAL: Use select_for_update to lock the row and prevent race conditions
                 # This ensures only one submission can create/update at a time
@@ -635,35 +636,20 @@ def create_rfp_response(request):
                     print(f"[WARN] No invitation found when updating existing response {existing_response.response_id}")
                 
                 # CRITICAL: ALWAYS set vendor_id - use invitation vendor_id if available
-                # IMPORTANT: vendor_id can be None for unmatched vendors
                 final_vendor_id = vendor_id
                 if invitation:
                     if invitation.vendor:
                         final_vendor_id = invitation.vendor.vendor_id
                         print(f"[CRITICAL] Using vendor_id from invitation.vendor: {final_vendor_id}")
                     elif hasattr(invitation, 'unmatched_vendor_id') and invitation.unmatched_vendor_id:
-                        # Validate unmatched_vendor_id exists
-                        try:
-                            vendor_check = Vendor.objects.get(vendor_id=invitation.unmatched_vendor_id)
-                            final_vendor_id = invitation.unmatched_vendor_id
-                            print(f"[CRITICAL] Using unmatched_vendor_id from invitation: {final_vendor_id}")
-                        except Vendor.DoesNotExist:
-                            final_vendor_id = None
-                            print(f"[WARN] unmatched_vendor_id {invitation.unmatched_vendor_id} does not exist - setting to None")
+                        final_vendor_id = invitation.unmatched_vendor_id
+                        print(f"[CRITICAL] Using unmatched_vendor_id from invitation: {final_vendor_id}")
                 
-                # Validate final_vendor_id exists if it's not None
                 if final_vendor_id:
-                    try:
-                        vendor_check = Vendor.objects.get(vendor_id=final_vendor_id)
-                        existing_response.vendor_id = final_vendor_id
-                        print(f"[CRITICAL] Set vendor_id={final_vendor_id} for existing response: {existing_response.response_id}")
-                    except Vendor.DoesNotExist:
-                        # Vendor doesn't exist - set to None for unmatched vendor
-                        existing_response.vendor_id = None
-                        print(f"[WARN] vendor_id {final_vendor_id} does not exist - setting to None for unmatched vendor")
+                    existing_response.vendor_id = final_vendor_id
+                    print(f"[CRITICAL] Set vendor_id={final_vendor_id} for existing response: {existing_response.response_id}")
                 else:
-                    existing_response.vendor_id = None
-                    print(f"[INFO] Setting vendor_id=None for unmatched vendor in existing response {existing_response.response_id}")
+                    print(f"[WARN] No vendor_id available when updating existing response {existing_response.response_id}")
                 
                 # Update all fields - using fields that exist in the database
                 # Note: vendor_name, contact_email, contact_phone are not in the database schema
@@ -676,37 +662,63 @@ def create_rfp_response(request):
                 logger.debug(f'[create_rfp_response] New response_documents: {response_documents}')
                 
                 # Use the complete response_documents structure from request
-                # This contains all nested data: companyInfo, financialInfo, rfpResponses, teamInfo, compliance, dynamicFields, etc.
+                # This contains all nested data: companyInfo, financialInfo, rfpResponses, teamInfo, compliance, dynamicFields, metadata, customDynamicFields, uploadedDocuments, etc.
+                # CRITICAL: Merge metadata.utmParameters with UTM params from request
+                if isinstance(response_documents, dict) and 'metadata' in response_documents:
+                    if utm_params and isinstance(response_documents['metadata'], dict):
+                        # Merge UTM parameters into metadata
+                        if 'utmParameters' not in response_documents['metadata'] or not response_documents['metadata'].get('utmParameters'):
+                            response_documents['metadata']['utmParameters'] = utm_params
+                        else:
+                            # Merge existing with new
+                            existing_utm = response_documents['metadata'].get('utmParameters', {})
+                            if isinstance(existing_utm, dict):
+                                response_documents['metadata']['utmParameters'] = {**existing_utm, **utm_params}
+                            else:
+                                response_documents['metadata']['utmParameters'] = utm_params
+                        logger.info(f'[create_rfp_response] Merged UTM parameters into metadata: {utm_params}')
+                    elif utm_params:
+                        # Create metadata if it doesn't exist
+                        if 'metadata' not in response_documents:
+                            response_documents['metadata'] = {}
+                        response_documents['metadata']['utmParameters'] = utm_params
+                        logger.info(f'[create_rfp_response] Added UTM parameters to metadata: {utm_params}')
+                
                 existing_response.response_documents = response_documents
                 
                 # Submission details
                 existing_response.submission_source = submission_source
                 existing_response.submitted_by = submitted_by
                 
+                # CRITICAL: Save vendor contact information as direct fields
+                existing_response.org = org
+                existing_response.vendor_name = vendor_name
+                existing_response.contact_email = contact_email
+                existing_response.contact_phone = contact_phone
+                
                 # Documents
-                existing_response.document_urls = document_urls
+                existing_response.document_urls = document_urls if isinstance(document_urls, dict) else {}
                 
                 # Proposal data
-                existing_response.proposal_data = proposal_data
-                existing_response.draft_data = proposal_data
+                existing_response.proposal_data = proposal_data if isinstance(proposal_data, dict) else {}
+                existing_response.draft_data = proposal_data if isinstance(proposal_data, dict) else {}
                 
                 # CRITICAL: Store UTM parameters in external_submission_data
+                # Always save UTM parameters, even if empty dict
+                existing_response.external_submission_data = {
+                        'utm_parameters': utm_params if utm_params else {},
+                        'submission_source': submission_source,
+                        'ip_address': ip_address if ip_address else None,
+                        'user_agent': user_agent if user_agent else None,
+                        'submission_timestamp': current_time.isoformat()
+                    }
                 if utm_params:
-                    existing_response.external_submission_data = {
-                        'utm_parameters': utm_params,
-                        'submission_source': submission_source,
-                        'ip_address': ip_address if ip_address else None,
-                        'user_agent': user_agent if user_agent else None,
-                        'submission_timestamp': current_time.isoformat()
-                    }
                     print(f"[CRITICAL] Stored UTM parameters in external_submission_data: {utm_params}")
-                else:
-                    existing_response.external_submission_data = {
-                        'submission_source': submission_source,
-                        'ip_address': ip_address if ip_address else None,
-                        'user_agent': user_agent if user_agent else None,
-                        'submission_timestamp': current_time.isoformat()
-                    }
+                
+                # CRITICAL: Save additional fields
+                existing_response.submitted_at = current_time
+                existing_response.ip_address = ip_address if ip_address else None
+                existing_response.user_agent = user_agent if user_agent else None
                 
                 # Financial info
                 if proposed_value is not None:
@@ -718,6 +730,7 @@ def create_rfp_response(request):
                 
                 # Evaluation
                 existing_response.evaluation_status = 'SUBMITTED'
+                existing_response.submission_status = 'SUBMITTED'  # CRITICAL: Set submission_status (required field)
                 existing_response.auto_rejected = False
                 existing_response.rejection_reason = None
                 existing_response.evaluated_by = None
@@ -750,19 +763,14 @@ def create_rfp_response(request):
                 rfp_response = existing_response
             else:
                 # CRITICAL: vendor_id comes from invitation or request
-                # For open RFPs, invitation.vendor might be NULL
-                # IMPORTANT: vendor_id can be None for unmatched vendors (stored in response_documents instead)
-                vendor_id_to_use = vendor_id  # Can be None for unmatched vendors
+                # For open RFPs, invitation.vendor might be NULL, so we use vendor_id from request
+                if not vendor_id:
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Vendor ID is required. Must be provided in request or come from invitation.'
+                    }, status=400)
                 
-                # Validate vendor_id exists if it's provided
-                if vendor_id_to_use:
-                    try:
-                        vendor_check = Vendor.objects.get(vendor_id=vendor_id_to_use)
-                        print(f"[CRITICAL] Validated vendor_id {vendor_id_to_use} exists before creating response")
-                    except Vendor.DoesNotExist:
-                        # Vendor doesn't exist - this is an unmatched vendor scenario
-                        print(f"[WARN] vendor_id {vendor_id_to_use} does not exist - setting to None for unmatched vendor")
-                        vendor_id_to_use = None
+                vendor_id_to_use = vendor_id
                 
                 # Get document info from request data
                 response_documents = data.get('responseDocuments', {})
@@ -775,23 +783,18 @@ def create_rfp_response(request):
                 # This handles race conditions and edge cases
                 # CRITICAL: Use select_for_update to prevent race conditions
                 final_check_response = None
-                # Build filter conditions - prioritize invitation_id for unmatched vendors
-                filter_conditions = {'rfp': rfp}
-                if invitation:
-                    filter_conditions['invitation_id'] = invitation.invitation_id
                 if vendor_id_to_use:
                     try:
-                        vendor_check = Vendor.objects.get(vendor_id=vendor_id_to_use)
-                        filter_conditions['vendor_id'] = vendor_id_to_use
-                    except Vendor.DoesNotExist:
-                        # vendor_id doesn't exist - don't filter by it
-                        pass
-                
-                try:
-                    final_check_response = RFPResponse.objects.select_for_update(nowait=True).filter(**filter_conditions).first()
-                except Exception:
-                    # If lock fails, try without lock (another transaction might be creating it)
-                    final_check_response = RFPResponse.objects.filter(**filter_conditions).first()
+                        final_check_response = RFPResponse.objects.select_for_update(nowait=True).filter(
+                            rfp=rfp,
+                            vendor_id=vendor_id_to_use
+                        ).first()
+                    except Exception:
+                        # If lock fails, try without lock (another transaction might be creating it)
+                        final_check_response = RFPResponse.objects.filter(
+                            rfp=rfp,
+                            vendor_id=vendor_id_to_use
+                        ).first()
                 
                 if final_check_response:
                     # Update the existing response
@@ -810,26 +813,24 @@ def create_rfp_response(request):
                             vendor_id_to_use = invitation.unmatched_vendor_id
                             print(f"[CRITICAL] Overriding vendor_id with invitation.unmatched_vendor_id: {vendor_id_to_use}")
                     
-                    # CRITICAL: vendor_id can be None for unmatched vendors
-                    # Validate vendor_id exists if it's not None
+                    # CRITICAL: vendor_id MUST come from invitation - no fallbacks
                     if vendor_id_to_use:
-                        try:
-                            vendor_check = Vendor.objects.get(vendor_id=vendor_id_to_use)
-                            final_check_response.vendor_id = vendor_id_to_use
-                            print(f"[CRITICAL] Set vendor_id={vendor_id_to_use} for final check response: {final_check_response.response_id}")
-                        except Vendor.DoesNotExist:
-                            # Vendor doesn't exist - set to None for unmatched vendor
-                            final_check_response.vendor_id = None
-                            print(f"[WARN] vendor_id {vendor_id_to_use} does not exist - setting to None for unmatched vendor")
+                        final_check_response.vendor_id = vendor_id_to_use
+                        print(f"[CRITICAL] Set vendor_id={vendor_id_to_use} for final check response: {final_check_response.response_id}")
                     else:
-                        final_check_response.vendor_id = None
-                        print(f"[INFO] Setting vendor_id=None for unmatched vendor in final check response {final_check_response.response_id}")
+                        print(f"[WARN] No vendor_id available for final check response {final_check_response.response_id}")
                     # Use complete response_documents structure
                     logger.info(f'[create_rfp_response] Updating final check response with complete response_documents')
                     logger.debug(f'[create_rfp_response] Response documents: {response_documents}')
                     final_check_response.response_documents = response_documents
                     final_check_response.submission_source = submission_source
                     final_check_response.submitted_by = vendor_name
+                    
+                    # CRITICAL: Save vendor contact information as direct fields
+                    final_check_response.org = org
+                    final_check_response.vendor_name = vendor_name
+                    final_check_response.contact_email = contact_email
+                    final_check_response.contact_phone = contact_phone
 # Merge document_urls instead of overwriting - preserve existing documents
                     existing_doc_urls = final_check_response.document_urls or {}
                     if isinstance(existing_doc_urls, str):
@@ -851,12 +852,17 @@ def create_rfp_response(request):
                         print(f"[FINAL CHECK] Setting new document_urls: {len(document_urls or {})} documents")
                    
  
-                    final_check_response.draft_data = proposal_data
+                    final_check_response.draft_data = proposal_data if isinstance(proposal_data, dict) else {}
+                    final_check_response.proposal_data = proposal_data if isinstance(proposal_data, dict) else {}
                     final_check_response.proposed_value = proposed_value
                     final_check_response.evaluation_status = 'SUBMITTED'
+                    final_check_response.submission_status = 'SUBMITTED'  # CRITICAL: Set submission_status (required field)
                     final_check_response.completion_percentage = completion_percentage
                     final_check_response.last_saved_at = current_time
                     final_check_response.submission_date = current_time
+                    final_check_response.submitted_at = current_time
+                    final_check_response.ip_address = ip_address if ip_address else None
+                    final_check_response.user_agent = user_agent if user_agent else None
                     
                     # CRITICAL: Store UTM parameters in external_submission_data
                     if utm_params:
@@ -877,7 +883,7 @@ def create_rfp_response(request):
                     # Create new response - guaranteed no duplicate
                     # CRITICAL: Determine final vendor_id and invitation_id
                     final_invitation_id = None
-                    final_vendor_id_for_create = vendor_id_to_use  # Can be None for unmatched vendors
+                    final_vendor_id_for_create = vendor_id_to_use
                     
                     if invitation:
                         final_invitation_id = invitation.invitation_id
@@ -888,69 +894,97 @@ def create_rfp_response(request):
                             final_vendor_id_for_create = invitation.vendor.vendor_id
                             print(f"[CRITICAL] Overriding vendor_id with invitation.vendor.vendor_id: {final_vendor_id_for_create}")
                         elif hasattr(invitation, 'unmatched_vendor_id') and invitation.unmatched_vendor_id:
-                            # Check if unmatched_vendor_id exists in vendors table
-                            try:
-                                vendor_check = Vendor.objects.get(vendor_id=invitation.unmatched_vendor_id)
-                                final_vendor_id_for_create = invitation.unmatched_vendor_id
-                                print(f"[CRITICAL] Using unmatched_vendor_id from invitation: {final_vendor_id_for_create}")
-                            except Vendor.DoesNotExist:
-                                # Unmatched vendor doesn't exist in vendors table
-                                final_vendor_id_for_create = None
-                                print(f"[WARN] unmatched_vendor_id {invitation.unmatched_vendor_id} does not exist - setting to None")
+                            final_vendor_id_for_create = invitation.unmatched_vendor_id
+                            print(f"[CRITICAL] Overriding vendor_id with invitation.unmatched_vendor_id: {final_vendor_id_for_create}")
                     else:
                         print(f"[WARN] Creating response WITHOUT invitation_id")
                     
-                    # CRITICAL: vendor_id can be None for unmatched vendors
-                    # All vendor information will be stored in response_documents
-                    if final_vendor_id_for_create is None:
-                        print(f"[INFO] Creating response with vendor_id=None (unmatched vendor) - vendor info stored in response_documents")
+                    # CRITICAL: vendor_id MUST come from invitation - no fallbacks
+                    if not final_vendor_id_for_create:
+                        return JsonResponse({
+                            'success': False,
+                            'error': 'Vendor ID must come from invitation. Cannot create response without valid vendor_id from invitation.'
+                        }, status=400)
                     
                     # CRITICAL: Final check right before creating to prevent duplicates
                     # This handles race conditions where multiple requests pass the initial check
                     final_duplicate_check = None
-                    # Build filter conditions - prioritize invitation_id for unmatched vendors
-                    duplicate_filter = {'rfp': rfp}
-                    if final_invitation_id:
-                        duplicate_filter['invitation_id'] = final_invitation_id
                     if final_vendor_id_for_create:
                         try:
-                            vendor_check = Vendor.objects.get(vendor_id=final_vendor_id_for_create)
-                            duplicate_filter['vendor_id'] = final_vendor_id_for_create
-                        except Vendor.DoesNotExist:
-                            # vendor_id doesn't exist - don't filter by it
-                            pass
-                    
-                    try:
-                        final_duplicate_check = RFPResponse.objects.select_for_update(nowait=True).filter(**duplicate_filter).first()
-                    except Exception:
-                        # If lock fails, check without lock
-                        final_duplicate_check = RFPResponse.objects.filter(**duplicate_filter).first()
+                            final_duplicate_check = RFPResponse.objects.select_for_update(nowait=True).filter(
+                                rfp=rfp,
+                                vendor_id=final_vendor_id_for_create
+                            ).first()
+                        except Exception:
+                            # If lock fails, check without lock
+                            final_duplicate_check = RFPResponse.objects.filter(
+                                rfp=rfp,
+                                vendor_id=final_vendor_id_for_create
+                            ).first()
                     
                     if final_duplicate_check:
                         # Another request created it, update instead
                         print(f"[DUPLICATE PREVENTION] Found response created by another request: {final_duplicate_check.response_id}, updating instead")
+                        
+                        # CRITICAL: Merge metadata.utmParameters with UTM params from request
+                        if isinstance(response_documents, dict) and 'metadata' in response_documents:
+                            if utm_params and isinstance(response_documents['metadata'], dict):
+                                # Merge UTM parameters into metadata
+                                if 'utmParameters' not in response_documents['metadata'] or not response_documents['metadata'].get('utmParameters'):
+                                    response_documents['metadata']['utmParameters'] = utm_params
+                                else:
+                                    # Merge existing with new
+                                    existing_utm = response_documents['metadata'].get('utmParameters', {})
+                                    if isinstance(existing_utm, dict):
+                                        response_documents['metadata']['utmParameters'] = {**existing_utm, **utm_params}
+                                    else:
+                                        response_documents['metadata']['utmParameters'] = utm_params
+                                logger.info(f'[create_rfp_response] Merged UTM parameters into metadata for duplicate prevention: {utm_params}')
+                            elif utm_params:
+                                # Create metadata if it doesn't exist
+                                if 'metadata' not in response_documents:
+                                    response_documents['metadata'] = {}
+                                response_documents['metadata']['utmParameters'] = utm_params
+                                logger.info(f'[create_rfp_response] Added UTM parameters to metadata for duplicate prevention: {utm_params}')
+                        
                         final_duplicate_check.response_documents = response_documents
                         final_duplicate_check.submission_source = submission_source
                         final_duplicate_check.submitted_by = vendor_name
+                        
+                        # CRITICAL: Save vendor contact information as direct fields
+                        final_duplicate_check.org = org
+                        final_duplicate_check.vendor_name = vendor_name
+                        final_duplicate_check.contact_email = contact_email
+                        final_duplicate_check.contact_phone = contact_phone
+                        
                         final_duplicate_check.document_urls = document_urls if isinstance(document_urls, dict) else {}
-                        final_duplicate_check.draft_data = proposal_data
+                        final_duplicate_check.draft_data = proposal_data if isinstance(proposal_data, dict) else {}
+                        final_duplicate_check.proposal_data = proposal_data if isinstance(proposal_data, dict) else {}
                         final_duplicate_check.proposed_value = proposed_value
                         final_duplicate_check.evaluation_status = 'SUBMITTED'
+                        final_duplicate_check.submission_status = 'SUBMITTED'  # CRITICAL: Set submission_status (required field)
                         final_duplicate_check.completion_percentage = completion_percentage
                         final_duplicate_check.last_saved_at = current_time
                         final_duplicate_check.submission_date = current_time
+                        final_duplicate_check.submitted_at = current_time
+                        final_duplicate_check.ip_address = ip_address if ip_address else None
+                        final_duplicate_check.user_agent = user_agent if user_agent else None
                         if invitation:
                             final_duplicate_check.invitation_id = invitation.invitation_id
                         if final_vendor_id_for_create:
                             final_duplicate_check.vendor_id = final_vendor_id_for_create
-                        if utm_params:
-                            final_duplicate_check.external_submission_data = {
-                                'utm_parameters': utm_params,
+                        
+                        # CRITICAL: Store UTM parameters in external_submission_data
+                        # Always save UTM parameters, even if empty dict
+                        final_duplicate_check.external_submission_data = {
+                                'utm_parameters': utm_params if utm_params else {},
                                 'submission_source': submission_source,
                                 'ip_address': ip_address if ip_address else None,
                                 'user_agent': user_agent if user_agent else None,
                                 'submission_timestamp': current_time.isoformat()
                             }
+                        if utm_params:
+                            print(f"[CRITICAL] Stored UTM parameters in duplicate prevention response: {utm_params}")
                         final_duplicate_check.save()
                         rfp_response = final_duplicate_check
                         print(f"[DUPLICATE PREVENTION] Updated existing response instead of creating duplicate: {rfp_response.response_id}")
@@ -959,6 +993,29 @@ def create_rfp_response(request):
                         logger.info(f'[create_rfp_response] Creating new response - rfp_id: {rfp.rfp_id}, vendor_id: {final_vendor_id_for_create}, invitation_id: {final_invitation_id}')
                         logger.debug(f'[create_rfp_response] Response documents to save: {response_documents}')
                         
+                        # CRITICAL: Merge metadata.utmParameters with UTM params from request BEFORE creating response
+                        # Store complete nested structure in response_documents
+                        # This contains all form fields: companyInfo, financialInfo, rfpResponses, teamInfo, compliance, dynamicFields, metadata, customDynamicFields, uploadedDocuments, etc.
+                        if isinstance(response_documents, dict) and 'metadata' in response_documents:
+                            if utm_params and isinstance(response_documents['metadata'], dict):
+                                # Merge UTM parameters into metadata
+                                if 'utmParameters' not in response_documents['metadata'] or not response_documents['metadata'].get('utmParameters'):
+                                    response_documents['metadata']['utmParameters'] = utm_params
+                                else:
+                                    # Merge existing with new
+                                    existing_utm = response_documents['metadata'].get('utmParameters', {})
+                                    if isinstance(existing_utm, dict):
+                                        response_documents['metadata']['utmParameters'] = {**existing_utm, **utm_params}
+                                    else:
+                                        response_documents['metadata']['utmParameters'] = utm_params
+                                logger.info(f'[create_rfp_response] Merged UTM parameters into metadata for new response: {utm_params}')
+                            elif utm_params:
+                                # Create metadata if it doesn't exist
+                                if 'metadata' not in response_documents:
+                                    response_documents['metadata'] = {}
+                                response_documents['metadata']['utmParameters'] = utm_params
+                                logger.info(f'[create_rfp_response] Added UTM parameters to metadata for new response: {utm_params}')
+                        
                         rfp_response = RFPResponse.objects.create(
                         # Basic info - CRITICAL: Always set both IDs
                         invitation_id=final_invitation_id,
@@ -966,19 +1023,25 @@ def create_rfp_response(request):
                         vendor_id=final_vendor_id_for_create,
                         
                         # Store complete nested structure in response_documents
-                        # This contains all form fields: companyInfo, financialInfo, rfpResponses, teamInfo, compliance, dynamicFields, etc.
                         response_documents=response_documents,
                         
                         # Submission details
                         submission_source=submission_source,
                         submitted_by=vendor_name,
                         
+                        # CRITICAL: Save vendor contact information as direct fields
+                        org=org,
+                        vendor_name=vendor_name,
+                        contact_email=contact_email,
+                        contact_phone=contact_phone,
+                        
                         # Documents
                         document_urls=document_urls if isinstance(document_urls, dict) else {},
 
                         
-                        # Draft data
-                        draft_data=proposal_data,  # Store initial submission as draft
+                        # Draft data and proposal data
+                        draft_data=proposal_data if isinstance(proposal_data, dict) else {},
+                        proposal_data=proposal_data if isinstance(proposal_data, dict) else {},
                         
                         # CRITICAL: Store UTM parameters in external_submission_data
                         external_submission_data={
@@ -1003,6 +1066,7 @@ def create_rfp_response(request):
                         
                         # Evaluation
                         evaluation_status='SUBMITTED',
+                        submission_status='SUBMITTED',  # CRITICAL: Set submission_status (required field)
                         auto_rejected=False,
                         rejection_reason=None,
                         evaluated_by=None,
@@ -1011,7 +1075,10 @@ def create_rfp_response(request):
                         
                         # Progress
                         completion_percentage=completion_percentage,
-                        last_saved_at=current_time
+                        last_saved_at=current_time,
+                        submitted_at=current_time,
+                        ip_address=ip_address if ip_address else None,
+                        user_agent=user_agent if user_agent else None
                     )
                     print(f"Created new response {rfp_response.response_id} for RFP {rfp.rfp_id}, vendor_id={final_vendor_id_for_create}, invitation_id={final_invitation_id}")
                     
@@ -1124,6 +1191,7 @@ def create_rfp_response(request):
 @api_view(['POST'])
 @authentication_classes([])
 @permission_classes([AllowAny])
+@rbac_rfp_optional('create_rfp_response')
 def upload_response_asset(request):
     """
     Upload an attachment for the rich text RFP response editor.
@@ -1138,19 +1206,51 @@ def upload_response_asset(request):
         invitation_id = request.POST.get('invitationId')
         response_id = request.POST.get('responseId')
         uploaded_by = request.POST.get('uploadedBy')
+        
+        # Log received data for debugging
+        logger.info(f"[UPLOAD_RESPONSE_ASSET] Received upload request - file: {bool(file)}, criteriaId: {criteria_id}, rfpId: {rfp_id}, vendorId: {vendor_id}, invitationId: {invitation_id}")
+        logger.info(f"[UPLOAD_RESPONSE_ASSET] POST data keys: {list(request.POST.keys())}")
+        logger.info(f"[UPLOAD_RESPONSE_ASSET] FILES keys: {list(request.FILES.keys())}")
  
         if not file or not criteria_id or not rfp_id:
+            missing_fields = []
+            if not file:
+                missing_fields.append('file')
+            if not criteria_id:
+                missing_fields.append('criteriaId')
+            if not rfp_id:
+                missing_fields.append('rfpId')
+            
+            error_msg = f'Missing required fields: {", ".join(missing_fields)}'
+            logger.warning(f"[UPLOAD_RESPONSE_ASSET] {error_msg}")
             return JsonResponse({
                 'success': False,
-                'error': 'Missing required fields: file, criteriaId, rfpId'
+                'error': error_msg
+            }, status=400)
+        
+        # Validate rfp_id can be converted to int
+        if not rfp_id or (isinstance(rfp_id, str) and rfp_id.strip() == ''):
+            logger.warning(f"[UPLOAD_RESPONSE_ASSET] Empty rfpId provided")
+            return JsonResponse({
+                'success': False,
+                'error': 'rfpId is required and cannot be empty'
+            }, status=400)
+        
+        # Validate criteria_id is not empty
+        if not criteria_id or (isinstance(criteria_id, str) and criteria_id.strip() == ''):
+            logger.warning(f"[UPLOAD_RESPONSE_ASSET] Empty criteriaId provided")
+            return JsonResponse({
+                'success': False,
+                'error': 'criteriaId is required and cannot be empty'
             }, status=400)
  
         try:
             rfp_id_int = int(rfp_id)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as e:
+            logger.warning(f"[UPLOAD_RESPONSE_ASSET] Invalid rfpId provided: {rfp_id}, error: {str(e)}")
             return JsonResponse({
                 'success': False,
-                'error': 'Invalid rfpId provided'
+                'error': f'Invalid rfpId provided: {rfp_id}. Must be a valid integer.'
             }, status=400)
  
         vendor_id_int = None
@@ -1190,7 +1290,7 @@ def upload_response_asset(request):
             temp_file_path = temp_file.name
  
         try:
-            from .s3_service import get_s3_service
+            from rfp.s3_service import get_s3_service
             s3_service = get_s3_service()
             user_identifier = str(
                 vendor_id_int
@@ -1366,7 +1466,9 @@ def check_submission_status(request):
         
         if response:
             # Only consider it submitted if the evaluation_status is 'SUBMITTED'
+            # DRAFT status means it's a draft, not a final submission
             is_actually_submitted = response.evaluation_status == 'SUBMITTED'
+            is_draft = response.evaluation_status == 'DRAFT'
             
             return JsonResponse({
                 'success': True,
@@ -1374,7 +1476,7 @@ def check_submission_status(request):
                 'response_id': response.response_id,
                 'evaluation_status': response.evaluation_status,
                 'submitted_at': response.submission_date.isoformat() if response.submission_date else None,
-                'is_draft': not is_actually_submitted
+                'is_draft': is_draft
             })
         else:
             return JsonResponse({
@@ -1391,7 +1493,7 @@ def check_submission_status(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_invitation_details(request, invitation_id):
@@ -1434,7 +1536,7 @@ def get_invitation_details(request, invitation_id):
         existing_response = RFPResponse.objects.filter(invitation=invitation).first()
         
         # Get RFP information separately
-        from .models import RFP
+        from rfp.models import RFP
         rfp = RFP.objects.get(rfp_id=invitation.rfp_id)
         
         return JsonResponse({
@@ -1467,7 +1569,7 @@ def get_invitation_details(request, invitation_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def test_endpoint(request):
@@ -1571,7 +1673,7 @@ def get_rfp_details(request):
             }, status=400)
         
         # Get RFP details
-        from .models import RFP, RFPTypeCustomFields
+        from rfp.models import RFP, RFPTypeCustomFields
         logger.info(f'[get_rfp_details] Fetching RFP with rfp_id: {rfp_id}')
         try:
             rfp = RFP.objects.get(rfp_id=rfp_id)
@@ -1601,31 +1703,8 @@ def get_rfp_details(request):
         else:
             logger.warning(f'RFP {rfp_id} has no rfp_type set')
         
-        # Fetch evaluation criteria
-        evaluation_criteria = []
-        try:
-            from .models import RFPEvaluationCriteria
-            criteria_queryset = RFPEvaluationCriteria.objects.filter(rfp=rfp).order_by('display_order', 'criteria_id')
-            for criterion in criteria_queryset:
-                evaluation_criteria.append({
-                    'criteria_id': criterion.criteria_id,
-                    'criteria_name': criterion.criteria_name,
-                    'criteria_description': criterion.criteria_description,
-                    'weight_percentage': float(criterion.weight_percentage) if criterion.weight_percentage else 0,
-                    'evaluation_type': criterion.evaluation_type,
-                    'is_mandatory': criterion.is_mandatory,
-                    'min_score': float(criterion.min_score) if criterion.min_score else None,
-                    'max_score': float(criterion.max_score) if criterion.max_score else None,
-                    'min_word_count': criterion.min_word_count,
-                    'display_order': criterion.display_order
-                })
-            logger.info(f'[get_rfp_details] Fetched {len(evaluation_criteria)} evaluation criteria for RFP {rfp_id}')
-        except Exception as e:
-            logger.error(f'[get_rfp_details] Error fetching evaluation criteria: {str(e)}', exc_info=True)
-            evaluation_criteria = []
-        
         # Prepare response data
-        logger.info(f'[get_rfp_details] Preparing response data - response_fields present: {response_fields is not None}, evaluation_criteria count: {len(evaluation_criteria)}')
+        logger.info(f'[get_rfp_details] Preparing response data - response_fields present: {response_fields is not None}')
         response_data = {
             'success': True,
             'rfp': {
@@ -1643,8 +1722,7 @@ def get_rfp_details(request):
                 'status': rfp.status,
                 'criticality_level': getattr(rfp, 'criticality_level', None),
                 'documents': rfp.documents,  # Include documents field
-                'response_fields': response_fields,  # Include dynamic response fields
-                'evaluation_criteria': evaluation_criteria  # Include evaluation criteria
+                'response_fields': response_fields  # Include dynamic response fields
             },
             'vendor': {
                 'vendor_id': vendor_id,
@@ -1699,7 +1777,7 @@ def get_open_rfp_details(request, rfp_number):
     """
     logger.info(f'[get_open_rfp_details] Request received - rfp_number: {rfp_number}, Method: {request.method}, Path: {request.path}')
     try:
-        from .models import RFPTypeCustomFields
+        from rfp.models import RFPTypeCustomFields
         logger.info(f'[get_open_rfp_details] Fetching RFP with rfp_number: {rfp_number}')
         rfp = get_object_or_404(RFP, rfp_number=rfp_number)
         logger.info(f'[get_open_rfp_details] RFP found - rfp_id: {rfp.rfp_id}, rfp_number: {rfp.rfp_number}, rfp_title: {rfp.rfp_title}, rfp_type: {rfp.rfp_type}, status: {rfp.status}')
@@ -1749,30 +1827,7 @@ def get_open_rfp_details(request, rfp_number):
         else:
             logger.warning(f'[get_open_rfp_details] RFP {rfp.rfp_number} has no rfp_type set (rfp_type is None or empty)')
         
-        # Fetch evaluation criteria
-        evaluation_criteria = []
-        try:
-            from .models import RFPEvaluationCriteria
-            criteria_queryset = RFPEvaluationCriteria.objects.filter(rfp=rfp).order_by('display_order', 'criteria_id')
-            for criterion in criteria_queryset:
-                evaluation_criteria.append({
-                    'criteria_id': criterion.criteria_id,
-                    'criteria_name': criterion.criteria_name,
-                    'criteria_description': criterion.criteria_description,
-                    'weight_percentage': float(criterion.weight_percentage) if criterion.weight_percentage else 0,
-                    'evaluation_type': criterion.evaluation_type,
-                    'is_mandatory': criterion.is_mandatory,
-                    'min_score': float(criterion.min_score) if criterion.min_score else None,
-                    'max_score': float(criterion.max_score) if criterion.max_score else None,
-                    'min_word_count': criterion.min_word_count,
-                    'display_order': criterion.display_order
-                })
-            logger.info(f'[get_open_rfp_details] Fetched {len(evaluation_criteria)} evaluation criteria for RFP {rfp.rfp_number}')
-        except Exception as e:
-            logger.error(f'[get_open_rfp_details] Error fetching evaluation criteria: {str(e)}', exc_info=True)
-            evaluation_criteria = []
-        
-        logger.info(f'[get_open_rfp_details] Preparing response - response_fields present: {response_fields is not None}, evaluation_criteria count: {len(evaluation_criteria)}')
+        logger.info(f'[get_open_rfp_details] Preparing response - response_fields present: {response_fields is not None}')
         response_data = {
             'success': True,
             'rfp': {
@@ -1788,8 +1843,7 @@ def get_open_rfp_details(request, rfp_number):
                 'budget_range_max': float(rfp.budget_range_max) if rfp.budget_range_max else None,
                 'status': rfp.status,
                 'documents': rfp.documents,  # Include documents for open RFP
-                'response_fields': response_fields,  # Include dynamic response fields
-                'evaluation_criteria': evaluation_criteria  # Include evaluation criteria
+                'response_fields': response_fields  # Include dynamic response fields
             }
         }
         logger.debug(f'[get_open_rfp_details] Response data - rfp.response_fields type: {type(response_fields)}, is None: {response_fields is None}')
@@ -1816,7 +1870,7 @@ def get_open_rfp_by_id(request, rfp_id):
     """
     logger.info(f'[get_open_rfp_by_id] Request received - rfp_id: {rfp_id}, Method: {request.method}, Path: {request.path}')
     try:
-        from .models import RFPTypeCustomFields
+        from rfp.models import RFPTypeCustomFields
         logger.info(f'[get_open_rfp_by_id] Fetching RFP with rfp_id: {rfp_id}')
         rfp = get_object_or_404(RFP, rfp_id=rfp_id)
         logger.info(f'[get_open_rfp_by_id] RFP found - rfp_id: {rfp.rfp_id}, rfp_number: {rfp.rfp_number}, rfp_title: {rfp.rfp_title}, rfp_type: {rfp.rfp_type}, status: {rfp.status}')
@@ -1867,30 +1921,7 @@ def get_open_rfp_by_id(request, rfp_id):
         else:
             logger.warning(f'[get_open_rfp_by_id] RFP {rfp_id} has no rfp_type set (rfp_type is None or empty)')
         
-        # Fetch evaluation criteria
-        evaluation_criteria = []
-        try:
-            from .models import RFPEvaluationCriteria
-            criteria_queryset = RFPEvaluationCriteria.objects.filter(rfp=rfp).order_by('display_order', 'criteria_id')
-            for criterion in criteria_queryset:
-                evaluation_criteria.append({
-                    'criteria_id': criterion.criteria_id,
-                    'criteria_name': criterion.criteria_name,
-                    'criteria_description': criterion.criteria_description,
-                    'weight_percentage': float(criterion.weight_percentage) if criterion.weight_percentage else 0,
-                    'evaluation_type': criterion.evaluation_type,
-                    'is_mandatory': criterion.is_mandatory,
-                    'min_score': float(criterion.min_score) if criterion.min_score else None,
-                    'max_score': float(criterion.max_score) if criterion.max_score else None,
-                    'min_word_count': criterion.min_word_count,
-                    'display_order': criterion.display_order
-                })
-            logger.info(f'[get_open_rfp_by_id] Fetched {len(evaluation_criteria)} evaluation criteria for RFP {rfp_id}')
-        except Exception as e:
-            logger.error(f'[get_open_rfp_by_id] Error fetching evaluation criteria: {str(e)}', exc_info=True)
-            evaluation_criteria = []
-        
-        logger.info(f'[get_open_rfp_by_id] Preparing response - response_fields present: {response_fields is not None}, evaluation_criteria count: {len(evaluation_criteria)}')
+        logger.info(f'[get_open_rfp_by_id] Preparing response - response_fields present: {response_fields is not None}')
         response_data = {
             'success': True,
             'rfp': {
@@ -1906,8 +1937,7 @@ def get_open_rfp_by_id(request, rfp_id):
                 'budget_range_max': float(rfp.budget_range_max) if rfp.budget_range_max else None,
                 'status': rfp.status,
                 'documents': rfp.documents,  # Include documents for open RFP
-                'response_fields': response_fields,  # Include dynamic response fields
-                'evaluation_criteria': evaluation_criteria  # Include evaluation criteria
+                'response_fields': response_fields  # Include dynamic response fields
             }
         }
         logger.debug(f'[get_open_rfp_by_id] Response data - rfp.response_fields type: {type(response_fields)}, is None: {response_fields is None}')
@@ -1925,7 +1955,7 @@ def get_open_rfp_by_id(request, rfp_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
 def create_open_invitation(request, rfp_number):
@@ -1990,7 +2020,7 @@ def create_open_invitation(request, rfp_number):
 # Note: Removed @rbac_rfp_optional decorator to allow fully public access for vendor portal
 def get_rfp_evaluation_criteria(request, rfp_number):
     """
-    Get evaluation criteria for an RFP by RFP number
+    Get evaluation criteria for an RFP
     Public endpoint for vendor portal - no authentication required
     """
     try:
@@ -1998,14 +2028,12 @@ def get_rfp_evaluation_criteria(request, rfp_number):
         
         criteria = []
         try:
-            from .models import RFPEvaluationCriteria
-            criteria_queryset = RFPEvaluationCriteria.objects.filter(rfp=rfp).order_by('display_order', 'criteria_id')
-            for criterion in criteria_queryset:
+            for criterion in rfp.evaluation_criteria.all():
                 criteria.append({
                     'criteria_id': criterion.criteria_id,
                     'criteria_name': criterion.criteria_name,
                     'criteria_description': criterion.criteria_description,
-                    'weight_percentage': float(criterion.weight_percentage) if criterion.weight_percentage else 0,
+                    'weight_percentage': float(criterion.weight_percentage),
                     'evaluation_type': criterion.evaluation_type,
                     'is_mandatory': criterion.is_mandatory,
                     'min_score': float(criterion.min_score) if criterion.min_score else None,
@@ -2014,7 +2042,7 @@ def get_rfp_evaluation_criteria(request, rfp_number):
                     'display_order': criterion.display_order
                 })
         except Exception as e:
-            logger.error(f"Error loading evaluation criteria: {e}", exc_info=True)
+            print(f"Error loading evaluation criteria: {e}")
             criteria = []
         
         return JsonResponse({
@@ -2025,57 +2053,6 @@ def get_rfp_evaluation_criteria(request, rfp_number):
         })
         
     except Exception as e:
-        logger.error(f'Failed to fetch evaluation criteria: {str(e)}', exc_info=True)
-        return JsonResponse({
-            'success': False,
-            'error': f'Failed to fetch evaluation criteria: {str(e)}'
-        }, status=500)
-
-
-@api_view(['GET'])
-@authentication_classes([])
-@permission_classes([AllowAny])
-@rbac_rfp_optional('view_rfp')
-def get_rfp_evaluation_criteria_by_id(request, rfp_id):
-    """
-    Get evaluation criteria for an RFP by RFP ID
-    Public endpoint for vendor portal - no authentication required
-    Alternative endpoint that accepts rfp_id instead of rfp_number
-    """
-    try:
-        rfp = get_object_or_404(RFP, rfp_id=rfp_id)
-        
-        criteria = []
-        try:
-            from .models import RFPEvaluationCriteria
-            criteria_queryset = RFPEvaluationCriteria.objects.filter(rfp=rfp).order_by('display_order', 'criteria_id')
-            for criterion in criteria_queryset:
-                criteria.append({
-                    'criteria_id': criterion.criteria_id,
-                    'criteria_name': criterion.criteria_name,
-                    'criteria_description': criterion.criteria_description,
-                    'weight_percentage': float(criterion.weight_percentage) if criterion.weight_percentage else 0,
-                    'evaluation_type': criterion.evaluation_type,
-                    'is_mandatory': criterion.is_mandatory,
-                    'min_score': float(criterion.min_score) if criterion.min_score else None,
-                    'max_score': float(criterion.max_score) if criterion.max_score else None,
-                    'min_word_count': criterion.min_word_count,
-                    'display_order': criterion.display_order
-                })
-        except Exception as e:
-            logger.error(f"Error loading evaluation criteria: {e}", exc_info=True)
-            criteria = []
-        
-        return JsonResponse({
-            'success': True,
-            'criteria': criteria,
-            'rfp_title': rfp.rfp_title,
-            'rfp_number': rfp.rfp_number,
-            'rfp_id': rfp.rfp_id
-        })
-        
-    except Exception as e:
-        logger.error(f'Failed to fetch evaluation criteria: {str(e)}', exc_info=True)
         return JsonResponse({
             'success': False,
             'error': f'Failed to fetch evaluation criteria: {str(e)}'
@@ -2085,25 +2062,13 @@ def get_rfp_evaluation_criteria_by_id(request, rfp_id):
 @api_view(['POST'])
 @authentication_classes([])
 @permission_classes([AllowAny])
+@rbac_rfp_optional('create_rfp_response')
 def save_draft_response(request):
     """
     Save or update a draft RFP response
     """
     try:
-        # Use request.data for DRF requests, fallback to request.body for plain Django requests
-        if hasattr(request, 'data') and request.data:
-            data = request.data
-            # If data is a QueryDict, convert to dict
-            if hasattr(data, 'dict'):
-                data = data.dict()
-        else:
-            try:
-                data = json.loads(request.body)
-            except (json.JSONDecodeError, AttributeError):
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Invalid request data format'
-                }, status=400)
+        data = json.loads(request.body)
         
         rfp_id = data.get('rfpId')
         vendor_id = data.get('vendorId')
@@ -2152,7 +2117,7 @@ def save_draft_response(request):
         
         with transaction.atomic():
             # Get RFP
-            from .models import RFP
+            from rfp.models import RFP
             try:
                 rfp = RFP.objects.get(rfp_id=rfp_id)
             except RFP.DoesNotExist:
@@ -2279,19 +2244,43 @@ def save_draft_response(request):
                 logger.debug(f'[save_draft_response] Complete response_documents structure: {response_documents}')
                 existing_response.response_documents = response_documents
                 
+                # CRITICAL: Set evaluation_status to DRAFT for draft saves
+                existing_response.evaluation_status = 'DRAFT'
+                # Set submitted_by for draft (vendor name or contact email)
+                if not existing_response.submitted_by:
+                    existing_response.submitted_by = vendor_name or contact_email or 'Vendor'
+                
+                # CRITICAL: Set submission_status (required field, cannot be null)
+                existing_response.submission_status = submission_status if submission_status else 'DRAFT'
+                
+                # CRITICAL: Save vendor contact information as direct fields
+                existing_response.org = org
+                existing_response.vendor_name = vendor_name
+                existing_response.contact_email = contact_email
+                existing_response.contact_phone = contact_phone
+                
+                # CRITICAL: Save proposal_data and document_urls
+                existing_response.proposal_data = proposal_data if isinstance(proposal_data, dict) else {}
+                # Note: document_urls might not be in draft save request, so preserve existing if not provided
+                
                 existing_response.completion_percentage = completion_percentage
                 existing_response.last_saved_at = timezone.now()
                 
                 # CRITICAL: Store UTM parameters in external_submission_data for drafts too
-                if utm_params:
-                    existing_response.external_submission_data = {
-                        'utm_parameters': utm_params,
+                # Always save UTM parameters, even if empty dict
+                existing_response.external_submission_data = {
+                        'utm_parameters': utm_params if utm_params else {},
                         'submission_source': 'draft',
                         'ip_address': ip_address if ip_address else None,
                         'user_agent': user_agent if user_agent else None,
                         'submission_timestamp': timezone.now().isoformat()
                     }
+                if utm_params:
                     print(f"[CRITICAL] Stored UTM parameters in draft: {utm_params}")
+                
+                # CRITICAL: Save additional fields for drafts
+                existing_response.ip_address = ip_address if ip_address else None
+                existing_response.user_agent = user_agent if user_agent else None
                 
                 # FINAL SAFETY CHECK: Ensure IDs are saved
                 if invitation and existing_response.invitation_id != invitation.invitation_id:
@@ -2399,9 +2388,26 @@ def save_draft_response(request):
                     vendor_id=final_vendor_id_draft,
                     invitation_id=final_invitation_id_draft,
                     response_documents=response_documents,
+                    evaluation_status='DRAFT',  # CRITICAL: Set status to DRAFT for new drafts
+                    submitted_by=vendor_name or contact_email or 'Vendor',  # Set submitted_by for draft
+                    
+                    # CRITICAL: Set submission_status (required field, cannot be null)
+                    submission_status=submission_status if submission_status else 'DRAFT',
+                    
+                    # CRITICAL: Save vendor contact information as direct fields
+                    org=org,
+                    vendor_name=vendor_name,
+                    contact_email=contact_email,
+                    contact_phone=contact_phone,
+                    
+                    # CRITICAL: Save proposal_data
+                    proposal_data=proposal_data if isinstance(proposal_data, dict) else {},
+                    
                     completion_percentage=completion_percentage,
                     last_saved_at=timezone.now(),
-                    external_submission_data=external_data if utm_params or ip_address or user_agent else None
+                    external_submission_data=external_data if utm_params or ip_address or user_agent else None,
+                    ip_address=ip_address if ip_address else None,
+                    user_agent=user_agent if user_agent else None
                 )
                 
                 # FINAL SAFETY CHECK: Ensure IDs are saved in draft
@@ -2445,7 +2451,7 @@ def get_draft_response(request, rfp_id):
         invitation_id = request.GET.get('invitationId')
         
         # Get RFP first
-        from .models import RFP
+        from rfp.models import RFP
         try:
             rfp = RFP.objects.get(rfp_id=rfp_id)
         except RFP.DoesNotExist:
@@ -2513,20 +2519,16 @@ def get_draft_response(request, rfp_id):
 
 
 @api_view(['POST'])
-@parser_classes([MultiPartParser, FormParser, JSONParser])
 @authentication_classes([])
 @permission_classes([AllowAny])
+@rbac_rfp_optional('create_rfp_response')
 def upload_document(request):
     """
     Upload document for RFP response to S3
-    Supports multipart/form-data for file uploads
     """
     try:
-        # Get form data - try multiple ways to access files
+        # Get form data
         file = request.FILES.get('file')
-        if not file and request.FILES:
-            # Try getting first file if 'file' key doesn't exist
-            file = list(request.FILES.values())[0] if request.FILES.values() else None
         document_type = request.POST.get('documentType')
         rfp_id = request.POST.get('rfpId')
         vendor_id = request.POST.get('vendorId')
@@ -2565,7 +2567,7 @@ def upload_document(request):
             }, status=400)
        
         # Import S3 service
-        from .s3_service import get_s3_service
+        from rfp.s3_service import get_s3_service
         import uuid
         import os
         import tempfile
@@ -2612,7 +2614,7 @@ def upload_document(request):
         document_name = request.POST.get('document_name', file.name)
        
         # Save to S3Files table for merging capability
-        from .models import S3Files
+        from rfp.models import S3Files
         import uuid
        
         # Determine file extension
@@ -2674,7 +2676,7 @@ def upload_document(request):
                     else:
                         # Create new response with document (only if RFP exists)
                         try:
-                            from .models import RFP
+                            from rfp.models import RFP
                             rfp = RFP.objects.get(rfp_id=rfp_id)
                            
                             RFPResponse.objects.create(
@@ -2692,7 +2694,8 @@ def upload_document(request):
                                         's3_file_id': s3_file.id
                                     }
                                 },
-                                evaluation_status='DRAFT'  # Changed from 'SUBMITTED' to 'DRAFT' for new responses
+                                evaluation_status='DRAFT',  # Set status to DRAFT for new responses created via document upload
+                                submitted_by='Vendor'  # Default value for draft responses created via document upload
                             )
                             print(f"[SUCCESS] Created new RFPResponse with document {document_type}")
                         except RFP.DoesNotExist:
@@ -2812,7 +2815,7 @@ def list_documents(request, rfp_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_rfp_responses(request):
@@ -2849,122 +2852,18 @@ def get_rfp_responses(request):
             try:
                 # Extract vendor information from response_documents
                 response_documents = response.response_documents or {}
-                
-                # Extract contact_email from multiple possible locations
-                contact_email = ''
-                company_info = response_documents.get('companyInfo', {})
-                if isinstance(company_info, dict):
-                    # Try companyInfo.contactEmail first
-                    contact_email = company_info.get('contactEmail', '') or company_info.get('contact_email', '') or company_info.get('email', '')
-                
-                # If not found in companyInfo, try direct fields
-                if not contact_email:
-                    contact_email = response_documents.get('contact_email', '') or response_documents.get('contactEmail', '') or response_documents.get('email', '')
-                
-                # If still not found and vendor_id exists, try to fetch from vendor_contacts table
-                if not contact_email and response.vendor_id:
-                    try:
-                        from django.db import connection
-                        with connection.cursor() as cursor:
-                            try:
-                                cursor.execute('''
-                                    SELECT email
-                                    FROM tprm_integration.vendor_contacts
-                                    WHERE vendor_id = %s 
-                                    AND (contact_type = 'PRIMARY' OR is_primary = 1 OR is_primary = '1' OR is_primary = 'Y')
-                                    AND (is_active = 1 OR is_active = '1' OR is_active = 'Y' OR is_active IS NULL)
-                                    AND email IS NOT NULL AND email != ''
-                                    ORDER BY is_primary DESC, contact_id ASC
-                                    LIMIT 1
-                                ''', [response.vendor_id])
-                                contact = cursor.fetchone()
-                                if contact and contact[0] and contact[0].strip():
-                                    contact_email = contact[0].strip()
-                                    print(f"[get_rfp_responses] Found email from vendor_contacts for vendor_id {response.vendor_id}: {contact_email}")
-                            except Exception as schema_error:
-                                # Fallback: try without schema prefix
-                                try:
-                                    cursor.execute('''
-                                        SELECT email
-                                        FROM vendor_contacts
-                                        WHERE vendor_id = %s 
-                                        AND (contact_type = 'PRIMARY' OR is_primary = 1 OR is_primary = '1')
-                                        AND (is_active = 1 OR is_active = '1' OR is_active = 'Y' OR is_active IS NULL)
-                                        AND email IS NOT NULL AND email != ''
-                                        ORDER BY is_primary DESC, contact_id ASC
-                                        LIMIT 1
-                                    ''', [response.vendor_id])
-                                    contact = cursor.fetchone()
-                                    if contact and contact[0] and contact[0].strip():
-                                        contact_email = contact[0].strip()
-                                        print(f"[get_rfp_responses] Found email from vendor_contacts (fallback) for vendor_id {response.vendor_id}: {contact_email}")
-                                except Exception as fallback_error:
-                                    logger.debug(f"Could not fetch email from vendor_contacts for vendor_id {response.vendor_id}: {str(fallback_error)}")
-                    except Exception as e:
-                        logger.debug(f"Error fetching vendor contact email for vendor_id {response.vendor_id}: {str(e)}")
-                
-                contact_phone = response_documents.get('contact_phone', '') or response_documents.get('contactPhone', '')
-                if not contact_phone and isinstance(company_info, dict):
-                    contact_phone = company_info.get('contact_phone', '') or company_info.get('contactPhone', '')
-                
-                # Extract vendor_name from multiple possible locations
-                vendor_name = ''
-                company_info = response_documents.get('companyInfo', {})
-                if isinstance(company_info, dict):
-                    # Try companyInfo.vendor_name first
-                    vendor_name = company_info.get('vendor_name', '') or company_info.get('company_name', '') or company_info.get('organization_name', '')
-                
-                # If not found in companyInfo, try direct field
-                if not vendor_name:
-                    vendor_name = response_documents.get('vendor_name', '') or response_documents.get('company_name', '') or response_documents.get('organization_name', '')
-                
-                # If still not found and vendor_id exists, try to fetch from vendors table
-                if not vendor_name and response.vendor_id:
-                    try:
-                        from .models import Vendor
-                        vendor = Vendor.objects.filter(vendor_id=response.vendor_id).first()
-                        if vendor:
-                            vendor_name = getattr(vendor, 'vendor_name', '') or getattr(vendor, 'company_name', '') or getattr(vendor, 'organization_name', '')
-                    except Exception as e:
-                        logger.debug(f"Could not fetch vendor name for vendor_id {response.vendor_id}: {str(e)}")
-                
-                # Extract organization name from multiple possible locations
-                org = ''
-                if isinstance(company_info, dict):
-                    # Try companyInfo.org first
-                    org = company_info.get('org', '') or company_info.get('organization_name', '') or company_info.get('company_name', '')
-                
-                # If not found in companyInfo, try direct field
-                if not org:
-                    org = response_documents.get('org', '') or response_documents.get('organization_name', '') or response_documents.get('company_name', '')
-                
-                # If still not found and vendor_id exists, try to fetch from vendors table
-                if not org and response.vendor_id:
-                    try:
-                        from .models import Vendor
-                        vendor = Vendor.objects.filter(vendor_id=response.vendor_id).first()
-                        if vendor:
-                            org = getattr(vendor, 'company_name', '') or getattr(vendor, 'organization_name', '')
-                    except Exception as e:
-                        logger.debug(f"Could not fetch vendor organization for vendor_id {response.vendor_id}: {str(e)}")
-                
-                # Fallback: use org for vendor_name if vendor_name is still empty
-                if not vendor_name and org:
-                    vendor_name = org
-                
-                # Fallback: use vendor_name for org if org is still empty
-                if not org and vendor_name:
-                    org = vendor_name
+                vendor_name = response_documents.get('vendor_name', '')
+                contact_email = response_documents.get('contact_email', '')
+                contact_phone = response_documents.get('contact_phone', '')
+                org = response_documents.get('org', '')
                 
                 response_data.append({
                     'response_id': response.response_id,
                     'rfp_id': response.rfp_id,
                     'vendor_id': response.vendor_id,
                     'vendor_name': vendor_name,
-                    'org': org,  # Organization name from all possible sources
+                    'org': org,  # Ensure org field is included
                     'contact_email': contact_email,
-                    'vendor_email': contact_email,  # Also include as vendor_email for compatibility
-                    'email': contact_email,  # Also include as email for compatibility
                     'contact_phone': contact_phone,
                     'proposal_data': response.response_documents,
                     'proposed_value': float(response.proposed_value) if response.proposed_value else None,
@@ -3005,7 +2904,7 @@ def get_rfp_responses(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_rfp_response_by_id(request, response_id):
@@ -3017,153 +2916,18 @@ def get_rfp_response_by_id(request, response_id):
         
         # Extract vendor information from response_documents
         response_documents = response.response_documents or {}
-        
-        # Extract contact_email from multiple possible locations
-        contact_email = ''
-        company_info = response_documents.get('companyInfo', {})
-        if isinstance(company_info, dict):
-            # Try companyInfo.contactEmail first
-            contact_email = company_info.get('contactEmail', '') or company_info.get('contact_email', '') or company_info.get('email', '')
-        
-        # If not found in companyInfo, try direct fields
-        if not contact_email:
-            contact_email = response_documents.get('contact_email', '') or response_documents.get('contactEmail', '') or response_documents.get('email', '')
-        
-        # If still not found and vendor_id exists, try to fetch from vendor_contacts table
-        if not contact_email and response.vendor_id:
-            try:
-                from django.db import connection
-                with connection.cursor() as cursor:
-                    try:
-                        cursor.execute('''
-                            SELECT email
-                            FROM tprm_integration.vendor_contacts
-                            WHERE vendor_id = %s 
-                            AND (contact_type = 'PRIMARY' OR is_primary = 1 OR is_primary = '1' OR is_primary = 'Y')
-                            AND (is_active = 1 OR is_active = '1' OR is_active = 'Y' OR is_active IS NULL)
-                            AND email IS NOT NULL AND email != ''
-                            ORDER BY is_primary DESC, contact_id ASC
-                            LIMIT 1
-                        ''', [response.vendor_id])
-                        contact = cursor.fetchone()
-                        if contact and contact[0] and contact[0].strip():
-                            contact_email = contact[0].strip()
-                            print(f"[get_rfp_response_by_id] Found email from vendor_contacts for vendor_id {response.vendor_id}: {contact_email}")
-                    except Exception as schema_error:
-                        # Fallback: try without schema prefix
-                        try:
-                            cursor.execute('''
-                                SELECT email
-                                FROM vendor_contacts
-                                WHERE vendor_id = %s 
-                                AND (contact_type = 'PRIMARY' OR is_primary = 1 OR is_primary = '1')
-                                AND (is_active = 1 OR is_active = '1' OR is_active = 'Y' OR is_active IS NULL)
-                                AND email IS NOT NULL AND email != ''
-                                ORDER BY is_primary DESC, contact_id ASC
-                                LIMIT 1
-                            ''', [response.vendor_id])
-                            contact = cursor.fetchone()
-                            if contact and contact[0] and contact[0].strip():
-                                contact_email = contact[0].strip()
-                                print(f"[get_rfp_response_by_id] Found email from vendor_contacts (fallback) for vendor_id {response.vendor_id}: {contact_email}")
-                        except Exception as fallback_error:
-                            logger.debug(f"Could not fetch email from vendor_contacts for vendor_id {response.vendor_id}: {str(fallback_error)}")
-            except Exception as e:
-                logger.debug(f"Error fetching vendor contact email for vendor_id {response.vendor_id}: {str(e)}")
-        
-        contact_phone = response_documents.get('contact_phone', '') or response_documents.get('contactPhone', '')
-        if not contact_phone and isinstance(company_info, dict):
-            contact_phone = company_info.get('contact_phone', '') or company_info.get('contactPhone', '')
-        
-        # Extract vendor_name from multiple possible locations
-        vendor_name = ''
-        company_info = response_documents.get('companyInfo', {})
-        if isinstance(company_info, dict):
-            # Try companyInfo.vendor_name first
-            vendor_name = company_info.get('vendor_name', '') or company_info.get('company_name', '') or company_info.get('organization_name', '')
-        
-        # If not found in companyInfo, try direct field
-        if not vendor_name:
-            vendor_name = response_documents.get('vendor_name', '') or response_documents.get('company_name', '') or response_documents.get('organization_name', '')
-        
-        # If still not found and vendor_id exists, try to fetch from vendors table
-        if not vendor_name and response.vendor_id:
-            try:
-                from .models import Vendor
-                vendor = Vendor.objects.filter(vendor_id=response.vendor_id).first()
-                if vendor:
-                    vendor_name = getattr(vendor, 'vendor_name', '') or getattr(vendor, 'company_name', '') or getattr(vendor, 'organization_name', '')
-            except Exception as e:
-                logger.debug(f"Could not fetch vendor name for vendor_id {response.vendor_id}: {str(e)}")
-        
-        # Extract organization name from multiple possible locations
-        org = ''
-        if isinstance(company_info, dict):
-            # Try companyInfo.org first
-            org = company_info.get('org', '') or company_info.get('organization_name', '') or company_info.get('company_name', '')
-        
-        # If not found in companyInfo, try direct field
-        if not org:
-            org = response_documents.get('org', '') or response_documents.get('organization_name', '') or response_documents.get('company_name', '')
-        
-        # If still not found and vendor_id exists, try to fetch from vendors table
-        if not org and response.vendor_id:
-            try:
-                from .models import Vendor
-                vendor = Vendor.objects.filter(vendor_id=response.vendor_id).first()
-                if vendor:
-                    org = getattr(vendor, 'company_name', '') or getattr(vendor, 'organization_name', '')
-            except Exception as e:
-                logger.debug(f"Could not fetch vendor organization for vendor_id {response.vendor_id}: {str(e)}")
-        
-        # Fallback: use org for vendor_name if vendor_name is still empty
-        if not vendor_name and org:
-            vendor_name = org
-        
-        # Fallback: use vendor_name for org if org is still empty
-        if not org and vendor_name:
-            org = vendor_name
-        
-        # Fetch additional document details from S3Files if document IDs are present
-        expanded_document_urls = {}
-        if response.document_urls:
-            try:
-                from .models import S3Files
-                for doc_type, doc_info in response.document_urls.items():
-                    expanded_doc_info = doc_info.copy() if isinstance(doc_info, dict) else {'url': doc_info}
-                    
-                    # If we have a document_id or s3_file_id, fetch full details from S3Files
-                    doc_id = expanded_doc_info.get('document_id') or expanded_doc_info.get('s3_file_id')
-                    if doc_id:
-                        try:
-                            s3_file = S3Files.objects.filter(id=doc_id).first()
-                            if s3_file:
-                                expanded_doc_info.update({
-                                    'url': s3_file.url,
-                                    'file_name': s3_file.file_name,
-                                    'file_type': s3_file.file_type,
-                                    'file_size': s3_file.file_size,
-                                    'uploaded_at': s3_file.uploaded_at.isoformat() if s3_file.uploaded_at else None,
-                                    'document_id': s3_file.id,
-                                    's3_file_id': s3_file.id
-                                })
-                        except Exception as e:
-                            logger.debug(f"Could not fetch S3File details for document_id {doc_id}: {str(e)}")
-                    
-                    expanded_document_urls[doc_type] = expanded_doc_info
-            except Exception as e:
-                logger.debug(f"Error expanding document URLs: {str(e)}")
-                expanded_document_urls = response.document_urls
+        vendor_name = response_documents.get('vendor_name', '')
+        contact_email = response_documents.get('contact_email', '')
+        contact_phone = response_documents.get('contact_phone', '')
+        org = response_documents.get('org', '')
         
         response_data = {
             'response_id': response.response_id,
             'rfp_id': response.rfp_id,
             'vendor_id': response.vendor_id,
             'vendor_name': vendor_name,
-            'org': org,  # Organization name from all possible sources
+            'org': org,  # Ensure org field is included
             'contact_email': contact_email,
-            'vendor_email': contact_email,  # Also include as vendor_email for compatibility
-            'email': contact_email,  # Also include as email for compatibility
             'contact_phone': contact_phone,
             'proposal_data': response.response_documents,
             'proposed_value': float(response.proposed_value) if response.proposed_value else None,
@@ -3175,7 +2939,7 @@ def get_rfp_response_by_id(request, response_id):
             'evaluation_date': response.evaluation_date.isoformat() if response.evaluation_date else None,
             'evaluation_comments': response.evaluation_comments,
             'response_documents': response.response_documents,
-            'document_urls': expanded_document_urls if expanded_document_urls else response.document_urls
+            'document_urls': response.document_urls
         }
         
         return JsonResponse({
@@ -3243,7 +3007,7 @@ def download_document(request, rfp_id):
             }, status=404)
         
         # Download from S3
-        from .s3_service import get_s3_service
+        from rfp.s3_service import get_s3_service
         s3_service = get_s3_service()
         
         download_result = s3_service.download_file(
@@ -3317,7 +3081,7 @@ def delete_document(request, rfp_id):
         
         # Delete from S3 if key exists
         if s3_key:
-            from .s3_service import get_s3_service
+            from rfp.s3_service import get_s3_service
             s3_service = get_s3_service()
             
             delete_result = s3_service.delete_file(

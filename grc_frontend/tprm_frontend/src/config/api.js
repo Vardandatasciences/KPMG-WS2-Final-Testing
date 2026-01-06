@@ -1,7 +1,7 @@
 // API Configuration
 const API_CONFIG = {
-  BASE_URL: 'http://localhost:8000/api/tprm',
-  RFP_APPROVAL_BASE: 'http://localhost:8000/api/tprm/rfp-approval',
+  BASE_URL: import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_TPRM_API_BASE_URL || 'https://grc-tprm.vardaands.com/api/tprm',
+  RFP_APPROVAL_BASE: import.meta.env.VITE_RFP_APPROVAL_BASE || `${import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_TPRM_API_BASE_URL || 'https://grc-tprm.vardaands.com/api/tprm'}/rfp-approval`,
   TIMEOUT: 10000, // 10 seconds
 }
 

@@ -66,6 +66,10 @@
             <span>Framework Explorer</span>
           </div>
         
+        <div @click="navigate('/domains')" class="menu-item" :class="{'active': isActive('/domains')}">
+            <i class="fas fa-sitemap icon"></i>
+            <span>Domains</span>
+          </div>
 
         <!-- 3. Policy Approval -->
         <div class="menu-item" @click="navigate('/policy/approval')" :class="{'active': isActive('/policy/approval')}">
@@ -1084,7 +1088,8 @@ export default {
       bcpConsole: false,
       eventHandling: false,
       eventManagement: false,
-      help: false
+      help: false,
+      domains: false
     })
 
     // Check if route is active

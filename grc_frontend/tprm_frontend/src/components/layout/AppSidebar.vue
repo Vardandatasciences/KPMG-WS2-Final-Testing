@@ -19,13 +19,17 @@
               @click="toggleExpanded(item.title)"
               class="flex items-center justify-between w-full px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <div class="flex items-center">
+              <div class="flex items-center flex-1 min-w-0">
                 <component :is="item.icon" class="h-5 w-5 mr-3 flex-shrink-0" />
-                <span v-if="!isCollapsed" class="truncate">{{ item.title }}</span>
+                <div v-if="!isCollapsed" class="flex flex-col leading-tight min-w-0">
+                  <span v-if="item.title === 'Continuity and Recovery plans management'" class="whitespace-nowrap">Continuity and Recovery</span>
+                  <span v-else class="truncate">{{ item.title }}</span>
+                  <span v-if="item.title === 'Continuity and Recovery plans management'" class="whitespace-nowrap">plans management</span>
+                </div>
               </div>
               <ChevronDown 
                 v-if="!isCollapsed"
-                :class="['h-4 w-4 transition-transform chevron-arrow', expandedItems.includes(item.title) ? 'rotate-180' : '']" 
+                :class="['h-4 w-4 transition-transform chevron-arrow flex-shrink-0 ml-2', expandedItems.includes(item.title) ? 'rotate-180' : '']" 
               />
             </button>
             <div v-if="expandedItems.includes(item.title) && !isCollapsed" class="ml-6 space-y-1">
@@ -109,6 +113,17 @@
       </div>
       
       <div class="p-6 pt-4 border-t border-gray-200 bg-white">
+        <!-- User Profile Section -->
+        <div v-if="!isCollapsed" class="mb-4 pb-4 border-b border-gray-200">
+          <div class="flex items-center px-3 py-2">
+            <User class="h-5 w-5 mr-3 flex-shrink-0 text-gray-600" />
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium text-gray-900 truncate">{{ username }}</p>
+              <p class="text-xs text-gray-500 truncate">{{ userEmail || 'User' }}</p>
+            </div>
+          </div>
+        </div>
+        
         <h3 v-if="!isCollapsed" class="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Management</h3>
         <nav class="space-y-1">
           <RouterLink
@@ -169,12 +184,47 @@ import {
   Edit3
 } from 'lucide-vue-next'
 import { useNotificationCount } from '@/composables/useNotificationCount'
+import { computed, onMounted } from 'vue'
 
 const expandedItems = ref([])
 const isCollapsed = ref(false)
 
 // Get unread notification count
 const { unreadCount } = useNotificationCount()
+
+// Username and email
+const username = ref('User')
+const userEmail = ref('')
+
+// Fetch username from localStorage
+const fetchUsername = () => {
+  try {
+    const userStr = localStorage.getItem('current_user') || localStorage.getItem('user')
+    if (userStr) {
+      const user = JSON.parse(userStr)
+      username.value = user.UserName || user.username || user.full_name || user.first_name + ' ' + (user.last_name || '') || 'User'
+      userEmail.value = user.email || user.Email || ''
+    } else {
+      // Try other sources
+      const storedFullName = localStorage.getItem('fullName')
+      const storedUsername = localStorage.getItem('username')
+      if (storedFullName && storedFullName !== 'null') {
+        username.value = storedFullName
+      } else if (storedUsername && storedUsername !== 'null') {
+        username.value = storedUsername
+      }
+    }
+  } catch (e) {
+    console.error('Error fetching username:', e)
+    username.value = 'User'
+  }
+}
+
+onMounted(() => {
+  fetchUsername()
+  // Listen for user data updates
+  window.addEventListener('userDataUpdated', fetchUsername)
+})
 
 const toggleExpanded = (title) => {
   const index = expandedItems.value.indexOf(title)
@@ -369,11 +419,6 @@ const mainItems = [
         icon: FileText
       },
       { 
-        title: "Search", 
-        url: "/search", 
-        icon: Search
-      },
-      { 
         title: "Contract Comparison", 
         url: "/contract-comparison", 
         icon: GitCompare
@@ -458,7 +503,7 @@ const mainItems = [
   },
   
   { 
-    title: "BCP/DRP Management", 
+    title: "Continuity and Recovery plans management", 
     url: "/bcp/vendor-upload", 
     icon: Shield,
     subItems: [
@@ -470,7 +515,6 @@ const mainItems = [
           { title: "Plan Submission & OCR", url: "/bcp/plan-submission-ocr" },
           { title: "Plan Evaluation", url: "/bcp/evaluation" },
           { title: "Plan Library", url: "/bcp/library" },
-          // { title: "OCR Extraction", url: "/bcp/ocr-extraction" },
         ]
       },
       { 

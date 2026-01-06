@@ -317,125 +317,7 @@
         </div>
       </div>
 
-      <!-- Policy Selection Tab (AI Audits Only) -->
-      <div v-if="currentTab === 1 && auditData.type === 'AI'" class="tab-content">
-        <h2>Policy Selection</h2>
-        <p class="tab-description">Select the policy that will be audited. This determines the compliance requirements and scope of the audit.</p>
-        
-        <div class="policy-selection-section">
-          <div class="dynamic-fields-row">
-            <div class="dynamic-field-col">
-              <label class="dynamic-label">
-                Select Policy
-                <!-- Data Type Circle Toggle -->
-                <div class="audit-data-type-circle-toggle-wrapper">
-                  <div class="audit-data-type-circle-toggle">
-                    <div 
-                      class="audit-circle-option personal-circle" 
-                      :class="{ active: fieldDataTypes?.policy === 'personal' }"
-                      @click="setDataType('policy', 'personal')"
-                      title="Personal Data"
-                    >
-                      <div class="audit-circle-inner"></div>
-                    </div>
-                    <div 
-                      class="audit-circle-option confidential-circle" 
-                      :class="{ active: fieldDataTypes?.policy === 'confidential' }"
-                      @click="setDataType('policy', 'confidential')"
-                      title="Confidential Data"
-                    >
-                      <div class="audit-circle-inner"></div>
-                    </div>
-                    <div 
-                      class="audit-circle-option regular-circle" 
-                      :class="{ active: fieldDataTypes?.policy === 'regular' }"
-                      @click="setDataType('policy', 'regular')"
-                      title="Regular Data"
-                    >
-                      <div class="audit-circle-inner"></div>
-                    </div>
-                  </div>
-                </div>
-              </label>
-              <div class="dynamic-desc">Choose the policy to be audited. This will determine the compliance requirements.</div>
-              <CustomDropdown
-                v-model="auditData.policy"
-                :config="{
-                  name: 'Policy',
-                  label: 'Policy',
-                  values: policies.map(p => ({ value: p.PolicyId, label: p.PolicyName })),
-                  defaultValue: 'Select Policy'
-                }"
-                :showSearchBar="true"
-                @change="onPolicyChange" 
-              />
-            </div>
-            <div class="dynamic-field-col">
-              <label class="dynamic-label">
-                Sub Policy <span v-if="auditData.type === 'AI'" class="required-asterisk">*</span>
-                <!-- Data Type Circle Toggle -->
-                <div class="audit-data-type-circle-toggle-wrapper">
-                  <div class="audit-data-type-circle-toggle">
-                    <div 
-                      class="audit-circle-option personal-circle" 
-                      :class="{ active: fieldDataTypes?.subPolicy === 'personal' }"
-                      @click="setDataType('subPolicy', 'personal')"
-                      title="Personal Data"
-                    >
-                      <div class="audit-circle-inner"></div>
-                    </div>
-                    <div 
-                      class="audit-circle-option confidential-circle" 
-                      :class="{ active: fieldDataTypes?.subPolicy === 'confidential' }"
-                      @click="setDataType('subPolicy', 'confidential')"
-                      title="Confidential Data"
-                    >
-                      <div class="audit-circle-inner"></div>
-                    </div>
-                    <div 
-                      class="audit-circle-option regular-circle" 
-                      :class="{ active: fieldDataTypes?.subPolicy === 'regular' }"
-                      @click="setDataType('subPolicy', 'regular')"
-                      title="Regular Data"
-                    >
-                      <div class="audit-circle-inner"></div>
-                    </div>
-                  </div>
-                </div>
-              </label>
-              <div class="dynamic-desc">
-                <span v-if="auditData.type === 'AI'">Select a specific sub-policy for AI compliance analysis.</span>
-                <span v-else>Select specific sub-policy if applicable.</span>
-              </div>
-              <CustomDropdown
-                v-model="auditData.subPolicy"
-                :config="{
-                  name: 'Sub Policy',
-                  label: 'Sub Policy',
-                  values: subpolicies.map(sp => ({ 
-                    value: sp.id, 
-                    label: sp.name.replace(/\s*\(\d+\)$/, '') // Remove numbers in parentheses at the end
-                  })),
-                  defaultValue: 'Select Sub Policy'
-                }"
-                :disabled="!auditData.policy"
-                @change="onMainSubPolicyChange"
-              />
-            </div>
-          </div>
-          
-          <!-- Policy Information Display -->
-          <div v-if="selectedPolicy" class="policy-info-card">
-            <h4>{{ selectedPolicy.PolicyName }}</h4>
-            <p class="policy-description">{{ selectedPolicy.PolicyDescription }}</p>
-            <div class="policy-meta">
-              <span class="policy-category">{{ selectedPolicy.PolicyCategory }}</span>
-              <span class="policy-type">{{ selectedPolicy.PolicyType }}</span>
-              <span class="policy-status">{{ selectedPolicy.Status }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
+      <!-- Policy Selection Tab removed for AI audits - policy selection happens in AI Audit Upload page -->
 
       <!-- Policy Assignment Tab (Internal/External/Self Audits Only) -->
       <div v-if="currentTab === 2 && auditData.type !== 'AI'" class="tab-content">
@@ -962,7 +844,7 @@
       </div>
 
       <!-- Auditor Assignment Tab (AI Audits Only) -->
-      <div v-if="currentTab === 2 && auditData.type === 'AI'" class="tab-content">
+      <div v-if="currentTab === 1 && auditData.type === 'AI'" class="tab-content">
         <h2>Auditor Assignment & Audit Details</h2>
 
         <!-- Team Assignments Section -->
@@ -973,32 +855,6 @@
               <h4 v-else>{{ getUserName(member.auditor) || 'Team Member' }} - {{ member.role }}</h4>
             </div>
             
-            <!-- Policy Assignment Section -->
-            <div class="collapsible-section">
-              <div class="section-header" @click="toggleSection(member, 'policyAssignment')">
-                <h5>Policy Assignment</h5>
-                <i :class="['fas', member.isPolicyAssignmentExpanded ? 'fa-chevron-up' : 'fa-chevron-down']"></i>
-              </div>
-              
-              <div class="section-content" :class="{ 'collapsed': !member.isPolicyAssignmentExpanded }">
-                <!-- Policy Information Display (Read-only) -->
-                <div class="policy-info-display">
-                  <h4>Selected Policy Information</h4>
-                  <div class="policy-details">
-                    <div class="policy-item">
-                      <span class="policy-label">Policy:</span>
-                      <span class="policy-value">{{ selectedPolicy?.PolicyName || 'No policy selected' }}</span>
-                    </div>
-                    <div class="policy-item" v-if="auditData.subPolicy">
-                      <span class="policy-label">Sub Policy:</span>
-                      <span class="policy-value">{{ selectedSubPolicy?.name || 'No sub-policy selected' }}</span>
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-
             <!-- Audit Details Section -->
             <div class="collapsible-section">
               <div class="section-header" @click="toggleSection(member, 'auditDetails')">
@@ -1208,20 +1064,15 @@
                   </div>
                 </div>
                 <div class="dynamic-fields-row">
-                <div class="dynamic-field-col">
+                  <div class="dynamic-field-col">
                     <label class="dynamic-label">Type</label>
-                    <div class="dynamic-desc">Select whether the audit is Internal or External.</div>
-                    <SelectInput
-                      v-model="member.type"
-                      :options="[
-                        { value: 'I', label: 'Internal' },
-                        { value: 'E', label: 'External' },
-                        { value: 'S', label: 'Self-Audit' },
-                        { value: 'AI', label: 'AI Audit' }
-                      ]"
-                      label="Type"
-                      placeholder="Select Type"
-                      :error="getFieldError('type', index)"
+                    <div class="dynamic-desc">Audit type selected in Framework Selection tab.</div>
+                    <input 
+                      type="text" 
+                      :value="getAuditTypeLabel(auditData.type)" 
+                      class="dynamic-input" 
+                      readonly
+                      style="background-color: #f3f4f6; cursor: not-allowed;"
                     />
                   </div>
                   <div class="dynamic-field-col">
@@ -1384,19 +1235,6 @@
                 </div>
               </div>
             </div>
-
-            <div class="compliance-preview" v-if="member.assignedPolicy">
-              <div class="preview-header">Compliance Items to be Audited:</div>
-              <div class="preview-content">
-                <div class="compliance-count" :class="{ 'loading': complianceCountLoading[`${member.assignedPolicy}-loading`] }">
-                  <span v-if="complianceCountLoading[`${member.assignedPolicy}-loading`]">Loading...</span>
-                  <span v-else>{{ getComplianceCount(member.assignedPolicy, member.assignedSubPolicy) }} items</span>
-                </div>
-                <div class="compliance-scope-desc" v-if="!member.assignedSubPolicy">
-                  Will include permanent compliances from all subpolicies under this policy
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -1419,8 +1257,8 @@
               <h4 v-else>{{ getUserName(member.auditor) || 'Team Member' }} - {{ member.role }}</h4>
             </div>
             
-            <!-- Policy Assignment Review Section -->
-            <div class="collapsible-section">
+            <!-- Policy Assignment Review Section (Hidden for AI audits - policy selection happens in AI Audit Upload) -->
+            <div v-if="auditData.type !== 'AI'" class="collapsible-section">
               <div class="section-header" @click="toggleSection(member, 'reviewPolicy')">
                 <h5>Policy Assignment</h5>
                 <i :class="['fas', member.isReviewPolicyExpanded ? 'fa-chevron-up' : 'fa-chevron-down']"></i>
@@ -1631,17 +1469,13 @@
                   <div class="dynamic-fields-row">
                     <div class="dynamic-field-col">
                       <label class="dynamic-label">Type</label>
-                      <SelectInput
-                        v-model="member.type"
-                        :options="[
-                          { value: 'I', label: 'Internal' },
-                          { value: 'E', label: 'External' },
-                          { value: 'S', label: 'Self-Audit' },
-                          { value: 'AI', label: 'AI Audit' }
-                        ]"
-                        label="Type"
-                        placeholder="Select Type"
-                        :error="getFieldError('type', index)"
+                      <div class="dynamic-desc">Audit type selected in Framework Selection tab.</div>
+                      <input 
+                        type="text" 
+                        :value="getAuditTypeLabel(auditData.type)" 
+                        class="dynamic-input" 
+                        readonly
+                        style="background-color: #f3f4f6; cursor: not-allowed;"
                       />
                     </div>
                     <div class="dynamic-field-col">
@@ -1961,7 +1795,7 @@ export default {
       currentTab: 0,
       tabs: [
         { name: 'Framework Selection', required: ['framework', 'type'] },
-        { name: 'Policy Selection', required: ['policy'] }, // For AI audits
+        { name: 'Policy Selection', required: ['policy'] }, // For AI audits (deprecated - will be removed)
         { name: 'Team Creation', required: [] }, // For Internal/External/Self audits
         { name: 'Auditor Assignment', required: [] }, // For AI audits
         { name: 'Policy Assignment', required: [] }, // For Internal/External/Self audits
@@ -2089,17 +1923,12 @@ export default {
         return !!(this.auditData.framework && this.auditData.type);
       }
       
-      // For AI audits
+      // For AI audits (Policy Selection tab removed)
       if (this.auditData.type === 'AI') {
         if (this.currentTab === 1) {
-          return !!(this.auditData.policy);
-        }
-        if (this.currentTab === 2) {
-          // All required fields for every team member, including at least one business unit and auditTitle
+          // Auditor Assignment tab - all required fields except policy/subpolicy (policy selection happens in AI Audit Upload)
           const allValid = this.teamMembers.every((member, idx) => {
             const baseValid = !!(
-              member.assignedPolicy &&
-              member.assignedSubPolicy && // Sub-policy required for AI audits
               member.reviewer && // Reviewer required for all audit types including AI
               member.scope &&
               member.objective &&
@@ -2113,8 +1942,6 @@ export default {
             if (!baseValid) {
               // Debug log for missing fields
               const missing = [];
-              if (!member.assignedPolicy) missing.push('assignedPolicy');
-              if (!member.assignedSubPolicy) missing.push('assignedSubPolicy');
               if (!member.reviewer) missing.push('reviewer');
               if (!member.scope) missing.push('scope');
               if (!member.objective) missing.push('objective');
@@ -2154,8 +1981,11 @@ export default {
     },
     
     isReviewTab() {
-      // For AI audits: tab 3 (Framework -> Policy -> Auditor Assignment -> Review)
+      // For AI audits: tab 2 (Framework -> Auditor Assignment -> Review)
       // For Internal/External/Self: tab 3 (Framework -> Team -> Policy Assignment -> Review)
+      if (this.auditData.type === 'AI') {
+        return this.currentTab === 2;
+      }
       return this.currentTab === 3;
     },
     
@@ -2183,11 +2013,11 @@ export default {
           auditType: this.auditData.type
         });
 
-        // For AI audits, auditor is not required but reviewer is required, sub-policy is required for compliance accuracy
-        const hasAssignmentInfo = member.assignedPolicy && 
-                                (this.auditData.type === 'AI' ? member.assignedSubPolicy : true) && // Sub-policy required for AI audits
-                                (member.reviewer && member.reviewer !== '') && // Reviewer required for all audit types
-                                (this.auditData.type === 'AI' ? true : (member.auditor && member.auditor !== ''));
+        // For AI audits: policy/subpolicy not required (policy selection happens in AI Audit Upload page)
+        // For non-AI audits: policy is required, auditor is required
+        const hasAssignmentInfo = (this.auditData.type === 'AI' 
+                                ? (member.reviewer && member.reviewer !== '') // Only reviewer required for AI audits
+                                : (member.assignedPolicy && member.reviewer && member.reviewer !== '' && member.auditor && member.auditor !== '')); // Policy, reviewer, and auditor required for non-AI audits
                                 
         const hasAuditDetails = member.scope && 
                               member.objective && 
@@ -2546,9 +2376,9 @@ export default {
           filteredBusinessUnits: [],
         }];
         // Update tabs for AI workflow
+        // Update tabs for AI audit workflow (Policy Selection removed)
         this.tabs = [
           { name: 'Framework Selection', required: ['framework', 'type'] },
-          { name: 'Policy Selection', required: ['policy'] },
           { name: 'Auditor Assignment', required: [] },
           { name: 'Review & Assign', required: ['scope', 'objective', 'type', 'frequency', 'dueDate'] }
         ];
@@ -2631,15 +2461,13 @@ export default {
           this.subpolicies = [];
         }
         
-        // Update team members with selected policy
-        this.teamMembers.forEach(member => {
-          member.assignedPolicy = this.auditData.policy;
-          member.assignedSubPolicy = this.auditData.subPolicy || '';
-        });
-
-        // For AI audits, just log that policy is selected - workflow will start when user clicks Assign Audit
-        if (this.auditData.type === 'AI') {
-          console.log('🤖 AI Audit: Policy selected, ready for AI audit workflow...');
+        // Update team members with selected policy (only for non-AI audits)
+        // AI audits don't require policy selection here - it happens in AI Audit Upload page
+        if (this.auditData.type !== 'AI') {
+          this.teamMembers.forEach(member => {
+            member.assignedPolicy = this.auditData.policy;
+            member.assignedSubPolicy = this.auditData.subPolicy || '';
+          });
         }
       }
     },
@@ -2648,12 +2476,14 @@ export default {
     onMainSubPolicyChange() {
       console.log('🔄 Main sub-policy changed:', this.auditData.subPolicy);
       
-      // Update team members with selected sub-policy
-      this.teamMembers.forEach(member => {
-        member.assignedSubPolicy = this.auditData.subPolicy || '';
-      });
-      
-      console.log('✅ Team members updated with sub-policy:', this.auditData.subPolicy);
+      // Update team members with selected sub-policy (only for non-AI audits)
+      // AI audits don't require policy selection here - it happens in AI Audit Upload page
+      if (this.auditData.type !== 'AI') {
+        this.teamMembers.forEach(member => {
+          member.assignedSubPolicy = this.auditData.subPolicy || '';
+        });
+        console.log('✅ Team members updated with sub-policy:', this.auditData.subPolicy);
+      }
     },
     
     // AI Audit Workflow Methods
@@ -3285,6 +3115,7 @@ return;
         case 'I': return 'Internal';
         case 'E': return 'External';
         case 'S': return 'Self-Audit';
+        case 'AI': return 'AI Audit';
         default: return type || 'Not specified';
       }
     },
@@ -3423,13 +3254,13 @@ return;
           pageContext = 'Framework Selection';
         } else if (this.currentTab === 1) {
           if (this.auditData.type === 'AI') {
-            pageContext = 'Policy Selection';
+            pageContext = 'Auditor Assignment';
           } else {
             pageContext = 'Team Creation';
           }
         } else if (this.currentTab === 2) {
           if (this.auditData.type === 'AI') {
-            pageContext = 'Auditor Assignment';
+            pageContext = 'Review & Assign';
           } else {
             pageContext = 'Policy Assignment';
           }

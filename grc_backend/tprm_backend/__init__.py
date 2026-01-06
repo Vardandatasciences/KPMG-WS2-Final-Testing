@@ -1,4 +1,7 @@
-# TPRM Backend Package
-# Third-Party Risk Management module integrated with GRC
+"""
+TPRM Backend Package
+Third Party Risk Management backend applications
+"""
+
 
 

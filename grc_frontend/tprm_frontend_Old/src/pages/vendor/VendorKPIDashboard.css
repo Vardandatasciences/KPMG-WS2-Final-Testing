@@ -1,0 +1,3368 @@
+/* Vendor KPI Dashboard Styles */
+
+/* Professional Font Import */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* Professional Typography System */
+* {
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif !important;
+  font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1 !important;
+  text-rendering: optimizeLegibility !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+}
+
+/* Main Layout - Standardized Container */
+.vendor_kpi-dashboard {
+  max-width: 1280px !important; /* max-w-7xl equivalent */
+  margin: 0 auto !important;
+  padding: 2rem !important;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%) !important;
+  min-height: 100vh !important;
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+}
+
+@media (max-width: 640px) {
+  .vendor_kpi-dashboard {
+    padding: 1rem !important;
+  }
+}
+
+/* Header Section - Standardized */
+.vendor_kpi-header {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 10 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  margin-bottom: 1.5rem !important;
+  background: rgba(255, 255, 255, 0.8) !important;
+  backdrop-filter: blur(8px) !important;
+  padding: 1.25rem 2rem !important;
+  border-radius: 12px !important;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+}
+
+
+@media (max-width: 768px) {
+  .vendor_kpi-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 1rem !important;
+    padding: 1rem !important;
+  }
+}
+/* Typography - Standardized */
+.vendor_kpi-title {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+  font-size: 0.870rem !important; /* text-2xl equivalent */
+  font-weight: 700 !important; /* font-bold */
+  line-height: 1.2 !important; /* leading-tight */
+  color: #1a202c !important; /* text-foreground */
+  margin: 0 !important;
+  letter-spacing: -0.025em !important; /* tracking-tight */
+  font-feature-settings: 'kern' 1, 'liga' 1 !important;
+  text-rendering: optimizeLegibility !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+}
+
+.vendor_kpi-subtitle {
+  font-size: 0.875rem !important; /* text-sm */
+  color: #64748b !important; /* text-muted-foreground */
+  margin: 0.25rem 0 0 0 !important;
+  font-weight: 400 !important;
+  line-height: 1.5 !important;
+}
+
+.vendor_export-button {
+  background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%) !important;
+  color: white !important;
+  border: none !important;
+  padding: 0.625rem 1.25rem !important;
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+  font-size: 0.875rem !important;
+  box-shadow: 0 2px 8px rgba(66, 153, 225, 0.3) !important;
+  transition: all 0.3s ease !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.vendor_export-button:hover {
+  background: linear-gradient(135deg, #3182ce 0%, #2c5282 100%) !important;
+  box-shadow: 0 4px 12px rgba(66, 153, 225, 0.4) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Summary KPIs Grid */
+.vendor_kpi-summary-grid {
+  display: grid !important;
+  grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+  gap: 1.75rem !important;
+  margin-bottom: 2rem !important;
+}
+
+@media (min-width: 768px) {
+  .vendor_kpi-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .vendor_kpi-summary-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+}
+
+/* Comprehensive KPIs Grid - Standardized */
+.vendor_kpi-comprehensive-grid {
+  display: grid !important;
+  grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+  gap: 1rem !important; /* Reduced from 1.25rem (20px to 16px) */
+  margin-bottom: 1.5rem !important; /* Reduced from 2rem */
+  align-items: stretch !important; /* Ensure all cards stretch to same height */
+}
+
+@media (min-width: 768px) {
+  .vendor_kpi-comprehensive-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .vendor_kpi-comprehensive-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+/* Enhanced Card Styles */
+.vendor_kpi-card {
+  background: white !important;
+  border-radius: 12px !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08) !important;
+  padding: 1.5rem !important;
+  transition: all 0.3s ease !important;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+}
+
+.vendor_kpi-card:hover {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12) !important;
+  transform: translateY(-2px) !important;
+}
+
+/* Standardized KPI Card Styles - Square Cards */
+.vendor_kpi-card-standardized {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  aspect-ratio: 1 / 1 !important; /* Square cards */
+  min-height: 0 !important; /* Allow aspect-ratio to control height */
+  background: white !important;
+  border-radius: 10px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  overflow: hidden !important;
+}
+
+.vendor_kpi-card-standardized:hover {
+  box-shadow: 0 10px 15px rgba(0, 0, 0, 0.08), 0 4px 6px rgba(0, 0, 0, 0.04) !important;
+  transform: scale(1.01) !important;
+}
+
+/* Standardized Card Header */
+.vendor_card-header-standardized {
+  padding: 0.75rem !important; /* Reduced for square cards */
+  padding-bottom: 0.5rem !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
+  flex-shrink: 0 !important;
+}
+
+/* Image Style Card Header - Vertical Stack Layout */
+.vendor_card-header-image-style {
+  padding: 0.625rem !important; /* Reduced padding */
+  padding-bottom: 0.375rem !important;
+  border-bottom: none !important;
+  flex-shrink: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.375rem !important; /* Reduced spacing */
+}
+
+/* Category at top */
+.vendor_kpi-card-category-top {
+  font-size: 0.6875rem !important; /* Reduced to 11px for square cards */
+  color: #94a3b8 !important; /* light gray */
+  margin: 0 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  font-weight: 500 !important;
+  line-height: 1.4 !important; /* Tighter line height */
+  order: 1 !important;
+}
+
+/* Title below category */
+.vendor_kpi-card-title-image-style {
+  font-size: 0.75rem !important; /* ~12px - reduced to fit without truncation */
+  font-weight: 600 !important;
+  color: #1a202c !important;
+  line-height: 1.3 !important; /* Tighter line height */
+  margin: 0 !important;
+  order: 2 !important;
+  white-space: nowrap !important; /* Keep on single line */
+  overflow: hidden !important; /* Hide overflow */
+  text-overflow: ellipsis !important; /* Show ellipsis if too long */
+  max-width: 100% !important;
+}
+
+/* Value and Target Stacked - Below Title */
+.vendor_kpi-value-stacked {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 0.125rem !important; /* Tighter spacing */
+  order: 3 !important;
+  margin-top: 0 !important;
+}
+
+/* Large Value */
+.vendor_kpi-value-large {
+  font-size: 1.5rem !important; /* Reduced to 24px */
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  margin: 0 !important;
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  white-space: nowrap !important;
+}
+
+/* Target in corner */
+.vendor_kpi-target-corner {
+  font-size: 0.75rem !important; /* Reduced to 12px for square cards */
+  font-weight: 400 !important;
+  color: #94a3b8 !important; /* light gray */
+  margin: 0 !important;
+  line-height: 1.4 !important; /* Tighter line height */
+  padding: 0 !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+  white-space: nowrap !important;
+  text-align: right !important;
+}
+
+/* Target below value (for other layouts) */
+.vendor_kpi-target-below {
+  font-size: 0.6875rem !important; /* Reduced to 11px */
+  font-weight: 400 !important;
+  color: #94a3b8 !important; /* light gray */
+  margin: 0 !important;
+  line-height: 1.3 !important; /* Tighter line height */
+  padding: 0 !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+}
+
+/* Standardized Card Content */
+.vendor_card-content-standardized {
+  padding: 0.75rem !important; /* Reduced for square cards */
+  padding-top: 0.5rem !important;
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.5rem !important; /* Reduced gap for square cards */
+  min-height: 0 !important; /* Allow flex shrinking */
+}
+
+/* Image Style Card Content */
+.vendor_card-content-image-style {
+  padding: 0.625rem !important; /* Reduced padding */
+  padding-top: 0.375rem !important; /* Reduced top padding */
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.375rem !important; /* Reduced gap */
+  min-height: 0 !important; /* Allow flex shrinking */
+  overflow: hidden !important;
+}
+
+/* Content without footer - expand chart area */
+.vendor_card-no-footer .vendor_card-content-image-style {
+  padding-bottom: 0.75rem !important;
+  padding-top: 0.25rem !important; /* Move chart up */
+}
+
+.vendor_card-no-footer .vendor_chart-container-image-style {
+  flex: 1 !important;
+  height: auto !important;
+  min-height: 5rem !important; /* Larger chart area when no footer */
+  margin-top: 0 !important; /* Remove any top margin */
+}
+
+/* KPI Card Styles - Standardized Typography */
+.vendor_kpi-card-title {
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  font-size: 1rem !important; /* text-base - 16px */
+  font-weight: 600 !important; /* font-semibold */
+  color: #1a202c !important; /* text-foreground */
+  margin: 0 0 0.375rem 0 !important; /* Consistent spacing */
+  letter-spacing: -0.01em !important;
+  line-height: 1.25 !important; /* leading-tight */
+  white-space: nowrap !important; /* Keep on single line */
+  overflow: hidden !important; /* Hide overflow */
+  text-overflow: ellipsis !important; /* Show ellipsis if too long */
+  max-width: 100% !important;
+  font-feature-settings: 'kern' 1, 'liga' 1 !important;
+  text-rendering: optimizeLegibility !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+}
+
+.vendor_kpi-card-category {
+  font-size: 0.75rem !important; /* text-xs - 12px */
+  color: #64748b !important; /* text-muted-foreground */
+  margin: 0 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important; /* tracking-wide */
+  font-weight: 500 !important; /* font-medium */
+  display: block !important;
+  line-height: 1.5 !important;
+}
+
+/* KPI Value Display */
+.vendor_kpi-value-container {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  margin-bottom: 1.25rem !important;
+}
+
+/* Position metrics in top right corner */
+.vendor_kpi-metrics {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-end !important;
+  max-width: 40% !important;
+  margin-left: auto !important;
+  flex-shrink: 0 !important;
+  padding-left: 1rem !important;
+  margin-top: 0 !important; /* Remove top margin */
+  position: absolute !important; /* Position absolutely */
+  top: 1.5rem !important; /* Position from top */
+  right: 1.5rem !important; /* Position from right */
+}
+
+.vendor_kpi-metrics .vendor_kpi-value {
+  font-size: 2rem !important;
+  line-height: 1.2 !important;
+  word-break: break-word !important;
+  font-weight: 700 !important;
+  text-align: right !important;
+}
+
+.vendor_kpi-metrics .vendor_kpi-target {
+  margin-top: 0.375rem !important;
+}
+
+.vendor_kpi-value {
+  font-size: 1.875rem !important; /* text-3xl - 30px (slightly reduced for better fit) */
+  font-weight: 700 !important; /* font-bold */
+  color: #1a202c !important; /* text-foreground */
+  margin: 0 !important;
+  line-height: 1.25 !important; /* leading-tight */
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+}
+
+.vendor_kpi-target {
+  font-size: 0.75rem !important; /* text-xs - 12px */
+  font-weight: 500 !important;
+  text-align: right !important;
+  padding: 0.25rem 0.5rem !important;
+  border-radius: 6px !important;
+  background: #f7fafc !important;
+  color: #64748b !important; /* text-muted-foreground */
+  margin-top: 0.375rem !important;
+  line-height: 1.5 !important;
+}
+
+.vendor_kpi-target.success {
+  color: #48bb78 !important;
+  background: #f0fff4 !important;
+}
+
+.vendor_kpi-target.warning {
+  color: #ed8936 !important;
+  background: #fffaf0 !important;
+}
+
+.vendor_kpi-target.destructive {
+  color: #f56565 !important;
+  background: #fff5f5 !important;
+}
+
+/* Target in corner - override colors for image style */
+.vendor_kpi-target-corner.success {
+  color: #94a3b8 !important; /* Light gray for image style */
+  background: transparent !important;
+}
+
+.vendor_kpi-target-corner.warning {
+  color: #94a3b8 !important;
+  background: transparent !important;
+}
+
+.vendor_kpi-target-corner.destructive {
+  color: #94a3b8 !important;
+  background: transparent !important;
+}
+
+/* Target below value - override colors for image style */
+.vendor_kpi-target-below.success {
+  color: #94a3b8 !important; /* Light gray for image style */
+  background: transparent !important;
+}
+
+.vendor_kpi-target-below.warning {
+  color: #94a3b8 !important;
+  background: transparent !important;
+}
+
+.vendor_kpi-target-below.destructive {
+  color: #94a3b8 !important;
+  background: transparent !important;
+}
+
+/* Card Header Area */
+.text-2xl {
+  font-size: 0.870rem !important;
+  line-height: 2rem !important;
+  white-space: nowrap !important; /* Keep on single line */
+  overflow: hidden !important; /* Hide overflow */
+  text-overflow: ellipsis !important; /* Show ellipsis if too long */
+  max-width: 100% !important; /* Allow full width */
+  margin-top: 0.5rem !important;
+  padding-right: 1rem !important;
+  display: block !important; /* Ensure it's a block element */
+  margin-bottom: 0.25rem !important;
+}
+
+.p-6 {
+  padding: 1.75rem 1.75rem 1rem 1.75rem !important;
+  position: relative !important; /* For absolute positioning of metrics */
+  min-height: 6rem !important; /* Ensure enough height for the metrics */
+}
+
+.space-y-1\.5 {
+  row-gap: 0.5rem !important;
+}
+
+.flex-col {
+  flex-direction: column !important;
+}
+
+.font-semibold {
+  font-weight: 600 !important;
+}
+
+.leading-none {
+  line-height: 1.2 !important;
+}
+
+.tracking-tight {
+  letter-spacing: -0.01em !important;
+}
+
+/* Chart Container - Standardized */
+.vendor_chart-container {
+  width: 100% !important;
+  height: 16rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
+  border-radius: 8px !important;
+  margin-bottom: 1.25rem !important;
+  position: relative !important;
+  overflow: visible !important;
+  padding: 1rem !important;
+  border: 1px solid rgba(0, 0, 0, 0.04) !important;
+  margin-top: 1rem !important;
+}
+
+/* Standardized Chart Container - Consistent Height */
+.vendor_chart-container-standardized {
+  width: 100% !important;
+  height: 4rem !important; /* Reduced to 64px for square cards */
+  min-height: 4rem !important;
+  max-height: 4rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: rgba(248, 250, 252, 0.5) !important; /* bg-muted/20 */
+  border-radius: 6px !important;
+  position: relative !important;
+  overflow: hidden !important;
+  padding: 0.375rem !important; /* Reduced padding */
+  margin: 0 !important;
+  flex-shrink: 0 !important;
+}
+
+/* Image Style Chart Container - Simple Bar Chart */
+.vendor_chart-container-image-style {
+  height: auto !important; /* Remove fixed height */
+  min-height: 0 !important; /* No artificial limit */
+  max-height: none !important; /* Allow full growth */
+  flex: 1 !important; /* Take remaining space */
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+  position: relative !important;
+  overflow: visible !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* Simple chart container - no padding, full height */
+.vendor_chart-container-image-style.vendor_chart-simple {
+  padding: 0.375rem !important;
+  padding-bottom: 0.75rem !important; /* Extra space for x-axis label */
+  justify-content: center !important;
+  align-items: flex-end !important;
+}
+
+/* Detailed Bar Chart - With Axis and Labels */
+.vendor_detailed-bar-chart {
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  align-items: stretch !important;
+  gap: 0.375rem !important;
+  position: relative !important;
+  background: transparent !important;
+}
+
+/* Y-Axis Labels */
+.vendor_chart-y-axis {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  width: 2rem !important;
+  flex-shrink: 0 !important;
+  padding-right: 0.5rem !important;
+}
+
+.vendor_chart-y-label {
+  font-size: 0.625rem !important; /* 10px */
+  color: #64748b !important; /* text-muted-foreground */
+  font-weight: 500 !important;
+  text-align: right !important;
+  line-height: 1 !important;
+}
+
+/* Main Chart Area */
+.vendor_chart-main-area {
+  flex: 1 !important; /* Fill parent */
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important; /* Center chart vertically */
+  justify-content: center !important;
+  min-height: 0 !important;
+  padding: 0 !important; /* Remove bottom padding */
+}
+
+/* Grid Lines */
+.vendor_chart-grid-lines {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  pointer-events: none !important;
+}
+
+.vendor_chart-grid-line {
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  height: 1px !important;
+  background: rgba(0, 0, 0, 0.08) !important;
+  transform: translateY(-50%) !important;
+}
+
+/* Bar Wrapper */
+.vendor_chart-bar-wrapper {
+  width: 35% !important; /* Bar width */
+  height: 100% !important;
+  display: flex !important;
+  align-items: flex-end !important;
+  justify-content: center !important;
+  position: relative !important;
+  z-index: 2 !important;
+  margin-left: auto !important;
+  margin-right: 8% !important; /* Offset from right edge */
+}
+
+/* Detailed Bar with Value Label */
+.vendor_simple-bar-detailed {
+  width: 100% !important;
+  background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%) !important; /* Solid blue */
+  border-radius: 4px 4px 0 0 !important; /* Rounded top corners */
+  transition: height 0.8s ease-out !important;
+  min-height: 10px !important; /* Minimum visible height */
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2) !important;
+  position: relative !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+}
+
+/* Value Label on Bar */
+.vendor_bar-value-label {
+  position: absolute !important;
+  top: -1rem !important; /* Above the bar */
+  font-size: 0.625rem !important; /* 10px */
+  font-weight: 700 !important;
+  color: #1a202c !important;
+  white-space: nowrap !important;
+  background: white !important;
+  padding: 0.125rem 0.375rem !important;
+  border-radius: 3px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15) !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+/* X-axis Label */
+.vendor_chart-x-axis-label {
+  position: absolute !important;
+  bottom: -1.5rem !important; /* Below chart area - more space */
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  font-size: 0.625rem !important; /* 10px */
+  color: #64748b !important; /* text-muted-foreground */
+  font-weight: 500 !important;
+  white-space: nowrap !important;
+  z-index: 10 !important; /* Ensure visibility */
+  background: rgba(255, 255, 255, 0.95) !important; /* Subtle background for visibility */
+  padding: 0.125rem 0.25rem !important; /* Add padding for visibility */
+  border-radius: 2px !important;
+}
+
+/* Circular Chart Container for Vendor Registration */
+.vendor_circular-chart-container {
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 1rem !important;
+  font-size: 0.875rem !important;
+
+}
+
+.vendor_circular-chart-wrapper {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.5rem !important;
+}
+
+.vendor_circular-chart-svg-container {
+  width: 6rem !important; /* 96px - w-24 equivalent */
+  height: 6rem !important; /* 96px - h-24 equivalent */
+  position: relative !important;
+}
+
+.vendor_circular-chart {
+  width: 100% !important;
+  height: 100% !important;
+  fill: none !important;
+  stroke-width: 3 !important; /* Increased stroke width for better visibility */
+  transform: rotate(-90deg) !important; /* Start from top */
+}
+
+.vendor_circle-bg {
+  stroke: #e5e7eb !important; /* Light gray background - slightly darker for contrast */
+  stroke-width: 3 !important;
+}
+
+.vendor_circle {
+  stroke: #1a202c !important; /* Dark gray/black progress circle - more visible */
+  stroke-width: 3 !important; /* Increased stroke width */
+  stroke-linecap: round !important;
+  transition: stroke-dasharray 0.3s ease !important;
+  opacity: 1 !important; /* Ensure full opacity */
+}
+
+.vendor_circular-chart-center {
+  position: absolute !important;
+  inset: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 1.125rem !important; /* text-lg equivalent */
+  font-weight: 600 !important; /* font-semibold */
+  color: #1a202c !important; /* text-gray-900 */
+}
+
+.vendor_circular-chart-label {
+  font-size: 0.875rem !important; /* text-sm */
+  color: #64748b !important; /* text-gray-500 */
+  text-align: center !important;
+}
+
+/* Cybersecurity Posture Score Layout */
+.vendor_cybersecurity-layout {
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.75rem !important;
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+/* Visual Indicator Box */
+.vendor_cybersecurity-visual-box {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%) !important; /* Light green gradient - this is the visual indicator, not a nested card */
+  border-radius: 12px !important;
+  padding: 0.75rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.375rem !important;
+  min-height: 3rem !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.vendor_cybersecurity-box-value {
+  font-size: 1.875rem !important;
+  font-weight: 700 !important;
+  color: #10b981 !important; /* Bright green */
+  line-height: 1 !important;
+}
+
+/* Excellent Badge */
+.vendor_cybersecurity-excellent-badge {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.3rem !important;
+  background: #10b981 !important; /* Dark green background */
+  color: white !important;
+  padding: 0.3rem 0.75rem !important;
+  border-radius: 9999px !important; /* Pill shape */
+  font-size: 0.7rem !important;
+  font-weight: 600 !important;
+}
+
+.vendor_excellent-checkmark {
+  font-size: 0.8rem !important;
+  line-height: 1 !important;
+}
+
+.vendor_excellent-text {
+  font-size: 0.7rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.025em !important;
+}
+
+/* Key Metrics Row */
+.vendor_cybersecurity-metrics-row {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-around !important;
+  gap: 0.375rem !important;
+  width: 100% !important;
+}
+
+.vendor_cybersecurity-metric-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.3rem !important;
+  flex: 1 !important;
+  justify-content: center !important;
+  flex-direction: column !important;
+}
+
+/* Metric Dots */
+.vendor_metric-dot {
+  width: 0.375rem !important;
+  height: 0.375rem !important;
+  border-radius: 50% !important;
+  flex-shrink: 0 !important;
+}
+
+.vendor_dot-blue {
+  background-color: #3b82f6 !important; /* Light blue */
+}
+
+.vendor_dot-green {
+  background-color: #10b981 !important; /* Green */
+}
+
+.vendor_dot-orange {
+  background-color: #f59e0b !important; /* Orange */
+}
+
+.vendor_metric-text {
+  font-size: 0.65rem !important;
+  font-weight: 500 !important;
+  color: #1f2937 !important;
+  line-height: 1.2 !important;
+  text-align: center !important;
+}
+
+/* Footer Details - Image Style */
+.vendor_metric-details-image-style {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 0.375rem !important; /* Reduced for square cards */
+  margin-top: 0 !important;
+  padding-top: 0.5rem !important; /* Reduced for square cards */
+  border-top: 1px solid rgba(0, 0, 0, 0.06) !important;
+  flex-shrink: 0 !important;
+}
+
+.vendor_chart-loading {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 100% !important;
+  width: 100% !important;
+  background: transparent !important;
+}
+
+.vendor_chart-loading-text {
+  color: hsl(var(--vendor_muted-foreground)) !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+}
+
+.vendor_chart-svg {
+  width: 100% !important;
+  height: 100% !important;
+  overflow: visible !important;
+}
+
+.vendor_chart-background {
+  fill: transparent !important;
+}
+
+/* Chart Elements */
+.vendor_chart-slice {
+  fill: #4299e1 !important;
+  transition: all 0.3s ease !important;
+  filter: drop-shadow(0 2px 4px rgba(66, 153, 225, 0.3)) !important;
+}
+
+.vendor_chart-bar {
+  fill: #4299e1 !important;
+  transition: all 0.3s ease !important;
+  filter: drop-shadow(0 2px 4px rgba(66, 153, 225, 0.2)) !important;
+}
+
+.vendor_chart-bar:hover {
+  fill: #3182ce !important;
+  filter: drop-shadow(0 3px 6px rgba(66, 153, 225, 0.4)) !important;
+  transform: scaleY(1.05) !important;
+  transform-origin: bottom !important;
+}
+
+.vendor_chart-bar-overdue {
+  fill: #f56565 !important;
+  transition: all 0.3s ease !important;
+  filter: drop-shadow(0 2px 4px rgba(245, 101, 101, 0.3)) !important;
+}
+
+.vendor_chart-bar-overdue:hover {
+  fill: #e53e3e !important;
+  filter: drop-shadow(0 3px 6px rgba(245, 101, 101, 0.4)) !important;
+  transform: scaleY(1.05) !important;
+  transform-origin: bottom !important;
+}
+
+.vendor_chart-bar-ontime {
+  fill: #48bb78 !important;
+  transition: all 0.3s ease !important;
+  filter: drop-shadow(0 2px 4px rgba(72, 187, 120, 0.3)) !important;
+}
+
+.vendor_chart-bar-ontime:hover {
+  fill: #38a169 !important;
+  filter: drop-shadow(0 3px 6px rgba(72, 187, 120, 0.4)) !important;
+  transform: scaleY(1.05) !important;
+  transform-origin: bottom !important;
+}
+
+.vendor_chart-line {
+  stroke: #4299e1 !important;
+  stroke-width: 3 !important;
+  fill: none !important;
+  filter: drop-shadow(0 2px 4px rgba(66, 153, 225, 0.3)) !important;
+  transition: all 0.3s ease !important;
+}
+
+.vendor_chart-line.vendor_chart-line-ofac {
+  stroke: #f56565 !important;
+  stroke-width: 3 !important;
+  filter: drop-shadow(0 2px 4px rgba(245, 101, 101, 0.3)) !important;
+}
+
+.vendor_chart-dot {
+  fill: #4299e1 !important;
+  r: 5 !important;
+  transition: all 0.2s ease !important;
+  cursor: pointer !important;
+  filter: drop-shadow(0 1px 2px rgba(66, 153, 225, 0.4)) !important;
+}
+
+.vendor_chart-dot:hover {
+  r: 7 !important;
+  fill: #3182ce !important;
+  filter: drop-shadow(0 2px 4px rgba(66, 153, 225, 0.5)) !important;
+}
+
+.vendor_chart-dot.vendor_chart-dot-ofac {
+  fill: #f56565 !important;
+  r: 5 !important;
+  filter: drop-shadow(0 1px 2px rgba(245, 101, 101, 0.4)) !important;
+}
+
+.vendor_chart-dot.vendor_chart-dot-ofac:hover {
+  r: 7 !important;
+  fill: #e53e3e !important;
+  filter: drop-shadow(0 2px 4px rgba(245, 101, 101, 0.5)) !important;
+}
+
+.vendor_chart-target-line {
+  stroke: #16a34a !important;
+  stroke-width: 2 !important;
+  opacity: 0.7 !important;
+}
+
+.vendor_chart-target-text {
+  font-size: 9px !important;
+  fill: #16a34a !important;
+  font-weight: 600 !important;
+  text-anchor: middle !important;
+}
+
+.vendor_chart-grid {
+  stroke: #cccccc !important;
+  stroke-width: 1 !important;
+  opacity: 0.5 !important;
+}
+
+.vendor_chart-text {
+  font-size: 12px !important;
+  fill: hsl(var(--vendor_foreground)) !important;
+  text-anchor: middle !important;
+  font-weight: 500 !important;
+}
+
+.vendor_chart-value-text {
+  font-size: 11px !important;
+  fill: #333333 !important;
+  text-anchor: middle !important;
+  font-weight: 700 !important;
+}
+
+.vendor_chart-category-text {
+  font-size: 10px !important;
+  fill: #333333 !important;
+  text-anchor: middle !important;
+  font-weight: 600 !important;
+  dominant-baseline: hanging !important;
+}
+
+.vendor_chart-axis-text {
+  font-size: 10px !important;
+  fill: #666666 !important;
+  text-anchor: end !important;
+  font-weight: 500 !important;
+}
+
+/* Alert Chart */
+.vendor_alert-chart {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 100% !important;
+  min-height: 8rem !important;
+  text-align: center !important;
+  padding: 1rem !important;
+}
+
+.vendor_alert-value {
+  font-size: 3rem !important;
+  font-weight: 700 !important;
+  color: hsl(var(--vendor_destructive)) !important;
+  margin-bottom: 0.5rem !important;
+}
+
+.vendor_alert-label {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  color: hsl(var(--vendor_destructive)) !important;
+  margin-bottom: 0.25rem !important;
+}
+
+.vendor_alert-warning {
+  font-size: 0.75rem !important;
+  color: hsl(var(--vendor_warning)) !important;
+  font-weight: 600 !important;
+}
+
+.vendor_breakdown {
+  margin-top: 0.75rem !important;
+  padding-top: 0.5rem !important;
+  border-top: 1px solid hsl(var(--vendor_border)) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.25rem !important;
+}
+
+.vendor_breakdown-item {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  font-size: 0.75rem !important;
+}
+
+.vendor_breakdown-label {
+  color: hsl(var(--vendor_muted-foreground)) !important;
+  font-weight: 500 !important;
+}
+
+.vendor_breakdown-value {
+  color: hsl(var(--vendor_foreground)) !important;
+  font-weight: 600 !important;
+}
+
+/* Gauge Chart */
+.vendor_gauge-chart {
+  position: relative !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.vendor_gauge-arc {
+  fill: none !important;
+  stroke-width: 8 !important;
+  stroke-linecap: round !important;
+}
+
+.vendor_gauge-background {
+  stroke: hsl(var(--vendor_border)) !important;
+}
+
+.vendor_gauge-progress {
+  stroke: hsl(var(--vendor_primary)) !important;
+}
+
+.vendor_gauge-text {
+  font-size: 1.5rem !important;
+  font-weight: 700 !important;
+  fill: hsl(var(--vendor_foreground)) !important;
+  text-anchor: middle !important;
+}
+
+/* Registration Time Gauge Chart */
+.vendor_registration-time-chart {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex: 0 1 auto !important;
+  gap: 0.375rem !important;
+  padding: 0.375rem !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+}
+
+/* Centered Value Display */
+.vendor_registration-main-value {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0rem !important;
+  flex-shrink: 0 !important;
+}
+
+.vendor_registration-value-large {
+  font-size: 2rem !important;
+  font-weight: 800 !important;
+  line-height: 0.85 !important;
+  letter-spacing: -0.02em !important;
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+}
+
+.vendor_registration-value-unit {
+  font-size: 0.65rem !important;
+  color: #6b7280 !important;
+  font-weight: 500 !important;
+}
+
+/* Status Badge */
+.vendor_registration-status-badge {
+  display: inline-block !important;
+  padding: 0.3rem 0.625rem !important;
+  border: 1.5px solid !important;
+  border-radius: 50px !important;
+  font-size: 0.6rem !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+}
+
+/* Progress Bar Section */
+.vendor_registration-progress-section {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.375rem !important;
+  width: 100% !important;
+  flex-shrink: 0 !important;
+}
+
+.vendor_registration-progress-bar-container {
+  width: 100% !important;
+}
+
+.vendor_registration-progress-bar {
+  display: flex !important;
+  width: 100% !important;
+  height: 0.375rem !important;
+  border-radius: 9999px !important;
+  overflow: hidden !important;
+  gap: 0 !important;
+}
+
+.vendor_registration-progress-segment {
+  flex: 1 !important;
+  height: 100% !important;
+}
+
+/* Metrics Grid */
+.vendor_registration-metrics {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 0.25rem !important;
+  width: 100% !important;
+  flex-shrink: 0 !important;
+}
+
+.vendor_registration-metric {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.1rem !important;
+  text-align: center !important;
+}
+
+.vendor_registration-metric-number {
+  font-size: 0.8rem !important;
+  font-weight: 700 !important;
+  color: #1f2937 !important;
+  line-height: 1 !important;
+}
+
+.vendor_registration-metric-label {
+  font-size: 0.55rem !important;
+  color: #6b7280 !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.025em !important;
+  line-height: 1 !important;
+}
+
+/* Footer Details */
+.vendor_registration-footer-details {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 0.25rem !important;
+  padding: 0.375rem !important;
+  border-top: 1px solid rgba(0, 0, 0, 0.08) !important;
+  background: transparent !important;
+  flex-shrink: 0 !important;
+  margin-top: auto !important;
+}
+
+.vendor_registration-footer-item {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.1rem !important;
+  text-align: center !important;
+}
+
+.vendor_registration-footer-label {
+  font-size: 0.55rem !important;
+  color: #6b7280 !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.025em !important;
+}
+
+.vendor_registration-footer-value {
+  font-size: 0.7rem !important;
+  color: #1f2937 !important;
+  font-weight: 600 !important;
+  padding: 0.2rem 0.3rem !important;
+  border-radius: 3px !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  line-height: 1 !important;
+}
+
+.vendor_registration-time-chart::before {
+  content: '' !important;
+  position: absolute !important;
+  top: -50% !important;
+  left: -50% !important;
+  width: 200% !important;
+  height: 200% !important;
+  background: radial-gradient(circle, rgba(66, 153, 225, 0.05) 0%, transparent 70%) !important;
+  pointer-events: none !important;
+}
+
+.vendor_registration-stats {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  width: 100% !important;
+  margin-top: 1rem !important;
+  padding: 1rem !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  border-radius: 10px !important;
+  border: 1px solid rgba(226, 232, 240, 0.6) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+  backdrop-filter: blur(10px) !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+.vendor_stat-item {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  text-align: center !important;
+  flex: 1 !important;
+  position: relative !important;
+}
+
+.vendor_stat-icon {
+  font-size: 1.25rem !important;
+  margin-bottom: 0.5rem !important;
+  opacity: 0.8 !important;
+}
+
+.vendor_stat-label {
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  font-size: 0.6875rem !important;
+  color: #64748b !important;
+  margin-bottom: 0.375rem !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.1em !important;
+  font-weight: 700 !important;
+  font-feature-settings: 'kern' 1, 'liga' 1 !important;
+  text-rendering: optimizeLegibility !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+}
+
+.vendor_stat-value {
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  font-size: 1rem !important;
+  font-weight: 800 !important;
+  color: #1e293b !important;
+  line-height: 1.2 !important;
+  letter-spacing: -0.025em !important;
+  font-feature-settings: 'kern' 1, 'liga' 1, 'tnum' 1 !important;
+  text-rendering: optimizeLegibility !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+}
+
+.vendor_stat-divider {
+  width: 1px !important;
+  height: 2rem !important;
+  background: linear-gradient(to bottom, transparent, #e2e8f0, transparent) !important;
+  margin: 0 0.5rem !important;
+}
+
+/* Enhanced gauge text styles with professional font */
+.vendor_gauge-text {
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif !important;
+  text-anchor: middle !important;
+  dominant-baseline: central !important;
+  font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1 !important;
+  text-rendering: optimizeLegibility !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+}
+
+/* Aligned Gauge Container */
+.vendor_aligned-gauge-container {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  height: 100% !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+  position: relative !important;
+  overflow: visible !important;
+}
+
+.vendor_aligned-gauge-container::before {
+  content: none !important;
+  display: none !important;
+}
+
+/* Aligned Chart Section */
+.vendor_aligned-chart-section {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  width: 100% !important;
+  margin-bottom: 1rem !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+/* Main Info Section */
+.vendor_aligned-main-info {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 0.75rem !important;
+  flex: 1 !important;
+}
+
+.vendor_aligned-main-value {
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  font-size: 2.5rem !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  letter-spacing: -0.02em !important;
+  font-feature-settings: 'kern' 1, 'liga' 1, 'tnum' 1 !important;
+  text-rendering: optimizeLegibility !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+}
+
+.vendor_aligned-status-badge {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+  padding: 0.5rem 1rem !important;
+  border-radius: 50px !important;
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+  border: 1px solid currentColor !important;
+  opacity: 0.8 !important;
+}
+
+.vendor_aligned-status-icon {
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+}
+
+.vendor_aligned-status-text {
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+}
+
+/* Gauge Visual Section */
+.vendor_aligned-gauge-visual {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex: 1 !important;
+}
+
+.vendor_aligned-gauge-svg {
+  width: 100% !important;
+  height: 6rem !important;
+  overflow: visible !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+/* Aligned Gauge Score */
+.vendor_aligned-gauge-score {
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  font-size: 1.5rem !important;
+  font-weight: 800 !important;
+  text-anchor: middle !important;
+  dominant-baseline: central !important;
+  letter-spacing: -0.02em !important;
+  font-feature-settings: 'kern' 1, 'liga' 1, 'tnum' 1 !important;
+  text-rendering: optimizeLegibility !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1)) !important;
+}
+
+.vendor_professional-gauge-label {
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+  text-anchor: middle !important;
+  dominant-baseline: central !important;
+  fill: #64748b !important;
+  letter-spacing: 0.025em !important;
+  text-transform: uppercase !important;
+}
+
+.vendor_professional-gauge-status {
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  font-size: 0.75rem !important;
+  font-weight: 700 !important;
+  text-anchor: middle !important;
+  dominant-baseline: central !important;
+  letter-spacing: 0.05em !important;
+  text-transform: uppercase !important;
+}
+
+.vendor_professional-gauge-icon {
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  font-size: 0.875rem !important;
+  font-weight: 700 !important;
+  text-anchor: middle !important;
+  dominant-baseline: central !important;
+}
+
+.vendor_professional-gauge-target {
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  font-size: 0.6875rem !important;
+  font-weight: 600 !important;
+  text-anchor: end !important;
+  dominant-baseline: central !important;
+}
+
+/* Aligned Metrics Section */
+.vendor_aligned-metrics-section {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 0.75rem !important;
+  width: 100% !important;
+  position: relative !important;
+  z-index: 1 !important;
+  padding: 0 0.5rem !important;
+}
+
+.vendor_aligned-metric-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+  padding: 0.5rem !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  border-radius: 8px !important;
+  border: 1px solid rgba(226, 232, 240, 0.6) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+  transition: all 0.2s ease !important;
+  min-height: 50px !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+}
+
+.vendor_aligned-metric-item:hover {
+  background: rgba(255, 255, 255, 1) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08) !important;
+}
+
+.vendor_aligned-metric-icon {
+  font-size: 1rem !important;
+  flex-shrink: 0 !important;
+  margin-right: 0.25rem !important;
+  min-width: 1.25rem !important;
+}
+
+.vendor_aligned-metric-content {
+  flex: 1 !important;
+  min-width: 0 !important;
+}
+
+.vendor_aligned-metric-value {
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  font-size: 0.875rem !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  letter-spacing: -0.025em !important;
+  font-feature-settings: 'kern' 1, 'liga' 1, 'tnum' 1 !important;
+  text-rendering: optimizeLegibility !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  margin-bottom: 0.125rem !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.vendor_aligned-metric-label {
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  font-size: 0.625rem !important;
+  color: #64748b !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  line-height: 1.1 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Progress arc animations */
+.vendor_gauge-progress {
+  transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  stroke-dasharray: 0 1000 !important;
+  stroke-dashoffset: 0 !important;
+  animation: drawArc 1.5s ease-out forwards !important;
+}
+
+@keyframes drawArc {
+  from {
+    stroke-dasharray: 0 1000;
+  }
+  to {
+    stroke-dasharray: var(--arc-length) 1000;
+  }
+}
+
+/* Enhanced target line */
+.vendor_chart-target-line {
+  stroke-dasharray: 4 2 !important;
+  animation: dashMove 2s linear infinite !important;
+}
+
+@keyframes dashMove {
+  to {
+    stroke-dashoffset: -6;
+  }
+}
+
+/* Status badge enhancement */
+.vendor_registration-time-chart rect[fill] {
+  transition: all 0.3s ease !important;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1)) !important;
+}
+
+/* Hover effects */
+.vendor_stat-item:hover .vendor_stat-icon {
+  transform: scale(1.1) !important;
+  transition: transform 0.2s ease !important;
+}
+
+.vendor_stat-item:hover .vendor_stat-value {
+  color: #0f172a !important;
+  transition: color 0.2s ease !important;
+}
+
+/* Modern Registration Time Chart */
+.vendor_registration-modern-chart {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 1rem !important;
+  width: 100% !important;
+  height: 100% !important;
+  padding: 0.75rem !important;
+}
+
+/* Modern Progress Card */
+.vendor_progress-card {
+  background: transparent !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+  position: relative !important;
+  overflow: visible !important;
+}
+
+.vendor_progress-card::before {
+  content: none !important;
+  display: none !important;
+}
+
+/* Metric Header */
+.vendor_metric-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  margin-bottom: 1.5rem !important;
+}
+
+.vendor_metric-main {
+  display: flex !important;
+  align-items: baseline !important;
+  gap: 0.5rem !important;
+}
+
+.vendor_metric-value {
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  font-size: 2.5rem !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  letter-spacing: -0.02em !important;
+  font-feature-settings: 'kern' 1, 'liga' 1, 'tnum' 1 !important;
+  text-rendering: optimizeLegibility !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+}
+
+.vendor_metric-unit {
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  color: #64748b !important;
+  letter-spacing: 0.025em !important;
+}
+
+.vendor_metric-status {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+  padding: 0.5rem 1rem !important;
+  border-radius: 50px !important;
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+  border: 1px solid currentColor !important;
+  opacity: 0.8 !important;
+}
+
+.vendor_status-icon {
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+}
+
+.vendor_status-text {
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+}
+
+/* Progress Bar */
+.vendor_progress-container {
+  margin-bottom: 1.5rem !important;
+}
+
+.vendor_progress-track {
+  position: relative !important;
+  height: 12px !important;
+  background: #e2e8f0 !important;
+  border-radius: 6px !important;
+  overflow: hidden !important;
+  margin-bottom: 0.5rem !important;
+}
+
+.vendor_progress-fill {
+  height: 100% !important;
+  border-radius: 6px !important;
+  transition: width 1s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  position: relative !important;
+}
+
+.vendor_progress-fill::after {
+  content: '' !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent) !important;
+  animation: shimmer 2s infinite !important;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%) !important; }
+  100% { transform: translateX(100%) !important; }
+}
+
+.vendor_target-marker {
+  position: absolute !important;
+  top: -2px !important;
+  width: 4px !important;
+  height: 16px !important;
+  background: #16a34a !important;
+  border-radius: 2px !important;
+  box-shadow: 0 2px 4px rgba(22, 163, 74, 0.3) !important;
+}
+
+.vendor_progress-labels {
+  display: flex !important;
+  justify-content: space-between !important;
+  font-size: 0.75rem !important;
+  color: #64748b !important;
+  font-weight: 500 !important;
+}
+
+.vendor_target-label {
+  color: #16a34a !important;
+  font-weight: 600 !important;
+}
+
+/* Performance Indicators */
+.vendor_performance-indicators {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.75rem !important;
+}
+
+.vendor_indicator {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.75rem !important;
+  padding: 0.5rem !important;
+  border-radius: 8px !important;
+  transition: all 0.2s ease !important;
+  opacity: 0.6 !important;
+}
+
+.vendor_indicator.active {
+  background: rgba(59, 130, 246, 0.1) !important;
+  opacity: 1 !important;
+  transform: scale(1.02) !important;
+}
+
+.vendor_indicator-dot {
+  width: 8px !important;
+  height: 8px !important;
+  border-radius: 50% !important;
+  flex-shrink: 0 !important;
+}
+
+.vendor_indicator span {
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  color: #374151 !important;
+}
+
+/* Modern Statistics Grid */
+.vendor_modern-stats {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 0.5rem !important;
+  margin-top: 0.4rem !important;
+  margin-left: 0 !important;
+  padding: 0 !important;
+}
+
+.vendor_stat-card {
+  background: transparent !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.vendor_stat-icon-modern {
+  font-size: 1rem !important;
+  opacity: 0.8 !important;
+  flex-shrink: 0 !important;
+  margin-right: 0.25rem !important;
+}
+
+.vendor_stat-content {
+  flex: 1 !important;
+  min-width: 0 !important;
+}
+
+.vendor_stat-number {
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+  color: #1e293b !important;
+  line-height: 1.2 !important;
+  letter-spacing: -0.025em !important;
+  font-feature-settings: 'kern' 1, 'liga' 1, 'tnum' 1 !important;
+  text-rendering: optimizeLegibility !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+}
+
+.vendor_stat-label-modern {
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  font-size: 0.6875rem !important;
+  color: #64748b !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  margin-top: 0.125rem !important;
+  line-height: 1.1 !important;
+}
+
+/* Export Modal Styles */
+.vendor_export-modal-overlay {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  background: rgba(0, 0, 0, 0.5) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 1000 !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+.vendor_export-modal {
+  background: white !important;
+  border-radius: 16px !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3) !important;
+  width: 90% !important;
+  max-width: 500px !important;
+  max-height: 90vh !important;
+  overflow: hidden !important;
+  animation: vendor_modalSlideIn 0.3s ease-out !important;
+}
+
+@keyframes vendor_modalSlideIn {
+  from {
+    opacity: 0 !important;
+    transform: translateY(-20px) scale(0.95) !important;
+  }
+  to {
+    opacity: 1 !important;
+    transform: translateY(0) scale(1) !important;
+  }
+}
+
+.vendor_export-modal-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 1.5rem 1.5rem 1rem 1.5rem !important;
+  border-bottom: 1px solid #e5e7eb !important;
+}
+
+.vendor_export-modal-title {
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  font-size: 1.25rem !important;
+  font-weight: 700 !important;
+  color: #111827 !important;
+  margin: 0 !important;
+  letter-spacing: -0.025em !important;
+}
+
+.vendor_export-modal-close {
+  background: none !important;
+  border: none !important;
+  cursor: pointer !important;
+  padding: 0.5rem !important;
+  border-radius: 8px !important;
+  color: #6b7280 !important;
+  transition: all 0.2s ease !important;
+}
+
+.vendor_export-modal-close:hover {
+  background: #f3f4f6 !important;
+  color: #374151 !important;
+}
+
+.vendor_export-modal-content {
+  padding: 1rem 1.5rem 1.5rem 1.5rem !important;
+}
+
+.vendor_export-modal-description {
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  color: #6b7280 !important;
+  font-size: 0.875rem !important;
+  line-height: 1.5 !important;
+  margin: 0 0 1.5rem 0 !important;
+}
+
+.vendor_export-options {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 1rem !important;
+}
+
+.vendor_export-option {
+  display: flex !important;
+  align-items: center !important;
+  gap: 1rem !important;
+  padding: 1rem !important;
+  border: 2px solid #e5e7eb !important;
+  border-radius: 12px !important;
+  background: white !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  text-align: left !important;
+  width: 100% !important;
+}
+
+.vendor_export-option:hover {
+  border-color: #3b82f6 !important;
+  background: transparent !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15) !important;
+}
+
+.vendor_export-option:disabled {
+  opacity: 0.6 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+}
+
+.vendor_export-option-icon {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 48px !important;
+  height: 48px !important;
+  border-radius: 10px !important;
+  flex-shrink: 0 !important;
+}
+
+.vendor_export-option-icon.pdf {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+  color: white !important;
+}
+
+.vendor_export-option-icon.excel {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  color: white !important;
+}
+
+.vendor_export-option-content {
+  flex: 1 !important;
+}
+
+.vendor_export-option-title {
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  color: #111827 !important;
+  margin: 0 0 0.25rem 0 !important;
+  letter-spacing: -0.025em !important;
+}
+
+.vendor_export-option-description {
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  font-size: 0.875rem !important;
+  color: #6b7280 !important;
+  margin: 0 !important;
+  line-height: 1.4 !important;
+}
+
+.vendor_export-loading {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 2rem !important;
+  gap: 1rem !important;
+}
+
+.vendor_export-loading-spinner {
+  width: 32px !important;
+  height: 32px !important;
+  border: 3px solid #e5e7eb !important;
+  border-top: 3px solid #3b82f6 !important;
+  border-radius: 50% !important;
+  animation: vendor_spin 1s linear infinite !important;
+}
+
+@keyframes vendor_spin {
+  0% { transform: rotate(0deg) !important; }
+  100% { transform: rotate(360deg) !important; }
+}
+
+.vendor_export-loading-text {
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  color: #6b7280 !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  margin: 0 !important;
+}
+
+/* Metric Details Grid - Standardized */
+.vendor_metric-details {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 0.375rem !important; /* Reduced for square cards */
+  margin-top: 0 !important;
+  padding-top: 0.5rem !important; /* Reduced for square cards */
+  border-top: 1px solid rgba(0, 0, 0, 0.06) !important;
+  flex-shrink: 0 !important;
+}
+
+.vendor_metric-detail {
+  text-align: center !important;
+  padding: 0.375rem !important; /* Reduced for square cards */
+  background: #f7fafc !important;
+  border-radius: 4px !important; /* Smaller radius */
+  transition: all 0.2s ease !important;
+  min-width: 0 !important; /* allow grid items to shrink without overflow */
+  overflow: hidden !important; /* prevent contents from spilling out */
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+}
+
+.vendor_metric-detail:hover {
+  background: #edf2f7 !important;
+  transform: translateY(-1px) !important;
+}
+
+.vendor_metric-detail-label {
+  font-size: 0.6875rem !important; /* Reduced to 11px for square cards */
+  color: #64748b !important; /* text-muted-foreground */
+  margin-bottom: 0.125rem !important; /* Reduced margin */
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important; /* tracking-wide */
+  font-weight: 500 !important; /* font-medium */
+  line-height: 1.3 !important; /* Tighter line height */
+}
+
+.vendor_metric-detail-value {
+  font-size: 0.75rem !important; /* Reduced to 12px for square cards */
+  font-weight: 600 !important; /* font-semibold */
+  color: #1a202c !important; /* text-foreground */
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+  line-height: 1.3 !important; /* Tighter line height */
+}
+
+/* Alerts Card in KPI Grid */
+.vendor_alerts-card {
+  grid-column: 1 / 4 !important; /* Span 3 columns (column 1 to 4) */
+  grid-row: span 1 !important; /* Occupy only 1 row */
+  min-width: 0 !important; /* Allow flex shrinking */
+  aspect-ratio: auto !important; /* Override square aspect ratio */
+  height: auto !important; /* Allow natural height */
+  background: white !important;
+  border-radius: 10px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+  padding: 1rem !important;
+}
+
+.vendor_alerts-card:hover {
+  box-shadow: 0 10px 15px rgba(0, 0, 0, 0.08), 0 4px 6px rgba(0, 0, 0, 0.04) !important;
+  transform: scale(1.005) !important;
+}
+
+@media (max-width: 768px) {
+  .vendor_alerts-card {
+    grid-column: 1 / -1 !important; /* Full width on mobile (1 column) */
+    grid-row: span 1 !important;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  .vendor_alerts-card {
+    grid-column: 1 / 3 !important; /* Span 2 columns on tablet */
+    grid-row: span 1 !important;
+  }
+}
+
+.vendor_section-icon {
+  width: 1.25rem !important;
+  height: 1.25rem !important;
+}
+
+.vendor_alert-item,
+.vendor_activity-item {
+  display: flex !important;
+  align-items: center !important;
+  padding: 0.875rem 1rem !important;
+  margin-bottom: 0 !important;
+  background-color: rgba(248, 250, 252, 0.6) !important;
+  border-radius: 8px !important;
+  transition: all 0.2s ease !important;
+  border: 1px solid rgba(0, 0, 0, 0.04) !important;
+}
+
+.vendor_alert-item:hover,
+.vendor_activity-item:hover {
+  background-color: rgba(248, 250, 252, 1) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  transform: translateX(2px) !important;
+}
+
+.vendor_alert-item:last-child,
+.vendor_activity-item:last-child {
+  margin-bottom: 0 !important;
+}
+
+/* Grid layout for alerts when in full-width card */
+.vendor_alerts-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)) !important;
+  gap: 0.75rem !important;
+  width: 100% !important;
+}
+
+.vendor_alerts-card-content {
+  padding: 1rem !important;
+}
+
+.vendor_alerts-card .vendor_flex.vendor_items-center {
+  padding: 0 !important;
+  margin-bottom: 0.75rem !important;
+}
+
+.vendor_alerts-card .vendor_alert-item {
+  margin-bottom: 0 !important;
+}
+
+/* Responsive alerts grid */
+@media (max-width: 768px) {
+  .vendor_alerts-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  .vendor_alerts-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+.vendor_item-icon {
+  width: 1.25rem !important;
+  height: 1.25rem !important;
+  margin-right: 0.75rem !important;
+  flex-shrink: 0 !important;
+}
+
+.vendor_item-text {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  flex: 1 !important;
+}
+
+/* KPI Categories Overview - Updated for UI components */
+
+/* Categories Grid - Standardized */
+.vendor_categories-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 1rem !important; /* Reduced from 1.25rem (20px to 16px) */
+  align-items: stretch !important; /* Ensure equal heights */
+}
+
+@media (min-width: 768px) {
+  .vendor_categories-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+}
+
+.vendor_category-item {
+  text-align: center !important;
+  transition: all 0.3s ease !important;
+  height: 100% !important;
+}
+
+/* Standardized Category Card - Square Cards */
+.vendor_category-card-standardized {
+  background: white !important;
+  border-radius: 10px !important;
+  padding: 0.75rem !important; /* Reduced for square cards */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  aspect-ratio: 1 / 1 !important; /* Square cards */
+  min-height: 0 !important; /* Allow aspect-ratio to control height */
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+
+.vendor_category-card-standardized:hover {
+  box-shadow: 0 10px 15px rgba(0, 0, 0, 0.08), 0 4px 6px rgba(0, 0, 0, 0.04) !important;
+  transform: scale(1.01) !important;
+}
+
+.vendor_category-icon {
+  width: 2.5rem !important; /* Reduced to 40px for square cards */
+  height: 2.5rem !important; /* Reduced to 40px for square cards */
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 0 auto 0.5rem !important; /* Reduced margin */
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.vendor_category-card-enhanced:hover .vendor_category-icon {
+  transform: scale(1.1) rotate(5deg) !important;
+}
+
+.vendor_category-name {
+  font-size: 0.875rem !important; /* Reduced to 14px for square cards */
+  font-weight: 600 !important; /* font-semibold */
+  color: #1a202c !important; /* text-foreground */
+  margin-bottom: 0.375rem !important; /* Reduced margin */
+  line-height: 1.2 !important; /* Tighter line height */
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+}
+
+.vendor_category-count {
+  font-size: 0.75rem !important; /* Reduced to 12px for square cards */
+  color: #64748b !important; /* text-muted-foreground */
+  margin-bottom: 0.5rem !important; /* Reduced margin */
+  line-height: 1.3 !important; /* Tighter line height */
+  font-weight: 400 !important;
+}
+
+/* Progress Circle Styles */
+.vendor_category-progress-wrapper {
+  position: relative !important;
+  display: inline-block !important;
+  width: 80px !important; /* Reduced to 80px for square cards */
+  height: 80px !important; /* Reduced to 80px for square cards */
+  margin: 0 auto !important;
+}
+
+.vendor_category-progress-circle {
+  width: 100% !important;
+  height: 100% !important;
+  transform: rotate(-90deg) !important;
+  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.vendor_category-progress-bg {
+  fill: none !important;
+  stroke: #e2e8f0 !important;
+  stroke-width: 8 !important;
+}
+
+.vendor_category-progress-fill {
+  fill: none !important;
+  stroke-width: 8 !important;
+  stroke-linecap: round !important;
+  transition: stroke-dasharray 1s ease-out !important;
+  transform-origin: center !important;
+}
+
+.vendor_progress-success {
+  stroke: #10b981 !important;
+}
+
+.vendor_progress-warning {
+  stroke: #f59e0b !important;
+}
+
+.vendor_progress-destructive {
+  stroke: #ef4444 !important;
+}
+
+.vendor_category-progress-text {
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  text-align: center !important;
+}
+
+.vendor_category-score {
+  font-size: 1rem !important; /* Reduced to 16px for square cards */
+  font-weight: 700 !important; /* font-bold */
+  margin-bottom: 0.125rem !important; /* Reduced margin */
+  transition: all 0.3s ease !important;
+  line-height: 1.2 !important; /* Tighter line height */
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+}
+
+.vendor_category-card-standardized:hover .vendor_category-score {
+  transform: scale(1.05) !important;
+}
+
+.vendor_category-score-label {
+  font-size: 0.75rem !important; /* text-xs - 12px */
+  color: #64748b !important; /* text-muted-foreground */
+  line-height: 1.5 !important;
+  font-weight: 400 !important;
+}
+
+/* Color Variants */
+.vendor_bg-primary-soft {
+  background: linear-gradient(135deg, #ebf8ff 0%, #bee3f8 100%) !important;
+}
+
+.vendor_bg-success-soft {
+  background: linear-gradient(135deg, #f0fff4 0%, #c6f6d5 100%) !important;
+}
+
+.vendor_bg-warning-soft {
+  background: linear-gradient(135deg, #fffaf0 0%, #feebc8 100%) !important;
+}
+
+.vendor_bg-destructive-soft {
+  background: linear-gradient(135deg, #fff5f5 0%, #fed7d7 100%) !important;
+}
+
+.vendor_text-primary {
+  color: #4299e1 !important;
+}
+
+.vendor_text-success {
+  color: #48bb78 !important;
+}
+
+.vendor_text-warning {
+  color: #ed8936 !important;
+}
+
+.vendor_text-destructive {
+  color: #f56565 !important;
+}
+
+/* Badge Styles - Updated for UI components */
+
+/* Vendor Trendline Charts */
+/* Simple container - no extra styling */
+.vendor_trendline-simple {
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  padding: 0 !important;
+  overflow: visible !important;
+}
+
+.vendor_trendline-charts {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem 0;
+  overflow: hidden; /* Prevent content from overflowing */
+}
+
+/* Vendor Dropdown Styles */
+/* Simple dropdown container - no card background */
+.vendor_dropdown-container-simple {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.375rem !important;
+  position: relative !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  padding: 0 !important;
+  margin-bottom: 1rem !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Legacy support */
+.vendor_dropdown-container-top {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.375rem !important;
+  position: relative !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  padding: 0 !important;
+  margin-bottom: 1rem !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Simple vendor info - no nested card */
+.vendor_info-simple {
+  width: 100% !important;
+  margin-top: 0.75rem !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.vendor_info-row {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 0 !important;
+}
+
+/* Chart Section - Keep for backward compatibility but hide */
+.vendor_chart-section {
+  display: none !important; /* Hide nested card */
+  background-color: transparent !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  margin-bottom: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.vendor_chart-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  margin-bottom: 0.5rem !important;
+}
+
+.vendor_dropdown-label {
+  font-size: 0.75rem !important; /* Reduced to 12px */
+  font-weight: 600 !important;
+  color: #374151 !important;
+  margin-bottom: 0.375rem !important; /* Reduced margin */
+  display: block !important;
+}
+
+.vendor_dropdown {
+  padding: 0.5rem 2rem 0.5rem 0.625rem !important; /* Reduced padding */
+  border-radius: 0.375rem !important;
+  border: 1px solid #d1d5db !important;
+  background-color: white !important;
+  font-size: 0.75rem !important; /* Reduced to 12px */
+  color: #1f2937 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  transition: all 0.2s ease !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+  cursor: pointer !important;
+  appearance: none !important;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236B7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E") !important;
+  background-position: right 0.5rem center !important;
+  background-repeat: no-repeat !important;
+  background-size: 0.875rem 0.875rem !important; /* Smaller arrow */
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  min-height: 2rem !important; /* Reduced height */
+  font-weight: 500 !important;
+}
+
+.vendor_dropdown:hover {
+  border-color: #9ca3af !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+.vendor_dropdown:focus {
+  outline: none !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15) !important;
+}
+
+
+/* Simple header - no border */
+.vendor_trendline-header-simple {
+  text-align: left !important;
+  margin-bottom: 0.75rem !important;
+  padding-bottom: 0 !important;
+  border-bottom: none !important;
+}
+
+.vendor_trendline-header {
+  text-align: left !important;
+  margin-bottom: 0.5rem !important;
+  padding-bottom: 0 !important;
+  border-bottom: none !important;
+}
+
+.vendor_trendline-title {
+  font-size: 0.9375rem !important; /* Reduced to 15px */
+  font-weight: 600 !important;
+  color: #2d3748 !important;
+  margin-bottom: 0.125rem !important; /* Reduced margin */
+}
+
+.vendor_trendline-subtitle {
+  font-size: 0.6875rem !important; /* Reduced to 11px */
+  color: #718096 !important;
+  font-weight: 500 !important;
+}
+
+.vendor_trendline-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.vendor_trendline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.vendor_trendline-item {
+  background-color: transparent !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  transition: all 0.2s ease !important;
+  border: none !important;
+  margin-bottom: 0 !important;
+  overflow: visible !important;
+}
+
+.vendor_trendline-item:hover {
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.vendor_trendline-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.vendor_trendline-vendor-name {
+  font-size: 0.8125rem !important; /* Reduced to 13px */
+  font-weight: 600 !important;
+  color: #2d3748 !important;
+  flex: 1 !important;
+  margin-right: 0.5rem !important; /* Reduced margin */
+}
+
+.vendor_trendline-current-days {
+  font-size: 0.6875rem !important; /* Reduced to 11px */
+  font-weight: 600 !important;
+  padding: 0.1875rem 0.5rem !important; /* Reduced padding */
+  border-radius: 9999px !important;
+  background-color: #edf2f7 !important;
+  color: #4a5568 !important;
+  flex-shrink: 0 !important;
+}
+
+.vendor_trendline-current-days.vendor_text-success {
+  background-color: rgba(72, 187, 120, 0.1);
+  color: #48bb78;
+}
+
+.vendor_trendline-current-days.vendor_text-warning {
+  background-color: rgba(237, 137, 54, 0.1);
+  color: #ed8936;
+}
+
+.vendor_trendline-chart {
+  width: 100% !important;
+  height: auto !important;
+  display: flex !important;
+  align-items: center !important;
+  margin-top: 0.5rem !important; /* Reduced margin */
+  gap: 0.5rem !important; /* Reduced gap */
+  overflow: hidden !important; /* Prevent chart from overflowing */
+  max-width: 100% !important; /* Ensure chart stays within container */
+  padding: 0.25rem 0 !important;
+}
+
+.vendor_trendline-chart-labels {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: #718096;
+  text-align: right;
+  padding-right: 0.75rem;
+  width: 1.75rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+}
+
+.vendor_trendline-chart-bar-container {
+  flex: 1 !important;
+  height: 1.75rem !important; /* Reduced height */
+  background-color: #edf2f7 !important;
+  border-radius: 4px !important;
+  overflow: hidden !important;
+  display: flex !important;
+  align-items: center !important;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+.vendor_trendline-chart-bar {
+  height: 100%;
+  border-radius: 6px;
+  position: relative;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  padding: 0 0.75rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.vendor_trendline-chart-value {
+  color: white !important;
+  font-size: 0.6875rem !important; /* Reduced to 11px */
+  font-weight: 700 !important;
+  white-space: nowrap !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1) !important;
+}
+
+.vendor_trendline-grid {
+  stroke: #e5e7eb;
+  stroke-width: 1;
+  opacity: 0.5;
+}
+
+.vendor_trendline-path {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.vendor_trendline-path.vendor_trendline-success {
+  stroke: hsl(var(--vendor_success));
+}
+
+.vendor_trendline-path.vendor_trendline-warning {
+  stroke: hsl(var(--vendor_warning));
+}
+
+.vendor_trendline-dot {
+  r: 3;
+  transition: r 0.2s ease;
+}
+
+.vendor_trendline-dot:hover {
+  r: 5;
+}
+
+.vendor_trendline-dot.vendor_trendline-dot-success {
+  fill: hsl(var(--vendor_success));
+}
+
+.vendor_trendline-dot.vendor_trendline-dot-warning {
+  fill: hsl(var(--vendor_warning));
+}
+
+.vendor_trendline-axis-text {
+  font-size: 10px;
+  fill: hsl(var(--vendor_muted-foreground));
+  text-anchor: end;
+  font-weight: 500;
+}
+
+.vendor_trendline-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 6rem;
+}
+
+.vendor_trendline-empty-text {
+  font-size: 0.875rem;
+  color: hsl(var(--vendor_muted-foreground));
+  text-align: center;
+}
+
+/* Fallback bar chart styles */
+.vendor_trendline-bar-success {
+  background: linear-gradient(135deg, #48bb78, #38a169);
+}
+
+.vendor_trendline-bar-warning {
+  background: linear-gradient(135deg, #ed8936, #dd6b20);
+}
+
+.vendor_trendline-current-text {
+  font-size: 12px;
+  fill: hsl(var(--vendor_foreground));
+  text-anchor: middle;
+  font-weight: 600;
+}
+
+/* Vendor Breakdown Table (keeping for backward compatibility) */
+.vendor_breakdown-table {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.vendor_breakdown-header {
+  text-align: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid hsl(var(--vendor_border));
+}
+
+.vendor_breakdown-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: hsl(var(--vendor_foreground));
+  margin-bottom: 0.25rem;
+}
+
+.vendor_breakdown-subtitle {
+  font-size: 0.75rem;
+  color: hsl(var(--vendor_muted-foreground));
+}
+
+.vendor_breakdown-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.vendor_breakdown-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.vendor_breakdown-item {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem;
+  background-color: hsl(var(--vendor_muted) / 0.3);
+  border-radius: var(--vendor_radius);
+  transition: background-color 0.2s ease;
+}
+
+.vendor_breakdown-item:hover {
+  background-color: hsl(var(--vendor_muted) / 0.5);
+}
+
+.vendor_breakdown-rank {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background-color: hsl(var(--vendor_primary));
+  color: hsl(var(--vendor_primary-foreground));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-right: 0.75rem;
+  flex-shrink: 0;
+}
+
+.vendor_breakdown-name {
+  flex: 1;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: hsl(var(--vendor_foreground));
+  margin-right: 0.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vendor_breakdown-days {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+  border-radius: 9999px;
+  background-color: hsl(var(--vendor_muted));
+  color: hsl(var(--vendor_foreground));
+  flex-shrink: 0;
+}
+
+.vendor_breakdown-days.vendor_text-success {
+  background-color: hsl(var(--vendor_success) / 0.1);
+  color: hsl(var(--vendor_success));
+}
+
+.vendor_breakdown-days.vendor_text-warning {
+  background-color: hsl(var(--vendor_warning) / 0.1);
+  color: hsl(var(--vendor_warning));
+}
+
+.vendor_breakdown-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 6rem;
+}
+
+.vendor_breakdown-empty-text {
+  font-size: 0.875rem;
+  color: hsl(var(--vendor_muted-foreground));
+  text-align: center;
+}
+
+/* Responsive Design */
+@media (max-width: 640px) {
+  .vendor_kpi-dashboard {
+    padding: 1rem !important;
+  }
+  
+  .vendor_kpi-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 1rem !important;
+    padding: 1rem !important;
+  }
+  
+  .vendor_kpi-title {
+    font-size: 1.5rem !important;
+  }
+  
+  .vendor_kpi-subtitle {
+    font-size: 0.8125rem !important;
+  }
+  
+  .vendor_export-button {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+  
+  .vendor_metric-details {
+    grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+  }
+  
+  .vendor_kpi-card {
+    padding: 1rem !important;
+  }
+  
+  .vendor_chart-container {
+    height: 10rem !important;
+  }
+  
+  .vendor_categories-grid {
+    grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+  }
+  
+  .vendor_breakdown-item {
+    padding: 0.375rem !important;
+  }
+  
+  .vendor_breakdown-name {
+    font-size: 0.8125rem !important;
+  }
+  
+  .vendor_breakdown-days {
+    font-size: 0.6875rem !important;
+    padding: 0.1875rem 0.375rem !important;
+  }
+  
+  .vendor_trendline-item {
+    padding: 0.75rem !important;
+  }
+  
+  .vendor_trendline-vendor-name {
+    font-size: 0.8125rem !important;
+  }
+  
+  .vendor_trendline-current-days {
+    font-size: 0.6875rem !important;
+    padding: 0.1875rem 0.375rem !important;
+  }
+  
+  .vendor_trendline-chart {
+    height: 4rem !important;
+  }
+}
+
+/* Tablet responsiveness */
+@media (min-width: 641px) and (max-width: 1023px) {
+  .vendor_kpi-dashboard {
+    padding: 1.5rem !important;
+  }
+  
+  .vendor_kpi-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  
+  .vendor_kpi-comprehensive-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+/* Animation keyframes */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Apply fade-in animation to cards */
+.vendor_kpi-card {
+  animation: fadeInUp 0.5s ease-out;
+  animation-fill-mode: both;
+}
+
+.vendor_kpi-summary-grid .vendor_kpi-card:nth-child(1) {
+  animation-delay: 0.1s;
+}
+
+.vendor_kpi-summary-grid .vendor_kpi-card:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.vendor_kpi-summary-grid .vendor_kpi-card:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.vendor_kpi-summary-grid .vendor_kpi-card:nth-child(4) {
+  animation-delay: 0.4s;
+}
+
+/* Loading state animation */
+.vendor_chart-loading-text {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Smooth scrolling */
+.vendor_kpi-dashboard {
+  scroll-behavior: smooth;
+}
+
+/* Additional utility classes */
+.vendor_flex {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  position: relative !important; /* Add relative positioning for absolute children */
+}
+
+.vendor_items-center {
+  align-items: flex-start !important;
+}
+
+.vendor_justify-between {
+  justify-content: flex-start !important; /* Changed from space-between to flex-start */
+  gap: 1.5rem !important;
+  padding: 0.5rem 0 !important;
+  width: 100% !important; /* Ensure full width */
+}
+
+.vendor_gap-2 {
+  gap: 0.5rem !important;
+}
+
+.vendor_text-right {
+  text-align: right !important;
+}
+
+.vendor_text-2xl {
+  font-size: 0.870rem !important;
+  line-height: 2rem !important;
+  white-space: nowrap !important; /* Keep on single line */
+  overflow: hidden !important; /* Hide overflow */
+  text-overflow: ellipsis !important; /* Show ellipsis if too long */
+}
+
+.vendor_font-bold {
+  font-weight: 700 !important;
+}
+
+.vendor_font-medium {
+  font-weight: 500 !important;
+}
+
+.vendor_text-sm {
+  font-size: 0.875rem !important;
+  line-height: 1.25rem !important;
+}
+
+.vendor_text-xs {
+  font-size: 0.75rem !important;
+  line-height: 1rem !important;
+}
+
+.vendor_h-4 {
+  height: 1rem !important;
+}
+
+.vendor_w-4 {
+  width: 1rem !important;
+}
+
+.vendor_h-8 {
+  height: 2rem !important;
+}
+
+.vendor_w-8 {
+  width: 2rem !important;
+}
+
+.vendor_mr-2 {
+  margin-right: 0.5rem !important;
+}
+
+/* Animated Counter Styles */
+.vendor_animated-counter {
+  display: inline-block !important;
+  font-feature-settings: 'tnum' 1 !important;
+  transition: all 0.3s ease !important;
+}
+
+/* Sparkline Chart Styles */
+.vendor_sparkline-container {
+  position: absolute !important;
+  bottom: 0.5rem !important;
+  left: 0.5rem !important;
+  right: 0.5rem !important;
+  height: 3rem !important;
+  opacity: 0.6 !important;
+  transition: opacity 0.3s ease !important;
+  z-index: 2 !important;
+  pointer-events: none !important;
+  background: linear-gradient(to top, rgba(255, 255, 255, 0.8), transparent) !important;
+  border-radius: 0 0 8px 8px !important;
+}
+
+.vendor_kpi-card:hover .vendor_sparkline-container {
+  opacity: 1 !important;
+}
+
+.vendor_sparkline-wrapper {
+  width: 100% !important;
+  height: 100% !important;
+  position: relative !important;
+}
+
+.vendor_sparkline-wrapper canvas {
+  max-height: 100% !important;
+}
+
+/* Enhanced Loading States */
+.vendor_chart-loading {
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.vendor_chart-loading::before {
+  content: '' !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: -100% !important;
+  width: 100% !important;
+  height: 100% !important;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent) !important;
+  animation: loadingShimmer 1.5s infinite !important;
+}
+
+@keyframes loadingShimmer {
+  0% { left: -100% !important; }
+  100% { left: 100% !important; }
+}
+
+/* Enhanced Card Hover Effects */
+.vendor_kpi-card {
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.vendor_kpi-card::before {
+  content: '' !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  height: 3px !important;
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6, #ec4899) !important;
+  transform: scaleX(0) !important;
+  transform-origin: left !important;
+  transition: transform 0.3s ease !important;
+}
+
+.vendor_kpi-card:hover::before {
+  transform: scaleX(1) !important;
+}
+
+/* Enhanced Metric Value Animation */
+.vendor_kpi-value {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.vendor_kpi-card:hover .vendor_kpi-value {
+  transform: scale(1.05) !important;
+}
+
+/* Pulse Animation for Important Metrics */
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08) !important;
+  }
+  50% {
+    box-shadow: 0 4px 20px rgba(59, 130, 246, 0.2) !important;
+  }
+}
+
+.vendor_kpi-card.vendor_metric-highlight {
+  animation: pulseGlow 2s ease-in-out infinite !important;
+}
+
+/* Smooth Value Transitions */
+.vendor_kpi-value {
+  will-change: transform !important;
+}
+
+/* Enhanced Badge Styles */
+.vendor_kpi-card .vendor_metric-detail {
+  transition: all 0.2s ease !important;
+}
+
+.vendor_kpi-card:hover .vendor_metric-detail {
+  background: #f8fafc !important;
+  transform: translateX(2px) !important;
+}
+
+/* Progress Circle Animation */
+@keyframes drawProgress {
+  from {
+    stroke-dasharray: 0 314 !important;
+  }
+}
+
+.vendor_category-progress-fill {
+  animation: drawProgress 1.5s ease-out forwards !important;
+}
+
+/* Enhanced Chart Container */
+.vendor_chart-container {
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.vendor_chart-container::after {
+  content: '' !important;
+  position: absolute !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  height: 1px !important;
+  background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.1), transparent) !important;
+  opacity: 0 !important;
+  transition: opacity 0.3s ease !important;
+}
+
+.vendor_kpi-card:hover .vendor_chart-container::after {
+  opacity: 1 !important;
+}
+
+/* ============================================
+   NEW REGISTRATION TIME LAYOUT
+   ============================================ */
+
+.vendor_registration-time-layout {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  height: 100% !important;
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+/* Main Chart Area */
+.vendor_registration-time-chart {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex: 0 1 auto !important;
+  gap: 0.375rem !important;
+  padding: 0.375rem !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+}
+
+/* Centered Value Display */
+.vendor_registration-main-value {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0rem !important;
+  flex-shrink: 0 !important;
+}
+
+.vendor_registration-value-large {
+  font-size: 2rem !important;
+  font-weight: 800 !important;
+  line-height: 0.85 !important;
+  letter-spacing: -0.02em !important;
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+}
+
+.vendor_registration-value-unit {
+  font-size: 0.65rem !important;
+  color: #6b7280 !important;
+  font-weight: 500 !important;
+}
+
+/* Status Badge */
+.vendor_registration-status-badge {
+  display: inline-block !important;
+  padding: 0.3rem 0.625rem !important;
+  border: 1.5px solid !important;
+  border-radius: 50px !important;
+  font-size: 0.6rem !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+}
+
+/* Progress Bar Section */
+.vendor_registration-progress-section {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.375rem !important;
+  width: 100% !important;
+  flex-shrink: 0 !important;
+}
+
+.vendor_registration-progress-bar-container {
+  width: 100% !important;
+}
+
+.vendor_registration-progress-bar {
+  display: flex !important;
+  width: 100% !important;
+  height: 0.375rem !important;
+  border-radius: 9999px !important;
+  overflow: hidden !important;
+  gap: 0 !important;
+}
+
+.vendor_registration-progress-segment {
+  flex: 1 !important;
+  height: 100% !important;
+}
+
+/* Metrics Grid */
+.vendor_registration-metrics {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 0.25rem !important;
+  width: 100% !important;
+  flex-shrink: 0 !important;
+}
+
+.vendor_registration-metric {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.1rem !important;
+  text-align: center !important;
+}
+
+.vendor_registration-metric-number {
+  font-size: 0.8rem !important;
+  font-weight: 700 !important;
+  color: #1f2937 !important;
+  line-height: 1 !important;
+}
+
+.vendor_registration-metric-label {
+  font-size: 0.55rem !important;
+  color: #6b7280 !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.025em !important;
+  line-height: 1 !important;
+}
+
+/* Footer Details */
+.vendor_registration-footer-details {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 0.25rem !important;
+  padding: 0.375rem !important;
+  border-top: 1px solid rgba(0, 0, 0, 0.08) !important;
+  background: transparent !important;
+  flex-shrink: 0 !important;
+  margin-top: auto !important;
+}
+
+.vendor_registration-footer-item {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.1rem !important;
+  text-align: center !important;
+}
+
+.vendor_registration-footer-label {
+  font-size: 0.55rem !important;
+  color: #6b7280 !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.025em !important;
+}
+
+.vendor_registration-footer-value {
+  font-size: 0.7rem !important;
+  color: #1f2937 !important;
+  font-weight: 600 !important;
+  padding: 0.2rem 0.3rem !important;
+  border-radius: 3px !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  line-height: 1 !important;
+}
+
+/* Cybersecurity Footer Details */
+.vendor_cybersecurity-footer {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 0.375rem !important;
+  padding: 0.5rem !important;
+  border-top: 1px solid rgba(0, 0, 0, 0.08) !important;
+  background: transparent !important;
+  width: 100% !important;
+  margin-top: auto !important;
+}
+
+.vendor_cybersecurity-footer-item {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.1rem !important;
+  text-align: center !important;
+}
+
+.vendor_cybersecurity-footer-label {
+  font-size: 0.55rem !important;
+  color: #6b7280 !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.025em !important;
+}
+
+.vendor_cybersecurity-footer-value {
+  font-size: 0.7rem !important;
+  color: #1f2937 !important;
+  font-weight: 600 !important;
+  padding: 0.2rem 0.3rem !important;
+  border-radius: 3px !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  line-height: 1 !important;
+}

@@ -1,17 +1,13 @@
 <template>
   <div class="plan-submission-ocr">
-    <!-- Page Header -->
-    <div class="page-header">
-      <div class="header-content">
-        <h1 class="page-title">OCR Extraction & Plan Assignment</h1>
-        <p class="page-subtitle">Extract data from submitted plans and assign for evaluation</p>
-      </div>
-    </div>
-
     <!-- Breadcrumb Navigation -->
     <div class="breadcrumb-container">
       <nav class="breadcrumb">
-        <div class="breadcrumb-item" :class="{ 'breadcrumb-item--active': currentStep === 1 }">
+        <div 
+          class="breadcrumb-item" 
+          :class="{ 'breadcrumb-item--active': currentStep === 1 }"
+          @click="goToStep(1)"
+        >
           <div class="breadcrumb-icon">
             <svg v-if="currentStep === 1" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
@@ -30,7 +26,15 @@
           </svg>
         </div>
         
-        <div class="breadcrumb-item" :class="{ 'breadcrumb-item--active': currentStep === 2 }">
+        <div 
+          class="breadcrumb-item" 
+          :class="{ 
+            'breadcrumb-item--active': currentStep === 2,
+            'breadcrumb-item--disabled': !isStep2Enabled && currentStep !== 2
+          }"
+          @click="handleStep2Click"
+          :title="!isStep2Enabled ? 'Please complete OCR extraction and save data in Step 1 first' : ''"
+        >
           <div class="breadcrumb-icon">
             <svg v-if="currentStep === 2" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"/>
@@ -213,253 +217,109 @@
                   </button>
                 </div>
 
-                <!-- BCP Extraction Fields -->
-                <div v-if="selectedPlan.plan_type === 'BCP'" class="extraction-fields">
-                  <div class="field-section">
-                    <h4 class="section-title">Purpose & Scope</h4>
-                    <div class="field-grid">
-                      <div class="field-group field-group--full">
-                        <label class="field-label">Purpose & Scope</label>
-                        <textarea 
-                          class="textarea h-24" 
-                          placeholder="Enter the purpose and scope of the business continuity plan..."
-                          v-model="extractedData.purpose_scope"
-                        />
+                <!-- Unified Extraction Fields for All Plan Types - Dynamic -->
+                <div class="extraction-fields">
+                  <!-- Field Management Header -->
+                  <div class="field-management-header">
+                    <button 
+                      class="btn btn--outline btn--sm"
+                      @click="showAddFieldModal = true"
+                    >
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                      </svg>
+                      Add Custom Field
+                    </button>
+                    <button 
+                      class="btn btn--outline btn--sm"
+                      @click="showRemoveButtons = !showRemoveButtons"
+                      :class="{ 'btn--active': showRemoveButtons }"
+                    >
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                      </svg>
+                      Remove Fields
+                    </button>
+                  </div>
+
+                  <!-- Dynamic Field Sections -->
+                  <template v-for="sectionGroup in getSectionGroups()" :key="sectionGroup.section">
+                    <div class="field-section">
+                      <div class="section-header">
+                        <h4 class="section-title">{{ sectionGroup.title }}</h4>
+                        <button 
+                          v-if="showRemoveButtons"
+                          class="btn-remove-section"
+                          @click="removeSection(sectionGroup.section)"
+                          :title="'Remove entire section: ' + sectionGroup.title"
+                        >
+                          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                          </svg>
+                        </button>
+                      </div>
+                      <div 
+                        class="field-grid"
+                        :class="{
+                          'field-grid--2cols': sectionGroup.section === 'purpose' || sectionGroup.section === 'risk' || sectionGroup.section === 'recovery' || sectionGroup.section === 'incident',
+                          'field-grid--3cols': sectionGroup.section === 'dependencies' || sectionGroup.section === 'communication' || sectionGroup.section === 'procedures' || sectionGroup.section === 'training',
+                          'field-grid--4cols': sectionGroup.section === 'infrastructure'
+                        }"
+                      >
+                        <div 
+                          v-for="field in sectionGroup.fields" 
+                          :key="field.id"
+                          class="field-group"
+                          :style="{
+                            gridColumn: field.gridCols === 2 ? 'span 2' : 'span 1'
+                          }"
+                        >
+                          <div class="field-header">
+                            <label class="field-label">{{ field.label }}</label>
+                            <button 
+                              v-if="showRemoveButtons"
+                              class="btn-remove-field"
+                              @click="removeField(field.id)"
+                              :title="field.isCustom ? 'Remove custom field' : 'Remove field'"
+                            >
+                              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                              </svg>
+                            </button>
+                          </div>
+                          <textarea 
+                            class="textarea" 
+                            :placeholder="field.placeholder"
+                            :style="{ minHeight: `${field.rows * 1.5}rem` }"
+                            v-model="extractedData[field.key]"
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  </template>
                   
-                  <div class="field-section">
-                    <h4 class="section-title">Regulatory & Compliance</h4>
-                    <div class="field-grid">
-                      <div class="field-group">
-                        <label class="field-label">Regulatory References</label>
-                        <input 
-                          class="input" 
-                          placeholder='["SOX", "Basel III", "PCI DSS"]' 
-                          v-model="extractedData.regulatory_references"
-                        />
-                      </div>
+                  <!-- Removed Fields Section -->
+                  <div v-if="removedFields.length > 0" class="removed-fields-section">
+                    <div class="section-header">
+                      <h4 class="section-title removed-section-title">Removed Fields</h4>
                     </div>
-                  </div>
-                  
-                  <div class="field-section">
-                    <h4 class="section-title">Critical Services & Dependencies</h4>
-                    <div class="field-grid">
-                      <div class="field-group">
-                        <label class="field-label">Critical Services</label>
-                        <input 
-                          class="input" 
-                          placeholder='["Payments", "Collections", "Customer Service"]' 
-                          v-model="extractedData.critical_services"
-                        />
-                      </div>
-                      <div class="field-group">
-                        <label class="field-label">Internal Dependencies</label>
-                        <input 
-                          class="input" 
-                          placeholder='["IT Systems", "HR Department", "Finance"]' 
-                          v-model="extractedData.dependencies_internal"
-                        />
-                      </div>
-                      <div class="field-group">
-                        <label class="field-label">External Dependencies</label>
-                        <input 
-                          class="input" 
-                          placeholder='["Cloud Provider", "Payment Gateway", "Banking Partners"]' 
-                          v-model="extractedData.dependencies_external"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div class="field-section">
-                    <h4 class="section-title">Risk & Business Impact</h4>
-                    <div class="field-grid">
-                      <div class="field-group field-group--full">
-                        <label class="field-label">Risk Assessment Summary</label>
+                    <div class="removed-fields-grid">
+                      <div 
+                        v-for="field in removedFields" 
+                        :key="field.id"
+                        class="removed-field-group"
+                      >
+                        <div class="field-header">
+                          <label class="field-label removed-field-label">{{ field.label }}</label>
+                          <span class="removed-badge">Removed</span>
+                        </div>
                         <textarea 
-                          class="textarea h-20" 
-                          placeholder="Enter risk assessment summary..." 
-                          v-model="extractedData.risk_assessment_summary"
-                        />
-                      </div>
-                      <div class="field-group field-group--full">
-                        <label class="field-label">Business Impact Analysis Summary</label>
-                        <textarea 
-                          class="textarea h-20" 
-                          placeholder="Enter business impact analysis..." 
-                          v-model="extractedData.bia_summary"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div class="field-section">
-                    <h4 class="section-title">Recovery Objectives</h4>
-                    <div class="field-grid">
-                      <div class="field-group">
-                        <label class="field-label">RTO Targets</label>
-                        <input 
-                          class="input" 
-                          placeholder='{"Payments":"4h","Collections":"2h","Customer Service":"8h"}' 
-                          v-model="extractedData.rto_targets"
-                          title='Enter as JSON object: {"Service":"Time"}'
-                        />
-                      </div>
-                      <div class="field-group">
-                        <label class="field-label">RPO Targets</label>
-                        <input 
-                          class="input" 
-                          placeholder='{"Payments":"15m","Collections":"30m","Customer Data":"1h"}' 
-                          v-model="extractedData.rpo_targets"
-                          title='Enter as JSON object: {"Service":"Time"}'
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div class="field-section">
-                    <h4 class="section-title">Communication & Roles</h4>
-                    <div class="field-grid">
-                      <div class="field-group field-group--full">
-                        <label class="field-label">Internal Communication Plan</label>
-                        <textarea 
-                          class="textarea h-16" 
-                          placeholder="Enter internal communication plan..." 
-                          v-model="extractedData.communication_plan_internal"
-                        />
-                      </div>
-                      <div class="field-group field-group--full">
-                        <label class="field-label">Bank Communication Plan</label>
-                        <textarea 
-                          class="textarea h-16" 
-                          placeholder="Enter bank communication plan..." 
-                          v-model="extractedData.communication_plan_bank"
-                        />
-                      </div>
-                      <div class="field-group">
-                        <label class="field-label">Roles & Responsibilities</label>
-                        <input 
-                          class="input" 
-                          placeholder='["Incident Commander", "Communication Lead", "Technical Lead"]' 
-                          v-model="extractedData.roles_responsibilities"
-                          title='Enter as JSON array: ["Role1", "Role2"]'
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                <!-- DRP Extraction Fields -->
-                <div v-else class="extraction-fields">
-                  <div class="field-section">
-                    <h4 class="section-title">Purpose & Scope</h4>
-                    <div class="field-grid">
-                      <div class="field-group field-group--full">
-                        <label class="field-label">Purpose & Scope</label>
-                        <textarea 
-                          class="textarea h-24" 
-                          placeholder="Enter the purpose and scope of the disaster recovery plan..."
-                          v-model="extractedData.purpose_scope"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div class="field-section">
-                    <h4 class="section-title">Critical Systems & Infrastructure</h4>
-                    <div class="field-grid">
-                      <div class="field-group">
-                        <label class="field-label">Critical Systems</label>
-                        <input 
-                          class="input" 
-                          placeholder='["Core Banking", "Payment Gateway", "Database Servers"]' 
-                          v-model="extractedData.critical_systems"
-                        />
-                      </div>
-                      <div class="field-group">
-                        <label class="field-label">Critical Applications</label>
-                        <input 
-                          class="input" 
-                          placeholder='["Loan System", "Trading Platform", "Customer Portal"]' 
-                          v-model="extractedData.critical_applications"
-                        />
-                      </div>
-                      <div class="field-group">
-                        <label class="field-label">Databases</label>
-                        <input 
-                          class="input" 
-                          placeholder='["Customer DB", "Transaction DB", "Archive DB"]' 
-                          v-model="extractedData.databases_list"
-                        />
-                      </div>
-                      <div class="field-group">
-                        <label class="field-label">Supporting Infrastructure</label>
-                        <input 
-                          class="input" 
-                          placeholder='["Network", "Storage", "Servers", "Security"]' 
-                          v-model="extractedData.supporting_infrastructure"
-                        />
-                      </div>
-                      <div class="field-group">
-                        <label class="field-label">Third Party Services</label>
-                        <input 
-                          class="input" 
-                          placeholder='["Cloud Provider", "SMS Gateway", "Email Service"]' 
-                          v-model="extractedData.third_party_services"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div class="field-section">
-                    <h4 class="section-title">Recovery Objectives</h4>
-                    <div class="field-grid">
-                      <div class="field-group">
-                        <label class="field-label">RTO Targets</label>
-                        <input 
-                          class="input" 
-                          placeholder='{"Critical Systems":"2h","Applications":"4h","Databases":"1h"}' 
-                          v-model="extractedData.rto_targets"
-                        />
-                      </div>
-                      <div class="field-group">
-                        <label class="field-label">RPO Targets</label>
-                        <input 
-                          class="input" 
-                          placeholder='{"Critical Systems":"30m","Applications":"1h","Databases":"15m"}' 
-                          v-model="extractedData.rpo_targets"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div class="field-section">
-                    <h4 class="section-title">Recovery Procedures</h4>
-                    <div class="field-grid">
-                      <div class="field-group">
-                        <label class="field-label">Recovery Site Details</label>
-                        <input 
-                          class="input" 
-                          placeholder="Primary DR site location and details" 
-                          v-model="extractedData.recovery_site_details"
-                        />
-                      </div>
-                      <div class="field-group field-group--full">
-                        <label class="field-label">Failover Procedures</label>
-                        <textarea 
-                          class="textarea h-16" 
-                          placeholder="Enter failover procedures..." 
-                          v-model="extractedData.failover_procedures"
-                        />
-                      </div>
-                      <div class="field-group field-group--full">
-                        <label class="field-label">Failback Procedures</label>
-                        <textarea 
-                          class="textarea h-16" 
-                          placeholder="Enter failback procedures..." 
-                          v-model="extractedData.failback_procedures"
+                          class="textarea removed-field-textarea" 
+                          :placeholder="field.placeholder"
+                          :style="{ minHeight: `${field.rows * 1.5}rem` }"
+                          :value="extractedData[field.key] || ''"
+                          readonly
+                          disabled
                         />
                       </div>
                     </div>
@@ -478,26 +338,18 @@
                     </svg>
                     Load Data
                   </button>
-                  <button 
-                    class="btn btn--primary"
-                    @click="saveExtractedData"
-                    :disabled="saving"
-                  >
-                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3-3m0 0l-3 3m3-3v12"/>
-                    </svg>
-                    {{ saving ? 'Saving...' : 'Save Data' }}
-                  </button>
-                  <button 
-                    class="btn btn--success"
-                    @click="markPlanComplete"
-                    :disabled="saving"
-                  >
-                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                    Mark Complete & Continue
-                  </button>
+                  <div class="save-action-group">
+                    <button 
+                      class="btn btn--primary"
+                      @click="saveExtractedData"
+                      :disabled="saving"
+                    >
+                      <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3-3m0 0l-3 3m3-3v12"/>
+                      </svg>
+                      {{ saving ? 'Saving...' : 'Save and Assign' }}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -506,154 +358,261 @@
       </div>
 
       <!-- Step 2: Assignment for Evaluation -->
-      <div v-if="currentStep === 2" class="step-panel step-2">
-        <div class="step-header">
-          <h2 class="step-title">
-            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"/>
-            </svg>
-            Step 2: Assign for Evaluation
-          </h2>
-          <p class="step-description">Assign your completed plans for evaluation</p>
-        </div>
-
-        <div class="step-body">
-          <!-- Empty State -->
-          <div v-if="!selectedPlanId" class="empty-state">
-            <div class="empty-icon">📄</div>
-            <p>No plan selected for assignment</p>
-            <button @click="goToStep(1)" class="btn btn--primary">Go to Step 1</button>
+      <div v-if="currentStep === 2" class="space-y-6">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title flex items-center gap-2">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+              </svg>
+              Assign for Evaluation
+            </h3>
           </div>
-          
-          <!-- Assignment Forms for Selected Plan -->
-          <div v-else-if="selectedPlan && selectedPlan.plan_id" class="assignment-forms">
-            <div class="assignment-form-card">
-              <div class="form-card-header">
-                <h3 class="plan-title">{{ selectedPlan.plan_name }}</h3>
-                <div class="plan-badges">
-                  <span :class="['type-badge', selectedPlan.plan_type === 'BCP' ? 'type-bcp' : 'type-drp']">
-                    {{ selectedPlan.plan_type }}
-                  </span>
-                  <span class="plan-id-badge">ID: {{ selectedPlan.plan_id }}</span>
+          <div class="card-content space-y-6">
+            <!-- Empty State -->
+            <div v-if="!selectedPlanId" class="empty-state">
+              <div class="empty-icon">📄</div>
+              <p>No plan selected for assignment</p>
+              <button @click="goToStep(1)" class="btn btn--primary">Go to Step 1</button>
+            </div>
+            
+            <!-- Assignment Form for Selected Plan -->
+            <form v-else-if="selectedPlan && selectedPlan.plan_id" @submit.prevent="createAssignment" class="space-y-6">
+              <!-- Row 1: Plan Type, Object ID, Object Type -->
+              <div class="form-grid-3">
+                <div class="space-y-2">
+                  <label for="planType" class="block text-sm font-medium">Plan Type <span class="text-destructive">*</span></label>
+                  <select v-model="assignmentForm.plan_type" id="planType" class="input" required>
+                    <option value="">Select plan type</option>
+                    <option v-for="pt in planTypes" :key="pt" :value="pt">
+                      {{ pt }}
+                    </option>
+                  </select>
+                </div>
+                <div class="space-y-2">
+                  <label for="objectId" class="block text-sm font-medium">Object ID <span class="text-destructive">*</span></label>
+                  <input 
+                    v-model="assignmentForm.object_id" 
+                    type="number" 
+                    id="objectId" 
+                    class="input" 
+                    required 
+                    placeholder="Enter object ID"
+                    readonly
+                  />
+                </div>
+                <div class="space-y-2">
+                  <label for="objectType" class="block text-sm font-medium">Object Type <span class="text-destructive">*</span></label>
+                  <select v-model="assignmentForm.object_type" id="objectType" class="input" required>
+                    <option value="">Select object type</option>
+                    <option value="PLAN EVALUATION">Plan Evaluation</option>
+                    <option value="NEW QUESTIONNAIRE">New Questionnaire</option>
+                    <option value="QUESTIONNAIRE RESPONSE">Questionnaire Response</option>
+                  </select>
                 </div>
               </div>
-              
-              <div class="assignment-form-content">
-                <form @submit.prevent="createAssignment" class="assignment-form">
-                  <!-- Row 1: Workflow Name, Assigner, Assigner Name -->
-                  <div class="form-grid-3">
-                    <div class="form-section">
-                      <label class="field-label">Workflow Name <span class="text-destructive">*</span></label>
-                      <input 
-                        v-model="assignmentForm.workflow_name" 
-                        type="text" 
-                        class="input" 
-                        required 
-                        placeholder="Enter workflow name"
-                      />
-                    </div>
-                    <div class="form-section">
-                      <label class="field-label">Assigner <span class="text-destructive">*</span></label>
-                      <select 
-                        v-model="assignmentForm.assigner_id" 
-                        class="select" 
-                        required 
-                        @change="onAssignerChange"
-                        :disabled="isLoadingUsers"
-                      >
-                        <option value="">{{ isLoadingUsers ? 'Loading users...' : 'Select assigner' }}</option>
-                        <option v-for="user in users" :key="user.user_id" :value="user.user_id">
-                          {{ user.display_name }}
-                        </option>
-                      </select>
-                    </div>
-                    <div class="form-section">
-                      <label class="field-label">Assigner Name</label>
-                      <input 
-                        v-model="assignmentForm.assigner_name" 
-                        type="text" 
-                        class="input" 
-                        readonly
-                        placeholder="Auto-filled from selection"
-                      />
-                    </div>
-                  </div>
 
-                  <!-- Row 2: Assignee Name, Assignee ID, Due Date -->
-                  <div class="form-grid-3">
-                    <div class="form-section">
-                      <label class="field-label">Assignee Name</label>
-                      <input 
-                        v-model="assignmentForm.assignee_name" 
-                        type="text" 
-                        class="input" 
-                        readonly
-                        placeholder="Auto-filled from selection"
-                      />
-                    </div>
-                    <div class="form-section">
-                      <label class="field-label">Assignee <span class="text-destructive">*</span></label>
-                      <select 
-                        v-model="assignmentForm.assignee_id" 
-                        class="select" 
-                        :required="!noApprovalNeeded"
-                        @change="onAssigneeChange"
-                        :disabled="noApprovalNeeded || isLoadingUsers"
-                      >
-                        <option value="">{{ isLoadingUsers ? 'Loading users...' : 'Select assignee' }}</option>
-                        <option v-for="user in users" :key="user.user_id" :value="user.user_id">
-                          {{ user.display_name }}
-                        </option>
-                      </select>
-                    </div>
-                    <div class="form-section">
-                      <label class="field-label">Due Date <span class="text-destructive">*</span></label>
-                      <input 
-                        v-model="assignmentForm.due_date" 
-                        type="datetime-local" 
-                        class="input" 
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <!-- Row 3: No Approval Needed Checkbox -->
-                  <div class="form-section mt-4">
-                    <label class="flex items-center gap-2 cursor-pointer">
-                      <input 
-                        type="checkbox" 
-                        v-model="noApprovalNeeded"
-                        class="rounded border-gray-300 cursor-pointer"
-                        @change="handleNoApprovalChange"
-                      />
-                      <span class="text-sm font-medium">No Approval Needed</span>
-                    </label>
-                    <p class="text-xs text-gray-500 ml-6 mt-1">
-                      If checked, the assigner and assignee will be the same (current user), and approval will be automatic
-                    </p>
-                  </div>
-
-                  <!-- Hidden fields for plan-specific data -->
-                  <input type="hidden" :value="selectedPlan.plan_type" />
-                  <input type="hidden" :value="selectedPlan.plan_id" />
-
-                  <!-- Form Actions -->
-                  <div class="form-actions">
-                    <button 
-                      type="submit" 
-                      class="btn btn--primary"
-                      :disabled="isSubmittingAssignment"
-                    >
-                      <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                      </svg>
-                      {{ isSubmittingAssignment ? 'Creating...' : 'Create Assignment' }}
-                    </button>
-                  </div>
-                </form>
+              <!-- Row 2: Workflow Name, Assigner, Assigner Name -->
+              <div class="form-grid-3">
+                <div class="space-y-2">
+                  <label for="workflowName" class="block text-sm font-medium">Workflow Name <span class="text-destructive">*</span></label>
+                  <input 
+                    v-model="assignmentForm.workflow_name" 
+                    type="text" 
+                    id="workflowName" 
+                    class="input" 
+                    required 
+                    placeholder="Enter workflow name"
+                  />
+                </div>
+                <div class="space-y-2">
+                  <label for="assignerId" class="block text-sm font-medium">Assigner <span class="text-destructive">*</span></label>
+                  <select v-model="assignmentForm.assigner_id" id="assignerId" class="input" required @change="onAssignerChange" :disabled="isLoadingUsers">
+                    <option value="">{{ isLoadingUsers ? 'Loading users...' : 'Select assigner' }}</option>
+                    <option v-for="user in users" :key="user.user_id" :value="user.user_id">
+                      {{ user.display_name }}
+                    </option>
+                  </select>
+                </div>
+                <div class="space-y-2">
+                  <label for="assignerName" class="block text-sm font-medium">Assigner Name</label>
+                  <input 
+                    v-model="assignmentForm.assigner_name" 
+                    type="text" 
+                    id="assignerName" 
+                    class="input" 
+                    readonly
+                    placeholder="Auto-filled from selection"
+                  />
+                </div>
               </div>
+
+              <!-- Row 3: Assignee Name, Assignee ID, Due Date -->
+              <div class="form-grid-3">
+                <div class="space-y-2">
+                  <label for="assigneeName" class="block text-sm font-medium">Assignee Name</label>
+                  <input 
+                    v-model="assignmentForm.assignee_name" 
+                    type="text" 
+                    id="assigneeName" 
+                    class="input" 
+                    readonly
+                    placeholder="Auto-filled from selection"
+                  />
+                </div>
+                <div class="space-y-2">
+                  <label for="assigneeId" class="block text-sm font-medium">Assignee <span class="text-destructive">*</span></label>
+                  <select v-model="assignmentForm.assignee_id" id="assigneeId" class="input" :required="!noApprovalNeeded" @change="onAssigneeChange" :disabled="noApprovalNeeded || isLoadingUsers">
+                    <option value="">{{ isLoadingUsers ? 'Loading users...' : 'Select assignee' }}</option>
+                    <option v-for="user in users" :key="user.user_id" :value="user.user_id">
+                      {{ user.display_name }}
+                    </option>
+                  </select>
+                </div>
+                <div class="space-y-2">
+                  <label for="dueDate" class="block text-sm font-medium">Due Date <span class="text-destructive">*</span></label>
+                  <input 
+                    v-model="assignmentForm.due_date" 
+                    type="datetime-local" 
+                    id="dueDate" 
+                    class="input" 
+                    required
+                  />
+                </div>
+              </div>
+
+              <!-- Row 4: No Approval Needed Checkbox -->
+              <div class="space-y-2">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    v-model="noApprovalNeeded"
+                    class="rounded border-gray-300 cursor-pointer"
+                    @change="handleNoApprovalChange"
+                  />
+                  <span class="text-sm font-medium">No Approval Needed</span>
+                </label>
+                <p class="text-xs text-gray-500 ml-6">
+                  If checked, the assigner and assignee will be the same (current user), and approval will be automatic
+                </p>
+              </div>
+
+              <!-- Action Buttons -->
+              <div class="flex gap-4 pt-4">
+                <button type="button" @click="goToStep(1)" class="btn btn--outline">
+                  <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                  </svg>
+                  Back to OCR Extraction
+                </button>
+                <button type="button" @click="resetAssignmentForm" class="btn btn--outline">
+                  <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                  </svg>
+                  Reset Form
+                </button>
+                <button type="submit" class="btn btn--primary" :disabled="isSubmittingAssignment">
+                  <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                  </svg>
+                  {{ isSubmittingAssignment ? 'Creating...' : 'Create Assignment' }}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Field Modal -->
+    <div v-if="showAddFieldModal" class="modal-overlay" @click.self="showAddFieldModal = false">
+      <div class="modal-content add-field-modal">
+        <div class="modal-header">
+          <h3 class="modal-title">Add Custom Field</h3>
+          <button class="btn btn--ghost btn--sm" @click="showAddFieldModal = false">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-section">
+            <label class="field-label">Field Key <span class="text-destructive">*</span></label>
+            <input 
+              v-model="newFieldForm.key" 
+              type="text" 
+              class="input" 
+              placeholder="e.g., custom_field_name"
+              required
+            />
+            <p class="field-hint">Must be unique and contain only letters, numbers, and underscores</p>
+          </div>
+          <div class="form-section">
+            <label class="field-label">Field Label <span class="text-destructive">*</span></label>
+            <input 
+              v-model="newFieldForm.label" 
+              type="text" 
+              class="input" 
+              placeholder="e.g., Custom Field Name"
+              required
+            />
+          </div>
+          <div class="form-section">
+            <label class="field-label">Section</label>
+            <select v-model="newFieldForm.section" class="select">
+              <option value="custom">Custom Fields</option>
+              <option value="purpose">Purpose & Scope</option>
+              <option value="dependencies">Dependencies</option>
+              <option value="infrastructure">Infrastructure</option>
+              <option value="risk">Risk & Impact</option>
+              <option value="recovery">Recovery Objectives</option>
+              <option value="incident">Incident Management</option>
+              <option value="communication">Communication & Roles</option>
+              <option value="procedures">Recovery Procedures</option>
+              <option value="training">Training & Maintenance</option>
+            </select>
+          </div>
+          <div class="form-section">
+            <label class="field-label">Section Title</label>
+            <input 
+              v-model="newFieldForm.sectionTitle" 
+              type="text" 
+              class="input" 
+              placeholder="Section Title"
+            />
+          </div>
+          <div class="form-section">
+            <label class="field-label">Placeholder Text</label>
+            <input 
+              v-model="newFieldForm.placeholder" 
+              type="text" 
+              class="input" 
+              placeholder="Enter placeholder text..."
+            />
+          </div>
+          <div class="form-row">
+            <div class="form-section">
+              <label class="field-label">Grid Columns</label>
+              <select v-model.number="newFieldForm.gridCols" class="select">
+                <option :value="1">1 Column</option>
+                <option :value="2">2 Columns</option>
+              </select>
+            </div>
+            <div class="form-section">
+              <label class="field-label">Textarea Rows</label>
+              <input 
+                v-model.number="newFieldForm.rows" 
+                type="number" 
+                class="input" 
+                min="1"
+                max="10"
+              />
             </div>
           </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn--outline" @click="showAddFieldModal = false">Cancel</button>
+          <button class="btn btn--primary" @click="addCustomField">Add Field</button>
         </div>
       </div>
     </div>
@@ -668,41 +627,56 @@ import http from '../../api/http.js'
 import api from '../../services/api_bcp.js'
 import { useNotifications } from '@/composables/useNotifications'
 import { PopupService } from '@/popup/popupService'
+import notificationService from '@/services/notificationService'
 import loggingService from '@/services/loggingService'
 import { useStore } from 'vuex'
 
 // Define interfaces for type safety
 interface ExtractedData {
-  purpose_scope?: string
-  regulatory_references?: string
-  critical_services?: string
-  dependencies_internal?: string
-  dependencies_external?: string
-  risk_assessment_summary?: string
-  bia_summary?: string
-  rto_targets?: string
-  rpo_targets?: string
-  incident_types?: string
-  alternate_work_locations?: string
-  communication_plan_internal?: string
-  communication_plan_bank?: string
-  roles_responsibilities?: string
-  training_testing_schedule?: string
-  maintenance_review_cycle?: string
-  critical_systems?: string
-  critical_applications?: string
-  databases_list?: string
-  supporting_infrastructure?: string
-  third_party_services?: string
-  disaster_scenarios?: string
-  disaster_declaration_process?: string
-  data_backup_strategy?: string
-  recovery_site_details?: string
-  failover_procedures?: string
-  failback_procedures?: string
-  network_recovery_steps?: string
-  application_restoration_order?: string
-  testing_validation_schedule?: string
+  plan_id?: number | null
+  purpose_scope?: string | null
+  regulatory_references?: string | null
+  critical_services?: string | null
+  dependencies_internal?: string | null
+  dependencies_external?: string | null
+  risk_assessment_summary?: string | null
+  bia_summary?: string | null
+  rto_targets?: string | null
+  rpo_targets?: string | null
+  critical_systems?: string | null
+  critical_applications?: string | null
+  databases_list?: string | null
+  supporting_infrastructure?: string | null
+  third_party_services?: string | null
+  incident_types?: string | null
+  alternate_work_locations?: string | null
+  communication_plan_internal?: string | null
+  communication_plan_bank?: string | null
+  roles_responsibilities?: string | null
+  training_testing_schedule?: string | null
+  maintenance_review_cycle?: string | null
+  disaster_scenarios?: string | null
+  disaster_declaration_process?: string | null
+  data_backup_strategy?: string | null
+  recovery_site_details?: string | null
+  failover_procedures?: string | null
+  failback_procedures?: string | null
+  network_recovery_steps?: string | null
+  application_restoration_order?: string | null
+  testing_validation_schedule?: string | null
+  [key: string]: any // Allow custom fields
+}
+
+interface FieldDefinition {
+  id: string
+  key: string
+  label: string
+  section: string
+  sectionTitle: string
+  placeholder: string
+  isCustom: boolean
+  gridCols?: number
+  rows?: number
 }
 
 // Data state
@@ -714,6 +688,7 @@ const store = useStore()
 const saving = ref(false)
 const submitting = ref(false)
 const isRunningOCR = ref(false)
+const isOCRSaved = ref(false) // Track if OCR data has been saved for current plan
 
 // Plan selection data
 const availablePlans = ref([])
@@ -732,12 +707,13 @@ const assignmentForm = ref({
   assigner_name: '',
   assignee_id: '',
   assignee_name: '',
-  object_type: 'PLAN',
+  object_type: 'PLAN EVALUATION',
   object_id: '',
   due_date: ''
 })
 const isSubmittingAssignment = ref(false)
 const noApprovalNeeded = ref(false)
+const planTypes = ref<string[]>([])
 
 // UI state
 const currentStep = ref(1)
@@ -745,12 +721,32 @@ const currentStep = ref(1)
 // Extracted data state for selected plan
 const extractedData = ref<ExtractedData>({})
 
+// Dynamic field management
+const fieldDefinitions = ref<FieldDefinition[]>([])
+const removedFields = ref<FieldDefinition[]>([])
+const showAddFieldModal = ref(false)
+const showRemoveButtons = ref(false)
+const newFieldForm = ref({
+  key: '',
+  label: '',
+  section: 'custom',
+  sectionTitle: 'Custom Fields',
+  placeholder: 'Enter value...',
+  gridCols: 1,
+  rows: 3
+})
+
 // Computed properties
 
 const isAllSelected = computed(() => {
   return availablePlans.value.length > 0 && availablePlans.value.every(plan => 
     selectedPlanId.value === plan.plan_id.toString()
   )
+})
+
+const isStep2Enabled = computed(() => {
+  // Step 2 is enabled only if a plan is selected and OCR data has been saved
+  return selectedPlanId.value !== "" && isOCRSaved.value
 })
 
 // Methods
@@ -765,13 +761,20 @@ const fetchPlans = async () => {
     if (plans && Array.isArray(plans)) {
       availablePlans.value = plans
       console.log('Successfully fetched plans:', plans.length, 'plans')
+      
+      // Extract unique plan types from plans
+      const uniquePlanTypes = [...new Set(plans.map((plan: any) => plan.plan_type).filter(Boolean))]
+      planTypes.value = uniquePlanTypes.sort()
+      console.log('Extracted plan types from plans:', planTypes.value)
     } else {
       console.error('API returned no plans data or plans is not an array')
       availablePlans.value = []
+      planTypes.value = []
     }
   } catch (error) {
     console.error('Error fetching plans from API:', error)
     availablePlans.value = []
+    planTypes.value = []
     PopupService.error(`Failed to load plans: ${error.message}. Please check your connection and try again.`, 'Loading Failed')
   } finally {
     isLoadingPlans.value = false
@@ -788,7 +791,7 @@ const closeDropdown = () => {
   }, 150)
 }
 
-const selectPlan = (plan) => {
+const selectPlan = async (plan) => {
   if (!plan || !plan.plan_id) {
     console.error('Invalid plan selected:', plan)
     return
@@ -800,12 +803,121 @@ const selectPlan = (plan) => {
   
   console.log('Plan selected:', plan)
   
+  // Reset OCR saved status when selecting a new plan
+  isOCRSaved.value = false
+  
+  // Clear removed fields when selecting a new plan
+  removedFields.value = []
+  
+  // Initialize field definitions
+  fieldDefinitions.value = initializeFieldDefinitions()
+  
   // Initialize extracted data for the selected plan
   extractedData.value = initializeExtractedData(plan.plan_type)
+  
+  // Load any existing extracted data and custom fields
+  await loadExistingExtractedData(plan.plan_id)
+  
+  // Check if plan already has OCR data saved (status is OCR_COMPLETED)
+  if (plan.status === 'OCR_COMPLETED') {
+    isOCRSaved.value = true
+  }
+  
+  // If user is on Step 2 and selects a new plan, go back to Step 1
+  if (currentStep.value === 2) {
+    currentStep.value = 1
+  }
   
   // Initialize assignment form
   assignmentForm.value = initializeAssignmentForm(plan.plan_type)
   assignmentForm.value.object_id = plan.plan_id
+}
+
+const loadExistingExtractedData = async (planId: number) => {
+  try {
+    // Try to fetch existing extracted data
+    const response = await api.plans.get(planId)
+    const plan = (response as any).plan || (response as any).data?.plan
+    
+    if (plan?.ocr_extracted_data) {
+      const existingData = plan.ocr_extracted_data
+      
+      // List of all predefined field keys (hardcoded fields)
+      const predefinedFieldKeys = [
+        'purpose_scope', 'regulatory_references', 'critical_services', 
+        'dependencies_internal', 'dependencies_external', 'risk_assessment_summary',
+        'bia_summary', 'rto_targets', 'rpo_targets', 'critical_systems',
+        'critical_applications', 'databases_list', 'supporting_infrastructure',
+        'third_party_services', 'incident_types', 'alternate_work_locations',
+        'communication_plan_internal', 'communication_plan_bank', 'roles_responsibilities',
+        'training_testing_schedule', 'maintenance_review_cycle', 'disaster_scenarios',
+        'disaster_declaration_process', 'data_backup_strategy', 'recovery_site_details',
+        'failover_procedures', 'failback_procedures', 'network_recovery_steps',
+        'application_restoration_order', 'testing_validation_schedule'
+      ]
+      
+      // JSON fields that need stringification
+      const jsonFields = [
+        'regulatory_references', 'critical_services', 'dependencies_internal', 
+        'dependencies_external', 'rto_targets', 'rpo_targets', 'incident_types',
+        'alternate_work_locations', 'roles_responsibilities', 'critical_systems',
+        'critical_applications', 'databases_list', 'supporting_infrastructure',
+        'third_party_services', 'disaster_scenarios', 'application_restoration_order'
+      ]
+      
+      // Load fields from existing data
+      Object.keys(existingData).forEach(key => {
+        if (key === 'plan_id') return
+        
+        const value = existingData[key]
+        if (value === null || value === undefined) return
+        
+        // Check if this field is currently in fieldDefinitions
+        const fieldExists = fieldDefinitions.value.some(f => f.key === key)
+        
+        if (fieldExists) {
+          // Field is in current fieldDefinitions, so load it
+          if (jsonFields.includes(key) && typeof value === 'object') {
+            extractedData.value[key] = JSON.stringify(value, null, 2)
+          } else {
+            extractedData.value[key] = value
+          }
+        } else {
+          // Field is not in current fieldDefinitions
+          // Only restore it if it's a custom field (not in predefined list)
+          // This means it was a custom field that was previously added
+          if (!predefinedFieldKeys.includes(key)) {
+            // It's a custom field, add it to fieldDefinitions and load it
+            const customField: FieldDefinition = {
+              id: `custom_${key}_${Date.now()}`,
+              key: key,
+              label: key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+              section: 'custom',
+              sectionTitle: 'Custom Fields',
+              placeholder: 'Enter value...',
+              isCustom: true,
+              gridCols: 1,
+              rows: 3
+            }
+            fieldDefinitions.value.push(customField)
+            
+            // Load the value
+            if (typeof value === 'object' && (Array.isArray(value) || (typeof value === 'object' && value !== null))) {
+              extractedData.value[key] = JSON.stringify(value, null, 2)
+            } else {
+              extractedData.value[key] = value
+            }
+          }
+          // If it's a predefined field that's not in fieldDefinitions, it was removed
+          // Don't restore it - it will be excluded from the save
+        }
+      })
+      
+      console.log(`Loaded existing data: ${Object.keys(extractedData.value).length} fields restored`)
+    }
+  } catch (error) {
+    console.log('No existing extracted data found or error loading:', error)
+  }
 }
 
 const toggleSelectAll = () => {
@@ -862,49 +974,225 @@ const getStatusBadgeClass = (status) => {
 
 // Updated methods for new workflow
 
+const initializeFieldDefinitions = (): FieldDefinition[] => {
+  return [
+    // Purpose & Scope
+    { id: 'purpose_scope', key: 'purpose_scope', label: 'Purpose & Scope', section: 'purpose', sectionTitle: 'Purpose & Scope', placeholder: 'Enter the purpose and scope of the plan...', isCustom: false, gridCols: 1, rows: 6 },
+    { id: 'regulatory_references', key: 'regulatory_references', label: 'Regulatory References', section: 'purpose', sectionTitle: 'Purpose & Scope', placeholder: '["SOX", "Basel III", "PCI DSS"]', isCustom: false, gridCols: 1, rows: 6 },
+    
+    // Critical Services & Dependencies
+    { id: 'critical_services', key: 'critical_services', label: 'Critical Services', section: 'dependencies', sectionTitle: 'Critical Services & Dependencies', placeholder: '["Payments", "Collections", "Customer Service"]', isCustom: false, gridCols: 1, rows: 4 },
+    { id: 'dependencies_internal', key: 'dependencies_internal', label: 'Internal Dependencies', section: 'dependencies', sectionTitle: 'Critical Services & Dependencies', placeholder: '["IT Systems", "HR Department", "Finance"]', isCustom: false, gridCols: 1, rows: 4 },
+    { id: 'dependencies_external', key: 'dependencies_external', label: 'External Dependencies', section: 'dependencies', sectionTitle: 'Critical Services & Dependencies', placeholder: '["Cloud Provider", "Payment Gateway", "Banking Partners"]', isCustom: false, gridCols: 1, rows: 4 },
+    
+    // Critical Systems & Infrastructure
+    { id: 'critical_systems', key: 'critical_systems', label: 'Critical Systems', section: 'infrastructure', sectionTitle: 'Critical Systems & Infrastructure', placeholder: '["Core Banking", "Payment Gateway", "Database Servers"]', isCustom: false, gridCols: 1, rows: 4 },
+    { id: 'critical_applications', key: 'critical_applications', label: 'Critical Applications', section: 'infrastructure', sectionTitle: 'Critical Systems & Infrastructure', placeholder: '["Loan System", "Trading Platform", "Customer Portal"]', isCustom: false, gridCols: 1, rows: 4 },
+    { id: 'databases_list', key: 'databases_list', label: 'Databases', section: 'infrastructure', sectionTitle: 'Critical Systems & Infrastructure', placeholder: '["Customer DB", "Transaction DB", "Archive DB"]', isCustom: false, gridCols: 1, rows: 4 },
+    { id: 'supporting_infrastructure', key: 'supporting_infrastructure', label: 'Supporting Infrastructure', section: 'infrastructure', sectionTitle: 'Critical Systems & Infrastructure', placeholder: '["Network", "Storage", "Servers", "Security"]', isCustom: false, gridCols: 1, rows: 4 },
+    { id: 'third_party_services', key: 'third_party_services', label: 'Third Party Services', section: 'infrastructure', sectionTitle: 'Critical Systems & Infrastructure', placeholder: '["Cloud Provider", "SMS Gateway", "Email Service"]', isCustom: false, gridCols: 1, rows: 4 },
+    
+    // Risk & Business Impact
+    { id: 'risk_assessment_summary', key: 'risk_assessment_summary', label: 'Risk Assessment Summary', section: 'risk', sectionTitle: 'Risk & Business Impact', placeholder: 'Enter risk assessment summary...', isCustom: false, gridCols: 1, rows: 5 },
+    { id: 'bia_summary', key: 'bia_summary', label: 'Business Impact Analysis Summary', section: 'risk', sectionTitle: 'Risk & Business Impact', placeholder: 'Enter business impact analysis...', isCustom: false, gridCols: 1, rows: 5 },
+    
+    // Recovery Objectives
+    { id: 'rto_targets', key: 'rto_targets', label: 'RTO Targets', section: 'recovery', sectionTitle: 'Recovery Objectives', placeholder: '{"Payments":"4h","Collections":"2h","Customer Service":"8h"}', isCustom: false, gridCols: 1, rows: 4 },
+    { id: 'rpo_targets', key: 'rpo_targets', label: 'RPO Targets', section: 'recovery', sectionTitle: 'Recovery Objectives', placeholder: '{"Payments":"15m","Collections":"30m","Customer Data":"1h"}', isCustom: false, gridCols: 1, rows: 4 },
+    
+    // Incident Management
+    { id: 'incident_types', key: 'incident_types', label: 'Incident Types', section: 'incident', sectionTitle: 'Incident Management', placeholder: '["Cyber Attack", "Natural Disaster", "System Failure"]', isCustom: false, gridCols: 1, rows: 4 },
+    { id: 'alternate_work_locations', key: 'alternate_work_locations', label: 'Alternate Work Locations', section: 'incident', sectionTitle: 'Incident Management', placeholder: '["Remote Work", "Backup Office", "Partner Locations"]', isCustom: false, gridCols: 1, rows: 4 },
+    { id: 'disaster_scenarios', key: 'disaster_scenarios', label: 'Disaster Scenarios', section: 'incident', sectionTitle: 'Incident Management', placeholder: '["Data Center Failure", "Network Outage", "Cyber Attack"]', isCustom: false, gridCols: 1, rows: 4 },
+    { id: 'disaster_declaration_process', key: 'disaster_declaration_process', label: 'Disaster Declaration Process', section: 'incident', sectionTitle: 'Incident Management', placeholder: 'Enter disaster declaration process...', isCustom: false, gridCols: 1, rows: 4 },
+    
+    // Communication & Roles
+    { id: 'communication_plan_internal', key: 'communication_plan_internal', label: 'Internal Communication Plan', section: 'communication', sectionTitle: 'Communication & Roles', placeholder: 'Enter internal communication plan...', isCustom: false, gridCols: 1, rows: 4 },
+    { id: 'communication_plan_bank', key: 'communication_plan_bank', label: 'Bank Communication Plan', section: 'communication', sectionTitle: 'Communication & Roles', placeholder: 'Enter bank communication plan...', isCustom: false, gridCols: 1, rows: 4 },
+    { id: 'roles_responsibilities', key: 'roles_responsibilities', label: 'Roles & Responsibilities', section: 'communication', sectionTitle: 'Communication & Roles', placeholder: '["Incident Commander", "Communication Lead", "Technical Lead"]', isCustom: false, gridCols: 1, rows: 4 },
+    
+    // Recovery Procedures
+    { id: 'recovery_site_details', key: 'recovery_site_details', label: 'Recovery Site Details', section: 'procedures', sectionTitle: 'Recovery Procedures', placeholder: 'Primary DR site location and details', isCustom: false, gridCols: 1, rows: 4 },
+    { id: 'data_backup_strategy', key: 'data_backup_strategy', label: 'Data Backup Strategy', section: 'procedures', sectionTitle: 'Recovery Procedures', placeholder: 'Enter data backup strategy...', isCustom: false, gridCols: 1, rows: 4 },
+    { id: 'failover_procedures', key: 'failover_procedures', label: 'Failover Procedures', section: 'procedures', sectionTitle: 'Recovery Procedures', placeholder: 'Enter failover procedures...', isCustom: false, gridCols: 1, rows: 4 },
+    { id: 'failback_procedures', key: 'failback_procedures', label: 'Failback Procedures', section: 'procedures', sectionTitle: 'Recovery Procedures', placeholder: 'Enter failback procedures...', isCustom: false, gridCols: 1, rows: 4 },
+    { id: 'network_recovery_steps', key: 'network_recovery_steps', label: 'Network Recovery Steps', section: 'procedures', sectionTitle: 'Recovery Procedures', placeholder: 'Enter network recovery steps...', isCustom: false, gridCols: 1, rows: 4 },
+    { id: 'application_restoration_order', key: 'application_restoration_order', label: 'Application Restoration Order', section: 'procedures', sectionTitle: 'Recovery Procedures', placeholder: '["Core Banking", "Payment Gateway", "Customer Portal"]', isCustom: false, gridCols: 1, rows: 4 },
+    
+    // Training, Testing & Maintenance
+    { id: 'training_testing_schedule', key: 'training_testing_schedule', label: 'Training & Testing Schedule', section: 'training', sectionTitle: 'Training, Testing & Maintenance', placeholder: 'Enter training and testing schedule...', isCustom: false, gridCols: 1, rows: 4 },
+    { id: 'testing_validation_schedule', key: 'testing_validation_schedule', label: 'Testing & Validation Schedule', section: 'training', sectionTitle: 'Training, Testing & Maintenance', placeholder: 'Enter testing and validation schedule...', isCustom: false, gridCols: 1, rows: 4 },
+    { id: 'maintenance_review_cycle', key: 'maintenance_review_cycle', label: 'Maintenance & Review Cycle', section: 'training', sectionTitle: 'Training, Testing & Maintenance', placeholder: 'Enter maintenance and review cycle...', isCustom: false, gridCols: 1, rows: 4 }
+  ]
+}
+
 const initializeExtractedData = (planType: string): ExtractedData => {
-  if (planType === 'BCP') {
-    return {
-      purpose_scope: '',
-      regulatory_references: '',
-      critical_services: '',
-      dependencies_internal: '',
-      dependencies_external: '',
-      risk_assessment_summary: '',
-      bia_summary: '',
-      rto_targets: '',
-      rpo_targets: '',
-      incident_types: '',
-      alternate_work_locations: '',
-      communication_plan_internal: '',
-      communication_plan_bank: '',
-      roles_responsibilities: '',
-      training_testing_schedule: '',
-      maintenance_review_cycle: ''
-    }
-  } else {
-    return {
-      purpose_scope: '',
-      regulatory_references: '',
-      critical_systems: '',
-      critical_applications: '',
-      databases_list: '',
-      supporting_infrastructure: '',
-      third_party_services: '',
-      rto_targets: '',
-      rpo_targets: '',
-      disaster_scenarios: '',
-      disaster_declaration_process: '',
-      data_backup_strategy: '',
-      recovery_site_details: '',
-      failover_procedures: '',
-      failback_procedures: '',
-      network_recovery_steps: '',
-      application_restoration_order: '',
-      testing_validation_schedule: '',
-      maintenance_review_cycle: ''
+  // Unified fields for all plan types
+  return {
+    plan_id: null,
+    purpose_scope: null,
+    regulatory_references: null,
+    critical_services: null,
+    dependencies_internal: null,
+    dependencies_external: null,
+    risk_assessment_summary: null,
+    bia_summary: null,
+    rto_targets: null,
+    rpo_targets: null,
+    critical_systems: null,
+    critical_applications: null,
+    databases_list: null,
+    supporting_infrastructure: null,
+    third_party_services: null,
+    incident_types: null,
+    alternate_work_locations: null,
+    communication_plan_internal: null,
+    communication_plan_bank: null,
+    roles_responsibilities: null,
+    training_testing_schedule: null,
+    maintenance_review_cycle: null,
+    disaster_scenarios: null,
+    disaster_declaration_process: null,
+    data_backup_strategy: null,
+    recovery_site_details: null,
+    failover_procedures: null,
+    failback_procedures: null,
+    network_recovery_steps: null,
+    application_restoration_order: null,
+    testing_validation_schedule: null
+  }
+}
+
+// Field management functions
+const addCustomField = () => {
+  if (!newFieldForm.value.key || !newFieldForm.value.label) {
+    PopupService.warning('Please provide both field key and label', 'Validation Error')
+    return
+  }
+  
+  // Validate key format (must be valid JavaScript identifier)
+  const keyRegex = /^[a-zA-Z_][a-zA-Z0-9_]*$/
+  if (!keyRegex.test(newFieldForm.value.key)) {
+    PopupService.warning('Field key must start with a letter or underscore and contain only letters, numbers, and underscores', 'Invalid Key Format')
+    return
+  }
+  
+  // Check if key already exists
+  if (fieldDefinitions.value.some(f => f.key === newFieldForm.value.key)) {
+    PopupService.warning('A field with this key already exists', 'Duplicate Key')
+    return
+  }
+  
+  // Get existing section title if section already exists
+  let sectionTitle = newFieldForm.value.sectionTitle
+  const existingSection = fieldDefinitions.value.find(f => f.section === newFieldForm.value.section)
+  if (existingSection && existingSection.sectionTitle) {
+    sectionTitle = existingSection.sectionTitle
+  }
+  
+  const newField: FieldDefinition = {
+    id: `custom_${Date.now()}`,
+    key: newFieldForm.value.key,
+    label: newFieldForm.value.label,
+    section: newFieldForm.value.section,
+    sectionTitle: sectionTitle,
+    placeholder: newFieldForm.value.placeholder,
+    isCustom: true,
+    gridCols: newFieldForm.value.gridCols || 1,
+    rows: newFieldForm.value.rows || 3
+  }
+  
+  fieldDefinitions.value.push(newField)
+  
+  // Initialize the field value in extractedData
+  extractedData.value[newField.key] = null
+  
+  // Reset form
+  newFieldForm.value = {
+    key: '',
+    label: '',
+    section: 'custom',
+    sectionTitle: 'Custom Fields',
+    placeholder: 'Enter value...',
+    gridCols: 1,
+    rows: 3
+  }
+  
+  showAddFieldModal.value = false
+  PopupService.success('Custom field added successfully', 'Field Added')
+}
+
+const removeField = (fieldId: string) => {
+  const field = fieldDefinitions.value.find(f => f.id === fieldId)
+  if (!field) return
+  
+  // Don't allow removing predefined fields (optional - you can change this)
+  if (!field.isCustom) {
+    const confirmed = confirm(`Are you sure you want to remove the field "${field.label}"? This is a predefined field.`)
+    if (!confirmed) return
+  }
+  
+  // Move field to removedFields instead of deleting
+  const index = fieldDefinitions.value.findIndex(f => f.id === fieldId)
+  if (index > -1) {
+    const removedField = { ...fieldDefinitions.value[index] }
+    fieldDefinitions.value.splice(index, 1)
+    
+    // Add to removed fields if not already there
+    if (!removedFields.value.find(f => f.id === fieldId)) {
+      removedFields.value.push(removedField)
     }
   }
+  
+  // Note: We keep the data in extractedData for display, but it won't be saved to backend
+  
+  PopupService.success('Field removed successfully', 'Field Removed')
+}
+
+const removeSection = (section: string) => {
+  const sectionFields = fieldDefinitions.value.filter(f => f.section === section)
+  if (sectionFields.length === 0) return
+  
+  const sectionTitle = sectionFields[0]?.sectionTitle || section
+  const confirmed = confirm(`Are you sure you want to remove the entire section "${sectionTitle}"? This will remove ${sectionFields.length} field(s).`)
+  if (!confirmed) return
+  
+  // Move all fields in this section to removedFields
+  sectionFields.forEach(field => {
+    const index = fieldDefinitions.value.findIndex(f => f.id === field.id)
+    if (index > -1) {
+      const removedField = { ...fieldDefinitions.value[index] }
+      fieldDefinitions.value.splice(index, 1)
+      
+      // Add to removed fields if not already there
+      if (!removedFields.value.find(f => f.id === field.id)) {
+        removedFields.value.push(removedField)
+      }
+    }
+  })
+  
+  PopupService.success(`Section "${sectionTitle}" removed successfully`, 'Section Removed')
+}
+
+const getFieldsBySection = (section: string) => {
+  return fieldDefinitions.value.filter(f => f.section === section)
+}
+
+const getSectionGroups = () => {
+  const sections = new Map<string, { title: string, fields: FieldDefinition[] }>()
+  
+  fieldDefinitions.value.forEach(field => {
+    if (!sections.has(field.section)) {
+      sections.set(field.section, { title: field.sectionTitle, fields: [] })
+    }
+    sections.get(field.section)!.fields.push(field)
+  })
+  
+  return Array.from(sections.entries()).map(([section, data]) => ({
+    section,
+    title: data.title,
+    fields: data.fields
+  }))
 }
 
 const initializeAssignmentForm = (planType: string) => {
@@ -918,7 +1206,7 @@ const initializeAssignmentForm = (planType: string) => {
     assigner_name: '',
     assignee_id: '',
     assignee_name: '',
-    object_type: 'PLAN',
+    object_type: 'PLAN EVALUATION',
     object_id: '',
     due_date: tomorrow.toISOString().slice(0, 16)
   }
@@ -927,13 +1215,47 @@ const initializeAssignmentForm = (planType: string) => {
   return form
 }
 
+const handleStep2Click = () => {
+  if (!isStep2Enabled.value) {
+    PopupService.warning(
+      'Please complete OCR extraction and save data in Step 1 before accessing Step 2.',
+      'Step 2 Disabled'
+    )
+    return
+  }
+  goToStep(2)
+}
+
 const goToStep = (step: number) => {
+  // Prevent navigation to Step 2 if conditions aren't met
+  if (step === 2 && !isStep2Enabled.value) {
+    PopupService.warning(
+      'Please complete OCR extraction and save data in Step 1 before accessing Step 2.',
+      'Step 2 Disabled'
+    )
+    return
+  }
+  
   currentStep.value = step
   if (step === 2 && selectedPlan.value && selectedPlan.value.plan_id) {
     // Initialize assignment form for selected plan when going to step 2
     assignmentForm.value = initializeAssignmentForm(selectedPlan.value.plan_type)
-    assignmentForm.value.object_id = selectedPlan.value.plan_id
+    assignmentForm.value.object_id = selectedPlan.value.plan_id.toString()
+    assignmentForm.value.object_type = 'PLAN EVALUATION'
     console.log('Initialized assignment form for plan:', selectedPlan.value.plan_id)
+  } else if (step === 2) {
+    // Reset assignment form if no plan is selected
+    assignmentForm.value = {
+      workflow_name: '',
+      plan_type: '',
+      assigner_id: '',
+      assigner_name: '',
+      assignee_id: '',
+      assignee_name: '',
+      object_type: 'PLAN EVALUATION',
+      object_id: '',
+      due_date: ''
+    }
   }
 }
 
@@ -998,34 +1320,22 @@ const handleNoApprovalChange = () => {
       }
     }
     
-    // Handle multiple property name formats (PascalCase from store, snake_case from localStorage, etc.)
-    const userId = currentUser?.UserId || 
-                   currentUser?.userId || 
-                   currentUser?.user_id || 
-                   currentUser?.userid || 
-                   currentUser?.id
-    
-    const userName = currentUser?.UserName || 
-                     currentUser?.username || 
-                     `${currentUser?.FirstName || currentUser?.first_name || ''} ${currentUser?.LastName || currentUser?.last_name || ''}`.trim() || 
-                     currentUser?.Email || 
-                     currentUser?.email ||
-                     currentUser?.name
+    // Handle both user_id and userid property names (backend returns userid)
+    const userId = currentUser?.user_id || currentUser?.userid
+    const userName = currentUser?.username || `${currentUser?.first_name || ''} ${currentUser?.last_name || ''}`.trim() || currentUser?.email
     
     if (currentUser && userId) {
       // Auto-fill assigner
       assignmentForm.value.assigner_id = userId.toString()
-      assignmentForm.value.assigner_name = userName || 'Current User'
+      assignmentForm.value.assigner_name = userName
       
       // Set assignee to same as assigner
       assignmentForm.value.assignee_id = userId.toString()
-      assignmentForm.value.assignee_name = userName || 'Current User'
+      assignmentForm.value.assignee_name = userName
     } else {
       console.error('No current user found in store or localStorage')
       console.log('Store state:', store.getters['auth/currentUser'])
       console.log('localStorage current_user:', localStorage.getItem('current_user'))
-      console.log('Current user object:', currentUser)
-      console.log('Resolved userId:', userId)
       PopupService.warning('Unable to get current user information. Please log in again or select assignee manually.', 'User Not Found')
       noApprovalNeeded.value = false
     }
@@ -1033,6 +1343,27 @@ const handleNoApprovalChange = () => {
     // Reset assignee when unchecked
     assignmentForm.value.assignee_id = ''
     assignmentForm.value.assignee_name = ''
+  }
+}
+
+const resetAssignmentForm = () => {
+  noApprovalNeeded.value = false
+  if (selectedPlan.value && selectedPlan.value.plan_id) {
+    assignmentForm.value = initializeAssignmentForm(selectedPlan.value.plan_type)
+    assignmentForm.value.object_id = selectedPlan.value.plan_id
+    assignmentForm.value.object_type = 'PLAN EVALUATION'
+  } else {
+    assignmentForm.value = {
+      workflow_name: '',
+      plan_type: '',
+      assigner_id: '',
+      assigner_name: '',
+      assignee_id: '',
+      assignee_name: '',
+      object_type: 'PLAN EVALUATION',
+      object_id: '',
+      due_date: ''
+    }
   }
 }
 
@@ -1059,23 +1390,14 @@ const createAssignment = async () => {
     }
     
     // Prepare the assignment data with proper structure
-    // Ensure assignee_id is set to assigner_id if no approval needed
-    const assignerId = parseInt(assignmentForm.value.assigner_id) || 0
-    const assigneeId = noApprovalNeeded.value 
-      ? assignerId 
-      : (parseInt(assignmentForm.value.assignee_id) || 0)
-    const assigneeName = noApprovalNeeded.value
-      ? assignmentForm.value.assigner_name
-      : assignmentForm.value.assignee_name
-    
     const assignmentData = {
       workflow_name: assignmentForm.value.workflow_name,
       plan_type: selectedPlan.value.plan_type,
-      assigner_id: assignerId,
+      assigner_id: parseInt(assignmentForm.value.assigner_id),
       assigner_name: assignmentForm.value.assigner_name,
-      assignee_id: assigneeId,
-      assignee_name: assigneeName,
-      object_type: 'PLAN',
+      assignee_id: parseInt(assignmentForm.value.assignee_id),
+      assignee_name: assignmentForm.value.assignee_name,
+      object_type: 'PLAN EVALUATION',
       object_id: selectedPlan.value.plan_id,
       due_date: assignmentForm.value.due_date,
       no_approval_needed: noApprovalNeeded.value
@@ -1101,7 +1423,7 @@ const createAssignment = async () => {
       assigner_name: '',
       assignee_id: '',
       assignee_name: '',
-      object_type: 'PLAN',
+      object_type: 'PLAN EVALUATION',
       object_id: '',
       due_date: ''
     }
@@ -1141,45 +1463,135 @@ const saveExtractedData = async () => {
 
   saving.value = true
   try {
-    const dataToSave = { ...extractedData.value }
+    const dataToSave: any = {}
+    dataToSave.plan_id = selectedPlan.value.plan_id
     
-    // Parse JSON fields - convert string representations back to objects
-    const jsonFields = [
-      'regulatory_references', 'critical_services', 'dependencies_internal', 
-      'dependencies_external', 'rto_targets', 'rpo_targets', 'incident_types',
-      'alternate_work_locations', 'roles_responsibilities', 'critical_systems',
-      'critical_applications', 'databases_list', 'supporting_infrastructure',
-      'third_party_services', 'disaster_scenarios', 'application_restoration_order'
-    ]
+    // Helper function to check if a value is empty/null
+    const isEmpty = (val: any): boolean => {
+      if (val === null || val === undefined) return true
+      if (typeof val === 'string' && val.trim() === '') return true
+      if (Array.isArray(val) && val.length === 0) return true
+      if (typeof val === 'object' && Object.keys(val).length === 0) return true
+      return false
+    }
     
-    jsonFields.forEach(field => {
-      if (dataToSave[field] && typeof dataToSave[field] === 'string') {
+    // Only save fields that are in fieldDefinitions (including custom fields) and have non-empty values
+    fieldDefinitions.value.forEach(fieldDef => {
+      const value = extractedData.value[fieldDef.key]
+      
+      // Skip null, undefined, empty strings, empty arrays, and empty objects
+      if (isEmpty(value)) {
+        return
+      }
+      
+      // Parse JSON fields - convert string representations back to objects
+      const jsonFields = [
+        'regulatory_references', 'critical_services', 'dependencies_internal', 
+        'dependencies_external', 'rto_targets', 'rpo_targets', 'incident_types',
+        'alternate_work_locations', 'roles_responsibilities', 'critical_systems',
+        'critical_applications', 'databases_list', 'supporting_infrastructure',
+        'third_party_services', 'disaster_scenarios', 'application_restoration_order'
+      ]
+      
+      // Check if field should be parsed as JSON (either predefined JSON field or custom field that looks like JSON)
+      if (jsonFields.includes(fieldDef.key) || (fieldDef.isCustom && typeof value === 'string' && (value.trim().startsWith('[') || value.trim().startsWith('{')))) {
         try {
-          dataToSave[field] = JSON.parse(dataToSave[field])
-        } catch (e) {
-          console.warn(`Failed to parse JSON for field ${field}:`, e)
-          // If parsing fails, try to create a simple array from comma-separated values
-          if (dataToSave[field].includes(',')) {
-            dataToSave[field] = dataToSave[field].split(',').map(item => item.trim()).filter(item => item)
+          const parsed = JSON.parse(value as string)
+          // Only save if parsed value is not empty
+          if (!isEmpty(parsed)) {
+            dataToSave[fieldDef.key] = parsed
           }
+        } catch (e) {
+          console.warn(`Failed to parse JSON for field ${fieldDef.key}:`, e)
+          // If parsing fails, try to create a simple array from comma-separated values
+          if (typeof value === 'string' && value.includes(',')) {
+            const arrayValue = value.split(',').map(item => item.trim()).filter(item => item)
+            if (arrayValue.length > 0) {
+              dataToSave[fieldDef.key] = arrayValue
+            }
+          } else if (!isEmpty(value)) {
+            // Save as string if not empty
+            dataToSave[fieldDef.key] = typeof value === 'string' ? value.trim() : value
+          }
+        }
+      } else {
+        // For non-JSON fields, trim strings and save if not empty
+        if (typeof value === 'string') {
+          const trimmed = value.trim()
+          if (trimmed !== '') {
+            dataToSave[fieldDef.key] = trimmed
+          }
+        } else if (!isEmpty(value)) {
+          dataToSave[fieldDef.key] = value
         }
       }
     })
     
-    // Use the OCR microservice extraction endpoint
-    const endpoint = `/ocr/plans/${selectedPlan.value.plan_id}/extract/`
+    console.log('Fields in fieldDefinitions:', fieldDefinitions.value.map(f => f.key))
+    console.log('Data to save (filtered, only fields in fieldDefinitions):', dataToSave)
+    console.log(`Saving ${Object.keys(dataToSave).length - 1} fields (excluding plan_id)`)
     
-    // Wrap data in extracted_data object as expected by the backend
-    await http.post(endpoint, {
+    // Use the OCR microservice extraction endpoint
+    const endpoint = `/api/ocr/plans/${selectedPlan.value.plan_id}/extract/`
+    
+    // Send unified payload with all fields (including custom fields)
+    const response = await http.post(endpoint, {
       extracted_data: dataToSave
     }, {
       timeout: 30000 // 30 seconds timeout for saving data
     })
     
-    PopupService.success('Extracted information has been saved successfully', 'Data Saved')
-  } catch (err: any) {
-    const errorMessage = err.response?.data?.message || err.response?.data?.error || err.message || 'Unknown error occurred'
-    PopupService.error(`Error saving data: ${errorMessage}`, 'Save Failed')
+    // Check for risk generation info in response
+    let successMessage = 'Extracted information has been saved successfully'
+    const responseData = (response as any)?.data || (response as any)
+    if (responseData?.risk_generation) {
+      const riskInfo = responseData.risk_generation
+      if (riskInfo.status === 'started') {
+        successMessage += '. Risk generation has started in the background - risks will appear in Risk Analytics shortly.'
+      } else if (riskInfo.status === 'deferred') {
+        successMessage += '. Risk generation will start shortly - check Risk Analytics in a few minutes.'
+      }
+    } else if (responseData?.risk_message) {
+      successMessage += '. ' + responseData.risk_message
+    }
+    
+    PopupService.success(successMessage, 'Data Saved')
+    
+    // Mark OCR as saved - this enables Step 2
+    isOCRSaved.value = true
+    
+    // Create notification with risk generation info
+    await notificationService.createOCRNotification('data_saved', {
+      plan_id: selectedPlan.value.plan_id,
+      risk_generation: responseData?.risk_generation
+    })
+    
+    // Update plan status to OCR_COMPLETED and navigate to Step 2
+    try {
+      await http.patch(`/bcpdrp/ocr/plans/${selectedPlan.value.plan_id}/status/`, {
+        status: 'OCR_COMPLETED'
+      })
+      
+      // Update the plan status in our local state
+      const plan = availablePlans.value.find(p => p.plan_id === selectedPlan.value.plan_id)
+      if (plan) {
+        plan.status = 'OCR_COMPLETED'
+      }
+      
+      // Advance to Step 2 after a short delay
+      setTimeout(() => {
+        goToStep(2)
+      }, 1000)
+    } catch (statusErr) {
+      console.error('Error updating plan status:', statusErr)
+      // Don't show error to user if status update fails, data was saved successfully
+      // Still navigate to Step 2
+      setTimeout(() => {
+        goToStep(2)
+      }, 1000)
+    }
+  } catch (err) {
+    PopupService.error(`Error saving data: ${err.message}`, 'Save Failed')
     console.error('Error saving extracted data:', err)
   } finally {
     saving.value = false
@@ -1194,7 +1606,7 @@ const markPlanComplete = async () => {
 
   saving.value = true
   try {
-    await http.patch(`/bcpdrp/ocr/plans/${selectedPlan.value.plan_id}/status/`, {
+    await http.patch(`/api/bcpdrp/ocr/plans/${selectedPlan.value.plan_id}/status/`, {
       status: 'OCR_COMPLETED'
     })
     
@@ -1229,7 +1641,7 @@ const runOCR = async () => {
     console.log('Running OCR for plan:', selectedPlan.value.plan_id)
     
     // Use OCR microservice endpoint
-    const endpoint = `/ocr/plans/${selectedPlan.value.plan_id}/run/`
+    const endpoint = `/api/ocr/plans/${selectedPlan.value.plan_id}/run/`
     
     showInfo('OCR processing started. This may take 1-2 minutes for AI extraction...')
     PopupService.success('OCR processing started. This may take 1-2 minutes for AI extraction...', 'Processing')
@@ -1243,19 +1655,15 @@ const runOCR = async () => {
     
     console.log('OCR processing completed:', response)
     console.log('Response data:', response.data)
+    console.log('Extracted data:', response.data?.extracted_data)
     
+    // Update the extracted data with the OCR results
     // The HTTP interceptor unwraps the response, so data is directly accessible
-    // Check both response.data.extracted_data and response.data.data.extracted_data
-    // to handle different response structures
-    const extractedDataFromResponse = response.data?.extracted_data || response.data?.data?.extracted_data
-    
-    console.log('Extracted data:', extractedDataFromResponse)
-    
-    if (extractedDataFromResponse) {
-      console.log('Setting extracted data:', extractedDataFromResponse)
+    if (response.data?.extracted_data) {
+      console.log('Setting extracted data:', response.data.extracted_data)
       
       // Process the extracted data to handle JSON fields properly
-      const processedData = { ...extractedDataFromResponse }
+      const processedData = { ...response.data.extracted_data }
       
       // Convert JSON objects/arrays to strings for form display
       const jsonFields = [
@@ -1266,9 +1674,34 @@ const runOCR = async () => {
         'third_party_services', 'disaster_scenarios', 'application_restoration_order'
       ]
       
-      jsonFields.forEach(field => {
-        if (processedData[field] && typeof processedData[field] === 'object') {
+      // Process all fields from OCR response
+      Object.keys(processedData).forEach(field => {
+        // Handle JSON fields
+        if (jsonFields.includes(field) && typeof processedData[field] === 'object') {
           processedData[field] = JSON.stringify(processedData[field], null, 2)
+        }
+        // Handle custom fields that might be objects/arrays
+        else if (typeof processedData[field] === 'object' && !fieldDefinitions.value.some(f => f.key === field)) {
+          // Check if it's a custom field that should be stringified
+          if (Array.isArray(processedData[field]) || (typeof processedData[field] === 'object' && processedData[field] !== null)) {
+            processedData[field] = JSON.stringify(processedData[field], null, 2)
+          }
+        }
+        
+        // Add custom fields to field definitions if they don't exist
+        if (!fieldDefinitions.value.some(f => f.key === field)) {
+          const customField: FieldDefinition = {
+            id: `custom_${field}_${Date.now()}`,
+            key: field,
+            label: field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+            section: 'custom',
+            sectionTitle: 'Custom Fields',
+            placeholder: 'Enter value...',
+            isCustom: true,
+            gridCols: 1,
+            rows: 3
+          }
+          fieldDefinitions.value.push(customField)
         }
       })
       
@@ -1283,11 +1716,9 @@ const runOCR = async () => {
       PopupService.success('OCR processing completed.', 'Success')
     }
     
-  } catch (err: any) {
+  } catch (err) {
     console.error('Error running OCR:', err)
-    const errorMessage = err.response?.data?.message || err.response?.data?.error || err.message || 'Unknown error occurred'
-    showError(`Error running OCR: ${errorMessage}`)
-    PopupService.error(`Failed to run OCR: ${errorMessage}`, 'OCR Error')
+    showError(`Error running OCR: ${err.response?.data?.message || err.message || 'Unknown error'}`)
   } finally {
     isRunningOCR.value = false
   }

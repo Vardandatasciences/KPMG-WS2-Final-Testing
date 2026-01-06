@@ -260,6 +260,7 @@
 /* Assignments Table */
 .assignments-table {
   width: 100%;
+  table-layout: auto;
   border-collapse: collapse;
   font-size: 14px;
 }
@@ -320,60 +321,48 @@
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
   font-weight: 600;
   color: var(--muted-foreground);
-  width: 120px;
+  width: 140px;
+  min-width: 140px;
 }
 
 .plan-id-cell {
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
   font-weight: 600;
   color: var(--muted-foreground);
-  width: 100px;
+  width: 120px;
+  min-width: 120px;
 }
 
 .questionnaire-id-cell {
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
   color: var(--muted-foreground);
-  width: 120px;
+  width: 140px;
+  min-width: 140px;
 }
 
 .questions-cell {
   text-align: center;
   font-weight: 600;
   color: var(--foreground);
-  width: 80px;
+  width: 100px;
+  min-width: 100px;
 }
 
 .due-date-cell {
   color: var(--foreground);
-  width: 100px;
+  width: 130px;
+  min-width: 130px;
+}
+
+.status-cell {
+  width: 140px;
+  min-width: 140px;
 }
 
 .assigned-date-cell {
   color: var(--muted-foreground);
-  width: 100px;
-}
-
-.action-cell {
-  width: 140px;
-  text-align: center;
-}
-
-/* Select Button */
-.select-assignment-btn {
-  padding: 6px 12px;
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
-  border: none;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.select-assignment-btn:hover {
-  background: hsl(var(--primary) / 0.9);
-  transform: translateY(-1px);
+  width: 130px;
+  min-width: 130px;
 }
 
 /* Badge Styling */
@@ -445,28 +434,6 @@
 .animate-spin {
   animation: spin 1s linear infinite;
 }
-
-.assignment-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--sp-6);
-}
-
-.assignment-title {
-  font-size: 1.875rem; /* text-3xl */
-  font-weight: var(--fw-bold);
-  color: var(--text);
-}
-
-.assignment-description {
-  color: var(--text-muted);
-}
-
-.phase-badge {
-  font-size: var(--fs-sm);
-}
-
 
 .assignment-form-grid {
   display: grid;

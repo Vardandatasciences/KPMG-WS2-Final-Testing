@@ -2,8 +2,7 @@
 Function-based views for BCP/DRP API with RBAC integration
 Following the pattern from rbac/example_views.py
 """
-from rest_framework.decorators import api_view, authentication_classes, permission_classes, parser_classes
-from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.response import Response
 from rest_framework import status, permissions
 from rest_framework.authentication import BaseAuthentication
@@ -32,7 +31,6 @@ from tprm_backend.audits_contract.models import ContractStaticQuestionnaire
 import logging
 import hashlib
 import os
-import traceback
 from django.conf import settings
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
@@ -40,25 +38,273 @@ from django.core.files.base import ContentFile
 # RBAC imports
 from tprm_backend.rbac.tprm_decorators import rbac_bcp_drp_required
 
-# Use Unified JWT Authentication from GRC
-from grc.jwt_auth import UnifiedJWTAuthentication
-
 logger = logging.getLogger(__name__)
 
 
 class SimpleAuthenticatedPermission(BasePermission):
     """Custom permission class that checks for authenticated users"""
     def has_permission(self, request, view):
-        # Just check if user object exists and is authenticated
-        # UnifiedJWTAuthentication handles GRC/TPRM user verification
-        if request.user and hasattr(request.user, 'is_authenticated'):
-            return request.user.is_authenticated
-        return False
+        # Check if user is authenticated
+        is_authenticated = bool(
+            request.user and 
+            request.user.is_authenticated and
+            hasattr(request.user, 'userid')
+        )
+        
+        # If not authenticated, we need to check if it's because no auth was provided
+        # or because auth failed. If request.user is AnonymousUser, no auth was provided.
+        if not is_authenticated:
+            from django.contrib.auth.models import AnonymousUser
+            if isinstance(request.user, AnonymousUser):
+                # No authentication was provided - return 401
+                from rest_framework.exceptions import NotAuthenticated
+                raise NotAuthenticated('Authentication credentials were not provided.')
+        
+        return is_authenticated
 
 
+class JWTAuthentication(BaseAuthentication):
+    """Custom JWT authentication class for DRF"""
+    def authenticate(self, request):
+        auth_header = request.headers.get('Authorization')
+        
+        # Debug logging
+        logger.info(f"[BCP JWT Auth] Path: {request.path}")
+        logger.info(f"[BCP JWT Auth] Authorization header present: {bool(auth_header)}")
+        if auth_header:
+            logger.info(f"[BCP JWT Auth] Auth header starts with Bearer: {auth_header.startswith('Bearer ')}")
+        
+        # If no authorization header, return None to allow other auth methods
+        if not auth_header:
+            logger.warning(f"[BCP JWT Auth] No Authorization header for {request.path}")
+            return None
+        
+        # If authorization header exists but doesn't start with Bearer, raise error
+        if not auth_header.startswith('Bearer '):
+            from rest_framework.exceptions import AuthenticationFailed
+            raise AuthenticationFailed('Invalid authentication header format. Expected: Bearer <token>')
+        
+        try:
+            token = auth_header.split(' ')[1]
+            logger.info(f"[BCP JWT Auth] Token extracted: {token[:20]}...")
+            
+            # Use JWT_SECRET_KEY from settings
+            secret_key = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+            payload = jwt.decode(token, secret_key, algorithms=['HS256'])
+            user_id = payload.get('user_id')
+            
+            logger.info(f"[BCP JWT Auth] Token decoded successfully, user_id: {user_id}")
+            
+            if user_id:
+                try:
+                    from mfa_auth.models import User
+                    user = User.objects.get(userid=user_id)
+                    # Add is_authenticated attribute for DRF compatibility
+                    user.is_authenticated = True
+                    logger.info(f"[BCP JWT Auth] User authenticated: {user.username}")
+                    return (user, token)
+                except ImportError:
+                    # If User model import fails, create a mock user
+                    logger.warning(f"[BCP JWT Auth] User model import failed, creating mock user for user_id: {user_id}")
+                    class MockUser:
+                        def __init__(self, user_id):
+                            self.userid = user_id
+                            self.username = f"user_{user_id}"
+                            self.is_authenticated = True
+                    
+                    return (MockUser(user_id), token)
+                except Exception as e:
+                    # If User model doesn't exist or other error, create a mock user
+                    logger.warning(f"[BCP JWT Auth] User {user_id} not found or error: {e}, creating mock user")
+                    class MockUser:
+                        def __init__(self, user_id):
+                            self.userid = user_id
+                            self.username = f"user_{user_id}"
+                            self.is_authenticated = True
+                    
+                    return (MockUser(user_id), token)
+            else:
+                from rest_framework.exceptions import AuthenticationFailed
+                logger.error("[BCP JWT Auth] Token does not contain user_id")
+                raise AuthenticationFailed('Token does not contain user_id')
+                
+        except jwt.ExpiredSignatureError:
+            logger.warning("JWT token expired")
+            from rest_framework.exceptions import AuthenticationFailed
+            raise AuthenticationFailed('Token has expired')
+        except jwt.InvalidTokenError:
+            logger.warning("Invalid JWT token")
+            from rest_framework.exceptions import AuthenticationFailed
+            raise AuthenticationFailed('Invalid token')
+        except Exception as e:
+            logger.error(f"JWT authentication error: {str(e)}")
+            from rest_framework.exceptions import AuthenticationFailed
+            raise AuthenticationFailed(f'Authentication failed: {str(e)}')
+    
+    def authenticate_header(self, request):
+        """
+        Return a string to be used as the value of the `WWW-Authenticate`
+        header in a `401 Unauthenticated` response.
+        """
+        return 'Bearer realm="api"'
+
+
+def get_comprehensive_plan_data(plan_id, evaluation_id=None):
+    """
+    Gather comprehensive plan data including plan info, extracted details, and evaluation data
+    
+    Args:
+        plan_id: Plan ID
+        evaluation_id: Optional evaluation ID
+        
+    Returns:
+        dict: Comprehensive plan data for LLaMA analysis
+    """
+    try:
+        # Get plan basic info
+        plan = Plan.objects.get(plan_id=plan_id)
+        plan_data = {
+            'plan_id': plan.plan_id,
+            'plan_name': plan.plan_name,
+            'plan_type': plan.plan_type,
+            'strategy_name': plan.strategy_name,
+            'vendor_id': plan.vendor_id,
+            'version': plan.version,
+            'document_date': plan.document_date.isoformat() if plan.document_date else None,
+            'criticality': plan.criticality,
+            'status': plan.status,
+            'submitted_at': plan.submitted_at.isoformat() if plan.submitted_at else None,
+            'ocr_extracted': plan.ocr_extracted,
+            'ocr_extracted_at': plan.ocr_extracted_at.isoformat() if plan.ocr_extracted_at else None
+        }
+        
+        # Get extracted details from unified ocr_extracted_data field
+        extracted_details = None
+        if plan.ocr_extracted_data:
+            extracted_details = plan.ocr_extracted_data.copy()
+            extracted_details['type'] = plan.plan_type
+            extracted_details['extracted_at'] = plan.ocr_extracted_at.isoformat() if plan.ocr_extracted_at else None
+        else:
+            logger.warning(f"No extracted data found for plan {plan_id} in ocr_extracted_data field")
+        
+        # Get evaluation data if evaluation_id is provided
+        evaluation_data = None
+        if evaluation_id:
+            try:
+                evaluation = Evaluation.objects.get(evaluation_id=evaluation_id)
+                evaluation_data = {
+                    'evaluation_id': evaluation.evaluation_id,
+                    'plan_id': evaluation.plan_id,
+                    'assigned_to_user_id': evaluation.assigned_to_user_id,
+                    'assigned_by_user_id': evaluation.assigned_by_user_id,
+                    'assigned_at': evaluation.assigned_at.isoformat() if evaluation.assigned_at else None,
+                    'due_date': evaluation.due_date.isoformat() if evaluation.due_date else None,
+                    'status': evaluation.status,
+                    'started_at': evaluation.started_at.isoformat() if evaluation.started_at else None,
+                    'submitted_at': evaluation.submitted_at.isoformat() if evaluation.submitted_at else None,
+                    'overall_score': float(evaluation.overall_score) if evaluation.overall_score else None,
+                    'quality_score': float(evaluation.quality_score) if evaluation.quality_score else None,
+                    'coverage_score': float(evaluation.coverage_score) if evaluation.coverage_score else None,
+                    'recovery_capability_score': float(evaluation.recovery_capability_score) if evaluation.recovery_capability_score else None,
+                    'compliance_score': float(evaluation.compliance_score) if evaluation.compliance_score else None,
+                    'weighted_score': float(evaluation.weighted_score) if evaluation.weighted_score else None,
+                    'criteria_json': evaluation.criteria_json,
+                    'evaluator_comments': evaluation.evaluator_comments
+                }
+            except Evaluation.DoesNotExist:
+                logger.warning(f"No evaluation found for evaluation_id {evaluation_id}")
+        
+        # Combine all data
+        comprehensive_data = {
+            'plan_info': plan_data,
+            'extracted_details': extracted_details,
+            'evaluation_data': evaluation_data
+        }
+        
+        logger.info(f"Gathered comprehensive data for plan {plan_id} (evaluation: {evaluation_id})")
+        return comprehensive_data
+        
+    except Plan.DoesNotExist:
+        logger.error(f"Plan {plan_id} not found")
+        return None
+    except Exception as e:
+        logger.error(f"Error gathering comprehensive plan data for plan {plan_id}: {str(e)}")
+        return None
+
+
+def generate_risks_for_plan_evaluation(plan_id, evaluation_id=None):
+    """
+    Generate risks using comprehensive plan data (plan + extracted details + evaluation)
+    
+    Args:
+        plan_id: Plan ID
+        evaluation_id: Optional evaluation ID
+        
+    Returns:
+        dict: Risk generation response or None if failed
+    """
+    try:
+        # Get comprehensive plan data
+        comprehensive_data = get_comprehensive_plan_data(plan_id, evaluation_id)
+        if not comprehensive_data:
+            return None
+        
+        # Call the risk generation service directly (no HTTP request)
+        from risk_analysis.services import RiskAnalysisService
+        
+        service = RiskAnalysisService()
+        result = service.analyze_comprehensive_plan_data(
+            entity='bcp_drp_module',
+            comprehensive_data=comprehensive_data
+        )
+        
+        logger.info(f"Generated {len(result.get('risks', []))} risks for comprehensive plan {plan_id} data")
+        return result
+            
+    except Exception as e:
+        logger.error(f"Error calling comprehensive risk generation service: {str(e)}")
+        return None
+
+
+def generate_risks_for_entity(entity, table, row_id):
+    """
+    Helper function to call the Risk Generation service directly (legacy method)
+    
+    Args:
+        entity: Entity name (e.g., 'bcp_drp_module')
+        table: Table name (e.g., 'bcp_drp_plans', 'bcp_drp_evaluations')
+        row_id: Row ID to analyze
+        
+    Returns:
+        dict: Risk generation response or None if failed
+    """
+    try:
+        # Call the risk generation service directly (no HTTP request)
+        from risk_analysis.services import RiskAnalysisService
+        
+        service = RiskAnalysisService()
+        result = service.analyze_entity_data_row(
+            entity=entity,
+            table=table,
+            row_id=row_id
+        )
+        
+        logger.info(f"Generated {len(result.get('risks', []))} risks for {entity} {table} row {row_id}")
+        return result
+            
+    except Exception as e:
+        logger.error(f"Error calling risk generation service: {str(e)}")
+        return None
+
+
+
+
+# =============================================================================
+# PLAN VIEWS
+# =============================================================================
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('view_plans')
 def plan_list_view(request):
@@ -129,7 +375,7 @@ def plan_list_view(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('view_plans')
 def strategy_list_view(request):
@@ -244,8 +490,7 @@ def strategy_list_view(request):
 
 
 @api_view(['POST'])
-@parser_classes([MultiPartParser, FormParser, JSONParser])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('create_strategy')
 def vendor_upload_view(request):
@@ -254,10 +499,9 @@ def vendor_upload_view(request):
         # Get the uploaded files and form data
         files = request.FILES
         strategy_name = request.data.get('strategyName', '').strip()
-        plan_type = request.data.get('planType', '').strip()
         documents_str = request.data.get('documents', '[]')
         
-        logger.info(f"Received upload request - Strategy: {strategy_name}, Plan Type: {plan_type}")
+        logger.info(f"Received upload request - Strategy: {strategy_name}")
         logger.info(f"Files received: {list(files.keys())}")
         logger.info(f"Files details: {[(key, obj.name, obj.size) for key, obj in files.items()]}")
         logger.info(f"Documents string: {documents_str}")
@@ -290,11 +534,22 @@ def vendor_upload_view(request):
         if not strategy_name:
             return error_response("Strategy name is required", status.HTTP_400_BAD_REQUEST)
         
-        if not plan_type or plan_type not in ['BCP', 'DRP']:
-            return error_response("Valid plan type (BCP or DRP) is required", status.HTTP_400_BAD_REQUEST)
-        
         if not documents:
             return error_response("At least one document is required", status.HTTP_400_BAD_REQUEST)
+        
+        # Validate that each document has a plan type
+        for doc_data in documents:
+            doc_plan_type = doc_data.get('planType', '').strip()
+            if not doc_plan_type:
+                return error_response("Plan type is required for each document", status.HTTP_400_BAD_REQUEST)
+            
+            # Check if plan type exists in dropdown table
+            if not Dropdown.objects.filter(source='plan_type', value=doc_plan_type).exists():
+                valid_types = list(Dropdown.objects.filter(source='plan_type').values_list('value', flat=True))
+                return error_response(
+                    f"Invalid plan type '{doc_plan_type}' for document '{doc_data.get('planName', 'Unknown')}'. Valid types are: {', '.join(valid_types)}",
+                    status.HTTP_400_BAD_REQUEST
+                )
         
         # For now, use a default vendor_id (in real app, this would come from authentication)
         vendor_id = 1
@@ -319,56 +574,30 @@ def vendor_upload_view(request):
             # Frontend sends files with key format: file_${fileName}
             file_key = f"file_{file_name}"
             logger.info(f"Looking for file with key: {file_key}, fileName: {file_name}")
-            logger.info(f"Available file keys: {list(files.keys())}")
-            
             if file_key in files:
                 uploaded_file = files[file_key]
                 logger.info(f"Found file with key: {file_key}")
             else:
                 # Fallback: try to find by original filename
                 logger.info(f"File key {file_key} not found, trying fallback search")
-                for key, file_obj in files.items():
+                for file_key, file_obj in files.items():
                     if file_obj.name == file_name:
                         uploaded_file = file_obj
-                        logger.info(f"Found file with fallback: {key}")
+                        logger.info(f"Found file with fallback: {file_key}")
                         break
             
             if not uploaded_file:
                 logger.warning(f"File not found for document: {file_name}")
-                logger.warning(f"Available files: {[(k, f.name if hasattr(f, 'name') else str(f)) for k, f in files.items()]}")
                 continue
             
-            # Read file content once for both saving and hashing
-            try:
-                uploaded_file.seek(0)  # Reset file pointer to beginning if possible
-            except (AttributeError, OSError):
-                # File object doesn't support seeking, that's okay - read it fresh
-                pass
-            file_content = uploaded_file.read()
-            
-            # Validate file type - check content_type or infer from extension
-            content_type = uploaded_file.content_type
-            if not content_type:
-                # Infer content type from extension if not provided
-                file_extension = os.path.splitext(uploaded_file.name)[1].lower()
-                if file_extension == '.pdf':
-                    content_type = 'application/pdf'
-                elif file_extension == '.doc':
-                    content_type = 'application/msword'
-                elif file_extension == '.docx':
-                    content_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-                else:
-                    content_type = 'unknown'
-            
+            # Validate file type
             allowed_types = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
-            if content_type not in allowed_types:
-                logger.error(f"Invalid file type: {content_type} for file: {uploaded_file.name}")
+            if uploaded_file.content_type not in allowed_types:
                 return error_response(f"Invalid file type for {uploaded_file.name}. Only PDF, DOC, and DOCX files are allowed.", status.HTTP_400_BAD_REQUEST)
             
             # Validate file size (max 10MB)
             max_size = 10 * 1024 * 1024  # 10MB
-            file_size = uploaded_file.size if hasattr(uploaded_file, 'size') and uploaded_file.size else len(file_content)
-            if file_size > max_size:
+            if uploaded_file.size > max_size:
                 return error_response(f"File {uploaded_file.name} is too large. Maximum size is 10MB.", status.HTTP_400_BAD_REQUEST)
             
             # Generate file path
@@ -376,10 +605,12 @@ def vendor_upload_view(request):
             storage_file_name = f"vendor_{vendor_id}_{strategy_id}_{uploaded_file.name}"
             file_path = f"uploads/plans/{storage_file_name}"
             
-            # Save file to storage using the already-read content
-            saved_path = default_storage.save(file_path, ContentFile(file_content))
+            # Save file to storage
+            saved_path = default_storage.save(file_path, ContentFile(uploaded_file.read()))
             
-            # Calculate file hash using the already-read content
+            # Calculate file hash
+            uploaded_file.seek(0)  # Reset file pointer
+            file_content = uploaded_file.read()
             sha256_hash = hashlib.sha256(file_content).hexdigest()
             
             # Get next plan_id
@@ -390,6 +621,8 @@ def vendor_upload_view(request):
             plan_data_inventory = doc_data.get('data_inventory', data_inventory)
             if not isinstance(plan_data_inventory, dict):
                 plan_data_inventory = {}
+            # Get plan type from document data (per-document plan type)
+            doc_plan_type = doc_data.get('planType', '').strip()
             
             # Create plan record
             plan = Plan.objects.create(
@@ -397,13 +630,13 @@ def vendor_upload_view(request):
                 vendor_id=vendor_id,
                 strategy_id=strategy_id,
                 strategy_name=strategy_name,
-                plan_type=plan_type,
+                plan_type=doc_plan_type,
                 plan_name=doc_data.get('planName', ''),
                 version='1.0',
                 file_uri=saved_path,
-                mime_type=content_type,
+                mime_type=uploaded_file.content_type,
                 sha256_checksum=sha256_hash,
-                size_bytes=file_size,
+                size_bytes=uploaded_file.size,
                 plan_scope=doc_data.get('scope', ''),
                 criticality=doc_data.get('criticality', 'MEDIUM'),
                 status='SUBMITTED',
@@ -418,9 +651,6 @@ def vendor_upload_view(request):
                 'status': plan.status
             })
         
-        if not created_plans:
-            return error_response("No documents were successfully uploaded. Please check that files are attached correctly.", status.HTTP_400_BAD_REQUEST)
-        
         return success_response({
             'message': f'Successfully uploaded {len(created_plans)} document(s)',
             'strategy_name': strategy_name,
@@ -429,10 +659,8 @@ def vendor_upload_view(request):
         }, status.HTTP_201_CREATED)
         
     except Exception as e:
-        error_traceback = traceback.format_exc()
         logger.error(f"Error uploading vendor documents: {str(e)}")
-        logger.error(f"Traceback: {error_traceback}")
-        return error_response(f"Failed to upload documents: {str(e)}", status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return error_response("Failed to upload documents", status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # =============================================================================
@@ -440,7 +668,7 @@ def vendor_upload_view(request):
 # =============================================================================
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('view_plans')
 def dropdown_list_view(request):
@@ -474,12 +702,144 @@ def dropdown_list_view(request):
         return error_response("Failed to fetch dropdown values", status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([SimpleAuthenticatedPermission])
+@rbac_bcp_drp_required('view_plans')
+def plan_types_list_view(request):
+    """Get all plan types from dropdown table"""
+    try:
+        # Get plan types from dropdown table
+        plan_types = Dropdown.objects.filter(source='plan_type').order_by('value')
+        
+        # Transform the data
+        plan_types_data = []
+        for plan_type in plan_types:
+            plan_types_data.append({
+                'id': plan_type.id,
+                'value': plan_type.value
+            })
+        
+        return success_response({
+            'plan_types': plan_types_data,
+            'total_count': len(plan_types_data)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching plan types: {str(e)}")
+        return error_response("Failed to fetch plan types", status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([SimpleAuthenticatedPermission])
+@rbac_bcp_drp_required('create_plans')
+def plan_type_create_view(request):
+    """Create a new plan type in dropdown table"""
+    try:
+        value = request.data.get('value', '').strip()
+        
+        if not value:
+            return error_response("Plan type value is required", status.HTTP_400_BAD_REQUEST)
+        
+        # Check if plan type already exists
+        if Dropdown.objects.filter(source='plan_type', value=value).exists():
+            return error_response(f"Plan type '{value}' already exists", status.HTTP_400_BAD_REQUEST)
+        
+        # Create new plan type
+        dropdown = Dropdown.objects.create(
+            source='plan_type',
+            value=value
+        )
+        
+        return success_response({
+            'id': dropdown.id,
+            'source': dropdown.source,
+            'value': dropdown.value
+        }, status_code=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        logger.error(f"Error creating plan type: {str(e)}")
+        return error_response("Failed to create plan type", status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['PUT', 'PATCH'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([SimpleAuthenticatedPermission])
+@rbac_bcp_drp_required('create_plans')
+def plan_type_update_view(request, plan_type_id):
+    """Update a plan type in dropdown table"""
+    try:
+        value = request.data.get('value', '').strip()
+        
+        if not value:
+            return error_response("Plan type value is required", status.HTTP_400_BAD_REQUEST)
+        
+        # Get the dropdown entry
+        try:
+            dropdown = Dropdown.objects.get(id=plan_type_id, source='plan_type')
+        except Dropdown.DoesNotExist:
+            return not_found_response("Plan type not found")
+        
+        # Check if new value already exists (excluding current entry)
+        if Dropdown.objects.filter(source='plan_type', value=value).exclude(id=plan_type_id).exists():
+            return error_response(f"Plan type '{value}' already exists", status.HTTP_400_BAD_REQUEST)
+        
+        # Update the value
+        dropdown.value = value
+        dropdown.save()
+        
+        return success_response({
+            'id': dropdown.id,
+            'source': dropdown.source,
+            'value': dropdown.value
+        })
+        
+    except Exception as e:
+        logger.error(f"Error updating plan type: {str(e)}")
+        return error_response("Failed to update plan type", status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['DELETE'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([SimpleAuthenticatedPermission])
+@rbac_bcp_drp_required('create_plans')
+def plan_type_delete_view(request, plan_type_id):
+    """Delete a plan type from dropdown table"""
+    try:
+        # Get the dropdown entry
+        try:
+            dropdown = Dropdown.objects.get(id=plan_type_id, source='plan_type')
+        except Dropdown.DoesNotExist:
+            return not_found_response("Plan type not found")
+        
+        # Check if plan type is being used in any plans
+        plan_count = Plan.objects.filter(plan_type=dropdown.value).count()
+        if plan_count > 0:
+            return error_response(
+                f"Cannot delete plan type '{dropdown.value}' because it is used in {plan_count} plan(s)",
+                status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Delete the plan type
+        value = dropdown.value
+        dropdown.delete()
+        
+        return success_response({
+            'message': f"Plan type '{value}' deleted successfully"
+        })
+        
+    except Exception as e:
+        logger.error(f"Error deleting plan type: {str(e)}")
+        return error_response("Failed to delete plan type", status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 # =============================================================================
 # QUESTIONNAIRE VIEWS
 # =============================================================================
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('create_questionnaire')
 def questionnaire_list_view(request):
@@ -577,7 +937,7 @@ def questionnaire_list_view(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('review_answers')
 def questionnaire_detail_view(request, questionnaire_id):
@@ -634,7 +994,7 @@ def questionnaire_detail_view(request, questionnaire_id):
 
 
 @api_view(['PUT'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('review_answers')
 def questionnaire_review_save_view(request, questionnaire_id):
@@ -679,7 +1039,7 @@ def questionnaire_review_save_view(request, questionnaire_id):
 # =============================================================================
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('ocr_extraction')
 def ocr_plans_list_view(request):
@@ -755,7 +1115,7 @@ def ocr_plans_list_view(request):
 # =============================================================================
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('view_plans')
 def comprehensive_plan_detail_view(request, plan_id):
@@ -766,61 +1126,14 @@ def comprehensive_plan_detail_view(request, plan_id):
         # Get plan basic info
         plan = Plan.objects.get(plan_id=plan_id)
         
-        # Get extracted details based on plan type
+        # Get extracted details from unified ocr_extracted_data field
         extracted_details = None
-        if plan.plan_type == 'BCP':
-            try:
-                bcp_details = BcpDetails.objects.get(plan_id=plan_id)
-                extracted_details = {
-                    'purpose_scope': bcp_details.purpose_scope,
-                    'regulatory_references': bcp_details.regulatory_references,
-                    'critical_services': bcp_details.critical_services,
-                    'dependencies_internal': bcp_details.dependencies_internal,
-                    'dependencies_external': bcp_details.dependencies_external,
-                    'risk_assessment_summary': bcp_details.risk_assessment_summary,
-                    'bia_summary': bcp_details.bia_summary,
-                    'rto_targets': bcp_details.rto_targets,
-                    'rpo_targets': bcp_details.rpo_targets,
-                    'incident_types': bcp_details.incident_types,
-                    'alternate_work_locations': bcp_details.alternate_work_locations,
-                    'communication_plan_internal': bcp_details.communication_plan_internal,
-                    'communication_plan_bank': bcp_details.communication_plan_bank,
-                    'roles_responsibilities': bcp_details.roles_responsibilities,
-                    'training_testing_schedule': bcp_details.training_testing_schedule,
-                    'maintenance_review_cycle': bcp_details.maintenance_review_cycle,
-                    'extracted_at': bcp_details.extracted_at.isoformat() if bcp_details.extracted_at else None,
-                    'extractor_version': bcp_details.extractor_version
-                }
-            except BcpDetails.DoesNotExist:
-                extracted_details = None
-        else:  # DRP
-            try:
-                drp_details = DrpDetails.objects.get(plan_id=plan_id)
-                extracted_details = {
-                    'purpose_scope': drp_details.purpose_scope,
-                    'regulatory_references': drp_details.regulatory_references,
-                    'critical_systems': drp_details.critical_systems,
-                    'critical_applications': drp_details.critical_applications,
-                    'databases_list': drp_details.databases_list,
-                    'supporting_infrastructure': drp_details.supporting_infrastructure,
-                    'third_party_services': drp_details.third_party_services,
-                    'rto_targets': drp_details.rto_targets,
-                    'rpo_targets': drp_details.rpo_targets,
-                    'disaster_scenarios': drp_details.disaster_scenarios,
-                    'disaster_declaration_process': drp_details.disaster_declaration_process,
-                    'data_backup_strategy': drp_details.data_backup_strategy,
-                    'recovery_site_details': drp_details.recovery_site_details,
-                    'failover_procedures': drp_details.failover_procedures,
-                    'failback_procedures': drp_details.failback_procedures,
-                    'network_recovery_steps': drp_details.network_recovery_steps,
-                    'application_restoration_order': drp_details.application_restoration_order,
-                    'testing_validation_schedule': drp_details.testing_validation_schedule,
-                    'maintenance_review_cycle': drp_details.maintenance_review_cycle,
-                    'extracted_at': drp_details.extracted_at.isoformat() if drp_details.extracted_at else None,
-                    'extractor_version': drp_details.extractor_version
-                }
-            except DrpDetails.DoesNotExist:
-                extracted_details = None
+        if plan.ocr_extracted_data:
+            extracted_details = plan.ocr_extracted_data.copy()
+            extracted_details['extracted_at'] = plan.ocr_extracted_at.isoformat() if plan.ocr_extracted_at else None
+            extracted_details['extractor_version'] = 'AI_LLAMA'
+        else:
+            extracted_details = None
         
         # Get evaluations for this plan
         evaluations = Evaluation.objects.filter(plan_id=plan_id).order_by('-assigned_at')
@@ -890,7 +1203,7 @@ def comprehensive_plan_detail_view(request, plan_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('ocr_extraction')
 def ocr_plan_detail_view(request, plan_id):
@@ -898,60 +1211,13 @@ def ocr_plan_detail_view(request, plan_id):
     try:
         plan = Plan.objects.get(plan_id=plan_id)
         
-        # Get extracted details based on plan type
-        extracted_data = None
-        if plan.plan_type == 'BCP':
-            try:
-                bcp_details = BcpDetails.objects.get(plan_id=plan_id)
-                logger.info(f"Found BCP details for plan {plan_id}: {bcp_details}")
-                extracted_data = {
-                    'purpose_scope': bcp_details.purpose_scope,
-                    'regulatory_references': bcp_details.regulatory_references,
-                    'critical_services': bcp_details.critical_services,
-                    'dependencies_internal': bcp_details.dependencies_internal,
-                    'dependencies_external': bcp_details.dependencies_external,
-                    'risk_assessment_summary': bcp_details.risk_assessment_summary,
-                    'bia_summary': bcp_details.bia_summary,
-                    'rto_targets': bcp_details.rto_targets,
-                    'rpo_targets': bcp_details.rpo_targets,
-                    'incident_types': bcp_details.incident_types,
-                    'alternate_work_locations': bcp_details.alternate_work_locations,
-                    'communication_plan_internal': bcp_details.communication_plan_internal,
-                    'communication_plan_bank': bcp_details.communication_plan_bank,
-                    'roles_responsibilities': bcp_details.roles_responsibilities,
-                    'training_testing_schedule': bcp_details.training_testing_schedule,
-                    'maintenance_review_cycle': bcp_details.maintenance_review_cycle
-                }
-                logger.info(f"Extracted data for plan {plan_id}: {extracted_data}")
-            except BcpDetails.DoesNotExist:
-                logger.warning(f"No BCP details found for plan {plan_id}")
-                extracted_data = {}
-        else:  # DRP
-            try:
-                drp_details = DrpDetails.objects.get(plan_id=plan_id)
-                extracted_data = {
-                    'purpose_scope': drp_details.purpose_scope,
-                    'regulatory_references': drp_details.regulatory_references,
-                    'critical_systems': drp_details.critical_systems,
-                    'critical_applications': drp_details.critical_applications,
-                    'databases_list': drp_details.databases_list,
-                    'supporting_infrastructure': drp_details.supporting_infrastructure,
-                    'third_party_services': drp_details.third_party_services,
-                    'rto_targets': drp_details.rto_targets,
-                    'rpo_targets': drp_details.rpo_targets,
-                    'disaster_scenarios': drp_details.disaster_scenarios,
-                    'disaster_declaration_process': drp_details.disaster_declaration_process,
-                    'data_backup_strategy': drp_details.data_backup_strategy,
-                    'recovery_site_details': drp_details.recovery_site_details,
-                    'failover_procedures': drp_details.failover_procedures,
-                    'failback_procedures': drp_details.failback_procedures,
-                    'network_recovery_steps': drp_details.network_recovery_steps,
-                    'application_restoration_order': drp_details.application_restoration_order,
-                    'testing_validation_schedule': drp_details.testing_validation_schedule,
-                    'maintenance_review_cycle': drp_details.maintenance_review_cycle
-                }
-            except DrpDetails.DoesNotExist:
-                extracted_data = {}
+        # Get extracted details from unified ocr_extracted_data field
+        extracted_data = {}
+        if plan.ocr_extracted_data:
+            extracted_data = plan.ocr_extracted_data.copy()
+            logger.info(f"Found extracted data for plan {plan_id} in ocr_extracted_data field")
+        else:
+            logger.warning(f"No extracted data found for plan {plan_id} in ocr_extracted_data field")
         
         plan_data = {
             'plan_id': plan.plan_id,
@@ -981,98 +1247,127 @@ def ocr_plan_detail_view(request, plan_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('ocr_extraction')
 def ocr_extraction_save_view(request, plan_id):
-    """Save extracted OCR data - requires OCRExtractionAndReview permission"""
+    """Save extracted OCR data to ocr_extracted_data field - unified for all plan types"""
     try:
         plan = Plan.objects.get(plan_id=plan_id)
         extracted_data = request.data.get('extracted_data', {})
         
-        if plan.plan_type == 'BCP':
-            # Create or update BCP extracted details
-            bcp_details, created = BcpDetails.objects.get_or_create(
-                plan_id=plan_id,
-                defaults={
-                    'purpose_scope': extracted_data.get('purpose_scope', ''),
-                    'regulatory_references': extracted_data.get('regulatory_references', []),
-                    'critical_services': extracted_data.get('critical_services', []),
-                    'dependencies_internal': extracted_data.get('dependencies_internal', []),
-                    'dependencies_external': extracted_data.get('dependencies_external', []),
-                    'risk_assessment_summary': extracted_data.get('risk_assessment_summary', ''),
-                    'bia_summary': extracted_data.get('bia_summary', ''),
-                    'rto_targets': extracted_data.get('rto_targets', {}),
-                    'rpo_targets': extracted_data.get('rpo_targets', {}),
-                    'incident_types': extracted_data.get('incident_types', []),
-                    'alternate_work_locations': extracted_data.get('alternate_work_locations', []),
-                    'communication_plan_internal': extracted_data.get('communication_plan_internal', ''),
-                    'communication_plan_bank': extracted_data.get('communication_plan_bank', ''),
-                    'roles_responsibilities': extracted_data.get('roles_responsibilities', []),
-                    'training_testing_schedule': extracted_data.get('training_testing_schedule', ''),
-                    'maintenance_review_cycle': extracted_data.get('maintenance_review_cycle', '')
-                }
-            )
-            
-            if not created:
-                # Update existing record
-                bcp_details.purpose_scope = extracted_data.get('purpose_scope', bcp_details.purpose_scope)
-                bcp_details.regulatory_references = extracted_data.get('regulatory_references', bcp_details.regulatory_references)
-                bcp_details.critical_services = extracted_data.get('critical_services', bcp_details.critical_services)
-                bcp_details.dependencies_internal = extracted_data.get('dependencies_internal', bcp_details.dependencies_internal)
-                bcp_details.dependencies_external = extracted_data.get('dependencies_external', bcp_details.dependencies_external)
-                bcp_details.risk_assessment_summary = extracted_data.get('risk_assessment_summary', bcp_details.risk_assessment_summary)
-                bcp_details.bia_summary = extracted_data.get('bia_summary', bcp_details.bia_summary)
-                bcp_details.rto_targets = extracted_data.get('rto_targets', bcp_details.rto_targets)
-                bcp_details.rpo_targets = extracted_data.get('rpo_targets', bcp_details.rpo_targets)
-                bcp_details.incident_types = extracted_data.get('incident_types', bcp_details.incident_types)
-                bcp_details.alternate_work_locations = extracted_data.get('alternate_work_locations', bcp_details.alternate_work_locations)
-                bcp_details.communication_plan_internal = extracted_data.get('communication_plan_internal', bcp_details.communication_plan_internal)
-                bcp_details.communication_plan_bank = extracted_data.get('communication_plan_bank', bcp_details.communication_plan_bank)
-                bcp_details.roles_responsibilities = extracted_data.get('roles_responsibilities', bcp_details.roles_responsibilities)
-                bcp_details.training_testing_schedule = extracted_data.get('training_testing_schedule', bcp_details.training_testing_schedule)
-                bcp_details.maintenance_review_cycle = extracted_data.get('maintenance_review_cycle', bcp_details.maintenance_review_cycle)
-                bcp_details.save()
-            
-        else:  # DRP
-            # Create or update DRP extracted details
-            drp_details, created = DrpDetails.objects.get_or_create(
-                plan_id=plan_id,
-                defaults={
-                    'purpose_scope': extracted_data.get('purpose_scope', ''),
-                    'regulatory_references': extracted_data.get('regulatory_references', []),
-                    'critical_systems': extracted_data.get('critical_systems', []),
-                    'critical_applications': extracted_data.get('critical_applications', []),
-                    'databases_list': extracted_data.get('databases_list', []),
-                    'supporting_infrastructure': extracted_data.get('supporting_infrastructure', []),
-                    'third_party_services': extracted_data.get('third_party_services', []),
-                    'rto_targets': extracted_data.get('rto_targets', {}),
-                    'rpo_targets': extracted_data.get('rpo_targets', {}),
-                    'disaster_scenarios': extracted_data.get('disaster_scenarios', []),
-                    'disaster_declaration_process': extracted_data.get('disaster_declaration_process', ''),
-                    'data_backup_strategy': extracted_data.get('data_backup_strategy', ''),
-                    'recovery_site_details': extracted_data.get('recovery_site_details', ''),
-                    'failover_procedures': extracted_data.get('failover_procedures', ''),
-                    'failback_procedures': extracted_data.get('failback_procedures', ''),
-                    'network_recovery_steps': extracted_data.get('network_recovery_steps', ''),
-                    'application_restoration_order': extracted_data.get('application_restoration_order', []),
-                    'testing_validation_schedule': extracted_data.get('testing_validation_schedule', ''),
-                    'maintenance_review_cycle': extracted_data.get('maintenance_review_cycle', '')
-                }
-            )
-            
-            if not created:
-                # Update existing record
-                for field, value in extracted_data.items():
-                    if hasattr(drp_details, field):
-                        setattr(drp_details, field, value)
-                drp_details.save()
+        # Helper function to check if a value is empty/null
+        def is_empty_value(val):
+            if val is None:
+                return True
+            if isinstance(val, str) and val.strip() == '':
+                return True
+            if isinstance(val, list) and len(val) == 0:
+                return True
+            if isinstance(val, dict) and len(val) == 0:
+                return True
+            return False
         
-        return success_response({
+        # Prepare unified data structure - include all fields from extracted_data (including custom fields)
+        # Only include fields that have non-empty values
+        unified_data = {'plan_id': plan_id}
+        
+        # Process all fields from extracted_data (including custom fields)
+        for key, value in extracted_data.items():
+            # Skip plan_id as it's already set
+            if key == 'plan_id':
+                continue
+            
+            # Only add non-empty values
+            if not is_empty_value(value):
+                unified_data[key] = value
+        
+        logger.info(f"[INFO] Saving {len(unified_data) - 1} non-empty fields for plan {plan_id} (including custom fields)")
+        
+        # Save to ocr_extracted_data field
+        plan.ocr_extracted_data = unified_data
+        plan.ocr_extracted = True
+        if not plan.ocr_extracted_at:
+            from django.utils import timezone
+            plan.ocr_extracted_at = timezone.now()
+        plan.save()
+        
+        # Generate risks after OCR data is saved (background task)
+        task_info = None
+        try:
+            logger.info(f"Triggering background comprehensive risk generation for OCR completed plan {plan_id}")
+            
+            # Import the background task
+            from risk_analysis.tasks import generate_comprehensive_risks_task
+            
+            # Start background task - analyze plan with extracted OCR data (no evaluation yet)
+            task = generate_comprehensive_risks_task.delay(
+                plan_id=plan_id,
+                evaluation_id=None  # No evaluation at OCR stage, only plan + extracted details
+            )
+            
+            task_info = {
+                'task_id': task.id,
+                'status': 'started',
+                'message': 'Comprehensive risk generation started in background'
+            }
+            
+            logger.info(f"Started background risk generation task {task.id} for OCR completed plan {plan_id}")
+            
+        except Exception as task_error:
+            logger.warning(f"Background task system not available, will generate risks after response: {task_error}")
+            
+            # Instead of blocking, we'll generate risks after sending the response
+            task_info = {
+                'task_id': 'deferred',
+                'status': 'deferred',
+                'message': 'Risk generation will start after OCR save completes'
+            }
+        
+        response_data = {
             'message': 'Extracted data saved successfully',
             'plan_id': plan_id,
             'plan_type': plan.plan_type
-        }, status.HTTP_201_CREATED)
+        }
+        
+        # Include background task info in response
+        if task_info:
+            response_data['risk_generation'] = task_info
+            if task_info['status'] == 'deferred':
+                response_data['risk_message'] = "OCR data saved! Comprehensive risk generation will start shortly - check Risk Analytics in a few minutes"
+            else:
+                response_data['risk_message'] = "Comprehensive risk generation started in background - risks will appear in Risk Analytics shortly"
+        else:
+            response_data['risk_message'] = "Risk generation task could not be started - check logs"
+        
+        # Create response first
+        response = success_response(response_data, status.HTTP_201_CREATED)
+        
+        # Start deferred risk generation after response (if needed)
+        if task_info and task_info['status'] == 'deferred':
+            import threading
+            
+            def deferred_ocr_risk_generation():
+                try:
+                    logger.info(f"Starting deferred risk generation for OCR completed plan {plan_id}")
+                    sync_result = generate_risks_for_plan_evaluation(
+                        plan_id=plan_id,
+                        evaluation_id=None  # No evaluation at OCR stage
+                    )
+                    if sync_result:
+                        logger.info(f"Deferred OCR risk generation completed: {len(sync_result.get('risks', []))} risks created")
+                    else:
+                        logger.error("Deferred OCR risk generation failed")
+                except Exception as e:
+                    logger.error(f"Error in deferred OCR risk generation: {str(e)}")
+            
+            # Start the risk generation in a separate thread
+            thread = threading.Thread(target=deferred_ocr_risk_generation)
+            thread.daemon = True  # Thread will die when main process dies
+            thread.start()
+            logger.info("Started deferred OCR risk generation thread")
+        
+        return response
         
     except Plan.DoesNotExist:
         return not_found_response("Plan not found")
@@ -1082,7 +1377,7 @@ def ocr_extraction_save_view(request, plan_id):
 
 
 @api_view(['PATCH'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('ocr_extraction')
 def ocr_status_update_view(request, plan_id):
@@ -1116,7 +1411,7 @@ def ocr_status_update_view(request, plan_id):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('assign_evaluation')
 def evaluation_list_view(request, plan_id):
@@ -1178,7 +1473,7 @@ def evaluation_list_view(request, plan_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('assign_evaluation')
 def evaluation_save_view(request, plan_id):
@@ -1218,14 +1513,18 @@ def evaluation_save_view(request, plan_id):
             eval_data_inventory = evaluation_data.get('data_inventory', {})
             if not isinstance(eval_data_inventory, dict):
                 eval_data_inventory = {}
+            # Determine initial status based on is_final_submission
+            is_final = evaluation_data.get('is_final_submission', False)
+            initial_status = 'SUBMITTED' if is_final else 'IN_PROGRESS'
             
             evaluation = Evaluation.objects.create(
                 evaluation_id=next_id,
                 plan_id=plan_id,
                 assigned_to_user_id=evaluation_data.get('assigned_to_user_id', 1),
                 assigned_by_user_id=evaluation_data.get('assigned_by_user_id', 1),
-                status='IN_PROGRESS',
+                status=initial_status,
                 started_at=timezone.now(),
+                submitted_at=timezone.now() if is_final else None,
                 overall_score=overall_score,
                 quality_score=quality_score,
                 coverage_score=coverage_score,
@@ -1237,7 +1536,26 @@ def evaluation_save_view(request, plan_id):
                 data_inventory=eval_data_inventory
             )
             created = True
-            logger.info(f"Successfully created evaluation {evaluation.evaluation_id}")
+            logger.info(f"Successfully created evaluation {evaluation.evaluation_id} with status {initial_status}")
+            
+            # If it's a final submission, update approval status
+            if is_final:
+                try:
+                    approval = BcpDrpApprovals.objects.filter(
+                        object_type='PLAN EVALUATION',
+                        object_id=plan_id,
+                        status__in=['ASSIGNED', 'IN_PROGRESS']
+                    ).first()
+                    
+                    if approval:
+                        approval.status = 'COMMENTED'
+                        approval.comment_text = evaluation_data.get('evaluator_comments', 'Evaluation submitted')
+                        approval.save()
+                        logger.info(f"Updated approval {approval.approval_id} status to COMMENTED for plan {plan_id}")
+                    else:
+                        logger.warning(f"No active approval found for plan {plan_id}")
+                except Exception as approval_error:
+                    logger.error(f"Error updating approval status for plan {plan_id}: {str(approval_error)}")
         
         if not created:
             # Update existing evaluation
@@ -1277,7 +1595,7 @@ def evaluation_save_view(request, plan_id):
                 # Update corresponding approval status to 'COMMENTED'
                 try:
                     approval = BcpDrpApprovals.objects.filter(
-                        object_type='PLAN',
+                        object_type='PLAN EVALUATION',
                         object_id=plan_id,
                         status__in=['ASSIGNED', 'IN_PROGRESS']  # Only update if not already commented/completed
                     ).first()
@@ -1303,39 +1621,6 @@ def evaluation_save_view(request, plan_id):
                 logger.error(f"Error saving evaluation: {str(save_error)}")
                 raise
         
-        # Generate risks if this is a final submission (background task)
-        task_info = None
-        if evaluation_data.get('is_final_submission', False):
-            logger.info(f"Triggering background comprehensive risk generation for completed evaluation {evaluation.evaluation_id} of plan {plan_id}")
-            
-            try:
-                # Import the background task
-                from risk_analysis.tasks import generate_comprehensive_risks_task
-                
-                # Start background task
-                task = generate_comprehensive_risks_task.delay(
-                    plan_id=plan_id,
-                    evaluation_id=evaluation.evaluation_id
-                )
-                
-                task_info = {
-                    'task_id': task.id,
-                    'status': 'started',
-                    'message': 'Comprehensive risk generation started in background'
-                }
-                
-                logger.info(f"Started background risk generation task {task.id} for plan {plan_id}")
-                
-            except Exception as task_error:
-                logger.warning(f"Background task system not available, will generate risks after response: {task_error}")
-                
-                # Instead of blocking, we'll generate risks after sending the response
-                task_info = {
-                    'task_id': 'deferred',
-                    'status': 'deferred',
-                    'message': 'Risk generation will start after evaluation save completes'
-                }
-        
         response_data = {
             'evaluation_id': evaluation.evaluation_id,
             'plan_id': evaluation.plan_id,
@@ -1343,44 +1628,7 @@ def evaluation_save_view(request, plan_id):
             'message': 'Evaluation saved successfully'
         }
         
-        # Include background task info in response
-        if task_info:
-            response_data['risk_generation'] = task_info
-            if task_info['status'] == 'deferred':
-                response_data['risk_message'] = "Evaluation saved! Comprehensive risk generation will start shortly - check Risk Analytics in a few minutes"
-            else:
-                response_data['risk_message'] = "Comprehensive risk generation started in background - risks will appear in Risk Analytics shortly"
-        elif evaluation_data.get('is_final_submission', False):
-            response_data['risk_message'] = "Risk generation task could not be started - check logs"
-        
-        # Create response first
-        response = success_response(response_data)
-        
-        # Start deferred risk generation after response (if needed)
-        if task_info and task_info['status'] == 'deferred' and evaluation_data.get('is_final_submission', False):
-            import threading
-            
-            def deferred_risk_generation():
-                try:
-                    logger.info(f"Starting deferred risk generation for evaluation {evaluation.evaluation_id} of plan {plan_id}")
-                    sync_result = generate_risks_for_plan_evaluation(
-                        plan_id=plan_id,
-                        evaluation_id=evaluation.evaluation_id
-                    )
-                    if sync_result:
-                        logger.info(f"Deferred risk generation completed: {len(sync_result.get('risks', []))} risks created")
-                    else:
-                        logger.error("Deferred risk generation failed")
-                except Exception as e:
-                    logger.error(f"Error in deferred risk generation: {str(e)}")
-            
-            # Start the risk generation in a separate thread
-            thread = threading.Thread(target=deferred_risk_generation)
-            thread.daemon = True  # Thread will die when main process dies
-            thread.start()
-            logger.info("Started deferred risk generation thread")
-        
-        return response
+        return success_response(response_data)
         
     except Exception as e:
         logger.error(f"Error saving evaluation: {str(e)}")
@@ -1388,7 +1636,7 @@ def evaluation_save_view(request, plan_id):
 
 
 @api_view(['PATCH'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('approve_evaluations')
 def plan_decision_view(request, plan_id):
@@ -1435,39 +1683,6 @@ def plan_decision_view(request, plan_id):
         
         plan.save()
         
-        # Generate risks for rejected or revision-requested plans (background task)
-        task_info = None
-        if decision in ['REJECT', 'REVISE']:
-            logger.info(f"Triggering background comprehensive risk generation for {decision.lower()}d plan {plan_id}")
-            
-            try:
-                # Import the background task
-                from risk_analysis.tasks import generate_comprehensive_risks_task
-                
-                # Start background task
-                task = generate_comprehensive_risks_task.delay(
-                    plan_id=plan_id,
-                    evaluation_id=None  # No specific evaluation, analyze plan + extracted details
-                )
-                
-                task_info = {
-                    'task_id': task.id,
-                    'status': 'started',
-                    'message': f'Risk generation started for {decision.lower()}d plan'
-                }
-                
-                logger.info(f"Started background risk generation task {task.id} for {decision.lower()}d plan {plan_id}")
-                
-            except Exception as task_error:
-                logger.warning(f"Background task system not available, will generate risks after response: {task_error}")
-                
-                # Instead of blocking, we'll generate risks after sending the response
-                task_info = {
-                    'task_id': 'deferred',
-                    'status': 'deferred',
-                    'message': f'Risk generation will start after {decision.lower()} decision completes'
-                }
-        
         response_data = {
             'message': f'Plan {decision}D successfully',
             'plan_id': plan_id,
@@ -1476,44 +1691,7 @@ def plan_decision_view(request, plan_id):
             'comment': comment if comment else None
         }
         
-        # Include background task info in response
-        if task_info:
-            response_data['risk_generation'] = task_info
-            if task_info['status'] == 'deferred':
-                response_data['risk_message'] = f"Plan {decision.lower()}d! Comprehensive risk generation will start shortly - check Risk Analytics in a few minutes"
-            else:
-                response_data['risk_message'] = "Comprehensive risk generation started in background - risks will appear in Risk Analytics shortly"
-        elif decision in ['REJECT', 'REVISE']:
-            response_data['risk_message'] = "Risk generation task could not be started - check logs"
-        
-        # Create response first
-        response = success_response(response_data)
-        
-        # Start deferred risk generation after response (if needed)
-        if task_info and task_info['status'] == 'deferred' and decision in ['REJECT', 'REVISE']:
-            import threading
-            
-            def deferred_plan_risk_generation():
-                try:
-                    logger.info(f"Starting deferred risk generation for {decision.lower()}d plan {plan_id}")
-                    sync_result = generate_risks_for_plan_evaluation(
-                        plan_id=plan_id,
-                        evaluation_id=None
-                    )
-                    if sync_result:
-                        logger.info(f"Deferred plan risk generation completed: {len(sync_result.get('risks', []))} risks created")
-                    else:
-                        logger.error("Deferred plan risk generation failed")
-                except Exception as e:
-                    logger.error(f"Error in deferred plan risk generation: {str(e)}")
-            
-            # Start the risk generation in a separate thread
-            thread = threading.Thread(target=deferred_plan_risk_generation)
-            thread.daemon = True  # Thread will die when main process dies
-            thread.start()
-            logger.info("Started deferred plan risk generation thread")
-        
-        return response
+        return success_response(response_data)
         
     except Plan.DoesNotExist:
         return not_found_response("Plan not found")
@@ -1523,7 +1701,7 @@ def plan_decision_view(request, plan_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('create_questionnaire')
 def questionnaire_save_view(request):
@@ -1653,7 +1831,7 @@ def questionnaire_save_view(request):
 # =============================================================================
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('view_plans')
 def users_list_view(request):
@@ -1737,7 +1915,7 @@ def _get_question_tags(question):
 # =============================================================================
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('assign_evaluation')
 def approval_assignment_create_view(request):
@@ -1750,18 +1928,16 @@ def approval_assignment_create_view(request):
         no_approval_needed = data.get('no_approval_needed', False)
         
         # If no approval needed, ensure assigner and assignee are the same
-        # Set assignee to assigner if not provided
-        if no_approval_needed:
-            if not data.get('assignee_id'):
-                data['assignee_id'] = data.get('assigner_id')
-            if not data.get('assignee_name'):
-                data['assignee_name'] = data.get('assigner_name')
-            if data.get('assigner_id') != data.get('assignee_id'):
-                return validation_error_response("When 'no approval needed' is checked, assigner and assignee must be the same")
+        if no_approval_needed and data.get('assigner_id') != data.get('assignee_id'):
+            return validation_error_response("When 'no approval needed' is checked, assigner and assignee must be the same")
         
         # Validate required fields
         required_fields = ['workflow_name', 'plan_type', 'assigner_id', 'assigner_name', 
-                          'object_type', 'object_id', 'due_date', 'assignee_id', 'assignee_name']
+                          'object_type', 'object_id', 'due_date']
+        
+        # Only require assignee if no_approval_needed is False
+        if not no_approval_needed:
+            required_fields.extend(['assignee_id', 'assignee_name'])
         
         for field in required_fields:
             if not data.get(field):
@@ -1770,22 +1946,20 @@ def approval_assignment_create_view(request):
         # Validate user IDs exist
         try:
             assigner = Users.objects.get(user_id=data['assigner_id'])
-            # Always validate assignee (it's required by the model)
-            assignee = Users.objects.get(user_id=data['assignee_id'])
-        except Users.DoesNotExist as e:
-            logger.error(f"User not found: {str(e)}")
+            # Only validate assignee if provided
+            if data.get('assignee_id'):
+                assignee = Users.objects.get(user_id=data['assignee_id'])
+        except Users.DoesNotExist:
             return validation_error_response("Invalid assigner or assignee user ID")
-        except (ValueError, TypeError) as e:
-            logger.error(f"Invalid user ID format: {str(e)}")
-            return validation_error_response("Invalid assigner or assignee user ID format")
         
         # Validate object type
-        valid_object_types = ['PLAN', 'QUESTIONNAIRE', 'ASSIGNMENT_RESPONSE']
+        valid_object_types = ['PLAN EVALUATION', 'NEW QUESTIONNAIRE', 'QUESTIONNAIRE RESPONSE']
         if data['object_type'] not in valid_object_types:
             return validation_error_response(f"Object type must be one of: {', '.join(valid_object_types)}")
         
         # Validate plan type
-        valid_plan_types = ['BCP', 'DRP']
+        # Get valid plan types from dropdown table
+        valid_plan_types = list(Dropdown.objects.filter(source='plan_type').values_list('value', flat=True))
         if data['plan_type'] not in valid_plan_types:
             return validation_error_response(f"Plan type must be one of: {', '.join(valid_plan_types)}")
         
@@ -1793,39 +1967,15 @@ def approval_assignment_create_view(request):
         max_workflow_id = BcpDrpApprovals.objects.aggregate(max_id=models.Max('workflow_id'))['max_id']
         next_workflow_id = (max_workflow_id or 0) + 1
         
-        # Parse and convert due_date to naive datetime (MySQL with USE_TZ=False doesn't support timezone-aware)
+        # Parse and convert due_date to timezone-aware datetime
         due_date_str = data['due_date']
         try:
-            # Parse the datetime string from the frontend (format: "2025-10-02T08:35" or "2025-10-02T08:35:00")
-            # Handle both with and without seconds
-            if 'T' in due_date_str:
-                # ISO format with time
-                if due_date_str.count(':') == 1:
-                    # Format: "2025-10-02T08:35" - add seconds
-                    due_date_str = due_date_str + ':00'
-                
-                # Remove timezone info if present (Z or +00:00 or -05:00)
-                if 'Z' in due_date_str:
-                    due_date_str = due_date_str.replace('Z', '')
-                elif '+' in due_date_str:
-                    due_date_str = due_date_str.split('+')[0]
-                elif due_date_str.count('-') > 2:  # Has timezone offset like -05:00
-                    # Split by last '-' and take everything before it
-                    parts = due_date_str.rsplit('-', 1)
-                    if ':' in parts[-1]:  # Last part is timezone offset
-                        due_date_str = parts[0]
-                
-                due_date = datetime.fromisoformat(due_date_str)
-            else:
-                # Date only format
-                due_date = datetime.fromisoformat(due_date_str)
-            
-            # Ensure it's naive (not timezone-aware) for MySQL backend
-            if timezone.is_aware(due_date):
-                due_date = timezone.make_naive(due_date)
+            # Parse the datetime string from the frontend (format: "2025-10-02T08:35")
+            due_date_naive = datetime.fromisoformat(due_date_str)
+            # Make it timezone-aware
+            due_date = timezone.make_aware(due_date_naive)
         except (ValueError, TypeError) as e:
-            logger.error(f"Error parsing due_date '{due_date_str}': {str(e)}")
-            return validation_error_response(f"Invalid due_date format: {due_date_str}. Expected format: YYYY-MM-DDTHH:MM")
+            return validation_error_response(f"Invalid due_date format: {due_date_str}")
         
         # Create approval assignment
         approval = BcpDrpApprovals.objects.create(
@@ -1866,18 +2016,15 @@ def approval_assignment_create_view(request):
         }, status.HTTP_201_CREATED)
         
     except Exception as e:
-        import traceback
-        error_traceback = traceback.format_exc()
         logger.error(f"Error creating approval assignment: {str(e)}")
-        logger.error(f"Traceback: {error_traceback}")
-        return error_response(f"Failed to create approval assignment: {str(e)}", status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return error_response("Failed to create approval assignment", status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 def auto_approve_object(approval):
     """Auto-approve object when no approval is needed"""
     from django.utils import timezone
     
-    if approval.object_type == 'PLAN':
+    if approval.object_type == 'PLAN EVALUATION':
         plan = Plan.objects.get(plan_id=approval.object_id)
         plan.status = 'APPROVED'
         plan.approved_by = approval.assignee_id
@@ -1885,15 +2032,15 @@ def auto_approve_object(approval):
         plan.save()
         logger.info(f"Auto-approved plan {approval.object_id} for user {approval.assignee_id}")
         
-    elif approval.object_type == 'QUESTIONNAIRE':
+    elif approval.object_type == 'NEW QUESTIONNAIRE':
+        # Do NOT auto-approve questionnaires - they should remain in DRAFT status
+        # The "No Approval Needed" flag only affects the approval workflow, not the questionnaire status
+        # Questionnaires should be explicitly approved through the approval workflow
         questionnaire = Questionnaire.objects.get(questionnaire_id=approval.object_id)
-        questionnaire.status = 'APPROVED'
-        questionnaire.approved_by_user_id = approval.assignee_id
-        questionnaire.approved_at = timezone.now()
-        questionnaire.save()
-        logger.info(f"Auto-approved questionnaire {approval.object_id} for user {approval.assignee_id}")
+        # Keep questionnaire status as DRAFT - do not change to APPROVED
+        logger.info(f"Skipping auto-approval for questionnaire {approval.object_id} - keeping status as DRAFT")
         
-    elif approval.object_type == 'ASSIGNMENT_RESPONSE':
+    elif approval.object_type == 'QUESTIONNAIRE RESPONSE':
         assignment = TestAssignmentsResponses.objects.get(
             assignment_response_id=approval.object_id
         )
@@ -1904,7 +2051,7 @@ def auto_approve_object(approval):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('view_plans')
 def approval_assignments_list_view(request):
@@ -1984,7 +2131,7 @@ def approval_assignments_list_view(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('approve_evaluations')
 def my_approvals_view(request):
@@ -2084,8 +2231,82 @@ def my_approvals_view(request):
         return error_response("Failed to fetch user approvals", status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(['PATCH'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([SimpleAuthenticatedPermission])
+@rbac_bcp_drp_required('approve_evaluations')
+def approval_status_update_view(request, approval_id):
+    """Update approval status and handle related object status changes"""
+    try:
+        # Get approval record
+        try:
+            approval = BcpDrpApprovals.objects.get(approval_id=approval_id)
+        except BcpDrpApprovals.DoesNotExist:
+            return not_found_response("Approval not found")
+        
+        # Get new status from request
+        new_status = request.data.get('status', '').strip().upper()
+        comment_text = request.data.get('comment_text', '').strip()
+        
+        # Validate status
+        valid_statuses = ['ASSIGNED', 'IN_PROGRESS', 'COMMENTED', 'SKIPPED', 'EXPIRED', 'CANCELLED']
+        if new_status not in valid_statuses:
+            return error_response(
+                f"Invalid status. Must be one of: {', '.join(valid_statuses)}", 
+                status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Update approval status
+        old_status = approval.status
+        approval.status = new_status
+        
+        # Update comment if provided
+        if comment_text:
+            approval.comment_text = comment_text
+        
+        approval.save()
+        logger.info(f"Updated approval {approval_id} status from {old_status} to {new_status}")
+        
+        # Handle related object status changes based on object_type
+        if approval.object_type == 'NEW QUESTIONNAIRE':
+            try:
+                questionnaire = Questionnaire.objects.get(questionnaire_id=approval.object_id)
+                
+                if new_status == 'IN_PROGRESS' and old_status == 'ASSIGNED':
+                    # When assignee starts working, change questionnaire status to IN_REVIEW
+                    questionnaire.status = 'IN_REVIEW'
+                    questionnaire.save()
+                    logger.info(f"Updated questionnaire {approval.object_id} status to IN_REVIEW when approval status changed to IN_PROGRESS")
+                
+                elif new_status == 'COMMENTED':
+                    # When assignee completes review with comment, change questionnaire status to APPROVED
+                    questionnaire.status = 'APPROVED'
+                    questionnaire.approved_by_user_id = approval.assignee_id
+                    questionnaire.approved_at = timezone.now()
+                    questionnaire.reviewer_user_id = approval.assignee_id
+                    questionnaire.reviewer_comment = comment_text or 'Questionnaire reviewed and approved'
+                    questionnaire.save()
+                    logger.info(f"Updated questionnaire {approval.object_id} status to APPROVED when approval status changed to COMMENTED")
+                    
+            except Questionnaire.DoesNotExist:
+                logger.warning(f"Questionnaire {approval.object_id} not found when updating approval status")
+        
+        return success_response({
+            'message': 'Approval status updated successfully',
+            'approval_id': approval_id,
+            'old_status': old_status,
+            'new_status': new_status,
+            'object_type': approval.object_type,
+            'object_id': approval.object_id
+        })
+        
+    except Exception as e:
+        logger.error(f"Error updating approval status: {str(e)}")
+        return error_response("Failed to update approval status", status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('review_answers')
 def questionnaire_assignments_list_view(request):
@@ -2178,7 +2399,7 @@ def questionnaire_assignments_list_view(request):
 
 
 @api_view(['PUT', 'PATCH'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('review_answers')
 def questionnaire_assignment_save_answers_view(request, assignment_id):
@@ -2187,8 +2408,7 @@ def questionnaire_assignment_save_answers_view(request, assignment_id):
     """
     try:
         # Get assignment data from request
-        # Use request.data instead of request.body when using DRF's @api_view decorator
-        data = request.data
+        data = json.loads(request.body)
         logger.info(f"Saving answers for assignment {assignment_id}: {data}")
         
         # Validate required fields
@@ -2292,9 +2512,9 @@ def questionnaire_assignment_save_answers_view(request, assignment_id):
             # and auto-approve the assignment if so
             try:
                 approval_record = BcpDrpApprovals.objects.filter(
-                    object_type='ASSIGNMENT_RESPONSE',
+                    object_type='QUESTIONNAIRE RESPONSE',
                     object_id=assignment_id,
-                    status='ASSIGNED'
+                    status__in=['ASSIGNED', 'IN_PROGRESS']  # Check both ASSIGNED and IN_PROGRESS
                 ).first()
                 
                 if approval_record:
@@ -2313,13 +2533,17 @@ def questionnaire_assignment_save_answers_view(request, assignment_id):
                         
                         logger.info(f"Auto-approved assignment response {assignment_id} due to no approval needed")
                     else:
-                        logger.info(f"Assignment {assignment_id} requires manual approval")
+                        # Update approval status to COMMENTED for normal submissions
+                        approval_record.status = 'COMMENTED'
+                        approval_record.comment_text = reviewer_comment or 'Questionnaire response submitted'
+                        approval_record.save()
+                        logger.info(f"Updated approval {approval_record.approval_id} status to COMMENTED for assignment {assignment_id}")
                 else:
-                    logger.info(f"No approval record found for assignment {assignment_id}")
+                    logger.info(f"No active approval record found for assignment {assignment_id}")
                     
             except Exception as e:
-                logger.error(f"Error checking auto-approval for assignment {assignment_id}: {str(e)}")
-                # Continue with normal submission even if auto-approval check fails
+                logger.error(f"Error updating approval status for assignment {assignment_id}: {str(e)}")
+                # Continue with normal submission even if approval update fails
         
         assignment.save()
         
@@ -2337,15 +2561,13 @@ def questionnaire_assignment_save_answers_view(request, assignment_id):
     except json.JSONDecodeError:
         return error_response("Invalid JSON data", status.HTTP_400_BAD_REQUEST)
     except Exception as e:
-        logger.error(f"Error saving assignment answers: {str(e)}", exc_info=True)
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        return error_response(f"Failed to save answers: {str(e)}", status.HTTP_500_INTERNAL_SERVER_ERROR)
+        logger.error(f"Error saving assignment answers: {str(e)}")
+        return error_response("Failed to save answers", status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @csrf_exempt
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('create_questionnaire')
 def questionnaire_assignment_create_view(request):
@@ -2354,8 +2576,7 @@ def questionnaire_assignment_create_view(request):
         logger.info("Creating questionnaire assignment")
         
         # Get assignment data from request
-        # Use request.data instead of request.body when using DRF's @api_view decorator
-        data = request.data
+        data = json.loads(request.body)
         logger.info(f"Assignment data: {data}")
         
         # Validate required fields
@@ -2368,11 +2589,9 @@ def questionnaire_assignment_create_view(request):
         assigned_by_user_id = data.get('assigned_by_user_id', 1)
         
         # Get all questions for the questionnaire to create a single assignment record with JSON data
-        # Use tprm database connection to access test_questions table (in tprm_integration database)
+        # Use default database connection to access test_questions table
         from django.db import connections
-        # Try to use 'tprm' connection if available, otherwise fall back to 'default'
-        db_connection = 'tprm' if 'tprm' in connections else 'default'
-        with connections[db_connection].cursor() as cursor:
+        with connections['default'].cursor() as cursor:
             cursor.execute("""
                 SELECT question_id, question_text, answer_type, is_required
                 FROM test_questions 
@@ -2471,7 +2690,7 @@ def questionnaire_assignment_create_view(request):
 # =============================================================================
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('final_approval')
 def plan_approve_view(request, plan_id):
@@ -2500,7 +2719,7 @@ def plan_approve_view(request, plan_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('final_approval')
 def plan_reject_view(request, plan_id):
@@ -2530,7 +2749,7 @@ def plan_reject_view(request, plan_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('final_approval')
 def questionnaire_approve_view(request, questionnaire_id):
@@ -2543,6 +2762,25 @@ def questionnaire_approve_view(request, questionnaire_id):
         questionnaire.approved_by_user_id = request.data.get('approved_by', 1)  # Default to user 1 if not provided
         questionnaire.approved_at = models.functions.Now()
         questionnaire.save()
+        
+        # Update corresponding approval status to 'COMMENTED'
+        try:
+            approval = BcpDrpApprovals.objects.filter(
+                object_type='NEW QUESTIONNAIRE',
+                object_id=questionnaire_id,
+                status__in=['ASSIGNED', 'IN_PROGRESS']  # Only update if not already commented/completed
+            ).first()
+            
+            if approval:
+                approval.status = 'COMMENTED'
+                approval.comment_text = request.data.get('comment', 'Questionnaire approved')
+                approval.save()
+                logger.info(f"Updated approval {approval.approval_id} status to COMMENTED for questionnaire {questionnaire_id}")
+            else:
+                logger.warning(f"No active approval found for questionnaire {questionnaire_id}")
+        except Exception as approval_error:
+            logger.error(f"Error updating approval status for questionnaire {questionnaire_id}: {str(approval_error)}")
+            # Don't fail the questionnaire approval if approval update fails
         
         return success_response({
             'message': 'Questionnaire approved successfully',
@@ -2558,7 +2796,7 @@ def questionnaire_approve_view(request, questionnaire_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('final_approval')
 def questionnaire_reject_view(request, questionnaire_id):
@@ -2588,7 +2826,7 @@ def questionnaire_reject_view(request, questionnaire_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('final_approval')
 def assignment_approve_view(request, assignment_id):
@@ -2615,7 +2853,7 @@ def assignment_approve_view(request, assignment_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('final_approval')
 def assignment_reject_view(request, assignment_id):
@@ -2648,7 +2886,7 @@ def assignment_reject_view(request, assignment_id):
 # =============================================================================
  
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('create_questionnaire')
 def questionnaire_template_save_view(request):
@@ -2732,7 +2970,7 @@ def questionnaire_template_save_view(request):
 # =============================================================================
  
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('create_questionnaire')
 def questionnaire_template_save_view(request):
@@ -2867,13 +3105,13 @@ def questionnaire_template_save_view(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('create_questionnaire')
 def questionnaire_template_list_view(request):
     """
     List questionnaire templates, optionally filtered by module_type.
-    Query params: module_type (BCP, DRP, etc.), status, is_active
+    Query params: module_type (PLANS, VENDOR, CONTRACT, SLA, etc.), status, is_active
     """
     try:
         # Get query parameters
@@ -2925,7 +3163,7 @@ def questionnaire_template_list_view(request):
         return error_response(f"Failed to list questionnaire templates: {str(e)}", status.HTTP_500_INTERNAL_SERVER_ERROR)
  
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('create_questionnaire')
 def questionnaire_template_get_view(request, template_id):
@@ -2960,3 +3198,75 @@ def questionnaire_template_get_view(request, template_id):
     except Exception as e:
         logger.error(f"Error getting questionnaire template: {str(e)}", exc_info=True)
         return error_response(f"Failed to get questionnaire template: {str(e)}", status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([SimpleAuthenticatedPermission])
+@rbac_bcp_drp_required('view_plans')
+def plan_risks_view(request, plan_id):
+    """
+    Get all risks associated with a specific plan
+    Query: entity='bcp_drp_module' AND row=plan_id (as string)
+    """
+    try:
+        from apps.vendor_risk.models import RiskTPRM
+        
+        # Convert plan_id to string for comparison (row field is varchar)
+        plan_id_str = str(plan_id)
+        
+        logger.info(f"Fetching risks for plan_id: {plan_id} (as string: '{plan_id_str}')")
+        logger.info(f"Query: entity='bcp_drp_module' AND row='{plan_id_str}'")
+        
+        # Get all risks where entity is "bcp_drp_module" and row matches the plan_id
+        risks = RiskTPRM.objects.filter(
+            entity='bcp_drp_module',
+            row=plan_id_str
+        ).order_by('-created_at')
+        
+        # Count the risks
+        risk_count = risks.count()
+        logger.info(f"Found {risk_count} risks for plan_id {plan_id}")
+        
+        risk_data = []
+        for risk in risks:
+            # Safely parse suggested_mitigations
+            mitigations = []
+            if risk.suggested_mitigations:
+                try:
+                    if isinstance(risk.suggested_mitigations, str):
+                        mitigations = json.loads(risk.suggested_mitigations)
+                    elif isinstance(risk.suggested_mitigations, list):
+                        mitigations = risk.suggested_mitigations
+                    else:
+                        mitigations = []
+                except (json.JSONDecodeError, TypeError):
+                    mitigations = []
+            
+            risk_data.append({
+                'id': risk.id,
+                'title': risk.title,
+                'description': risk.description or '',
+                'likelihood': risk.likelihood,
+                'impact': risk.impact,
+                'score': float(risk.score) if risk.score else 0.0,
+                'priority': risk.priority,
+                'ai_explanation': risk.ai_explanation or '',
+                'suggested_mitigations': mitigations,
+                'status': risk.status,
+                'exposure_rating': risk.exposure_rating,
+                'risk_type': risk.risk_type,
+                'entity': risk.entity,
+                'row': risk.row,
+                'created_at': risk.created_at.isoformat() if risk.created_at else None,
+                'updated_at': risk.updated_at.isoformat() if risk.updated_at else None,
+            })
+        
+        return success_response({
+            'risks': risk_data,
+            'count': risk_count,
+            'plan_id': plan_id
+        })
+    except Exception as e:
+        logger.error(f"Error fetching risks for plan {plan_id}: {str(e)}", exc_info=True)
+        return error_response(f"Failed to fetch risks: {str(e)}", status.HTTP_500_INTERNAL_SERVER_ERROR)

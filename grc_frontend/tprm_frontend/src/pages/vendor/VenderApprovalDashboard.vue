@@ -326,15 +326,11 @@ import { useRouter } from 'vue-router'
 import api from '@/utils/api'
 import dayjs from 'dayjs'
 import loggingService from '@/services/loggingService'
-import { getTprmApiUrl } from '@/utils/backendEnv'
 
 export default {
   name: 'VendorApprovalDashboard',
   setup() {
     const router = useRouter()
-    // API base URL for vendor-approval endpoints
-    const VENDOR_APPROVAL_API_BASE_URL = getTprmApiUrl('vendor-approval')
-    
     const stats = ref({})
     const recentRequests = ref([])
     const myTasks = ref([])
@@ -364,7 +360,7 @@ export default {
     const loadUsers = async () => {
       try {
         console.log('Loading users...')
-        const usersResponse = await api.get(`${VENDOR_APPROVAL_API_BASE_URL}/users/`)
+        const usersResponse = await api.get('/api/v1/vendor-approval/users/')
         console.log('Users response:', usersResponse.data)
         users.value = usersResponse.data
         
@@ -384,7 +380,7 @@ export default {
       
       try {
         console.log('Loading requests for user:', selectedRequestUser.value)
-        const response = await api.get(`${VENDOR_APPROVAL_API_BASE_URL}/dashboard/user-requests/${selectedRequestUser.value}/`)
+        const response = await api.get(`/api/v1/vendor-approval/dashboard/user-requests/${selectedRequestUser.value}/`)
         console.log('User requests response:', response.data)
         recentRequests.value = response.data
       } catch (error) {
@@ -398,7 +394,7 @@ export default {
       
       try {
         console.log('Loading tasks for user:', selectedTaskUser.value)
-        const response = await api.get(`${VENDOR_APPROVAL_API_BASE_URL}/dashboard/user-tasks/${selectedTaskUser.value}/`)
+        const response = await api.get(`/api/v1/vendor-approval/dashboard/user-tasks/${selectedTaskUser.value}/`)
         console.log('User tasks response:', response.data)
         myTasks.value = response.data
       } catch (error) {
@@ -414,20 +410,20 @@ export default {
         
         // Load statistics
         console.log('Fetching stats...')
-        const statsResponse = await api.get(`${VENDOR_APPROVAL_API_BASE_URL}/dashboard/stats/`)
+        const statsResponse = await api.get('/api/v1/vendor-approval/dashboard/stats/')
         console.log('Stats response:', statsResponse.data)
         stats.value = statsResponse.data
 
         // Load recent requests from database
         console.log('Fetching recent requests...')
-        const recentResponse = await api.get(`${VENDOR_APPROVAL_API_BASE_URL}/dashboard/recent-requests/`)
+        const recentResponse = await api.get('/api/v1/vendor-approval/dashboard/recent-requests/')
         console.log('Recent requests response:', recentResponse.data)
         recentRequests.value = recentResponse.data
 
         // Load my tasks from database (using current user ID)
         const currentUserId = localStorage.getItem('currentUserId') || 'admin'
         console.log('Fetching tasks for user:', currentUserId)
-        const tasksResponse = await api.get(`${VENDOR_APPROVAL_API_BASE_URL}/dashboard/user-tasks/${currentUserId}/`)
+        const tasksResponse = await api.get(`/api/v1/vendor-approval/dashboard/user-tasks/${currentUserId}/`)
         console.log('Tasks response:', tasksResponse.data)
         myTasks.value = tasksResponse.data
 

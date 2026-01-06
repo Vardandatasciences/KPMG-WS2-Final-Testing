@@ -97,9 +97,9 @@ class Migration(migrations.Migration):
                 ('extracted_data', models.JSONField(blank=True, default=dict)),
                 ('upload_date', models.DateTimeField(auto_now_add=True)),
                 ('processed_status', models.CharField(choices=[('PENDING', 'Pending'), ('PROCESSING', 'Processing'), ('PROCESSED', 'Processed'), ('FAILED', 'Failed')], default='PENDING', max_length=20)),
-                ('contract', models.ForeignKey(db_column='contract_id', on_delete=django.db.models.deletion.CASCADE, related_name='sla_documents', to='tprm_slas.contract')),
+                ('contract', models.ForeignKey(db_column='contract_id', on_delete=django.db.models.deletion.CASCADE, related_name='sla_documents', to='slas.contract')),
                 ('uploaded_by', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='uploaded_sla_documents', to=settings.AUTH_USER_MODEL)),
-                ('vendor', models.ForeignKey(db_column='vendor_id', on_delete=django.db.models.deletion.CASCADE, related_name='sla_documents', to='tprm_slas.vendor')),
+                ('vendor', models.ForeignKey(db_column='vendor_id', on_delete=django.db.models.deletion.CASCADE, related_name='sla_documents', to='slas.vendor')),
             ],
             options={
                 'verbose_name': 'SLA Document',
@@ -132,8 +132,8 @@ class Migration(migrations.Migration):
                 ('compliance_score', models.DecimalField(blank=True, decimal_places=2, max_digits=5, null=True)),
                 ('priority', models.CharField(choices=[('HIGH', 'High'), ('MEDIUM', 'Medium'), ('LOW', 'Low'), ('CRITICAL', 'Critical')], default='MEDIUM', max_length=20)),
                 ('approval_status', models.CharField(choices=[('PENDING', 'Pending'), ('APPROVED', 'Approved')], default='PENDING', max_length=20)),
-                ('contract', models.ForeignKey(db_column='contract_id', on_delete=django.db.models.deletion.CASCADE, related_name='vendor_slas', to='tprm_slas.contract')),
-                ('vendor', models.ForeignKey(db_column='vendor_id', on_delete=django.db.models.deletion.CASCADE, related_name='vendor_slas', to='tprm_slas.vendor')),
+                ('contract', models.ForeignKey(db_column='contract_id', on_delete=django.db.models.deletion.CASCADE, related_name='vendor_slas', to='slas.contract')),
+                ('vendor', models.ForeignKey(db_column='vendor_id', on_delete=django.db.models.deletion.CASCADE, related_name='vendor_slas', to='slas.vendor')),
             ],
             options={
                 'verbose_name': 'Vendor SLA',
@@ -155,8 +155,8 @@ class Migration(migrations.Migration):
                 ('mitigation_actions', models.TextField(blank=True)),
                 ('penalty_amount', models.DecimalField(blank=True, decimal_places=2, max_digits=10, null=True)),
                 ('status', models.CharField(choices=[('open', 'Open'), ('investigating', 'Investigating'), ('mitigated', 'Mitigated'), ('resolved', 'Resolved'), ('closed', 'Closed')], default='open', max_length=20)),
-                ('metric', models.ForeignKey(db_column='metric_id', on_delete=django.db.models.deletion.CASCADE, related_name='violations', to='tprm_slas.slametric')),
-                ('sla', models.ForeignKey(db_column='sla_id', on_delete=django.db.models.deletion.CASCADE, related_name='violations', to='tprm_slas.vendorsla')),
+                ('metric', models.ForeignKey(db_column='metric_id', on_delete=django.db.models.deletion.CASCADE, related_name='violations', to='slas.slametric')),
+                ('sla', models.ForeignKey(db_column='sla_id', on_delete=django.db.models.deletion.CASCADE, related_name='violations', to='slas.vendorsla')),
             ],
             options={
                 'verbose_name': 'SLA Violation',
@@ -177,7 +177,7 @@ class Migration(migrations.Migration):
                 ('action_items', models.JSONField(default=list)),
                 ('next_review_date', models.DateField()),
                 ('reviewer', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='sla_reviews', to=settings.AUTH_USER_MODEL)),
-                ('sla', models.ForeignKey(db_column='sla_id', on_delete=django.db.models.deletion.CASCADE, related_name='reviews', to='tprm_slas.vendorsla')),
+                ('sla', models.ForeignKey(db_column='sla_id', on_delete=django.db.models.deletion.CASCADE, related_name='reviews', to='slas.vendorsla')),
             ],
             options={
                 'verbose_name': 'SLA Review',
@@ -188,7 +188,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='slametric',
             name='sla',
-            field=models.ForeignKey(db_column='sla_id', on_delete=django.db.models.deletion.CASCADE, related_name='sla_metrics', to='tprm_slas.vendorsla'),
+            field=models.ForeignKey(db_column='sla_id', on_delete=django.db.models.deletion.CASCADE, related_name='sla_metrics', to='slas.vendorsla'),
         ),
         migrations.CreateModel(
             name='SLACompliance',
@@ -203,8 +203,8 @@ class Migration(migrations.Migration):
                 ('breach_duration', models.DurationField(blank=True, null=True)),
                 ('penalty_applied', models.DecimalField(blank=True, decimal_places=2, max_digits=10, null=True)),
                 ('notes', models.TextField(blank=True)),
-                ('metric', models.ForeignKey(db_column='metric_id', on_delete=django.db.models.deletion.CASCADE, related_name='compliance_records', to='tprm_slas.slametric')),
-                ('sla', models.ForeignKey(db_column='sla_id', on_delete=django.db.models.deletion.CASCADE, related_name='compliance_records', to='tprm_slas.vendorsla')),
+                ('metric', models.ForeignKey(db_column='metric_id', on_delete=django.db.models.deletion.CASCADE, related_name='compliance_records', to='slas.slametric')),
+                ('sla', models.ForeignKey(db_column='sla_id', on_delete=django.db.models.deletion.CASCADE, related_name='compliance_records', to='slas.vendorsla')),
             ],
             options={
                 'verbose_name': 'SLA Compliance',

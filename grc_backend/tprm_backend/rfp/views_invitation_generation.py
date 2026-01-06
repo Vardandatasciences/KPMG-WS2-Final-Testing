@@ -14,15 +14,29 @@ from rest_framework.decorators import api_view, authentication_classes, permissi
 
 from .models import RFP, VendorInvitation, Vendor, RFPUnmatchedVendor
 from .email_templates import generate_rich_html_email
-from .rfp_authentication import UnifiedJWTAuthentication, SimpleAuthenticatedPermission
+from .rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required
 
 
 def generate_tracking_urls(rfp_id: int, invitation_id: int):
     """Generate acknowledge/decline tracking URLs that include rfp_id and invitation_id."""
     from django.conf import settings
-    # Use backend API URL for API endpoints
+    import re
+    
+    # Get backend URL and ensure it uses localhost (not ngrok)
     backend_url = getattr(settings, 'BACKEND_API_URL', 'http://localhost:8000').rstrip('/')
+    
+    # Replace any ngrok URLs with localhost:8000
+    if 'ngrok' in backend_url.lower():
+        backend_url = 'http://localhost:8000'
+    
+    # Ensure it's localhost (not 127.0.0.1 or other variations)
+    if not backend_url.startswith('http://localhost') and not backend_url.startswith('https://localhost'):
+        # Extract port if present, otherwise use 8000
+        port_match = re.search(r':(\d+)', backend_url)
+        port = port_match.group(1) if port_match else '8000'
+        backend_url = f'http://localhost:{port}'
+    
     # Point to API endpoints that record the status
     acknowledge_url = f"{backend_url}/api/v1/vendor-invitations/ack/{rfp_id}/{invitation_id}/"
     decline_url = f"{backend_url}/api/v1/vendor-invitations/decline/{rfp_id}/{invitation_id}/"
@@ -30,7 +44,7 @@ def generate_tracking_urls(rfp_id: int, invitation_id: int):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
 def generate_invitations_new_format(request):
@@ -38,9 +52,7 @@ def generate_invitations_new_format(request):
     Generate invitations using the new URI method with query parameters
     """
     try:
-        # Use request.data (DRF) instead of request.body to avoid RawPostDataException
-        # Since we're using @api_view, request.data is automatically parsed
-        data = request.data if hasattr(request, 'data') else json.loads(request.body)
+        data = json.loads(request.body)
         rfp_id = data.get('rfpId')
         vendors = data.get('vendors', [])
         custom_message = data.get('customMessage', '')
@@ -78,8 +90,22 @@ def generate_invitations_new_format(request):
                 print(f'[DEBUG] Processing vendor_data: {vendor_data}')
                 # Generate new-style URL with query parameters
                 from django.conf import settings
-                # Get EXTERNAL_BASE_URL with fallback to localhost:3000
-                external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000')
+                import re
+                
+                # Get external base URL and ensure it uses localhost (not ngrok)
+                external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
+                
+                # Replace any ngrok URLs with localhost:3000 (frontend port)
+                if 'ngrok' in external_base_url.lower():
+                    external_base_url = 'http://localhost:3000'
+                
+                # Ensure it's localhost (not 127.0.0.1 or other variations)
+                if not external_base_url.startswith('http://localhost') and not external_base_url.startswith('https://localhost'):
+                    # Extract port if present, otherwise use 3000
+                    port_match = re.search(r':(\d+)', external_base_url)
+                    port = port_match.group(1) if port_match else '3000'
+                    external_base_url = f'http://localhost:{port}'
+                
                 base_url = f"{external_base_url}/submit"
                 
                 # Prepare parameters
@@ -89,28 +115,12 @@ def generate_invitations_new_format(request):
                 contact_data = None
                 if vendor_id:
                     with connection.cursor() as cursor:
-                        try:
-                            # Try with tprm_integration schema first
-                            cursor.execute('''
-                                SELECT first_name, last_name, email, phone, mobile
-                                FROM tprm_integration.vendor_contacts
-                                WHERE vendor_id = %s 
-                                AND (contact_type = 'PRIMARY' OR is_primary = 1 OR is_primary = '1')
-                                AND (is_active = 1 OR is_active = '1' OR is_active = 'Y' OR is_active IS NULL)
-                                ORDER BY is_primary DESC, contact_id ASC
-                                LIMIT 1
-                            ''', [vendor_id])
-                        except Exception:
-                            # Fallback: try without schema prefix
-                            cursor.execute('''
-                                SELECT first_name, last_name, email, phone, mobile
-                                FROM vendor_contacts
-                                WHERE vendor_id = %s 
-                                AND (contact_type = 'PRIMARY' OR is_primary = 1 OR is_primary = '1')
-                                AND (is_active = 1 OR is_active = '1' OR is_active = 'Y' OR is_active IS NULL)
-                                ORDER BY is_primary DESC, contact_id ASC
-                                LIMIT 1
-                            ''', [vendor_id])
+                        cursor.execute('''
+                            SELECT first_name, last_name, email, phone, mobile
+                            FROM vendor_contacts
+                            WHERE vendor_id = %s AND contact_type = 'PRIMARY' AND is_primary = 1 AND is_active = 1
+                            LIMIT 1
+                        ''', [vendor_id])
                         contact = cursor.fetchone()
                         if contact:
                             contact_data = {
@@ -211,66 +221,10 @@ def generate_invitations_new_format(request):
                     'is_matched_vendor': invitation.is_matched_vendor
                 })
         
-        # Send invitation emails immediately after generation
-        print(f'[EMAIL] Sending invitation emails for {len(created_invitations)} invitations')
-        sent_count = 0
-        failed_count = 0
-        
-        for invitation_data in created_invitations:
-            try:
-                # Get the invitation object
-                invitation_obj = VendorInvitation.objects.get(invitation_id=invitation_data['invitation_id'])
-                
-                # Generate email content
-                rfp_data = {
-                    'rfp_title': rfp.rfp_title,
-                    'rfp_number': rfp.rfp_number,
-                    'description': rfp.description,
-                    'submission_deadline': rfp.submission_deadline.isoformat() if rfp.submission_deadline else None
-                }
-                
-                email_body = generate_rich_html_email(invitation_data, rfp_data)
-                email_subject = f"RFP Invitation: {rfp.rfp_title}"
-                
-                # Send email
-                from django.core.mail import EmailMessage
-                from django.conf import settings
-                
-                email_message = EmailMessage(
-                    subject=email_subject,
-                    body=email_body,
-                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@example.com'),
-                    to=[invitation_data['vendor_email']],
-                )
-                email_message.content_subtype = "html"
-                
-                # Send the email
-                result = email_message.send()
-                
-                if result:
-                    # Update invitation status to SENT
-                    invitation_obj.invitation_status = 'SENT'
-                    invitation_obj.invited_date = timezone.now()
-                    invitation_obj.save()
-                    sent_count += 1
-                    print(f'[SUCCESS] Email sent successfully to {invitation_data["vendor_email"]}')
-                else:
-                    failed_count += 1
-                    print(f'[WARNING] Email send returned False for {invitation_data["vendor_email"]}')
-                    
-            except Exception as email_error:
-                failed_count += 1
-                print(f'[ERROR] Failed to send email to {invitation_data.get("vendor_email", "unknown")}: {str(email_error)}')
-                import traceback
-                print(f'[ERROR] Traceback: {traceback.format_exc()}')
-                continue
-        
         return JsonResponse({
             'success': True,
-            'message': f'Generated {len(created_invitations)} invitation(s) and sent {sent_count} email(s) successfully',
-            'invitations': created_invitations,
-            'emails_sent': sent_count,
-            'emails_failed': failed_count
+            'message': f'Generated {len(created_invitations)} invitation(s) successfully',
+            'invitations': created_invitations
         })
         
     except json.JSONDecodeError as e:
@@ -292,7 +246,7 @@ def generate_invitations_new_format(request):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
 def generate_open_rfp_invitation(request):
@@ -300,8 +254,7 @@ def generate_open_rfp_invitation(request):
     Generate invitation for open RFP (no specific vendor)
     """
     try:
-        # Use request.data (DRF) instead of request.body to avoid RawPostDataException
-        data = request.data if hasattr(request, 'data') else json.loads(request.body)
+        data = json.loads(request.body)
         rfp_id = data.get('rfpId')
         
         if not rfp_id:
@@ -321,7 +274,22 @@ def generate_open_rfp_invitation(request):
         
         # Generate open RFP URL
         from django.conf import settings
-        external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000')
+        import re
+        
+        # Get external base URL and ensure it uses localhost (not ngrok)
+        external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
+        
+        # Replace any ngrok URLs with localhost:3000 (frontend port)
+        if 'ngrok' in external_base_url.lower():
+            external_base_url = 'http://localhost:3000'
+        
+        # Ensure it's localhost (not 127.0.0.1 or other variations)
+        if not external_base_url.startswith('http://localhost') and not external_base_url.startswith('https://localhost'):
+            # Extract port if present, otherwise use 3000
+            port_match = re.search(r':(\d+)', external_base_url)
+            port = port_match.group(1) if port_match else '3000'
+            external_base_url = f'http://localhost:{port}'
+        
         base_url = f"{external_base_url}/submit/open"
         params = {
             'rfpId': str(rfp_id)
@@ -374,7 +342,7 @@ def generate_open_rfp_invitation(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def get_invitations_by_rfp(request, rfp_id):
@@ -418,7 +386,7 @@ def get_invitations_by_rfp(request, rfp_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
 def send_invitation_emails(request):
@@ -426,8 +394,7 @@ def send_invitation_emails(request):
     Send invitation emails to vendors
     """
     try:
-        # Use request.data (DRF) instead of request.body to avoid RawPostDataException
-        data = request.data if hasattr(request, 'data') else json.loads(request.body)
+        data = json.loads(request.body)
         invitations = data.get('invitations', [])
         rfp_data = data.get('rfpData', {})
         

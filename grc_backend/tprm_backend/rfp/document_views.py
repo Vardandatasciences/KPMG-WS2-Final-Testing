@@ -5,12 +5,12 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from .models import RFP
 from .document_generator import generate_rfp_document
-from .rfp_authentication import UnifiedJWTAuthentication, SimpleAuthenticatedPermission
+from .rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required
 import json
 
 
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def generate_rfp_word_document(request, rfp_id):
@@ -40,7 +40,7 @@ def generate_rfp_word_document(request, rfp_id):
             'geographical_scope': rfp.geographical_scope,
             'compliance_requirements': rfp.compliance_requirements,
             'allow_late_submissions': rfp.allow_late_submissions,
-            'auto_publish': rfp.auto_publish,
+            'auto_approve': rfp.auto_approve,
             'status': rfp.status,
             'evaluation_criteria': []
         }
@@ -81,7 +81,7 @@ def generate_rfp_word_document(request, rfp_id):
         )
 
 
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def generate_rfp_pdf_document(request, rfp_id):
@@ -111,7 +111,7 @@ def generate_rfp_pdf_document(request, rfp_id):
             'geographical_scope': rfp.geographical_scope,
             'compliance_requirements': rfp.compliance_requirements,
             'allow_late_submissions': rfp.allow_late_submissions,
-            'auto_publish': rfp.auto_publish,
+            'auto_approve': rfp.auto_approve,
             'status': rfp.status,
             'evaluation_criteria': []
         }
@@ -153,7 +153,7 @@ def generate_rfp_pdf_document(request, rfp_id):
 
 
 @api_view(['POST'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
 def generate_document_from_data(request):
@@ -192,7 +192,7 @@ def generate_document_from_data(request):
 
 
 @api_view(['GET'])
-@authentication_classes([UnifiedJWTAuthentication])
+@authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
 def preview_rfp_document(request, rfp_id):
@@ -222,7 +222,7 @@ def preview_rfp_document(request, rfp_id):
             'geographical_scope': rfp.geographical_scope,
             'compliance_requirements': rfp.compliance_requirements,
             'allow_late_submissions': rfp.allow_late_submissions,
-            'auto_publish': rfp.auto_publish,
+            'auto_approve': rfp.auto_approve,
             'status': rfp.status,
             'evaluation_criteria': []
         }

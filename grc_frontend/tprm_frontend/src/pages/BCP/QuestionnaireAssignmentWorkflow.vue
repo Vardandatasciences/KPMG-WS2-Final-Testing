@@ -1,40 +1,53 @@
 <template>
   <div class="min-h-screen bg-background">
     <div class="container mx-auto p-6 space-y-6">
-      <!-- Header -->
-      <div class="flex flex-col space-y-4">
-        <div class="flex items-center justify-between">
-          <div>
-            <h1 class="text-3xl font-bold text-foreground">📋 Questionnaire Assignment Workflow</h1>
-            <p class="text-muted-foreground">Step {{ currentStep }} of 2: {{ currentStepTitle }}</p>
-          </div>
-          <div class="flex gap-2">
-            <span class="badge badge--outline text-sm">Assignment Workflow</span>
-          </div>
-        </div>
-
-        <!-- Progress Indicator -->
-        <div class="card">
-          <div class="card-content">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center space-x-4">
-                <div class="flex items-center">
-                  <div :class="['step-indicator', currentStep >= 1 ? 'step-completed' : 'step-pending']">
-                    <span class="step-number">1</span>
-                  </div>
-                  <span class="step-label">Assign Questionnaire</span>
-                </div>
-                <div class="step-connector"></div>
-                <div class="flex items-center">
-                  <div :class="['step-indicator', currentStep >= 2 ? 'step-completed' : 'step-pending']">
-                    <span class="step-number">2</span>
-                  </div>
-                  <span class="step-label">Create Approval Assignment</span>
-                </div>
-              </div>
+      <!-- Breadcrumb Navigation -->
+      <div class="breadcrumb-container">
+        <nav class="breadcrumb">
+          <div 
+            class="breadcrumb-item" 
+            :class="{ 'breadcrumb-item--active': currentStep === 1 }"
+            @click="goToStep(1)"
+          >
+            <div class="breadcrumb-icon">
+              <svg v-if="currentStep === 1" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"/>
+              </svg>
+              <span v-else class="breadcrumb-number">1</span>
+            </div>
+            <div class="breadcrumb-content">
+              <span class="breadcrumb-title">Assign Questionnaire</span>
+              <span class="breadcrumb-description">Select questionnaire and assign to plan</span>
             </div>
           </div>
-        </div>
+          
+          <div class="breadcrumb-separator">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+          </div>
+          
+          <div 
+            class="breadcrumb-item" 
+            :class="{ 
+              'breadcrumb-item--active': currentStep === 2,
+              'breadcrumb-item--disabled': !isStep2Enabled && currentStep !== 2
+            }"
+            @click="handleStep2Click"
+            :title="!isStep2Enabled ? 'Please complete questionnaire assignment in Step 1 first' : ''"
+          >
+            <div class="breadcrumb-icon">
+              <svg v-if="currentStep === 2" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <span v-else class="breadcrumb-number">2</span>
+            </div>
+            <div class="breadcrumb-content">
+              <span class="breadcrumb-title">Create Approval</span>
+              <span class="breadcrumb-description">Create approval workflow</span>
+            </div>
+          </div>
+        </nav>
       </div>
 
       <!-- STEP 1: Questionnaire Assignment Form -->
@@ -114,6 +127,14 @@
                       <table v-else class="plans-table">
                         <thead>
                           <tr>
+                            <th class="checkbox-column">
+                              <input 
+                                type="checkbox" 
+                                class="select-all-checkbox"
+                                :checked="isAllSelected"
+                                @change="toggleSelectAll"
+                              />
+                            </th>
                             <th>Plan ID</th>
                             <th>Plan Name</th>
                             <th>Type</th>
@@ -121,7 +142,6 @@
                             <th>Vendor</th>
                             <th>Criticality</th>
                             <th>Status</th>
-                            <th>Action</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -131,6 +151,14 @@
                             class="plan-row"
                             :class="{ 'selected': assignmentForm.plan_id == plan.plan_id }"
                           >
+                            <td class="checkbox-column">
+                              <input 
+                                type="checkbox" 
+                                class="plan-checkbox"
+                                :checked="assignmentForm.plan_id == plan.plan_id"
+                                @change="selectPlan(plan)"
+                              />
+                            </td>
                             <td class="plan-id-cell">{{ plan.plan_id }}</td>
                             <td class="plan-name-cell">{{ plan.plan_name }}</td>
                             <td>
@@ -149,15 +177,6 @@
                               <span class="badge badge--neutral">
                                 {{ typeof plan.status === 'string' ? plan.status.replace(/_/g, ' ') : 'N/A' }}
                               </span>
-                            </td>
-                            <td class="action-cell">
-                              <button 
-                                class="select-plan-btn"
-                                @click="selectPlan(plan)"
-                                @mousedown.prevent
-                              >
-                                Select
-                              </button>
                             </td>
                           </tr>
                         </tbody>
@@ -287,8 +306,9 @@
                 <label for="planType" class="block text-sm font-medium">Plan Type <span class="text-destructive">*</span></label>
                 <select v-model="approvalForm.plan_type" id="planType" class="input" required>
                   <option value="">Select plan type</option>
-                  <option value="BCP">Business Continuity Plan</option>
-                  <option value="DRP">Disaster Recovery Plan</option>
+                  <option v-for="planType in planTypes" :key="planType" :value="planType">
+                    {{ planType }}
+                  </option>
                 </select>
               </div>
               <div class="space-y-2">
@@ -418,7 +438,6 @@
           </form>
         </div>
       </div>
-
     </div>
   </div>
 </template>
@@ -464,7 +483,7 @@ const approvalForm = ref({
   assigner_name: '',
   assignee_id: '',
   assignee_name: '',
-  object_type: 'ASSIGNMENT_RESPONSE',
+  object_type: 'QUESTIONNAIRE RESPONSE',
   object_id: '',
   due_date: ''
 })
@@ -479,10 +498,22 @@ const users = ref([])
 const isLoadingUsers = ref(false)
 const isLoadingPlans = ref(false)
 const isPlanDropdownOpen = ref(false)
+const planTypes = ref<string[]>([])
 
 // Computed properties
+const isAllSelected = computed(() => {
+  return plans.value.length > 0 && plans.value.every(plan => 
+    assignmentForm.value.plan_id == plan.plan_id
+  )
+})
+
 const currentStepTitle = computed(() => {
   return currentStep.value === 1 ? 'Assign Questionnaire' : 'Create Approval Assignment'
+})
+
+const isStep2Enabled = computed(() => {
+  // Step 2 is enabled only if assignment response ID exists (Step 1 completed)
+  return assignmentResponseId.value !== null && assignmentResponseId.value !== undefined
 })
 
 // API Functions
@@ -506,9 +537,15 @@ const fetchPlans = async () => {
     const plansData = response.data?.plans || response.data || []
     plans.value = plansData
     console.log('Successfully fetched plans:', plansData.length, 'plans')
+    
+    // Extract unique plan types from plans table
+    const uniquePlanTypes = [...new Set(plansData.map((plan: any) => plan.plan_type).filter(Boolean))] as string[]
+    planTypes.value = uniquePlanTypes.sort()
+    console.log('Extracted plan types from plans:', planTypes.value)
   } catch (err) {
     console.error('Error fetching plans:', err)
     plans.value = []
+    planTypes.value = []
     PopupService.error(`Failed to load plans: ${err.message}. Please check your connection and try again.`, 'Loading Failed')
   } finally {
     isLoadingPlans.value = false
@@ -625,9 +662,6 @@ const submitApprovalAssignment = async () => {
     
     console.log('Approval assignment created successfully:', response)
     
-    // Show success popup
-    PopupService.success('Questionnaire assignment and approval workflow have been created successfully!', 'Workflow Completed')
-    
     // Redirect to My Approvals screen
     router.push('/bcp/my-approvals')
     
@@ -692,34 +726,22 @@ const handleNoApprovalChange = () => {
       }
     }
     
-    // Handle multiple property name formats (PascalCase from store, snake_case from localStorage, etc.)
-    const userId = currentUser?.UserId || 
-                   currentUser?.userId || 
-                   currentUser?.user_id || 
-                   currentUser?.userid || 
-                   currentUser?.id
-    
-    const userName = currentUser?.UserName || 
-                     currentUser?.username || 
-                     `${currentUser?.FirstName || currentUser?.first_name || ''} ${currentUser?.LastName || currentUser?.last_name || ''}`.trim() || 
-                     currentUser?.Email || 
-                     currentUser?.email ||
-                     currentUser?.name
+    // Handle both user_id and userid property names (backend returns userid)
+    const userId = currentUser?.user_id || currentUser?.userid
+    const userName = currentUser?.username || `${currentUser?.first_name || ''} ${currentUser?.last_name || ''}`.trim() || currentUser?.email
     
     if (currentUser && userId) {
       // Auto-fill assigner
       approvalForm.value.assigner_id = userId.toString()
-      approvalForm.value.assigner_name = userName || 'Current User'
+      approvalForm.value.assigner_name = userName
       
       // Set assignee to same as assigner
       approvalForm.value.assignee_id = userId.toString()
-      approvalForm.value.assignee_name = userName || 'Current User'
+      approvalForm.value.assignee_name = userName
     } else {
       console.error('No current user found in store or localStorage')
       console.log('Store state:', store.getters['auth/currentUser'])
       console.log('localStorage current_user:', localStorage.getItem('current_user'))
-      console.log('Current user object:', currentUser)
-      console.log('Resolved userId:', userId)
       PopupService.warning('Unable to get current user information. Please log in again or select assignee manually.', 'User Not Found')
       noApprovalNeeded.value = false
     }
@@ -739,14 +761,53 @@ const resetApprovalForm = () => {
     assigner_name: '',
     assignee_id: '',
     assignee_name: '',
-    object_type: 'ASSIGNMENT_RESPONSE',
+    object_type: 'QUESTIONNAIRE RESPONSE',
     object_id: assignmentResponseId.value || '',
     due_date: ''
   }
 }
 
+const handleStep2Click = () => {
+  if (!isStep2Enabled.value) {
+    PopupService.warning(
+      'Please complete questionnaire assignment in Step 1 before accessing Step 2.',
+      'Step 2 Disabled'
+    )
+    return
+  }
+  goToStep(2)
+}
+
 const goToStep = (step) => {
+  // Prevent navigation to Step 2 if conditions aren't met
+  if (step === 2 && !isStep2Enabled.value) {
+    PopupService.warning(
+      'Please complete questionnaire assignment in Step 1 before accessing Step 2.',
+      'Step 2 Disabled'
+    )
+    return
+  }
+  
   currentStep.value = step
+}
+
+const startNewWorkflow = () => {
+  // Reset all forms and go back to step 1
+  assignmentForm.value = {
+    plan_id: '',
+    questionnaire_id: '',
+    assigned_to_user_id: '',
+    due_date: ''
+  }
+  assignmentResponseId.value = null
+  resetApprovalForm()
+  currentStep.value = 1
+  assignmentError.value = null
+  approvalError.value = null
+}
+
+const viewAssignments = () => {
+  router.push('/bcp/my-approvals')
 }
 
 // Plan selection methods
@@ -772,6 +833,16 @@ const selectPlan = (plan) => {
   setTimeout(() => {
     isPlanDropdownOpen.value = false
   }, 100)
+}
+
+const toggleSelectAll = () => {
+  if (isAllSelected.value) {
+    assignmentForm.value.plan_id = ''
+  } else {
+    if (plans.value.length > 0) {
+      selectPlan(plans.value[0])
+    }
+  }
 }
 
 const getSelectedPlanDisplay = () => {

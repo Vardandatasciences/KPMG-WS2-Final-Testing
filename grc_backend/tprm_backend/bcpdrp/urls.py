@@ -21,6 +21,9 @@ urlpatterns = [
     path('evaluations/<int:plan_id>/', views.evaluation_list_view, name='evaluation-list'),
     path('evaluations/<int:plan_id>/save/', views.evaluation_save_view, name='evaluation-save'),
     
+    # Plan risks endpoint
+    path('plans/<int:plan_id>/risks/', views.plan_risks_view, name='plan-risks'),
+    
     # Decision endpoints
     path('plans/<int:plan_id>/decision/', views.plan_decision_view, name='plan-decision'),
     path('plans/<int:plan_id>/approve/', views.plan_approve_view, name='plan-approve'),
@@ -31,6 +34,12 @@ urlpatterns = [
     
     # Dropdown endpoints
     path('dropdowns/', views.dropdown_list_view, name='dropdown-list'),
+    
+    # Plan type management endpoints
+    path('plan-types/', views.plan_types_list_view, name='plan-types-list'),
+    path('plan-types/create/', views.plan_type_create_view, name='plan-type-create'),
+    path('plan-types/<int:plan_type_id>/update/', views.plan_type_update_view, name='plan-type-update'),
+    path('plan-types/<int:plan_type_id>/delete/', views.plan_type_delete_view, name='plan-type-delete'),
     
     # Questionnaire endpoints
     path('questionnaires/', views.questionnaire_list_view, name='questionnaire-list'),
@@ -54,6 +63,7 @@ urlpatterns = [
     # Approval assignment endpoints
     path('approvals/', views.approval_assignments_list_view, name='approval-assignments-list'),
     path('approvals/assignments/', views.approval_assignment_create_view, name='approval-assignment-create'),
+    path('approvals/<int:approval_id>/status/', views.approval_status_update_view, name='approval-status-update'),
     path('my-approvals/', views.my_approvals_view, name='my-approvals'),
     
     

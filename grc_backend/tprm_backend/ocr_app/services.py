@@ -1009,29 +1009,44 @@ class DocumentProcessingService:
             }
 
     def extract_bcp_data_with_ai(self, ocr_text: str) -> Dict:
-        """Extract BCP data using AI (LLaMA)"""
+        """Extract unified BCP/DRP data using AI (LLaMA) - all fields for all plan types"""
         try:
             prompt = f"""
-            Extract Business Continuity Plan (BCP) information from the following document text.
-            Return the data in JSON format with these exact fields:
+            Extract Business Continuity Plan (BCP) or Disaster Recovery Plan (DRP) information from the following document text.
+            Return the data in JSON format with these exact fields (use null for fields not found):
             
             {{
-                "purpose_scope": "string",
-                "regulatory_references": ["string"],
-                "critical_services": ["string"],
-                "dependencies_internal": ["string"],
-                "dependencies_external": ["string"],
-                "risk_assessment_summary": "string",
-                "bia_summary": "string",
-                "rto_targets": {{"service": "time"}},
-                "rpo_targets": {{"service": "time"}},
-                "incident_types": ["string"],
-                "alternate_work_locations": ["string"],
-                "communication_plan_internal": "string",
-                "communication_plan_bank": "string",
-                "roles_responsibilities": ["string"],
-                "training_testing_schedule": "string",
-                "maintenance_review_cycle": "string"
+                "plan_id": null,
+                "purpose_scope": "string or null",
+                "regulatory_references": ["string"] or null,
+                "critical_services": ["string"] or null,
+                "dependencies_internal": ["string"] or null,
+                "dependencies_external": ["string"] or null,
+                "risk_assessment_summary": "string or null",
+                "bia_summary": "string or null",
+                "rto_targets": {{"service": "time"}} or null,
+                "rpo_targets": {{"service": "time"}} or null,
+                "critical_systems": ["string"] or null,
+                "critical_applications": ["string"] or null,
+                "databases_list": ["string"] or null,
+                "supporting_infrastructure": ["string"] or null,
+                "third_party_services": ["string"] or null,
+                "incident_types": ["string"] or null,
+                "alternate_work_locations": ["string"] or null,
+                "communication_plan_internal": "string or null",
+                "communication_plan_bank": "string or null",
+                "roles_responsibilities": ["string"] or null,
+                "training_testing_schedule": "string or null",
+                "maintenance_review_cycle": "string or null",
+                "disaster_scenarios": ["string"] or null,
+                "disaster_declaration_process": "string or null",
+                "data_backup_strategy": "string or null",
+                "recovery_site_details": "string or null",
+                "failover_procedures": "string or null",
+                "failback_procedures": "string or null",
+                "network_recovery_steps": "string or null",
+                "application_restoration_order": ["string"] or null,
+                "testing_validation_schedule": "string or null"
             }}
             
             Document text:
@@ -1078,32 +1093,44 @@ class DocumentProcessingService:
             }
 
     def extract_drp_data_with_ai(self, ocr_text: str) -> Dict:
-        """Extract DRP data using AI (LLaMA)"""
+        """Extract unified BCP/DRP data using AI (LLaMA) - all fields for all plan types"""
         try:
             prompt = f"""
-            Extract Disaster Recovery Plan (DRP) information from the following document text.
-            Return the data in JSON format with these exact fields:
+            Extract Business Continuity Plan (BCP) or Disaster Recovery Plan (DRP) information from the following document text.
+            Return the data in JSON format with these exact fields (use null for fields not found):
             
             {{
-                "purpose_scope": "string",
-                "regulatory_references": ["string"],
-                "critical_systems": ["string"],
-                "critical_applications": ["string"],
-                "databases_list": ["string"],
-                "supporting_infrastructure": ["string"],
-                "third_party_services": ["string"],
-                "rto_targets": {{"system": "time"}},
-                "rpo_targets": {{"system": "time"}},
-                "disaster_scenarios": ["string"],
-                "disaster_declaration_process": "string",
-                "data_backup_strategy": "string",
-                "recovery_site_details": "string",
-                "failover_procedures": "string",
-                "failback_procedures": "string",
-                "network_recovery_steps": "string",
-                "application_restoration_order": ["string"],
-                "testing_validation_schedule": "string",
-                "maintenance_review_cycle": "string"
+                "plan_id": null,
+                "purpose_scope": "string or null",
+                "regulatory_references": ["string"] or null,
+                "critical_services": ["string"] or null,
+                "dependencies_internal": ["string"] or null,
+                "dependencies_external": ["string"] or null,
+                "risk_assessment_summary": "string or null",
+                "bia_summary": "string or null",
+                "rto_targets": {{"service": "time"}} or null,
+                "rpo_targets": {{"service": "time"}} or null,
+                "critical_systems": ["string"] or null,
+                "critical_applications": ["string"] or null,
+                "databases_list": ["string"] or null,
+                "supporting_infrastructure": ["string"] or null,
+                "third_party_services": ["string"] or null,
+                "incident_types": ["string"] or null,
+                "alternate_work_locations": ["string"] or null,
+                "communication_plan_internal": "string or null",
+                "communication_plan_bank": "string or null",
+                "roles_responsibilities": ["string"] or null,
+                "training_testing_schedule": "string or null",
+                "maintenance_review_cycle": "string or null",
+                "disaster_scenarios": ["string"] or null,
+                "disaster_declaration_process": "string or null",
+                "data_backup_strategy": "string or null",
+                "recovery_site_details": "string or null",
+                "failover_procedures": "string or null",
+                "failback_procedures": "string or null",
+                "network_recovery_steps": "string or null",
+                "application_restoration_order": ["string"] or null,
+                "testing_validation_schedule": "string or null"
             }}
             
             Document text:
@@ -1167,22 +1194,37 @@ class DocumentProcessingService:
             percentages = re.findall(percent_pattern, ocr_text)
             
             basic_data = {
+                "plan_id": None,
                 "purpose_scope": "Business Continuity Plan for maintaining operations during disruptions",
-                "regulatory_references": ["SOX", "Basel III", "PCI DSS"] if "sox" in text_lower or "basel" in text_lower else [],
-                "critical_services": ["Payment Processing", "Customer Service"] if "payment" in text_lower else [],
-                "dependencies_internal": ["IT Systems", "HR Department"] if "it" in text_lower else [],
-                "dependencies_external": ["Cloud Provider", "Banking Partners"] if "cloud" in text_lower else [],
+                "regulatory_references": ["SOX", "Basel III", "PCI DSS"] if "sox" in text_lower or "basel" in text_lower else None,
+                "critical_services": ["Payment Processing", "Customer Service"] if "payment" in text_lower else None,
+                "dependencies_internal": ["IT Systems", "HR Department"] if "it" in text_lower else None,
+                "dependencies_external": ["Cloud Provider", "Banking Partners"] if "cloud" in text_lower else None,
                 "risk_assessment_summary": "Risk assessment covers cyber threats, natural disasters, and operational failures",
                 "bia_summary": "Business Impact Analysis identifies critical business functions and recovery requirements",
                 "rto_targets": {"Critical Services": "4h", "Support Services": "8h"},
                 "rpo_targets": {"Critical Data": "15m", "Support Data": "1h"},
+                "critical_systems": None,
+                "critical_applications": None,
+                "databases_list": None,
+                "supporting_infrastructure": None,
+                "third_party_services": None,
                 "incident_types": ["Cyber Attack", "Natural Disaster", "System Failure"],
                 "alternate_work_locations": ["Remote Work", "Backup Office"],
                 "communication_plan_internal": "Internal communication follows hierarchical structure with multiple channels",
                 "communication_plan_bank": "Customer notifications via website, mobile app, email, and SMS",
                 "roles_responsibilities": ["Incident Commander", "Communication Lead", "Technical Lead"],
                 "training_testing_schedule": "Annual training, quarterly exercises, semi-annual testing",
-                "maintenance_review_cycle": "Quarterly review with annual comprehensive updates"
+                "maintenance_review_cycle": "Quarterly review with annual comprehensive updates",
+                "disaster_scenarios": None,
+                "disaster_declaration_process": None,
+                "data_backup_strategy": None,
+                "recovery_site_details": None,
+                "failover_procedures": None,
+                "failback_procedures": None,
+                "network_recovery_steps": None,
+                "application_restoration_order": None,
+                "testing_validation_schedule": None
             }
             
             return {
@@ -1216,15 +1258,28 @@ class DocumentProcessingService:
             percentages = re.findall(percent_pattern, ocr_text)
             
             basic_data = {
+                "plan_id": None,
                 "purpose_scope": "Disaster Recovery Plan for rapid recovery of critical IT systems and infrastructure",
-                "regulatory_references": ["SOX", "Basel III", "PCI DSS", "FFIEC"] if "sox" in text_lower or "basel" in text_lower else [],
+                "regulatory_references": ["SOX", "Basel III", "PCI DSS", "FFIEC"] if "sox" in text_lower or "basel" in text_lower else None,
+                "critical_services": None,
+                "dependencies_internal": None,
+                "dependencies_external": None,
+                "risk_assessment_summary": None,
+                "bia_summary": None,
+                "rto_targets": {"Critical Systems": "2h", "Applications": "4h", "Databases": "1h"},
+                "rpo_targets": {"Critical Systems": "30m", "Applications": "1h", "Databases": "15m"},
                 "critical_systems": ["Core Banking System", "Payment Gateway", "Database Servers"],
                 "critical_applications": ["Loan Management System", "Trading Platform", "Customer Portal"],
                 "databases_list": ["Customer Database", "Transaction Database", "Risk Database"],
                 "supporting_infrastructure": ["Network", "Storage", "Servers", "Security"],
                 "third_party_services": ["Cloud Provider", "SMS Gateway", "Email Service"],
-                "rto_targets": {"Critical Systems": "2h", "Applications": "4h", "Databases": "1h"},
-                "rpo_targets": {"Critical Systems": "30m", "Applications": "1h", "Databases": "15m"},
+                "incident_types": None,
+                "alternate_work_locations": None,
+                "communication_plan_internal": None,
+                "communication_plan_bank": None,
+                "roles_responsibilities": None,
+                "training_testing_schedule": None,
+                "maintenance_review_cycle": "Monthly review with quarterly updates",
                 "disaster_scenarios": ["Data Center Failure", "Network Outage", "Cyber Attack"],
                 "disaster_declaration_process": "Three-tier process: Level 1 (Minor), Level 2 (Major), Level 3 (Critical)",
                 "data_backup_strategy": "Multi-tier backup with real-time replication and off-site storage",
@@ -1233,8 +1288,7 @@ class DocumentProcessingService:
                 "failback_procedures": "Primary system validation, data sync, service migration, performance testing",
                 "network_recovery_steps": "Assess damage, activate backup circuits, configure routing, test connectivity",
                 "application_restoration_order": ["Core Banking", "Payment Gateway", "Customer Portal", "Risk Management"],
-                "testing_validation_schedule": "Monthly DR testing with annual comprehensive exercise",
-                "maintenance_review_cycle": "Monthly review with quarterly updates"
+                "testing_validation_schedule": "Monthly DR testing with annual comprehensive exercise"
             }
             
             return {
@@ -1386,15 +1440,16 @@ class DocumentProcessingService:
             logger.info(f"[INFO] Step 3: Running AI extraction for {plan_type}")
             
             try:
-                if plan_type == 'BCP':
+                # Use unified extraction method for all plan types
+                # Both extract_bcp_data_with_ai and extract_drp_data_with_ai now extract all unified fields
+                if plan_type.upper() == 'BCP':
                     extraction_result = self.extract_bcp_data_with_ai(ocr_text)
-                elif plan_type == 'DRP':
+                elif plan_type.upper() == 'DRP':
                     extraction_result = self.extract_drp_data_with_ai(ocr_text)
                 else:
-                    return {
-                        'success': False,
-                        'error': f'Invalid plan type: {plan_type}'
-                    }
+                    # For any other plan type (CRP, etc.), use the unified extraction method
+                    # Both methods now extract all fields, so we can use either one
+                    extraction_result = self.extract_bcp_data_with_ai(ocr_text)
                 
                 if not extraction_result['success']:
                     logger.error(f"[ERROR] AI extraction failed: {extraction_result.get('error')}")

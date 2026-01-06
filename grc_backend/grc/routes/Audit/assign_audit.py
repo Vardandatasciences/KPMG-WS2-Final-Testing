@@ -461,85 +461,89 @@ def create_audit(request):
                 )
 
                 # Get compliances based on selection level
-                findings_created += 1
-                
-                if audit.FrameworkId_id:
-                    with connection.cursor() as cursor:
-                        # First verify the framework exists
-                        cursor.execute("""
-                            SELECT FrameworkId, FrameworkName 
-                            FROM frameworks 
-                            WHERE FrameworkId = %s
-                        """, [audit.FrameworkId_id])
-                        framework = cursor.fetchone()
-                        
-                        if not framework:
-                            print(f"Framework {audit.FrameworkId_id} not found")
-                            return Response({
-                                'error': f'Framework with ID {audit.FrameworkId_id} not found'
-                            }, status=status.HTTP_404_NOT_FOUND)
-                        
-                        print(f"Found framework: {framework}")
-                        
-                        # Get compliances based on selection level
-                        if audit.PolicyId_id and audit.SubPolicyId_id:
-                            print(f"Getting compliances for subpolicy {audit.SubPolicyId_id}")
+                # SKIP creating audit findings for AI audits - they will be created after document upload and compliance selection
+                if audit_type != 'A':  # Only create findings for non-AI audits
+                    findings_created += 1
+                    
+                    if audit.FrameworkId_id:
+                        with connection.cursor() as cursor:
+                            # First verify the framework exists
                             cursor.execute("""
-                                SELECT c.* 
-                                FROM compliance c
-                                WHERE c.SubPolicyId = %s
-                                AND c.PermanentTemporary = 'Permanent'
-                                AND c.Status = 'Approved'
-                                AND c.ActiveInactive = 'Active'
-                            """, [audit.SubPolicyId_id])
-                            
-                        elif audit.PolicyId_id:
-                            print(f"Getting compliances for policy {audit.PolicyId_id}")
-                            cursor.execute("""
-                                SELECT c.* 
-                                FROM compliance c
-                                INNER JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
-                                WHERE sp.PolicyId = %s
-                                AND c.PermanentTemporary = 'Permanent'
-                                AND c.Status = 'Approved'
-                                AND c.ActiveInactive = 'Active'
-                            """, [audit.PolicyId_id])
-                            
-                        else:
-                            print(f"Getting compliances for framework {audit.FrameworkId_id}")
-                            cursor.execute("""
-                                SELECT c.* 
-                                FROM compliance c
-                                INNER JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
-                                INNER JOIN policies p ON sp.PolicyId = p.PolicyId
-                                WHERE p.FrameworkId = %s
-                                AND c.PermanentTemporary = 'Permanent'
-                                AND c.Status = 'Approved'
-                                AND c.ActiveInactive = 'Active'
+                                SELECT FrameworkId, FrameworkName 
+                                FROM frameworks 
+                                WHERE FrameworkId = %s
                             """, [audit.FrameworkId_id])
-                        
-                        compliances = cursor.fetchall()
-                        print(f"Found {len(compliances)} compliances")
-                        
-                        # Create audit findings for found compliances
-                        if compliances:
-                            for compliance in compliances:
-                                compliance_id = compliance[0]  # Assuming ComplianceId is the first column
-                                print(f"Creating finding for compliance {compliance_id}")
-                                
+                            framework = cursor.fetchone()
+                            
+                            if not framework:
+                                print(f"Framework {audit.FrameworkId_id} not found")
+                                return Response({
+                                    'error': f'Framework with ID {audit.FrameworkId_id} not found'
+                                }, status=status.HTTP_404_NOT_FOUND)
+                            
+                            print(f"Found framework: {framework}")
+                            
+                            # Get compliances based on selection level
+                            if audit.PolicyId_id and audit.SubPolicyId_id:
+                                print(f"Getting compliances for subpolicy {audit.SubPolicyId_id}")
                                 cursor.execute("""
-                                    INSERT INTO audit_findings (
-                                        `AuditId`, `ComplianceId`, `UserId`, `Evidence`, 
-                                        `Check`, `Comments`, `MajorMinor`, `AssignedDate`, `FrameworkId`, `ReviewRejected`
-                                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                                """, [
-                                    audit.AuditId, compliance_id, audit.Auditor_id,
-                                    '', '0', '', None, audit.AssignedDate, audit.FrameworkId_id, 0  # Auto-inject framework from parent audit
-                                ])
-                                findings_created += 1
-                                print(f"Created finding {findings_created} for compliance {compliance_id}")
-                        else:
-                            print(f"No compliances found for audit {audit.AuditId}")
+                                    SELECT c.* 
+                                    FROM compliance c
+                                    WHERE c.SubPolicyId = %s
+                                    AND c.PermanentTemporary = 'Permanent'
+                                    AND c.Status = 'Approved'
+                                    AND c.ActiveInactive = 'Active'
+                                """, [audit.SubPolicyId_id])
+                                
+                            elif audit.PolicyId_id:
+                                print(f"Getting compliances for policy {audit.PolicyId_id}")
+                                cursor.execute("""
+                                    SELECT c.* 
+                                    FROM compliance c
+                                    INNER JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
+                                    WHERE sp.PolicyId = %s
+                                    AND c.PermanentTemporary = 'Permanent'
+                                    AND c.Status = 'Approved'
+                                    AND c.ActiveInactive = 'Active'
+                                """, [audit.PolicyId_id])
+                                
+                            else:
+                                print(f"Getting compliances for framework {audit.FrameworkId_id}")
+                                cursor.execute("""
+                                    SELECT c.* 
+                                    FROM compliance c
+                                    INNER JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
+                                    INNER JOIN policies p ON sp.PolicyId = p.PolicyId
+                                    WHERE p.FrameworkId = %s
+                                    AND c.PermanentTemporary = 'Permanent'
+                                    AND c.Status = 'Approved'
+                                    AND c.ActiveInactive = 'Active'
+                                """, [audit.FrameworkId_id])
+                            
+                            compliances = cursor.fetchall()
+                            print(f"Found {len(compliances)} compliances")
+                            
+                            # Create audit findings for found compliances
+                            if compliances:
+                                for compliance in compliances:
+                                    compliance_id = compliance[0]  # Assuming ComplianceId is the first column
+                                    print(f"Creating finding for compliance {compliance_id}")
+                                    
+                                    cursor.execute("""
+                                        INSERT INTO audit_findings (
+                                            `AuditId`, `ComplianceId`, `UserId`, `Evidence`, 
+                                            `Check`, `Comments`, `MajorMinor`, `AssignedDate`, `FrameworkId`, `ReviewRejected`
+                                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                    """, [
+                                        audit.AuditId, compliance_id, audit.Auditor_id,
+                                        '', '0', '', None, audit.AssignedDate, audit.FrameworkId_id, 0  # Auto-inject framework from parent audit
+                                    ])
+                                    findings_created += 1
+                                    print(f"Created finding {findings_created} for compliance {compliance_id}")
+                            else:
+                                print(f"No compliances found for audit {audit.AuditId}")
+                else:
+                    print(f"AI Audit detected - skipping audit findings creation. Findings will be created after document upload and compliance selection.")
             
             except Exception as e:
                 print(f"ERROR in audit creation for member {member_id}: {str(e)}")

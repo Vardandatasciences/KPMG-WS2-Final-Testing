@@ -260,10 +260,16 @@ export default {
     async startPeriodicTokenRefresh() {
       try {
         const { default: authService } = await import('./services/authService.js')
-        authService.startPeriodicTokenRefresh()
-        console.log('🔄 Periodic token refresh started from App.vue')
+        // Check if the method exists before calling it
+        if (authService && typeof authService.startPeriodicTokenRefresh === 'function') {
+          authService.startPeriodicTokenRefresh()
+          console.log('🔄 Periodic token refresh started from App.vue')
+        } else {
+          console.log('ℹ️ Periodic token refresh not available in authService (optional feature)')
+        }
       } catch (error) {
-        console.error('❌ Error starting periodic token refresh:', error)
+        // Don't log as error - this is an optional feature
+        console.log('ℹ️ Periodic token refresh not available:', error.message)
       }
     }
   }

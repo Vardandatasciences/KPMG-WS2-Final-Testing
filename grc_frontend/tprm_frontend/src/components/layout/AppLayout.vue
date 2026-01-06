@@ -1,7 +1,6 @@
 <template>
   <div class="h-screen">
-    <!-- TPRM Sidebar temporarily commented out -->
-    <!-- <AppSidebar @sidebar-toggle="handleSidebarToggle" /> -->
+    <AppSidebar @sidebar-toggle="handleSidebarToggle" />
     <div class="main-content" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
       <AppHeader />
       <main class="flex-1 overflow-x-hidden overflow-y-auto bg-background">
@@ -15,8 +14,7 @@
 
 <script setup>
 import { ref } from 'vue'
-// TPRM Sidebar temporarily commented out
-// import AppSidebar from './AppSidebar.vue'
+import AppSidebar from './AppSidebar.vue'
 import AppHeader from './AppHeader.vue'
 
 const isSidebarCollapsed = ref(false)
@@ -28,7 +26,7 @@ const handleSidebarToggle = (collapsed) => {
 
 <style scoped>
 .main-content {
-  margin-left: 240px; /* 240px margin to account for GRC sidebar */
+  margin-left: 0;
   height: 100vh;
   display: flex;
   flex-direction: column;
@@ -37,13 +35,12 @@ const handleSidebarToggle = (collapsed) => {
 }
 
 @media (min-width: 640px) {
-  /* 240px left margin to prevent overlap with GRC sidebar */
   .main-content {
-    margin-left: 240px; /* GRC sidebar width */
+    margin-left: 16.8rem; /* 268.8px - sidebar width + 5% spacing */
   }
   
   .main-content.sidebar-collapsed {
-    margin-left: 240px; /* Keep same margin even if TPRM sidebar was collapsed */
+    margin-left: 4.2rem; /* 67.2px - collapsed sidebar width + 5% spacing */
   }
 }
 </style>

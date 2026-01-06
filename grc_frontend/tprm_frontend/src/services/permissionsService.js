@@ -2,9 +2,7 @@
  * Permissions Service for RBAC checks
  * Handles permission verification before showing pages
  */
-
 import { getTprmApiBaseUrl } from '@/utils/backendEnv'
-import authService from '@/services/authService'
 
 const API_BASE_URL = getTprmApiBaseUrl()
 
@@ -21,49 +19,12 @@ class PermissionsService {
    * @param {string} permission - Permission to check (ViewSLA, CreateSLA, UpdateSLA, DeleteSLA, ActivateDeactivateSLA)
    * @returns {Promise<boolean>}
    */
-  getActiveUserId() {
-    const user = this.getCurrentUser()
-    if (!user) return null
-    return user.userid || user.UserId || user.id || user.user_id || null
-  }
-
-  buildUrlWithUserId(baseUrl, extraParams = {}) {
-    const params = new URLSearchParams()
-    Object.entries(extraParams).forEach(([key, value]) => {
-      if (typeof value !== 'undefined' && value !== null) {
-        params.append(key, value)
-      }
-    })
-
-    const userId = this.getActiveUserId()
-    if (userId) {
-      params.append('user_id', userId)
-    }
-
-    const user = this.getCurrentUser()
-    const username =
-      user?.username ||
-      user?.UserName ||
-      user?.user_name ||
-      null
-    if (username) {
-      params.append('username', username)
-    }
-
-    const email = user?.email || user?.Email || null
-    if (email) {
-      params.append('email', email)
-    }
-
-    const separator = baseUrl.includes('?') ? '&' : '?'
-    return `${baseUrl}${params.toString() ? separator + params.toString() : ''}`
-  }
-
   async hasSLAPermission(permission) {
     const user = this.getCurrentUser()
     console.log('[PermissionsService] Checking SLA permission:', permission, 'for user:', user)
     
-    const userId = this.getActiveUserId()
+    // Support both 'id' and 'userid' fields
+    const userId = user?.userid || user?.id
     if (!user || !userId) {
       console.warn('[PermissionsService] No user or user.id/userid found')
       return false
@@ -79,28 +40,20 @@ class PermissionsService {
     }
 
     try {
-      const token = authService.getSessionToken()
-      
-      // Build URL with user identification (works even without token)
-      const url = this.buildUrlWithUserId(
-        `${API_BASE_URL}/rbac/sla/`,
-        { permission_type: permission }
-      )
-      console.log('[PermissionsService] Fetching permission from:', url)
+      const token = localStorage.getItem('session_token')
+      if (!token) {
+        console.warn('[PermissionsService] No session token found')
+        return false
+      }
 
-      // Build headers - include token if available
-      const headers = {
-        'Content-Type': 'application/json'
-      }
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`
-      } else {
-        console.warn('[PermissionsService] No session token found, using user_id from query params')
-      }
+      const url = `${API_BASE_URL}/api/rbac/sla/?permission_type=${permission}`
+      console.log('[PermissionsService] Fetching permission from:', url)
 
       const response = await fetch(url, {
         method: 'GET',
-        headers
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       })
 
       console.log('[PermissionsService] Response status:', response.status)
@@ -132,6 +85,71 @@ class PermissionsService {
   }
 
   /**
+   * Check if user has a specific Contract permission
+   * @param {string} permission - Permission to check (e.g., CreateContract, PerformContractAudit)
+   * @returns {Promise<boolean>}
+   */
+  async hasContractPermission(permission) {
+    const user = this.getCurrentUser()
+    console.log('[PermissionsService] Checking Contract permission:', permission, 'for user:', user)
+    
+    const userId = user?.userid || user?.id
+    if (!user || !userId) {
+      console.warn('[PermissionsService] No user or user.id/userid found')
+      return false
+    }
+
+    const cacheKey = `contract_${userId}_${permission}`
+
+    const cached = permissionCache.get(cacheKey)
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      console.log('[PermissionsService] Using cached Contract permission:', permission, '=', cached.hasPermission)
+      return cached.hasPermission
+    }
+
+    try {
+      const token = localStorage.getItem('session_token')
+      if (!token) {
+        console.warn('[PermissionsService] No session token found')
+        return false
+      }
+
+      const url = `${API_BASE_URL}/api/rbac/contract/?permission_type=${permission}`
+      console.log('[PermissionsService] Fetching Contract permission from:', url)
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      console.log('[PermissionsService] Contract permission response status:', response.status)
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log('[PermissionsService] Contract permission response data:', data)
+        const hasPermission = data.has_permission || false
+
+        permissionCache.set(cacheKey, {
+          hasPermission,
+          timestamp: Date.now()
+        })
+
+        console.log('[PermissionsService] Contract permission check result:', permission, '=', hasPermission)
+        return hasPermission
+      } else {
+        const errorText = await response.text()
+        console.error('[PermissionsService] Contract permission API failed:', response.status, errorText)
+        return false
+      }
+    } catch (error) {
+      console.error('[PermissionsService] Error checking Contract permission:', error)
+      return false
+    }
+  }
+
+  /**
    * Check if user has a specific RFP permission
    * @param {string} permission - Permission to check (view_rfp, create_rfp, edit_rfp, delete_rfp, approve_rfp, evaluate_rfp, etc.)
    * @returns {Promise<boolean>}
@@ -140,7 +158,8 @@ class PermissionsService {
     const user = this.getCurrentUser()
     console.log('[PermissionsService] Checking RFP permission:', permission, 'for user:', user)
     
-    const userId = this.getActiveUserId()
+    // Support both 'id' and 'userid' fields
+    const userId = user?.userid || user?.id
     if (!user || !userId) {
       console.warn('[PermissionsService] No user or user.id/userid found')
       return false
@@ -156,28 +175,20 @@ class PermissionsService {
     }
 
     try {
-      const token = authService.getSessionToken()
-      
-      // Build URL with user identification (works even without token)
-      const url = this.buildUrlWithUserId(
-        `${API_BASE_URL}/rbac/rfp/`,
-        { permission_type: permission }
-      )
-      console.log('[PermissionsService] Fetching RFP permission from:', url)
+      const token = localStorage.getItem('session_token')
+      if (!token) {
+        console.warn('[PermissionsService] No session token found')
+        return false
+      }
 
-      // Build headers - include token if available
-      const headers = {
-        'Content-Type': 'application/json'
-      }
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`
-      } else {
-        console.warn('[PermissionsService] No session token found, using user_id from query params')
-      }
+      const url = `${API_BASE_URL}/api/rbac/rfp/?permission_type=${permission}`
+      console.log('[PermissionsService] Fetching RFP permission from:', url)
 
       const response = await fetch(url, {
         method: 'GET',
-        headers
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       })
 
       console.log('[PermissionsService] Response status:', response.status)
@@ -217,16 +228,24 @@ class PermissionsService {
     // Determine permission type based on prefix
     // - vendor_* => Vendor permission (e.g., vendor_view, vendor_create, vendor_approve_reject)
     // - *_rfp => RFP permission (e.g., view_rfp, create_rfp)
+    // - Contains 'contract' => Contract permission (e.g., CreateContract, PerformContractAudit)
     // - Otherwise => SLA permission (e.g., ViewSLA, CreateSLA)
     
-    const isVendorPermission = permission.toLowerCase().startsWith('vendor_')
-    const isRFPPermission = permission.toLowerCase().includes('rfp')
+    const loweredPermission = permission.toLowerCase()
+    const isVendorPermission = loweredPermission.startsWith('vendor_')
+    const isRFPPermission = loweredPermission.includes('rfp')
+    const isContractPermission = loweredPermission.includes('contract')
     
     console.log('[PermissionsService] Routing permission check:', {
       permission,
       isVendorPermission,
       isRFPPermission,
-      method: isVendorPermission ? 'checkVendorPermission' : (isRFPPermission ? 'checkRFPPermission' : 'hasSLAPermission')
+      isContractPermission,
+      method: isVendorPermission
+        ? 'checkVendorPermission'
+        : (isRFPPermission
+          ? 'checkRFPPermission'
+          : (isContractPermission ? 'hasContractPermission' : 'hasSLAPermission'))
     })
     
     if (isVendorPermission) {
@@ -254,6 +273,8 @@ class PermissionsService {
       return this.checkVendorPermission(vendorPermissionType)
     } else if (isRFPPermission) {
       return this.checkRFPPermission(permission)
+    } else if (isContractPermission) {
+      return this.hasContractPermission(permission)
     } else {
       return this.hasSLAPermission(permission)
     }
@@ -268,7 +289,7 @@ class PermissionsService {
     const results = {}
     await Promise.all(
       permissions.map(async (permission) => {
-        results[permission] = await this.hasSLAPermission(permission)
+        results[permission] = await this.checkPermission(permission)
       })
     )
     return results
@@ -280,12 +301,12 @@ class PermissionsService {
    */
   getCurrentUser() {
     try {
-      const userStr = localStorage.getItem('current_user') || localStorage.getItem('user')
+      const userStr = localStorage.getItem('current_user')
       if (userStr) {
         return JSON.parse(userStr)
       }
     } catch (e) {
-      console.error('Error parsing stored user:', e)
+      console.error('Error parsing current_user:', e)
     }
     return null
   }
@@ -305,8 +326,9 @@ class PermissionsService {
   clearUserCache(userId) {
     console.log('[PermissionsService] Clearing cache for user:', userId)
     const keysToDelete = []
+    const prefixes = ['sla_', 'rfp_', 'vendor_', 'contract_']
     for (const [key] of permissionCache) {
-      if (key.startsWith(`sla_${userId}_`)) {
+      if (prefixes.some(prefix => key.startsWith(`${prefix}${userId}_`))) {
         keysToDelete.push(key)
       }
     }
@@ -360,7 +382,15 @@ class PermissionsService {
    * @returns {Promise<boolean>}
    */
   async canApproveSLA() {
-    return this.hasSLAPermission('ActivateDeactivateSLA')
+    return this.hasContractPermission('ApproveContract')
+  }
+
+  /**
+   * Check if user can reject contracts (SLA rejections)
+   * @returns {Promise<boolean>}
+   */
+  async canRejectSLA() {
+    return this.hasContractPermission('RejectContract')
   }
 
   /**
@@ -372,7 +402,8 @@ class PermissionsService {
     const user = this.getCurrentUser()
     console.log('[PermissionsService] Checking Vendor permission:', permission, 'for user:', user)
     
-    const userId = this.getActiveUserId()
+    // Support both 'id' and 'userid' fields
+    const userId = user?.userid || user?.id
     if (!user || !userId) {
       console.warn('[PermissionsService] No user or user.id/userid found')
       return false
@@ -388,28 +419,20 @@ class PermissionsService {
     }
 
     try {
-      const token = authService.getSessionToken()
-      
-      // Build URL with user identification (works even without token)
-      const url = this.buildUrlWithUserId(
-        `${API_BASE_URL}/rbac/vendor/`,
-        { permission_type: permission }
-      )
-      console.log('[PermissionsService] Fetching Vendor permission from:', url)
+      const token = localStorage.getItem('session_token')
+      if (!token) {
+        console.warn('[PermissionsService] No session token found')
+        return false
+      }
 
-      // Build headers - include token if available
-      const headers = {
-        'Content-Type': 'application/json'
-      }
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`
-      } else {
-        console.warn('[PermissionsService] No session token found, using user_id from query params')
-      }
+      const url = `${API_BASE_URL}/api/rbac/vendor/?permission_type=${permission}`
+      console.log('[PermissionsService] Fetching Vendor permission from:', url)
 
       const response = await fetch(url, {
         method: 'GET',
-        headers
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       })
 
       console.log('[PermissionsService] Response status:', response.status)

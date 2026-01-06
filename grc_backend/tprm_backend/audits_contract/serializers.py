@@ -3,7 +3,7 @@ Serializers for the Audits app.
 """
 from rest_framework import serializers
 from .models import ContractAudit, ContractStaticQuestionnaire, ContractAuditVersion, ContractAuditFinding, ContractAuditReport
-from tprm_backend.contracts.models import VendorContract
+from tprm_backend.contracts.models import VendorContract, ContractTerm
 from django.contrib.auth.models import User
 
 
@@ -15,7 +15,7 @@ class ContractStaticQuestionnaireSerializer(serializers.ModelSerializer):
         model = ContractStaticQuestionnaire
         fields = [
             'question_id', 'term_id', 'term_name', 'question_text', 'question_type',
-            'is_required', 'scoring_weightings', 'created_at'
+            'is_required', 'scoring_weightings', 'document_upload', 'multiple_choice', 'created_at'
         ]
         read_only_fields = ['question_id', 'created_at']
     
@@ -50,16 +50,55 @@ class ContractAuditFindingSerializer(serializers.ModelSerializer):
     
     # Add a computed field to show questionnaire responses with question text
     questionnaire_responses_with_questions = serializers.SerializerMethodField()
+    term_title = serializers.SerializerMethodField()
+    term_text = serializers.SerializerMethodField()
+    term_category = serializers.SerializerMethodField()
     
     class Meta:
         model = ContractAuditFinding
         fields = [
-            'audit_finding_id', 'audit_id', 'term_id', 'evidence', 'user_id',
-            'how_to_verify', 'impact_recommendations', 'details_of_finding',
+            'audit_finding_id', 'audit_id', 'term_id', 'term_title', 'term_text', 'term_category',
+            'evidence', 'user_id', 'how_to_verify', 'impact_recommendations', 'details_of_finding',
             'comment', 'check_date', 'questionnaire_responses', 'questionnaire_responses_with_questions',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['audit_finding_id', 'created_at', 'updated_at']
+
+    def _get_term_cache(self):
+        """Return a shared cache for term lookups scoped to this serializer instance."""
+        if '_term_cache' not in self.context:
+            self.context['_term_cache'] = {}
+        return self.context['_term_cache']
+    
+    def _get_term_details(self, term_id):
+        """Fetch term details from cache or database."""
+        if not term_id:
+            return None
+        
+        cache = self._get_term_cache()
+        if term_id not in cache:
+            cache[term_id] = ContractTerm.objects.filter(term_id=term_id).values(
+                'term_title', 'term_text', 'term_category'
+            ).first()
+        return cache[term_id]
+    
+    def get_term_title(self, obj):
+        term = self._get_term_details(obj.term_id)
+        if term:
+            return term.get('term_title') or f"Term {obj.term_id}"
+        return None
+    
+    def get_term_text(self, obj):
+        term = self._get_term_details(obj.term_id)
+        if term:
+            return term.get('term_text')
+        return None
+    
+    def get_term_category(self, obj):
+        term = self._get_term_details(obj.term_id)
+        if term:
+            return term.get('term_category')
+        return None
     
     def validate_questionnaire_responses(self, value):
         """Ensure questionnaire_responses is valid JSON."""

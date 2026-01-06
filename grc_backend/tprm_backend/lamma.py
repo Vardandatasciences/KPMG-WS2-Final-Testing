@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 def get_ollama_url():
     """Get Ollama URL based on environment - CONFIGURED TO USE EC2 ONLY"""
     # FORCE EC2 USAGE - Skip local Ollama
-    ec2_url = "http://13.126.18.17:11434"
+    ec2_url = "http://13.205.15.232:11434"
     
     # Check if we want to override with environment variable
     if os.getenv('ENVIRONMENT') == 'LOCAL':

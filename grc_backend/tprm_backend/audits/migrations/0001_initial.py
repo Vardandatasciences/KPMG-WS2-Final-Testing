@@ -9,7 +9,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('tprm_slas', '0001_initial'),
+        ('slas', '0001_initial'),
     ]
 
     operations = [
@@ -120,7 +120,7 @@ class Migration(migrations.Migration):
                 ('responsibility', models.TextField(blank=True, null=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('sla', models.ForeignKey(blank=True, db_column='sla_id', null=True, on_delete=django.db.models.deletion.CASCADE, related_name='audits', to='tprm_slas.vendorsla')),
+                ('sla', models.ForeignKey(blank=True, db_column='sla_id', null=True, on_delete=django.db.models.deletion.CASCADE, related_name='audits', to='slas.vendorsla')),
             ],
             options={
                 'verbose_name': 'Audit',

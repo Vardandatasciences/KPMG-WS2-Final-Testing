@@ -17,11 +17,36 @@ logger = logging.getLogger(__name__)
 
 def get_user_id_from_jwt(request):
     """
-    Resolve user_id from explicit overrides or JWT token.
-    Delegates to RBACTPRMUtils so the logic stays consistent between
-    API views and decorators.
+    Extract user_id from JWT token in Authorization header
     """
-    return RBACTPRMUtils.get_user_id_from_request(request)
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            logger.warning("[RBAC TPRM VIEWS] No Bearer token found in Authorization header")
+            return None
+        
+        token = auth_header.split(' ')[1]
+        
+        # Decode JWT token
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+        user_id = payload.get('user_id')
+        
+        if user_id:
+            logger.info(f"[RBAC TPRM VIEWS] Successfully extracted user_id from JWT: {user_id}")
+            return user_id
+        else:
+            logger.warning("[RBAC TPRM VIEWS] No user_id found in JWT payload")
+            return None
+            
+    except jwt.ExpiredSignatureError:
+        logger.error("[RBAC TPRM VIEWS] JWT token has expired")
+        return None
+    except jwt.InvalidTokenError as e:
+        logger.error(f"[RBAC TPRM VIEWS] Invalid JWT token: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"[RBAC TPRM VIEWS] Error extracting user_id from JWT: {e}")
+        return None
 
 @csrf_exempt
 @require_http_methods(["GET"])

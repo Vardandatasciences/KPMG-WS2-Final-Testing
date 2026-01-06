@@ -11,8 +11,6 @@ import { VueQueryPlugin } from '@tanstack/vue-query'
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
-// Auth debugging utility
-import authDebug from './utils/authDebug.js'
 
 // Vuetify
 import 'vuetify/styles'

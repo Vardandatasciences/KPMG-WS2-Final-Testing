@@ -3074,7 +3074,7 @@ def update_existing_activeinactive_by_date(request):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR) 
 
 @api_view(['GET'])
-@permission_classes([PolicyViewPermission])
+@permission_classes([])  # Permission check handled in view logic based on query params
 def get_users_for_reviewer_selection(request):
     """
     Get users that can be selected as reviewers based on RBAC permissions

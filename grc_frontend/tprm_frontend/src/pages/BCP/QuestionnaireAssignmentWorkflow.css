@@ -1,5 +1,106 @@
 /* Questionnaire Assignment Workflow Styles */
 
+/* Breadcrumb Navigation */
+.breadcrumb-container {
+  margin-bottom: var(--sp-8);
+  padding: var(--sp-4);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-sm);
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-4);
+}
+
+.breadcrumb-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-lg);
+  transition: all 0.2s ease;
+  min-width: 200px;
+  cursor: pointer;
+}
+
+.breadcrumb-item:hover {
+  background: hsl(var(--muted) / 0.5);
+  transform: translateY(-1px);
+}
+
+.breadcrumb-item--active:hover {
+  background: hsl(var(--primary) / 0.9);
+  transform: translateY(-1px);
+}
+
+.breadcrumb-item--disabled {
+  opacity: 0.5;
+  cursor: not-allowed !important;
+  pointer-events: auto;
+}
+
+.breadcrumb-item--disabled:hover {
+  background: transparent !important;
+  transform: none !important;
+}
+
+.breadcrumb-item--active {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  box-shadow: var(--shadow-md);
+}
+
+.breadcrumb-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--background);
+  color: var(--muted-foreground);
+  font-weight: var(--fw-bold);
+  font-size: var(--fs-lg);
+}
+
+.breadcrumb-item--active .breadcrumb-icon {
+  background: var(--primary-foreground);
+  color: var(--primary);
+}
+
+.breadcrumb-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.breadcrumb-title {
+  font-size: var(--fs-base);
+  font-weight: var(--fw-semibold);
+}
+
+.breadcrumb-description {
+  font-size: var(--fs-sm);
+  opacity: 0.8;
+}
+
+.breadcrumb-separator {
+  display: flex;
+  align-items: center;
+  color: var(--muted-foreground);
+  margin: 0 var(--sp-2);
+}
+
+.breadcrumb-number {
+  font-weight: var(--fw-bold);
+  font-size: var(--fs-lg);
+}
+
 /* Step Indicator Styles */
 .step-indicator {
   display: flex;
@@ -375,6 +476,23 @@ label {
 }
 
 /* Responsive Design */
+@media (max-width: 1024px) {
+  .breadcrumb {
+    flex-direction: column;
+    gap: var(--sp-2);
+  }
+  
+  .breadcrumb-item {
+    min-width: 100%;
+    width: 100%;
+  }
+  
+  .breadcrumb-separator {
+    transform: rotate(90deg);
+    margin: var(--sp-2) 0;
+  }
+}
+
 @media (max-width: 768px) {
   .container {
     padding-left: 0.5rem;
@@ -730,6 +848,11 @@ label {
 .plan-name-cell {
   font-weight: 500;
   color: hsl(var(--foreground));
+}
+
+.checkbox-column {
+  width: 40px;
+  text-align: center;
 }
 
 .strategy-cell,
