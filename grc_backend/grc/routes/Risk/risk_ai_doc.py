@@ -50,6 +50,7 @@ from ...utils.model_router import (
     get_current_system_load
 )
 from ...utils.file_compression import decompress_if_needed
+from ...routes.Global.s3_fucntions import create_direct_mysql_client
 from ...utils.request_queue import (
     rate_limit_decorator,
     process_with_queue,
@@ -1197,7 +1198,15 @@ def upload_and_process_risk_document(request):
 
         uploaded_file = request.FILES['file']
         file_name = uploaded_file.name
-        ext = os.path.splitext(file_name)[1].lower()
+        
+        # Handle compressed files (.gz extension)
+        # Remove .gz extension to get original file extension
+        original_filename = file_name
+        if file_name.endswith('.gz'):
+            original_filename = file_name[:-3]  # Remove .gz
+            print(f"📦 Detected compressed file: {file_name} → {original_filename}")
+        
+        ext = os.path.splitext(original_filename)[1].lower()
 
         allowed = ['.pdf', '.docx', '.doc', '.xlsx', '.xls', '.txt']
         if ext not in allowed:
@@ -1230,6 +1239,35 @@ def upload_and_process_risk_document(request):
             # Update extension after decompression (remove .gz)
             ext = os.path.splitext(file_path)[1].lower()
             print(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
+
+        # Upload to S3 for backup and cloud storage
+        s3_url = None
+        s3_key = None
+        user_id = request.POST.get('user_id', '1')
+        try:
+            print(f"☁️ Uploading file to S3...")
+            s3_client = create_direct_mysql_client()
+            connection_test = s3_client.test_connection()
+            if connection_test.get('overall_success', False):
+                # Generate unique filename for S3
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                s3_filename = f"risk_ai_{timestamp}_{os.path.basename(file_path)}"
+                upload_result = s3_client.upload(
+                    file_path=file_path,
+                    user_id=user_id,
+                    custom_file_name=s3_filename,
+                    module='Risk'
+                )
+                if upload_result.get('success'):
+                    s3_url = upload_result['file_info']['url']
+                    s3_key = upload_result['file_info'].get('s3Key', '')
+                    print(f"✅ File uploaded to S3: {s3_url}")
+                else:
+                    print(f"⚠️ S3 upload failed: {upload_result.get('error', 'Unknown error')}")
+            else:
+                print(f"⚠️ S3 service unavailable, continuing with local file")
+        except Exception as s3_error:
+            print(f"⚠️ S3 upload error (continuing with local file): {str(s3_error)}")
 
         try:
             # Step 1: Extract text from the saved file
@@ -1348,6 +1386,11 @@ def upload_and_process_risk_document(request):
             # Include compression metadata if file was compressed
             if compression_metadata:
                 response_data['compression_metadata'] = compression_metadata
+            
+            # Include S3 info if uploaded successfully
+            if s3_url:
+                response_data['s3_url'] = s3_url
+                response_data['s3_key'] = s3_key
             
             resp = JsonResponse(response_data)
             resp['Access-Control-Allow-Origin'] = '*'

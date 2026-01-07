@@ -722,22 +722,31 @@ def jwt_login(request):
                 # Login with User ID
                 user_id = int(username)  # Convert to integer
                 candidate = Users.objects.get(UserId=user_id)
-                logger.debug(f"User found by ID: {candidate.UserId} - {candidate.UserName}")
+                logger.info(f"🔍 LOGIN DEBUG: User found by ID: {candidate.UserId} - {candidate.UserName}")
+                logger.info(f"🔍 LOGIN DEBUG: User {candidate.UserId} - IsActive: {candidate.IsActive}, HasLicenseKey: {bool(candidate.license_key)}")
             else:
                 # Login with Username (default)
                 candidate = Users.objects.get(UserName=username)
-                logger.debug(f"User found by username: {candidate.UserId} - {candidate.UserName}")
+                logger.info(f"🔍 LOGIN DEBUG: User found by username: {candidate.UserId} - {candidate.UserName}")
+                logger.info(f"🔍 LOGIN DEBUG: User {candidate.UserId} - IsActive: {candidate.IsActive}, HasLicenseKey: {bool(candidate.license_key)}")
 
             # Check hashed password first
-            if check_password(password, candidate.Password):
+            password_check_result = check_password(password, candidate.Password)
+            logger.info(f"🔍 LOGIN DEBUG: User {candidate.UserId} - Password check result: {password_check_result}")
+            
+            if password_check_result:
                 user = candidate
+                logger.info(f"✅ LOGIN DEBUG: Password verified successfully for User {candidate.UserId}")
             # Backward compatibility: migrate legacy plain-text passwords
             elif candidate.Password == password:
                 candidate.Password = make_password(password)
                 candidate.save(update_fields=['Password'])
                 user = candidate
                 logger.warning(f"Password for user {candidate.UserName} was stored in plain text and has been hashed.")
+            else:
+                logger.warning(f"❌ LOGIN DEBUG: Password check failed for User {candidate.UserId} - Password doesn't match hashed or plain text")
         except Users.DoesNotExist:
+            logger.warning(f"❌ LOGIN DEBUG: User not found - login_type: {login_type}, username/userid: {username}")
             user = None
         except ValueError:
             logger.warning(f"Login failed - invalid user ID format: {username}")
@@ -760,6 +769,8 @@ def jwt_login(request):
             # ========================================
             failed_attempts = cache.get(user_cache_key, 0) + 1
             cache.set(user_cache_key, failed_attempts, 900)  # Keep counter for 15 minutes
+            
+            logger.error(f"❌ LOGIN FAILED: User authentication failed for {login_type}: {username} - Reason: Password mismatch or user not found (Attempt {failed_attempts}/5)")
             
             # Log failed login attempt
             _log_failed_login(
@@ -839,11 +850,13 @@ def jwt_login(request):
         # ========================================
         # LICENSE KEY VALIDATION PROCESS - JWT LOGIN
         # ========================================
+        logger.info(f"🔍 LOGIN DEBUG: User {user.UserId} passed password check, proceeding to license validation")
         if not getattr(settings, 'LICENSE_CHECK_ENABLED', True):
             logger.warning("🔕 LICENSE CHECK DISABLED via settings. Proceeding without external verification.")
         else:
             # Step 1: Check if user has a license key assigned
             license_verification_result = None
+            logger.info(f"🔍 LOGIN DEBUG: License check enabled. User {user.UserId} license_key value: {user.license_key if user.license_key else 'None/Empty'}")
             if user.license_key:
                 logger.info(f"🔐 LICENSE VALIDATION: User {user.UserName} has license key: {user.license_key[:10]}...")
                 try:
@@ -1016,7 +1029,6 @@ def jwt_login(request):
         tokens = generate_jwt_tokens(user)
         
         # Store user info in session for compatibility with consistent naming
-        import time
         request.session['user_id'] = user.UserId
         request.session['username'] = user.UserName
         request.session['grc_user_id'] = user.UserId  # Backup key for RBAC

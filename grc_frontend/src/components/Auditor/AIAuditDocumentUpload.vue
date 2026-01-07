@@ -951,6 +951,7 @@
 <script>
 import api from '@/services/api.js'
 import auditorDataService from '@/services/auditorService' // NEW: Use cached auditor data
+import { compressFile, shouldCompressFile } from '@/utils/fileCompression.js'
 
 export default {
   name: 'AIAuditDocumentUpload',
@@ -2789,13 +2790,38 @@ export default {
 
         // Upload each file ONCE with all mappings
         for (let i = 0; i < this.selectedFiles.length; i++) {
-          const file = this.selectedFiles[i]
+          let file = this.selectedFiles[i]
+          let compressionMetadata = null
+
+          // Compress file if beneficial
+          if (shouldCompressFile(file)) {
+            try {
+              this.uploadProgress = Math.round((completedFiles / totalFiles) * 100)
+              const result = await compressFile(file)
+              file = result.compressedFile
+              compressionMetadata = {
+                original_size: result.originalSize,
+                compressed_size: result.compressedSize,
+                ratio: result.compressionRatio
+              }
+              console.log(`✅ Compression complete for ${this.selectedFiles[i].name}: ${result.compressionRatio}% reduction`)
+            } catch (error) {
+              console.warn('⚠️ Compression failed, uploading original file:', error)
+              // Continue with original file if compression fails
+            }
+          }
+
           const formData = new FormData()
 
-          // Append file once
+          // Append file (possibly compressed)
           formData.append('file', file)
           formData.append('document_type', 'evidence')
           formData.append('external_source', 'manual')
+          
+          // Include compression metadata if available
+          if (compressionMetadata) {
+            formData.append('compression_metadata', JSON.stringify(compressionMetadata))
+          }
           
           // Append all mappings as JSON array
           formData.append('mappings', JSON.stringify(mappingPairs))

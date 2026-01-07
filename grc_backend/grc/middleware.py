@@ -528,3 +528,222 @@ class AuditLoggingMiddleware(MiddlewareMixin):
             logger.info(f"User {user.UserName} (ID: {user.UserId}) accessing {request.method} {request.path}")
         
         return None
+
+
+class EnterpriseSecurityHeadersMiddleware(MiddlewareMixin):
+    """
+    Enterprise-Grade Security Headers Middleware
+    
+    Adds comprehensive security headers to all HTTP responses to protect against:
+    - XSS (Cross-Site Scripting) attacks
+    - Clickjacking attacks
+    - MIME type sniffing attacks
+    - Man-in-the-middle attacks
+    - Data injection attacks
+    
+    This middleware implements defense-in-depth security by adding multiple layers
+    of protection through HTTP security headers.
+    """
+    
+    def __init__(self, get_response):
+        super().__init__(get_response)
+        self.get_response = get_response
+        self.is_debug = getattr(settings, 'DEBUG', False)
+        self.is_production = not self.is_debug
+        
+        # Get allowed hosts for CSP configuration
+        self.allowed_hosts = getattr(settings, 'ALLOWED_HOSTS', [])
+        
+    def process_response(self, request, response):
+        """
+        Add enterprise-grade security headers to all responses
+        """
+        
+        # =====================================================================
+        # 1. X-Content-Type-Options: Prevent MIME type sniffing
+        # =====================================================================
+        # Prevents browser from guessing MIME types, reducing risk of XSS
+        response['X-Content-Type-Options'] = 'nosniff'
+        
+        # =====================================================================
+        # 2. X-Frame-Options: Prevent clickjacking attacks
+        # =====================================================================
+        # Prevents page from being embedded in iframes (clickjacking protection)
+        response['X-Frame-Options'] = 'DENY'
+        
+        # =====================================================================
+        # 3. X-XSS-Protection: Enable browser XSS filter
+        # =====================================================================
+        # Enables browser's built-in XSS protection (legacy, but still useful)
+        response['X-XSS-Protection'] = '1; mode=block'
+        
+        # =====================================================================
+        # 4. Referrer-Policy: Control referrer information
+        # =====================================================================
+        # Controls how much referrer information is sent with requests
+        # 'strict-origin-when-cross-origin' - Only send full URL for same-origin, 
+        #                                      send only origin for cross-origin
+        response['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        
+        # =====================================================================
+        # 5. Permissions-Policy (formerly Feature-Policy): Disable unnecessary features
+        # =====================================================================
+        # Disables browser features that aren't needed (geolocation, camera, etc.)
+        # Reduces attack surface
+        permissions_policy = [
+            'geolocation=()',
+            'microphone=()',
+            'camera=()',
+            'payment=()',
+            'usb=()',
+            'magnetometer=()',
+            'gyroscope=()',
+            'accelerometer=()',
+            'ambient-light-sensor=()',
+            'autoplay=()',
+            'fullscreen=(self)',
+            'picture-in-picture=()',
+        ]
+        response['Permissions-Policy'] = ', '.join(permissions_policy)
+        
+        # =====================================================================
+        # 6. Strict-Transport-Security (HSTS): Force HTTPS in production
+        # =====================================================================
+        # Forces browsers to use HTTPS for future requests (prevents MITM attacks)
+        # Only enable in production with HTTPS
+        if self.is_production:
+            # max-age=31536000 = 1 year
+            # includeSubDomains = Apply to all subdomains
+            # preload = Eligible for HSTS preload list
+            response['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload'
+        # In development/debug mode, don't set this header (allows HTTP)
+        
+        # =====================================================================
+        # 7. Content-Security-Policy (CSP): Prevent XSS and data injection
+        # =====================================================================
+        # Restricts which resources can be loaded (most powerful XSS protection)
+        csp_directives = self._build_csp_policy(request)
+        if csp_directives:
+            response['Content-Security-Policy'] = csp_directives
+        
+        # =====================================================================
+        # 8. Cross-Origin-Embedder-Policy (COEP): Isolate resources
+        # =====================================================================
+        # Prevents documents from loading cross-origin resources
+        response['Cross-Origin-Embedder-Policy'] = 'require-corp'
+        
+        # =====================================================================
+        # 9. Cross-Origin-Opener-Policy (COOP): Isolate browsing contexts
+        # =====================================================================
+        # Isolates the browsing context from cross-origin documents
+        response['Cross-Origin-Opener-Policy'] = 'same-origin'
+        
+        # =====================================================================
+        # 10. Cross-Origin-Resource-Policy (CORP): Control resource loading
+        # =====================================================================
+        # Prevents resources from being loaded by other origins
+        response['Cross-Origin-Resource-Policy'] = 'same-origin'
+        
+        # =====================================================================
+        # 11. Cache-Control for sensitive responses
+        # =====================================================================
+        # Prevent caching of sensitive data (auth tokens, user data, etc.)
+        if self._is_sensitive_response(request, response):
+            response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+            response['Pragma'] = 'no-cache'
+            response['Expires'] = '0'
+        
+        return response
+    
+    def _build_csp_policy(self, request):
+        """
+        Build Content-Security-Policy based on request context
+        """
+        # Get current origin for CSP 'self' reference
+        scheme = 'https' if self.is_production else request.scheme
+        host = request.get_host()
+        current_origin = f"{scheme}://{host}"
+        
+        # Base CSP directives (restrictive by default)
+        directives = []
+        
+        # default-src: Fallback for other directive types
+        # Only allow resources from same origin
+        directives.append("default-src 'self'")
+        
+        # script-src: Where JavaScript can be loaded from
+        # Allow same-origin scripts and inline scripts (needed for some apps)
+        # In production, consider removing 'unsafe-inline' and using nonces
+        directives.append("script-src 'self' 'unsafe-inline' 'unsafe-eval'")
+        
+        # style-src: Where CSS can be loaded from
+        # Allow same-origin styles and inline styles (needed for dynamic styles)
+        directives.append("style-src 'self' 'unsafe-inline'")
+        
+        # img-src: Where images can be loaded from
+        # Allow same-origin, data URIs (base64 images), and HTTPS images
+        directives.append("img-src 'self' data: https:")
+        
+        # font-src: Where fonts can be loaded from
+        directives.append("font-src 'self' data:")
+        
+        # connect-src: Where AJAX/fetch requests can go
+        # Allow same-origin and current origin
+        connect_sources = ["'self'", current_origin]
+        directives.append(f"connect-src {' '.join(connect_sources)}")
+        
+        # frame-src: Where iframes can be loaded from
+        # Deny all iframes by default (prevent clickjacking)
+        directives.append("frame-src 'none'")
+        
+        # frame-ancestors: Where this page can be embedded
+        # Deny all (prevent embedding in iframes)
+        directives.append("frame-ancestors 'none'")
+        
+        # object-src: Where plugins can be loaded from
+        # Deny all (prevent Flash, Java applets, etc.)
+        directives.append("object-src 'none'")
+        
+        # base-uri: Where <base> tag can point to
+        # Only allow same-origin
+        directives.append("base-uri 'self'")
+        
+        # form-action: Where forms can submit to
+        # Only allow same-origin
+        directives.append("form-action 'self'")
+        
+        # upgrade-insecure-requests: Automatically upgrade HTTP to HTTPS
+        if self.is_production:
+            directives.append("upgrade-insecure-requests")
+        
+        return '; '.join(directives)
+    
+    def _is_sensitive_response(self, request, response):
+        """
+        Determine if response contains sensitive data that shouldn't be cached
+        """
+        sensitive_paths = [
+            '/api/jwt/',
+            '/api/login/',
+            '/api/user/',
+            '/api/users/',
+            '/api/auth/',
+            '/admin/',
+        ]
+        
+        # Check if path contains sensitive endpoints
+        if any(request.path.startswith(path) for path in sensitive_paths):
+            return True
+        
+        # Check if response contains authentication-related headers
+        if 'Authorization' in request.headers or 'X-Session-Token' in request.headers:
+            return True
+        
+        # Check content type - JSON responses might contain sensitive data
+        content_type = response.get('Content-Type', '')
+        if 'application/json' in content_type:
+            # For JSON responses from API, assume sensitive (can be refined)
+            if request.path.startswith('/api/'):
+                return True
+        
+        return False

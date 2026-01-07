@@ -62,6 +62,17 @@ def _get_client_ip(request):
         ip = x_forwarded_for.split(',')[0].strip()
     else:
         ip = request.META.get('REMOTE_ADDR', 'unknown')
+    
+    # Sanitize IP: remove port if present, truncate to 45 chars
+    if ip and ip != 'unknown':
+        # Remove port number if present (IPv4 only, not IPv6)
+        if ':' in ip and not ip.startswith('['):
+            parts = ip.split(':')
+            if len(parts) == 2 and '.' in parts[0]:
+                ip = parts[0]
+        # Truncate to max 45 characters (database column limit)
+        ip = ip[:45] if len(ip) > 45 else ip
+    
     return ip
 
 # Track verified emails for password reset
@@ -4991,7 +5002,7 @@ def login_user(request):
         # ========================================
         # RATE LIMITING - PER IP
         # ========================================
-        client_ip = request.META.get('REMOTE_ADDR', 'unknown')
+        client_ip = _get_client_ip(request)  # Use sanitized IP function
         ip_cache_key = f"session_login_rate_limit_ip_{client_ip}"
         ip_attempts = cache.get(ip_cache_key, 0)
         
@@ -7099,6 +7110,16 @@ def reset_password(request):
             try:
                 from .routes.Global.logging_service import send_log
                 client_ip = request.META.get('REMOTE_ADDR', 'unknown')
+                # Handle FrameworkId safely - Users model may not have FrameworkId field
+                framework_id = None
+                if hasattr(user, 'FrameworkId') and user.FrameworkId:
+                    # If FrameworkId is a ForeignKey relationship
+                    if hasattr(user.FrameworkId, 'FrameworkId'):
+                        framework_id = user.FrameworkId.FrameworkId
+                    # If FrameworkId is already an integer
+                    elif isinstance(user.FrameworkId, int):
+                        framework_id = user.FrameworkId
+                
                 send_log(
                     module='Authentication',
                     actionType='PASSWORD_RESET',
@@ -7108,7 +7129,7 @@ def reset_password(request):
                     logLevel='INFO',
                     ipAddress=client_ip,
                     additionalInfo={'reset_method': 'forgot_password', 'email': Email},
-                    frameworkId=user.FrameworkId.FrameworkId if user.FrameworkId else None
+                    frameworkId=framework_id
                 )
                 logger.info(f"✅ Password reset logged to grc_logs for user: {user.UserName}")
             except Exception as log_error:

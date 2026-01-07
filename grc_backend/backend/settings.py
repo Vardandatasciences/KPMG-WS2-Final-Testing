@@ -133,6 +133,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Enterprise Security Headers Middleware - Adds comprehensive security headers to all responses
+    "grc.middleware.EnterpriseSecurityHeadersMiddleware",
     "grc.middleware.JWTAuthenticationMiddleware",
     "grc.middleware.AuditLoggingMiddleware",
     # Removed grc.rbac.middleware.GRCRBACMiddleware - using simplified decorator-based RBAC instead

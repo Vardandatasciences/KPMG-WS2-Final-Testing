@@ -30,6 +30,7 @@ from ...routes.Global.validation import (
 from django.utils.decorators import method_decorator
 from ...routes.Global.logging_service import send_log
 from ...routes.Global.s3_fucntions import create_direct_mysql_client
+from ...utils.file_compression import decompress_if_needed
 import os
 import tempfile
 from ...rbac.permissions import (
@@ -977,6 +978,15 @@ def upload_evidence_to_s3(request):
             for chunk in uploaded_file.chunks():
                 temp_file.write(chunk)
             temp_file_path = temp_file.name
+        
+        # Decompress if needed (client-side compression)
+        compression_metadata = None
+        temp_file_path, was_compressed, compression_stats = decompress_if_needed(temp_file_path)
+        if was_compressed:
+            compression_metadata = compression_stats
+            # Update file extension after decompression (remove .gz)
+            file_extension = os.path.splitext(temp_file_path)[1].lower()
+            print(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
         
         try:
             # Create S3 client
