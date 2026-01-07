@@ -765,8 +765,8 @@ onMounted(async () => {
   
   // Check if user has permission to view KPI Dashboard
   try {
-    // Check for view_risk_scores permission as KPI dashboard shows risk-related metrics
-    const hasPermission = await permissionsService.checkVendorPermission('view')
+    // Check for view_vendors permission as KPI dashboard shows vendor-related metrics
+    const hasPermission = await permissionsService.checkVendorPermission('view_vendors')
     
     console.log('[VendorKPIDashboard] Permission check result:', hasPermission)
     

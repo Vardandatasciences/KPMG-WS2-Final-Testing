@@ -30,6 +30,16 @@ from tprm_backend.core.tenant_utils import (
     tenant_filter
 )
 
+# Database connection helper - Use tprm_integration database for all vendor operations
+def get_db_connection():
+    """
+    Get the correct database connection for tprm_integration database.
+    Returns 'tprm' connection if available, otherwise falls back to 'default'.
+    """
+    if 'tprm' in connections.databases:
+        return connections['tprm']
+    return connections['default']
+
 # Try to import openpyxl, but don't fail if it's not available
 try:
     import openpyxl
@@ -76,7 +86,7 @@ class ScreeningMatchRateAPIView(APIView):
             if not tenant_id:
                 return Response({'error': 'Tenant context not found'}, status=status.HTTP_403_FORBIDDEN)
 
-            with connections['default'].cursor() as cursor:
+            with get_db_connection().cursor() as cursor:
                 # Step 1: Get total vendors count from temp_vendor table
                 # MULTI-TENANCY: Filter by tenant
                 cursor.execute("SELECT COUNT(*) AS total_vendors FROM temp_vendor WHERE TenantId = %s", [tenant_id])
@@ -198,7 +208,7 @@ class QuestionnaireOverdueRateAPIView(APIView):
             if not tenant_id:
                 return Response({'error': 'Tenant context not found'}, status=status.HTTP_403_FORBIDDEN)
 
-            with connections['default'].cursor() as cursor:
+            with get_db_connection().cursor() as cursor:
                 # Step 1: Get total questionnaires count from questionnaire_assignments table
                 # MULTI-TENANCY: Filter by tenant through temp_vendor
                 cursor.execute("""
@@ -313,7 +323,7 @@ class VendorsFlaggedOFACPEPAPIView(APIView):
             if not tenant_id:
                 return Response({'error': 'Tenant context not found'}, status=status.HTTP_403_FORBIDDEN)
 
-            with connections['default'].cursor() as cursor:
+            with get_db_connection().cursor() as cursor:
                 # Step 1: Get total vendors count from temp_vendor table
                 # MULTI-TENANCY: Filter by tenant
                 cursor.execute("SELECT COUNT(*) AS total_vendors FROM temp_vendor WHERE TenantId = %s", [tenant_id])
@@ -502,7 +512,7 @@ class VendorAcceptanceTimeAPIView(APIView):
         logger.info("VendorAcceptanceTimeAPIView.get called")
         
         try:
-            with connections['default'].cursor() as cursor:
+            with get_db_connection().cursor() as cursor:
                 # Step 1: Get overall average acceptance time
                 cursor.execute("""
                     SELECT AVG(DATEDIFF(v.created_at, tv.created_at)) AS avg_acceptance_time
@@ -786,7 +796,7 @@ class VendorAlertsAPIView(APIView):
             if not tenant_id:
                 return Response({'error': 'Tenant context not found'}, status=status.HTTP_403_FORBIDDEN)
 
-            with connections['default'].cursor() as cursor:
+            with get_db_connection().cursor() as cursor:
                 alerts = []
                 
                 # 1. Check for vendors flagged in OFAC list this week
@@ -907,7 +917,7 @@ class VendorRegistrationCompletionRateAPIView(APIView):
         logger.info("VendorRegistrationCompletionRateAPIView.get called")
         
         try:
-            with connections['default'].cursor() as cursor:
+            with get_db_connection().cursor() as cursor:
                 # Step 1: Get total award notifications
                 cursor.execute("SELECT COUNT(*) AS total_notifications FROM rfp_award_notifications")
                 total_notifications = cursor.fetchone()[0] or 0
@@ -1019,7 +1029,7 @@ class VendorRegistrationTimeAPIView(APIView):
         logger.info("VendorRegistrationTimeAPIView.get called")
         
         try:
-            with connections['default'].cursor() as cursor:
+            with get_db_connection().cursor() as cursor:
                 # Step 1: Get average registration time (response_date to created_at)
                 cursor.execute("""
                     SELECT AVG(DATEDIFF(tv.created_at, ran.response_date)) AS avg_registration_time

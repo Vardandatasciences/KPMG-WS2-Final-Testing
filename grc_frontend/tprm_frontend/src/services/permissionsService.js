@@ -24,10 +24,10 @@ class PermissionsService {
     const user = this.getCurrentUser()
     console.log('[PermissionsService] Checking SLA permission:', permission, 'for user:', user)
     
-    // Support both 'id' and 'userid' fields
-    const userId = user?.userid || user?.id
+    // Support UserId, userid, id, user_id fields
+    const userId = user?.UserId || user?.userid || user?.id || user?.user_id
     if (!user || !userId) {
-      console.warn('[PermissionsService] No user or user.id/userid found')
+      console.warn('[PermissionsService] No user or user ID found')
       return false
     }
 
@@ -95,9 +95,9 @@ class PermissionsService {
     const user = this.getCurrentUser()
     console.log('[PermissionsService] Checking Contract permission:', permission, 'for user:', user)
     
-    const userId = user?.userid || user?.id
+    const userId = user?.UserId || user?.userid || user?.id || user?.user_id
     if (!user || !userId) {
-      console.warn('[PermissionsService] No user or user.id/userid found')
+      console.warn('[PermissionsService] No user or user ID found')
       return false
     }
 
@@ -161,10 +161,10 @@ class PermissionsService {
     const user = this.getCurrentUser()
     console.log('[PermissionsService] Checking RFP permission:', permission, 'for user:', user)
     
-    // Support both 'id' and 'userid' fields
-    const userId = user?.userid || user?.id
+    // Support UserId, userid, id, user_id fields
+    const userId = user?.UserId || user?.userid || user?.id || user?.user_id
     if (!user || !userId) {
-      console.warn('[PermissionsService] No user or user.id/userid found')
+      console.warn('[PermissionsService] No user or user ID found')
       return false
     }
 
@@ -319,6 +319,7 @@ class PermissionsService {
           hasId: !!user.id,
           hasUserId: !!user.user_id,
           hasUserid: !!user.userid,
+          hasUserIdCapital: !!user.UserId,
           keys: Object.keys(user)
         })
         return user
@@ -356,12 +357,12 @@ class PermissionsService {
   }
 
   /**
-   * Get user ID from current user (supports both 'id' and 'userid' fields)
+   * Get user ID from current user (supports UserId, userid, id, user_id fields)
    * @returns {number|null}
    */
   getUserId() {
     const user = this.getCurrentUser()
-    return user?.userid || user?.id || null
+    return user?.UserId || user?.userid || user?.id || user?.user_id || null
   }
 
   /**
@@ -421,8 +422,8 @@ class PermissionsService {
     const user = this.getCurrentUser()
     console.log('[PermissionsService] Checking Vendor permission:', permission, 'for user:', user)
     
-    // Support multiple user ID field names: userid, id, user_id
-    const userId = user?.userid || user?.id || user?.user_id
+    // Support multiple user ID field names: UserId (capital U), userid, id, user_id
+    const userId = user?.UserId || user?.userid || user?.id || user?.user_id
     if (!user || !userId) {
       console.warn('[PermissionsService] No user or user ID found. User object:', user)
       console.warn('[PermissionsService] Available user keys:', user ? Object.keys(user) : 'null')
@@ -431,7 +432,7 @@ class PermissionsService {
         const userStr = localStorage.getItem('user')
         if (userStr) {
           const fallbackUser = JSON.parse(userStr)
-          const fallbackUserId = fallbackUser?.userid || fallbackUser?.id || fallbackUser?.user_id
+          const fallbackUserId = fallbackUser?.UserId || fallbackUser?.userid || fallbackUser?.id || fallbackUser?.user_id
           if (fallbackUserId) {
             console.log('[PermissionsService] Found user ID from fallback "user" key:', fallbackUserId)
             // Continue with fallback user
