@@ -10,6 +10,12 @@ class VendorRiskAssessments(VendorBaseModel):
     """Vendor risk assessments mapping to existing vendor_risk_assessments table"""
     
     assessment_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link risk assessment to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.DO_NOTHING, db_column='TenantId', 
+                               related_name='vendor_risk_assessments', null=True, blank=True,
+                               help_text="Tenant this risk assessment belongs to")
+    
     vendor = models.ForeignKey(Vendors, models.DO_NOTHING)
     riskid = models.IntegerField(db_column='RiskId', blank=True, null=True)  # Reference to risk table
     assessment_type = models.CharField(max_length=15, blank=True, null=True)
@@ -41,6 +47,12 @@ class VendorRiskFactors(VendorBaseModel):
     """Vendor risk factors mapping to existing vendor_risk_factors table"""
     
     factor_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link risk factor to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.DO_NOTHING, db_column='TenantId', 
+                               related_name='vendor_risk_factors', null=True, blank=True,
+                               help_text="Tenant this risk factor belongs to")
+    
     assessment = models.ForeignKey(VendorRiskAssessments, models.DO_NOTHING)
     risk_category = models.CharField(max_length=13, blank=True, null=True)
     risk_factor = models.CharField(max_length=255, blank=True, null=True)
@@ -67,6 +79,12 @@ class VendorRiskThresholds(VendorBaseModel):
     """Vendor risk thresholds mapping to existing vendor_risk_thresholds table"""
     
     threshold_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link risk threshold to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.DO_NOTHING, db_column='TenantId', 
+                               related_name='vendor_risk_thresholds', null=True, blank=True,
+                               help_text="Tenant this risk threshold belongs to")
+    
     vendor_category = models.ForeignKey(VendorCategories, models.DO_NOTHING, blank=True, null=True)
     risk_type = models.CharField(max_length=13, blank=True, null=True)
     low_threshold = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
@@ -92,6 +110,12 @@ class RiskTPRM(VendorBaseModel):
     """Risk TPRM model mapping to existing risk_tprm table"""
     
     id = models.AutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link risk to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.DO_NOTHING, db_column='TenantId', 
+                               related_name='risk_tprm', null=True, blank=True,
+                               help_text="Tenant this risk belongs to")
+    
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
     likelihood = models.IntegerField()
@@ -123,6 +147,12 @@ class VendorLifecycleStages(VendorBaseModel):
     """Vendor lifecycle stages mapping to existing vendor_lifecycle_stages table"""
     
     stage_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link lifecycle stage to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.DO_NOTHING, db_column='TenantId', 
+                               related_name='vendor_lifecycle_stages', null=True, blank=True,
+                               help_text="Tenant this lifecycle stage belongs to")
+    
     stage_name = models.CharField(max_length=100)
     stage_code = models.CharField(unique=True, max_length=20)
     stage_order = models.IntegerField()

@@ -60,6 +60,12 @@ class MfaEmailChallenge(TPRMEncryptedFieldsMixin, models.Model):
     ]
 
     challenge_id = models.BigAutoField(db_column="ChallengeId", primary_key=True)
+    
+    # MULTI-TENANCY: Link MFA email challenge to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='mfa_email_challenges', null=True, blank=True,
+                               help_text="Tenant this MFA email challenge belongs to")
+    
     user = models.ForeignKey(
         User,
         db_column="UserId",
@@ -134,6 +140,12 @@ class MfaAuditLog(TPRMEncryptedFieldsMixin, models.Model):
     ]
 
     mfa_event_id = models.BigAutoField(db_column="MfaEventId", primary_key=True)
+    
+    # MULTI-TENANCY: Link MFA audit log to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='mfa_audit_logs', null=True, blank=True,
+                               help_text="Tenant this MFA audit log belongs to")
+    
     user = models.ForeignKey(
         User,
         db_column="UserId",

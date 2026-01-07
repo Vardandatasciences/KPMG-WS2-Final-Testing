@@ -25,19 +25,39 @@ from .forms import (
 from .rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required
 
+# MULTI-TENANCY: Import tenant utilities for filtering
+from tprm_backend.core.tenant_utils import (
+    get_tenant_id_from_request,
+    filter_queryset_by_tenant,
+    get_tenant_aware_queryset,
+    require_tenant,
+    tenant_filter
+)
+
 
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def vendor_selection(request, rfp_id):
     """
     View for selecting vendors for an RFP
+    MULTI-TENANCY: Only shows vendors and RFPs belonging to the tenant
     """
-    rfp = get_object_or_404(RFP, rfp_id=rfp_id)
+    # MULTI-TENANCY: Get tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return JsonResponse({'error': 'Tenant context not found'}, status=403)
+    
+    # MULTI-TENANCY: Filter RFP by tenant
+    rfp = get_object_or_404(RFP, rfp_id=rfp_id, tenant_id=tenant_id)
     
     # Get existing selected vendors for this RFP
+    # MULTI-TENANCY: Filter by tenant
     selected_vendor_ids = list(RFPVendorSelection.objects.filter(
-        rfp=rfp
+        rfp=rfp,
+        tenant_id=tenant_id
     ).values_list('vendor_id', flat=True))
     
     # Forms
@@ -46,7 +66,8 @@ def vendor_selection(request, rfp_id):
     bulk_upload_form = VendorBulkUploadForm()
     
     # Handle search and filtering
-    vendors = Vendor.objects.all().prefetch_related(
+    # MULTI-TENANCY: Filter vendors by tenant
+    vendors = Vendor.objects.filter(tenant_id=tenant_id).prefetch_related(
         'capabilities', 'certifications'
     )
     
@@ -140,31 +161,47 @@ def vendor_selection(request, rfp_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('edit_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def update_vendor_selection(request, rfp_id):
     """
     View for updating vendor selection
+    MULTI-TENANCY: Only allows updating selections for tenant's RFPs and vendors
     """
-    rfp = get_object_or_404(RFP, rfp_id=rfp_id)
+    # MULTI-TENANCY: Get tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return JsonResponse({'success': False, 'error': 'Tenant context not found'}, status=403)
+    
+    # MULTI-TENANCY: Filter RFP by tenant
+    rfp = get_object_or_404(RFP, rfp_id=rfp_id, tenant_id=tenant_id)
     
     try:
         data = json.loads(request.body)
         vendor_id = data.get('vendor_id')
         is_selected = data.get('is_selected', False)
         
-        vendor = get_object_or_404(Vendor, vendor_id=vendor_id)
+        # MULTI-TENANCY: Filter vendor by tenant
+        vendor = get_object_or_404(Vendor, vendor_id=vendor_id, tenant_id=tenant_id)
         
         if is_selected:
             # Add vendor to selection if not already selected
+            # MULTI-TENANCY: Set tenant_id on creation
             RFPVendorSelection.objects.get_or_create(
                 rfp=rfp,
                 vendor=vendor,
-                defaults={'selected_by': request.user.id}
+                defaults={
+                    'selected_by': request.user.id,
+                    'tenant_id': tenant_id
+                }
             )
         else:
             # Remove vendor from selection
+            # MULTI-TENANCY: Filter by tenant
             RFPVendorSelection.objects.filter(
                 rfp=rfp,
-                vendor=vendor
+                vendor=vendor,
+                tenant_id=tenant_id
             ).delete()
         
         return JsonResponse({'success': True})
@@ -176,11 +213,20 @@ def update_vendor_selection(request, rfp_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def bulk_select_vendors(request, rfp_id):
     """
     View for bulk selecting/deselecting vendors
+    MULTI-TENANCY: Only works with tenant's RFPs and vendors
     """
-    rfp = get_object_or_404(RFP, rfp_id=rfp_id)
+    # MULTI-TENANCY: Get tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return JsonResponse({'success': False, 'error': 'Tenant context not found'}, status=403)
+    
+    # MULTI-TENANCY: Filter RFP by tenant
+    rfp = get_object_or_404(RFP, rfp_id=rfp_id, tenant_id=tenant_id)
     
     try:
         data = json.loads(request.body)
@@ -188,39 +234,53 @@ def bulk_select_vendors(request, rfp_id):
         select_all = data.get('select_all', False)
         
         if select_all:
-            # Get all vendor IDs
-            all_vendor_ids = list(Vendor.objects.values_list('vendor_id', flat=True))
+            # MULTI-TENANCY: Get all vendor IDs for this tenant
+            all_vendor_ids = list(Vendor.objects.filter(tenant_id=tenant_id).values_list('vendor_id', flat=True))
             
             # Check if all vendors are already selected
+            # MULTI-TENANCY: Filter by tenant
             selected_count = RFPVendorSelection.objects.filter(
                 rfp=rfp,
-                vendor_id__in=all_vendor_ids
+                vendor_id__in=all_vendor_ids,
+                tenant_id=tenant_id
             ).count()
             
             if selected_count == len(all_vendor_ids):
                 # Deselect all vendors
+                # MULTI-TENANCY: Filter by tenant
                 RFPVendorSelection.objects.filter(
                     rfp=rfp,
-                    vendor_id__in=all_vendor_ids
+                    vendor_id__in=all_vendor_ids,
+                    tenant_id=tenant_id
                 ).delete()
                 return JsonResponse({'success': True, 'action': 'deselected_all'})
             else:
                 # Select all vendors
+                # MULTI-TENANCY: Set tenant_id on creation
                 for vendor_id in all_vendor_ids:
                     RFPVendorSelection.objects.get_or_create(
                         rfp=rfp,
                         vendor_id=vendor_id,
-                        defaults={'selected_by': request.user.id}
+                        defaults={
+                            'selected_by': request.user.id,
+                            'tenant_id': tenant_id
+                        }
                     )
                 return JsonResponse({'success': True, 'action': 'selected_all'})
         else:
             # Select/deselect specific vendors
+            # MULTI-TENANCY: Set tenant_id on creation
             for vendor_id in vendor_ids:
-                RFPVendorSelection.objects.get_or_create(
-                    rfp=rfp,
-                    vendor_id=vendor_id,
-                    defaults={'selected_by': request.user.id}
-                )
+                # Verify vendor belongs to tenant
+                if Vendor.objects.filter(vendor_id=vendor_id, tenant_id=tenant_id).exists():
+                    RFPVendorSelection.objects.get_or_create(
+                        rfp=rfp,
+                        vendor_id=vendor_id,
+                        defaults={
+                            'selected_by': request.user.id,
+                            'tenant_id': tenant_id
+                        }
+                    )
             return JsonResponse({'success': True})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
@@ -230,14 +290,24 @@ def bulk_select_vendors(request, rfp_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def generate_vendor_urls(request, rfp_id):
     """
     View for generating invitation URLs for selected vendors using new query parameter format
+    MULTI-TENANCY: Only generates URLs for tenant's RFPs and vendors
     """
-    rfp = get_object_or_404(RFP, rfp_id=rfp_id)
+    # MULTI-TENANCY: Get tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return JsonResponse({'error': 'Tenant context not found'}, status=403)
+    
+    # MULTI-TENANCY: Filter RFP by tenant
+    rfp = get_object_or_404(RFP, rfp_id=rfp_id, tenant_id=tenant_id)
     
     # Get selected vendors
-    selected_vendors = RFPVendorSelection.objects.filter(rfp=rfp)
+    # MULTI-TENANCY: Filter by tenant
+    selected_vendors = RFPVendorSelection.objects.filter(rfp=rfp, tenant_id=tenant_id)
     
     if not selected_vendors:
         messages.error(request, "No vendors selected. Please select at least one vendor.")
@@ -283,6 +353,7 @@ def generate_vendor_urls(request, rfp_id):
             invitation_url = f"{base_url}?{urlencode(params)}"
             
             # Store invitation in database
+            # MULTI-TENANCY: Set tenant_id on creation
             invitation = VendorInvitation.objects.create(
                 rfp_id=rfp.rfp_id,
                 vendor_id=vendor.vendor_id,
@@ -295,7 +366,8 @@ def generate_vendor_urls(request, rfp_id):
                 is_matched_vendor=True,
                 submission_source='invited',
                 invitation_status='CREATED',
-                custom_message=request.POST.get('custom_message', '')
+                custom_message=request.POST.get('custom_message', ''),
+                tenant_id=tenant_id
             )
             
             # Update selection with invitation URL
@@ -378,15 +450,26 @@ def generate_open_rfp_url(rfp_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def vendor_invitation(request, rfp_id):
     """
     View for sending invitations to selected vendors
+    MULTI-TENANCY: Only shows invitations for tenant's RFPs
     """
-    rfp = get_object_or_404(RFP, rfp_id=rfp_id)
+    # MULTI-TENANCY: Get tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return JsonResponse({'error': 'Tenant context not found'}, status=403)
+    
+    # MULTI-TENANCY: Filter RFP by tenant
+    rfp = get_object_or_404(RFP, rfp_id=rfp_id, tenant_id=tenant_id)
     
     # Get selected vendors with URLs
+    # MULTI-TENANCY: Filter by tenant
     selected_vendors = RFPVendorSelection.objects.filter(
-        rfp=rfp
+        rfp=rfp,
+        tenant_id=tenant_id
     ).select_related('vendor')
     
     context = {
@@ -402,13 +485,25 @@ def vendor_invitation(request, rfp_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_unmatched_vendors(request, rfp_id):
     """
     API endpoint to get unmatched vendors for an RFP
+    MULTI-TENANCY: Only returns unmatched vendors for tenant's RFP
     """
-    rfp = get_object_or_404(RFP, rfp_id=rfp_id)
+    # MULTI-TENANCY: Get tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return JsonResponse({'error': 'Tenant context not found'}, status=403)
     
+    # MULTI-TENANCY: Filter RFP by tenant
+    rfp = get_object_or_404(RFP, rfp_id=rfp_id, tenant_id=tenant_id)
+    
+    # MULTI-TENANCY: Filter unmatched vendors by tenant
     unmatched_vendors = RFPUnmatchedVendor.objects.filter(
+        rfp_id=rfp_id,
+        tenant_id=tenant_id,
         matching_status__in=['unmatched', 'pending_review']
     ).order_by('-created_at')
     
@@ -433,12 +528,21 @@ def get_unmatched_vendors(request, rfp_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def create_unmatched_vendor(request, rfp_id):
     """
     API endpoint to create a new unmatched vendor
+    MULTI-TENANCY: Only allows creating unmatched vendors for tenant's RFP
     """
+    # MULTI-TENANCY: Get tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return JsonResponse({'error': 'Tenant context not found'}, status=403)
+    
     try:
-        rfp = get_object_or_404(RFP, rfp_id=rfp_id)
+        # MULTI-TENANCY: Filter RFP by tenant
+        rfp = get_object_or_404(RFP, rfp_id=rfp_id, tenant_id=tenant_id)
         data = json.loads(request.body)
         
         # Validate required fields
@@ -448,13 +552,16 @@ def create_unmatched_vendor(request, rfp_id):
                 return JsonResponse({'error': f'{field} is required'}, status=400)
         
         # Create unmatched vendor
+        # MULTI-TENANCY: Set tenant_id on creation
         unmatched_vendor = RFPUnmatchedVendor.objects.create(
+            rfp_id=rfp_id,
             vendor_name=data['vendor_name'],
             vendor_email=data['vendor_email'],
             vendor_phone=data['vendor_phone'],
             company_name=data['company_name'],
             submission_data=data.get('submission_data', {}),
-            matching_status=data.get('matching_status', 'unmatched')
+            matching_status=data.get('matching_status', 'unmatched'),
+            tenant_id=tenant_id
         )
         
         return JsonResponse({
@@ -476,16 +583,27 @@ def create_unmatched_vendor(request, rfp_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_approved_vendors(request, rfp_id):
     """
     API endpoint to get all approved vendors for an RFP
+    MULTI-TENANCY: Only returns approved vendors for tenant's RFP
     """
-    rfp = get_object_or_404(RFP, rfp_id=rfp_id)
+    # MULTI-TENANCY: Get tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return JsonResponse({'error': 'Tenant context not found'}, status=403)
+    
+    # MULTI-TENANCY: Filter RFP by tenant
+    rfp = get_object_or_404(RFP, rfp_id=rfp_id, tenant_id=tenant_id)
     
     try:
         # Get only the fields that actually exist in the database
+        # MULTI-TENANCY: Filter vendors by tenant
         approved_vendors = Vendor.objects.filter(
-            status='APPROVED'
+            status='APPROVED',
+            tenant_id=tenant_id
         ).values(
             'vendor_id', 'vendor_code', 'company_name', 'legal_name', 
             'business_type', 'incorporation_date', 'tax_id', 'duns_number',
@@ -579,14 +697,27 @@ def get_approved_vendors(request, rfp_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_all_approved_vendors(request):
     """
     API endpoint to get all approved vendors (for frontend vendor selection)
+    MULTI-TENANCY: Only returns approved vendors belonging to the tenant
     """
+    # MULTI-TENANCY: Get tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return JsonResponse({
+            'success': False,
+            'error': 'Tenant context not found'
+        }, status=403)
+    
     try:
         # Get only the fields that actually exist in the database
+        # MULTI-TENANCY: Filter vendors by tenant
         approved_vendors = Vendor.objects.filter(
-            status='APPROVED'
+            status='APPROVED',
+            tenant_id=tenant_id
         ).values(
             'vendor_id', 'vendor_code', 'company_name', 'legal_name', 
             'business_type', 'incorporation_date', 'tax_id', 'duns_number',

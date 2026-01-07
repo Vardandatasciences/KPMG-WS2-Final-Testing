@@ -32,6 +32,15 @@ from .serializers import (
 from tprm_backend.apps.vendor_core.vendor_authentication import VendorAuthenticationMixin
 from tprm_backend.rbac.tprm_decorators import rbac_vendor_required
 
+# MULTI-TENANCY: Import tenant utilities for filtering
+from tprm_backend.core.tenant_utils import (
+    get_tenant_id_from_request,
+    filter_queryset_by_tenant,
+    get_tenant_aware_queryset,
+    require_tenant,
+    tenant_filter
+)
+
 
 class QuestionnaireViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
     """
@@ -288,8 +297,15 @@ class QuestionnaireViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def get_vendor_categories(self, request):
-        """Get available vendor categories"""
-        categories = VendorCategories.objects.all()
+        """Get available vendor categories
+        MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+        """
+        # MULTI-TENANCY: Filter by tenant
+        tenant_id = get_tenant_id_from_request(request)
+        if tenant_id:
+            categories = VendorCategories.objects.filter(tenant_id=tenant_id)
+        else:
+            categories = VendorCategories.objects.all()
         category_list = [
             {
                 'value': str(cat.category_id),
@@ -303,8 +319,15 @@ class QuestionnaireViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def get_vendors(self, request):
-        """Get list of available vendors from temp_vendor table"""
-        vendors = TempVendor.objects.all().order_by('company_name')
+        """Get list of available vendors from temp_vendor table
+        MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+        """
+        # MULTI-TENANCY: Get tenant ID and filter
+        tenant_id = get_tenant_id_from_request(request)
+        if tenant_id:
+            vendors = TempVendor.objects.filter(tenant_id=tenant_id).order_by('company_name')
+        else:
+            vendors = TempVendor.objects.all().order_by('company_name')
         vendor_list = [
             {
                 'id': vendor.id,
@@ -345,8 +368,13 @@ class QuestionnaireViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
             print(f"DEBUG - get_vendor_rfp_data: vendor_id={vendor_id} (type: {type(vendor_id)})")
             
             # Get the TempVendor to access response_id
+            # MULTI-TENANCY: Filter by tenant
+            tenant_id = get_tenant_id_from_request(request)
             try:
-                temp_vendor = TempVendor.objects.get(id=vendor_id)
+                if tenant_id:
+                    temp_vendor = TempVendor.objects.get(id=vendor_id, tenant_id=tenant_id)
+                else:
+                    temp_vendor = TempVendor.objects.get(id=vendor_id)
                 print(f"DEBUG - Found TempVendor: {temp_vendor.company_name}, response_id={temp_vendor.response_id}")
             except TempVendor.DoesNotExist:
                 print(f"DEBUG - TempVendor with id={vendor_id} not found")
@@ -486,7 +514,9 @@ class QuestionnaireViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def get_vendor_screening_data(self, request):
-        """Get external screening data for a specific vendor"""
+        """Get external screening data for a specific vendor
+        MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+        """
         vendor_id = request.query_params.get('vendor_id')
         if not vendor_id:
             return Response(
@@ -495,6 +525,12 @@ class QuestionnaireViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
             )
         
         try:
+            # MULTI-TENANCY: Verify vendor belongs to tenant
+            tenant_id = get_tenant_id_from_request(request)
+            if tenant_id:
+                if not TempVendor.objects.filter(id=vendor_id, tenant_id=tenant_id).exists():
+                    return Response({'error': 'Vendor not found'}, status=status.HTTP_404_NOT_FOUND)
+            
             screening_results = ExternalScreeningResult.objects.filter(vendor_id=vendor_id).order_by('-screening_date')
             screening_data = []
             
@@ -710,10 +746,17 @@ class QuestionnaireAssignmentViewSet(VendorAuthenticationMixin, viewsets.ModelVi
         created_assignments = []
         errors = []
         
+        # MULTI-TENANCY: Get tenant ID for filtering
+        tenant_id = get_tenant_id_from_request(request)
+        
         with transaction.atomic():
             for vendor_id in vendor_ids:
                 try:
-                    vendor = get_object_or_404(TempVendor, id=vendor_id)
+                    # MULTI-TENANCY: Filter by tenant
+                    if tenant_id:
+                        vendor = get_object_or_404(TempVendor, id=vendor_id, tenant_id=tenant_id)
+                    else:
+                        vendor = get_object_or_404(TempVendor, id=vendor_id)
                     
                     # Check if assignment already exists
                     existing = QuestionnaireAssignments.objects.filter(
@@ -896,8 +939,15 @@ class QuestionnaireAssignmentViewSet(VendorAuthenticationMixin, viewsets.ModelVi
     
     @action(detail=False, methods=['get'])
     def get_vendors(self, request):
-        """Get list of available vendors for assignment"""
-        vendors = TempVendor.objects.all()
+        """Get list of available vendors for assignment
+        MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+        """
+        # MULTI-TENANCY: Filter by tenant
+        tenant_id = get_tenant_id_from_request(request)
+        if tenant_id:
+            vendors = TempVendor.objects.filter(tenant_id=tenant_id)
+        else:
+            vendors = TempVendor.objects.all()
         vendor_list = [
             {
                 'id': vendor.id,
@@ -974,13 +1024,21 @@ class QuestionnaireResponseViewSet(VendorAuthenticationMixin, viewsets.ModelView
     
     @action(detail=False, methods=['get'])
     def get_vendor_assignments(self, request):
-        """Get assignments for a specific vendor"""
+        """Get assignments for a specific vendor
+        MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+        """
         vendor_id = request.query_params.get('vendor_id')
         if not vendor_id:
             return Response(
                 {'error': 'vendor_id parameter is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        
+        # MULTI-TENANCY: Verify vendor belongs to tenant
+        tenant_id = get_tenant_id_from_request(request)
+        if tenant_id:
+            if not TempVendor.objects.filter(id=vendor_id, tenant_id=tenant_id).exists():
+                return Response({'error': 'Vendor not found'}, status=status.HTTP_404_NOT_FOUND)
         
         assignments = QuestionnaireAssignments.objects.filter(
             temp_vendor_id=vendor_id

@@ -27,35 +27,51 @@ from tprm_backend.apps.vendor_approval.models import ApprovalRequests, ApprovalS
 from tprm_backend.rbac.tprm_decorators import rbac_vendor_required
 from tprm_backend.apps.vendor_core.vendor_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 
+# MULTI-TENANCY: Import tenant utilities for filtering
+from tprm_backend.core.tenant_utils import (
+    get_tenant_id_from_request,
+    filter_queryset_by_tenant,
+    get_tenant_aware_queryset,
+    require_tenant,
+    tenant_filter
+)
+
 
 @api_view(['GET'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('ViewLifecycleHistory')
+@require_tenant
+@tenant_filter
 def lifecycle_tracker_data(request):
     """
     Get comprehensive lifecycle tracker data including:
     - Timeline events for a specific vendor
     - Stage analytics
     - Recent status changes
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=status.HTTP_403_FORBIDDEN)
+
         vendor_id = request.GET.get('vendor_id')
         search_term = request.GET.get('search', '')
         status_filter = request.GET.get('status', '')
         stage_filter = request.GET.get('stage', '')
         
-        # Get timeline events
-        timeline_events = get_timeline_events(vendor_id, search_term, status_filter, stage_filter)
+        # Get timeline events - pass tenant_id for filtering
+        timeline_events = get_timeline_events(vendor_id, search_term, status_filter, stage_filter, tenant_id)
         
-        # Get stage analytics
-        stage_analytics = get_stage_analytics()
+        # Get stage analytics - pass tenant_id for filtering
+        stage_analytics = get_stage_analytics(tenant_id)
         
-        # Get recent status changes
-        recent_changes = get_recent_status_changes()
+        # Get recent status changes - pass tenant_id for filtering
+        recent_changes = get_recent_status_changes(tenant_id)
         
-        # Get vendor stages from temp_vendor table
-        vendor_stages = get_vendor_stages_from_temp_table()
+        # Get vendor stages from temp_vendor table - pass tenant_id for filtering
+        vendor_stages = get_vendor_stages_from_temp_table(tenant_id)
         
         return Response({
             'timeline_events': timeline_events,
@@ -71,13 +87,19 @@ def lifecycle_tracker_data(request):
         )
 
 
-def get_timeline_events(vendor_id=None, search_term='', status_filter='', stage_filter=''):
-    """Get timeline events for vendors from temp_vendor table"""
+def get_timeline_events(vendor_id=None, search_term='', status_filter='', stage_filter='', tenant_id=None):
+    """Get timeline events for vendors from temp_vendor table
+    MULTI-TENANCY: Filters by tenant_id
+    """
     events = []
     
     try:
         # Get temp vendors with their lifecycle stage information
-        temp_vendors_query = TempVendor.objects.all().order_by('-created_at')
+        # MULTI-TENANCY: Filter by tenant
+        if tenant_id:
+            temp_vendors_query = TempVendor.objects.filter(tenant_id=tenant_id).order_by('-created_at')
+        else:
+            temp_vendors_query = TempVendor.objects.all().order_by('-created_at')
         
         if vendor_id:
             temp_vendors_query = temp_vendors_query.filter(id=vendor_id)
@@ -130,8 +152,10 @@ def get_timeline_events(vendor_id=None, search_term='', status_filter='', stage_
     return events
 
 
-def get_stage_analytics():
-    """Get analytics for each lifecycle stage from temp_vendor table"""
+def get_stage_analytics(tenant_id=None):
+    """Get analytics for each lifecycle stage from temp_vendor table
+    MULTI-TENANCY: Filters by tenant_id
+    """
     analytics = []
     
     try:
@@ -139,11 +163,19 @@ def get_stage_analytics():
         stages = VendorLifecycleStages.objects.filter(is_active=True).order_by('stage_order')
         
         # Get total vendor count from temp_vendor table
-        total_vendors = TempVendor.objects.count()
+        # MULTI-TENANCY: Filter by tenant
+        if tenant_id:
+            total_vendors = TempVendor.objects.filter(tenant_id=tenant_id).count()
+        else:
+            total_vendors = TempVendor.objects.count()
         
         for stage in stages:
             # Count vendors in this stage from temp_vendor table
-            vendors_in_stage = TempVendor.objects.filter(lifecycle_stage=stage.stage_id).count()
+            # MULTI-TENANCY: Filter by tenant
+            if tenant_id:
+                vendors_in_stage = TempVendor.objects.filter(lifecycle_stage=stage.stage_id, tenant_id=tenant_id).count()
+            else:
+                vendors_in_stage = TempVendor.objects.filter(lifecycle_stage=stage.stage_id).count()
             
             # Calculate percentage
             percentage = (vendors_in_stage / total_vendors * 100) if total_vendors > 0 else 0
@@ -162,15 +194,24 @@ def get_stage_analytics():
     return analytics
 
 
-def get_recent_status_changes():
-    """Get recent status changes from temp_vendor table"""
+def get_recent_status_changes(tenant_id=None):
+    """Get recent status changes from temp_vendor table
+    MULTI-TENANCY: Filters by tenant_id
+    """
     recent_changes = []
     
     try:
         # Get recent temp vendors ordered by updated_at
-        temp_vendors = TempVendor.objects.filter(
-            updated_at__isnull=False
-        ).order_by('-updated_at')[:10]
+        # MULTI-TENANCY: Filter by tenant
+        if tenant_id:
+            temp_vendors = TempVendor.objects.filter(
+                updated_at__isnull=False,
+                tenant_id=tenant_id
+            ).order_by('-updated_at')[:10]
+        else:
+            temp_vendors = TempVendor.objects.filter(
+                updated_at__isnull=False
+            ).order_by('-updated_at')[:10]
         
         # Get lifecycle stages for reference
         lifecycle_stages = VendorLifecycleStages.objects.filter(is_active=True)
@@ -211,13 +252,19 @@ def get_recent_status_changes():
     return recent_changes
 
 
-def get_vendor_stages_from_temp_table():
-    """Get vendor stages from temp_vendor table with stage information"""
+def get_vendor_stages_from_temp_table(tenant_id=None):
+    """Get vendor stages from temp_vendor table with stage information
+    MULTI-TENANCY: Filters by tenant_id
+    """
     vendor_stages = []
     
     try:
         # Get all temp vendors with their lifecycle stage information
-        temp_vendors = TempVendor.objects.all().order_by('-created_at')
+        # MULTI-TENANCY: Filter by tenant
+        if tenant_id:
+            temp_vendors = TempVendor.objects.filter(tenant_id=tenant_id).order_by('-created_at')
+        else:
+            temp_vendors = TempVendor.objects.all().order_by('-created_at')
         
         # Get lifecycle stages for reference
         lifecycle_stages = VendorLifecycleStages.objects.filter(is_active=True).order_by('stage_order')
@@ -263,9 +310,17 @@ def get_vendor_stages_from_temp_table():
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('ViewLifecycleHistory')
+@require_tenant
+@tenant_filter
 def vendor_lifecycle_stages(request):
-    """Get all lifecycle stages"""
+    """Get all lifecycle stages
+    MULTI-TENANCY: Lifecycle stages may be shared across tenants
+    """
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=status.HTTP_403_FORBIDDEN)
+
         stages = VendorLifecycleStages.objects.filter(is_active=True).order_by('stage_order')
         
         stage_data = []
@@ -293,10 +348,19 @@ def vendor_lifecycle_stages(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('ViewLifecycleHistory')
+@require_tenant
+@tenant_filter
 def vendor_timeline(request, vendor_id):
-    """Get timeline for a specific vendor"""
+    """Get timeline for a specific vendor
+    MULTI-TENANCY: Ensures vendor belongs to tenant
+    """
     try:
-        vendor = Vendors.objects.get(vendor_id=vendor_id)
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=status.HTTP_403_FORBIDDEN)
+
+        # MULTI-TENANCY: Filter by tenant
+        vendor = Vendors.objects.get(vendor_id=vendor_id, tenant_id=tenant_id)
         
         # Get all timeline events for this vendor
         timeline_events = get_timeline_events(vendor_id=vendor_id)
@@ -332,10 +396,18 @@ def vendor_timeline(request, vendor_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('ViewLifecycleHistory')
+@require_tenant
+@tenant_filter
 def temp_vendor_stages(request):
-    """Get vendor stages from temp_vendor table"""
+    """Get vendor stages from temp_vendor table
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
     try:
-        vendor_stages = get_vendor_stages_from_temp_table()
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=status.HTTP_403_FORBIDDEN)
+
+        vendor_stages = get_vendor_stages_from_temp_table(tenant_id)
         
         return Response({
             'vendor_stages': vendor_stages,
@@ -353,9 +425,17 @@ def temp_vendor_stages(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('update_vendor')
+@require_tenant
+@tenant_filter
 def update_vendor_stage(request):
-    """Update vendor lifecycle stage"""
+    """Update vendor lifecycle stage
+    MULTI-TENANCY: Ensures vendor belongs to tenant
+    """
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=status.HTTP_403_FORBIDDEN)
+
         vendor_id = request.data.get('vendor_id')
         new_stage = request.data.get('new_stage')
         change_reason = request.data.get('change_reason', '')
@@ -367,7 +447,8 @@ def update_vendor_stage(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        vendor = Vendors.objects.get(vendor_id=vendor_id)
+        # MULTI-TENANCY: Filter by tenant
+        vendor = Vendors.objects.get(vendor_id=vendor_id, tenant_id=tenant_id)
         old_stage = vendor.lifecycle_stage
         
         # Update vendor stage
@@ -408,11 +489,20 @@ def update_vendor_stage(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('ViewLifecycleHistory')
+@require_tenant
+@tenant_filter
 def get_vendors_list(request):
-    """Get list of all vendors for dropdown filtering"""
+    """Get list of all vendors for dropdown filtering
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=status.HTTP_403_FORBIDDEN)
+
         # Get all temp vendors for dropdown
-        temp_vendors = TempVendor.objects.all().order_by('company_name')
+        # MULTI-TENANCY: Filter by tenant
+        temp_vendors = TempVendor.objects.filter(tenant_id=tenant_id).order_by('company_name')
         
         vendors_list = []
         for vendor in temp_vendors:
@@ -441,11 +531,20 @@ def get_vendors_list(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('ViewLifecycleHistory')
+@require_tenant
+@tenant_filter
 def get_vendor_lifecycle_timeline(request, vendor_id):
-    """Get detailed lifecycle timeline for a specific vendor from lifecycle_tracker"""
+    """Get detailed lifecycle timeline for a specific vendor from lifecycle_tracker
+    MULTI-TENANCY: Ensures vendor belongs to tenant
+    """
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=status.HTTP_403_FORBIDDEN)
+
         # Get vendor details
-        vendor = TempVendor.objects.get(id=vendor_id)
+        # MULTI-TENANCY: Filter by tenant
+        vendor = TempVendor.objects.get(id=vendor_id, tenant_id=tenant_id)
         
         # Get lifecycle tracker entries for this vendor
         lifecycle_entries = LifecycleTracker.objects.filter(
@@ -540,34 +639,48 @@ def get_vendor_lifecycle_timeline(request, vendor_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('ViewLifecycleHistory')
+@require_tenant
+@tenant_filter
 def get_lifecycle_analytics(request):
-    """Get comprehensive lifecycle analytics"""
+    """Get comprehensive lifecycle analytics
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=status.HTTP_403_FORBIDDEN)
+
         # Get stage analytics from lifecycle_tracker
         stage_analytics = []
         stages = VendorLifecycleStages.objects.filter(is_active=True).order_by('stage_order')
         
         for stage in stages:
             # Count vendors currently in this stage
-            current_in_stage = TempVendor.objects.filter(lifecycle_stage=stage.stage_id).count()
+            # MULTI-TENANCY: Filter by tenant
+            current_in_stage = TempVendor.objects.filter(lifecycle_stage=stage.stage_id, tenant_id=tenant_id).count()
             
             # Count vendors who have completed this stage
+            # MULTI-TENANCY: Filter by tenant through vendor
+            vendor_ids = TempVendor.objects.filter(tenant_id=tenant_id).values_list('id', flat=True)
             completed_stage = LifecycleTracker.objects.filter(
                 lifecycle_stage=stage.stage_id,
-                ended_at__isnull=False
+                ended_at__isnull=False,
+                vendor_id__in=vendor_ids
             ).count()
             
             # Count vendors currently active in this stage
             active_in_stage = LifecycleTracker.objects.filter(
                 lifecycle_stage=stage.stage_id,
-                ended_at__isnull=True
+                ended_at__isnull=True,
+                vendor_id__in=vendor_ids
             ).count()
             
             # Calculate average duration for completed stages
             completed_entries = LifecycleTracker.objects.filter(
                 lifecycle_stage=stage.stage_id,
                 ended_at__isnull=False,
-                started_at__isnull=False
+                started_at__isnull=False,
+                vendor_id__in=vendor_ids
             )
             
             avg_duration_hours = 0
@@ -593,8 +706,9 @@ def get_lifecycle_analytics(request):
             })
         
         # Get overall statistics
-        total_vendors = TempVendor.objects.count()
-        vendors_with_tracking = LifecycleTracker.objects.values('vendor_id').distinct().count()
+        # MULTI-TENANCY: Filter by tenant
+        total_vendors = TempVendor.objects.filter(tenant_id=tenant_id).count()
+        vendors_with_tracking = LifecycleTracker.objects.filter(vendor_id__in=vendor_ids).values('vendor_id').distinct().count()
         
         return Response({
             'stage_analytics': stage_analytics,

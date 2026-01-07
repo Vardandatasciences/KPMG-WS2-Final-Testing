@@ -38,6 +38,15 @@ from tprm_backend.utils.vendor_validators import vendor_validate_input
 from tprm_backend.rbac.tprm_decorators import rbac_vendor_required
 from .vendor_authentication import JWTAuthentication, SimpleAuthenticatedPermission, VendorAuthenticationMixin
 
+# MULTI-TENANCY: Import tenant utilities for filtering
+from tprm_backend.core.tenant_utils import (
+    get_tenant_id_from_request,
+    filter_queryset_by_tenant,
+    get_tenant_aware_queryset,
+    require_tenant,
+    tenant_filter
+)
+
 # Initialize logger
 vendor_logger = logging.getLogger('vendor_security')
 
@@ -46,13 +55,20 @@ class VendorCategoriesViewSet(VendorAuthenticationMixin, viewsets.ReadOnlyModelV
     """
     ViewSet for vendor categories with vendor_ prefix
     Provides read-only access to vendor categories with RBAC protection
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
     queryset = VendorCategories.objects.all()
     serializer_class = VendorCategoriesSerializer
     
+    def get_queryset(self):
+        """Get vendor categories with tenant filtering"""
+        # MULTI-TENANCY: Filter by tenant
+        queryset = get_tenant_aware_queryset(VendorCategories, self.request)
+        return queryset
+    
     def vendor_get_queryset(self):
         """Get vendor categories with secure filtering"""
-        vendor_queryset = self.queryset
+        vendor_queryset = self.get_queryset()  # MULTI-TENANCY: Use tenant-filtered queryset
         
         # Apply any additional filtering here
         vendor_search = self.request.query_params.get('search', None)
@@ -93,13 +109,20 @@ class VendorsViewSet(VendorAuthenticationMixin, viewsets.ReadOnlyModelViewSet):
     """
     ViewSet for vendors with vendor_ prefix
     Provides read-only access to vendor information with RBAC protection
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
     queryset = Vendors.objects.select_related('vendor_category', 'created_by')
     serializer_class = VendorsSerializer
     
+    def get_queryset(self):
+        """Get vendors with tenant filtering"""
+        # MULTI-TENANCY: Filter by tenant
+        queryset = get_tenant_aware_queryset(Vendors, self.request)
+        return queryset.select_related('vendor_category', 'created_by')
+    
     def vendor_get_queryset(self):
         """Get vendors with secure filtering"""
-        vendor_queryset = self.queryset
+        vendor_queryset = self.get_queryset()  # MULTI-TENANCY: Use tenant-filtered queryset
         
         # Apply filters
         vendor_status = self.request.query_params.get('status', None)
@@ -123,11 +146,18 @@ class VendorsViewSet(VendorAuthenticationMixin, viewsets.ReadOnlyModelViewSet):
     
     @action(detail=True, methods=['get'])
     def vendor_profile(self, request, pk=None):
-        """Get complete vendor profile with related data"""
+        """Get complete vendor profile with related data
+        MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+        """
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
+        
         try:
-            vendor_instance = self.get_object()
-            vendor_contacts = VendorContacts.objects.filter(vendor=vendor_instance, is_active=1)
-            vendor_documents = VendorDocuments.objects.filter(vendor=vendor_instance)
+            vendor_instance = self.get_object()  # Already filtered by tenant via get_queryset
+            # MULTI-TENANCY: Filter contacts and documents by tenant
+            vendor_contacts = VendorContacts.objects.filter(vendor=vendor_instance, is_active=1, tenant_id=tenant_id)
+            vendor_documents = VendorDocuments.objects.filter(vendor=vendor_instance, tenant_id=tenant_id)
             
             vendor_profile_data = {
                 'vendor': self.get_serializer(vendor_instance).data,
@@ -182,13 +212,20 @@ class VendorsViewSet(VendorAuthenticationMixin, viewsets.ReadOnlyModelViewSet):
 class VendorContactsViewSet(VendorAuthenticationMixin, viewsets.ReadOnlyModelViewSet):
     """
     ViewSet for vendor contacts with vendor_ prefix with RBAC protection
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
     queryset = VendorContacts.objects.select_related('vendor')
     serializer_class = VendorContactsSerializer
     
+    def get_queryset(self):
+        """Get vendor contacts with tenant filtering"""
+        # MULTI-TENANCY: Filter by tenant
+        queryset = get_tenant_aware_queryset(VendorContacts, self.request)
+        return queryset.select_related('vendor')
+    
     def vendor_get_queryset(self):
         """Get vendor contacts with filtering"""
-        vendor_queryset = self.queryset
+        vendor_queryset = self.get_queryset()  # MULTI-TENANCY: Use tenant-filtered queryset
         
         vendor_vendor_id = self.request.query_params.get('vendor_id', None)
         vendor_is_primary = self.request.query_params.get('is_primary', None)
@@ -206,13 +243,20 @@ class VendorContactsViewSet(VendorAuthenticationMixin, viewsets.ReadOnlyModelVie
 class VendorDocumentsViewSet(VendorAuthenticationMixin, viewsets.ReadOnlyModelViewSet):
     """
     ViewSet for vendor documents with vendor_ prefix with RBAC protection
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
     queryset = VendorDocuments.objects.select_related('vendor', 'uploaded_by')
     serializer_class = VendorDocumentsSerializer
     
+    def get_queryset(self):
+        """Get vendor documents with tenant filtering"""
+        # MULTI-TENANCY: Filter by tenant
+        queryset = get_tenant_aware_queryset(VendorDocuments, self.request)
+        return queryset.select_related('vendor', 'uploaded_by')
+    
     def vendor_get_queryset(self):
         """Get vendor documents with filtering"""
-        vendor_queryset = self.queryset
+        vendor_queryset = self.get_queryset()  # MULTI-TENANCY: Use tenant-filtered queryset
         
         vendor_vendor_id = self.request.query_params.get('vendor_id', None)
         vendor_doc_type = self.request.query_params.get('document_type', None)
@@ -233,13 +277,16 @@ class TempVendorViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
     """
     ViewSet for temporary vendor registration with vendor_ prefix
     Allows creating and managing temporary vendor registrations with RBAC protection
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
     queryset = TempVendor.objects.all()
     serializer_class = TempVendorSerializer
     
     def get_queryset(self):
-        """Get temp vendors with secure filtering and search"""
-        queryset = self.queryset.order_by('-created_at')
+        """Get temp vendors with tenant filtering and search"""
+        # MULTI-TENANCY: Filter by tenant
+        queryset = get_tenant_aware_queryset(TempVendor, self.request)
+        queryset = queryset.order_by('-created_at')
         
         # Apply search filter
         search_term = self.request.query_params.get('search', None)
@@ -289,7 +336,13 @@ class TempVendorViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def search(self, request):
-        """Search temp vendors by name or code"""
+        """Search temp vendors by name or code
+        MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+        """
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
+        
         try:
             search_term = request.query_params.get('q', request.query_params.get('search', ''))
             if not search_term:
@@ -299,11 +352,11 @@ class TempVendorViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
                 }, status=status.HTTP_400_BAD_REQUEST)
             
             search_term = search_term.strip()
-            queryset = self.queryset.filter(
+            queryset = self.get_queryset().filter(  # MULTI-TENANCY: Use tenant-filtered queryset
                 Q(company_name__icontains=search_term) |
                 Q(legal_name__icontains=search_term) |
                 Q(vendor_code__icontains=search_term)
-            ).order_by('-created_at')
+            )
             
             serializer = self.get_serializer(queryset, many=True)
             
@@ -325,7 +378,13 @@ class TempVendorViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     def create(self, request, *args, **kwargs):
-        """Create new temp vendor registration"""
+        """Create new temp vendor registration
+        MULTI-TENANCY: Sets tenant_id on creation to ensure tenant isolation
+        """
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
+        
         try:
             # Parse annual revenue if it's a string with currency symbols
             vendor_data = request.data.copy()
@@ -346,6 +405,9 @@ class TempVendorViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
             for field in checkbox_fields:
                 if field in vendor_data:
                     vendor_data[field] = bool(vendor_data[field])
+            
+            # MULTI-TENANCY: Add tenant_id to data
+            vendor_data['tenant_id'] = tenant_id
             
             vendor_serializer = self.get_serializer(data=vendor_data)
             vendor_serializer.is_valid(raise_exception=True)
@@ -404,11 +466,17 @@ class TempVendorViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
     
     @action(detail=False, methods=['post'])
     def vendor_submit_registration(self, request):
-        """Submit complete vendor registration with all tabs data"""
+        """Submit complete vendor registration with all tabs data
+        MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+        """
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
+        
         try:
             with transaction.atomic():
                 # Get form data from request
-                vendor_form_data = request.data
+                vendor_form_data = request.data.copy()
 
                 temp_vendor_id = vendor_form_data.pop('temp_vendor_id', None)
                 
@@ -421,14 +489,15 @@ class TempVendorViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
                     **vendor_form_data,
                     'contacts': vendor_contacts,
                     'documents': vendor_documents,
-                    'status': 'pending'
+                    'status': 'pending',
+                    'tenant_id': tenant_id  # MULTI-TENANCY: Set tenant_id
                 }
                 
                 # Create or update the temp vendor record
                 if temp_vendor_id:
-                    # Update existing record
+                    # Update existing record - MULTI-TENANCY: Filter by tenant
                     try:
-                        vendor_temp_record = TempVendor.objects.get(id=temp_vendor_id)
+                        vendor_temp_record = TempVendor.objects.get(id=temp_vendor_id, tenant_id=tenant_id)
                         vendor_serializer = self.get_serializer(vendor_temp_record, data=vendor_registration_data, partial=True)
                         vendor_serializer.is_valid(raise_exception=True)
                         vendor_temp_record = vendor_serializer.save()
@@ -586,9 +655,14 @@ class TempVendorViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
         return screening_results
 
     def _perform_ofac_screening(self, vendor):
-        """Perform OFAC screening for a vendor"""
+        """Perform OFAC screening for a vendor
+        MULTI-TENANCY: Uses vendor's tenant_id for tenant isolation
+        """
         try:
             vendor_logger.info(f"Starting OFAC screening for vendor {vendor.id}: {vendor.company_name}")
+            
+            # MULTI-TENANCY: Get tenant_id from vendor
+            tenant_id = getattr(vendor, 'tenant_id', None) or getattr(vendor.tenant, 'tenant_id', None) if hasattr(vendor, 'tenant') and vendor.tenant else None
             
             ofac_service = OFACService()
             
@@ -597,6 +671,7 @@ class TempVendorViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
             vendor_logger.info(f"OFAC API connection test: {connection_test}")
             
             # Create screening record
+            # Note: ExternalScreeningResult doesn't have tenant_id, but we filter by vendor's tenant_id
             screening = ExternalScreeningResult.objects.create(
                 vendor_id=vendor.id,
                 screening_type='OFAC',
@@ -1641,13 +1716,21 @@ class TempVendorViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
 class VendorScreeningViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
     """
     ViewSet for vendor screening operations with RBAC protection
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
     queryset = ExternalScreeningResult.objects.all()
     serializer_class = ExternalScreeningResultSerializer
 
     def get_queryset(self):
-        """Get screening results with filters"""
-        queryset = ExternalScreeningResult.objects.prefetch_related('matches')
+        """Get screening results with tenant filtering"""
+        tenant_id = get_tenant_id_from_request(self.request)
+        if not tenant_id:
+            return ExternalScreeningResult.objects.none()
+        
+        # MULTI-TENANCY: Filter by vendor's tenant_id
+        # ExternalScreeningResult doesn't have tenant_id, so filter through vendor relationship
+        vendor_ids = TempVendor.objects.filter(tenant_id=tenant_id).values_list('id', flat=True)
+        queryset = ExternalScreeningResult.objects.filter(vendor_id__in=vendor_ids).prefetch_related('matches')
         
         # Filter by status
         status_filter = self.request.query_params.get('status')
@@ -1662,13 +1745,24 @@ class VendorScreeningViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
         # Filter by vendor
         vendor_id = self.request.query_params.get('vendor_id')
         if vendor_id:
-            queryset = queryset.filter(vendor_id=vendor_id)
+            # MULTI-TENANCY: Ensure vendor belongs to tenant
+            try:
+                TempVendor.objects.get(id=vendor_id, tenant_id=tenant_id)
+                queryset = queryset.filter(vendor_id=vendor_id)
+            except TempVendor.DoesNotExist:
+                queryset = queryset.none()
             
         return queryset.order_by('-screening_date')
 
     @action(detail=False, methods=['post'])
     def screen_vendor(self, request):
-        """Initiate screening for a vendor"""
+        """Initiate screening for a vendor
+        MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+        """
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
+        
         serializer = ScreeningRequestSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -1678,7 +1772,8 @@ class VendorScreeningViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
         threshold = serializer.validated_data.get('threshold', 85)
         
         try:
-            vendor = TempVendor.objects.get(id=vendor_id)
+            # MULTI-TENANCY: Filter by tenant
+            vendor = TempVendor.objects.get(id=vendor_id, tenant_id=tenant_id)
             results = []
             
             for screening_type in screening_types:
@@ -1704,8 +1799,14 @@ class VendorScreeningViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def update_match_status(self, request, pk=None):
-        """Update the status of a specific match"""
-        screening = self.get_object()
+        """Update the status of a specific match
+        MULTI-TENANCY: Ensures match belongs to tenant's vendor
+        """
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
+        
+        screening = self.get_object()  # Already filtered by tenant via get_queryset
         serializer = MatchUpdateSerializer(data=request.data)
         
         if not serializer.is_valid():
@@ -1716,6 +1817,7 @@ class VendorScreeningViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
         notes = serializer.validated_data.get('notes', '')
         
         try:
+            # MULTI-TENANCY: Match is already filtered through screening's vendor
             match = ScreeningMatch.objects.get(
                 match_id=match_id, 
                 screening=screening
@@ -1741,8 +1843,18 @@ class VendorScreeningViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def summary_stats(self, request):
-        """Get summary statistics for screening results"""
-        stats = ExternalScreeningResult.objects.aggregate(
+        """Get summary statistics for screening results
+        MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+        """
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
+        
+        # MULTI-TENANCY: Filter by vendor's tenant_id
+        vendor_ids = TempVendor.objects.filter(tenant_id=tenant_id).values_list('id', flat=True)
+        queryset = ExternalScreeningResult.objects.filter(vendor_id__in=vendor_ids)
+        
+        stats = queryset.aggregate(
             total_screenings=Count('screening_id'),
             clear_count=Count('screening_id', filter=Q(status='CLEAR')),
             under_review_count=Count('screening_id', filter=Q(status='UNDER_REVIEW')),
@@ -1789,7 +1901,13 @@ class VendorScreeningViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def vendor_screening_results(self, request):
-        """Get screening results for a specific vendor"""
+        """Get screening results for a specific vendor
+        MULTI-TENANCY: Ensures vendor belongs to tenant
+        """
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
+        
         vendor_id = request.query_params.get('vendor_id')
         if not vendor_id:
             return Response({
@@ -1798,6 +1916,15 @@ class VendorScreeningViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         try:
+            # MULTI-TENANCY: Verify vendor belongs to tenant
+            try:
+                vendor = TempVendor.objects.get(id=vendor_id, tenant_id=tenant_id)
+            except TempVendor.DoesNotExist:
+                return Response({
+                    'status': 'error',
+                    'message': 'Vendor not found or does not belong to your tenant'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
             # Get all screening results for the vendor
             results = self.get_queryset().filter(vendor_id=vendor_id).order_by('-screening_date')
             serializer = self.get_serializer(results, many=True)
@@ -1820,9 +1947,24 @@ class VendorScreeningViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def mark_as_cleared(self, request, pk=None):
-        """Mark all screening results for a vendor as cleared"""
+        """Mark all screening results for a vendor as cleared
+        MULTI-TENANCY: Ensures vendor belongs to tenant
+        """
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
+        
         try:
             vendor_id = pk
+            # MULTI-TENANCY: Verify vendor belongs to tenant
+            try:
+                vendor = TempVendor.objects.get(id=vendor_id, tenant_id=tenant_id)
+            except TempVendor.DoesNotExist:
+                return Response({
+                    'status': 'error',
+                    'message': 'Vendor not found or does not belong to your tenant'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
             # Update all screening results for this vendor to CLEAR status
             ExternalScreeningResult.objects.filter(vendor_id=vendor_id).update(
                 status='CLEAR',
@@ -1854,9 +1996,24 @@ class VendorScreeningViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def add_note(self, request, pk=None):
-        """Add a note to screening results for a vendor"""
+        """Add a note to screening results for a vendor
+        MULTI-TENANCY: Ensures vendor belongs to tenant
+        """
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
+        
         try:
             vendor_id = pk
+            # MULTI-TENANCY: Verify vendor belongs to tenant
+            try:
+                vendor = TempVendor.objects.get(id=vendor_id, tenant_id=tenant_id)
+            except TempVendor.DoesNotExist:
+                return Response({
+                    'status': 'error',
+                    'message': 'Vendor not found or does not belong to your tenant'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
             note = request.data.get('note', '')
             
             if not note:
@@ -1934,15 +2091,21 @@ class VendorScreeningViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def print_screening_results(self, request):
-        """Print screening results to console and return formatted data"""
+        """Print screening results to console and return formatted data
+        MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+        """
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
+        
         vendor_id = request.query_params.get('vendor_id')
         print_all = request.query_params.get('print_all', 'false').lower() == 'true'
         
         try:
             if print_all:
-                # Print all screening results
+                # Print all screening results (already filtered by tenant via get_queryset)
                 results = self.get_queryset().order_by('-screening_date')
-                self._print_all_screening_results(results)
+                self._print_all_screening_results(results, tenant_id)
                 
                 return Response({
                     'status': 'success',
@@ -1951,6 +2114,15 @@ class VendorScreeningViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
                     'count': results.count()
                 })
             elif vendor_id:
+                # MULTI-TENANCY: Verify vendor belongs to tenant
+                try:
+                    vendor = TempVendor.objects.get(id=vendor_id, tenant_id=tenant_id)
+                except TempVendor.DoesNotExist:
+                    return Response({
+                        'status': 'error',
+                        'message': 'Vendor not found or does not belong to your tenant'
+                    }, status=status.HTTP_404_NOT_FOUND)
+                
                 # Print results for specific vendor
                 results = self.get_queryset().filter(vendor_id=vendor_id).order_by('-screening_date')
                 self._print_vendor_screening_results(vendor_id, self.get_serializer(results, many=True).data)
@@ -1974,10 +2146,14 @@ class VendorScreeningViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
                 'message': 'Failed to print screening results'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    def _print_all_screening_results(self, results):
-        """Print all screening results to console"""
+    def _print_all_screening_results(self, results, tenant_id=None):
+        """Print all screening results to console
+        MULTI-TENANCY: Results are already filtered by tenant via get_queryset
+        """
         print("\n" + "="*100)
         print("🔍 ALL EXTERNAL SCREENING RESULTS")
+        if tenant_id:
+            print(f"🏢 Tenant ID: {tenant_id}")
         print(f"📅 Retrieved: {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print("="*100)
         
@@ -1998,7 +2174,7 @@ class VendorScreeningViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
             print(f"   Total Matches: {result.total_matches}")
             print(f"   High Risk Matches: {result.high_risk_matches}")
             
-            # Get matches for this screening
+            # Get matches for this screening (already filtered through screening's vendor)
             matches = ScreeningMatch.objects.filter(screening=result)
             if matches.exists():
                 print(f"   📋 Individual Matches ({matches.count()}):")

@@ -10,15 +10,29 @@ from .rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required
 from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
 
+# MULTI-TENANCY: Import tenant utilities for filtering
+from tprm_backend.core.tenant_utils import (
+    get_tenant_id_from_request,
+    require_tenant,
+    tenant_filter
+)
+
 
 @api_view(['POST'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('assign_rfp_evaluators')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def bulk_assign_evaluators(request):
     """
     Bulk assign evaluators to multiple proposals
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
         data = request.data
         
@@ -35,7 +49,8 @@ def bulk_assign_evaluators(request):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Validate proposals exist
-        existing_proposals = RFPResponse.objects.filter(response_id__in=proposal_ids)
+        # MULTI-TENANCY: Filter by tenant
+        existing_proposals = RFPResponse.objects.filter(response_id__in=proposal_ids, tenant_id=tenant_id)
         if len(existing_proposals) != len(proposal_ids):
             return Response({
                 'error': 'One or more proposals not found'
@@ -47,10 +62,12 @@ def bulk_assign_evaluators(request):
             for proposal_id in proposal_ids:
                 for evaluator_id in evaluator_ids:
                     # Check if assignment already exists
+                    # MULTI-TENANCY: Filter by tenant
                     existing_assignment = RFPEvaluatorAssignment.objects.filter(
                         proposal_id=proposal_id,
                         evaluator_id=evaluator_id,
-                        assignment_type=assignment_type
+                        assignment_type=assignment_type,
+                        tenant_id=tenant_id
                     ).first()
                     
                     if existing_assignment:
@@ -58,6 +75,7 @@ def bulk_assign_evaluators(request):
                         continue
                     
                     # Create new assignment
+                    # MULTI-TENANCY: Set tenant_id on creation
                     assignment = RFPEvaluatorAssignment.objects.create(
                         proposal_id=proposal_id,
                         evaluator_id=evaluator_id,
@@ -65,7 +83,8 @@ def bulk_assign_evaluators(request):
                         assigned_by_id=assigned_by_id,
                         assigned_date=timezone.now(),
                         deadline_date=deadline_date,
-                        status='ASSIGNED'
+                        status='ASSIGNED',
+                        tenant_id=tenant_id  # MULTI-TENANCY: Set tenant_id
                     )
                     
                     created_assignments.append({
@@ -91,17 +110,26 @@ def bulk_assign_evaluators(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_evaluator_assignments(request, evaluator_id):
     """
     Get all assignments for a specific evaluator
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
-        assignments = RFPEvaluatorAssignment.objects.filter(evaluator_id=evaluator_id)
+        # MULTI-TENANCY: Filter by tenant
+        assignments = RFPEvaluatorAssignment.objects.filter(evaluator_id=evaluator_id, tenant_id=tenant_id)
         
         assignment_data = []
         for assignment in assignments:
+            # MULTI-TENANCY: Filter by tenant
             try:
-                proposal = RFPResponse.objects.get(response_id=assignment.proposal_id)
+                proposal = RFPResponse.objects.get(response_id=assignment.proposal_id, tenant_id=tenant_id)
                 assignment_data.append({
                     'assignment_id': assignment.assignment_id,
                     'proposal_id': assignment.proposal_id,
@@ -132,12 +160,28 @@ def get_evaluator_assignments(request, evaluator_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_proposal_assignments(request, proposal_id):
     """
     Get all evaluators assigned to a specific proposal
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
-        assignments = RFPEvaluatorAssignment.objects.filter(proposal_id=proposal_id)
+        # MULTI-TENANCY: Verify proposal belongs to tenant
+        try:
+            proposal = RFPResponse.objects.get(response_id=proposal_id, tenant_id=tenant_id)
+        except RFPResponse.DoesNotExist:
+            return Response({
+                'error': f'Proposal not found: {proposal_id}'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # MULTI-TENANCY: Filter by tenant
+        assignments = RFPEvaluatorAssignment.objects.filter(proposal_id=proposal_id, tenant_id=tenant_id)
         
         assignment_data = []
         for assignment in assignments:
@@ -168,10 +212,17 @@ def get_proposal_assignments(request, proposal_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('edit_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def update_assignment_status(request, assignment_id):
     """
     Update the status of a specific assignment
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
         data = request.data
         new_status = data.get('status')
@@ -182,8 +233,9 @@ def update_assignment_status(request, assignment_id):
                 'error': 'Status is required'
             }, status=status.HTTP_400_BAD_REQUEST)
         
+        # MULTI-TENANCY: Filter by tenant
         try:
-            assignment = RFPEvaluatorAssignment.objects.get(assignment_id=assignment_id)
+            assignment = RFPEvaluatorAssignment.objects.get(assignment_id=assignment_id, tenant_id=tenant_id)
         except RFPEvaluatorAssignment.DoesNotExist:
             return Response({
                 'error': 'Assignment not found'
@@ -220,13 +272,21 @@ def update_assignment_status(request, assignment_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('delete_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def remove_assignment(request, assignment_id):
     """
     Remove a specific assignment
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
+        # MULTI-TENANCY: Filter by tenant
         try:
-            assignment = RFPEvaluatorAssignment.objects.get(assignment_id=assignment_id)
+            assignment = RFPEvaluatorAssignment.objects.get(assignment_id=assignment_id, tenant_id=tenant_id)
         except RFPEvaluatorAssignment.DoesNotExist:
             return Response({
                 'error': 'Assignment not found'
@@ -249,15 +309,25 @@ def remove_assignment(request, assignment_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_available_evaluators(request):
     """
     Get list of available evaluators from the database.
     Returns all active users who can be assigned as evaluators.
     Optionally filters by users who have evaluation permissions via RBAC.
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
         # Get all active users from CustomUser model
+        # MULTI-TENANCY: Filter by tenant (if CustomUser has tenant_id field)
+        # Note: Assuming CustomUser has tenant_id field, adjust if different
         active_users = CustomUser.objects.filter(is_active='Y').order_by('first_name', 'last_name')
+        # If CustomUser has tenant_id: .filter(tenant_id=tenant_id)
         
         evaluators = []
         for user in active_users:

@@ -15,6 +15,11 @@ class ApprovalWorkflows(TPRMEncryptedFieldsMixin, models.Model):
     # Primary key
     workflow_id = models.CharField(max_length=50, primary_key=True)
     
+    # MULTI-TENANCY: Link approval workflow to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='approval_workflows', null=True, blank=True,
+                               help_text="Tenant this approval workflow belongs to")
+    
     # Workflow details
     workflow_name = models.CharField(max_length=255)
     workflow_type = models.CharField(max_length=20, choices=WORKFLOW_TYPE_CHOICES)
@@ -58,6 +63,11 @@ class ApprovalRequests(TPRMEncryptedFieldsMixin, models.Model):
     
     # Primary key
     approval_id = models.CharField(max_length=50, primary_key=True)
+    
+    # MULTI-TENANCY: Link approval request to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='approval_requests', null=True, blank=True,
+                               help_text="Tenant this approval request belongs to")
     
     # Foreign key to workflow
     workflow_id = models.CharField(max_length=50)
@@ -115,6 +125,11 @@ class ApprovalStages(TPRMEncryptedFieldsMixin, models.Model):
     
     # Primary key
     stage_id = models.CharField(max_length=50, primary_key=True)
+    
+    # MULTI-TENANCY: Link approval stage to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='approval_stages', null=True, blank=True,
+                               help_text="Tenant this approval stage belongs to")
     
     # Foreign key to approval request
     approval_id = models.CharField(max_length=50)
@@ -175,6 +190,11 @@ class ApprovalComments(TPRMEncryptedFieldsMixin, models.Model):
     # Primary key
     comment_id = models.CharField(max_length=50, primary_key=True)
     
+    # MULTI-TENANCY: Link approval comment to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='approval_comments', null=True, blank=True,
+                               help_text="Tenant this approval comment belongs to")
+    
     # Foreign keys
     approval_id = models.CharField(max_length=50)
     stage_id = models.CharField(max_length=50, null=True, blank=True)
@@ -218,6 +238,11 @@ class ApprovalRequestVersions(TPRMEncryptedFieldsMixin, models.Model):
     
     # Primary key
     version_id = models.CharField(max_length=50, primary_key=True)
+    
+    # MULTI-TENANCY: Link approval request version to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='approval_request_versions', null=True, blank=True,
+                               help_text="Tenant this approval request version belongs to")
     
     # Foreign key to approval request
     approval_id = models.CharField(max_length=50)

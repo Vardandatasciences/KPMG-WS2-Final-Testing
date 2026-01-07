@@ -10,6 +10,12 @@ class VendorApprovals(VendorBaseModel):
     """Vendor approvals mapping to existing vendor_approvals table"""
     
     approval_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link vendor approval to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.DO_NOTHING, db_column='TenantId', 
+                               related_name='vendor_lifecycle_approvals', null=True, blank=True,
+                               help_text="Tenant this vendor approval belongs to")
+    
     vendor = models.ForeignKey(Vendors, models.DO_NOTHING)
     stage = models.ForeignKey(VendorLifecycleStages, models.DO_NOTHING)
     approver = models.ForeignKey(Users, models.DO_NOTHING)
@@ -35,6 +41,12 @@ class VendorStatusHistory(VendorBaseModel):
     """Vendor status history mapping to existing vendor_status_history table"""
     
     history_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link vendor status history to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.DO_NOTHING, db_column='TenantId', 
+                               related_name='vendor_status_histories', null=True, blank=True,
+                               help_text="Tenant this vendor status history belongs to")
+    
     vendor = models.ForeignKey(Vendors, models.DO_NOTHING)
     old_status = models.CharField(max_length=50, blank=True, null=True)
     new_status = models.CharField(max_length=50, blank=True, null=True)
@@ -59,6 +71,12 @@ class VendorContracts(VendorBaseModel):
     """Vendor contracts mapping to existing vendor_contracts table"""
     
     contract_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link vendor contract to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.DO_NOTHING, db_column='TenantId', 
+                               related_name='vendor_lifecycle_contracts', null=True, blank=True,
+                               help_text="Tenant this vendor contract belongs to")
+    
     vendor = models.ForeignKey(Vendors, models.DO_NOTHING)
     contract_number = models.CharField(unique=True, max_length=100)
     contract_title = models.CharField(max_length=255)
@@ -92,6 +110,12 @@ class VendorSlas(VendorBaseModel):
     """Vendor SLAs mapping to existing vendor_slas table"""
     
     sla_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link vendor SLA to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.DO_NOTHING, db_column='TenantId', 
+                               related_name='vendor_lifecycle_slas', null=True, blank=True,
+                               help_text="Tenant this vendor SLA belongs to")
+    
     vendor = models.ForeignKey(Vendors, models.DO_NOTHING)
     contract_id = models.BigIntegerField(blank=True, null=True)
     sla_name = models.CharField(max_length=255)

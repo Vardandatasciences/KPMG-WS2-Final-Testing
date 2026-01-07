@@ -17,6 +17,11 @@ class RBACTPRM(models.Model):
     # Primary Key
     rbac_id = models.AutoField(db_column='RBACId', primary_key=True)
     
+    # MULTI-TENANCY: Link RBAC to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='rbac_tprm_records', null=True, blank=True,
+                               help_text="Tenant this RBAC record belongs to")
+    
     # User Information
     user_id = models.IntegerField(db_column='UserId')
     username = models.CharField(db_column='UserName', max_length=255)
@@ -340,6 +345,12 @@ class AccessRequestTPRM(models.Model):
     ]
    
     id = models.AutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link access request to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='access_requests_tprm', null=True, blank=True,
+                               help_text="Tenant this access request belongs to")
+    
     user_id = models.IntegerField(db_column='user_id')
     requested_url = models.CharField(max_length=500, db_column='requested_url', null=True, blank=True)
     requested_feature = models.CharField(max_length=255, db_column='requested_feature', null=True, blank=True)

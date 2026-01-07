@@ -63,6 +63,15 @@ from .forms import (
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required
 from .rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission, RFPAuthenticationMixin
 
+# MULTI-TENANCY: Import tenant utilities for filtering
+from tprm_backend.core.tenant_utils import (
+    get_tenant_id_from_request,
+    filter_queryset_by_tenant,
+    get_tenant_aware_queryset,
+    require_tenant,
+    tenant_filter
+)
+
 
 
 # ============================================================================
@@ -73,6 +82,8 @@ from .rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_rfp_kpi_summary(request):
     """
     Get KPI summary cards data for RFP analytics dashboard
@@ -83,7 +94,12 @@ def get_rfp_kpi_summary(request):
     - Average RFP Cycle Days
     - Average Quality Score
     - Cost Savings Percentage
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
         from datetime import datetime, timedelta
         from django.db.models import Avg, Count, Sum, F, Q, ExpressionWrapper, DurationField
@@ -98,18 +114,21 @@ def get_rfp_kpi_summary(request):
         last_month_end = current_month_start - timedelta(seconds=1)
         
         # ===== 1. TOTAL RFPs CREATED =====
-        total_rfps = RFP.objects.count()
+        # MULTI-TENANCY: Filter by tenant
+        total_rfps = RFP.objects.filter(tenant_id=tenant_id).count()
         print(f"[KPI] Total RFPs: {total_rfps}")
         
         # Current month RFPs
         current_month_rfps = RFP.objects.filter(
-            created_at__gte=current_month_start
+            created_at__gte=current_month_start,
+            tenant_id=tenant_id
         ).count()
         
         # Last month RFPs
         last_month_rfps = RFP.objects.filter(
             created_at__gte=last_month_start,
-            created_at__lte=last_month_end
+            created_at__lte=last_month_end,
+            tenant_id=tenant_id
         ).count()
         
         # Calculate percentage change
@@ -124,13 +143,15 @@ def get_rfp_kpi_summary(request):
         # ===== 2. ACTIVE RFPs =====
         # Active RFPs are those from APPROVED to EVALUATION (excluding DRAFT and IN_REVIEW)
         active_statuses = ['APPROVED', 'PUBLISHED', 'SUBMISSION_OPEN', 'EVALUATION']
-        active_rfps = RFP.objects.filter(status__in=active_statuses).count()
+        # MULTI-TENANCY: Filter by tenant
+        active_rfps = RFP.objects.filter(status__in=active_statuses, tenant_id=tenant_id).count()
         
         # Calculate how many were active at the end of last month
         # (RFPs that were active at the end of last month)
         last_month_active = RFP.objects.filter(
             status__in=active_statuses,
-            created_at__lte=last_month_end
+            created_at__lte=last_month_end,
+            tenant_id=tenant_id
         ).count()
         
         # Calculate percentage change
@@ -142,12 +163,14 @@ def get_rfp_kpi_summary(request):
         active_trend = "up" if active_change_pct > 5 else "down" if active_change_pct < -5 else "neutral"
         
         # ===== 3. AWARDED RFPs =====
-        awarded_rfps = RFP.objects.filter(status='AWARDED').count()
+        # MULTI-TENANCY: Filter by tenant
+        awarded_rfps = RFP.objects.filter(status='AWARDED', tenant_id=tenant_id).count()
         
         # Calculate how many were awarded by the end of last month
         last_month_awarded = RFP.objects.filter(
             status='AWARDED',
-            award_decision_date__lte=last_month_end
+            award_decision_date__lte=last_month_end,
+            tenant_id=tenant_id
         ).count()
         
         # Calculate percentage change
@@ -160,9 +183,11 @@ def get_rfp_kpi_summary(request):
         
         # ===== 4. AVERAGE RFP CYCLE DAYS =====
         # Calculate average days from creation to award
+        # MULTI-TENANCY: Filter by tenant
         awarded_rfps_with_dates = RFP.objects.filter(
             status='AWARDED',
-            award_decision_date__isnull=False
+            award_decision_date__isnull=False,
+            tenant_id=tenant_id
         )
         
         total_days = 0
@@ -206,7 +231,9 @@ def get_rfp_kpi_summary(request):
         # Calculate average quality score from RFP responses that have been evaluated
         
         # Get all evaluated responses with scores
+        # MULTI-TENANCY: Filter by tenant
         evaluated_responses = RFPResponse.objects.filter(
+            tenant_id=tenant_id,
             overall_score__isnull=False,
             overall_score__gt=0
         )
@@ -218,14 +245,17 @@ def get_rfp_kpi_summary(request):
             avg_quality_score = 0.0
         
         # Current month average - get responses from RFPs awarded this month
+        # MULTI-TENANCY: Filter by tenant
         current_month_rfps = RFP.objects.filter(
             award_decision_date__gte=current_month_start,
-            status='AWARDED'
+            status='AWARDED',
+            tenant_id=tenant_id
         )
         current_month_response_ids = RFPResponse.objects.filter(
             rfp__in=current_month_rfps,
             overall_score__isnull=False,
-            overall_score__gt=0
+            overall_score__gt=0,
+            tenant_id=tenant_id
         )
         
         if current_month_response_ids.exists():
@@ -235,15 +265,18 @@ def get_rfp_kpi_summary(request):
             current_avg_quality = avg_quality_score
         
         # Last month average - get responses from RFPs awarded last month
+        # MULTI-TENANCY: Filter by tenant
         last_month_rfps = RFP.objects.filter(
             award_decision_date__gte=last_month_start,
             award_decision_date__lte=last_month_end,
-            status='AWARDED'
+            status='AWARDED',
+            tenant_id=tenant_id
         )
         last_month_response_ids = RFPResponse.objects.filter(
             rfp__in=last_month_rfps,
             overall_score__isnull=False,
-            overall_score__gt=0
+            overall_score__gt=0,
+            tenant_id=tenant_id
         )
         
         if last_month_response_ids.exists():
@@ -257,10 +290,12 @@ def get_rfp_kpi_summary(request):
         
         # ===== 6. COST SAVINGS PERCENTAGE =====
         # Calculate savings: (estimated_value - proposed_value) / estimated_value * 100
+        # MULTI-TENANCY: Filter by tenant
         awarded_rfps_with_values = RFP.objects.filter(
             status='AWARDED',
             estimated_value__isnull=False,
-            estimated_value__gt=0
+            estimated_value__gt=0,
+            tenant_id=tenant_id
         )
         
         total_estimated = Decimal('0')
@@ -269,10 +304,12 @@ def get_rfp_kpi_summary(request):
         
         for rfp in awarded_rfps_with_values:
             # Get the winning response (highest score) for this RFP
+            # MULTI-TENANCY: Filter by tenant
             winning_response = RFPResponse.objects.filter(
                 rfp=rfp,
                 proposed_value__isnull=False,
-                overall_score__isnull=False
+                overall_score__isnull=False,
+                tenant_id=tenant_id
             ).order_by('-overall_score').first()
             
             if winning_response:
@@ -362,7 +399,16 @@ def get_rfp_kpi_summary(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_rfp_creation_rate(request):
+    """
+    Get RFP creation rate over time
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
     """
     Get RFP creation rate data by month for the specified timeline
     Returns monthly RFP creation statistics
@@ -394,7 +440,8 @@ def get_rfp_creation_rate(request):
             months_to_show = 12
         elif timeline == 'ALL':
             # Get the earliest RFP date
-            earliest_rfp = RFP.objects.order_by('created_at').first()
+            # MULTI-TENANCY: Filter by tenant
+            earliest_rfp = RFP.objects.filter(tenant_id=tenant_id).order_by('created_at').first()
             if earliest_rfp:
                 start_date = earliest_rfp.created_at
                 # Calculate number of months
@@ -409,8 +456,10 @@ def get_rfp_creation_rate(request):
             months_to_show = 6
         
         # Query RFPs created since start_date, grouped by month
+        # MULTI-TENANCY: Filter by tenant
         monthly_data = RFP.objects.filter(
-            created_at__gte=start_date
+            created_at__gte=start_date,
+            tenant_id=tenant_id
         ).annotate(
             month=TruncMonth('created_at')
         ).values('month').annotate(
@@ -492,6 +541,8 @@ def get_rfp_creation_rate(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_first_time_approval_rate(request):
     """
     Get First-Time Approval Rate KPI
@@ -502,7 +553,11 @@ def get_first_time_approval_rate(request):
     - First-time approval = version_number=1 AND version_type='FINAL'
     - Total first submissions = version_number=1
     - Rate = (First-time approved / Total first submissions) * 100
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
     try:
         from django.db.models import Count, Q
         from django.db import connection
@@ -701,6 +756,8 @@ def get_first_time_approval_rate(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_rfp_approval_time(request):
     """
     Get RFP approval time data by month
@@ -709,7 +766,11 @@ def get_rfp_approval_time(request):
     
     Query Parameters:
         timeline: '3M' (3 months), '6M' (6 months), '1Y' (1 year), 'ALL' (all time)
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
     try:
         from datetime import datetime, timedelta
         from django.db.models import Avg, Count, Q, F
@@ -735,7 +796,8 @@ def get_rfp_approval_time(request):
             months_to_show = 12
         elif timeline == 'ALL':
             # Get the earliest RFP date
-            earliest_rfp = RFP.objects.order_by('created_at').first()
+            # MULTI-TENANCY: Filter by tenant
+            earliest_rfp = RFP.objects.filter(tenant_id=tenant_id).order_by('created_at').first()
             if earliest_rfp:
                 start_date = earliest_rfp.created_at
                 # Calculate number of months
@@ -754,9 +816,11 @@ def get_rfp_approval_time(request):
         # Falls back to updated_at if no approval completion date is available
         from rfp_approval.models import ApprovalRequests
         
+        # MULTI-TENANCY: Filter by tenant
         approved_rfps = RFP.objects.filter(
             status__in=['APPROVED', 'PUBLISHED', 'SUBMISSION_OPEN', 'EVALUATION', 'AWARDED'],
-            created_at__gte=start_date
+            created_at__gte=start_date,
+            tenant_id=tenant_id
         ).annotate(
             month=TruncMonth('created_at')
         )
@@ -908,7 +972,16 @@ def get_rfp_approval_time(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_vendor_response_rate(request):
+    """
+    Get vendor response rate metrics
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
     """
     Get Vendor Response Rate KPI
     Calculates vendor engagement metrics across RFPs using REAL-TIME data
@@ -937,8 +1010,10 @@ def get_vendor_response_rate(request):
         print(f"[KPI] Getting Vendor Response Rate")
         
         # Get all RFPs that have invitations
+        # MULTI-TENANCY: Filter by tenant
         rfps_with_invitations = RFP.objects.filter(
-            invitations__isnull=False
+            invitations__isnull=False,
+            tenant_id=tenant_id
         ).distinct()
         
         total_rfps = rfps_with_invitations.count()
@@ -978,12 +1053,16 @@ def get_vendor_response_rate(request):
         
         for rfp in rfps_with_invitations:
             # Count invitations for this RFP
+            # MULTI-TENANCY: Filter by tenant
             invitations_count = VendorInvitation.objects.filter(
-                rfp=rfp
+                rfp=rfp,
+                tenant_id=tenant_id
             ).count()
             
             # Count responses for this RFP
+            # MULTI-TENANCY: Filter by tenant
             responses_count = RFPResponse.objects.filter(
+                tenant_id=tenant_id,
                 rfp=rfp
             ).count()
             
@@ -996,7 +1075,9 @@ def get_vendor_response_rate(request):
             avg_quality_score = 0
             if responses_count > 0:
                 # Get all response IDs for this RFP
+                # MULTI-TENANCY: Filter by tenant
                 response_ids = RFPResponse.objects.filter(
+                    tenant_id=tenant_id,
                     rfp=rfp
                 ).values_list('response_id', flat=True)
                 
@@ -1084,10 +1165,13 @@ def get_vendor_response_rate(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_new_vs_existing_vendors(request):
     """
     Get New vs Existing Vendors KPI
     Calculates the ratio of new vendors to existing vendors across RFPs
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     
     This endpoint analyzes:
     1. Total vendors invited per RFP
@@ -1103,6 +1187,10 @@ def get_new_vs_existing_vendors(request):
     - Monthly breakdown of new vs existing vendors
     - Summary statistics
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
         from django.db.models import Count, Q, F
         from django.utils import timezone
@@ -1126,12 +1214,15 @@ def get_new_vs_existing_vendors(request):
         print(f"[KPI] Calculating New vs Existing Vendors KPI (timeline: {timeline})")
         
         # Get all invitations within the date range
+        # MULTI-TENANCY: Filter by tenant
         if start_date:
             invitations_query = VendorInvitation.objects.filter(
-                invited_date__gte=start_date
+                invited_date__gte=start_date,
+                tenant_id=tenant_id
             )
         else:
-            invitations_query = VendorInvitation.objects.all()
+            # MULTI-TENANCY: Filter by tenant
+            invitations_query = VendorInvitation.objects.filter(tenant_id=tenant_id)
         
         # Get all invitations with RFP information
         invitations = invitations_query.select_related('rfp', 'vendor').order_by('invited_date')
@@ -1251,10 +1342,13 @@ def get_new_vs_existing_vendors(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_category_performance(request):
     """
     Get Category Performance KPI
     Analyzes vendor performance by category using scatter plot data
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     
     This endpoint analyzes:
     1. Vendor categories (IT, Consulting, Marketing, Legal, Operations, etc.)
@@ -1272,6 +1366,10 @@ def get_category_performance(request):
     - Scatter plot data with x (response rate %) and y (quality score 0-10)
     - Summary statistics per category
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
         from .models import RFPEvaluationScore
         from django.db.models import Avg, Count, Q, F
@@ -1430,10 +1528,13 @@ def get_category_performance(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_award_acceptance_rate(request):
     """
     Get Award Acceptance Rate KPI
     Calculates the percentage of vendors who accept awards vs reject/expire
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     
     This endpoint analyzes:
     1. Total award notifications sent
@@ -1449,6 +1550,10 @@ def get_award_acceptance_rate(request):
     - Pie chart data with breakdown of acceptance status
     - Summary statistics (total notifications, acceptance rate, etc.)
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
         from .models import RFPAwardNotification
         from django.db.models import Count, Q
@@ -1593,10 +1698,13 @@ def get_award_acceptance_rate(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_reviewer_workload(request):
     """
     Get Reviewer Workload KPI
     Tracks the distribution of workload across reviewers over time for RFP workflows only
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     
     This endpoint analyzes:
     1. Number of approval stages assigned to each reviewer (only RFP workflow stages)
@@ -1618,6 +1726,10 @@ def get_reviewer_workload(request):
     - Summary statistics (total reviewers, average workload, etc.)
     - Top reviewers list
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
         from django.db.models import Count, Q, F
         from django.db.models.functions import TruncMonth
@@ -1855,10 +1967,13 @@ def get_reviewer_workload(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_vendor_conversion_funnel(request):
     """
     Get Vendor Conversion Funnel KPI
     Tracks the onboarding rate of previously unmatched vendors
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     
     This endpoint analyzes:
     1. Total unmatched vendors (vendors who submitted responses but weren't in the system)
@@ -1875,6 +1990,10 @@ def get_vendor_conversion_funnel(request):
     - Conversion rate at each stage
     - Summary statistics
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
         from django.db.models import Count, Q
         from django.utils import timezone
@@ -1883,7 +2002,8 @@ def get_vendor_conversion_funnel(request):
         print(f"[KPI] Calculating Vendor Conversion Funnel")
         
         # Get all unmatched vendors
-        all_unmatched = RFPUnmatchedVendor.objects.all()
+        # MULTI-TENANCY: Filter by tenant
+        all_unmatched = RFPUnmatchedVendor.objects.filter(tenant_id=tenant_id)
         total_unmatched = all_unmatched.count()
         
         print(f"[KPI] Total unmatched vendors: {total_unmatched}")
@@ -2043,10 +2163,13 @@ def get_vendor_conversion_funnel(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_evaluator_consistency(request):
     """
     Get Evaluator Consistency KPI
     Analyzes scoring patterns across evaluators to detect bias or inconsistency
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     
     This endpoint analyzes:
     1. Average scores given by each evaluator
@@ -2065,6 +2188,10 @@ def get_evaluator_consistency(request):
     - Bias indicators (scoring patterns)
     - Inter-evaluator comparison data
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
         from django.db.models import Avg, Count, StdDev, Min, Max, Q, F
         from django.db.models.functions import Coalesce
@@ -2473,10 +2600,13 @@ def get_evaluator_consistency(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_evaluator_completion_time(request):
     """
     Get Evaluator Completion Time KPI
     Tracks the time each evaluator takes to complete their assigned approval stages
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     
     This endpoint analyzes:
     1. Time taken by each evaluator to complete stages (completed_at - started_at)
@@ -2492,6 +2622,10 @@ def get_evaluator_completion_time(request):
     - Summary statistics (avg completion time, total evaluators, etc.)
     - Evaluator metadata (names, completion counts)
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
         from django.db.models import Avg, Count, Q, F
         from django.db.models.functions import TruncMonth
@@ -2698,12 +2832,18 @@ def get_evaluator_completion_time(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_consensus_quality(request):
     """
     Calculate consensus quality among evaluators
     Measures agreement levels across evaluators and criteria
     Uses raw SQL to avoid DecimalField validation issues
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
     try:
         from django.db import connection
         import math
@@ -2964,11 +3104,17 @@ def get_consensus_interpretation(consensus_score):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_score_distribution(request):
     """
     API endpoint to get score distribution by ranges (histogram)
     Returns how many scores fall into each score range (0-100 scale)
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
     try:
         from django.db.models import Avg, Min, Max, StdDev, Count, Q
         from decimal import Decimal
@@ -3143,11 +3289,17 @@ def get_score_distribution(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_criteria_effectiveness(request):
     """
     API endpoint to get criteria effectiveness analysis
     Analyzes how different evaluation criteria correlate with each other and with final scores
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
     try:
         from django.db import connection
         import numpy as np
@@ -3500,11 +3652,17 @@ def get_criteria_effectiveness(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_budget_variance(request):
     """
     API endpoint to get budget variance analysis
     Analyzes the difference between estimated budgets and actual/awarded amounts
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
     try:
         from django.db import connection
         from decimal import Decimal
@@ -3761,6 +3919,8 @@ def get_budget_variance(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_price_spread(request):
     """
     Get Price Spread KPI
@@ -3781,6 +3941,10 @@ def get_price_spread(request):
     - Summary statistics (avg spread, max spread, min spread)
     - Competitiveness metrics
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
         from django.db.models import Max, Min, Avg, Count, Q
         from django.utils import timezone
@@ -3805,14 +3969,17 @@ def get_price_spread(request):
         print(f"[KPI] Getting Price Spread for timeline: {timeline}")
         
         # Get RFPs with multiple responses within the date range
+        # MULTI-TENANCY: Filter by tenant
         if start_date:
             rfps_query = RFP.objects.filter(
                 responses__isnull=False,
-                created_at__gte=start_date
+                created_at__gte=start_date,
+                tenant_id=tenant_id
             ).distinct()
         else:
             rfps_query = RFP.objects.filter(
-                responses__isnull=False
+                responses__isnull=False,
+                tenant_id=tenant_id
             ).distinct()
         
         total_rfps = rfps_query.count()
@@ -3849,7 +4016,9 @@ def get_price_spread(request):
         
         for rfp in rfps_query:
             # Get all responses with proposed values for this RFP
+            # MULTI-TENANCY: Filter by tenant
             responses = RFPResponse.objects.filter(
+                tenant_id=tenant_id,
                 rfp=rfp,
                 proposed_value__isnull=False,
                 proposed_value__gt=0
@@ -3976,6 +4145,8 @@ def get_price_spread(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_process_funnel(request):
     """
     Get RFP Process Funnel KPI
@@ -4002,6 +4173,10 @@ def get_process_funnel(request):
     - Conversion rates between stages
     - Drop-off analysis
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
         from django.db.models import Count, Q, F
         from django.utils import timezone
@@ -4180,6 +4355,8 @@ def get_process_funnel(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_rfp_lifecycle_time(request):
     """
     Get End-to-End RFP Lifecycle Time KPI
@@ -4206,6 +4383,10 @@ def get_rfp_lifecycle_time(request):
     - Total average cycle time
     - Trend analysis comparing recent vs older RFPs
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
         from datetime import datetime, timedelta
         from django.db.models import Avg, Count, Q, F

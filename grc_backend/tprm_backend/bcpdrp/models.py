@@ -12,6 +12,12 @@ from tprm_backend.utils.encrypted_fields_mixin import TPRMEncryptedFieldsMixin
 class Dropdown(models.Model):
     """Dropdown values model for various system dropdowns"""
     id = models.AutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link dropdown to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='bcpdrp_dropdowns', null=True, blank=True,
+                               help_text="Tenant this dropdown belongs to")
+    
     source = models.CharField(max_length=45)
     value = models.CharField(max_length=45)
 
@@ -43,6 +49,12 @@ class Plan(TPRMEncryptedFieldsMixin, models.Model):
     ]
 
     plan_id = models.IntegerField(primary_key=True)
+    
+    # MULTI-TENANCY: Link plan to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='bcpdrp_plans', null=True, blank=True,
+                               help_text="Tenant this plan belongs to")
+    
     vendor_id = models.IntegerField()
     strategy_id = models.IntegerField()
     strategy_name = models.CharField(max_length=255)
@@ -95,6 +107,11 @@ class BcpDetails(TPRMEncryptedFieldsMixin, models.Model):
     """BCP extracted details model"""
     plan_id = models.IntegerField(primary_key=True)
     
+    # MULTI-TENANCY: Link BCP details to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='bcp_details', null=True, blank=True,
+                               help_text="Tenant this BCP detail belongs to")
+    
     # Purpose and Scope
     purpose_scope = models.TextField(blank=True, null=True)
     regulatory_references = models.JSONField(default=list, blank=True)
@@ -141,6 +158,11 @@ class BcpDetails(TPRMEncryptedFieldsMixin, models.Model):
 class DrpDetails(TPRMEncryptedFieldsMixin, models.Model):
     """DRP extracted details model"""
     plan_id = models.IntegerField(primary_key=True)
+    
+    # MULTI-TENANCY: Link DRP details to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='drp_details', null=True, blank=True,
+                               help_text="Tenant this DRP detail belongs to")
     
     # Purpose and Scope
     purpose_scope = models.TextField(blank=True, null=True)
@@ -196,6 +218,12 @@ class Evaluation(TPRMEncryptedFieldsMixin, models.Model):
     
 
     evaluation_id = models.IntegerField(primary_key=True)
+    
+    # MULTI-TENANCY: Link evaluation to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='bcpdrp_evaluations', null=True, blank=True,
+                               help_text="Tenant this evaluation belongs to")
+    
     plan_id = models.IntegerField()
     
     # Assignment
@@ -250,6 +278,12 @@ class Questionnaire(TPRMEncryptedFieldsMixin, models.Model):
     ]
 
     questionnaire_id = models.AutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link questionnaire to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='bcpdrp_questionnaires', null=True, blank=True,
+                               help_text="Tenant this questionnaire belongs to")
+    
     plan_id = models.IntegerField(null=True, blank=True)
     version = models.CharField(max_length=16, default='1.0')
     previous_questionnaire_id = models.IntegerField(null=True, blank=True)
@@ -280,6 +314,12 @@ class Question(TPRMEncryptedFieldsMixin, models.Model):
     ]
 
     question_id = models.IntegerField(primary_key=True)
+    
+    # MULTI-TENANCY: Link question to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='bcpdrp_questions', null=True, blank=True,
+                               help_text="Tenant this question belongs to")
+    
     questionnaire_id = models.IntegerField()
     seq_no = models.IntegerField()
     question_text = models.TextField()
@@ -331,6 +371,12 @@ class TestAssignmentsResponses(TPRMEncryptedFieldsMixin, models.Model):
     ]
 
     assignment_response_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link test assignment response to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='test_assignments_responses', null=True, blank=True,
+                               help_text="Tenant this test assignment response belongs to")
+    
     plan_id = models.BigIntegerField()
     questionnaire_id = models.BigIntegerField()
     question_id = models.IntegerField()  # NEW: Links to specific question (requires DB migration)
@@ -379,6 +425,12 @@ class BcpDrpApprovals(TPRMEncryptedFieldsMixin, models.Model):
     ]
     
     approval_id = models.AutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link BCP/DRP approval to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='bcpdrp_approvals', null=True, blank=True,
+                               help_text="Tenant this approval belongs to")
+    
     workflow_id = models.IntegerField()
     workflow_name = models.CharField(max_length=255)
     assigner_id = models.IntegerField()
@@ -406,6 +458,12 @@ class BcpDrpApprovals(TPRMEncryptedFieldsMixin, models.Model):
 class Users(TPRMEncryptedFieldsMixin, models.Model):
     """Users table model"""
     user_id = models.AutoField(primary_key=True, db_column='UserId')
+    
+    # MULTI-TENANCY: Link user to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='bcpdrp_users', null=True, blank=True,
+                               help_text="Tenant this user belongs to")
+    
     user_name = models.CharField(max_length=255, db_column='UserName')
     password = models.CharField(max_length=255, db_column='Password')
     created_at = models.DateTimeField(auto_now_add=True, db_column='CreatedAt')
@@ -456,6 +514,11 @@ class QuestionnaireTemplate(TPRMEncryptedFieldsMixin, models.Model):
    
     # Primary Key
     template_id = models.AutoField(primary_key=True)
+   
+    # MULTI-TENANCY: Link questionnaire template to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='questionnaire_templates', null=True, blank=True,
+                               help_text="Tenant this questionnaire template belongs to")
    
     # Basic Information
     template_name = models.CharField(max_length=255)

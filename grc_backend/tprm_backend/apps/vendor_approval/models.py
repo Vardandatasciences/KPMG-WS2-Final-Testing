@@ -173,6 +173,12 @@ class TempVendor(VendorBaseModel):
     """Temporary vendor data mapping to temp_vendor table"""
     
     id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link temp vendor to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.DO_NOTHING, db_column='TenantId', 
+                               related_name='vendor_approval_temp_vendors', null=True, blank=True,
+                               help_text="Tenant this temp vendor belongs to")
+    
     vendor_code = models.CharField(max_length=50, blank=True, null=True)
     company_name = models.CharField(max_length=255, blank=True, null=True)
     legal_name = models.CharField(max_length=255, blank=True, null=True)
@@ -213,6 +219,12 @@ class TprmRisk(VendorBaseModel):
     """TPRM Risk mapping to tprm_risk table"""
     
     id = models.CharField(max_length=20, primary_key=True)
+    
+    # MULTI-TENANCY: Link TPRM risk to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.DO_NOTHING, db_column='TenantId', 
+                               related_name='tprm_risks', null=True, blank=True,
+                               help_text="Tenant this TPRM risk belongs to")
+    
     vendor_id = models.BigIntegerField(blank=True, null=True)
     title = models.CharField(max_length=255, blank=True, null=True)
     description = models.TextField(blank=True, null=True)

@@ -23,6 +23,15 @@ from .entity_service import EntityDataService
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required
 from tprm_backend.rfp.rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 
+# MULTI-TENANCY: Import tenant utilities for filtering
+from tprm_backend.core.tenant_utils import (
+    get_tenant_id_from_request,
+    filter_queryset_by_tenant,
+    get_tenant_aware_queryset,
+    require_tenant,
+    tenant_filter
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -30,7 +39,9 @@ logger = logging.getLogger(__name__)
 
 
 class RiskViewSet(viewsets.ModelViewSet):
-    """ViewSet for Risks"""
+    """ViewSet for Risks
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
     authentication_classes = [JWTAuthentication]
     permission_classes = [SimpleAuthenticatedPermission]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
@@ -40,8 +51,15 @@ class RiskViewSet(viewsets.ModelViewSet):
     ordering = ['id']
     
     def get_queryset(self):
-        """Get filtered queryset based on request parameters"""
-        queryset = Risk.objects.all()
+        """Get filtered queryset based on request parameters
+        MULTI-TENANCY: Filter by tenant
+        """
+        # MULTI-TENANCY: Filter by tenant
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            queryset = Risk.objects.filter(tenant_id=tenant_id)
+        else:
+            queryset = Risk.objects.all()
         
         # Apply custom filters (module filtering removed)
         priority = self.request.query_params.get('priority', None)
@@ -94,11 +112,20 @@ class RiskViewSet(viewsets.ModelViewSet):
         return RiskSerializer
     
     def perform_create(self, serializer):
-        """Set created_by user when creating a risk"""
+        """Set created_by user when creating a risk
+        MULTI-TENANCY: Set tenant_id on creation
+        """
+        tenant_id = get_tenant_id_from_request(self.request)
         if hasattr(self.request, 'user') and self.request.user.is_authenticated:
-            serializer.save(created_by=self.request.user.id)
+            if tenant_id:
+                serializer.save(created_by=self.request.user.id, tenant_id=tenant_id)
+            else:
+                serializer.save(created_by=self.request.user.id)
         else:
-            serializer.save()
+            if tenant_id:
+                serializer.save(tenant_id=tenant_id)
+            else:
+                serializer.save()
     
     @action(detail=True, methods=['post'])
     def assign_owner(self, request, pk=None):

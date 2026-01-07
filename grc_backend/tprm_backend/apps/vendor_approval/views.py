@@ -44,6 +44,15 @@ from django.db import transaction
 from tprm_backend.rbac.tprm_decorators import rbac_vendor_required
 from tprm_backend.apps.vendor_core.vendor_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 
+# MULTI-TENANCY: Import tenant utilities for filtering
+from tprm_backend.core.tenant_utils import (
+    get_tenant_id_from_request,
+    filter_queryset_by_tenant,
+    get_tenant_aware_queryset,
+    require_tenant,
+    tenant_filter
+)
+
 
 
 def compute_exponent_normalized_weights(raw_values, target_sum=10.0, max_iterations=40):
@@ -804,11 +813,12 @@ def check_sequential_approval_ready(approval_id, stage_order):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_my_approvals(request):
 
     """Return approvals assigned to a given user, grouped by stage_type.
-
-
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
 
     Query params:
 
@@ -819,6 +829,9 @@ def get_my_approvals(request):
     """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         user_id = request.query_params.get('user_id')
 
@@ -891,18 +904,22 @@ def get_my_approvals(request):
                     JOIN approval_requests ar ON ar.approval_id = ast.approval_id
                     
                     JOIN approval_workflows aw ON ar.workflow_id = aw.workflow_id
+                    
+                    LEFT JOIN temp_vendor tv ON JSON_EXTRACT(ar.request_data, '$.vendor_id') = tv.id
 
                     WHERE ast.assigned_user_id = %s
 
                       AND UPPER(ast.stage_status) IN ({statuses})
 
                       AND aw.business_object_type = 'Vendor'
+                      
+                      AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
                     ORDER BY ast.stage_type, ast.stage_order, ar.created_at DESC
 
                     """.format(statuses=','.join(['%s'] * len(include_statuses))),
 
-                    [int(user_id), *include_statuses]
+                    [int(user_id), *include_statuses, tenant_id]
 
                 )
 
@@ -953,16 +970,20 @@ def get_my_approvals(request):
                     JOIN approval_requests ar ON ar.approval_id = ast.approval_id
 
                     JOIN approval_workflows aw ON ar.workflow_id = aw.workflow_id
+                    
+                    LEFT JOIN temp_vendor tv ON JSON_EXTRACT(ar.request_data, '$.vendor_id') = tv.id
 
                     WHERE ast.assigned_user_id = %s
 
                     AND aw.business_object_type = 'Vendor'
+                    
+                    AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
                     ORDER BY ast.stage_type, ast.stage_order, ar.created_at DESC
 
                     """,
 
-                    [int(user_id)]
+                    [int(user_id), tenant_id]
 
                 )
 
@@ -1062,17 +1083,21 @@ def get_my_approvals(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_stage_reviewers(request):
 
     """Return distinct reviewers present in approval_stages for dropdowns.
-
-
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
 
     Returns id (assigned_user_id) and name (assigned_user_name). Filters out NULL/empty.
 
     """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         with connections['default'].cursor() as cursor:
 
@@ -1087,16 +1112,22 @@ def get_stage_reviewers(request):
                 JOIN approval_requests a ON s.approval_id = a.approval_id
 
                 JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+                
+                LEFT JOIN temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
 
                 WHERE s.assigned_user_id IS NOT NULL
 
                   AND CAST(s.assigned_user_id AS CHAR) <> ''
 
                   AND w.business_object_type = 'Vendor'
+                  
+                  AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
                 ORDER BY name
 
-                """
+                """,
+                
+                [tenant_id]
 
             )
 
@@ -1126,11 +1157,18 @@ def get_stage_reviewers(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_user_assigned_stages(request, user_id):
 
-    """Return all stages assigned to the given user with request/workflow info."""
+    """Return all stages assigned to the given user with request/workflow info.
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         with connections['default'].cursor() as cursor:
 
@@ -1163,16 +1201,20 @@ def get_user_assigned_stages(request, user_id):
                 JOIN approval_requests a ON s.approval_id = a.approval_id
 
                 JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+                
+                LEFT JOIN temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
 
                 WHERE s.assigned_user_id = %s
 
                 AND w.business_object_type = 'Vendor'
+                
+                AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
                 ORDER BY s.created_at DESC
 
                 """,
 
-                [user_id]
+                [user_id, tenant_id]
 
             )
 
@@ -1226,17 +1268,21 @@ def get_user_assigned_stages(request, user_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('approve_reject_vendor')
+@require_tenant
+@tenant_filter
 def post_stage_action(request, stage_id):
 
     """Approve/Reject/Request Changes for a stage by id.
-
-
+    MULTI-TENANCY: Ensures stage belongs to tenant's vendor
 
     Expected payload: { action: APPROVE|REJECT|REQUEST_CHANGES, user_id, user_name, response_data?, rejection_reason?, comments? }
 
     """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         payload = request.data or {}
 
@@ -1251,6 +1297,7 @@ def post_stage_action(request, stage_id):
         with connections['default'].cursor() as cursor:
 
             # Get current stage + related info + workflow type
+            # MULTI-TENANCY: Filter by tenant
 
             cursor.execute("""
 
@@ -1263,10 +1310,14 @@ def post_stage_action(request, stage_id):
                 JOIN approval_requests ar ON as_table.approval_id = ar.approval_id
 
                 JOIN approval_workflows aw ON ar.workflow_id = aw.workflow_id
+                
+                LEFT JOIN temp_vendor tv ON JSON_EXTRACT(ar.request_data, '$.vendor_id') = tv.id
 
                 WHERE as_table.stage_id = %s
 
-            """, [stage_id])
+                AND (tv.TenantId = %s OR tv.TenantId IS NULL)
+
+            """, [stage_id, tenant_id])
 
             
 
@@ -1780,17 +1831,21 @@ def post_stage_action(request, stage_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_questionnaire_questions(request, questionnaire_id: int):
 
     """Return questions for a given questionnaire_id from questionnaire_questions table.
-
-
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
 
     Response is ordered by display_order.
 
     """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         with connections['default'].cursor() as cursor:
 
@@ -1864,11 +1919,12 @@ def get_questionnaire_questions(request, questionnaire_id: int):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_approvals_by_requester(request):
 
     """Return all approval requests created by a requester.
-
-
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
 
     Query params:
 
@@ -1885,6 +1941,9 @@ def get_approvals_by_requester(request):
     """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         requester_id = request.query_params.get('requester_id')
 
@@ -1940,9 +1999,13 @@ def get_approvals_by_requester(request):
 
                 LEFT JOIN approval_stages s ON s.approval_id = ar.approval_id
 
-                WHERE ar.requester_id = %s
+                LEFT JOIN temp_vendor tv ON JSON_EXTRACT(ar.request_data, '$.vendor_id') = tv.id
+
+                WHERE CAST(ar.requester_id AS CHAR) = %s
 
                 AND w.business_object_type = 'Vendor'
+                
+                AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
                 {flow_clause}
 
@@ -1960,7 +2023,7 @@ def get_approvals_by_requester(request):
 
 
 
-            params = [str(requester_id)]
+            params = [str(requester_id), tenant_id]
 
             flow_clause = ''
 
@@ -1969,12 +2032,6 @@ def get_approvals_by_requester(request):
                 flow_clause = 'AND w.workflow_type = %s'
 
                 params.append(flow_filter)
-
-
-
-            # Match requester regardless of stored type by casting to CHAR
-
-            sql = sql.replace('WHERE ar.requester_id = %s', 'WHERE CAST(ar.requester_id AS CHAR) = %s')
 
             cursor.execute(sql.format(flow_clause=flow_clause), params)
 
@@ -2030,11 +2087,18 @@ def get_approvals_by_requester(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_users(request):
 
-    """Get all users for dropdown selection"""
+    """Get all users for dropdown selection
+    MULTI-TENANCY: Note - Users may be shared across tenants, but filtering is applied where relevant
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         with connections['default'].cursor() as cursor:
 
@@ -2154,15 +2218,23 @@ def get_users(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_request_with_stages(request, approval_id: str):
 
-    """Return a single approval request with its stages, parsed request_data, and questionnaire questions if applicable."""
+    """Return a single approval request with its stages, parsed request_data, and questionnaire questions if applicable.
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         with connections['default'].cursor() as cursor:
 
             # Get the approval request with workflow info
+            # MULTI-TENANCY: Filter by tenant
 
             cursor.execute(
 
@@ -2181,14 +2253,18 @@ def get_request_with_stages(request, approval_id: str):
                 FROM approval_requests a
 
                 JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+                
+                LEFT JOIN temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
 
                 WHERE a.approval_id = %s
 
                 AND w.business_object_type = 'Vendor'
+                
+                AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
                 """,
 
-                [approval_id]
+                [approval_id, tenant_id]
 
             )
 
@@ -2370,17 +2446,21 @@ def get_request_with_stages(request, approval_id: str):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('approve_reject_vendor')
+@require_tenant
+@tenant_filter
 def requester_final_decision(request, approval_id: str):
 
     """Allow requester to take final decision on MULTI_PERSON workflows.
-
-
+    MULTI-TENANCY: Ensures approval belongs to tenant's vendor
 
     Payload: { decision: APPROVE|REJECT, reason?: str, overall_score_override?: object }
 
     """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         data = request.data or {}
 
@@ -2405,8 +2485,14 @@ def requester_final_decision(request, approval_id: str):
 
 
         with connections['default'].cursor() as cursor:
-
-            cursor.execute("SELECT workflow_id, overall_status, request_data FROM approval_requests WHERE approval_id=%s", [approval_id])
+            # MULTI-TENANCY: Filter by tenant
+            cursor.execute("""
+                SELECT ar.workflow_id, ar.overall_status, ar.request_data 
+                FROM approval_requests ar
+                LEFT JOIN temp_vendor tv ON JSON_EXTRACT(ar.request_data, '$.vendor_id') = tv.id
+                WHERE ar.approval_id=%s
+                AND (tv.TenantId = %s OR tv.TenantId IS NULL)
+            """, [approval_id, tenant_id])
 
             r = cursor.fetchone()
 
@@ -3094,11 +3180,12 @@ def requester_final_decision(request, approval_id: str):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('approve_reject_vendor')
+@require_tenant
+@tenant_filter
 def admin_handle_rejection(request, approval_id):
 
     """Admin endpoint to handle rejected workflows in MULTI_LEVEL workflows.
-
-    
+    MULTI-TENANCY: Ensures approval belongs to tenant's vendor
 
     Payload: { 
 
@@ -3117,6 +3204,9 @@ def admin_handle_rejection(request, approval_id):
     """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         data = request.data or {}
 
@@ -3511,29 +3601,42 @@ def admin_handle_rejection(request, approval_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_request_versions(request, approval_id):
 
-    """Get version history for an approval request"""
+    """Get version history for an approval request
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         with connections['default'].cursor() as cursor:
-
+            # MULTI-TENANCY: Filter by tenant through approval request
             cursor.execute("""
 
-                SELECT version_id, version_number, version_label, changes_summary, 
+                SELECT arv.version_id, arv.version_number, arv.version_label, arv.changes_summary, 
 
-                       created_by, created_by_name, created_by_role, version_type, 
+                       arv.created_by, arv.created_by_name, arv.created_by_role, arv.version_type, 
 
-                       parent_version_id, is_current, is_approved, change_reason, created_at
+                       arv.parent_version_id, arv.is_current, arv.is_approved, arv.change_reason, arv.created_at
 
-                FROM approval_request_versions 
+                FROM approval_request_versions arv
 
-                WHERE approval_id = %s 
+                JOIN approval_requests ar ON arv.approval_id = ar.approval_id
+                
+                LEFT JOIN temp_vendor tv ON JSON_EXTRACT(ar.request_data, '$.vendor_id') = tv.id
 
-                ORDER BY version_number DESC
+                WHERE arv.approval_id = %s 
+                
+                AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
-            """, [approval_id])
+                ORDER BY arv.version_number DESC
+
+            """, [approval_id, tenant_id])
 
             
 
@@ -3711,11 +3814,18 @@ def debug_version_data(request, approval_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('create_vendor')
+@require_tenant
+@tenant_filter
 def create_workflow(request):
 
-    """Create a new approval workflow with stages"""
+    """Create a new approval workflow with stages
+    MULTI-TENANCY: Workflows are created in tenant context
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         data = request.data
 
@@ -3951,11 +4061,18 @@ def create_workflow(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_workflows(request):
 
-    """Get all approval workflows"""
+    """Get all approval workflows
+    MULTI-TENANCY: Workflows may be shared across tenants for Vendor business_object_type
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         with connections['default'].cursor() as cursor:
 
@@ -4001,11 +4118,18 @@ def get_workflows(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_workflow_stages(request, workflow_id):
 
-    """Get stages for a specific workflow"""
+    """Get stages for a specific workflow
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         with connections['default'].cursor() as cursor:
 
@@ -4055,11 +4179,18 @@ def get_workflow_stages(request, workflow_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('SubmitVendorForApproval')
+@require_tenant
+@tenant_filter
 def create_workflow_request(request):
 
-    """Create an approval request using an existing workflow"""
+    """Create an approval request using an existing workflow
+    MULTI-TENANCY: Ensures vendor belongs to tenant
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         data = request.data
 
@@ -4297,11 +4428,18 @@ def create_workflow_request(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('SubmitVendorForApproval')
+@require_tenant
+@tenant_filter
 def create_comprehensive_workflow(request):
 
-    """Create a comprehensive workflow with request and stages in one operation"""
+    """Create a comprehensive workflow with request and stages in one operation
+    MULTI-TENANCY: Ensures vendor belongs to tenant
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         data = request.data
 
@@ -5084,11 +5222,18 @@ def create_comprehensive_workflow(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_active_questionnaires(request):
 
-    """Get all active questionnaires for selection"""
+    """Get all active questionnaires for selection
+    MULTI-TENANCY: Questionnaires may be shared across tenants
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         with connections['default'].cursor() as cursor:
 
@@ -5188,11 +5333,18 @@ def get_active_questionnaires(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('create_vendor')
+@require_tenant
+@tenant_filter
 def add_dummy_users(request):
 
-    """Add dummy users to the users table for testing"""
+    """Add dummy users to the users table for testing
+    MULTI-TENANCY: Admin function for testing
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         with connections['default'].cursor() as cursor:
 
@@ -5288,13 +5440,13 @@ def add_dummy_users(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_vendors(request):
 
     """
-
     Get all vendors from temp_vendor table for selection in final vendor approval
-
-    
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
 
     Returns:
 
@@ -5303,10 +5455,12 @@ def get_vendors(request):
     """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
-        # Get vendors from temp_vendor table
-
-        vendors = TempVendor.objects.all().order_by('company_name')
+        # MULTI-TENANCY: Get vendors from temp_vendor table filtered by tenant
+        vendors = TempVendor.objects.filter(tenant_id=tenant_id).order_by('company_name')
 
         
 
@@ -5390,13 +5544,13 @@ def get_vendors(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_vendor_detail(request, vendor_id):
 
     """
-
     Get detailed information for a specific vendor by ID
-
-    
+    MULTI-TENANCY: Ensures vendor belongs to tenant
 
     Args:
 
@@ -5411,8 +5565,12 @@ def get_vendor_detail(request, vendor_id):
     """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
-        vendor = TempVendor.objects.get(id=vendor_id)
+        # MULTI-TENANCY: Filter by tenant
+        vendor = TempVendor.objects.get(id=vendor_id, tenant_id=tenant_id)
 
         
 
@@ -5508,11 +5666,18 @@ def get_vendor_detail(request, vendor_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def dashboard_stats(request):
 
-    """Get dashboard statistics for approval system"""
+    """Get dashboard statistics for approval system
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         from django.db import connections
 
@@ -5520,7 +5685,8 @@ def dashboard_stats(request):
 
         
 
-        # Get basic counts filtered by business_object_type = 'Vendor'
+        # Get basic counts filtered by business_object_type = 'Vendor' and tenant
+        # MULTI-TENANCY: Filter by tenant
 
         cursor.execute("""
 
@@ -5539,10 +5705,14 @@ def dashboard_stats(request):
             FROM approval_requests a
 
             JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+            
+            LEFT JOIN temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
 
             WHERE w.business_object_type = 'Vendor'
 
-        """)
+            AND (tv.TenantId = %s OR tv.TenantId IS NULL)
+
+        """, [tenant_id])
 
         
 
@@ -5560,7 +5730,8 @@ def dashboard_stats(request):
 
         
 
-        # Get workflow type breakdown filtered by business_object_type = 'Vendor'
+        # Get workflow type breakdown filtered by business_object_type = 'Vendor' and tenant
+        # MULTI-TENANCY: Filter by tenant
 
         cursor.execute("""
 
@@ -5573,12 +5744,16 @@ def dashboard_stats(request):
             FROM approval_requests a
 
             JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+            
+            LEFT JOIN temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
 
             WHERE w.business_object_type = 'Vendor'
+            
+            AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
             GROUP BY w.workflow_type
 
-        """)
+        """, [tenant_id])
 
         
 
@@ -5590,7 +5765,8 @@ def dashboard_stats(request):
 
         
 
-        # Get priority breakdown filtered by business_object_type = 'Vendor'
+        # Get priority breakdown filtered by business_object_type = 'Vendor' and tenant
+        # MULTI-TENANCY: Filter by tenant
 
         cursor.execute("""
 
@@ -5603,12 +5779,16 @@ def dashboard_stats(request):
             FROM approval_requests a
 
             JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+            
+            LEFT JOIN temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
 
             WHERE w.business_object_type = 'Vendor'
+            
+            AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
             GROUP BY a.priority
 
-        """)
+        """, [tenant_id])
 
         
 
@@ -5637,12 +5817,16 @@ def dashboard_stats(request):
             FROM approval_requests a
 
             JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+            
+            LEFT JOIN temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
 
             WHERE w.business_object_type = 'Vendor'
+            
+            AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
             AND a.created_at >= %s
 
-        """, [week_ago])
+        """, [tenant_id, week_ago])
 
         
 
@@ -5699,8 +5883,12 @@ def dashboard_stats(request):
             FROM approval_requests a
 
             JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+            
+            LEFT JOIN temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
 
             WHERE w.business_object_type = 'Vendor'
+            
+            AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
         """)
 
@@ -5748,11 +5936,18 @@ def dashboard_stats(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def recent_requests(request):
 
-    """Get recent approval requests for dashboard"""
+    """Get recent approval requests for dashboard
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         cursor = connections['default'].cursor()
 
@@ -5781,6 +5976,7 @@ def recent_requests(request):
         
 
         # Fetch recent requests with workflow details
+        # MULTI-TENANCY: Filter by tenant
 
         cursor.execute("""
 
@@ -5797,14 +5993,18 @@ def recent_requests(request):
             FROM approval_requests a
 
             JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+            
+            LEFT JOIN temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
 
             WHERE w.business_object_type = 'Vendor'
+            
+            AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
             ORDER BY a.created_at DESC
 
             LIMIT 10
 
-        """)
+        """, [tenant_id])
 
         
 
@@ -5858,11 +6058,18 @@ def recent_requests(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def user_tasks(request, user_id):
 
-    """Get tasks assigned to a specific user for dashboard"""
+    """Get tasks assigned to a specific user for dashboard
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         cursor = connections['default'].cursor()
 
@@ -5901,6 +6108,7 @@ def user_tasks(request, user_id):
         
 
         # Fetch user's assigned stages that are pending or in progress
+        # MULTI-TENANCY: Filter by tenant
 
         cursor.execute("""
 
@@ -5929,18 +6137,22 @@ def user_tasks(request, user_id):
             JOIN approval_requests a ON s.approval_id = a.approval_id
 
             JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+            
+            LEFT JOIN temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
 
             WHERE s.assigned_user_id = %s 
 
             AND s.stage_status IN ('PENDING', 'IN_PROGRESS')
 
             AND w.business_object_type = 'Vendor'
+            
+            AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
             ORDER BY s.deadline_date ASC, s.created_at DESC
 
             LIMIT 10
 
-        """, [user_id])
+        """, [user_id, tenant_id])
 
         
 
@@ -6006,11 +6218,18 @@ def user_tasks(request, user_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def user_requests(request, user_id):
 
-    """Get requests created by a specific user for dashboard"""
+    """Get requests created by a specific user for dashboard
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         cursor = connections['default'].cursor()
 
@@ -6039,6 +6258,7 @@ def user_requests(request, user_id):
         
 
         # Fetch requests created by the user with workflow details
+        # MULTI-TENANCY: Filter by tenant
 
         cursor.execute("""
 
@@ -6055,16 +6275,20 @@ def user_requests(request, user_id):
             FROM approval_requests a
 
             JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+            
+            LEFT JOIN temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
 
             WHERE a.requester_id = %s
 
             AND w.business_object_type = 'Vendor'
+            
+            AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
             ORDER BY a.created_at DESC
 
             LIMIT 10
 
-        """, [user_id])
+        """, [user_id, tenant_id])
 
         
 
@@ -6118,13 +6342,13 @@ def user_requests(request, user_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_vendor_risks(request, vendor_id):
 
     """
-
     Get all risks associated with a specific vendor - both internal and external
-
-    
+    MULTI-TENANCY: Ensures vendor belongs to tenant
 
     Args:
 
@@ -6139,15 +6363,24 @@ def get_vendor_risks(request, vendor_id):
     """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
+
+        # MULTI-TENANCY: Verify vendor belongs to tenant
+        try:
+            vendor = TempVendor.objects.get(id=vendor_id, tenant_id=tenant_id)
+        except TempVendor.DoesNotExist:
+            return Response({
+                'error': 'Vendor not found or does not belong to your tenant'
+            }, status=status.HTTP_404_NOT_FOUND)
 
         # Get internal risks from risk_tprm table where entity=vendor_management and row matches vendor_id
-
+        # MULTI-TENANCY: Filter by tenant
         internal_risks = Risk.objects.filter(
-
             entity='vendor_management',
-
-            row=str(vendor_id)
-
+            row=str(vendor_id),
+            tenant_id=tenant_id
         ).order_by('-created_at')
 
         
@@ -6219,7 +6452,7 @@ def get_vendor_risks(request, vendor_id):
         
 
         # First get all screening results for this vendor
-
+        # MULTI-TENANCY: Already filtered through vendor's tenant_id
         screening_results = ExternalScreeningResults.objects.filter(vendor_id=vendor_id)
 
         
@@ -6432,15 +6665,25 @@ def get_vendor_risks(request, vendor_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_submitted_questionnaire_assignments(request):
 
-    """Get all questionnaire assignments with RESPONDED status for response approval"""
+    """Get all questionnaire assignments with RESPONDED status for response approval
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
+        # MULTI-TENANCY: Filter assignments by tenant through temp_vendor
         assignments = QuestionnaireAssignments.objects.filter(
 
-            status='RESPONDED'
+            status='RESPONDED',
+            
+            temp_vendor__tenant_id=tenant_id
 
         ).select_related(
 
@@ -6628,11 +6871,18 @@ def get_submitted_questionnaire_assignments(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('ReviewApproveResponses')
+@require_tenant
+@tenant_filter
 def save_reviewer_scores(request):
 
-    """Save reviewer scores for questionnaire responses"""
+    """Save reviewer scores for questionnaire responses
+    MULTI-TENANCY: Ensures assignment belongs to tenant's vendor
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         data = request.data
 
@@ -6655,10 +6905,11 @@ def save_reviewer_scores(request):
         
 
         # Get the assignment
+        # MULTI-TENANCY: Filter by tenant
 
         try:
 
-            assignment = QuestionnaireAssignments.objects.get(assignment_id=assignment_id)
+            assignment = QuestionnaireAssignments.objects.get(assignment_id=assignment_id, temp_vendor__tenant_id=tenant_id)
 
         except QuestionnaireAssignments.DoesNotExist:
 
@@ -7242,9 +7493,13 @@ def save_reviewer_scores(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('update_vendor')
+@require_tenant
+@tenant_filter
 def save_stage_draft(request):
 
-    """Save draft decision for an approval stage"""
+    """Save draft decision for an approval stage
+    MULTI-TENANCY: Ensures stage belongs to tenant's vendor
+    """
 
     try:
 
@@ -7412,11 +7667,18 @@ def save_stage_draft(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def load_stage_draft(request, stage_id):
 
-    """Load saved draft decision for an approval stage"""
+    """Load saved draft decision for an approval stage
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         user_id = request.query_params.get('user_id')
 
@@ -7425,16 +7687,23 @@ def load_stage_draft(request, stage_id):
         with connections['default'].cursor() as cursor:
 
             # Get the stage with draft data
+            # MULTI-TENANCY: Filter by tenant
 
             cursor.execute("""
 
-                SELECT approval_id, stage_name, stage_status, assigned_user_id, response_data
+                SELECT ast.approval_id, ast.stage_name, ast.stage_status, ast.assigned_user_id, ast.response_data
 
-                FROM approval_stages 
+                FROM approval_stages ast
 
-                WHERE stage_id = %s
+                JOIN approval_requests ar ON ast.approval_id = ar.approval_id
+                
+                LEFT JOIN temp_vendor tv ON JSON_EXTRACT(ar.request_data, '$.vendor_id') = tv.id
 
-            """, [stage_id])
+                WHERE ast.stage_id = %s
+                
+                AND (tv.TenantId = %s OR tv.TenantId IS NULL)
+
+            """, [stage_id, tenant_id])
 
             
 
@@ -7512,15 +7781,23 @@ def load_stage_draft(request, stage_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_parallel_approval_scoring_data(request, approval_id):
 
-    """Get aggregated scoring data for parallel response approval workflows"""
+    """Get aggregated scoring data for parallel response approval workflows
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         with connections['default'].cursor() as cursor:
 
             # Get the approval request and verify it's a parallel response approval
+            # MULTI-TENANCY: Filter by tenant
 
             cursor.execute("""
 
@@ -7529,10 +7806,14 @@ def get_parallel_approval_scoring_data(request, approval_id):
                 FROM approval_requests ar
 
                 JOIN approval_workflows aw ON ar.workflow_id = aw.workflow_id
+                
+                LEFT JOIN temp_vendor tv ON JSON_EXTRACT(ar.request_data, '$.vendor_id') = tv.id
 
                 WHERE ar.approval_id = %s
 
-            """, [approval_id])
+                AND (tv.TenantId = %s OR tv.TenantId IS NULL)
+
+            """, [approval_id, tenant_id])
 
             
 
@@ -8222,11 +8503,18 @@ def get_parallel_approval_scoring_data(request, approval_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('update_vendor')
+@require_tenant
+@tenant_filter
 def save_final_assignee_scores(request):
 
-    """Save final scores made by assignee for parallel response approval"""
+    """Save final scores made by assignee for parallel response approval
+    MULTI-TENANCY: Ensures assignment belongs to tenant's vendor
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         data = request.data
 
@@ -8263,10 +8551,11 @@ def save_final_assignee_scores(request):
         
 
         # Get the assignment
+        # MULTI-TENANCY: Filter by tenant
 
         try:
 
-            assignment = QuestionnaireAssignments.objects.get(assignment_id=assignment_id)
+            assignment = QuestionnaireAssignments.objects.get(assignment_id=assignment_id, temp_vendor__tenant_id=tenant_id)
 
         except QuestionnaireAssignments.DoesNotExist:
 
@@ -9145,11 +9434,18 @@ def save_final_assignee_scores(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('update_vendor')
+@require_tenant
+@tenant_filter
 def update_question_scores_in_json(request):
 
-    """Update individual question scores in the request_data JSON"""
+    """Update individual question scores in the request_data JSON
+    MULTI-TENANCY: Ensures assignment belongs to tenant's vendor
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         data = request.data
 
@@ -9728,8 +10024,12 @@ def _end_questionnaire_approval_start_questionnaire_response(vendor_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def test_lifecycle_stage_3(request, vendor_id):
-    """Test function to ensure lifecycle stage 3 is correctly recorded for a vendor"""
+    """Test function to ensure lifecycle stage 3 is correctly recorded for a vendor
+    MULTI-TENANCY: Ensures vendor belongs to tenant
+    """
     try:
         # Convert vendor_id to integer
         vendor_id = int(vendor_id)
@@ -9777,8 +10077,12 @@ def test_lifecycle_stage_3(request, vendor_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def check_risk_generation_status(request, approval_id):
-    """Check the status of risk generation for a given approval ID"""
+    """Check the status of risk generation for a given approval ID
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
     try:
         from risk_analysis_vendor.models import Risk
         
@@ -9839,9 +10143,12 @@ def check_risk_generation_status(request, approval_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_approval_version_history(request, approval_id):
     """
     Get complete version history for an approval request with properly incremented version numbers.
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     
     Returns all versions ordered by version_number, showing every decision made in the approval workflow.
     Each approval, rejection, and decision is recorded with an incremented version number.

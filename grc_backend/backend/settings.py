@@ -139,6 +139,9 @@ MIDDLEWARE = [
     # MULTI-TENANCY: Add tenant context middleware (after JWT authentication)
     "grc.tenant_middleware.TenantContextMiddleware",
     "grc.tenant_middleware.TenantIsolationMiddleware",
+    # MULTI-TENANCY: Add TPRM tenant context middleware for TPRM modules
+    "tprm_backend.core.tenant_middleware.TenantContextMiddleware",
+    "tprm_backend.core.tenant_middleware.TenantIsolationMiddleware",
     "grc.middleware.AuditLoggingMiddleware",
     # Removed grc.rbac.middleware.GRCRBACMiddleware - using simplified decorator-based RBAC instead
 ]

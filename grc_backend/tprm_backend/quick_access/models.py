@@ -4,6 +4,12 @@ import json
 
 class GRCLog(models.Model):
     log_id = models.AutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link GRC log to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='grc_logs', null=True, blank=True,
+                               help_text="Tenant this GRC log belongs to")
+    
     timestamp = models.DateTimeField(auto_now_add=True)
     user_id = models.CharField(max_length=50)
     user_name = models.CharField(max_length=100)
@@ -26,6 +32,12 @@ class GRCLog(models.Model):
 
 class QuickAccessFavorite(models.Model):
     id = models.AutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link quick access favorite to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='quick_access_favorites', null=True, blank=True,
+                               help_text="Tenant this quick access favorite belongs to")
+    
     user_id = models.IntegerField(default=1)
     title = models.CharField(max_length=200)
     url = models.CharField(max_length=500)
