@@ -1,8 +1,9 @@
 from django.db import models
 from django.utils import timezone
+from tprm_backend.utils.encrypted_fields_mixin import TPRMEncryptedFieldsMixin
 
 
-class ApprovalWorkflows(models.Model):
+class ApprovalWorkflows(TPRMEncryptedFieldsMixin, models.Model):
     """
     Model for approval workflows
     """
@@ -39,7 +40,7 @@ class ApprovalWorkflows(models.Model):
         ordering = ['-created_at']
 
 
-class ApprovalRequests(models.Model):
+class ApprovalRequests(TPRMEncryptedFieldsMixin, models.Model):
     """
     Model for approval requests
     """
@@ -103,7 +104,7 @@ class ApprovalRequests(models.Model):
         ]
 
 
-class ApprovalStages(models.Model):
+class ApprovalStages(TPRMEncryptedFieldsMixin, models.Model):
     """
     Model for approval stages
     """
@@ -175,7 +176,7 @@ class ApprovalStages(models.Model):
         ]
 
 
-class ApprovalComments(models.Model):
+class ApprovalComments(TPRMEncryptedFieldsMixin, models.Model):
     """
     Model for approval comments
     """
@@ -224,7 +225,7 @@ class ApprovalComments(models.Model):
         ]
 
 
-class ApprovalRequestVersions(models.Model):
+class ApprovalRequestVersions(TPRMEncryptedFieldsMixin, models.Model):
     """
     Model for approval request versions
     """

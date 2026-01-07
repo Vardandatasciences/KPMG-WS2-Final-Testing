@@ -2,12 +2,13 @@
 Serializers for the Audits app.
 """
 from rest_framework import serializers
+from tprm_backend.utils.base_serializer import AutoDecryptingModelSerializer
 from .models import Audit, StaticQuestionnaire, AuditVersion, AuditFinding, AuditReport
 from tprm_backend.slas.models import VendorSLA
 from tprm_backend.slas.serializers import VendorSLASerializer, SLAMetricSerializer
 
 
-class StaticQuestionnaireSerializer(serializers.ModelSerializer):
+class StaticQuestionnaireSerializer(AutoDecryptingModelSerializer):
     """Serializer for StaticQuestionnaire model."""
     
     class Meta:
@@ -19,7 +20,7 @@ class StaticQuestionnaireSerializer(serializers.ModelSerializer):
         read_only_fields = ['question_id', 'created_at']
 
 
-class AuditVersionSerializer(serializers.ModelSerializer):
+class AuditVersionSerializer(AutoDecryptingModelSerializer):
     """Serializer for AuditVersion model."""
     
     class Meta:
@@ -32,7 +33,7 @@ class AuditVersionSerializer(serializers.ModelSerializer):
         read_only_fields = ['version_id', 'date_created', 'created_at']
 
 
-class AuditFindingSerializer(serializers.ModelSerializer):
+class AuditFindingSerializer(AutoDecryptingModelSerializer):
     """Serializer for AuditFinding model."""
     
     class Meta:
@@ -45,7 +46,7 @@ class AuditFindingSerializer(serializers.ModelSerializer):
         read_only_fields = ['audit_finding_id', 'created_at', 'updated_at']
 
 
-class AuditReportSerializer(serializers.ModelSerializer):
+class AuditReportSerializer(AutoDecryptingModelSerializer):
     """Serializer for AuditReport model."""
     
     class Meta:
@@ -56,7 +57,7 @@ class AuditReportSerializer(serializers.ModelSerializer):
         read_only_fields = ['report_id', 'generated_at']
 
 
-class AuditSerializer(serializers.ModelSerializer):
+class AuditSerializer(AutoDecryptingModelSerializer):
     """Serializer for Audit model."""
     sla_id = serializers.IntegerField(read_only=True)
     sla_name = serializers.SerializerMethodField()
@@ -85,7 +86,7 @@ class AuditSerializer(serializers.ModelSerializer):
         return None
 
 
-class AuditCreateSerializer(serializers.ModelSerializer):
+class AuditCreateSerializer(AutoDecryptingModelSerializer):
     """Serializer for creating audits."""
     sla_id = serializers.IntegerField(write_only=True)
     
@@ -140,7 +141,7 @@ class AuditCreateSerializer(serializers.ModelSerializer):
         return audit
 
 
-class AuditListSerializer(serializers.ModelSerializer):
+class AuditListSerializer(AutoDecryptingModelSerializer):
     """Simplified serializer for audit lists."""
     sla_name = serializers.SerializerMethodField()
     sla_type = serializers.SerializerMethodField()

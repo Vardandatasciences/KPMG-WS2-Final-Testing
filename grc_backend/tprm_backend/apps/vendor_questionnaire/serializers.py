@@ -3,11 +3,12 @@ Vendor Questionnaire Serializers
 """
 
 from rest_framework import serializers
+from tprm_backend.utils.base_serializer import AutoDecryptingModelSerializer
 from .models import Questionnaires, QuestionnaireQuestions, QuestionnaireAssignments, QuestionnaireResponseSubmissions
 from tprm_backend.apps.vendor_core.models import TempVendor
 
 
-class QuestionnaireQuestionSerializer(serializers.ModelSerializer):
+class QuestionnaireQuestionSerializer(AutoDecryptingModelSerializer):
     """Serializer for individual questionnaire questions"""
     
     class Meta:
@@ -27,7 +28,7 @@ class QuestionnaireQuestionSerializer(serializers.ModelSerializer):
         read_only_fields = ['question_id']
 
 
-class QuestionnaireSerializer(serializers.ModelSerializer):
+class QuestionnaireSerializer(AutoDecryptingModelSerializer):
     """Serializer for questionnaires with nested questions"""
     
     questions = QuestionnaireQuestionSerializer(many=True, required=False)
@@ -92,7 +93,7 @@ class QuestionnaireSerializer(serializers.ModelSerializer):
         return instance
 
 
-class QuestionnaireListSerializer(serializers.ModelSerializer):
+class QuestionnaireListSerializer(AutoDecryptingModelSerializer):
     """Simplified serializer for questionnaire list view"""
     
     question_count = serializers.SerializerMethodField()
@@ -117,7 +118,7 @@ class QuestionnaireListSerializer(serializers.ModelSerializer):
         return obj.questions.count()
 
 
-class QuestionnaireCreateSerializer(serializers.ModelSerializer):
+class QuestionnaireCreateSerializer(AutoDecryptingModelSerializer):
     """Serializer for creating questionnaires (without questions initially)"""
     
     vendor_id = serializers.IntegerField(required=False, allow_null=True)
@@ -155,7 +156,7 @@ class QuestionnaireCreateSerializer(serializers.ModelSerializer):
         return questionnaire
 
 
-class QuestionnaireAssignmentSerializer(serializers.ModelSerializer):
+class QuestionnaireAssignmentSerializer(AutoDecryptingModelSerializer):
     """Serializer for questionnaire assignments"""
     
     vendor_name = serializers.CharField(source='temp_vendor.company_name', read_only=True)
@@ -183,7 +184,7 @@ class QuestionnaireAssignmentSerializer(serializers.ModelSerializer):
         read_only_fields = ['assignment_id', 'assigned_date', 'created_at', 'updated_at']
 
 
-class QuestionnaireResponseSerializer(serializers.ModelSerializer):
+class QuestionnaireResponseSerializer(AutoDecryptingModelSerializer):
     """Serializer for questionnaire responses"""
     
     question_text = serializers.CharField(source='question.question_text', read_only=True)

@@ -11,11 +11,12 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.contrib.auth import get_user_model
 from simple_history.models import HistoricalRecords
+from tprm_backend.utils.encrypted_fields_mixin import TPRMEncryptedFieldsMixin
 
 User = get_user_model()
 
 
-class BaseModel(models.Model):
+class BaseModel(TPRMEncryptedFieldsMixin, models.Model):
     """Base model with common fields."""
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

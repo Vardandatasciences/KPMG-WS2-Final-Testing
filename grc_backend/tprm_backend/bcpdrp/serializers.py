@@ -2,6 +2,7 @@
 Django REST Framework serializers for BCP/DRP API
 """
 from rest_framework import serializers
+from tprm_backend.utils.base_serializer import AutoDecryptingModelSerializer
 from .models import Plan, Questionnaire, Question, Users
 
 
@@ -9,7 +10,7 @@ from .models import Plan, Questionnaire, Question, Users
 # PLAN SERIALIZERS
 # =============================================================================
 
-class PlanListSerializer(serializers.ModelSerializer):
+class PlanListSerializer(AutoDecryptingModelSerializer):
     """Serializer for listing plans with basic information"""
     vendor_name = serializers.SerializerMethodField()
     
@@ -195,7 +196,7 @@ class VendorSerializer(serializers.Serializer):
 # QUESTIONNAIRE SERIALIZERS
 # =============================================================================
 
-class QuestionSerializer(serializers.ModelSerializer):
+class QuestionSerializer(AutoDecryptingModelSerializer):
     """Serializer for individual questions"""
     
     class Meta:
@@ -206,7 +207,7 @@ class QuestionSerializer(serializers.ModelSerializer):
         ]
 
 
-class QuestionnaireListSerializer(serializers.ModelSerializer):
+class QuestionnaireListSerializer(AutoDecryptingModelSerializer):
     """Serializer for listing questionnaires with basic information"""
     question_count = serializers.SerializerMethodField()
     owner_name = serializers.SerializerMethodField()
@@ -228,7 +229,7 @@ class QuestionnaireListSerializer(serializers.ModelSerializer):
         return f"Owner {obj.created_by_user_id}"
 
 
-class QuestionnaireDetailSerializer(serializers.ModelSerializer):
+class QuestionnaireDetailSerializer(AutoDecryptingModelSerializer):
     """Serializer for detailed questionnaire information"""
     questions = QuestionSerializer(many=True, read_only=True)
     owner_name = serializers.SerializerMethodField()
@@ -257,7 +258,7 @@ class QuestionnaireDetailSerializer(serializers.ModelSerializer):
         return f"Approver {obj.approved_by_user_id}" if obj.approved_by_user_id else None
 
 
-class QuestionnaireCreateSerializer(serializers.ModelSerializer):
+class QuestionnaireCreateSerializer(AutoDecryptingModelSerializer):
     """Serializer for creating a new questionnaire"""
     
     class Meta:
@@ -268,7 +269,7 @@ class QuestionnaireCreateSerializer(serializers.ModelSerializer):
         ]
 
 
-class QuestionnaireUpdateSerializer(serializers.ModelSerializer):
+class QuestionnaireUpdateSerializer(AutoDecryptingModelSerializer):
     """Serializer for updating a questionnaire"""
     
     class Meta:
@@ -282,7 +283,7 @@ class QuestionnaireUpdateSerializer(serializers.ModelSerializer):
 # AUTHENTICATION SERIALIZERS
 # =============================================================================
 
-class UserSerializer(serializers.ModelSerializer):
+class UserSerializer(AutoDecryptingModelSerializer):
     """Serializer for user data"""
     
     class Meta:

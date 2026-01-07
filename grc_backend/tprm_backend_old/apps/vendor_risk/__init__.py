@@ -1,1 +1,0 @@
-# Vendor Risk Assessment Application

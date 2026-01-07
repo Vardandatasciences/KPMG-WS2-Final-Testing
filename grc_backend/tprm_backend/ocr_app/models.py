@@ -1,8 +1,9 @@
 from django.db import models
 from django.contrib.auth.models import User
+from tprm_backend.utils.encrypted_fields_mixin import TPRMEncryptedFieldsMixin
 
 
-class Document(models.Model):
+class Document(TPRMEncryptedFieldsMixin, models.Model):
     """Model for storing document metadata"""
     
     STATUS_CHOICES = [
@@ -33,7 +34,7 @@ class Document(models.Model):
         return f"{self.Title} ({self.OriginalFilename})"
 
 
-class OcrResult(models.Model):
+class OcrResult(TPRMEncryptedFieldsMixin, models.Model):
     """Model for storing OCR processing results"""
     
     OcrResultId = models.BigAutoField(primary_key=True)
@@ -54,7 +55,7 @@ class OcrResult(models.Model):
         return f"OCR Result for Document ID {self.DocumentId}"
 
 
-class ExtractedData(models.Model):
+class ExtractedData(TPRMEncryptedFieldsMixin, models.Model):
     """Model for storing AI-extracted structured data from documents"""
     
     ExtractedDataId = models.BigAutoField(primary_key=True)

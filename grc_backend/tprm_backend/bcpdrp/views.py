@@ -2,9 +2,10 @@
 Function-based views for BCP/DRP API with RBAC integration
 Following the pattern from rbac/example_views.py
 """
-from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.decorators import api_view, authentication_classes, permission_classes, parser_classes
 from rest_framework.response import Response
 from rest_framework import status, permissions
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.permissions import IsAuthenticated, BasePermission
 from django.http import HttpRequest
@@ -532,6 +533,7 @@ def strategy_list_view(request):
 
 
 @api_view(['POST'])
+@parser_classes([MultiPartParser, FormParser, JSONParser])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('create_strategy')
@@ -645,10 +647,25 @@ def vendor_upload_view(request):
                 logger.warning(f"File not found for document: {file_name}")
                 continue
             
-            # Validate file type
-            allowed_types = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
-            if uploaded_file.content_type not in allowed_types:
-                return error_response(f"Invalid file type for {uploaded_file.name}. Only PDF, DOC, and DOCX files are allowed.", status.HTTP_400_BAD_REQUEST)
+            # Validate file type (case-insensitive check)
+            allowed_types = [
+                'application/pdf', 
+                'application/msword', 
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            ]
+            content_type = uploaded_file.content_type.lower() if uploaded_file.content_type else ''
+            file_extension = os.path.splitext(uploaded_file.name)[1].lower()
+            allowed_extensions = ['.pdf', '.doc', '.docx']
+            
+            # Check both content type and file extension
+            is_valid_type = any(allowed.lower() == content_type for allowed in allowed_types)
+            is_valid_extension = file_extension in allowed_extensions
+            
+            if not (is_valid_type or is_valid_extension):
+                return error_response(
+                    f"Invalid file type for {uploaded_file.name} (type: {uploaded_file.content_type}). Only PDF, DOC, and DOCX files are allowed.", 
+                    status.HTTP_400_BAD_REQUEST
+                )
             
             # Validate file size (max 10MB)
             max_size = 10 * 1024 * 1024  # 10MB
@@ -669,8 +686,8 @@ def vendor_upload_view(request):
             sha256_hash = hashlib.sha256(file_content).hexdigest()
             
             # Get next plan_id
-            # MULTI-TENANCY: Filter by tenant
-            max_plan = Plan.objects.filter(tenant_id=tenant_id).aggregate(max_id=models.Max('plan_id'))
+            # NOTE: plan_id is PRIMARY KEY and must be unique across ALL tenants, not per-tenant
+            max_plan = Plan.objects.aggregate(max_id=models.Max('plan_id'))
             plan_id = (max_plan['max_id'] or 0) + 1
             
             # Get data_inventory from document data or use the one from request
@@ -717,8 +734,14 @@ def vendor_upload_view(request):
         }, status.HTTP_201_CREATED)
         
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
         logger.error(f"Error uploading vendor documents: {str(e)}")
-        return error_response("Failed to upload documents", status.HTTP_500_INTERNAL_SERVER_ERROR)
+        logger.error(f"Traceback: {error_details}")
+        return error_response(
+            f"Failed to upload documents: {str(e)}", 
+            status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 # =============================================================================

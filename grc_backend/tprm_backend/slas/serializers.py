@@ -3,6 +3,7 @@ Serializers for the SLAs app matching MySQL schema.
 """
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from tprm_backend.utils.base_serializer import AutoDecryptingModelSerializer
 from .models import (
     Vendor, Contract, VendorSLA, SLAMetric, SLADocument,
     SLACompliance, SLAViolation, SLAReview
@@ -11,7 +12,7 @@ from .models import (
 User = get_user_model()
 
 
-class VendorSerializer(serializers.ModelSerializer):
+class VendorSerializer(AutoDecryptingModelSerializer):
     """Serializer for Vendor model."""
     
     class Meta:
@@ -22,7 +23,7 @@ class VendorSerializer(serializers.ModelSerializer):
         read_only_fields = ['vendor_id']
 
 
-class ContractSerializer(serializers.ModelSerializer):
+class ContractSerializer(AutoDecryptingModelSerializer):
     """Serializer for Contract model."""
     
     class Meta:
@@ -33,7 +34,7 @@ class ContractSerializer(serializers.ModelSerializer):
         read_only_fields = ['contract_id']
 
 
-class SLAMetricSerializer(serializers.ModelSerializer):
+class SLAMetricSerializer(AutoDecryptingModelSerializer):
     """Serializer for SLAMetric model."""
     data_inventory = serializers.JSONField(required=False, allow_null=True)
     
@@ -46,7 +47,7 @@ class SLAMetricSerializer(serializers.ModelSerializer):
         read_only_fields = ['metric_id']
 
 
-class VendorSLASerializer(serializers.ModelSerializer):
+class VendorSLASerializer(AutoDecryptingModelSerializer):
     """Serializer for VendorSLA model."""
     vendor = VendorSerializer(read_only=True)
     vendor_id = serializers.PrimaryKeyRelatedField(
@@ -77,7 +78,7 @@ class VendorSLASerializer(serializers.ModelSerializer):
         read_only_fields = ['sla_id']
 
 
-class SLADocumentSerializer(serializers.ModelSerializer):
+class SLADocumentSerializer(AutoDecryptingModelSerializer):
     """Serializer for SLADocument model."""
     vendor = VendorSerializer(read_only=True)
     vendor_id = serializers.PrimaryKeyRelatedField(
@@ -106,7 +107,7 @@ class SLADocumentSerializer(serializers.ModelSerializer):
         read_only_fields = ['document_id', 'upload_date']
 
 
-class SLAComplianceSerializer(serializers.ModelSerializer):
+class SLAComplianceSerializer(AutoDecryptingModelSerializer):
     """Serializer for SLACompliance model."""
     sla = VendorSLASerializer(read_only=True)
     metric = SLAMetricSerializer(read_only=True)
@@ -122,7 +123,7 @@ class SLAComplianceSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
 
-class SLAViolationSerializer(serializers.ModelSerializer):
+class SLAViolationSerializer(AutoDecryptingModelSerializer):
     """Serializer for SLAViolation model."""
     sla = VendorSLASerializer(read_only=True)
     metric = SLAMetricSerializer(read_only=True)
@@ -138,7 +139,7 @@ class SLAViolationSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
 
-class SLAReviewSerializer(serializers.ModelSerializer):
+class SLAReviewSerializer(AutoDecryptingModelSerializer):
     """Serializer for SLAReview model."""
     sla = VendorSLASerializer(read_only=True)
     reviewer = serializers.PrimaryKeyRelatedField(
@@ -156,7 +157,7 @@ class SLAReviewSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
 
-class VendorSLADetailSerializer(serializers.ModelSerializer):
+class VendorSLADetailSerializer(AutoDecryptingModelSerializer):
     """Detailed VendorSLA serializer with all related data."""
     vendor = VendorSerializer(read_only=True)
     contract = ContractSerializer(read_only=True)
@@ -212,7 +213,7 @@ class VendorSLADetailSerializer(serializers.ModelSerializer):
             return []
 
 
-class SLAMetricCreateSerializer(serializers.ModelSerializer):
+class SLAMetricCreateSerializer(AutoDecryptingModelSerializer):
     """Serializer for creating SLA metrics without requiring sla field."""
     data_inventory = serializers.JSONField(required=False, allow_null=True)
     
@@ -243,7 +244,7 @@ class SLAMetricCreateSerializer(serializers.ModelSerializer):
         return validated_data
 
 
-class VendorSLASubmissionSerializer(serializers.ModelSerializer):
+class VendorSLASubmissionSerializer(AutoDecryptingModelSerializer):
     """Serializer for VendorSLA submission."""
     vendor_id = serializers.PrimaryKeyRelatedField(
         queryset=Vendor.objects.all(),

@@ -1,9 +1,10 @@
 from rest_framework import serializers
+from tprm_backend.utils.base_serializer import AutoDecryptingModelSerializer
 from tprm_backend.mfa_auth.models import User
 from tprm_backend.contracts.models import ContractApproval, VendorContract, ContractAmendment, ContractRenewal
 
 
-class ContractApprovalAssignmentSerializer(serializers.ModelSerializer):
+class ContractApprovalAssignmentSerializer(AutoDecryptingModelSerializer):
     """Serializer for contract approval assignment with enhanced contract details"""
     
     contract_details = serializers.SerializerMethodField()
@@ -121,7 +122,7 @@ class ContractApprovalAssignmentSerializer(serializers.ModelSerializer):
         return None
 
 
-class ContractApprovalCreateAssignmentSerializer(serializers.ModelSerializer):
+class ContractApprovalCreateAssignmentSerializer(AutoDecryptingModelSerializer):
     """Serializer for creating contract approval assignments"""
     
     class Meta:

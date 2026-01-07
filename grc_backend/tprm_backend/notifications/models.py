@@ -1,7 +1,8 @@
 from django.db import models
 from django.contrib.auth.models import User
+from tprm_backend.utils.encrypted_fields_mixin import TPRMEncryptedFieldsMixin
 
-class Notification(models.Model):
+class Notification(TPRMEncryptedFieldsMixin, models.Model):
     PRIORITY_CHOICES = [
         ('critical', 'Critical'),
         ('high', 'High'),

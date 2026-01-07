@@ -1237,23 +1237,36 @@ export default {
     // Get logged in username
     const fetchUsername = async () => {
       try {
-        // Try all possible sources for the user's name
+        // Prefer explicit name keys set during auth/profile flows
+        const storedUserName = localStorage.getItem('user_name')
         const storedFullName = localStorage.getItem('fullName')
         const storedUsername = localStorage.getItem('username')
-        const userData = localStorage.getItem('user')
+
+        // Fallback to any stored user object
+        const userData = localStorage.getItem('current_user') || localStorage.getItem('user')
         let fallback = 'User'
+
         if (userData) {
           try {
             const userObj = JSON.parse(userData)
-            fallback = userObj.full_name || userObj.UserName || userObj.user_name || userObj.username || fallback
+            fallback =
+              userObj.full_name ||
+              userObj.firstName && userObj.lastName ? `${userObj.firstName} ${userObj.lastName}` :
+              userObj.UserName ||
+              userObj.user_name ||
+              userObj.username ||
+              fallback
           } catch (e) {
             console.error('Error parsing user data:', e)
           }
         }
+
         if (storedFullName && storedFullName !== 'null') {
           username.value = storedFullName
         } else if (storedUsername && storedUsername !== 'null') {
           username.value = storedUsername
+        } else if (storedUserName && storedUserName !== 'null') {
+          username.value = storedUserName
         } else {
           username.value = fallback
         }

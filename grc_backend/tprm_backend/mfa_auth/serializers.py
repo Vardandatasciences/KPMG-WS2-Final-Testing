@@ -1,8 +1,9 @@
 from rest_framework import serializers
+from tprm_backend.utils.base_serializer import AutoDecryptingModelSerializer
 from .models import User, MfaEmailChallenge, MfaAuditLog
 
 
-class UserSerializer(serializers.ModelSerializer):
+class UserSerializer(AutoDecryptingModelSerializer):
     class Meta:
         model = User
         fields = ['userid', 'username', 'email', 'first_name', 'last_name', 'is_active']
@@ -48,14 +49,14 @@ class OtpResponseSerializer(serializers.Serializer):
     session_token = serializers.CharField(required=False)
 
 
-class MfaChallengeSerializer(serializers.ModelSerializer):
+class MfaChallengeSerializer(AutoDecryptingModelSerializer):
     class Meta:
         model = MfaEmailChallenge
         fields = ['challenge_id', 'status', 'attempts', 'expires_at', 'created_at']
         read_only_fields = ['challenge_id', 'expires_at', 'created_at']
 
 
-class MfaAuditLogSerializer(serializers.ModelSerializer):
+class MfaAuditLogSerializer(AutoDecryptingModelSerializer):
     class Meta:
         model = MfaAuditLog
         fields = ['mfa_event_id', 'event_type', 'detail_json', 'ip_address', 'created_at']

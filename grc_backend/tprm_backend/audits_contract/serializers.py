@@ -2,12 +2,13 @@
 Serializers for the Audits app.
 """
 from rest_framework import serializers
+from tprm_backend.utils.base_serializer import AutoDecryptingModelSerializer
 from .models import ContractAudit, ContractStaticQuestionnaire, ContractAuditVersion, ContractAuditFinding, ContractAuditReport
 from tprm_backend.contracts.models import VendorContract, ContractTerm
 from django.contrib.auth.models import User
 
 
-class ContractStaticQuestionnaireSerializer(serializers.ModelSerializer):
+class ContractStaticQuestionnaireSerializer(AutoDecryptingModelSerializer):
     """Serializer for ContractStaticQuestionnaire model."""
     term_name = serializers.SerializerMethodField()
     
@@ -32,7 +33,7 @@ class ContractStaticQuestionnaireSerializer(serializers.ModelSerializer):
         return obj.term_id or 'Unknown Term'
 
 
-class ContractAuditVersionSerializer(serializers.ModelSerializer):
+class ContractAuditVersionSerializer(AutoDecryptingModelSerializer):
     """Serializer for ContractAuditVersion model."""
     
     class Meta:
@@ -45,7 +46,7 @@ class ContractAuditVersionSerializer(serializers.ModelSerializer):
         read_only_fields = ['version_id', 'date_created', 'created_at']
 
 
-class ContractAuditFindingSerializer(serializers.ModelSerializer):
+class ContractAuditFindingSerializer(AutoDecryptingModelSerializer):
     """Serializer for ContractAuditFinding model."""
     
     # Add a computed field to show questionnaire responses with question text
@@ -173,7 +174,7 @@ class ContractAuditFindingSerializer(serializers.ModelSerializer):
             raise
 
 
-class ContractAuditReportSerializer(serializers.ModelSerializer):
+class ContractAuditReportSerializer(AutoDecryptingModelSerializer):
     """Serializer for ContractAuditReport model."""
     
     class Meta:
@@ -184,7 +185,7 @@ class ContractAuditReportSerializer(serializers.ModelSerializer):
         read_only_fields = ['report_id', 'generated_at']
 
 
-class ContractAuditSerializer(serializers.ModelSerializer):
+class ContractAuditSerializer(AutoDecryptingModelSerializer):
     """Serializer for ContractAudit model."""
     contract_title = serializers.SerializerMethodField()
     contract_id = serializers.SerializerMethodField()
@@ -214,7 +215,7 @@ class ContractAuditSerializer(serializers.ModelSerializer):
         return None
 
 
-class ContractAuditCreateSerializer(serializers.ModelSerializer):
+class ContractAuditCreateSerializer(AutoDecryptingModelSerializer):
     """Serializer for creating contract audits."""
     
     class Meta:
@@ -246,7 +247,7 @@ class ContractAuditCreateSerializer(serializers.ModelSerializer):
         return audit
 
 
-class ContractAuditUpdateSerializer(serializers.ModelSerializer):
+class ContractAuditUpdateSerializer(AutoDecryptingModelSerializer):
     """Serializer for updating contract audits with partial updates."""
     
     class Meta:
@@ -293,7 +294,7 @@ class ContractAuditUpdateSerializer(serializers.ModelSerializer):
         return value
 
 
-class ContractAuditListSerializer(serializers.ModelSerializer):
+class ContractAuditListSerializer(AutoDecryptingModelSerializer):
     """Simplified serializer for contract audit lists."""
     contract_title = serializers.SerializerMethodField()
     contract_id = serializers.SerializerMethodField()

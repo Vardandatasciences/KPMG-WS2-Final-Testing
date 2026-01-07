@@ -3,6 +3,7 @@ Vendor Lifecycle Serializers
 """
 
 from rest_framework import serializers
+from tprm_backend.utils.base_serializer import AutoDecryptingModelSerializer
 from .models import (
     VendorApprovals, 
     VendorStatusHistory, 
@@ -13,7 +14,7 @@ from .models import (
 from tprm_backend.apps.vendor_core.models import Vendors, Users
 
 
-class VendorLifecycleStageSerializer(serializers.ModelSerializer):
+class VendorLifecycleStageSerializer(AutoDecryptingModelSerializer):
     """Serializer for vendor lifecycle stages"""
     
     class Meta:
@@ -24,7 +25,7 @@ class VendorLifecycleStageSerializer(serializers.ModelSerializer):
         ]
 
 
-class VendorApprovalSerializer(serializers.ModelSerializer):
+class VendorApprovalSerializer(AutoDecryptingModelSerializer):
     """Serializer for vendor approvals"""
     
     vendor_name = serializers.CharField(source='vendor.company_name', read_only=True)
@@ -45,7 +46,7 @@ class VendorApprovalSerializer(serializers.ModelSerializer):
         return obj.approver.username
 
 
-class VendorStatusHistorySerializer(serializers.ModelSerializer):
+class VendorStatusHistorySerializer(AutoDecryptingModelSerializer):
     """Serializer for vendor status history"""
     
     vendor_name = serializers.CharField(source='vendor.company_name', read_only=True)
@@ -92,7 +93,7 @@ class RecentChangeSerializer(serializers.Serializer):
     date = serializers.CharField()
 
 
-class VendorContractSerializer(serializers.ModelSerializer):
+class VendorContractSerializer(AutoDecryptingModelSerializer):
     """Serializer for vendor contracts"""
     
     vendor_name = serializers.CharField(source='vendor.company_name', read_only=True)
@@ -118,7 +119,7 @@ class VendorContractSerializer(serializers.ModelSerializer):
         return None
 
 
-class VendorSlaSerializer(serializers.ModelSerializer):
+class VendorSlaSerializer(AutoDecryptingModelSerializer):
     """Serializer for vendor SLAs"""
     
     vendor_name = serializers.CharField(source='vendor.company_name', read_only=True)

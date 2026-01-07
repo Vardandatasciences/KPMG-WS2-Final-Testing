@@ -3,6 +3,7 @@ Vendor Core Models - Maps to existing database tables
 """
 
 from django.db import models
+from tprm_backend.utils.encrypted_fields_mixin import TPRMEncryptedFieldsMixin
 
 
 class VendorBaseModel(models.Model):
@@ -13,7 +14,7 @@ class VendorBaseModel(models.Model):
         managed = False  # Don't let Django manage these tables
 
 
-class Users(VendorBaseModel):
+class Users(TPRMEncryptedFieldsMixin, VendorBaseModel):
     """User model mapping to existing users table"""
     
     userid = models.AutoField(db_column='UserId', primary_key=True)
@@ -63,7 +64,7 @@ class VendorCategories(VendorBaseModel):
         return self.category_name
 
 
-class Vendors(VendorBaseModel):
+class Vendors(TPRMEncryptedFieldsMixin, VendorBaseModel):
     """Main vendors table mapping"""
     
     vendor_id = models.BigAutoField(primary_key=True)
@@ -113,7 +114,7 @@ class Vendors(VendorBaseModel):
         return self.company_name
 
 
-class VendorContacts(VendorBaseModel):
+class VendorContacts(TPRMEncryptedFieldsMixin, VendorBaseModel):
     """Vendor contacts mapping to existing vendor_contacts table"""
     
     contact_id = models.BigAutoField(primary_key=True)
@@ -147,7 +148,7 @@ class VendorContacts(VendorBaseModel):
         return f"{self.first_name} {self.last_name} - {self.vendor.company_name}"
 
 
-class VendorDocuments(VendorBaseModel):
+class VendorDocuments(TPRMEncryptedFieldsMixin, VendorBaseModel):
     """Vendor documents mapping to existing vendor_documents table"""
     
     document_id = models.BigAutoField(primary_key=True)
@@ -207,7 +208,7 @@ class VendorLifecycleStages(VendorBaseModel):
         return self.stage_name
 
 
-class TempVendor(VendorBaseModel):
+class TempVendor(TPRMEncryptedFieldsMixin, VendorBaseModel):
     """Temporary vendor model mapping to temp_vendor table for registration"""
     
     id = models.BigAutoField(primary_key=True)
@@ -259,7 +260,7 @@ class TempVendor(VendorBaseModel):
         return self.company_name or f"Temp Vendor {self.id}"
 
 
-class ExternalScreeningResult(VendorBaseModel):
+class ExternalScreeningResult(TPRMEncryptedFieldsMixin, VendorBaseModel):
     """External screening results mapping to external_screening_results table"""
     
     SCREENING_TYPES = [
@@ -310,7 +311,7 @@ class ExternalScreeningResult(VendorBaseModel):
         return f"{vendor_name} - {self.screening_type} ({self.status})"
 
 
-class ScreeningMatch(VendorBaseModel):
+class ScreeningMatch(TPRMEncryptedFieldsMixin, VendorBaseModel):
     """Screening matches mapping to screening_matches table"""
     
     RESOLUTION_STATUS_CHOICES = [

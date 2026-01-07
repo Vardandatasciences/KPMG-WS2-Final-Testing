@@ -44,6 +44,14 @@ def safe_isoformat(val):
     """Lazy wrapper for safe_isoformat from utils.py"""
     return _get_utils_module().safe_isoformat(val)
 
+def sanitize_ip_address(ip_address):
+    """
+    Lazy wrapper for sanitize_ip_address from the original utils.py.
+    Kept here for backward compatibility with imports like:
+        from grc.utils import sanitize_ip_address
+    """
+    return _get_utils_module().sanitize_ip_address(ip_address)
+
 def send_log(*args, **kwargs):
     """Lazy wrapper for send_log from utils.py"""
     return _get_utils_module().send_log(*args, **kwargs)
@@ -134,6 +142,7 @@ __all__ = [
     # Original utils.py functions
     'parse_date',
     'safe_isoformat',
+    'sanitize_ip_address',
     'send_log',
     'get_client_ip',
     'LOGGING_SERVICE_URL',

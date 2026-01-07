@@ -4,10 +4,11 @@ Serializers for the users app.
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
+from tprm_backend.utils.base_serializer import AutoDecryptingModelSerializer
 from .models import User, UserProfile, UserSession
 
 
-class UserSerializer(serializers.ModelSerializer):
+class UserSerializer(AutoDecryptingModelSerializer):
     """Serializer for User model."""
     
     class Meta:
@@ -22,7 +23,7 @@ class UserSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'date_joined', 'created_at', 'updated_at']
 
 
-class UserProfileSerializer(serializers.ModelSerializer):
+class UserProfileSerializer(AutoDecryptingModelSerializer):
     """Serializer for UserProfile model."""
     
     class Meta:
@@ -34,7 +35,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
-class UserSessionSerializer(serializers.ModelSerializer):
+class UserSessionSerializer(AutoDecryptingModelSerializer):
     """Serializer for UserSession model."""
     
     class Meta:
@@ -46,7 +47,7 @@ class UserSessionSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'last_activity']
 
 
-class RegisterSerializer(serializers.ModelSerializer):
+class RegisterSerializer(AutoDecryptingModelSerializer):
     """Serializer for user registration."""
     password = serializers.CharField(write_only=True, validators=[validate_password])
     password_confirm = serializers.CharField(write_only=True)
@@ -110,7 +111,7 @@ class ChangePasswordSerializer(serializers.Serializer):
         return value
 
 
-class UserDetailSerializer(serializers.ModelSerializer):
+class UserDetailSerializer(AutoDecryptingModelSerializer):
     """Detailed user serializer with profile information."""
     profile = UserProfileSerializer(read_only=True)
     escalation_to = UserSerializer(read_only=True)
@@ -128,7 +129,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'date_joined', 'created_at', 'updated_at']
 
 
-class ApproverSerializer(serializers.ModelSerializer):
+class ApproverSerializer(AutoDecryptingModelSerializer):
     """Serializer for approver users."""
     
     class Meta:

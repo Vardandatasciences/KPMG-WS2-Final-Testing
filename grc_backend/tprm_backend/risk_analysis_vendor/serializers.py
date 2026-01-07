@@ -1,9 +1,10 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
+from tprm_backend.utils.base_serializer import AutoDecryptingModelSerializer
 from .models import Risk
 
 
-class UserSerializer(serializers.ModelSerializer):
+class UserSerializer(AutoDecryptingModelSerializer):
     """Serializer for User model"""
     class Meta:
         model = User
@@ -13,7 +14,7 @@ class UserSerializer(serializers.ModelSerializer):
 # Removed TPRMModuleSerializer and ModuleDataSerializer - using entity-data-row approach
 
 
-class RiskSerializer(serializers.ModelSerializer):
+class RiskSerializer(AutoDecryptingModelSerializer):
     """Serializer for Risk model"""
     assigned_to_name = serializers.SerializerMethodField()
     created_by_name = serializers.SerializerMethodField()
@@ -44,7 +45,7 @@ class RiskSerializer(serializers.ModelSerializer):
         return None
 
 
-class RiskListSerializer(serializers.ModelSerializer):
+class RiskListSerializer(AutoDecryptingModelSerializer):
     """Simplified serializer for risk list views"""
     assigned_to_name = serializers.SerializerMethodField()
     
@@ -68,7 +69,7 @@ class RiskListSerializer(serializers.ModelSerializer):
         return None
 
 
-class RiskDetailSerializer(serializers.ModelSerializer):
+class RiskDetailSerializer(AutoDecryptingModelSerializer):
     """Detailed serializer for risk detail views"""
     assigned_to = serializers.SerializerMethodField()
     created_by = serializers.SerializerMethodField()
