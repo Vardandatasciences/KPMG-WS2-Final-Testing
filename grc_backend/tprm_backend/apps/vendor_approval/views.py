@@ -853,147 +853,200 @@ def get_my_approvals(request):
 
             include_statuses = [s.strip().upper() for s in include_status_param.split(',') if s.strip()]
 
-
-
-        with connections['default'].cursor() as cursor:
-
-            if include_statuses:
-
-                cursor.execute(
-
-                    """
-
-                    SELECT 
-
-                        ar.approval_id,
-
-                        ar.workflow_id,
-
-                        ar.request_title,
-
-                        ar.request_description,
-
-                        ar.requester_id,
-
-                        ar.requester_department,
-
-                        ar.priority,
-
-                        ar.overall_status,
-
-                        ar.submission_date,
-
-                        ar.created_at,
-
-                        ar.updated_at,
-
-                        ast.stage_id,
-
-                        ast.stage_order,
-
-                        ast.stage_name,
-
-                        ast.stage_type,
-
-                        ast.stage_status,
-
-                        ast.deadline_date
-
-                    FROM approval_stages ast
-
-                    JOIN approval_requests ar ON ar.approval_id = ast.approval_id
-                    
-                    JOIN approval_workflows aw ON ar.workflow_id = aw.workflow_id
-                    
-                    LEFT JOIN temp_vendor tv ON JSON_EXTRACT(ar.request_data, '$.vendor_id') = tv.id
-
-                    WHERE ast.assigned_user_id = %s
-
-                      AND UPPER(ast.stage_status) IN ({statuses})
-
-                      AND aw.business_object_type = 'Vendor'
-                      
-                      AND (tv.TenantId = %s OR tv.TenantId IS NULL)
-
-                    ORDER BY ast.stage_type, ast.stage_order, ar.created_at DESC
-
-                    """.format(statuses=','.join(['%s'] * len(include_statuses))),
-
-                    [int(user_id), *include_statuses, tenant_id]
-
-                )
-
+        # Ensure we're using the tprm_integrations database
+        # The default connection should point to tprm_integration, but verify it
+        import logging
+        import os
+        from django.db import connections as db_connections
+        logger = logging.getLogger(__name__)
+        
+        db_connection = db_connections['default']
+        db_name = db_connection.settings_dict.get('NAME', '')
+        
+        # Log the database being used for debugging
+        logger.info(f"[My Approvals] Using database: {db_name} for user_id: {user_id}")
+        
+        # If the database is not tprm_integration, try to fix it
+        if 'tprm' not in db_name.lower() and db_name != 'tprm_integration':
+            logger.warning(f"[My Approvals] WARNING: Database connection is using '{db_name}' instead of 'tprm_integration'.")
+            
+            # Check if there's a 'tprm' connection defined
+            if 'tprm' in db_connections.databases:
+                db_connection = db_connections['tprm']
+                db_name = db_connection.settings_dict.get('NAME', '')
+                logger.info(f"[My Approvals] Switching to 'tprm' connection, now using database: {db_name}")
             else:
+                # The environment variable might be overriding the default
+                # Check what DB_NAME is set to
+                env_db_name = os.environ.get('DB_NAME', '')
+                if env_db_name and env_db_name != 'tprm_integration':
+                    logger.error(f"[My Approvals] ERROR: DB_NAME environment variable is set to '{env_db_name}' but should be 'tprm_integration'.")
+                    logger.error(f"[My Approvals] Please set DB_NAME=tprm_integration in your environment variables.")
+                
+                # Log warning - the connection will be used as-is
+                # The proper fix is to set DB_NAME=tprm_integration in environment variables
+                logger.warning(f"[My Approvals] Attempting to use database '{db_name}' - queries may fail if tables don't exist.")
 
-                cursor.execute(
+        # Initialize rows variable before try block
+        rows = []
+        
+        try:
+            with db_connection.cursor() as cursor:
 
-                    """
+                if include_statuses:
 
-                    SELECT 
+                    cursor.execute(
 
-                        ar.approval_id,
+                        """
 
-                        ar.workflow_id,
+                        SELECT 
 
-                        ar.request_title,
+                            ar.approval_id,
 
-                        ar.request_description,
+                            ar.workflow_id,
 
-                        ar.requester_id,
+                            ar.request_title,
 
-                        ar.requester_department,
+                            ar.request_description,
 
-                        ar.priority,
+                            ar.requester_id,
 
-                        ar.overall_status,
+                            ar.requester_department,
 
-                        ar.submission_date,
+                            ar.priority,
 
-                        ar.created_at,
+                            ar.overall_status,
 
-                        ar.updated_at,
+                            ar.submission_date,
 
-                        ast.stage_id,
+                            ar.created_at,
 
-                        ast.stage_order,
+                            ar.updated_at,
 
-                        ast.stage_name,
+                            ast.stage_id,
 
-                        ast.stage_type,
+                            ast.stage_order,
 
-                        ast.stage_status,
+                            ast.stage_name,
 
-                        ast.deadline_date
+                            ast.stage_type,
 
-                    FROM approval_stages ast
+                            ast.stage_status,
 
-                    JOIN approval_requests ar ON ar.approval_id = ast.approval_id
+                            ast.deadline_date
 
-                    JOIN approval_workflows aw ON ar.workflow_id = aw.workflow_id
-                    
-                    LEFT JOIN temp_vendor tv ON JSON_EXTRACT(ar.request_data, '$.vendor_id') = tv.id
+                        FROM approval_stages ast
 
-                    WHERE ast.assigned_user_id = %s
+                        JOIN approval_requests ar ON ar.approval_id = ast.approval_id
+                        
+                        JOIN approval_workflows aw ON ar.workflow_id = aw.workflow_id
+                        
+                        LEFT JOIN tprm_integration.temp_vendor tv ON JSON_EXTRACT(ar.request_data, '$.vendor_id') = tv.id
 
-                    AND aw.business_object_type = 'Vendor'
-                    
-                    AND (tv.TenantId = %s OR tv.TenantId IS NULL)
+                        WHERE ast.assigned_user_id = %s
 
-                    ORDER BY ast.stage_type, ast.stage_order, ar.created_at DESC
+                          AND UPPER(ast.stage_status) IN ({statuses})
 
-                    """,
+                          AND aw.business_object_type = 'Vendor'
+                          
+                          AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
-                    [int(user_id), tenant_id]
+                        ORDER BY ast.stage_type, ast.stage_order, ar.created_at DESC
 
-                )
+                        """.format(statuses=','.join(['%s'] * len(include_statuses))),
+
+                        [int(user_id), *include_statuses, tenant_id]
+
+                    )
+
+                else:
+
+                    cursor.execute(
+
+                        """
+
+                        SELECT 
+
+                            ar.approval_id,
+
+                            ar.workflow_id,
+
+                            ar.request_title,
+
+                            ar.request_description,
+
+                            ar.requester_id,
+
+                            ar.requester_department,
+
+                            ar.priority,
+
+                            ar.overall_status,
+
+                            ar.submission_date,
+
+                            ar.created_at,
+
+                            ar.updated_at,
+
+                            ast.stage_id,
+
+                            ast.stage_order,
+
+                            ast.stage_name,
+
+                            ast.stage_type,
+
+                            ast.stage_status,
+
+                            ast.deadline_date
+
+                        FROM approval_stages ast
+
+                        JOIN approval_requests ar ON ar.approval_id = ast.approval_id
+
+                        JOIN approval_workflows aw ON ar.workflow_id = aw.workflow_id
+                        
+                        LEFT JOIN tprm_integration.temp_vendor tv ON JSON_EXTRACT(ar.request_data, '$.vendor_id') = tv.id
+
+                        WHERE ast.assigned_user_id = %s
+
+                        AND aw.business_object_type = 'Vendor'
+                        
+                        AND (tv.TenantId = %s OR tv.TenantId IS NULL)
+
+                        ORDER BY ast.stage_type, ast.stage_order, ar.created_at DESC
+
+                        """,
+
+                        [int(user_id), tenant_id]
+
+                    )
 
 
 
-            columns = [col[0] for col in cursor.description]
+                columns = [col[0] for col in cursor.description]
 
-            rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
-
-
+                rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+        except Exception as db_error:
+            error_msg = str(db_error)
+            logger.error(f"[My Approvals] Database error: {error_msg}")
+            
+            # Check if it's a table not found error for temp_vendor
+            if "temp_vendor" in error_msg.lower() and ("doesn't exist" in error_msg.lower() or "does not exist" in error_msg.lower()):
+                logger.error(f"[My Approvals] ERROR: temp_vendor table not found in database '{db_name}'. "
+                           f"Expected database: 'tprm_integration'. "
+                           f"Please ensure the DATABASES['default']['NAME'] is set to 'tprm_integration'.")
+                return Response({
+                    'error': f'temp_vendor table not found in database. Expected database: tprm_integration, but using: {db_name}',
+                    'message': 'Database configuration error. Please check that DB_NAME environment variable is set to tprm_integration.',
+                    'database_used': db_name,
+                    'database_expected': 'tprm_integration'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            # Re-raise other database errors
+            raise
 
         parallel = []
 
@@ -1170,86 +1223,117 @@ def get_user_assigned_stages(request, user_id):
         if not tenant_id:
             return Response({'error': 'Tenant context not found'}, status=403)
 
-        with connections['default'].cursor() as cursor:
+        # Ensure we're using the tprm_integrations database
+        import logging
+        from django.db import connections as db_connections
+        logger = logging.getLogger(__name__)
+        
+        db_connection = db_connections['default']
+        db_name = db_connection.settings_dict.get('NAME', '')
+        
+        # Log the database being used for debugging
+        logger.info(f"[Assigned Stages] Using database: {db_name} for user_id: {user_id}")
 
-            cursor.execute(
+        # Initialize stages list
+        stages = []
+        
+        try:
+            with db_connection.cursor() as cursor:
 
-                """
+                cursor.execute(
 
-                SELECT 
+                    """
 
-                    s.stage_id, s.approval_id, s.stage_order, s.stage_name, s.stage_description,
+                    SELECT 
 
-                    s.assigned_user_id, s.assigned_user_name, s.assigned_user_role, s.department,
+                        s.stage_id, s.approval_id, s.stage_order, s.stage_name, s.stage_description,
 
-                    s.stage_type, s.stage_status, s.deadline_date, s.extended_deadline,
+                        s.assigned_user_id, s.assigned_user_name, s.assigned_user_role, s.department,
 
-                    s.started_at, s.completed_at, s.response_data, s.rejection_reason,
+                        s.stage_type, s.stage_status, s.deadline_date, s.extended_deadline,
 
-                    s.escalation_level, s.is_mandatory, s.created_at, s.updated_at,
+                        s.started_at, s.completed_at, s.response_data, s.rejection_reason,
 
-                    a.request_title, a.request_description, a.requester_id, a.requester_department,
+                        s.escalation_level, s.is_mandatory, s.created_at, s.updated_at,
 
-                    a.priority, a.request_data, a.overall_status, a.submission_date,
+                        a.request_title, a.request_description, a.requester_id, a.requester_department,
 
-                    a.created_at AS request_created_at, a.updated_at AS request_updated_at,
+                        a.priority, a.request_data, a.overall_status, a.submission_date,
 
-                    w.workflow_type
+                        a.created_at AS request_created_at, a.updated_at AS request_updated_at,
 
-                FROM approval_stages s
+                        w.workflow_type
 
-                JOIN approval_requests a ON s.approval_id = a.approval_id
+                    FROM approval_stages s
 
-                JOIN approval_workflows w ON a.workflow_id = w.workflow_id
-                
-                LEFT JOIN temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
+                    JOIN approval_requests a ON s.approval_id = a.approval_id
 
-                WHERE s.assigned_user_id = %s
+                    JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+                    
+                    -- Ensure temp_vendor is read from the TPRM database (not grc2)
+                    LEFT JOIN tprm_integration.temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
 
-                AND w.business_object_type = 'Vendor'
-                
-                AND (tv.TenantId = %s OR tv.TenantId IS NULL)
+                    WHERE s.assigned_user_id = %s
 
-                ORDER BY s.created_at DESC
+                    AND w.business_object_type = 'Vendor'
+                    
+                    AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
-                """,
+                    ORDER BY s.created_at DESC
 
-                [user_id, tenant_id]
+                    """,
 
-            )
+                    [user_id, tenant_id]
 
+                )
 
+                columns = [col[0] for col in cursor.description]
 
-            columns = [col[0] for col in cursor.description]
+                for row in cursor.fetchall():
 
-            stages = []
+                    item = dict(zip(columns, row))
 
-            for row in cursor.fetchall():
+                    # Parse JSON fields if strings
 
-                item = dict(zip(columns, row))
+                    for json_key in ('response_data', 'request_data'):
 
-                # Parse JSON fields if strings
+                        if item.get(json_key) and isinstance(item.get(json_key), str):
 
-                for json_key in ('response_data', 'request_data'):
+                            try:
 
-                    if item.get(json_key) and isinstance(item.get(json_key), str):
+                                item[json_key] = json.loads(item[json_key])
 
-                        try:
+                            except Exception:
 
-                            item[json_key] = json.loads(item[json_key])
+                                pass
 
-                        except Exception:
+                    stages.append(item)
 
-                            pass
-
-                stages.append(item)
-
-
+        except Exception as db_error:
+            error_msg = str(db_error)
+            logger.error(f"[Assigned Stages] Database error: {error_msg}")
+            
+            # Check if it's a table not found error for temp_vendor
+            if "temp_vendor" in error_msg.lower() and ("doesn't exist" in error_msg.lower() or "does not exist" in error_msg.lower()):
+                logger.error(f"[Assigned Stages] ERROR: temp_vendor table not found in database '{db_name}'. "
+                           f"Expected database: 'tprm_integration'. "
+                           f"Please ensure the DATABASES['default']['NAME'] is set to 'tprm_integration'.")
+                return Response({
+                    'error': f'temp_vendor table not found in database. Expected database: tprm_integration, but using: {db_name}',
+                    'message': 'Database configuration error. Please check that DB_NAME environment variable is set to tprm_integration.',
+                    'database_used': db_name,
+                    'database_expected': 'tprm_integration'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            # Re-raise other database errors
+            raise
 
         return Response(stages, status=status.HTTP_200_OK)
 
     except Exception as e:
-
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error fetching assigned stages: {str(e)}")
         print(f"Error fetching assigned stages: {str(e)}")
 
         return Response({

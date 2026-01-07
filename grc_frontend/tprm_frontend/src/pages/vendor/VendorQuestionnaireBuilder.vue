@@ -962,7 +962,7 @@ const allRFPDocuments = computed(() => {
 })
 
 // Get questionnaire ID from route if editing existing
-const questionnaireId = ref(route.params.id || null)
+const questionnaireId = ref(route.params.id || route.query.id || null)
 
 // Watch for changes in data source or vendor selection
 watch([selectedDataSource, () => questionnaire.value.vendor_id], async ([newDataSource, newVendorId]) => {
@@ -1031,16 +1031,35 @@ watch(() => questions.value, (newQuestions) => {
 
 onMounted(async () => {
   try {
+    console.log('VendorQuestionnaireBuilder - Starting data load...')
+    
     // Load vendor categories and vendors
-    vendorCategories.value = await questionnaireStore.getVendorCategories()
-    vendors.value = await questionnaireStore.fetchVendors()
+    console.log('VendorQuestionnaireBuilder - Fetching vendor categories...')
+    try {
+      vendorCategories.value = await questionnaireStore.getVendorCategories()
+      console.log('VendorQuestionnaireBuilder - Vendor categories loaded:', vendorCategories.value?.length || 0)
+    } catch (error) {
+      console.error('VendorQuestionnaireBuilder - Error loading vendor categories:', error)
+      vendorCategories.value = []
+    }
+    
+    console.log('VendorQuestionnaireBuilder - Fetching vendors...')
+    try {
+      vendors.value = await questionnaireStore.fetchVendors()
+      console.log('VendorQuestionnaireBuilder - Vendors loaded:', vendors.value?.length || 0)
+    } catch (error) {
+      console.error('VendorQuestionnaireBuilder - Error loading vendors:', error)
+      vendors.value = []
+    }
     
     // Load templates
+    console.log('VendorQuestionnaireBuilder - Loading templates...')
     await loadTemplates()
     
     if (questionnaireId.value) {
       // Load existing questionnaire
       try {
+        console.log('VendorQuestionnaireBuilder - Loading existing questionnaire:', questionnaireId.value)
         await questionnaireStore.fetchQuestionnaire(questionnaireId.value)
       } catch (error) {
         console.error('Failed to load questionnaire:', error)
@@ -1049,7 +1068,7 @@ onMounted(async () => {
           PopupService.warning(`Questionnaire with ID ${questionnaireId.value} does not exist. Starting with a new questionnaire.`, 'Questionnaire Not Found')
           questionnaireStore.resetCurrentQuestionnaire()
           // Clear the questionnaire ID from the route
-          router.replace({ name: 'VendorQuestionnaireBuilder' })
+          router.replace({ name: 'Vendor Questionnaire Builder' })
         } else {
           throw error
         }
@@ -1058,9 +1077,16 @@ onMounted(async () => {
       // Reset for new questionnaire
       questionnaireStore.resetCurrentQuestionnaire()
     }
+    
+    console.log('VendorQuestionnaireBuilder - Data load completed')
   } catch (error) {
     console.error('Failed to load data:', error)
-    PopupService.error('Failed to load questionnaire data. Please refresh the page.', 'Loading Error')
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      response: error.response
+    })
+    PopupService.error('Failed to load questionnaire data. Please check the console for details.', 'Loading Error')
   }
 })
 
@@ -1206,8 +1232,12 @@ const saveDraft = async () => {
           
           // Update route to include ID
           router.replace({ 
-            name: 'VendorQuestionnaireBuilder', 
-            params: { id: questionnaireId.value } 
+            name: 'Vendor Questionnaire Builder', 
+            query: { id: questionnaireId.value } 
+          }).catch(err => {
+            console.error('Navigation error:', err)
+            // Fallback to path-based navigation
+            router.replace(`/vendor-questionnaire?id=${questionnaireId.value}`).catch(console.error)
           })
         } else {
           throw error
@@ -1249,8 +1279,12 @@ const saveDraft = async () => {
       
       // Update route to include ID
       router.replace({ 
-        name: 'VendorQuestionnaireBuilder', 
-        params: { id: questionnaireId.value } 
+        name: 'Vendor Questionnaire Builder', 
+        query: { id: questionnaireId.value } 
+      }).catch(err => {
+        console.error('Navigation error:', err)
+        // Fallback to path-based navigation
+        router.replace(`/vendor-questionnaire?id=${questionnaireId.value}`).catch(console.error)
       })
     }
     
@@ -1372,8 +1406,12 @@ const activateQuestionnaire = async () => {
           () => {
             // Update route to include ID
             router.replace({ 
-              name: 'VendorQuestionnaireBuilder', 
-              params: { id: questionnaireId.value } 
+              name: 'Vendor Questionnaire Builder', 
+              query: { id: questionnaireId.value } 
+            }).catch(err => {
+              console.error('Navigation error:', err)
+              // Fallback to path-based navigation
+              router.replace(`/vendor-questionnaire?id=${questionnaireId.value}`).catch(console.error)
             })
           }
         )
@@ -1990,7 +2028,9 @@ const handleDataSourceChange = async () => {
 }
 </script>
 
-<style scoped src="./VendorQuestionnaireBuilder.css"></style>
+<style>
+@import './VendorQuestionnaireBuilder.css';
+</style>
 
 <style scoped>
 /* Simplified styles - minimal nesting */

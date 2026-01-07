@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { getApiV1Url } from '@/utils/backendEnv'
 
 export const useQuestionnaireStore = defineStore('questionnaire', () => {
   // State
@@ -20,9 +21,10 @@ export const useQuestionnaireStore = defineStore('questionnaire', () => {
   const loading = ref(false)
   const error = ref(null)
 
-  // API Base URL
-  import { getTprmApiV1Url } from '@/utils/backendEnv'
-  const API_BASE = getTprmApiV1Url('vendor-questionnaire')
+  // API Base URL - Backend is configured at /api/v1/vendor-questionnaire/ (not /api/tprm/v1/)
+  const API_BASE = getApiV1Url('vendor-questionnaire')
+  console.log('QuestionnaireStore - API_BASE initialized:', API_BASE)
+  console.log('QuestionnaireStore - Expected URL format: /api/v1/vendor-questionnaire/')
 
   // Computed
   const getQuestionnaires = computed(() => questionnaires.value)
@@ -521,10 +523,26 @@ export const useQuestionnaireStore = defineStore('questionnaire', () => {
 
   const getVendorCategories = async () => {
     try {
-      const data = await apiCall(`${API_BASE}/questionnaires/get_vendor_categories/`)
-      return data
+      const url = `${API_BASE}/questionnaires/get_vendor_categories/`
+      console.log('getVendorCategories - Calling API:', url)
+      const data = await apiCall(url)
+      console.log('getVendorCategories - Response:', data)
+      // Handle both array and object responses
+      if (Array.isArray(data)) {
+        return data
+      } else if (data && data.results) {
+        return data.results
+      } else if (data && data.data) {
+        return Array.isArray(data.data) ? data.data : []
+      }
+      return []
     } catch (err) {
       console.error('Failed to fetch vendor categories:', err)
+      console.error('Error details:', {
+        message: err.message,
+        stack: err.stack,
+        url: `${API_BASE}/questionnaires/get_vendor_categories/`
+      })
       return []
     }
   }
@@ -533,11 +551,33 @@ export const useQuestionnaireStore = defineStore('questionnaire', () => {
     loading.value = true
     error.value = null
     try {
-      const data = await apiCall(`${API_BASE}/questionnaires/get_vendors/`)
-      vendors.value = data
-      return data
+      const url = `${API_BASE}/questionnaires/get_vendors/`
+      console.log('fetchVendors - Calling API:', url)
+      const data = await apiCall(url)
+      console.log('fetchVendors - Response:', data)
+      // Handle both array and object responses
+      let vendorsList = []
+      if (Array.isArray(data)) {
+        vendorsList = data
+      } else if (data && data.results) {
+        vendorsList = data.results
+      } else if (data && data.data) {
+        vendorsList = Array.isArray(data.data) ? data.data : []
+      } else if (data && typeof data === 'object') {
+        // Try to extract vendors from object
+        vendorsList = Object.values(data).find(Array.isArray) || []
+      }
+      vendors.value = vendorsList
+      console.log('fetchVendors - Processed vendors count:', vendorsList.length)
+      return vendorsList
     } catch (err) {
       console.error('Failed to fetch vendors:', err)
+      console.error('Error details:', {
+        message: err.message,
+        stack: err.stack,
+        url: `${API_BASE}/questionnaires/get_vendors/`
+      })
+      vendors.value = []
       return []
     } finally {
       loading.value = false
@@ -623,10 +663,21 @@ export const useQuestionnaireStore = defineStore('questionnaire', () => {
         ? `${API_BASE}/questionnaires/get_templates/?${queryParams}`
         : `${API_BASE}/questionnaires/get_templates/`
       
-      console.log('Fetching templates from:', url)
+      console.log('fetchTemplates - Calling API:', url)
+      console.log('fetchTemplates - API_BASE:', API_BASE)
       const data = await apiCall(url)
-      console.log('Templates response:', data)
-      return data.templates || data || []
+      console.log('fetchTemplates - Response:', data)
+      // Handle different response formats
+      if (Array.isArray(data)) {
+        return data
+      } else if (data && data.templates) {
+        return Array.isArray(data.templates) ? data.templates : []
+      } else if (data && data.results) {
+        return Array.isArray(data.results) ? data.results : []
+      } else if (data && data.data) {
+        return Array.isArray(data.data) ? data.data : []
+      }
+      return []
     } catch (err) {
       console.error('Failed to fetch templates:', err)
       console.error('Error details:', {

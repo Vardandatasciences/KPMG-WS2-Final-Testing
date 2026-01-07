@@ -42,6 +42,19 @@ class JWTAuthentication(BaseAuthentication):
                 logger.warning("[Vendor Auth] No user_id in JWT payload")
                 raise AuthenticationFailed('Invalid token: missing user_id')
             
+            # Get tenant_id from User model and set it on request for multi-tenancy
+            try:
+                from mfa_auth.models import User
+                user_obj = User.objects.get(userid=user_id)
+                tenant_id = user_obj.tenant_id if hasattr(user_obj, 'tenant_id') else None
+                if tenant_id:
+                    request.tenant_id = tenant_id
+                    logger.info(f"[Vendor Auth] Set tenant_id {tenant_id} on request for user {user_id}")
+                else:
+                    logger.warning(f"[Vendor Auth] User {user_id} has no tenant_id")
+            except Exception as e:
+                logger.warning(f"[Vendor Auth] Could not fetch tenant_id for user {user_id}: {e}")
+            
             # Create a simple user object
             class SimpleUser:
                 def __init__(self, userid, username):

@@ -487,7 +487,7 @@ const router = createRouter({
     {
       path: '/vendor-approval-dashboard',
       name: 'Vendor Approval Dashboard',
-      component: () => import('@/pages/vendor/VenderApprovalDashboard.vue'),
+      component: () => import('@/pages/vendor/VendorApprovalDashboard.vue'),
       meta: { requiresAuth: true, permission: 'vendor_approve_reject' }
     },
     {
@@ -791,6 +791,23 @@ router.onError((error) => {
   console.error('Router navigation error:', error)
   // Log the error but don't break the app
   const errorMessage = error.message || 'Unknown navigation error'
+ 
+  // Handle syntax errors
+  if (errorMessage.includes('Unexpected token') || 
+      errorMessage.includes('SyntaxError') ||
+      error.name === 'SyntaxError') {
+    console.error('⚠️ Syntax error detected in component:', {
+      message: errorMessage,
+      stack: error.stack,
+      name: error.name,
+      component: error.component || 'Unknown'
+    })
+    console.error('This usually indicates a syntax error in the component file. Please check the component for:')
+    console.error('- Missing closing braces or brackets')
+    console.error('- Invalid object/array syntax')
+    console.error('- Template literal issues')
+    console.error('- Import/export syntax errors')
+  }
  
   // If it's a module loading error, try to provide helpful information
   if (errorMessage.includes('Failed to fetch dynamically imported module') ||

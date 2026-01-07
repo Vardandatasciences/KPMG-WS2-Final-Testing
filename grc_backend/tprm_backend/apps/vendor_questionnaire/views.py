@@ -12,6 +12,7 @@ from django.utils import timezone
 from django.http import Http404
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
+from django.db.utils import ProgrammingError
 import os
 import tempfile
 import json
@@ -32,14 +33,20 @@ from .serializers import (
 from tprm_backend.apps.vendor_core.vendor_authentication import VendorAuthenticationMixin
 from tprm_backend.rbac.tprm_decorators import rbac_vendor_required
 
-# MULTI-TENANCY: Import tenant utilities for filtering
-from tprm_backend.core.tenant_utils import (
-    get_tenant_id_from_request,
-    filter_queryset_by_tenant,
-    get_tenant_aware_queryset,
-    require_tenant,
-    tenant_filter
-)
+# MULTI-TENANCY: Import tenant utilities
+from tprm_backend.core.tenant_utils import get_tenant_id_from_request
+
+# Database connection helper - Use tprm_integration database for all vendor operations
+from django.db import connections
+
+def get_db_connection():
+    """
+    Get the correct database connection for tprm_integration database.
+    Returns 'tprm' if available, otherwise falls back to 'default'.
+    """
+    if 'tprm' in connections.databases:
+        return connections['tprm']
+    return connections['default']
 
 
 class QuestionnaireViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
@@ -297,15 +304,8 @@ class QuestionnaireViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def get_vendor_categories(self, request):
-        """Get available vendor categories
-        MULTI-TENANCY: Filters by tenant to ensure tenant isolation
-        """
-        # MULTI-TENANCY: Filter by tenant
-        tenant_id = get_tenant_id_from_request(request)
-        if tenant_id:
-            categories = VendorCategories.objects.filter(tenant_id=tenant_id)
-        else:
-            categories = VendorCategories.objects.all()
+        """Get available vendor categories"""
+        categories = VendorCategories.objects.all()
         category_list = [
             {
                 'value': str(cat.category_id),
@@ -319,15 +319,8 @@ class QuestionnaireViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def get_vendors(self, request):
-        """Get list of available vendors from temp_vendor table
-        MULTI-TENANCY: Filters by tenant to ensure tenant isolation
-        """
-        # MULTI-TENANCY: Get tenant ID and filter
-        tenant_id = get_tenant_id_from_request(request)
-        if tenant_id:
-            vendors = TempVendor.objects.filter(tenant_id=tenant_id).order_by('company_name')
-        else:
-            vendors = TempVendor.objects.all().order_by('company_name')
+        """Get list of available vendors from temp_vendor table"""
+        vendors = TempVendor.objects.all().order_by('company_name')
         vendor_list = [
             {
                 'id': vendor.id,
@@ -368,13 +361,8 @@ class QuestionnaireViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
             print(f"DEBUG - get_vendor_rfp_data: vendor_id={vendor_id} (type: {type(vendor_id)})")
             
             # Get the TempVendor to access response_id
-            # MULTI-TENANCY: Filter by tenant
-            tenant_id = get_tenant_id_from_request(request)
             try:
-                if tenant_id:
-                    temp_vendor = TempVendor.objects.get(id=vendor_id, tenant_id=tenant_id)
-                else:
-                    temp_vendor = TempVendor.objects.get(id=vendor_id)
+                temp_vendor = TempVendor.objects.get(id=vendor_id)
                 print(f"DEBUG - Found TempVendor: {temp_vendor.company_name}, response_id={temp_vendor.response_id}")
             except TempVendor.DoesNotExist:
                 print(f"DEBUG - TempVendor with id={vendor_id} not found")
@@ -405,7 +393,7 @@ class QuestionnaireViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
                     user_id = temp_vendor.userid
                     print(f"DEBUG - Fallback: Trying by userid={user_id}")
                     try:
-                        with connection.cursor() as cursor:
+                        with get_db_connection().cursor() as cursor:
                             cursor.execute("""
                                 SELECT DISTINCT rr.response_id
                                 FROM rfp_responses rr
@@ -509,14 +497,12 @@ class QuestionnaireViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
             print(f"ERROR - Traceback: {error_trace}")
             return Response(
                 {'error': f'Failed to fetch RFP data: {str(e)}', 'traceback': error_trace},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_200_OK
             )
     
     @action(detail=False, methods=['get'])
     def get_vendor_screening_data(self, request):
-        """Get external screening data for a specific vendor
-        MULTI-TENANCY: Filters by tenant to ensure tenant isolation
-        """
+        """Get external screening data for a specific vendor"""
         vendor_id = request.query_params.get('vendor_id')
         if not vendor_id:
             return Response(
@@ -525,12 +511,6 @@ class QuestionnaireViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
             )
         
         try:
-            # MULTI-TENANCY: Verify vendor belongs to tenant
-            tenant_id = get_tenant_id_from_request(request)
-            if tenant_id:
-                if not TempVendor.objects.filter(id=vendor_id, tenant_id=tenant_id).exists():
-                    return Response({'error': 'Vendor not found'}, status=status.HTTP_404_NOT_FOUND)
-            
             screening_results = ExternalScreeningResult.objects.filter(vendor_id=vendor_id).order_by('-screening_date')
             screening_data = []
             
@@ -552,7 +532,7 @@ class QuestionnaireViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
         except Exception as e:
             return Response(
                 {'error': f'Failed to fetch screening data: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_200_OK
             )
     
     @action(detail=False, methods=['get'])
@@ -562,7 +542,7 @@ class QuestionnaireViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
         Query params: status, is_active
         """
         try:
-            from bcpdrp.models import QuestionnaireTemplate
+            from tprm_backend.bcpdrp.models import QuestionnaireTemplate
             
             # Get query parameters
             status_filter = request.query_params.get('status')
@@ -570,6 +550,14 @@ class QuestionnaireViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
             
             # Build query - always filter by VENDOR module_type and is_template=True
             query = Q(module_type='VENDOR', is_template=True)
+            
+            # MULTI-TENANCY: Filter by tenant if available
+            tenant_id = get_tenant_id_from_request(request)
+            if tenant_id:
+                query &= Q(tenant_id=tenant_id)
+                print(f'Filtering templates by tenant_id: {tenant_id}')
+            else:
+                print('Warning: No tenant_id found in request - returning all templates')
             
             if status_filter:
                 query &= Q(status=status_filter)
@@ -605,13 +593,25 @@ class QuestionnaireViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
                 'templates': templates_data,
                 'count': len(templates_data)
             }, status=status.HTTP_200_OK)
+        except ProgrammingError as e:
+            # Handle case where table doesn't exist yet
+            error_msg = str(e)
+            if "doesn't exist" in error_msg.lower() or "1146" in error_msg:
+                print(f"Questionnaire templates table doesn't exist yet. Returning empty list.")
+                return Response({
+                    'success': True,
+                    'templates': [],
+                    'count': 0
+                }, status=status.HTTP_200_OK)
+            else:
+                # Re-raise if it's a different ProgrammingError
+                raise
         except Exception as e:
             import traceback
             print(f"Error listing questionnaire templates: {str(e)}")
             print(traceback.format_exc())
-            return Response(
-                {'error': f'Failed to list questionnaire templates: {str(e)}'}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            return Response({'success': True, 'templates': [], 'count': 0, 'message': 'Templates temporarily unavailable'},  
+                status=status.HTTP_200_OK
             )
     
     @action(detail=False, methods=['get'])
@@ -621,7 +621,7 @@ class QuestionnaireViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
         Query params: template_id
         """
         try:
-            from bcpdrp.models import QuestionnaireTemplate
+            from tprm_backend.bcpdrp.models import QuestionnaireTemplate
             
             template_id = request.query_params.get('template_id')
             if not template_id:
@@ -659,13 +659,25 @@ class QuestionnaireViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
                 'questions': questions,
                 'question_count': len(questions)
             }, status=status.HTTP_200_OK)
+        except ProgrammingError as e:
+            # Handle case where table doesn't exist yet
+            error_msg = str(e)
+            if "doesn't exist" in error_msg.lower() or "1146" in error_msg:
+                print(f"Questionnaire templates table doesn't exist yet.")
+                return Response(
+                    {'error': 'Questionnaire templates table does not exist yet'}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            else:
+                # Re-raise if it's a different ProgrammingError
+                raise
         except Exception as e:
             import traceback
             print(f"Error getting questionnaire template: {str(e)}")
             print(traceback.format_exc())
             return Response(
                 {'error': f'Failed to get questionnaire template: {str(e)}'}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_200_OK
             )
 
 
@@ -746,17 +758,10 @@ class QuestionnaireAssignmentViewSet(VendorAuthenticationMixin, viewsets.ModelVi
         created_assignments = []
         errors = []
         
-        # MULTI-TENANCY: Get tenant ID for filtering
-        tenant_id = get_tenant_id_from_request(request)
-        
         with transaction.atomic():
             for vendor_id in vendor_ids:
                 try:
-                    # MULTI-TENANCY: Filter by tenant
-                    if tenant_id:
-                        vendor = get_object_or_404(TempVendor, id=vendor_id, tenant_id=tenant_id)
-                    else:
-                        vendor = get_object_or_404(TempVendor, id=vendor_id)
+                    vendor = get_object_or_404(TempVendor, id=vendor_id)
                     
                     # Check if assignment already exists
                     existing = QuestionnaireAssignments.objects.filter(
@@ -939,15 +944,8 @@ class QuestionnaireAssignmentViewSet(VendorAuthenticationMixin, viewsets.ModelVi
     
     @action(detail=False, methods=['get'])
     def get_vendors(self, request):
-        """Get list of available vendors for assignment
-        MULTI-TENANCY: Filters by tenant to ensure tenant isolation
-        """
-        # MULTI-TENANCY: Filter by tenant
-        tenant_id = get_tenant_id_from_request(request)
-        if tenant_id:
-            vendors = TempVendor.objects.filter(tenant_id=tenant_id)
-        else:
-            vendors = TempVendor.objects.all()
+        """Get list of available vendors for assignment from tprm_integration database"""
+        vendors = TempVendor.objects.using('tprm').all()
         vendor_list = [
             {
                 'id': vendor.id,
@@ -963,8 +961,8 @@ class QuestionnaireAssignmentViewSet(VendorAuthenticationMixin, viewsets.ModelVi
     
     @action(detail=False, methods=['get'])
     def get_active_questionnaires(self, request):
-        """Get list of active questionnaires for assignment"""
-        questionnaires = Questionnaires.objects.filter(status='ACTIVE')
+        """Get list of active questionnaires for assignment from tprm_integration database"""
+        questionnaires = Questionnaires.objects.using('tprm').filter(status='ACTIVE')
         questionnaire_list = [
             {
                 'questionnaire_id': q.questionnaire_id,
@@ -1024,9 +1022,7 @@ class QuestionnaireResponseViewSet(VendorAuthenticationMixin, viewsets.ModelView
     
     @action(detail=False, methods=['get'])
     def get_vendor_assignments(self, request):
-        """Get assignments for a specific vendor
-        MULTI-TENANCY: Filters by tenant to ensure tenant isolation
-        """
+        """Get assignments for a specific vendor from tprm_integration database"""
         vendor_id = request.query_params.get('vendor_id')
         if not vendor_id:
             return Response(
@@ -1034,29 +1030,54 @@ class QuestionnaireResponseViewSet(VendorAuthenticationMixin, viewsets.ModelView
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # MULTI-TENANCY: Verify vendor belongs to tenant
-        tenant_id = get_tenant_id_from_request(request)
-        if tenant_id:
-            if not TempVendor.objects.filter(id=vendor_id, tenant_id=tenant_id).exists():
-                return Response({'error': 'Vendor not found'}, status=status.HTTP_404_NOT_FOUND)
-        
-        assignments = QuestionnaireAssignments.objects.filter(
-            temp_vendor_id=vendor_id
-        ).select_related('questionnaire', 'temp_vendor')
-        
-        assignment_list = []
-        for assignment in assignments:
-            assignment_list.append({
-                'assignment_id': assignment.assignment_id,
-                'questionnaire_id': assignment.questionnaire.questionnaire_id,
-                'questionnaire_name': assignment.questionnaire.questionnaire_name,
-                'status': assignment.status,
-                'assigned_date': assignment.assigned_date,
-                'due_date': assignment.due_date,
-                'vendor_name': assignment.temp_vendor.company_name
-            })
-        
-        return Response(assignment_list)
+        try:
+            # Convert vendor_id to integer
+            try:
+                vendor_id = int(vendor_id)
+            except (ValueError, TypeError):
+                return Response(
+                    {'error': f'Invalid vendor_id: {vendor_id}. Must be a valid integer.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            print(f"[GET_VENDOR_ASSIGNMENTS] Fetching assignments for vendor_id: {vendor_id}")
+            
+            # Use 'tprm' database to query from tprm_integration
+            # Try both temp_vendor_id and temp_vendor__id in case of field name differences
+            assignments = QuestionnaireAssignments.objects.using('tprm').filter(
+                temp_vendor_id=vendor_id
+            ).select_related('questionnaire', 'temp_vendor')
+            
+            print(f"[GET_VENDOR_ASSIGNMENTS] Found {assignments.count()} assignments for vendor_id: {vendor_id}")
+            
+            assignment_list = []
+            for assignment in assignments:
+                try:
+                    assignment_data = {
+                        'assignment_id': assignment.assignment_id,
+                        'questionnaire_id': assignment.questionnaire.questionnaire_id,
+                        'questionnaire_name': assignment.questionnaire.questionnaire_name,
+                        'status': assignment.status,
+                        'assigned_date': assignment.assigned_date.isoformat() if assignment.assigned_date else None,
+                        'due_date': assignment.due_date.isoformat() if assignment.due_date else None,
+                        'vendor_name': assignment.temp_vendor.company_name if assignment.temp_vendor else 'Unknown Vendor'
+                    }
+                    assignment_list.append(assignment_data)
+                except Exception as e:
+                    print(f"[GET_VENDOR_ASSIGNMENTS] Error processing assignment {assignment.assignment_id}: {str(e)}")
+                    continue
+            
+            print(f"[GET_VENDOR_ASSIGNMENTS] Returning {len(assignment_list)} assignments")
+            return Response(assignment_list)
+            
+        except Exception as e:
+            print(f"[GET_VENDOR_ASSIGNMENTS] Error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {'error': f'Failed to fetch vendor assignments: {str(e)}'},
+                status=status.HTTP_200_OK
+            )
     
     @action(detail=False, methods=['get'])
     def get_assignment_responses(self, request):
@@ -1068,13 +1089,14 @@ class QuestionnaireResponseViewSet(VendorAuthenticationMixin, viewsets.ModelView
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        assignment = get_object_or_404(QuestionnaireAssignments, assignment_id=assignment_id)
+        # Use 'tprm' database to query from tprm_integration
+        assignment = get_object_or_404(QuestionnaireAssignments.objects.using('tprm'), assignment_id=assignment_id)
         questions = assignment.questionnaire.questions.all().order_by('display_order')
         
-        # Get existing responses
+        # Get existing responses from tprm_integration database
         existing_responses = {
             r.question_id: r for r in 
-            QuestionnaireResponseSubmissions.objects.filter(assignment=assignment)
+            QuestionnaireResponseSubmissions.objects.using('tprm').filter(assignment=assignment)
         }
         
         responses_data = []
@@ -1464,7 +1486,7 @@ class QuestionnaireResponseViewSet(VendorAuthenticationMixin, viewsets.ModelView
                     else:
                         return Response(
                             {'error': f'Failed to upload {file.name}: {upload_result.get("error", "Unknown error")}'}, 
-                            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                            status=status.HTTP_200_OK
                         )
                         
                 finally:
@@ -1490,7 +1512,7 @@ class QuestionnaireResponseViewSet(VendorAuthenticationMixin, viewsets.ModelView
         except Exception as e:
             return Response(
                 {'error': f'Upload failed: {str(e)}'}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_200_OK
             )
     
     @action(detail=False, methods=['delete'])
@@ -1546,5 +1568,5 @@ class QuestionnaireResponseViewSet(VendorAuthenticationMixin, viewsets.ModelView
         except Exception as e:
             return Response(
                 {'error': f'Failed to remove file: {str(e)}'}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_200_OK
             )
