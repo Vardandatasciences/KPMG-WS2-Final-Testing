@@ -342,7 +342,8 @@ const getEvidenceUpdatedLabel = (auditId) => {
 const loadAudits = async () => {
   try {
     loading.value = true
-    const auditsData = await apiService.getAudits()
+    // Pass show_all=true to get all audits for the tenant (not just assigned ones)
+    const auditsData = await apiService.getAudits({ show_all: true })
     let audits = auditsData.results || auditsData || []
     
     // Load SLA data to populate SLA names
@@ -431,18 +432,12 @@ const loadAudits = async () => {
   }
 }
 
-// Filter audits to show only those assigned to the current user
+// Filter audits - backend already filters by tenant and user assignment
+// Frontend just returns all audits from backend (they're already filtered appropriately)
 const myAudits = computed(() => {
-  if (!currentUserId.value) {
-    // If no user is logged in, return empty array
-    return []
-  }
-  
-  // Filter audits where user is the assigned auditor or reviewer
-  return allAudits.value.filter(audit => 
-    audit.auditor_id === currentUserId.value || 
-    audit.reviewer_id === currentUserId.value
-  )
+  // Backend already handles filtering by tenant and user assignment
+  // So we just return all audits returned by the backend
+  return allAudits.value
 })
 
 // Filter by search term

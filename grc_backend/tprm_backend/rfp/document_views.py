@@ -17,6 +17,7 @@ from tprm_backend.core.tenant_utils import (
 import json
 
 
+@api_view(['GET'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
@@ -96,6 +97,7 @@ def generate_rfp_word_document(request, rfp_id):
         )
 
 
+@api_view(['GET'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')

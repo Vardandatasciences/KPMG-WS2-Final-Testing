@@ -222,7 +222,7 @@ class ContractAuditCreateSerializer(AutoDecryptingModelSerializer):
         model = ContractAudit
         fields = [
             'title', 'scope', 'assignee_id', 'auditor_id', 'reviewer_id', 'due_date', 'frequency',
-            'audit_type', 'contract', 'term_id', 'business_unit', 'role', 'responsibility'
+            'audit_type', 'contract', 'term_id', 'business_unit', 'role', 'responsibility', 'tenant_id'
         ]
     
     def create(self, validated_data):

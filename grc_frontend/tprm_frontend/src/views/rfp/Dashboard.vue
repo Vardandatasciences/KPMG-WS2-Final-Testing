@@ -9,23 +9,17 @@
         </p>
       </div>
       <div class="flex gap-2">
-        <Button variant="outline" as-child>
-          <a href="/rfp-list">
-            <FileText class="h-4 w-4 mr-2" />
-            Manage RFPs
-          </a>
+        <Button variant="outline" @click="router.push('/rfp-list')">
+          <FileText class="h-4 w-4 mr-2" />
+          Manage RFPs
         </Button>
-        <Button variant="outline" as-child>
-          <a href="/rfp-analytics">
-            <BarChart3 class="h-4 w-4 mr-2" />
-            View Analytics
-          </a>
+        <Button variant="outline" @click="router.push('/rfp-analytics')">
+          <BarChart3 class="h-4 w-4 mr-2" />
+          View Analytics
         </Button>
-        <Button as-child class="gradient-primary">
-          <a href="/rfp-creation">
-            <Plus class="h-4 w-4 mr-2" />
-            Create RFP
-          </a>
+        <Button @click="router.push('/rfp-creation')" class="gradient-primary">
+          <Plus class="h-4 w-4 mr-2" />
+          Create RFP
         </Button>
       </div>
     </div>
@@ -62,11 +56,9 @@
               Your most recent RFP activities
             </p>
           </div>
-          <Button variant="outline" size="sm" as-child>
-            <a href="/rfp-list">
-              View All
-              <ArrowRight class="h-4 w-4 ml-2" />
-            </a>
+          <Button variant="outline" size="sm" @click="navigateToRFPList">
+            View All
+            <ArrowRight class="h-4 w-4 ml-2" />
           </Button>
         </div>
         <div class="space-y-4">
@@ -118,7 +110,7 @@ import Badge from '@/components_rfp/rfpBadge.vue'
 import Progress from '@/components_rfp/rfpProgress.vue'
 import { useNotifications } from '@/composables/useNotifications'
 import loggingService from '@/services/loggingService'
-// Router removed - using MPA navigation
+import { useRouter } from 'vue-router'
 import { useRFPStore } from '@/store/index_rfp'
 
 // Icons
@@ -166,11 +158,14 @@ const BarChart3 = markRaw({
   template: '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>'
 })
 
-// Navigation functions for MPA
-const navigateToPage = (url: string) => {
-  window.location.href = url
-}
+// Router for navigation
+const router = useRouter()
 const rfpStore = useRFPStore()
+
+// Navigation function
+const navigateToRFPList = () => {
+  router.push('/rfp-list')
+}
 
 // Fetch RFPs when component mounts
 onMounted(async () => {

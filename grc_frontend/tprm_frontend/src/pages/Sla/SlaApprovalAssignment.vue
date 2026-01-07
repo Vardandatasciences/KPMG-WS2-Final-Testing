@@ -566,21 +566,40 @@ const fetchUsers = async () => {
     
     console.log('API response data:', response)
     
-    if (response && Array.isArray(response)) {
+    // Handle different response formats
+    if (response && response.success && Array.isArray(response.data)) {
+      users.value = response.data
+      console.log('Successfully fetched users:', response.data.length, 'records')
+    } else if (response && Array.isArray(response)) {
       users.value = response
       console.log('Successfully fetched users:', response.length, 'records')
     } else if (response && response.results && Array.isArray(response.results)) {
       users.value = response.results
       console.log('Successfully fetched users:', response.results.length, 'records')
+    } else if (response && response.data && Array.isArray(response.data)) {
+      users.value = response.data
+      console.log('Successfully fetched users:', response.data.length, 'records')
     } else {
-      console.error('API returned no users data')
+      console.error('API returned no users data:', response)
       users.value = []
+      PopupService.error('Failed to load users. Please try again.', 'Loading Error')
     }
     
     // Automatically select current user as assigner if available
     if (currentUser.value && !form.value.assigner_id) {
       const currentUserId = currentUser.value?.userid || currentUser.value?.user_id || currentUser.value?.id
-      if (currentUserId) {
+      if (currentUser.value.user && !currentUserId) { // Check nested user object
+        const nestedUserId = currentUser.value.user.userid || currentUser.value.user.user_id || currentUser.value.user.UserId || currentUser.value.user.id
+        if (nestedUserId) {
+          const currentUserInUsers = users.value.find(
+            user => user.user_id == nestedUserId || user.userid == nestedUserId || user.id == nestedUserId
+          )
+          if (currentUserInUsers) {
+            form.value.assigner_id = currentUserInUsers.user_id || currentUserInUsers.userid || currentUserInUsers.id
+            console.log('Auto-selected current user as assigner (from nested user):', form.value.assigner_id)
+          }
+        }
+      } else if (currentUserId) {
         // Check if current user exists in the users list
         const currentUserInUsers = users.value.find(
           user => user.user_id == currentUserId || user.userid == currentUserId || user.id == currentUserId
@@ -594,6 +613,7 @@ const fetchUsers = async () => {
   } catch (error) {
     console.error('Error fetching users:', error)
     users.value = []
+    PopupService.error(error.response?.data?.error || 'Failed to load users. Please try again.', 'Loading Error')
   } finally {
     isLoadingUsers.value = false
   }
@@ -710,14 +730,39 @@ const onAssigneeChange = () => {
 }
 
 const onSLAChange = () => {
-  const sla = contracts.value.find(c => c.sla_id == form.value.object_id)
+  const slaId = form.value.object_id
+  const sla = contracts.value.find(c => {
+    const contractSlaId = c.sla_id || c.id
+    return contractSlaId == slaId
+  })
   if (sla) {
     selectedContract.value = sla
-    form.value.sla_id = sla.sla_id
+    form.value.sla_id = sla.sla_id || sla.id
     console.log('Selected SLA:', sla)
   } else {
     selectedContract.value = null
     form.value.sla_id = ''
+    // If we have an object_id but no matching SLA, try to fetch it
+    if (slaId) {
+      console.log('SLA not found in list for object_id:', slaId, 'attempting to fetch')
+      slaApprovalApi.getSLAById(slaId).then(individualSLA => {
+        if (individualSLA) {
+          // Add to list if not present
+          const existingSLA = contracts.value.find(c => {
+            const contractSlaId = c.sla_id || c.id
+            return contractSlaId == slaId
+          })
+          if (!existingSLA) {
+            contracts.value.unshift(individualSLA)
+          }
+          selectedContract.value = individualSLA
+          form.value.sla_id = individualSLA.sla_id || individualSLA.id
+          console.log('Fetched and selected SLA:', individualSLA)
+        }
+      }).catch(error => {
+        console.error('Error fetching SLA:', error)
+      })
+    }
   }
 }
 
@@ -892,13 +937,95 @@ onMounted(async () => {
     showCreateForm.value = true
     
     if (slaId) {
-      form.value.object_id = slaId
-      form.value.sla_id = slaId
-      // Find and set the selected SLA
-      const sla = contracts.value.find(c => c.sla_id == slaId)
-      if (sla) {
-        selectedContract.value = sla
+      // Convert to number for comparison
+      const slaIdNum = parseInt(slaId)
+      // Set as number (not string) to match the option values which are numbers
+      form.value.object_id = slaIdNum
+      form.value.sla_id = slaIdNum
+      
+      // Wait for SLAs to be loaded, then find and set the selected SLA
+      // Use a watcher or check after a short delay to ensure contracts are loaded
+      const checkAndSetSLA = async () => {
+        const sla = contracts.value.find(c => {
+          const contractSlaId = c.sla_id || c.id
+          return contractSlaId == slaIdNum || contractSlaId == slaId
+        })
+        if (sla) {
+          selectedContract.value = sla
+          console.log('Auto-filled and selected SLA from URL parameter:', sla)
+        } else {
+          // If not found in contracts list, try fetching it individually from the API
+          console.log('SLA not found in contracts list, attempting to fetch individual SLA from API')
+          try {
+            const individualSLA = await slaApprovalApi.getSLAById(slaIdNum)
+            if (individualSLA) {
+              // Ensure the SLA has sla_id field
+              if (!individualSLA.sla_id && individualSLA.id) {
+                individualSLA.sla_id = individualSLA.id
+              }
+              // Add the SLA to the contracts list if not already present
+              const existingSLA = contracts.value.find(c => {
+                const contractSlaId = c.sla_id || c.id
+                return contractSlaId == slaIdNum || contractSlaId == slaId
+              })
+              if (!existingSLA) {
+                contracts.value.unshift(individualSLA) // Add to the beginning of the list
+              }
+              selectedContract.value = individualSLA
+              // Ensure form values are set correctly (use number to match option values)
+              form.value.object_id = individualSLA.sla_id || individualSLA.id
+              form.value.sla_id = individualSLA.sla_id || individualSLA.id
+              console.log('Auto-filled and selected SLA after fetching individually:', individualSLA)
+            } else {
+              // If still not found, try refreshing the full list
+              console.log('Individual SLA fetch returned no data, trying full list refresh')
+              await fetchSLAsForDropdown()
+              const slaAfterFetch = contracts.value.find(c => {
+                const contractSlaId = c.sla_id || c.id
+                return contractSlaId == slaIdNum || contractSlaId == slaId
+              })
+              if (slaAfterFetch) {
+                selectedContract.value = slaAfterFetch
+                // Ensure form values are set correctly
+                form.value.object_id = slaAfterFetch.sla_id || slaAfterFetch.id
+                form.value.sla_id = slaAfterFetch.sla_id || slaAfterFetch.id
+                console.log('Auto-filled and selected SLA after fetching full list:', slaAfterFetch)
+              } else {
+                console.warn('SLA not found even after fetching. slaId:', slaId)
+                PopupService.warning(`SLA with ID ${slaId} was not found. Please select it manually from the dropdown.`, 'SLA Not Found')
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching individual SLA:', error)
+            // Try refreshing the full list as fallback
+            try {
+              await fetchSLAsForDropdown()
+              const slaAfterFetch = contracts.value.find(c => {
+                const contractSlaId = c.sla_id || c.id
+                return contractSlaId == slaIdNum || contractSlaId == slaId
+              })
+              if (slaAfterFetch) {
+                selectedContract.value = slaAfterFetch
+                // Ensure form values are set correctly
+                form.value.object_id = slaAfterFetch.sla_id || slaAfterFetch.id
+                form.value.sla_id = slaAfterFetch.sla_id || slaAfterFetch.id
+                console.log('Auto-filled and selected SLA after fetching full list (fallback):', slaAfterFetch)
+              } else {
+                console.warn('SLA not found even after fetching. slaId:', slaId)
+                PopupService.warning(`SLA with ID ${slaId} was not found. Please select it manually from the dropdown.`, 'SLA Not Found')
+              }
+            } catch (fetchError) {
+              console.error('Error fetching SLAs list:', fetchError)
+              PopupService.warning(`SLA with ID ${slaId} was not found. Please select it manually from the dropdown.`, 'SLA Not Found')
+            }
+          }
+        }
       }
+      
+      // Check immediately and also after a short delay to handle async loading
+      checkAndSetSLA()
+      setTimeout(checkAndSetSLA, 500)
+      
       console.log('Auto-filled object_id from URL parameter:', slaId)
     }
     

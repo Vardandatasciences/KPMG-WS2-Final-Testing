@@ -20,6 +20,8 @@ class User(TPRMEncryptedFieldsMixin, models.Model):
     session_token = models.CharField(db_column="session_token", max_length=1045, null=True, blank=True)
     consent_accepted = models.CharField(db_column="consent_accepted", max_length=1, null=True, blank=True)
     license_key = models.CharField(db_column="license_key", max_length=255, null=True, blank=True)
+    # MULTI-TENANCY: Link user to tenant
+    tenant_id = models.IntegerField(db_column="TenantId", null=True, blank=True, help_text="Tenant this user belongs to")
 
     class Meta:
         db_table = "users"

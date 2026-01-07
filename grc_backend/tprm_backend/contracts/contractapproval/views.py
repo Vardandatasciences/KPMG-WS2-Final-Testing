@@ -22,6 +22,12 @@ from tprm_backend.contracts.contractapproval.serializers import (
 from tprm_backend.contracts.serializers import VendorContractSerializer, ContractTermSerializer, ContractClauseSerializer
 from tprm_backend.contracts.views import RateLimiter, SecurityManager
 from tprm_backend.rbac.tprm_decorators import rbac_contract_required
+from tprm_backend.core.tenant_utils import (
+    get_tenant_id_from_request,
+    get_tenant_aware_queryset,
+    require_tenant,
+    tenant_filter
+)
 
 logger = logging.getLogger(__name__)
 
@@ -103,17 +109,28 @@ def health_check(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('approve')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def approval_list(request):
     """
     List contract approvals with filtering and pagination.
     
     Security: Users can only view approvals assigned to them.
     If no assignee_id is provided, automatically filters by authenticated user's ID.
+    MULTI-TENANCY: Filters approvals by tenant to ensure tenant isolation
     """
     try:
         # Rate limiting
         if RateLimiter.is_rate_limited(request, limit=200, window=3600):
             return Response({'error': 'Rate limit exceeded'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+        
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
         
         # Get query parameters
         assignee_id = request.GET.get('assignee_id')
@@ -126,23 +143,42 @@ def approval_list(request):
         page = int(request.GET.get('page', 1))
         page_size = min(int(request.GET.get('page_size', 20)), 100)
         
-        logger.info(f"Contract approval list request - User: {getattr(request.user, 'userid', 'anonymous')}, assignee_id: {assignee_id}, filters: {request.GET}")
+        logger.info(f"Contract approval list request - User: {getattr(request.user, 'userid', 'anonymous')}, tenant_id: {tenant_id}, assignee_id: {assignee_id}, filters: {request.GET}")
         
         # Build query - if assignee_id is provided, allow users to view their own approvals
         # even without general 'list' permission
+        # MULTI-TENANCY: Filter by tenant_id, but also handle null tenant_id for backward compatibility
         if assignee_id:
             # User is requesting their own approvals - allow this
             # Try both string and integer conversion to handle potential type mismatches
             try:
                 assignee_id_int = int(assignee_id)
-                queryset = ContractApproval.objects.filter(assignee_id=assignee_id_int)
+                # Try with tenant_id first, then fallback to null tenant_id if no results
+                queryset = ContractApproval.objects.filter(assignee_id=assignee_id_int, tenant_id=tenant_id)
                 
-                # If no results with int, try string
+                # If no results with tenant_id, try with null tenant_id (backward compatibility)
                 if queryset.count() == 0:
-                    queryset = ContractApproval.objects.filter(assignee_id=str(assignee_id))
+                    null_tenant_queryset = ContractApproval.objects.filter(assignee_id=assignee_id_int, tenant_id__isnull=True)
+                    if null_tenant_queryset.exists():
+                        # Found approvals with null tenant_id - update them and use them
+                        logger.info(f"Found {null_tenant_queryset.count()} approvals with null tenant_id for assignee {assignee_id_int}, updating them")
+                        null_tenant_queryset.update(tenant_id=tenant_id)
+                        queryset = ContractApproval.objects.filter(assignee_id=assignee_id_int, tenant_id=tenant_id)
+                
+                # If still no results, try string version
+                if queryset.count() == 0:
+                    queryset = ContractApproval.objects.filter(assignee_id=str(assignee_id), tenant_id=tenant_id)
+                    if queryset.count() == 0:
+                        null_tenant_queryset = ContractApproval.objects.filter(assignee_id=str(assignee_id), tenant_id__isnull=True)
+                        if null_tenant_queryset.exists():
+                            logger.info(f"Found {null_tenant_queryset.count()} approvals with null tenant_id for assignee {assignee_id} (string), updating them")
+                            null_tenant_queryset.update(tenant_id=tenant_id)
+                            queryset = ContractApproval.objects.filter(assignee_id=str(assignee_id), tenant_id=tenant_id)
                     
             except ValueError:
-                queryset = ContractApproval.objects.filter(assignee_id=assignee_id)
+                queryset = ContractApproval.objects.filter(assignee_id=assignee_id, tenant_id=tenant_id)
+                if queryset.count() == 0:
+                    queryset = ContractApproval.objects.filter(assignee_id=assignee_id, tenant_id__isnull=True)
         else:
             # Security: If no assignee_id is provided, filter by the authenticated user's ID
             # This ensures users can ONLY see approvals assigned to them
@@ -150,13 +186,31 @@ def approval_list(request):
             if current_user_id:
                 try:
                     current_user_id_int = int(current_user_id)
-                    queryset = ContractApproval.objects.filter(assignee_id=current_user_id_int)
+                    # Try with tenant_id first, then fallback to null tenant_id if no results
+                    queryset = ContractApproval.objects.filter(assignee_id=current_user_id_int, tenant_id=tenant_id)
                     
-                    # If no results with int, try string
+                    # If no results with tenant_id, try with null tenant_id (backward compatibility)
                     if queryset.count() == 0:
-                        queryset = ContractApproval.objects.filter(assignee_id=str(current_user_id))
+                        null_tenant_queryset = ContractApproval.objects.filter(assignee_id=current_user_id_int, tenant_id__isnull=True)
+                        if null_tenant_queryset.exists():
+                            # Found approvals with null tenant_id - update them and use them
+                            logger.info(f"Found {null_tenant_queryset.count()} approvals with null tenant_id for assignee {current_user_id_int}, updating them")
+                            null_tenant_queryset.update(tenant_id=tenant_id)
+                            queryset = ContractApproval.objects.filter(assignee_id=current_user_id_int, tenant_id=tenant_id)
+                    
+                    # If still no results, try string version
+                    if queryset.count() == 0:
+                        queryset = ContractApproval.objects.filter(assignee_id=str(current_user_id), tenant_id=tenant_id)
+                        if queryset.count() == 0:
+                            null_tenant_queryset = ContractApproval.objects.filter(assignee_id=str(current_user_id), tenant_id__isnull=True)
+                            if null_tenant_queryset.exists():
+                                logger.info(f"Found {null_tenant_queryset.count()} approvals with null tenant_id for assignee {current_user_id} (string), updating them")
+                                null_tenant_queryset.update(tenant_id=tenant_id)
+                                queryset = ContractApproval.objects.filter(assignee_id=str(current_user_id), tenant_id=tenant_id)
                 except (ValueError, TypeError):
-                    queryset = ContractApproval.objects.filter(assignee_id=current_user_id)
+                    queryset = ContractApproval.objects.filter(assignee_id=current_user_id, tenant_id=tenant_id)
+                    if queryset.count() == 0:
+                        queryset = ContractApproval.objects.filter(assignee_id=current_user_id, tenant_id__isnull=True)
             else:
                 # No user ID available - return empty queryset for security
                 queryset = ContractApproval.objects.none()
@@ -215,19 +269,44 @@ def approval_list(request):
         
     except Exception as e:
         logger.error(f"Error listing contract approvals: {str(e)}")
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return Response({
+            'success': False,
+            'error': str(e),
+            'data': [],
+            'pagination': {
+                'page': 1,
+                'page_size': 20,
+                'total_pages': 0,
+                'total_count': 0,
+                'has_next': False,
+                'has_previous': False
+            }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['GET'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('approve')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def approval_detail(request, pk):
     """
     Get details of a specific contract approval
+    MULTI-TENANCY: Filters approval by tenant to ensure tenant isolation
     """
     try:
-        approval = ContractApproval.objects.get(approval_id=pk)
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
+        approval = ContractApproval.objects.get(approval_id=pk, tenant_id=tenant_id)
         serializer = ContractApprovalAssignmentSerializer(approval)
         
         return Response({
@@ -246,14 +325,25 @@ def approval_detail(request, pk):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('approve')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def approval_create(request):
     """
     Create a new contract approval
+    MULTI-TENANCY: Automatically assigns tenant_id to the approval
     """
     try:
         # Rate limiting
         if RateLimiter.is_rate_limited(request, limit=50, window=3600):
             return Response({'error': 'Rate limit exceeded'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+        
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
         
         # Security validation
         SecurityManager.validate_contract_data(request.data)
@@ -264,27 +354,74 @@ def approval_create(request):
             from django.utils import timezone
             data['assigned_date'] = timezone.now()
         
-        # Auto-populate assigner_name and assignee_name from user IDs
-        from mfa_auth.models import User
+        # MULTI-TENANCY: Set tenant_id if not provided
+        if not data.get('tenant_id'):
+            data['tenant_id'] = tenant_id
         
+        # Auto-populate assigner_name and assignee_name from user IDs
         if data.get('assigner_id') and not data.get('assigner_name'):
             try:
+                from mfa_auth.models import User
                 assigner = User.objects.get(userid=data['assigner_id'])
                 data['assigner_name'] = f"{assigner.first_name} {assigner.last_name}".strip() or assigner.username
-            except User.DoesNotExist:
+            except ImportError:
+                logger.warning(f"User model import failed, using raw SQL for assigner_id {data['assigner_id']}")
+                # Fallback to raw SQL
+                try:
+                    from django.db import connection
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            "SELECT FirstName, LastName, UserName FROM users WHERE UserId = %s",
+                            [data['assigner_id']]
+                        )
+                        row = cursor.fetchone()
+                        if row:
+                            first_name, last_name, username = row
+                            full_name = f"{first_name or ''} {last_name or ''}".strip()
+                            data['assigner_name'] = full_name if full_name else (username or f"User {data['assigner_id']}")
+                        else:
+                            data['assigner_name'] = f"User {data['assigner_id']}"
+                except Exception as sql_err:
+                    logger.error(f"Raw SQL query failed for assigner: {sql_err}")
+                    data['assigner_name'] = f"User {data['assigner_id']}"
+            except Exception as e:
+                logger.warning(f"Error getting assigner name: {e}")
                 data['assigner_name'] = f"User {data['assigner_id']}"
         
         if data.get('assignee_id') and not data.get('assignee_name'):
             try:
+                from mfa_auth.models import User
                 assignee = User.objects.get(userid=data['assignee_id'])
                 data['assignee_name'] = f"{assignee.first_name} {assignee.last_name}".strip() or assignee.username
-            except User.DoesNotExist:
+            except ImportError:
+                logger.warning(f"User model import failed, using raw SQL for assignee_id {data['assignee_id']}")
+                # Fallback to raw SQL
+                try:
+                    from django.db import connection
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            "SELECT FirstName, LastName, UserName FROM users WHERE UserId = %s",
+                            [data['assignee_id']]
+                        )
+                        row = cursor.fetchone()
+                        if row:
+                            first_name, last_name, username = row
+                            full_name = f"{first_name or ''} {last_name or ''}".strip()
+                            data['assignee_name'] = full_name if full_name else (username or f"User {data['assignee_id']}")
+                        else:
+                            data['assignee_name'] = f"User {data['assignee_id']}"
+                except Exception as sql_err:
+                    logger.error(f"Raw SQL query failed for assignee: {sql_err}")
+                    data['assignee_name'] = f"User {data['assignee_id']}"
+            except Exception as e:
+                logger.warning(f"Error getting assignee name: {e}")
                 data['assignee_name'] = f"User {data['assignee_id']}"
         
         serializer = ContractApprovalCreateAssignmentSerializer(data=data)
         
         if serializer.is_valid():
-            approval = serializer.save()
+            # MULTI-TENANCY: Ensure tenant_id is set when saving
+            approval = serializer.save(tenant_id=tenant_id)
             
             # Update contract status to UNDER_REVIEW if it's a contract creation approval
             if approval.object_type == 'CONTRACT_CREATION' and approval.object_id:
@@ -373,12 +510,23 @@ def approval_bulk_create(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('approve')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def approval_update(request, pk):
     """
     Update a contract approval (status, comments)
+    MULTI-TENANCY: Filters approval by tenant to ensure tenant isolation
     """
     try:
-        approval = ContractApproval.objects.get(approval_id=pk)
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
+        approval = ContractApproval.objects.get(approval_id=pk, tenant_id=tenant_id)
         
         # Only allow updating status and comment_text
         allowed_fields = ['status', 'comment_text']
@@ -410,12 +558,23 @@ def approval_update(request, pk):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('approve')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def approval_delete(request, pk):
     """
     Delete a contract approval
+    MULTI-TENANCY: Filters approval by tenant to ensure tenant isolation
     """
     try:
-        approval = ContractApproval.objects.get(approval_id=pk)
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
+        approval = ContractApproval.objects.get(approval_id=pk, tenant_id=tenant_id)
         approval.delete()
         
         return Response({
@@ -434,14 +593,25 @@ def approval_delete(request, pk):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('approve')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def approval_stats(request):
     """
     Get contract approval statistics.
     
     Security: Returns statistics only for approvals assigned to the authenticated user.
     If no assignee_id is provided, automatically uses authenticated user's ID.
+    MULTI-TENANCY: Filters statistics by tenant to ensure tenant isolation
     """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Apply filters if provided
         assignee_id = request.GET.get('assignee_id')
         object_type = request.GET.get('object_type')
@@ -452,17 +622,17 @@ def approval_stats(request):
         if not assignee_id:
             assignee_id = getattr(request.user, 'userid', None)
         
-        # Get base queryset filtered by assignee_id
+        # Get base queryset filtered by assignee_id and tenant_id
         if assignee_id:
             try:
                 assignee_id_int = int(assignee_id)
-                queryset = ContractApproval.objects.filter(assignee_id=assignee_id_int)
+                queryset = ContractApproval.objects.filter(assignee_id=assignee_id_int, tenant_id=tenant_id)
                 
                 # If no results with int, try string
                 if queryset.count() == 0:
-                    queryset = ContractApproval.objects.filter(assignee_id=str(assignee_id))
+                    queryset = ContractApproval.objects.filter(assignee_id=str(assignee_id), tenant_id=tenant_id)
             except (ValueError, TypeError):
-                queryset = ContractApproval.objects.filter(assignee_id=assignee_id)
+                queryset = ContractApproval.objects.filter(assignee_id=assignee_id, tenant_id=tenant_id)
         else:
             # No user ID available - return empty queryset for security
             queryset = ContractApproval.objects.none()
@@ -537,19 +707,30 @@ def approval_stats(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('approve')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def contract_approvals_list(request, contract_id):
     """
     Get all approvals for a specific contract
+    MULTI-TENANCY: Filters approvals by tenant to ensure tenant isolation
     """
     try:
-        # Verify contract exists
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
+        # Verify contract exists and belongs to tenant
         try:
-            contract = VendorContract.objects.get(contract_id=contract_id)
+            contract = VendorContract.objects.get(contract_id=contract_id, tenant_id=tenant_id)
         except VendorContract.DoesNotExist:
             return Response({'error': 'Contract not found'}, status=status.HTTP_404_NOT_FOUND)
         
-        # Get approvals for this contract
-        approvals = ContractApproval.objects.filter(object_id=contract_id)
+        # Get approvals for this contract, filtered by tenant
+        approvals = ContractApproval.objects.filter(object_id=contract_id, tenant_id=tenant_id)
         
         # Apply additional filters
         status_filter = request.GET.get('status')
@@ -579,14 +760,25 @@ def contract_approvals_list(request, contract_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('approve')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_contract_approvals(request):
     """
     Get contract approvals for a specific contract by object_id
+    MULTI-TENANCY: Filters approvals by tenant to ensure tenant isolation
     """
     try:
         # Rate limiting
         if RateLimiter.is_rate_limited(request, limit=200, window=3600):
             return Response({'error': 'Rate limit exceeded'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+        
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
         
         # Get query parameters
         object_id = request.GET.get('object_id')
@@ -595,10 +787,11 @@ def get_contract_approvals(request):
         if not object_id:
             return Response({'error': 'object_id parameter is required'}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Build query
+        # Build query, filtered by tenant
         queryset = ContractApproval.objects.filter(
             object_type=object_type,
-            object_id=object_id
+            object_id=object_id,
+            tenant_id=tenant_id
         ).order_by('-created_at')
         
         # Serialize data
@@ -618,17 +811,28 @@ def get_contract_approvals(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('approve')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_assigner_approvals(request):
     """
     Get contract approvals where the current user is the assigner (for review)
     
     Security: If assigner_id is not provided, automatically filters by authenticated user's ID
     to ensure users only see their own assigned approvals.
+    MULTI-TENANCY: Filters approvals by tenant to ensure tenant isolation
     """
     try:
         # Rate limiting
         if RateLimiter.is_rate_limited(request, limit=200, window=3600):
             return Response({'error': 'Rate limit exceeded'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+        
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
         
         # Get query parameters
         assigner_id = request.GET.get('assigner_id')
@@ -659,10 +863,41 @@ def get_assigner_approvals(request):
                     }
                 })
         
-        logger.info(f"Assigner approvals request - User: {request.user.userid if hasattr(request.user, 'userid') else 'N/A'}, assigner_id: {assigner_id}, filters: {request.GET}")
+        logger.info(f"Assigner approvals request - User: {request.user.userid if hasattr(request.user, 'userid') else 'N/A'}, tenant_id: {tenant_id}, assigner_id: {assigner_id}, filters: {request.GET}")
         
         # Build query for approvals where user is the assigner
-        queryset = ContractApproval.objects.filter(assigner_id=assigner_id)
+        # MULTI-TENANCY: Filter by tenant_id, but also handle null tenant_id for backward compatibility
+        try:
+            assigner_id_int = int(assigner_id)
+            # Try with tenant_id first, then fallback to null tenant_id if no results
+            queryset = ContractApproval.objects.filter(assigner_id=assigner_id_int, tenant_id=tenant_id)
+            
+            # If no results with tenant_id, try with null tenant_id (backward compatibility)
+            if queryset.count() == 0:
+                null_tenant_queryset = ContractApproval.objects.filter(assigner_id=assigner_id_int, tenant_id__isnull=True)
+                if null_tenant_queryset.exists():
+                    # Found approvals with null tenant_id - update them and use them
+                    logger.info(f"Found {null_tenant_queryset.count()} approvals with null tenant_id for assigner {assigner_id_int}, updating them")
+                    null_tenant_queryset.update(tenant_id=tenant_id)
+                    queryset = ContractApproval.objects.filter(assigner_id=assigner_id_int, tenant_id=tenant_id)
+            
+            # If still no results, try string version
+            if queryset.count() == 0:
+                queryset = ContractApproval.objects.filter(assigner_id=str(assigner_id), tenant_id=tenant_id)
+                if queryset.count() == 0:
+                    null_tenant_queryset = ContractApproval.objects.filter(assigner_id=str(assigner_id), tenant_id__isnull=True)
+                    if null_tenant_queryset.exists():
+                        logger.info(f"Found {null_tenant_queryset.count()} approvals with null tenant_id for assigner {assigner_id} (string), updating them")
+                        null_tenant_queryset.update(tenant_id=tenant_id)
+                        queryset = ContractApproval.objects.filter(assigner_id=str(assigner_id), tenant_id=tenant_id)
+        except (ValueError, TypeError):
+            queryset = ContractApproval.objects.filter(assigner_id=assigner_id, tenant_id=tenant_id)
+            if queryset.count() == 0:
+                null_tenant_queryset = ContractApproval.objects.filter(assigner_id=assigner_id, tenant_id__isnull=True)
+                if null_tenant_queryset.exists():
+                    logger.info(f"Found {null_tenant_queryset.count()} approvals with null tenant_id for assigner {assigner_id}, updating them")
+                    null_tenant_queryset.update(tenant_id=tenant_id)
+                    queryset = ContractApproval.objects.filter(assigner_id=assigner_id, tenant_id=tenant_id)
         
         # Apply additional filters
         if status_filter:
@@ -700,18 +935,35 @@ def get_assigner_approvals(request):
         
     except Exception as e:
         logger.error(f"Error getting assigner approvals: {str(e)}")
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return Response({
+            'success': False,
+            'error': str(e),
+            'data': [],
+            'pagination': {
+                'page': 1,
+                'page_size': 20,
+                'total_pages': 0,
+                'total_count': 0,
+                'has_next': False,
+                'has_previous': False
+            }
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('approve')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def approve_contract(request, approval_id):
     """
     Approve a contract after review
     
     Performance: Backup is created asynchronously AFTER approval to prevent blocking
+    MULTI-TENANCY: Filters approval by tenant to ensure tenant isolation
     """
     import threading
     
@@ -720,15 +972,52 @@ def approve_contract(request, approval_id):
         if RateLimiter.is_rate_limited(request, limit=50, window=3600):
             return Response({'error': 'Rate limit exceeded'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
         
-        # Get the approval
-        try:
-            approval = ContractApproval.objects.get(approval_id=approval_id)
-        except ContractApproval.DoesNotExist:
-            return Response({'error': 'Approval not found'}, status=status.HTTP_404_NOT_FOUND)
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
         
-        # Check if user is the assigner
-        if approval.assigner_id != getattr(request.user, 'userid', 1):
-            return Response({'error': 'You can only approve contracts you assigned'}, status=status.HTTP_403_FORBIDDEN)
+        # Get the approval, filtered by tenant (with fallback to null tenant_id for backward compatibility)
+        try:
+            approval = ContractApproval.objects.get(approval_id=approval_id, tenant_id=tenant_id)
+        except ContractApproval.DoesNotExist:
+            # Try with null tenant_id for backward compatibility
+            try:
+                approval = ContractApproval.objects.get(approval_id=approval_id, tenant_id__isnull=True)
+                # Update the approval with tenant_id if it was null
+                if approval.tenant_id is None:
+                    approval.tenant_id = tenant_id
+                    approval.save(update_fields=['tenant_id'])
+                    logger.info(f"Updated approval {approval_id} with tenant_id {tenant_id}")
+            except ContractApproval.DoesNotExist:
+                return Response({
+                    'success': False,
+                    'error': 'Approval not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check if user is the assigner (handle both int and string comparisons)
+        current_user_id = getattr(request.user, 'userid', None)
+        assigner_id = approval.assigner_id
+        
+        # Normalize both IDs for comparison
+        try:
+            current_user_id_int = int(current_user_id) if current_user_id else None
+            assigner_id_int = int(assigner_id) if assigner_id else None
+            if current_user_id_int != assigner_id_int:
+                return Response({
+                    'success': False,
+                    'error': 'You can only approve contracts you assigned'
+                }, status=status.HTTP_403_FORBIDDEN)
+        except (ValueError, TypeError):
+            # Fallback to string comparison
+            if str(current_user_id) != str(assigner_id):
+                return Response({
+                    'success': False,
+                    'error': 'You can only approve contracts you assigned'
+                }, status=status.HTTP_403_FORBIDDEN)
         
         # Update approval status to APPROVED and set approved_date
         approval.status = 'APPROVED'
@@ -772,15 +1061,15 @@ def approve_contract(request, approval_id):
                     subcontract.save()
                     logger.info(f"Subcontract {subcontract.contract_id} approved")
                     
-                    # Update subcontract terms approval_status to Approved
-                    ContractTerm.objects.filter(contract_id=subcontract.contract_id).update(
+                    # Update subcontract terms approval_status to Approved, filtered by tenant
+                    ContractTerm.objects.filter(contract_id=subcontract.contract_id, tenant_id=tenant_id).update(
                         approval_status='Approved',
                         compliance_status='Compliant'
                     )
                     logger.info(f"Updated subcontract terms approval_status for subcontract {subcontract.contract_id}")
                     
-                    # Update subcontract clauses status to Approved
-                    ContractClause.objects.filter(contract_id=subcontract.contract_id).update(
+                    # Update subcontract clauses status to Approved, filtered by tenant
+                    ContractClause.objects.filter(contract_id=subcontract.contract_id, tenant_id=tenant_id).update(
                         status='Approved',
                         is_standard=True
                     )
@@ -848,11 +1137,14 @@ def approve_contract(request, approval_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('reject')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def reject_contract(request, approval_id):
     """
     Reject a contract after review
     
     Performance: Backup is created asynchronously AFTER rejection to prevent blocking
+    MULTI-TENANCY: Filters approval by tenant to ensure tenant isolation
     """
     import threading
     
@@ -861,15 +1153,52 @@ def reject_contract(request, approval_id):
         if RateLimiter.is_rate_limited(request, limit=50, window=3600):
             return Response({'error': 'Rate limit exceeded'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
         
-        # Get the approval
-        try:
-            approval = ContractApproval.objects.get(approval_id=approval_id)
-        except ContractApproval.DoesNotExist:
-            return Response({'error': 'Approval not found'}, status=status.HTTP_404_NOT_FOUND)
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
         
-        # Check if user is the assigner
-        if approval.assigner_id != getattr(request.user, 'userid', 1):
-            return Response({'error': 'You can only reject contracts you assigned'}, status=status.HTTP_403_FORBIDDEN)
+        # Get the approval, filtered by tenant (with fallback to null tenant_id for backward compatibility)
+        try:
+            approval = ContractApproval.objects.get(approval_id=approval_id, tenant_id=tenant_id)
+        except ContractApproval.DoesNotExist:
+            # Try with null tenant_id for backward compatibility
+            try:
+                approval = ContractApproval.objects.get(approval_id=approval_id, tenant_id__isnull=True)
+                # Update the approval with tenant_id if it was null
+                if approval.tenant_id is None:
+                    approval.tenant_id = tenant_id
+                    approval.save(update_fields=['tenant_id'])
+                    logger.info(f"Updated approval {approval_id} with tenant_id {tenant_id}")
+            except ContractApproval.DoesNotExist:
+                return Response({
+                    'success': False,
+                    'error': 'Approval not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check if user is the assigner (handle both int and string comparisons)
+        current_user_id = getattr(request.user, 'userid', None)
+        assigner_id = approval.assigner_id
+        
+        # Normalize both IDs for comparison
+        try:
+            current_user_id_int = int(current_user_id) if current_user_id else None
+            assigner_id_int = int(assigner_id) if assigner_id else None
+            if current_user_id_int != assigner_id_int:
+                return Response({
+                    'success': False,
+                    'error': 'You can only reject contracts you assigned'
+                }, status=status.HTTP_403_FORBIDDEN)
+        except (ValueError, TypeError):
+            # Fallback to string comparison
+            if str(current_user_id) != str(assigner_id):
+                return Response({
+                    'success': False,
+                    'error': 'You can only reject contracts you assigned'
+                }, status=status.HTTP_403_FORBIDDEN)
         
         # Get rejection reason
         rejection_reason = request.data.get('rejection_reason', '')
@@ -883,28 +1212,29 @@ def reject_contract(request, approval_id):
         if approval.object_type == 'CONTRACT_CREATION' and approval.object_id:
             try:
                 from tprm_backend.contracts.models import VendorContract, ContractTerm, ContractClause
-                contract = VendorContract.objects.get(contract_id=approval.object_id)
+                contract = VendorContract.objects.get(contract_id=approval.object_id, tenant_id=tenant_id)
                 contract.status = 'REJECTED'
                 contract.save()
                 logger.info(f"Contract {approval.object_id} rejected by {getattr(request.user, 'userid', 1)}")
                 
-                # Update all main contract terms approval_status to Rejected
-                ContractTerm.objects.filter(contract_id=approval.object_id).update(
+                # Update all main contract terms approval_status to Rejected, filtered by tenant
+                ContractTerm.objects.filter(contract_id=approval.object_id, tenant_id=tenant_id).update(
                     approval_status='Rejected'
                 )
                 logger.info(f"Updated contract terms approval_status to Rejected for contract {approval.object_id}")
                 
-                # Update all main contract clauses status to Rejected
-                ContractClause.objects.filter(contract_id=approval.object_id).update(
+                # Update all main contract clauses status to Rejected, filtered by tenant
+                ContractClause.objects.filter(contract_id=approval.object_id, tenant_id=tenant_id).update(
                     status='Rejected'
                 )
                 logger.info(f"Updated contract clauses status to Rejected for contract {approval.object_id}")
                 
-                # Find and reject all subcontracts
+                # Find and reject all subcontracts, filtered by tenant
                 subcontracts = VendorContract.objects.filter(
                     contract_kind='SUBCONTRACT',
                     parent_contract_id=approval.object_id,
-                    is_archived=False
+                    is_archived=False,
+                    tenant_id=tenant_id
                 )
                 
                 for subcontract in subcontracts:
@@ -913,14 +1243,14 @@ def reject_contract(request, approval_id):
                     subcontract.save()
                     logger.info(f"Subcontract {subcontract.contract_id} rejected")
                     
-                    # Update subcontract terms approval_status to Rejected
-                    ContractTerm.objects.filter(contract_id=subcontract.contract_id).update(
+                    # Update subcontract terms approval_status to Rejected, filtered by tenant
+                    ContractTerm.objects.filter(contract_id=subcontract.contract_id, tenant_id=tenant_id).update(
                         approval_status='Rejected'
                     )
                     logger.info(f"Updated subcontract terms approval_status to Rejected for subcontract {subcontract.contract_id}")
                     
-                    # Update subcontract clauses status to Rejected
-                    ContractClause.objects.filter(contract_id=subcontract.contract_id).update(
+                    # Update subcontract clauses status to Rejected, filtered by tenant
+                    ContractClause.objects.filter(contract_id=subcontract.contract_id, tenant_id=tenant_id).update(
                         status='Rejected'
                     )
                     logger.info(f"Updated subcontract clauses status to Rejected for subcontract {subcontract.contract_id}")

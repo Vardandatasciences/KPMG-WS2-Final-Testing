@@ -185,3 +185,4 @@ WHERE TenantId = 2;  -- Replace 2 with priya.gupta's actual TenantId
 
 If all of the above are true, **multitenancy is working perfectly!** 🎉
 
+

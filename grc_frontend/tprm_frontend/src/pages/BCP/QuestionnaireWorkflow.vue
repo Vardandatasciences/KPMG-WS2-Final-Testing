@@ -1532,7 +1532,8 @@ const fetchUsers = async () => {
 const onAssignerChange = () => {
   const selectedUser = users.value.find(user => user.user_id == assignmentForm.value.assigner_id)
   if (selectedUser) {
-    assignmentForm.value.assigner_name = selectedUser.username
+    // Use display_name if available (shown in dropdown), otherwise fall back to username
+    assignmentForm.value.assigner_name = selectedUser.display_name || selectedUser.username || ''
   } else {
     assignmentForm.value.assigner_name = ''
   }
@@ -1541,7 +1542,8 @@ const onAssignerChange = () => {
 const onAssigneeChange = () => {
   const selectedUser = users.value.find(user => user.user_id == assignmentForm.value.assignee_id)
   if (selectedUser) {
-    assignmentForm.value.assignee_name = selectedUser.username
+    // Use display_name if available (shown in dropdown), otherwise fall back to username
+    assignmentForm.value.assignee_name = selectedUser.display_name || selectedUser.username || ''
   } else {
     assignmentForm.value.assignee_name = ''
   }
@@ -1550,7 +1552,14 @@ const onAssigneeChange = () => {
 const handleNoApprovalChange = () => {
   if (noApprovalNeeded.value) {
     // Try to get current logged in user from Vuex store first
-    let currentUser = store.getters['auth/currentUser']
+    let currentUser = null
+    
+    try {
+      currentUser = store.getters['auth/currentUser']
+      console.log('Vuex store user:', currentUser)
+    } catch (vuexError) {
+      console.log('Could not access Vuex store:', vuexError.message)
+    }
     
     // If not in store, try to get from localStorage as fallback
     if (!currentUser) {
@@ -1565,9 +1574,26 @@ const handleNoApprovalChange = () => {
       }
     }
     
-    // Handle both user_id and userid property names (backend returns userid)
-    const userId = currentUser?.user_id || currentUser?.userid
-    const userName = currentUser?.username || `${currentUser?.first_name || ''} ${currentUser?.last_name || ''}`.trim() || currentUser?.email
+    // Try multiple possible user ID field names (checking all common variations)
+    const userId = currentUser?.UserId || currentUser?.id || currentUser?.user_id || currentUser?.userId || currentUser?.userid
+    
+    // First, try to find the user in the users list to get their display_name
+    let userName = ''
+    if (userId) {
+      const userFromList = users.value.find(user => user.user_id == userId)
+      if (userFromList) {
+        // Use display_name from the users list (matches what's shown in dropdown)
+        userName = userFromList.display_name || userFromList.username || ''
+      }
+    }
+    
+    // If not found in users list, construct name from currentUser object
+    if (!userName && currentUser) {
+      userName = currentUser?.username || 
+                 `${currentUser?.first_name || ''} ${currentUser?.last_name || ''}`.trim() || 
+                 currentUser?.email || 
+                 ''
+    }
     
     if (currentUser && userId) {
       // Auto-fill assigner
@@ -1577,10 +1603,13 @@ const handleNoApprovalChange = () => {
       // Set assignee to same as assigner
       assignmentForm.value.assignee_id = userId.toString()
       assignmentForm.value.assignee_name = userName
+      
+      console.log('✅ Successfully set assigner and assignee from user:', { userId, userName })
     } else {
       console.error('No current user found in store or localStorage')
       console.log('Store state:', store.getters['auth/currentUser'])
       console.log('localStorage current_user:', localStorage.getItem('current_user'))
+      console.log('Current user object:', currentUser)
       PopupService.warning('Unable to get current user information. Please log in again or select assignee manually.', 'User Not Found')
       noApprovalNeeded.value = false
     }
@@ -1597,14 +1626,26 @@ const createAssignment = async () => {
   try {
     console.log('Creating assignment:', assignmentForm.value)
     
-    // Ensure all required fields are filled
-    if (!assignmentForm.value.workflow_name || !assignmentForm.value.assigner_id || !assignmentForm.value.due_date) {
-      PopupService.warning('Please fill in all required fields (Workflow Name, Assigner, Due Date)', 'Required Fields Missing')
-      return
+    // Validate all required fields (matching backend requirements)
+    const missingFields = []
+    
+    if (!assignmentForm.value.workflow_name) missingFields.push('Workflow Name')
+    if (!assignmentForm.value.plan_type) missingFields.push('Plan Type')
+    if (!assignmentForm.value.assigner_id) missingFields.push('Assigner')
+    if (!assignmentForm.value.assigner_name) missingFields.push('Assigner Name')
+    if (!assignmentForm.value.object_type) missingFields.push('Object Type')
+    if (!assignmentForm.value.object_id) missingFields.push('Object ID')
+    if (!assignmentForm.value.due_date) missingFields.push('Due Date')
+    
+    // Only require assignee fields if no_approval_needed is false
+    if (!noApprovalNeeded.value) {
+      if (!assignmentForm.value.assignee_id) missingFields.push('Assignee')
+      if (!assignmentForm.value.assignee_name) missingFields.push('Assignee Name')
     }
     
-    if (!noApprovalNeeded.value && !assignmentForm.value.assignee_id) {
-      PopupService.warning('Please select an assignee or check "No Approval Needed"', 'Assignee Required')
+    if (missingFields.length > 0) {
+      PopupService.warning(`Please fill in all required fields: ${missingFields.join(', ')}`, 'Required Fields Missing')
+      isSubmitting.value = false
       return
     }
     
@@ -1612,6 +1653,13 @@ const createAssignment = async () => {
     const assignmentData = {
       ...assignmentForm.value,
       no_approval_needed: noApprovalNeeded.value
+    }
+    
+    // Ensure object_id is a string or number (not empty string)
+    if (assignmentData.object_id === '' || assignmentData.object_id === null || assignmentData.object_id === undefined) {
+      PopupService.warning('Object ID is required. Please ensure the questionnaire was saved successfully.', 'Object ID Missing')
+      isSubmitting.value = false
+      return
     }
     
     // Call the API to create the approval assignment using the new workflow API
@@ -1626,12 +1674,31 @@ const createAssignment = async () => {
     
   } catch (error) {
     console.error('Error creating assignment:', error)
+    console.error('Error response:', error.response?.data)
     
     let errorMessage = 'Error creating assignment. Please try again.'
-    if (error.response?.data?.message) {
-      errorMessage = error.response.data.message
-    } else if (error.response?.data?.error) {
-      errorMessage = error.response.data.error
+    
+    // Try to extract detailed error message from backend
+    if (error.response?.data) {
+      const responseData = error.response.data
+      // Check for different possible error message formats
+      if (responseData.message) {
+        errorMessage = responseData.message
+      } else if (responseData.error) {
+        errorMessage = responseData.error
+      } else if (responseData.detail) {
+        errorMessage = responseData.detail
+      } else if (typeof responseData === 'string') {
+        errorMessage = responseData
+      } else if (responseData.non_field_errors && Array.isArray(responseData.non_field_errors)) {
+        errorMessage = responseData.non_field_errors.join(', ')
+      } else {
+        // Try to extract first error message from any field
+        const firstError = Object.values(responseData).find(v => typeof v === 'string' || Array.isArray(v))
+        if (firstError) {
+          errorMessage = Array.isArray(firstError) ? firstError[0] : firstError
+        }
+      }
     } else if (error.message) {
       errorMessage = error.message
     }

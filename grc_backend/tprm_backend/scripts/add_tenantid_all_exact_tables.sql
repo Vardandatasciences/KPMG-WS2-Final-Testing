@@ -684,3 +684,4 @@ SELECT 'bcp_drp_plans', COUNT(*), COUNT(TenantId) FROM bcp_drp_plans
 UNION ALL
 SELECT 'vendor_slas', COUNT(*), COUNT(TenantId) FROM vendor_slas;
 
+
