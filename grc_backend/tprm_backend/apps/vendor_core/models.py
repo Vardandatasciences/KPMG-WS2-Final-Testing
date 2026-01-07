@@ -37,6 +37,12 @@ class VendorCategories(VendorBaseModel):
     """Vendor categories mapping to existing vendor_categories table"""
     
     category_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link vendor category to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.DO_NOTHING, db_column='TenantId', 
+                               related_name='vendor_categories', null=True, blank=True,
+                               help_text="Tenant this vendor category belongs to")
+    
     category_name = models.CharField(max_length=100)
     category_code = models.CharField(unique=True, max_length=20)
     description = models.TextField(blank=True, null=True)
@@ -61,6 +67,12 @@ class Vendors(VendorBaseModel):
     """Main vendors table mapping"""
     
     vendor_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link vendor to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.DO_NOTHING, db_column='TenantId', 
+                               related_name='vendor_core_vendors', null=True, blank=True,
+                               help_text="Tenant this vendor belongs to")
+    
     vendor_code = models.CharField(unique=True, max_length=50)
     company_name = models.CharField(max_length=255)
     legal_name = models.CharField(max_length=255, blank=True, null=True)
@@ -105,6 +117,12 @@ class VendorContacts(VendorBaseModel):
     """Vendor contacts mapping to existing vendor_contacts table"""
     
     contact_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link vendor contact to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.DO_NOTHING, db_column='TenantId', 
+                               related_name='vendor_core_contacts', null=True, blank=True,
+                               help_text="Tenant this vendor contact belongs to")
+    
     vendor = models.ForeignKey(Vendors, models.DO_NOTHING)
     contact_type = models.CharField(max_length=9, blank=True, null=True)
     first_name = models.CharField(max_length=100, blank=True, null=True)
@@ -133,6 +151,12 @@ class VendorDocuments(VendorBaseModel):
     """Vendor documents mapping to existing vendor_documents table"""
     
     document_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link vendor document to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.DO_NOTHING, db_column='TenantId', 
+                               related_name='vendor_core_documents', null=True, blank=True,
+                               help_text="Tenant this vendor document belongs to")
+    
     vendor = models.ForeignKey(Vendors, models.DO_NOTHING)
     document_type = models.CharField(max_length=13, blank=True, null=True)
     document_name = models.CharField(max_length=255)
@@ -187,6 +211,12 @@ class TempVendor(VendorBaseModel):
     """Temporary vendor model mapping to temp_vendor table for registration"""
     
     id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link temp vendor to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.DO_NOTHING, db_column='TenantId', 
+                               related_name='temp_vendors', null=True, blank=True,
+                               help_text="Tenant this temp vendor belongs to")
+    
     userid = models.IntegerField(db_column='UserId', blank=True, null=True)
     vendor_code = models.CharField(max_length=50, blank=True, null=True)
     company_name = models.CharField(max_length=255, blank=True, null=True)
@@ -210,7 +240,6 @@ class TempVendor(VendorBaseModel):
     description = models.TextField(blank=True, null=True)
     contacts = models.JSONField(blank=True, null=True)
     documents = models.JSONField(blank=True, null=True)
-    data_inventory = models.JSONField(null=True, blank=True, help_text="JSON mapping vendor field labels to data types (personal, confidential, regular)")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     response_id = models.BigIntegerField(blank=True, null=True)

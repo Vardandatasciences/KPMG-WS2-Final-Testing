@@ -31,6 +31,15 @@ from tprm_backend.apps.vendor_core.models import S3Files
 from tprm_backend.s3 import create_direct_mysql_client
 from tprm_backend.rbac.tprm_decorators import rbac_contract_required
 
+# MULTI-TENANCY: Import tenant utilities for filtering
+from tprm_backend.core.tenant_utils import (
+    get_tenant_id_from_request,
+    filter_queryset_by_tenant,
+    get_tenant_aware_queryset,
+    require_tenant,
+    tenant_filter
+)
+
 import re
 def _normalize_term_id(term_id):
     if term_id is None:
@@ -188,7 +197,9 @@ class JWTAuthentication(BaseAuthentication):
 
 
 class ContractAuditListView(generics.ListCreateAPIView):
-    """List and create contract audits."""
+    """List and create contract audits.
+    MULTI-TENANCY: Filters audits by tenant to ensure tenant isolation
+    """
     queryset = ContractAudit.objects.select_related('contract').all()
     authentication_classes = [JWTAuthentication]
     permission_classes = [PerformContractAuditPermission]
@@ -199,8 +210,13 @@ class ContractAuditListView(generics.ListCreateAPIView):
     ordering = ['-created_at']
     
     def get_queryset(self):
-        """Override queryset to filter by current user's role when appropriate."""
+        """Override queryset to filter by tenant and current user's role when appropriate."""
         queryset = super().get_queryset()
+        
+        # MULTI-TENANCY: Filter by tenant
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
         
         # Get current user ID from request
         if hasattr(self.request, 'user') and hasattr(self.request.user, 'userid'):
@@ -230,6 +246,11 @@ class ContractAuditListView(generics.ListCreateAPIView):
             return ContractAuditCreateSerializer
         return ContractAuditListSerializer
     
+    def perform_create(self, serializer):
+        """MULTI-TENANCY: Set tenant_id when creating audit"""
+        tenant_id = get_tenant_id_from_request(self.request)
+        serializer.save(tenant_id=tenant_id)
+    
     def create(self, request, *args, **kwargs):
         """Override create method to provide better error handling."""
         try:
@@ -244,10 +265,20 @@ class ContractAuditListView(generics.ListCreateAPIView):
 
 
 class ContractAuditDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """Retrieve, update and delete contract audit."""
+    """Retrieve, update and delete contract audit.
+    MULTI-TENANCY: Filters audits by tenant to ensure tenant isolation
+    """
     queryset = ContractAudit.objects.all()
     authentication_classes = [JWTAuthentication]
     permission_classes = [PerformContractAuditPermission]
+    
+    def get_queryset(self):
+        """MULTI-TENANCY: Filter audits by tenant"""
+        queryset = super().get_queryset()
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        return queryset
     
     def get_serializer_class(self):
         if self.request.method in ['PUT', 'PATCH']:
@@ -287,9 +318,16 @@ class ContractAuditDetailView(generics.RetrieveUpdateDestroyAPIView):
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('PerformContractAudit')
 def start_audit(request, audit_id):
-    """Start an audit by changing status to in_progress."""
+    """Start an audit by changing status to in_progress.
+    MULTI-TENANCY: Ensures audit belongs to tenant
+    """
     try:
-        audit = get_object_or_404(ContractAudit, audit_id=audit_id)
+        # MULTI-TENANCY: Filter by tenant
+        tenant_id = get_tenant_id_from_request(request)
+        if tenant_id:
+            audit = get_object_or_404(ContractAudit, audit_id=audit_id, tenant_id=tenant_id)
+        else:
+            audit = get_object_or_404(ContractAudit, audit_id=audit_id)
         
         # Check if audit is in 'created' status
         if audit.status != 'created':
@@ -319,25 +357,52 @@ def start_audit(request, audit_id):
 
 
 class ContractStaticQuestionnaireListView(generics.ListCreateAPIView):
-    """List and create contract static questionnaires."""
+    """List and create contract static questionnaires.
+    MULTI-TENANCY: Filters questionnaires by tenant to ensure tenant isolation
+    """
     queryset = ContractStaticQuestionnaire.objects.all()
     serializer_class = ContractStaticQuestionnaireSerializer
     authentication_classes = [JWTAuthentication]
     permission_classes = [PerformContractAuditPermission]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['term_id', 'question_type', 'is_required']
+    
+    def get_queryset(self):
+        """MULTI-TENANCY: Filter questionnaires by tenant"""
+        queryset = super().get_queryset()
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        return queryset
+    
+    def perform_create(self, serializer):
+        """MULTI-TENANCY: Set tenant_id when creating questionnaire"""
+        tenant_id = get_tenant_id_from_request(self.request)
+        serializer.save(tenant_id=tenant_id)
 
 
 class ContractStaticQuestionnaireDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """Retrieve, update and delete contract static questionnaire."""
+    """Retrieve, update and delete contract static questionnaire.
+    MULTI-TENANCY: Filters questionnaires by tenant to ensure tenant isolation
+    """
     queryset = ContractStaticQuestionnaire.objects.all()
     serializer_class = ContractStaticQuestionnaireSerializer
     authentication_classes = [JWTAuthentication]
     permission_classes = [PerformContractAuditPermission]
+    
+    def get_queryset(self):
+        """MULTI-TENANCY: Filter questionnaires by tenant"""
+        queryset = super().get_queryset()
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        return queryset
 
 
 class ContractAuditVersionListView(generics.ListCreateAPIView):
-    """List and create contract audit versions."""
+    """List and create contract audit versions.
+    MULTI-TENANCY: Filters audit versions by tenant to ensure tenant isolation
+    """
     queryset = ContractAuditVersion.objects.all()
     serializer_class = ContractAuditVersionSerializer
     authentication_classes = [JWTAuthentication]
@@ -346,18 +411,43 @@ class ContractAuditVersionListView(generics.ListCreateAPIView):
     filterset_fields = ['audit_id', 'version_type', 'approval_status', 'user_id']
     ordering_fields = ['date_created', 'created_at']
     ordering = ['-created_at']
+    
+    def get_queryset(self):
+        """MULTI-TENANCY: Filter audit versions by tenant"""
+        queryset = super().get_queryset()
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        return queryset
+    
+    def perform_create(self, serializer):
+        """MULTI-TENANCY: Set tenant_id when creating audit version"""
+        tenant_id = get_tenant_id_from_request(self.request)
+        serializer.save(tenant_id=tenant_id)
 
 
 class ContractAuditVersionDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """Retrieve, update and delete contract audit version."""
+    """Retrieve, update and delete contract audit version.
+    MULTI-TENANCY: Filters audit versions by tenant to ensure tenant isolation
+    """
     queryset = ContractAuditVersion.objects.all()
     serializer_class = ContractAuditVersionSerializer
     authentication_classes = [JWTAuthentication]
     permission_classes = [PerformContractAuditPermission]
+    
+    def get_queryset(self):
+        """MULTI-TENANCY: Filter audit versions by tenant"""
+        queryset = super().get_queryset()
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        return queryset
 
 
 class ContractAuditFindingListView(generics.ListCreateAPIView):
-    """List and create contract audit findings."""
+    """List and create contract audit findings.
+    MULTI-TENANCY: Filters audit findings by tenant to ensure tenant isolation
+    """
     queryset = ContractAuditFinding.objects.all()
     serializer_class = ContractAuditFindingSerializer
     authentication_classes = [JWTAuthentication]
@@ -366,6 +456,19 @@ class ContractAuditFindingListView(generics.ListCreateAPIView):
     filterset_fields = ['audit_id', 'term_id', 'user_id']
     ordering_fields = ['check_date', 'created_at']
     ordering = ['-created_at']
+    
+    def get_queryset(self):
+        """MULTI-TENANCY: Filter audit findings by tenant"""
+        queryset = super().get_queryset()
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        return queryset
+    
+    def perform_create(self, serializer):
+        """MULTI-TENANCY: Set tenant_id when creating audit finding"""
+        tenant_id = get_tenant_id_from_request(self.request)
+        serializer.save(tenant_id=tenant_id)
     
     def list(self, request, *args, **kwargs):
         """Override list method to add debugging."""
@@ -450,15 +553,27 @@ class ContractAuditFindingListView(generics.ListCreateAPIView):
 
 
 class ContractAuditFindingDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """Retrieve, update and delete contract audit finding."""
+    """Retrieve, update and delete contract audit finding.
+    MULTI-TENANCY: Filters audit findings by tenant to ensure tenant isolation
+    """
     queryset = ContractAuditFinding.objects.all()
     serializer_class = ContractAuditFindingSerializer
     authentication_classes = [JWTAuthentication]
     permission_classes = [PerformContractAuditPermission]
+    
+    def get_queryset(self):
+        """MULTI-TENANCY: Filter audit findings by tenant"""
+        queryset = super().get_queryset()
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        return queryset
 
 
 class ContractAuditReportListView(generics.ListCreateAPIView):
-    """List and create contract audit reports."""
+    """List and create contract audit reports.
+    MULTI-TENANCY: Filters audit reports by tenant to ensure tenant isolation
+    """
     queryset = ContractAuditReport.objects.all()
     serializer_class = ContractAuditReportSerializer
     authentication_classes = [JWTAuthentication]
@@ -467,14 +582,37 @@ class ContractAuditReportListView(generics.ListCreateAPIView):
     filterset_fields = ['audit_id', 'contract_id', 'term_id']
     ordering_fields = ['generated_at']
     ordering = ['-generated_at']
+    
+    def get_queryset(self):
+        """MULTI-TENANCY: Filter audit reports by tenant"""
+        queryset = super().get_queryset()
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        return queryset
+    
+    def perform_create(self, serializer):
+        """MULTI-TENANCY: Set tenant_id when creating audit report"""
+        tenant_id = get_tenant_id_from_request(self.request)
+        serializer.save(tenant_id=tenant_id)
 
 
 class ContractAuditReportDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """Retrieve, update and delete contract audit report."""
+    """Retrieve, update and delete contract audit report.
+    MULTI-TENANCY: Filters audit reports by tenant to ensure tenant isolation
+    """
     queryset = ContractAuditReport.objects.all()
     serializer_class = ContractAuditReportSerializer
     authentication_classes = [JWTAuthentication]
     permission_classes = [PerformContractAuditPermission]
+    
+    def get_queryset(self):
+        """MULTI-TENANCY: Filter audit reports by tenant"""
+        queryset = super().get_queryset()
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        return queryset
 
 
 @api_view(['POST'])
@@ -503,8 +641,13 @@ def upload_contract_audit_report(request):
     contract_id = data.get('contract_id')
     term_id = data.get('term_id') or None
     
+    # MULTI-TENANCY: Filter by tenant
+    tenant_id = get_tenant_id_from_request(request)
     try:
-        audit = ContractAudit.objects.get(audit_id=audit_id)
+        if tenant_id:
+            audit = ContractAudit.objects.get(audit_id=audit_id, tenant_id=tenant_id)
+        else:
+            audit = ContractAudit.objects.get(audit_id=audit_id)
     except ContractAudit.DoesNotExist:
         return Response(
             {'success': False, 'error': f'Audit {audit_id} not found'},
@@ -599,11 +742,13 @@ def upload_contract_audit_report(request):
         }
     )
     
+    # MULTI-TENANCY: Set tenant_id
     report = ContractAuditReport.objects.create(
         audit_id=audit_id,
         contract_id=contract_id,
         term_id=term_id,
-        report_link=s3_url
+        report_link=s3_url,
+        tenant_id=tenant_id
     )
     
     return Response(
@@ -652,8 +797,13 @@ def upload_contract_audit_document(request):
     file_size = data.get('file_size')
     file_data = data.get('file_data')
     
+    # MULTI-TENANCY: Verify audit belongs to tenant
+    tenant_id = get_tenant_id_from_request(request)
     try:
-        ContractAudit.objects.get(audit_id=audit_id)
+        if tenant_id:
+            ContractAudit.objects.get(audit_id=audit_id, tenant_id=tenant_id)
+        else:
+            ContractAudit.objects.get(audit_id=audit_id)
     except ContractAudit.DoesNotExist:
         return Response(
             {'success': False, 'error': f'Audit {audit_id} not found'},
@@ -746,11 +896,19 @@ def upload_contract_audit_document(request):
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('PerformContractAudit')
 def contract_audit_dashboard_stats(request):
-    """Get contract audit dashboard statistics."""
-    total_audits = ContractAudit.objects.count()
-    active_audits = ContractAudit.objects.filter(status__in=['created', 'in_progress']).count()
-    completed_audits = ContractAudit.objects.filter(status='completed').count()
-    overdue_audits = ContractAudit.objects.filter(
+    """Get contract audit dashboard statistics.
+    MULTI-TENANCY: Filters statistics by tenant to ensure tenant isolation
+    """
+    # MULTI-TENANCY: Filter by tenant
+    tenant_id = get_tenant_id_from_request(request)
+    audits_base = ContractAudit.objects.all()
+    if tenant_id:
+        audits_base = audits_base.filter(tenant_id=tenant_id)
+    
+    total_audits = audits_base.count()
+    active_audits = audits_base.filter(status__in=['created', 'in_progress']).count()
+    completed_audits = audits_base.filter(status='completed').count()
+    overdue_audits = audits_base.filter(
         due_date__lt=timezone.now().date(),
         status__in=['created', 'in_progress']
     ).count()
@@ -768,12 +926,22 @@ def contract_audit_dashboard_stats(request):
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('PerformContractAudit')
 def available_contracts(request):
-    """Get available contracts for audit creation."""
+    """Get available contracts for audit creation.
+    MULTI-TENANCY: Filters contracts by tenant to ensure tenant isolation
+    """
+    # MULTI-TENANCY: Filter by tenant
+    tenant_id = get_tenant_id_from_request(request)
     contracts = VendorContract.objects.select_related('vendor')
+    if tenant_id:
+        contracts = contracts.filter(tenant_id=tenant_id)
     
     contract_data = []
     for contract in contracts:
-        terms_count = ContractTerm.objects.filter(contract_id=contract.contract_id).count()
+        # MULTI-TENANCY: Filter terms by tenant
+        terms_query = ContractTerm.objects.filter(contract_id=contract.contract_id)
+        if tenant_id:
+            terms_query = terms_query.filter(tenant_id=tenant_id)
+        terms_count = terms_query.count()
         contract_data.append({
             'contract_id': contract.contract_id,
             'contract_title': contract.contract_title,
@@ -794,10 +962,18 @@ def available_contracts(request):
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('PerformContractAudit')
 def contract_terms(request, contract_id):
-    """Get terms for a specific contract."""
+    """Get terms for a specific contract.
+    MULTI-TENANCY: Ensures contract belongs to tenant and filters terms
+    """
     try:
-        contract = VendorContract.objects.get(contract_id=contract_id)
-        terms = ContractTerm.objects.filter(contract_id=contract_id)
+        # MULTI-TENANCY: Filter by tenant
+        tenant_id = get_tenant_id_from_request(request)
+        if tenant_id:
+            contract = VendorContract.objects.get(contract_id=contract_id, tenant_id=tenant_id)
+            terms = ContractTerm.objects.filter(contract_id=contract_id, tenant_id=tenant_id)
+        else:
+            contract = VendorContract.objects.get(contract_id=contract_id)
+            terms = ContractTerm.objects.filter(contract_id=contract_id)
         
         terms_data = []
         for term in terms:
@@ -840,8 +1016,12 @@ def questionnaires_by_term_title(request):
     
     This endpoint finds terms in contract_terms by term_category (preferred) or term_title, 
     then returns questionnaires from contract_static_questionnaires that match those term_ids.
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
     try:
+        # MULTI-TENANCY: Filter by tenant
+        tenant_id = get_tenant_id_from_request(request)
+        
         term_category = request.query_params.get('term_category', None)
         term_title = request.query_params.get('term_title', None)
         term_id = request.query_params.get('term_id', None)
@@ -858,7 +1038,10 @@ def questionnaires_by_term_title(request):
             matching_term_ids = [term_id]
             # Also get term_category if available for additional matching
             try:
-                term_obj = ContractTerm.objects.filter(term_id=term_id).first()
+                term_query = ContractTerm.objects.filter(term_id=term_id)
+                if tenant_id:
+                    term_query = term_query.filter(tenant_id=tenant_id)
+                term_obj = term_query.first()
                 if term_obj:
                     term_category = term_obj.term_category
                     term_title = term_obj.term_title
@@ -869,13 +1052,18 @@ def questionnaires_by_term_title(request):
             matching_terms = ContractTerm.objects.filter(
                 term_category__iexact=term_category
             )
+            if tenant_id:
+                matching_terms = matching_terms.filter(tenant_id=tenant_id)
             matching_term_ids = list(matching_terms.values_list('term_id', flat=True))
             logger.info(f"Found {len(matching_term_ids)} terms with category '{term_category}': {matching_term_ids}")
             
             # Also try to find questionnaires by looking up their term_ids in contract_terms
             # This handles cases where questionnaires might be linked to terms we haven't found yet
             # Get all unique term_ids from questionnaires that might match
-            all_questionnaire_term_ids = list(ContractStaticQuestionnaire.objects.values_list('term_id', flat=True).distinct())
+            questionnaire_query = ContractStaticQuestionnaire.objects.all()
+            if tenant_id:
+                questionnaire_query = questionnaire_query.filter(tenant_id=tenant_id)
+            all_questionnaire_term_ids = list(questionnaire_query.values_list('term_id', flat=True).distinct())
             logger.info(f"Total unique term_ids in questionnaires: {len(all_questionnaire_term_ids)}")
             
             # OPTIMIZED: Use bulk query instead of N+1 queries
@@ -884,7 +1072,10 @@ def questionnaires_by_term_title(request):
                 additional_terms = ContractTerm.objects.filter(
                     term_id__in=all_questionnaire_term_ids,
                     term_category__iexact=term_category
-                ).values_list('term_id', flat=True)
+                )
+                if tenant_id:
+                    additional_terms = additional_terms.filter(tenant_id=tenant_id)
+                additional_terms = additional_terms.values_list('term_id', flat=True)
                 additional_term_ids = list(additional_terms)
                 
                 if additional_term_ids:
@@ -896,6 +1087,8 @@ def questionnaires_by_term_title(request):
             matching_terms = ContractTerm.objects.filter(
                 term_title__iexact=term_title
             )
+            if tenant_id:
+                matching_terms = matching_terms.filter(tenant_id=tenant_id)
             matching_term_ids = list(matching_terms.values_list('term_id', flat=True))
         
         # If no matching terms found in DB, but we have term_id or term_category,
@@ -920,13 +1113,24 @@ def questionnaires_by_term_title(request):
                     term_id_variations.extend([numeric_part, f'term_{numeric_part}'])
                 
                 # Try to find questionnaires with matching term_id
+                # MULTI-TENANCY: Filter by tenant
                 questionnaires_by_term_id = ContractStaticQuestionnaire.objects.filter(
                     term_id__in=term_id_variations
-                ) | ContractStaticQuestionnaire.objects.filter(
+                )
+                if tenant_id:
+                    questionnaires_by_term_id = questionnaires_by_term_id.filter(tenant_id=tenant_id)
+                
+                questionnaires_by_term_id = questionnaires_by_term_id | ContractStaticQuestionnaire.objects.filter(
                     term_id__iendswith=tid_str
-                ) | ContractStaticQuestionnaire.objects.filter(
+                )
+                if tenant_id:
+                    questionnaires_by_term_id = questionnaires_by_term_id.filter(tenant_id=tenant_id)
+                
+                questionnaires_by_term_id = questionnaires_by_term_id | ContractStaticQuestionnaire.objects.filter(
                     term_id__icontains=tid_str
                 )
+                if tenant_id:
+                    questionnaires_by_term_id = questionnaires_by_term_id.filter(tenant_id=tenant_id)
                 
                 if questionnaires_by_term_id.exists():
                     logger.info(f"Found {questionnaires_by_term_id.count()} questionnaires by direct term_id match")
@@ -975,9 +1179,12 @@ def questionnaires_by_term_title(request):
         
         # Get questionnaires using multiple matching strategies
         # 1. Exact match with term_ids
+        # MULTI-TENANCY: Filter by tenant
         questionnaires_exact = ContractStaticQuestionnaire.objects.filter(
             term_id__in=all_possible_term_ids
         )
+        if tenant_id:
+            questionnaires_exact = questionnaires_exact.filter(tenant_id=tenant_id)
         logger.info(f"Found {questionnaires_exact.count()} questionnaires by exact term_id match")
         
         # 2. Partial match - if term_id in questionnaires contains the term_id from contract_terms
@@ -992,15 +1199,21 @@ def questionnaires_by_term_title(request):
             partial_q_objects |= Q(term_id__iendswith=tid_str) | Q(term_id__icontains=tid_str)
         
         questionnaires_partial = ContractStaticQuestionnaire.objects.filter(partial_q_objects)
+        if tenant_id:
+            questionnaires_partial = questionnaires_partial.filter(tenant_id=tenant_id)
         logger.info(f"Found {questionnaires_partial.count()} questionnaires by partial term_id match (bulk query)")
         
         # 3. Direct lookup: Find questionnaires whose term_id exists in contract_terms with matching category
         # This is the most reliable method - it directly links questionnaires to terms by category
         if term_category:
             # Get all term_ids from contract_terms that have this category
-            category_term_ids = list(ContractTerm.objects.filter(
+            # MULTI-TENANCY: Filter by tenant
+            category_terms_query = ContractTerm.objects.filter(
                 term_category__iexact=term_category
-            ).values_list('term_id', flat=True))
+            )
+            if tenant_id:
+                category_terms_query = category_terms_query.filter(tenant_id=tenant_id)
+            category_term_ids = list(category_terms_query.values_list('term_id', flat=True))
             
             # Build all possible variations of these term_ids
             category_term_id_variations = []
@@ -1021,25 +1234,38 @@ def questionnaires_by_term_title(request):
             category_term_id_variations = list(set(category_term_id_variations))
             
             # Find questionnaires with any of these term_ids
+            # MULTI-TENANCY: Filter by tenant
             questionnaires_by_category = ContractStaticQuestionnaire.objects.filter(
                 term_id__in=category_term_id_variations
             )
+            if tenant_id:
+                questionnaires_by_category = questionnaires_by_category.filter(tenant_id=tenant_id)
             
             # OPTIMIZED: Use bulk query instead of N+1 queries for reverse lookup
             # Get all questionnaire term_ids (fetch once, reuse if already fetched earlier)
-            all_q_term_ids_for_reverse = list(ContractStaticQuestionnaire.objects.values_list('term_id', flat=True).distinct())
+            # MULTI-TENANCY: Filter by tenant
+            all_q_term_ids_query = ContractStaticQuestionnaire.objects.all()
+            if tenant_id:
+                all_q_term_ids_query = all_q_term_ids_query.filter(tenant_id=tenant_id)
+            all_q_term_ids_for_reverse = list(all_q_term_ids_query.values_list('term_id', flat=True).distinct())
             
             if all_q_term_ids_for_reverse:
                 # Find all terms that have matching category AND whose term_id is in questionnaire term_ids
-                matching_q_term_ids = list(ContractTerm.objects.filter(
+                # MULTI-TENANCY: Filter by tenant
+                matching_terms_query = ContractTerm.objects.filter(
                     term_id__in=all_q_term_ids_for_reverse,
                     term_category__iexact=term_category
-                ).values_list('term_id', flat=True))
+                )
+                if tenant_id:
+                    matching_terms_query = matching_terms_query.filter(tenant_id=tenant_id)
+                matching_q_term_ids = list(matching_terms_query.values_list('term_id', flat=True))
                 
                 if matching_q_term_ids:
                     questionnaires_by_category_reverse = ContractStaticQuestionnaire.objects.filter(
                         term_id__in=matching_q_term_ids
                     )
+                    if tenant_id:
+                        questionnaires_by_category_reverse = questionnaires_by_category_reverse.filter(tenant_id=tenant_id)
                     questionnaires_by_category = questionnaires_by_category | questionnaires_by_category_reverse
             
             # Only count once after all queries are combined
@@ -1080,8 +1306,13 @@ def questionnaires_by_term_title(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 def questionnaires_by_term_ids(request):
-    """Get questionnaires grouped by exact term_ids (with minimal normalization)."""
+    """Get questionnaires grouped by exact term_ids (with minimal normalization).
+    MULTI-TENANCY: Filters questionnaires by tenant to ensure tenant isolation
+    """
     try:
+        # MULTI-TENANCY: Filter by tenant
+        tenant_id = get_tenant_id_from_request(request)
+        
         term_ids_param = request.query_params.get('term_ids')
         if not term_ids_param:
             return Response(
@@ -1109,6 +1340,8 @@ def questionnaires_by_term_ids(request):
         questionnaires_queryset = ContractStaticQuestionnaire.objects.filter(
             term_id__in=list(search_ids)
         )
+        if tenant_id:
+            questionnaires_queryset = questionnaires_queryset.filter(tenant_id=tenant_id)
 
         serialized_questionnaires = ContractStaticQuestionnaireSerializer(
             questionnaires_queryset,
@@ -1482,9 +1715,16 @@ def available_users(request):
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('PerformContractAudit')
 def submit_contract_audit_response(request, audit_id):
-    """Submit responses for a contract audit."""
+    """Submit responses for a contract audit.
+    MULTI-TENANCY: Ensures audit belongs to tenant
+    """
     try:
-        audit = ContractAudit.objects.get(audit_id=audit_id)
+        # MULTI-TENANCY: Filter by tenant
+        tenant_id = get_tenant_id_from_request(request)
+        if tenant_id:
+            audit = ContractAudit.objects.get(audit_id=audit_id, tenant_id=tenant_id)
+        else:
+            audit = ContractAudit.objects.get(audit_id=audit_id)
         
         # For now, just update the audit status
         # In a full implementation, you would handle questionnaire responses here
@@ -1509,9 +1749,16 @@ def submit_contract_audit_response(request, audit_id):
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('PerformContractAudit')
 def review_contract_audit(request, audit_id):
-    """Review and approve/reject a contract audit."""
+    """Review and approve/reject a contract audit.
+    MULTI-TENANCY: Ensures audit belongs to tenant
+    """
     try:
-        audit = ContractAudit.objects.get(audit_id=audit_id)
+        # MULTI-TENANCY: Filter by tenant
+        tenant_id = get_tenant_id_from_request(request)
+        if tenant_id:
+            audit = ContractAudit.objects.get(audit_id=audit_id, tenant_id=tenant_id)
+        else:
+            audit = ContractAudit.objects.get(audit_id=audit_id)
         action = request.data.get('action', 'approve')
         comments = request.data.get('comments', '')
         

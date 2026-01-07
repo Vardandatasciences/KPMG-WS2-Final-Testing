@@ -7,7 +7,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('rfp', '0013_delete_rfpresponse'),
+        ('tprm_rfp', '0013_delete_rfpresponse'),
     ]
 
     operations = [

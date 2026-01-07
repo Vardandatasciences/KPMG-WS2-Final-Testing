@@ -7,7 +7,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('rfp', '0020_add_unmatched_vendor_id_field'),
+        ('tprm_rfp', '0020_add_unmatched_vendor_id_field'),
     ]
 
     operations = [

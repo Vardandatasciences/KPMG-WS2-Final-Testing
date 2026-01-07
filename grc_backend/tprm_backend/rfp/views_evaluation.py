@@ -15,11 +15,20 @@ from tprm_backend.rfp_approval.models import ApprovalRequestVersions
 from .rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required
 
+# MULTI-TENANCY: Import tenant utilities for filtering
+from tprm_backend.core.tenant_utils import (
+    get_tenant_id_from_request,
+    require_tenant,
+    tenant_filter
+)
+
 
 @api_view(['POST'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('evaluate_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def save_committee_evaluation(request, rfp_id):
     """
     Save committee rankings for an RFP.
@@ -36,7 +45,12 @@ def save_committee_evaluation(request, rfp_id):
     using the `weighted_final_score` field and stores comments in
     `evaluation_comments`. It does not depend on migrations and only uses
     existing columns.
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
         data = request.data or {}
         evaluator_id = data.get('evaluator_id')
@@ -48,8 +62,9 @@ def save_committee_evaluation(request, rfp_id):
             }, status=status.HTTP_400_BAD_REQUEST)
           # Get RFP and update status to EVALUATION if needed
         from .models import RFP
+        # MULTI-TENANCY: Filter by tenant
         try:
-            rfp = RFP.objects.get(rfp_id=rfp_id)
+            rfp = RFP.objects.get(rfp_id=rfp_id, tenant_id=tenant_id)
             if rfp.status in ['SUBMISSION_OPEN', 'PUBLISHED']:
                 rfp.status = 'EVALUATION'
                 rfp.save()
@@ -68,8 +83,9 @@ def save_committee_evaluation(request, rfp_id):
                 ranking_score = item.get('ranking_score')
                 ranking_comments = item.get('evaluation_comments', '')
 
+                # MULTI-TENANCY: Filter by tenant
                 try:
-                    resp = RFPResponse.objects.get(response_id=response_id, rfp_id=rfp_id)
+                    resp = RFPResponse.objects.get(response_id=response_id, rfp_id=rfp_id, tenant_id=tenant_id)
                 except RFPResponse.DoesNotExist:
                     continue
 
@@ -105,28 +121,37 @@ def save_committee_evaluation(request, rfp_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('evaluate_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def save_evaluation_scores(request, response_id):
     """
     Save evaluation scores for an RFP response to rfp_evaluation_scores table
     Handles both draft saves and final submissions
     
     Each criterion score is saved as a separate record in the table
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
         print(f"Saving evaluation scores for response_id: {response_id}")
         print(f"Request data: {request.data}")
         
         # Get the RFP response to validate it exists
+        # MULTI-TENANCY: Filter by tenant
         try:
-            rfp_response = RFPResponse.objects.get(response_id=response_id)
+            rfp_response = RFPResponse.objects.get(response_id=response_id, tenant_id=tenant_id)
         except RFPResponse.DoesNotExist:
             return Response({
                 'error': f'RFP Response with ID {response_id} not found'
             }, status=status.HTTP_404_NOT_FOUND)
          # Update RFP status to EVALUATION if needed
         from .models import RFP
+        # MULTI-TENANCY: Filter by tenant
         try:
-            rfp = RFP.objects.get(rfp_id=rfp_response.rfp_id)
+            rfp = RFP.objects.get(rfp_id=rfp_response.rfp_id, tenant_id=tenant_id)
             if rfp.status in ['SUBMISSION_OPEN', 'PUBLISHED'] and not is_draft:
                 rfp.status = 'EVALUATION'
                 rfp.save()
@@ -165,6 +190,7 @@ def save_evaluation_scores(request, response_id):
         
         with transaction.atomic():
             # If clear_existing is True, delete existing scores for this evaluator
+            # MULTI-TENANCY: Filter by tenant (via response)
             if clear_existing:
                 deleted_count = RFPEvaluationScore.objects.filter(
                     response_id=response_id,
@@ -304,8 +330,9 @@ def get_evaluation_scores(request, response_id):
     """
     try:
         # Get the RFP response to validate it exists
+        # MULTI-TENANCY: Filter by tenant
         try:
-            rfp_response = RFPResponse.objects.get(response_id=response_id)
+            rfp_response = RFPResponse.objects.get(response_id=response_id, tenant_id=tenant_id)
         except RFPResponse.DoesNotExist:
             return Response({
                 'error': f'RFP Response with ID {response_id} not found'
@@ -317,6 +344,7 @@ def get_evaluation_scores(request, response_id):
         criteria_id = request.query_params.get('criteria_id')
         
         # Query evaluation scores
+        # MULTI-TENANCY: Filter by tenant (via response)
         scores_query = RFPEvaluationScore.objects.filter(response_id=response_id)
         
         if evaluator_id:
@@ -416,9 +444,20 @@ def get_evaluation_scores_bulk(request):
                 'error': 'No valid response_ids provided'
             }, status=status.HTTP_400_BAD_REQUEST)
        
+        # MULTI-TENANCY: Verify all response_ids belong to tenant
+        responses = RFPResponse.objects.filter(response_id__in=response_ids, tenant_id=tenant_id)
+        valid_response_ids = list(responses.values_list('response_id', flat=True))
+        
+        if not valid_response_ids:
+            return Response({
+                'success': False,
+                'error': 'No valid responses found for the provided response_ids'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
         # Query evaluation scores for all response_ids
+        # MULTI-TENANCY: Filter by tenant (via response)
         scores_query = RFPEvaluationScore.objects.filter(
-            response_id__in=response_ids,
+            response_id__in=valid_response_ids,
             evaluation_status='completed'  # Only get completed evaluations
         ).order_by('response_id', 'criteria_id', 'evaluator_id')
        

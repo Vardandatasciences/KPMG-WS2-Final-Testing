@@ -369,6 +369,12 @@ class SearchIndex(models.Model):
     ]
     
     id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link search index to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='search_indexes', null=True, blank=True,
+                               help_text="Tenant this search index belongs to")
+    
     entity_type = models.CharField(
         max_length=20,
         choices=ENTITY_TYPE_CHOICES,
@@ -488,6 +494,11 @@ class SearchAnalytics(models.Model):
     """
     Model to track search analytics and performance metrics.
     """
+    
+    # MULTI-TENANCY: Link search analytics to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='search_analytics', null=True, blank=True,
+                               help_text="Tenant this search analytics belongs to")
     
     query = models.TextField(help_text="Search query performed")
     results_count = models.IntegerField(default=0, help_text="Number of results returned")

@@ -1835,6 +1835,7 @@
                       </div>
                     </div>
                   </div>
+                </Label>
                 <Label html-for="autoApprove" class="text-sm" title="When enabled, this RFP is automatically approved by the creator without going through the approval workflow">
                   Auto-approve (no approval workflow required)
                 </Label>

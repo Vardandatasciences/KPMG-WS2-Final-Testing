@@ -18,11 +18,22 @@ from .serializers import (
 from .services import RiskAnalysisService
 from .entity_service import EntityDataService
 
+# MULTI-TENANCY: Import tenant utilities for filtering
+from tprm_backend.core.tenant_utils import (
+    get_tenant_id_from_request,
+    filter_queryset_by_tenant,
+    get_tenant_aware_queryset,
+    require_tenant,
+    tenant_filter
+)
+
 logger = logging.getLogger(__name__)
 
 
 class RiskViewSet(viewsets.ModelViewSet):
-    """ViewSet for Risks"""
+    """ViewSet for Risks
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
     permission_classes = [permissions.AllowAny]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['priority', 'status', 'risk_type', 'assigned_to']
@@ -31,8 +42,15 @@ class RiskViewSet(viewsets.ModelViewSet):
     ordering = ['id']
     
     def get_queryset(self):
-        """Get filtered queryset based on request parameters"""
-        queryset = Risk.objects.all()
+        """Get filtered queryset based on request parameters
+        MULTI-TENANCY: Filter by tenant
+        """
+        # MULTI-TENANCY: Filter by tenant
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            queryset = Risk.objects.filter(tenant_id=tenant_id)
+        else:
+            queryset = Risk.objects.all()
         
         # Apply custom filters
         priority = self.request.query_params.get('priority', None)
@@ -76,28 +94,46 @@ class RiskViewSet(viewsets.ModelViewSet):
 
 
 class RiskHeatmapViewSet(viewsets.ReadOnlyModelViewSet):
-    """ViewSet for Risk Heatmap Data"""
+    """ViewSet for Risk Heatmap Data
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
     permission_classes = [permissions.AllowAny]
     serializer_class = HeatmapDataSerializer
     
     def get_queryset(self):
-        """Get risks for heatmap visualization"""
+        """Get risks for heatmap visualization
+        MULTI-TENANCY: Filter by tenant
+        """
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            return Risk.objects.filter(tenant_id=tenant_id)
         return Risk.objects.all()
 
 
 class RiskStatisticsAPIView(APIView):
-    """API View for Risk Statistics"""
+    """API View for Risk Statistics
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
     permission_classes = [permissions.AllowAny]
     
     def get(self, request):
-        """Get risk statistics"""
+        """Get risk statistics
+        MULTI-TENANCY: Filter by tenant
+        """
         try:
-            total_risks = Risk.objects.count()
-            high_risks = Risk.objects.filter(priority='HIGH').count()
-            medium_risks = Risk.objects.filter(priority='MEDIUM').count()
-            low_risks = Risk.objects.filter(priority='LOW').count()
+            # MULTI-TENANCY: Filter by tenant
+            tenant_id = get_tenant_id_from_request(request)
+            if tenant_id:
+                risk_queryset = Risk.objects.filter(tenant_id=tenant_id)
+            else:
+                risk_queryset = Risk.objects.all()
             
-            avg_score = Risk.objects.aggregate(
+            total_risks = risk_queryset.count()
+            high_risks = risk_queryset.filter(priority='HIGH').count()
+            medium_risks = risk_queryset.filter(priority='MEDIUM').count()
+            low_risks = risk_queryset.filter(priority='LOW').count()
+            
+            avg_score = risk_queryset.aggregate(
                 avg_score=Avg('score')
             )['avg_score'] or 0
             

@@ -9,21 +9,53 @@ from rest_framework.decorators import api_view, authentication_classes, permissi
 from .rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required
 
+# MULTI-TENANCY: Import tenant utilities for filtering
+from tprm_backend.core.tenant_utils import (
+    get_tenant_id_from_request,
+    require_tenant,
+    tenant_filter
+)
+
 @api_view(['GET'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_vendor_primary_contact(request, vendor_id):
-    """Get primary contact for a vendor"""
+    """
+    Get primary contact for a vendor
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return JsonResponse({'error': 'Tenant context not found'}, status=403)
+    
     try:
+        # MULTI-TENANCY: Verify vendor belongs to tenant
+        from .models import Vendor
+        try:
+            vendor = Vendor.objects.get(vendor_id=vendor_id, tenant_id=tenant_id)
+        except Vendor.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'Vendor not found: {vendor_id}'
+            }, status=404)
+        
         # Query vendor_contacts table for primary contact
+        # MULTI-TENANCY: Filter by tenant
         with connection.cursor() as cursor:
             cursor.execute('''
-                SELECT contact_id, first_name, last_name, email, phone, mobile, designation
-                FROM vendor_contacts
-                WHERE vendor_id = %s AND contact_type = 'PRIMARY' AND is_primary = 1 AND is_active = 1
+                SELECT vc.contact_id, vc.first_name, vc.last_name, vc.email, vc.phone, vc.mobile, vc.designation
+                FROM vendor_contacts vc
+                INNER JOIN vendors v ON vc.vendor_id = v.vendor_id
+                WHERE vc.vendor_id = %s 
+                    AND vc.contact_type = 'PRIMARY' 
+                    AND vc.is_primary = 1 
+                    AND vc.is_active = 1
+                    AND v.TenantId = %s
                 LIMIT 1
-            ''', [vendor_id])
+            ''', [vendor_id, tenant_id])
             contact = cursor.fetchone()
             
             if contact:

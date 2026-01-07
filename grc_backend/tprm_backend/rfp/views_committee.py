@@ -13,11 +13,20 @@ from .models import RFP, RFPCommittee, RFPFinalEvaluation, RFPResponse
 from .rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required
 
+# MULTI-TENANCY: Import tenant utilities for filtering
+from tprm_backend.core.tenant_utils import (
+    get_tenant_id_from_request,
+    require_tenant,
+    tenant_filter
+)
+
 
 @api_view(['POST'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def create_committee(request, rfp_id):
     """
     Create committee assignments for an RFP
@@ -35,7 +44,12 @@ def create_committee(request, rfp_id):
         "response_ids": [123, 456, 789],
         "added_by": 1
     }
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
         data = request.data or {}
         committee_members = data.get('committee_members', [])
@@ -52,8 +66,9 @@ def create_committee(request, rfp_id):
             response_ids = []
 
         # Verify RFP exists
+        # MULTI-TENANCY: Filter by tenant
         try:
-            rfp = RFP.objects.get(rfp_id=rfp_id)
+            rfp = RFP.objects.get(rfp_id=rfp_id, tenant_id=tenant_id)
         except RFP.DoesNotExist:
             return Response({
                 'error': f'RFP with ID {rfp_id} not found'
@@ -62,9 +77,11 @@ def create_committee(request, rfp_id):
         created_committees = []
         with transaction.atomic():
             # Clear existing committee for this RFP
-            RFPCommittee.objects.filter(rfp_id=rfp_id).delete()
+            # MULTI-TENANCY: Filter by tenant
+            RFPCommittee.objects.filter(rfp_id=rfp_id, tenant_id=tenant_id).delete()
             
             for member_data in committee_members:
+                # MULTI-TENANCY: Set tenant_id on creation
                 committee = RFPCommittee.objects.create(
                     rfp_id=rfp_id,
                     response_id=response_ids,
@@ -72,7 +89,8 @@ def create_committee(request, rfp_id):
                     member_id=member_data.get('member_id'),
                     member_role=member_data.get('member_role', 'Committee Member'),
                     is_chair=member_data.get('is_chair', False),
-                    added_by=added_by
+                    added_by=added_by,
+                    tenant_id=tenant_id  # MULTI-TENANCY: Set tenant_id
                 )
                 created_committees.append({
                     'committee_id': committee.committee_id,
@@ -99,12 +117,28 @@ def create_committee(request, rfp_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_committee(request, rfp_id):
     """
     Get committee members for an RFP
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
-        committees = RFPCommittee.objects.filter(rfp_id=rfp_id).order_by('-is_chair', 'member_role')
+        # MULTI-TENANCY: Verify RFP belongs to tenant
+        try:
+            rfp = RFP.objects.get(rfp_id=rfp_id, tenant_id=tenant_id)
+        except RFP.DoesNotExist:
+            return Response({
+                'error': f'RFP with ID {rfp_id} not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # MULTI-TENANCY: Filter by tenant
+        committees = RFPCommittee.objects.filter(rfp_id=rfp_id, tenant_id=tenant_id).order_by('-is_chair', 'member_role')
         
         committee_data = []
         for committee in committees:
@@ -133,6 +167,8 @@ def get_committee(request, rfp_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('evaluate_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def save_final_evaluation(request, rfp_id):
     """
     Save final evaluation rankings for an RFP
@@ -150,7 +186,12 @@ def save_final_evaluation(request, rfp_id):
             ...
         ]
     }
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
         data = request.data or {}
         evaluator_id = data.get('evaluator_id')
@@ -162,9 +203,11 @@ def save_final_evaluation(request, rfp_id):
             }, status=status.HTTP_400_BAD_REQUEST)
 
         # Verify evaluator is part of committee
+        # MULTI-TENANCY: Filter by tenant
         committee_member = RFPCommittee.objects.filter(
             rfp_id=rfp_id, 
-            member_id=evaluator_id
+            member_id=evaluator_id,
+            tenant_id=tenant_id
         ).first()
         
         if not committee_member:
@@ -175,9 +218,11 @@ def save_final_evaluation(request, rfp_id):
         saved_evaluations = []
         with transaction.atomic():
             # Clear existing evaluations for this evaluator and RFP
+            # MULTI-TENANCY: Filter by tenant
             RFPFinalEvaluation.objects.filter(
                 rfp_id=rfp_id, 
-                evaluator_id=evaluator_id
+                evaluator_id=evaluator_id,
+                tenant_id=tenant_id
             ).delete()
             
             for ranking in rankings:
@@ -188,18 +233,21 @@ def save_final_evaluation(request, rfp_id):
                     evaluation_comments = ranking.get('evaluation_comments', '')
                     
                     # Verify response exists
+                    # MULTI-TENANCY: Filter by tenant
                     try:
-                        response = RFPResponse.objects.get(response_id=response_id, rfp_id=rfp_id)
+                        response = RFPResponse.objects.get(response_id=response_id, rfp_id=rfp_id, tenant_id=tenant_id)
                     except RFPResponse.DoesNotExist:
                         continue
                     
+                    # MULTI-TENANCY: Set tenant_id on creation
                     evaluation = RFPFinalEvaluation.objects.create(
                         rfp_id=rfp_id,
                         response_id=response_id,
                         evaluator_id=evaluator_id,
                         ranking_position=ranking_position,
                         ranking_score=ranking_score,
-                        evaluation_comments=evaluation_comments
+                        evaluation_comments=evaluation_comments,
+                        tenant_id=tenant_id  # MULTI-TENANCY: Set tenant_id
                     )
                     
                     saved_evaluations.append({
@@ -230,12 +278,28 @@ def save_final_evaluation(request, rfp_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_final_evaluations(request, rfp_id):
     """
     Get all final evaluations for an RFP
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
-        evaluations = RFPFinalEvaluation.objects.filter(rfp_id=rfp_id).order_by('evaluator_id', 'ranking_position')
+        # MULTI-TENANCY: Verify RFP belongs to tenant
+        try:
+            rfp = RFP.objects.get(rfp_id=rfp_id, tenant_id=tenant_id)
+        except RFP.DoesNotExist:
+            return Response({
+                'error': f'RFP with ID {rfp_id} not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # MULTI-TENANCY: Filter by tenant
+        evaluations = RFPFinalEvaluation.objects.filter(rfp_id=rfp_id, tenant_id=tenant_id).order_by('evaluator_id', 'ranking_position')
         
         # Group by evaluator
         evaluator_evaluations = {}
@@ -269,12 +333,28 @@ def get_final_evaluations(request, rfp_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_consensus_ranking(request, rfp_id):
     """
     Calculate consensus ranking based on all committee evaluations
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
-        evaluations = RFPFinalEvaluation.objects.filter(rfp_id=rfp_id)
+        # MULTI-TENANCY: Verify RFP belongs to tenant
+        try:
+            rfp = RFP.objects.get(rfp_id=rfp_id, tenant_id=tenant_id)
+        except RFP.DoesNotExist:
+            return Response({
+                'error': f'RFP with ID {rfp_id} not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # MULTI-TENANCY: Filter by tenant
+        evaluations = RFPFinalEvaluation.objects.filter(rfp_id=rfp_id, tenant_id=tenant_id)
         
         if not evaluations.exists():
             return Response({
@@ -305,8 +385,9 @@ def get_consensus_ranking(request, rfp_id):
             avg_score = total_score / evaluator_count[response_id]
             
             # Get response details
+            # MULTI-TENANCY: Filter by tenant
             try:
-                response = RFPResponse.objects.get(response_id=response_id)
+                response = RFPResponse.objects.get(response_id=response_id, tenant_id=tenant_id)
                 consensus_ranking.append({
                     'response_id': response_id,
                     'vendor_name': getattr(response, 'vendor_name', 'Unknown Vendor'),
@@ -364,16 +445,18 @@ def declare_award(request, rfp_id):
             }, status=status.HTTP_400_BAD_REQUEST)
 
         # Verify response exists
+        # MULTI-TENANCY: Filter by tenant
         try:
-            response = RFPResponse.objects.get(response_id=winning_response_id, rfp_id=rfp_id)
+            response = RFPResponse.objects.get(response_id=winning_response_id, rfp_id=rfp_id, tenant_id=tenant_id)
         except RFPResponse.DoesNotExist:
             return Response({
                 'error': f'Response with ID {winning_response_id} not found for RFP {rfp_id}'
             }, status=status.HTTP_404_NOT_FOUND)
 
         # Update RFP with award information
+        # MULTI-TENANCY: Filter by tenant
         try:
-            rfp = RFP.objects.get(rfp_id=rfp_id)
+            rfp = RFP.objects.get(rfp_id=rfp_id, tenant_id=tenant_id)
             rfp.status = 'AWARDED'
             rfp.award_decision_date = timezone.now()
             rfp.award_justification = award_justification

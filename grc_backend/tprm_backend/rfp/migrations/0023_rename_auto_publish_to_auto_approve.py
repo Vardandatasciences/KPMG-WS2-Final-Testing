@@ -71,7 +71,7 @@ def reverse_rename(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('rfp', '0022_create_award_notification_model'),
+        ('tprm_rfp', '0022_create_award_notification_model'),
     ]
 
     operations = [

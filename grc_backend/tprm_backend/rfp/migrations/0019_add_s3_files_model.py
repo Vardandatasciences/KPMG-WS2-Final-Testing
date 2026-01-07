@@ -7,7 +7,7 @@ import django.utils.timezone
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('rfp', '0018_add_missing_vendor_invitation_fields'),
+        ('tprm_rfp', '0018_add_missing_vendor_invitation_fields'),
     ]
 
     operations = [

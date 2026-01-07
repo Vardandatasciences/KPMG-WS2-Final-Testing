@@ -16,6 +16,17 @@ class User(AbstractUser):
         ('admin', 'Administrator'),
     ]
     
+    # MULTI-TENANCY: Link user to tenant
+    tenant = models.ForeignKey(
+        'core.Tenant',
+        on_delete=models.CASCADE,
+        db_column='TenantId',
+        related_name='users',
+        null=True,
+        blank=True,
+        help_text="Tenant this user belongs to"
+    )
+    
     user_type = models.CharField(
         max_length=20,
         choices=USER_TYPE_CHOICES,

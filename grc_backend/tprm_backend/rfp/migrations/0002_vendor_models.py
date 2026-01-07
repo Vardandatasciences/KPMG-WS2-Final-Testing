@@ -6,7 +6,7 @@ import django.utils.timezone
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('rfp', '0001_initial'),
+        ('tprm_rfp', '0001_initial'),
     ]
 
     operations = [

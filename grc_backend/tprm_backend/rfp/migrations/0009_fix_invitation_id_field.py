@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('rfp', '0008_change_approval_workflow_id_to_char'),
+        ('tprm_rfp', '0008_change_approval_workflow_id_to_char'),
     ]
 
     operations = [

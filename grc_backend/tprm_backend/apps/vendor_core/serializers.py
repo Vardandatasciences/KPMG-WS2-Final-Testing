@@ -230,8 +230,6 @@ class UsersSerializer(serializers.ModelSerializer):
 class TempVendorSerializer(serializers.ModelSerializer):
     """Serializer for temporary vendor registration with vendor_ prefix"""
     
-    data_inventory = serializers.JSONField(required=False, allow_null=True)
-    
     class Meta:
         model = TempVendor
         fields = [
@@ -240,16 +238,10 @@ class TempVendorSerializer(serializers.ModelSerializer):
             'industry_sector', 'website', 'annual_revenue', 'employee_count', 
             'headquarters_address', 'vendor_category', 'risk_level', 'status', 
             'is_critical_vendor', 'has_data_access', 'has_system_access', 
-            'description', 'contacts', 'documents', 'data_inventory', 'created_at', 'updated_at', 
+            'description', 'contacts', 'documents', 'created_at', 'updated_at', 
             'response_id'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
-    
-    def validate_data_inventory(self, value):
-        """Ensure data_inventory is always a dictionary"""
-        if not isinstance(value, dict):
-            return {}
-        return value
     
     def vendor_validate_company_name(self, value):
         """Validate company name with vendor_ prefix"""

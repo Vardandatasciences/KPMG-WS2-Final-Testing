@@ -3,6 +3,12 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 
 class Framework(models.Model):
     FrameworkId = models.AutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link framework to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='frameworks', null=True, blank=True,
+                               help_text="Tenant this framework belongs to")
+    
     FrameworkName = models.CharField(max_length=255)
     CurrentVersion = models.FloatField()
     FrameworkDescription = models.TextField()
@@ -34,6 +40,12 @@ class ComplianceMapping(models.Model):
     ]
 
     mapping_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link compliance mapping to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='compliance_mappings', null=True, blank=True,
+                               help_text="Tenant this compliance mapping belongs to")
+    
     sla_id = models.BigIntegerField()
     framework_id = models.IntegerField()
     compliance_status = models.CharField(max_length=50, default='Compliant')

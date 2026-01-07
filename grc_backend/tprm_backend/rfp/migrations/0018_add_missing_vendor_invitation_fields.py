@@ -7,7 +7,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('rfp', '0017_remove_duplicate_invitation_id'),
+        ('tprm_rfp', '0017_remove_duplicate_invitation_id'),
     ]
 
     operations = [

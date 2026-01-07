@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('rfp', '0021_create_committee_models'),
+        ('tprm_rfp', '0021_create_committee_models'),
     ]
 
     operations = [

@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('rfp', '0009_fix_invitation_id_field'),
+        ('tprm_rfp', '0009_fix_invitation_id_field'),
     ]
 
     operations = [

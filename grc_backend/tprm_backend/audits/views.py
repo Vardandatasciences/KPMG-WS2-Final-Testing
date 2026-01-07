@@ -27,6 +27,16 @@ from .serializers import (
 from tprm_backend.slas.models import VendorSLA, SLAMetric
 from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
 
+# MULTI-TENANCY: Import tenant utilities for filtering
+from tprm_backend.core.tenant_utils import (
+    get_tenant_id_from_request,
+    filter_queryset_by_tenant,
+    get_tenant_aware_queryset,
+    require_tenant,
+    tenant_filter
+)
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -118,7 +128,9 @@ class JWTAuthentication(BaseAuthentication):
 
 
 class AuditListView(generics.ListCreateAPIView):
-    """List and create audits."""
+    """List and create audits.
+    MULTI-TENANCY: Filters audits by tenant to ensure tenant isolation
+    """
     queryset = Audit.objects.all()
     authentication_classes = [JWTAuthentication]
     permission_classes = [PerformContractAuditPermission]
@@ -127,6 +139,19 @@ class AuditListView(generics.ListCreateAPIView):
     search_fields = ['title', 'scope']
     ordering_fields = ['due_date', 'created_at', 'updated_at']
     ordering = ['-created_at']
+    
+    def get_queryset(self):
+        """MULTI-TENANCY: Filter audits by tenant"""
+        queryset = super().get_queryset()
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        return queryset
+    
+    def perform_create(self, serializer):
+        """MULTI-TENANCY: Set tenant_id when creating audit"""
+        tenant_id = get_tenant_id_from_request(self.request)
+        serializer.save(tenant_id=tenant_id)
     
     def get_serializer_class(self):
         if self.request.method == 'POST':
@@ -152,11 +177,21 @@ class AuditListView(generics.ListCreateAPIView):
 
 
 class AuditDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """Retrieve, update and delete audit."""
+    """Retrieve, update and delete audit.
+    MULTI-TENANCY: Filters audits by tenant to ensure tenant isolation
+    """
     queryset = Audit.objects.all()
     serializer_class = AuditSerializer
     authentication_classes = [JWTAuthentication]
     permission_classes = [PerformContractAuditPermission]
+    
+    def get_queryset(self):
+        """MULTI-TENANCY: Filter audits by tenant"""
+        queryset = super().get_queryset()
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        return queryset
 
 
 class QuestionnairesPagination(PageNumberPagination):
@@ -167,7 +202,9 @@ class QuestionnairesPagination(PageNumberPagination):
 
 
 class StaticQuestionnaireListView(generics.ListCreateAPIView):
-    """List and create static questionnaires."""
+    """List and create static questionnaires.
+    MULTI-TENANCY: Filters questionnaires by tenant to ensure tenant isolation
+    """
     queryset = StaticQuestionnaire.objects.all()
     serializer_class = StaticQuestionnaireSerializer
     authentication_classes = [JWTAuthentication]
@@ -175,18 +212,43 @@ class StaticQuestionnaireListView(generics.ListCreateAPIView):
     pagination_class = QuestionnairesPagination
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['metric_name', 'question_type', 'is_required']
+    
+    def get_queryset(self):
+        """MULTI-TENANCY: Filter questionnaires by tenant"""
+        queryset = super().get_queryset()
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        return queryset
+    
+    def perform_create(self, serializer):
+        """MULTI-TENANCY: Set tenant_id when creating questionnaire"""
+        tenant_id = get_tenant_id_from_request(self.request)
+        serializer.save(tenant_id=tenant_id)
 
 
 class StaticQuestionnaireDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """Retrieve, update and delete static questionnaire."""
+    """Retrieve, update and delete static questionnaire.
+    MULTI-TENANCY: Filters questionnaires by tenant to ensure tenant isolation
+    """
     queryset = StaticQuestionnaire.objects.all()
     serializer_class = StaticQuestionnaireSerializer
     authentication_classes = [JWTAuthentication]
     permission_classes = [PerformContractAuditPermission]
+    
+    def get_queryset(self):
+        """MULTI-TENANCY: Filter questionnaires by tenant"""
+        queryset = super().get_queryset()
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        return queryset
 
 
 class AuditVersionListView(generics.ListCreateAPIView):
-    """List and create audit versions."""
+    """List and create audit versions.
+    MULTI-TENANCY: Filters audit versions by tenant to ensure tenant isolation
+    """
     queryset = AuditVersion.objects.all()
     serializer_class = AuditVersionSerializer
     authentication_classes = [JWTAuthentication]
@@ -195,18 +257,43 @@ class AuditVersionListView(generics.ListCreateAPIView):
     filterset_fields = ['audit_id', 'version_type', 'approval_status', 'user_id']
     ordering_fields = ['date_created', 'created_at']
     ordering = ['-created_at']
+    
+    def get_queryset(self):
+        """MULTI-TENANCY: Filter audit versions by tenant"""
+        queryset = super().get_queryset()
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        return queryset
+    
+    def perform_create(self, serializer):
+        """MULTI-TENANCY: Set tenant_id when creating audit version"""
+        tenant_id = get_tenant_id_from_request(self.request)
+        serializer.save(tenant_id=tenant_id)
 
 
 class AuditVersionDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """Retrieve, update and delete audit version."""
+    """Retrieve, update and delete audit version.
+    MULTI-TENANCY: Filters audit versions by tenant to ensure tenant isolation
+    """
     queryset = AuditVersion.objects.all()
     serializer_class = AuditVersionSerializer
     authentication_classes = [JWTAuthentication]
     permission_classes = [PerformContractAuditPermission]
+    
+    def get_queryset(self):
+        """MULTI-TENANCY: Filter audit versions by tenant"""
+        queryset = super().get_queryset()
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        return queryset
 
 
 class AuditFindingListView(generics.ListCreateAPIView):
-    """List and create audit findings."""
+    """List and create audit findings.
+    MULTI-TENANCY: Filters audit findings by tenant to ensure tenant isolation
+    """
     queryset = AuditFinding.objects.all()
     serializer_class = AuditFindingSerializer
     authentication_classes = [JWTAuthentication]
@@ -215,18 +302,43 @@ class AuditFindingListView(generics.ListCreateAPIView):
     filterset_fields = ['audit_id', 'metrics_id', 'user_id']
     ordering_fields = ['check_date', 'created_at']
     ordering = ['-created_at']
+    
+    def get_queryset(self):
+        """MULTI-TENANCY: Filter audit findings by tenant"""
+        queryset = super().get_queryset()
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        return queryset
+    
+    def perform_create(self, serializer):
+        """MULTI-TENANCY: Set tenant_id when creating audit finding"""
+        tenant_id = get_tenant_id_from_request(self.request)
+        serializer.save(tenant_id=tenant_id)
 
 
 class AuditFindingDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """Retrieve, update and delete audit finding."""
+    """Retrieve, update and delete audit finding.
+    MULTI-TENANCY: Filters audit findings by tenant to ensure tenant isolation
+    """
     queryset = AuditFinding.objects.all()
     serializer_class = AuditFindingSerializer
     authentication_classes = [JWTAuthentication]
     permission_classes = [PerformContractAuditPermission]
+    
+    def get_queryset(self):
+        """MULTI-TENANCY: Filter audit findings by tenant"""
+        queryset = super().get_queryset()
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        return queryset
 
 
 class AuditReportListView(generics.ListCreateAPIView):
-    """List and create audit reports."""
+    """List and create audit reports.
+    MULTI-TENANCY: Filters audit reports by tenant to ensure tenant isolation
+    """
     queryset = AuditReport.objects.all()
     serializer_class = AuditReportSerializer
     authentication_classes = [JWTAuthentication]
@@ -235,25 +347,56 @@ class AuditReportListView(generics.ListCreateAPIView):
     filterset_fields = ['audit_id', 'sla_id', 'metrics_id']
     ordering_fields = ['generated_at']
     ordering = ['-generated_at']
+    
+    def get_queryset(self):
+        """MULTI-TENANCY: Filter audit reports by tenant"""
+        queryset = super().get_queryset()
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        return queryset
+    
+    def perform_create(self, serializer):
+        """MULTI-TENANCY: Set tenant_id when creating audit report"""
+        tenant_id = get_tenant_id_from_request(self.request)
+        serializer.save(tenant_id=tenant_id)
 
 
 class AuditReportDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """Retrieve, update and delete audit report."""
+    """Retrieve, update and delete audit report.
+    MULTI-TENANCY: Filters audit reports by tenant to ensure tenant isolation
+    """
     queryset = AuditReport.objects.all()
     serializer_class = AuditReportSerializer
     authentication_classes = [JWTAuthentication]
     permission_classes = [PerformContractAuditPermission]
+    
+    def get_queryset(self):
+        """MULTI-TENANCY: Filter audit reports by tenant"""
+        queryset = super().get_queryset()
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        return queryset
 
 
 @api_view(['GET'])
 @authentication_classes([JWTAuthentication])
 @permission_classes_decorator([PerformContractAuditPermission])
 def audit_dashboard_stats(request):
-    """Get audit dashboard statistics."""
-    total_audits = Audit.objects.count()
-    active_audits = Audit.objects.filter(status__in=['created', 'in_progress']).count()
-    completed_audits = Audit.objects.filter(status='completed').count()
-    overdue_audits = Audit.objects.filter(
+    """Get audit dashboard statistics.
+    MULTI-TENANCY: Filters statistics by tenant to ensure tenant isolation
+    """
+    # MULTI-TENANCY: Filter by tenant
+    tenant_id = get_tenant_id_from_request(request)
+    audits_base = Audit.objects.all()
+    if tenant_id:
+        audits_base = audits_base.filter(tenant_id=tenant_id)
+    
+    total_audits = audits_base.count()
+    active_audits = audits_base.filter(status__in=['created', 'in_progress']).count()
+    completed_audits = audits_base.filter(status='completed').count()
+    overdue_audits = audits_base.filter(
         due_date__lt=timezone.now().date(),
         status__in=['created', 'in_progress']
     ).count()
@@ -270,17 +413,28 @@ def audit_dashboard_stats(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes_decorator([PerformContractAuditPermission])
 def available_slas(request):
-    """Get available SLAs for audit creation."""
+    """Get available SLAs for audit creation.
+    MULTI-TENANCY: Filters SLAs by tenant to ensure tenant isolation
+    """
+    # MULTI-TENANCY: Filter by tenant
+    tenant_id = get_tenant_id_from_request(request)
+    
     # Check if user is admin (user_id = 1) - admin can access any SLA
     user_id = request.GET.get('user_id', request.headers.get('X-User-ID', '1'))
     is_admin = str(user_id) == '1'
     
-    if is_admin:
-        # Admin can access any SLA regardless of status
-        slas = VendorSLA.objects.all().select_related('vendor', 'contract')
+    # Build base query with tenant filtering
+    if tenant_id:
+        slas_base = VendorSLA.objects.filter(tenant_id=tenant_id)
     else:
-        # Regular users can only access active SLAs
-        slas = VendorSLA.objects.filter(status='ACTIVE').select_related('vendor', 'contract')
+        slas_base = VendorSLA.objects.all()
+    
+    if is_admin:
+        # Admin can access any SLA regardless of status (within tenant)
+        slas = slas_base.select_related('vendor', 'contract')
+    else:
+        # Regular users can only access active SLAs (within tenant)
+        slas = slas_base.filter(status='ACTIVE').select_related('vendor', 'contract')
     
     sla_data = []
     for sla in slas:
@@ -305,20 +459,35 @@ def available_slas(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes_decorator([PerformContractAuditPermission])
 def sla_metrics(request, sla_id):
-    """Get metrics for a specific SLA."""
+    """Get metrics for a specific SLA.
+    MULTI-TENANCY: Ensures SLA belongs to tenant
+    """
     try:
+        # MULTI-TENANCY: Filter by tenant
+        tenant_id = get_tenant_id_from_request(request)
+        
         # Check if user is admin (user_id = 1) - admin can access any SLA
         user_id = request.GET.get('user_id', request.headers.get('X-User-ID', '1'))
         is_admin = str(user_id) == '1'
         
-        if is_admin:
-            # Admin can access any SLA regardless of status
-            sla = VendorSLA.objects.get(sla_id=sla_id)
+        # Build base query with tenant filtering
+        if tenant_id:
+            sla_query = VendorSLA.objects.filter(sla_id=sla_id, tenant_id=tenant_id)
         else:
-            # Regular users can only access active SLAs
-            sla = VendorSLA.objects.get(sla_id=sla_id, status='ACTIVE')
+            sla_query = VendorSLA.objects.filter(sla_id=sla_id)
         
-        metrics = SLAMetric.objects.filter(sla=sla)
+        if is_admin:
+            # Admin can access any SLA regardless of status (within tenant)
+            sla = sla_query.get()
+        else:
+            # Regular users can only access active SLAs (within tenant)
+            sla = sla_query.filter(status='ACTIVE').get()
+        
+        # MULTI-TENANCY: Filter metrics by tenant
+        if tenant_id:
+            metrics = SLAMetric.objects.filter(sla=sla, tenant_id=tenant_id)
+        else:
+            metrics = SLAMetric.objects.filter(sla=sla)
         
         metrics_data = []
         for metric in metrics:
@@ -417,9 +586,16 @@ def available_users(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes_decorator([PerformContractAuditPermission])
 def submit_audit_response(request, audit_id):
-    """Submit responses for an audit."""
+    """Submit responses for an audit.
+    MULTI-TENANCY: Ensures audit belongs to tenant
+    """
     try:
-        audit = Audit.objects.get(audit_id=audit_id)
+        # MULTI-TENANCY: Filter by tenant
+        tenant_id = get_tenant_id_from_request(request)
+        if tenant_id:
+            audit = Audit.objects.get(audit_id=audit_id, tenant_id=tenant_id)
+        else:
+            audit = Audit.objects.get(audit_id=audit_id)
         responses_data = request.data.get('responses', [])
         
         # Validate and save responses
@@ -469,9 +645,16 @@ def submit_audit_response(request, audit_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes_decorator([PerformContractAuditPermission])
 def review_audit(request, audit_id):
-    """Review and approve/reject an audit."""
+    """Review and approve/reject an audit.
+    MULTI-TENANCY: Ensures audit belongs to tenant
+    """
     try:
-        audit = Audit.objects.get(audit_id=audit_id)
+        # MULTI-TENANCY: Filter by tenant
+        tenant_id = get_tenant_id_from_request(request)
+        if tenant_id:
+            audit = Audit.objects.get(audit_id=audit_id, tenant_id=tenant_id)
+        else:
+            audit = Audit.objects.get(audit_id=audit_id)
         action = request.data.get('action', 'approve')
         comments = request.data.get('comments', '')
         

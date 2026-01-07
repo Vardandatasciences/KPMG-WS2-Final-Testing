@@ -11,13 +11,24 @@ from django.utils import timezone
 from .models import VendorLifecycleStages
 from tprm_backend.apps.vendor_core.models import TempVendor
 
+# MULTI-TENANCY: Import tenant utilities
+from tprm_backend.core.tenant_utils import get_tenant_id_from_request
+
 
 @api_view(['GET'])
 def test_lifecycle_data(request):
-    """Test endpoint to get lifecycle data without authentication"""
+    """Test endpoint to get lifecycle data without authentication
+    MULTI-TENANCY: Filters by tenant when tenant context is available
+    """
     try:
+        # MULTI-TENANCY: Get tenant ID for filtering
+        tenant_id = get_tenant_id_from_request(request)
+        
         # Get temp vendors with their lifecycle stage information
-        temp_vendors = TempVendor.objects.all().order_by('-created_at')
+        if tenant_id:
+            temp_vendors = TempVendor.objects.filter(tenant_id=tenant_id).order_by('-created_at')
+        else:
+            temp_vendors = TempVendor.objects.all().order_by('-created_at')
         
         # Get lifecycle stages for reference
         lifecycle_stages = VendorLifecycleStages.objects.filter(is_active=True)

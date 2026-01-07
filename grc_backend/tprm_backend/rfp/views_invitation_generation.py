@@ -17,6 +17,13 @@ from .email_templates import generate_rich_html_email
 from .rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required
 
+# MULTI-TENANCY: Import tenant utilities for filtering
+from tprm_backend.core.tenant_utils import (
+    get_tenant_id_from_request,
+    require_tenant,
+    tenant_filter
+)
+
 
 def generate_tracking_urls(rfp_id: int, invitation_id: int):
     """Generate acknowledge/decline tracking URLs that include rfp_id and invitation_id."""
@@ -47,10 +54,17 @@ def generate_tracking_urls(rfp_id: int, invitation_id: int):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def generate_invitations_new_format(request):
     """
     Generate invitations using the new URI method with query parameters
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return JsonResponse({'error': 'Tenant context not found'}, status=403)
+    
     try:
         data = json.loads(request.body)
         rfp_id = data.get('rfpId')
@@ -70,8 +84,9 @@ def generate_invitations_new_format(request):
             }, status=400)
         
         # Get RFP
+        # MULTI-TENANCY: Filter by tenant
         try:
-            rfp = RFP.objects.get(rfp_id=rfp_id)
+            rfp = RFP.objects.get(rfp_id=rfp_id, tenant_id=tenant_id)
         except RFP.DoesNotExist:
             return JsonResponse({
                 'success': False,
@@ -151,13 +166,15 @@ def generate_invitations_new_format(request):
                 invitation_url = f"{base_url}?{urlencode(params)}"
                 
                 # Check if invitation already exists
+                # MULTI-TENANCY: Filter by tenant
                 existing_invitation = None
                 if vendor_data.get('vendor_id'):
                     try:
                         # Avoid ORM fetch of Vendor which can fail if table columns are out-of-sync
                         existing_invitation = VendorInvitation.objects.get(
                             rfp_id=rfp_id,
-                            vendor_id=vendor_data.get('vendor_id')
+                            vendor_id=vendor_data.get('vendor_id'),
+                            tenant_id=tenant_id
                         )
                         print(f'[DEBUG] Found existing invitation for vendor {vendor_data.get("vendor_id")}, updating...')
                     except VendorInvitation.DoesNotExist:
@@ -183,6 +200,7 @@ def generate_invitations_new_format(request):
                 else:
                     # Create new invitation record
                     # Assign by vendor_id to avoid querying Vendor ORM (works even if Vendor table is out-of-sync)
+                    # MULTI-TENANCY: Set tenant_id on creation
                     invitation = VendorInvitation.objects.create(
                         rfp_id=rfp_id,
                         vendor_id=vendor_data.get('vendor_id') or None,
@@ -196,6 +214,7 @@ def generate_invitations_new_format(request):
                         submission_source='invited',
                         invitation_status='CREATED',
                         custom_message=custom_message,
+                        tenant_id=tenant_id,  # MULTI-TENANCY: Set tenant_id
                         utm_parameters={
                             'utm_source': 'rfp_portal',
                             'utm_medium': 'email',
@@ -249,10 +268,17 @@ def generate_invitations_new_format(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def generate_open_rfp_invitation(request):
     """
     Generate invitation for open RFP (no specific vendor)
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return JsonResponse({'error': 'Tenant context not found'}, status=403)
+    
     try:
         data = json.loads(request.body)
         rfp_id = data.get('rfpId')
@@ -264,8 +290,9 @@ def generate_open_rfp_invitation(request):
             }, status=400)
         
         # Get RFP
+        # MULTI-TENANCY: Filter by tenant
         try:
-            rfp = RFP.objects.get(rfp_id=rfp_id)
+            rfp = RFP.objects.get(rfp_id=rfp_id, tenant_id=tenant_id)
         except RFP.DoesNotExist:
             return JsonResponse({
                 'success': False,
@@ -297,6 +324,7 @@ def generate_open_rfp_invitation(request):
         invitation_url = f"{base_url}?{urlencode(params)}"
         
         # Create invitation record for open RFP
+        # MULTI-TENANCY: Set tenant_id on creation
         invitation = VendorInvitation.objects.create(
             rfp_id=rfp_id,
             vendor=None,  # Use vendor field instead of vendor_id
@@ -310,6 +338,7 @@ def generate_open_rfp_invitation(request):
             submission_source='open',
             invitation_status='CREATED',
             custom_message='',
+            tenant_id=tenant_id,  # MULTI-TENANCY: Set tenant_id
             utm_parameters={
                 'utm_source': 'rfp_portal',
                 'utm_medium': 'public',
@@ -345,12 +374,29 @@ def generate_open_rfp_invitation(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_invitations_by_rfp(request, rfp_id):
     """
     Get all invitations for a specific RFP
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return JsonResponse({'error': 'Tenant context not found'}, status=403)
+    
     try:
-        invitations = VendorInvitation.objects.filter(rfp_id=rfp_id).order_by('-created_at')
+        # MULTI-TENANCY: Verify RFP belongs to tenant and filter invitations
+        try:
+            rfp = RFP.objects.get(rfp_id=rfp_id, tenant_id=tenant_id)
+        except RFP.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'RFP not found: {rfp_id}'
+            }, status=404)
+        
+        # MULTI-TENANCY: Filter by tenant
+        invitations = VendorInvitation.objects.filter(rfp_id=rfp_id, tenant_id=tenant_id).order_by('-created_at')
         
         invitation_list = []
         for invitation in invitations:
@@ -389,10 +435,17 @@ def get_invitations_by_rfp(request, rfp_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def send_invitation_emails(request):
     """
     Send invitation emails to vendors
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return JsonResponse({'error': 'Tenant context not found'}, status=403)
+    
     try:
         data = json.loads(request.body)
         invitations = data.get('invitations', [])
@@ -406,7 +459,11 @@ def send_invitation_emails(request):
         for invitation in invitations:
             try:
                 # Update invitation status to SENT
-                invitation_obj = VendorInvitation.objects.get(invitation_id=invitation['invitation_id'])
+                # MULTI-TENANCY: Filter by tenant
+                invitation_obj = VendorInvitation.objects.get(
+                    invitation_id=invitation['invitation_id'],
+                    tenant_id=tenant_id
+                )
                 invitation_obj.invitation_status = 'SENT'
                 invitation_obj.invited_date = timezone.now()
                 invitation_obj.save()

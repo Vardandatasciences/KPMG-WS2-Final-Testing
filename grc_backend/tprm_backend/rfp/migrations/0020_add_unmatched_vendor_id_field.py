@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('rfp', '0019_add_s3_files_model'),
+        ('tprm_rfp', '0019_add_s3_files_model'),
     ]
 
     operations = [

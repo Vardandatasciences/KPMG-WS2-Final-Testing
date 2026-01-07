@@ -16,6 +16,15 @@ from .serializers import (
     FrameworkSerializer, ComplianceMappingSerializer, ComplianceMappingDetailSerializer
 )
 
+# MULTI-TENANCY: Import tenant utilities for filtering
+from tprm_backend.core.tenant_utils import (
+    get_tenant_id_from_request,
+    filter_queryset_by_tenant,
+    get_tenant_aware_queryset,
+    require_tenant,
+    tenant_filter
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -83,7 +92,9 @@ class JWTAuthentication(BaseAuthentication):
 
 
 class FrameworkViewSet(viewsets.ModelViewSet):
-    """ViewSet for Framework model."""
+    """ViewSet for Framework model.
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
     queryset = Framework.objects.all()
     serializer_class = FrameworkSerializer
     authentication_classes = [JWTAuthentication]
@@ -94,21 +105,47 @@ class FrameworkViewSet(viewsets.ModelViewSet):
     ordering_fields = ['FrameworkName', 'CurrentVersion', 'EffectiveDate']
     ordering = ['FrameworkName']
 
+    def get_queryset(self):
+        """MULTI-TENANCY: Filter by tenant"""
+        queryset = super().get_queryset()
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        return queryset
+
+    def perform_create(self, serializer):
+        """MULTI-TENANCY: Set tenant_id on creation"""
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            serializer.save(tenant_id=tenant_id)
+        else:
+            serializer.save()
+
     @action(detail=False, methods=['get'])
     def active(self, request):
         """Get only active frameworks."""
-        active_frameworks = self.queryset.filter(ActiveInactive='Active')
+        # MULTI-TENANCY: Filter by tenant
+        tenant_id = get_tenant_id_from_request(request)
+        if tenant_id:
+            active_frameworks = self.get_queryset().filter(ActiveInactive='Active', tenant_id=tenant_id)
+        else:
+            active_frameworks = self.get_queryset().filter(ActiveInactive='Active')
         serializer = self.get_serializer(active_frameworks, many=True)
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'])
     def by_category(self, request):
         """Get frameworks grouped by category."""
+        # MULTI-TENANCY: Filter by tenant
+        tenant_id = get_tenant_id_from_request(request)
         category = request.query_params.get('category')
         if category:
-            frameworks = self.queryset.filter(Category=category)
+            if tenant_id:
+                frameworks = self.get_queryset().filter(Category=category, tenant_id=tenant_id)
+            else:
+                frameworks = self.get_queryset().filter(Category=category)
         else:
-            frameworks = self.queryset.all()
+            frameworks = self.get_queryset().all()
         
         # Group by category
         categories = {}
@@ -123,7 +160,9 @@ class FrameworkViewSet(viewsets.ModelViewSet):
 
 
 class ComplianceMappingViewSet(viewsets.ModelViewSet):
-    """ViewSet for ComplianceMapping model."""
+    """ViewSet for ComplianceMapping model.
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
     queryset = ComplianceMapping.objects.all()
     serializer_class = ComplianceMappingSerializer
     authentication_classes = [JWTAuthentication]
@@ -134,6 +173,22 @@ class ComplianceMappingViewSet(viewsets.ModelViewSet):
     ordering_fields = ['compliance_score', 'last_audited', 'next_audit_due']
     ordering = ['-compliance_score']
 
+    def get_queryset(self):
+        """MULTI-TENANCY: Filter by tenant"""
+        queryset = super().get_queryset()
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        return queryset
+
+    def perform_create(self, serializer):
+        """MULTI-TENANCY: Set tenant_id on creation"""
+        tenant_id = get_tenant_id_from_request(self.request)
+        if tenant_id:
+            serializer.save(tenant_id=tenant_id)
+        else:
+            serializer.save()
+
     def get_serializer_class(self):
         if self.action == 'retrieve':
             return ComplianceMappingDetailSerializer
@@ -142,33 +197,41 @@ class ComplianceMappingViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def by_sla(self, request):
         """Get compliance mappings for a specific SLA"""
+        # MULTI-TENANCY: Filter by tenant
+        tenant_id = get_tenant_id_from_request(request)
         sla_id = request.query_params.get('sla_id')
         if not sla_id:
             return Response({'error': 'sla_id parameter is required'}, status=status.HTTP_400_BAD_REQUEST)
         
-        mappings = self.queryset.filter(sla_id=sla_id)
+        if tenant_id:
+            mappings = self.get_queryset().filter(sla_id=sla_id, tenant_id=tenant_id)
+        else:
+            mappings = self.get_queryset().filter(sla_id=sla_id)
         serializer = self.get_serializer(mappings, many=True)
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'])
     def by_framework(self, request):
         """Get compliance mappings for a specific framework"""
+        # MULTI-TENANCY: Use get_queryset() to ensure tenant filtering
         framework_id = request.query_params.get('framework_id')
         if not framework_id:
             return Response({'error': 'framework_id parameter is required'}, status=status.HTTP_400_BAD_REQUEST)
         
-        mappings = self.queryset.filter(framework_id=framework_id)
+        mappings = self.get_queryset().filter(framework_id=framework_id)
         serializer = self.get_serializer(mappings, many=True)
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'])
     def summary(self, request):
         """Get compliance mapping summary statistics"""
+        # MULTI-TENANCY: Use get_queryset() to ensure tenant filtering
         from django.db.models import Avg
         
-        total_mappings = self.queryset.count()
-        compliant_mappings = self.queryset.filter(compliance_status='Compliant').count()
-        avg_compliance_score = self.queryset.aggregate(
+        queryset = self.get_queryset()
+        total_mappings = queryset.count()
+        compliant_mappings = queryset.filter(compliance_status='Compliant').count()
+        avg_compliance_score = queryset.aggregate(
             avg_score=Avg('compliance_score')
         )['avg_score'] or 0
         

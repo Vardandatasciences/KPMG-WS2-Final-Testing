@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('rfp', '0016_filestorage'),
+        ('tprm_rfp', '0016_filestorage'),
     ]
 
     operations = [

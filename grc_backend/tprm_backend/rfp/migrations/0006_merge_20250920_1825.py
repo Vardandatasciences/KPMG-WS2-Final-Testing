@@ -6,8 +6,8 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('rfp', '0002_vendor_models'),
-        ('rfp', '0005_rfpunmatchedvendor_rfpvendorselection_vendor_and_more'),
+        ('tprm_rfp', '0002_vendor_models'),
+        ('tprm_rfp', '0005_rfpunmatchedvendor_rfpvendorselection_vendor_and_more'),
     ]
 
     operations = [

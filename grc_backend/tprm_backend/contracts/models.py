@@ -58,6 +58,12 @@ class Vendor(models.Model):
     
     # Basic Information
     vendor_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link vendor to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='contract_vendors', null=True, blank=True,
+                               help_text="Tenant this vendor belongs to")
+    
     vendor_code = models.CharField(max_length=50, help_text="Unique vendor identifier")
     company_name = models.CharField(max_length=255, help_text="Display name of the company")
     legal_name = models.CharField(max_length=255, blank=True, null=True, help_text="Legal registered name")
@@ -256,6 +262,12 @@ class VendorContract(models.Model):
     
     # Basic Contract Information
     contract_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link vendor contract to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='vendor_contracts', null=True, blank=True,
+                               help_text="Tenant this vendor contract belongs to")
+    
     vendor = models.ForeignKey(
         Vendor, 
         on_delete=models.CASCADE, 
@@ -494,6 +506,11 @@ class ContractTerm(models.Model):
     # Primary key - using id field to match database schema
     id = models.BigAutoField(primary_key=True)
     
+    # MULTI-TENANCY: Link contract term to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='contract_terms', null=True, blank=True,
+                               help_text="Tenant this contract term belongs to")
+    
     # Foreign key to contract - using contract_id field to match database schema
     contract_id = models.BigIntegerField(help_text="Contract ID")
     
@@ -549,6 +566,11 @@ class ContractClause(models.Model):
     
     # Primary key - matching database schema
     id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link contract clause to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='contract_clauses', null=True, blank=True,
+                               help_text="Tenant this contract clause belongs to")
     
     # Foreign key to contract - using contract_id field to match database schema
     contract_id = models.BigIntegerField(help_text="Contract ID", default=1)
@@ -607,6 +629,11 @@ class VendorContact(models.Model):
     
     # Primary key - matching database schema
     contact_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link vendor contact to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='vendor_contacts', null=True, blank=True,
+                               help_text="Tenant this vendor contact belongs to")
     
     # Foreign key to vendor - using vendor_id field to match database schema
     vendor_id = models.BigIntegerField(help_text="Vendor ID")
@@ -696,6 +723,11 @@ class ContractAmendment(models.Model):
     
     # Primary key - matching database schema
     amendment_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link contract amendment to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='contract_amendments', null=True, blank=True,
+                               help_text="Tenant this contract amendment belongs to")
     
     # Foreign key to contract - using contract_id field to match database schema
     contract_id = models.BigIntegerField(help_text="Contract ID")
@@ -870,6 +902,12 @@ class ContractRenewal(models.Model):
     ]
     
     renewal_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link contract renewal to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='contract_renewals', null=True, blank=True,
+                               help_text="Tenant this contract renewal belongs to")
+    
     contract_id = models.BigIntegerField(help_text="Reference to the original contract")
     renewal_date = models.DateField(help_text="Date when renewal process was initiated")
     notification_sent_date = models.DateField(blank=True, null=True, help_text="Date when the renewal notification was sent")
@@ -1008,6 +1046,12 @@ class ContractApproval(models.Model):
     ]
     
     approval_id = models.AutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link contract approval to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='contract_approvals', null=True, blank=True,
+                               help_text="Tenant this contract approval belongs to")
+    
     workflow_id = models.IntegerField(help_text="ID of the workflow this approval belongs to")
     workflow_name = models.CharField(max_length=255, help_text="Name of the workflow")
     assigner_id = models.IntegerField(help_text="ID of the user who assigned this approval")

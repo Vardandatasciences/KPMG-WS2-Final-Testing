@@ -10,6 +10,12 @@ from tprm_backend.slas.models import VendorSLA, SLAMetric
 class Audit(models.Model):
     """Audit model matching MySQL schema."""
     audit_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link audit to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='audits', null=True, blank=True,
+                               help_text="Tenant this audit belongs to")
+    
     title = models.CharField(max_length=255)
     scope = models.TextField(blank=True, null=True)
     assignee_id = models.IntegerField(blank=True, null=True)
@@ -94,6 +100,12 @@ class Audit(models.Model):
 class StaticQuestionnaire(models.Model):
     """Static questionnaires matching tprm_db schema."""
     question_id = models.AutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link static questionnaire to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='static_questionnaires', null=True, blank=True,
+                               help_text="Tenant this static questionnaire belongs to")
+    
     metric_name = models.CharField(max_length=255)
     question_text = models.TextField()
     question_type = models.CharField(
@@ -122,6 +134,12 @@ class StaticQuestionnaire(models.Model):
 class AuditVersion(models.Model):
     """Audit versions matching tprm_db schema."""
     version_id = models.AutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link audit version to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='audit_versions', null=True, blank=True,
+                               help_text="Tenant this audit version belongs to")
+    
     audit_id = models.IntegerField()
     version_type = models.CharField(
         max_length=1,
@@ -158,6 +176,12 @@ class AuditVersion(models.Model):
 class AuditFinding(models.Model):
     """Audit findings matching tprm_db schema."""
     audit_finding_id = models.AutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link audit finding to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='audit_findings', null=True, blank=True,
+                               help_text="Tenant this audit finding belongs to")
+    
     audit_id = models.IntegerField()
     metrics_id = models.IntegerField()
     evidence = models.TextField()
@@ -184,6 +208,12 @@ class AuditFinding(models.Model):
 class AuditReport(models.Model):
     """Audit reports matching tprm_db schema."""
     report_id = models.AutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link audit report to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='audit_reports', null=True, blank=True,
+                               help_text="Tenant this audit report belongs to")
+    
     audit_id = models.IntegerField()
     report_link = models.CharField(max_length=500)  # S3 bucket link
     sla_id = models.IntegerField()
