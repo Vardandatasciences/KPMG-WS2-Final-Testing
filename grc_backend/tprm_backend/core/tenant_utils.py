@@ -135,28 +135,39 @@ def tenant_filter(view_func):
                                 logger.debug(f"[Tenant Utils] JWT decode error: {e}")
                                 pass
                     
-                    # Get tenant from user - try different User models
+                    # Get tenant from user by querying users table directly from tprm_integrations database
                     if user_id:
-                        # Try mfa_auth.User first (most common in TPRM)
+                        from django.db import connections
+                        
                         try:
-                            from mfa_auth.models import User
-                            user = User.objects.get(userid=user_id)
-                            if hasattr(user, 'tenant_id'):
-                                tenant_id = user.tenant_id
-                            elif hasattr(user, 'tenant') and user.tenant:
-                                tenant_id = user.tenant.tenant_id
-                        except Exception as e:
-                            logger.debug(f"[Tenant Utils] mfa_auth.User not found: {e}")
-                            # Try other User models if mfa_auth doesn't work
+                            with connections['default'].cursor() as cursor:
+                                # Query users table to get tenant_id
+                                cursor.execute("""
+                                    SELECT tenant_id
+                                    FROM users
+                                    WHERE userid = %s OR id = %s OR user_id = %s
+                                    LIMIT 1
+                                """, [user_id, user_id, user_id])
+                                
+                                result = cursor.fetchone()
+                                
+                                if result and result[0]:
+                                    tenant_id = result[0]
+                                    logger.debug(f"[Tenant Utils] Found tenant_id {tenant_id} from users table for user_id: {user_id}")
+                                else:
+                                    logger.debug(f"[Tenant Utils] No tenant_id found in users table for user_id: {user_id}")
+                        except Exception as db_error:
+                            logger.debug(f"[Tenant Utils] Error querying users table: {db_error}")
+                            # Fallback to model-based lookup if raw SQL fails
                             try:
-                                from bcpdrp.models import Users
-                                user = Users.objects.get(user_id=user_id)
+                                from mfa_auth.models import User
+                                user = User.objects.get(userid=user_id)
                                 if hasattr(user, 'tenant_id'):
                                     tenant_id = user.tenant_id
                                 elif hasattr(user, 'tenant') and user.tenant:
                                     tenant_id = user.tenant.tenant_id
-                            except Exception as e2:
-                                logger.debug(f"[Tenant Utils] bcpdrp.Users not found: {e2}")
+                            except Exception as e:
+                                logger.debug(f"[Tenant Utils] mfa_auth.User model lookup also failed: {e}")
                                 pass
                 except Exception as e:
                     logger.error(f"[Tenant Utils] Error extracting tenant: {e}")

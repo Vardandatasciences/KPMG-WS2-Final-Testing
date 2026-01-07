@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.db.models import Count
+from tprm_backend.utils.base_serializer import AutoDecryptingModelSerializer
 from .models import SearchIndex, SearchAnalytics
 
 
@@ -47,7 +48,7 @@ class SearchQuerySerializer(serializers.Serializer):
     )
 
 
-class SearchResultSerializer(serializers.ModelSerializer):
+class SearchResultSerializer(AutoDecryptingModelSerializer):
     """Serializer for search results."""
     
     global_uid = serializers.SerializerMethodField()
@@ -267,7 +268,7 @@ class SearchResponseSerializer(serializers.Serializer):
     query = serializers.CharField(help_text="Original search query")
 
 
-class SearchAnalyticsSerializer(serializers.ModelSerializer):
+class SearchAnalyticsSerializer(AutoDecryptingModelSerializer):
     """Serializer for search analytics."""
     
     class Meta:

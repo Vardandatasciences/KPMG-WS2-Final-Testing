@@ -1,0 +1,146 @@
+########################################
+# LOCAL ENVIRONMENT CONFIGURATION
+# This file should NEVER be committed to Git.
+########################################
+ 
+# ==== Django / Core ====
+DJANGO_SECRET_KEY=django-insecure-%@4hoxv^4aj(ul6t3=i_iu%)*il^l&tc!38jrqb%g(td^lls$k)
+DEBUG=true
+ 
+# ==== Database (MySQL on RDS) ====
+DB_NAME=grc2
+DB_USER=admin
+DB_PASSWORD=Vardaan123
+DB_HOST=grc-db.c1womgmu83di.ap-south-1.rds.amazonaws.com
+DB_PORT=3306
+ 
+# DB_NAME=grc2
+# DB_USER=root
+# DB_PASSWORD=root
+# DB_HOST=localhost
+# DB_PORT=3306
+ 
+ 
+# TPRM Database
+TPRM_DB_NAME=tprm_integration
+TPRM_DB_USER=admin
+TPRM_DB_PASSWORD=rootroot
+TPRM_DB_HOST=tprmintegration.c1womgmu83di.ap-south-1.rds.amazonaws.com
+TPRM_DB_PORT=3306
+ 
+ 
+# TPRM_DB_NAME=tprm_integration
+# TPRM_DB_USER=root
+# TPRM_DB_PASSWORD=root
+# TPRM_DB_HOST=localhost
+# TPRM_DB_PORT=3306
+ 
+# ==== OpenAI / LLMs ====
+ 
+PERPLEXITY_API_KEY="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"
+ 
+ 
+ 
+ 
+GROK_API_KEY="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"
+GROK_MODEL="llama-3.1-8b-instant"
+ 
+REDIS_URL=redis://localhost:6379/2
+ 
+# Ollama  for open chnage to openai
+RISK_AI_PROVIDER=ollama
+OLLAMA_BASE_URL=http://13.205.15.232:11434
+OLLAMA_MODEL=llama3.2:3b-instruct-q4_K_M
+OPENAI_API_KEY=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
+ 
+OPENAI_MODEL="gpt-4o-mini"
+ 
+# ==== Licensing / Feature Flags ====
+LICENSE_CHECK_ENABLED=false
+MFA_ENABLED=false
+ 
+# ==== Email / Gmail / SMTP ====
+# SMTP Configuration for Gmail
+SMTP_SERVER='smtp.gmail.com'
+SMTP_PORT=587
+SMTP_EMAIL='loukyarao68@gmail.com'
+SMTP_PASSWORD='vafx kqve dwmj mvjv'
+GMAIL_USER='loukyarao68@gmail.com'
+GMAIL_APP_PASSWORD='vafx kqve dwmj mvjv'
+ 
+DEFAULT_FROM_EMAIL='loukyarao68@gmail.com'
+DEFAULT_FROM_NAME='GRC System'
+ 
+# ==== WhatsApp API (Meta) ====
+WHATSAPP_API_URL='https://graph.facebook.com/v21.0/521803094347148/messages'
+WHATSAPP_ACCESS_TOKEN='EAAZAFlVKZBf1EBOZBVRH0U6RCZAWfJQ79hzPCZCsZAdkQX9o5qcDRG7DZCanC8hoFZBOs7hrvoft0WiXMUXRDKmCfZAl26xLweNmxvkF5YJLwupO5KnbUqzNqj4WKIzq33ZAAFbaoP8z2F5zZCnUxy7MfookTQGRZCqvuzX1P60ZCWoZCr4KDZCyIZA8rX9r9k7jI4okVnEn3CnVNcZBMsSSaFo6RgAiUIcPsOcOy1ABgmEUZD'
+WHATSAPP_PHONE_NUMBER_ID='521803094347148'
+WHATSAPP_SENDER_PHONE='521803094347148'
+TEMPLATE_NAME='hello_world'
+USE_LOCAL_DEVELOPMENT=true
+# ==== AWS S3 ====
+AWS_BUCKET_NAME="orcashoimages"
+AWS_STORAGE_BUCKET_NAME="orcashoimages"
+AWS_ACCESS_KEY_ID="AKIAUFKKTW4PVLTPXEMC"
+AWS_SECRET_ACCESS_KEY="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"
+AWS_REGION="ap-south-1"
+AWS_S3_REGION_NAME="ap-south-1"
+ 
+# ==== Microsoft Azure / Sentinel ====
+MICROSOFT_CLIENT_ID="1d9fdf2e-ebc8-47e0-8e7d-4c4c41b6a616"
+MICROSOFT_TENANT_ID="aa7c8c45-41a3-4453-bc9a-3adfe8ff5fb6"
+MICROSOFT_CLIENT_SECRET="~2N8Q~NvXe1tEmlvG-jkOxYLPuvJazxN4Wwuzbyr"
+REDIRECT_URI="https://api-grc.vardaands.com/auth/sentinel/callback"
+MICROSOFT_AUTHORITY="https://login.microsoftonline.com/common"
+MICROSOFT_USER="likitha.r@vardaanglobal.com"
+ 
+AZURE_SUBSCRIPTION_ID=os.environ.get("AZURE_SUBSCRIPTION_ID", "")
+AZURE_RESOURCE_GROUP=os.environ.get("AZURE_RESOURCE_GROUP", "")
+AZURE_WORKSPACE_NAME=os.environ.get("AZURE_WORKSPACE_NAME", "")
+ 
+ 
+# ==== Jira OAuth ====
+JIRA_CLIENT_ID=4P9O14ygMc08yy0BrBNPcTTpNlgjD1UQ
+JIRA_CLIENT_SECRET=ATOAi7DTNkJ1winBixHg3Vdq8ijyXuhY6ek1-RpagetNhD7EwggY4EMdJjwgS7zJkPNL0814E486
+# JIRA_REDIRECT_URI='https://api-grc.vardaands.com/api/jira/oauth-callback/'
+JIRA_REDIRECT_URI=http://127.0.0.1:8000/api/jira/oauth-callback/
+ 
+JIRA_SCOPES=read:jira-user read:jira-work
+ 
+ 
+# ==== BambooHR OAuth ====
+ 
+ 
+BAMBOOHR_CLIENT_ID="developer_portal-12062b68e6fd89aea7d83f9e218805ac6c448de9"
+BAMBOOHR_CLIENT_SECRET="a91f93594c9521800031c3e28719aff266df3922de3690bd0cb4f3aacf5fcb727b1fa3c7111d17da"
+ 
+USE_LOCAL_DEVELOPMENT=true
+FRONTEND_URL=http://localhost:8080
+ 
+BAMBOOHR_REDIRECT_URI=http://127.0.0.1:8000/api/bamboohr/oauth-callback/
+BAMBOOHR_FLASK_SERVER_URL=http://127.0.0.1:5000
+BAMBOOHR_SCOPES=email openid employee company:info employee:contact employee:job employee:name employee:photo employee_directory
+ 
+# ==== OAuth State (only skip in local dev) ====
+SKIP_OAUTH_STATE_VERIFICATION=true
+ 
+GOOGLE_CLIENT_ID=990328574998-irdqaukmk6tkfg9s0curhmlcsv93tf1j.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=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
+ 
+AWS_ACCESS_KEY_ID=AKIAW76SPJ4WHO6XV47T
+AWS_SECRET_ACCESS_KEY=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
+AWS_REGION=ap-south-1
+ 
+# Set inactivity period (default: 90 days)
+USER_INACTIVITY_DAYS=90
+ 
+# Future features
+USER_INACTIVITY_EMAIL_ENABLED=false
+USER_INACTIVITY_WARNING_DAYS=7
+ 
+ 
+ 
+ 
+ 
+backend env 
+ 

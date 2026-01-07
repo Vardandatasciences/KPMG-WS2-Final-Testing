@@ -3,9 +3,10 @@ from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
 import json
+from tprm_backend.utils.encrypted_fields_mixin import TPRMEncryptedFieldsMixin
 
 
-class Vendor(models.Model):
+class Vendor(TPRMEncryptedFieldsMixin, models.Model):
     """Vendor model for managing vendor information"""
     
     VENDOR_CATEGORIES = [

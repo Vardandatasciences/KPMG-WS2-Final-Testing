@@ -6,6 +6,7 @@ from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.contrib.auth.models import User
 import json
+from tprm_backend.utils.encrypted_fields_mixin import TPRMEncryptedFieldsMixin
 
 
 class Dropdown(models.Model):
@@ -28,7 +29,7 @@ class Dropdown(models.Model):
         return f"{self.source}: {self.value}"
 
 
-class Plan(models.Model):
+class Plan(TPRMEncryptedFieldsMixin, models.Model):
     """BCP/DRP Plan model"""
     
     CRITICALITY_CHOICES = [
@@ -102,7 +103,7 @@ class Plan(models.Model):
         return f"{self.plan_name} ({self.plan_type}) - {self.strategy_name}"
 
      
-class BcpDetails(models.Model):
+class BcpDetails(TPRMEncryptedFieldsMixin, models.Model):
     """BCP extracted details model"""
     plan_id = models.IntegerField(primary_key=True)
     
@@ -154,7 +155,7 @@ class BcpDetails(models.Model):
         return f"BCP Details for Plan {self.plan_id}"
 
 
-class DrpDetails(models.Model):
+class DrpDetails(TPRMEncryptedFieldsMixin, models.Model):
     """DRP extracted details model"""
     plan_id = models.IntegerField(primary_key=True)
     
@@ -205,7 +206,7 @@ class DrpDetails(models.Model):
         return f"DRP Details for Plan {self.plan_id}"
 
 
-class Evaluation(models.Model):
+class Evaluation(TPRMEncryptedFieldsMixin, models.Model):
     """Plan evaluation model"""
     STATUS_CHOICES = [
         ('ASSIGNED', 'Assigned'),
@@ -267,7 +268,7 @@ class Evaluation(models.Model):
         return f"Evaluation {self.evaluation_id} for Plan {self.plan_id}"
 
 
-class Questionnaire(models.Model):
+class Questionnaire(TPRMEncryptedFieldsMixin, models.Model):
     """Test questionnaire model"""
     STATUS_CHOICES = [
         ('DRAFT', 'Draft'),
@@ -304,7 +305,7 @@ class Questionnaire(models.Model):
         return f"{self.title} v{self.version}"
 
 
-class Question(models.Model):
+class Question(TPRMEncryptedFieldsMixin, models.Model):
     """Test question model"""
     ANSWER_TYPE_CHOICES = [
         ('TEXT', 'Text'),
@@ -334,7 +335,7 @@ class Question(models.Model):
         return f"Q{self.seq_no}: {self.question_text[:50]}..."
 
 
-class TestAssignmentsResponses(models.Model):
+class TestAssignmentsResponses(TPRMEncryptedFieldsMixin, models.Model):
     """
     Test assignments responses model - consolidated table for assignments, responses, and answers.
     
@@ -406,7 +407,7 @@ class TestAssignmentsResponses(models.Model):
         return f"Assignment Response {self.assignment_response_id} for Plan {self.plan_id} - Question {self.question_id}"
 
 
-class BcpDrpApprovals(models.Model):
+class BcpDrpApprovals(TPRMEncryptedFieldsMixin, models.Model):
     """BCP/DRP Approvals model for workflow management"""
     OBJECT_TYPE_CHOICES = [
         ('PLAN EVALUATION', 'Plan Evaluation'),
@@ -454,7 +455,7 @@ class BcpDrpApprovals(models.Model):
         return f"Approval {self.approval_id}: {self.workflow_name} - {self.assignee_name}"
 
 
-class Users(models.Model):
+class Users(TPRMEncryptedFieldsMixin, models.Model):
     """Users table model"""
     user_id = models.AutoField(primary_key=True, db_column='UserId')
     
@@ -483,7 +484,7 @@ class Users(models.Model):
     def __str__(self):
         return f"{self.user_name} ({self.first_name} {self.last_name})"
 
-class QuestionnaireTemplate(models.Model):
+class QuestionnaireTemplate(TPRMEncryptedFieldsMixin, models.Model):
     """Unified Questionnaire Template model for all modules"""
     TEMPLATE_TYPE_CHOICES = [
         ('STATIC', 'Static'),

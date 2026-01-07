@@ -1343,37 +1343,50 @@ export default {
       // User must have SubmitVendorForApproval permission to create workflows
       // First check localStorage, then check backend API if needed
       let hasPermission = permissions.value.canSubmitForApproval
+      console.log('Initial permission check from localStorage:', hasPermission)
       
-      // If permission check from localStorage returns false, try fetching from backend
-      if (!hasPermission) {
-        console.log('Permission not found in localStorage, checking backend API...')
-        try {
-          // Check backend API for the permission
-          hasPermission = await permissionsService.checkVendorPermission('submit_vendor_for_approval')
-          console.log('Backend permission check result:', hasPermission)
+      // Always check backend API to ensure we have the latest permissions
+      // This is important because permissions might have changed or localStorage might be stale
+      try {
+        console.log('Checking backend API for submit_vendor_for_approval permission...')
+        const backendPermission = await permissionsService.checkVendorPermission('submit_vendor_for_approval')
+        console.log('Backend permission check result:', backendPermission)
+        
+        // Use backend result as the source of truth
+        hasPermission = backendPermission
+        
+        // If we got permission from backend, update localStorage for future checks
+        if (hasPermission) {
+          // Update user object in localStorage with permission
+          let userStr = localStorage.getItem('user')
+          if (!userStr) {
+            userStr = localStorage.getItem('current_user')
+          }
           
-          // If we got permission from backend, update localStorage
-          if (hasPermission) {
-            // Update user object in localStorage with permission
-            const userStr = localStorage.getItem('user')
-            if (userStr) {
-              try {
-                const user = JSON.parse(userStr)
-                if (!user.permissions) {
-                  user.permissions = {}
-                }
-                user.permissions.SubmitVendorForApproval = true
-                localStorage.setItem('user', JSON.stringify(user))
-                console.log('Updated localStorage with permission')
-              } catch (e) {
-                console.error('Error updating localStorage:', e)
+          if (userStr) {
+            try {
+              const user = JSON.parse(userStr)
+              if (!user.permissions) {
+                user.permissions = {}
               }
+              user.permissions.SubmitVendorForApproval = true
+              // Save to both keys for compatibility
+              localStorage.setItem('user', JSON.stringify(user))
+              if (localStorage.getItem('current_user')) {
+                localStorage.setItem('current_user', JSON.stringify(user))
+              }
+              console.log('Updated localStorage with permission')
+            } catch (e) {
+              console.error('Error updating localStorage:', e)
             }
           }
-        } catch (error) {
-          console.error('Error checking permission from backend:', error)
-          hasPermission = false
         }
+      } catch (error) {
+        console.error('Error checking permission from backend:', error)
+        // If backend check fails, fall back to localStorage check
+        // This allows the page to work if there's a temporary network issue
+        console.log('Falling back to localStorage permission check due to backend error')
+        hasPermission = permissions.value.canSubmitForApproval
       }
       
       if (!hasPermission) {

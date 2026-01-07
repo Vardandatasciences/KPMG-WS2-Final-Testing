@@ -157,6 +157,24 @@ class VendorContact(BaseModel):
     
     def __str__(self):
         return f"{self.vendor.name} - {self.name}"
+    
+    @property
+    def email_plain(self):
+        """Get decrypted email address"""
+        from tprm_backend.utils.data_encryption import decrypt_data
+        return decrypt_data(self.email) if self.email else None
+    
+    @property
+    def phone_plain(self):
+        """Get decrypted phone number"""
+        from tprm_backend.utils.data_encryption import decrypt_data
+        return decrypt_data(self.phone) if self.phone else None
+    
+    @property
+    def mobile_plain(self):
+        """Get decrypted mobile number"""
+        from tprm_backend.utils.data_encryption import decrypt_data
+        return decrypt_data(self.mobile) if self.mobile else None
 
 
 class VendorFinancial(BaseModel):

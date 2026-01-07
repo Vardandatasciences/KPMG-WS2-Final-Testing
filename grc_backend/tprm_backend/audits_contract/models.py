@@ -5,9 +5,10 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.contrib.auth.models import User
 from tprm_backend.contracts.models import VendorContract, ContractTerm
+from tprm_backend.utils.encrypted_fields_mixin import TPRMEncryptedFieldsMixin
 
 
-class ContractAudit(models.Model):
+class ContractAudit(TPRMEncryptedFieldsMixin, models.Model):
     """Audit model matching MySQL schema."""
     audit_id = models.BigAutoField(primary_key=True)
     
@@ -98,7 +99,7 @@ class ContractAudit(models.Model):
         return f"{self.title} - {self.status}"
 
 
-class ContractStaticQuestionnaire(models.Model):
+class ContractStaticQuestionnaire(TPRMEncryptedFieldsMixin, models.Model):
     """Static questionnaires matching existing database schema."""
     question_id = models.AutoField(primary_key=True)
     
@@ -139,7 +140,7 @@ class ContractStaticQuestionnaire(models.Model):
         return f"{self.question_text[:50]}..."
 
 
-class ContractAuditVersion(models.Model):
+class ContractAuditVersion(TPRMEncryptedFieldsMixin, models.Model):
     """Audit versions matching tprm_db schema."""
     version_id = models.AutoField(primary_key=True)
     
@@ -181,7 +182,7 @@ class ContractAuditVersion(models.Model):
         return f"Version {self.version_number} - {self.audit_id}"
 
 
-class ContractAuditFinding(models.Model):
+class ContractAuditFinding(TPRMEncryptedFieldsMixin, models.Model):
     """Audit findings matching tprm_db schema."""
     audit_finding_id = models.AutoField(primary_key=True)
     
@@ -213,7 +214,7 @@ class ContractAuditFinding(models.Model):
         return f"Finding for Audit {self.audit_id}"
 
 
-class ContractAuditReport(models.Model):
+class ContractAuditReport(TPRMEncryptedFieldsMixin, models.Model):
     """Audit reports matching tprm_db schema."""
     report_id = models.AutoField(primary_key=True)
     

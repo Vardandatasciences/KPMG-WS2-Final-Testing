@@ -2,7 +2,8 @@
  * Permissions Service for RBAC checks
  * Handles permission verification before showing pages
  */
-import { getTprmApiBaseUrl } from '@/utils/backendEnv'
+// Use relative import so this service also works when dynamically imported from grc_frontend
+import { getTprmApiBaseUrl } from '../utils/backendEnv'
 
 const API_BASE_URL = getTprmApiBaseUrl()
 
@@ -46,7 +47,8 @@ class PermissionsService {
         return false
       }
 
-      const url = `${API_BASE_URL}/api/rbac/sla/?permission_type=${permission}`
+      const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL
+      const url = `${baseUrl}/rbac/sla/?permission_type=${permission}`
       console.log('[PermissionsService] Fetching permission from:', url)
 
       const response = await fetch(url, {
@@ -114,7 +116,8 @@ class PermissionsService {
         return false
       }
 
-      const url = `${API_BASE_URL}/api/rbac/contract/?permission_type=${permission}`
+      const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL
+      const url = `${baseUrl}/rbac/contract/?permission_type=${permission}`
       console.log('[PermissionsService] Fetching Contract permission from:', url)
 
       const response = await fetch(url, {
@@ -181,7 +184,8 @@ class PermissionsService {
         return false
       }
 
-      const url = `${API_BASE_URL}/api/rbac/rfp/?permission_type=${permission}`
+      const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL
+      const url = `${baseUrl}/rbac/rfp/?permission_type=${permission}`
       console.log('[PermissionsService] Fetching RFP permission from:', url)
 
       const response = await fetch(url, {
@@ -297,17 +301,32 @@ class PermissionsService {
 
   /**
    * Get current user from localStorage
+   * Checks both 'current_user' and 'user' keys for compatibility
    * @returns {Object|null}
    */
   getCurrentUser() {
     try {
-      const userStr = localStorage.getItem('current_user')
+      // Try 'current_user' first (preferred)
+      let userStr = localStorage.getItem('current_user')
+      if (!userStr) {
+        // Fallback to 'user' key
+        userStr = localStorage.getItem('user')
+      }
+      
       if (userStr) {
-        return JSON.parse(userStr)
+        const user = JSON.parse(userStr)
+        console.log('[PermissionsService] getCurrentUser - Found user:', {
+          hasId: !!user.id,
+          hasUserId: !!user.user_id,
+          hasUserid: !!user.userid,
+          keys: Object.keys(user)
+        })
+        return user
       }
     } catch (e) {
-      console.error('Error parsing current_user:', e)
+      console.error('[PermissionsService] Error parsing user from localStorage:', e)
     }
+    console.warn('[PermissionsService] No user found in localStorage (checked both "current_user" and "user" keys)')
     return null
   }
 
@@ -402,10 +421,36 @@ class PermissionsService {
     const user = this.getCurrentUser()
     console.log('[PermissionsService] Checking Vendor permission:', permission, 'for user:', user)
     
-    // Support both 'id' and 'userid' fields
-    const userId = user?.userid || user?.id
+    // Support multiple user ID field names: userid, id, user_id
+    const userId = user?.userid || user?.id || user?.user_id
     if (!user || !userId) {
-      console.warn('[PermissionsService] No user or user.id/userid found')
+      console.warn('[PermissionsService] No user or user ID found. User object:', user)
+      console.warn('[PermissionsService] Available user keys:', user ? Object.keys(user) : 'null')
+      // Try to get user from 'user' key as fallback
+      try {
+        const userStr = localStorage.getItem('user')
+        if (userStr) {
+          const fallbackUser = JSON.parse(userStr)
+          const fallbackUserId = fallbackUser?.userid || fallbackUser?.id || fallbackUser?.user_id
+          if (fallbackUserId) {
+            console.log('[PermissionsService] Found user ID from fallback "user" key:', fallbackUserId)
+            // Continue with fallback user
+            const cacheKey = `vendor_${fallbackUserId}_${permission}`
+            
+            // Check cache first
+            const cached = permissionCache.get(cacheKey)
+            if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+              console.log('[PermissionsService] Using cached Vendor permission:', permission, '=', cached.hasPermission)
+              return cached.hasPermission
+            }
+
+            // Proceed with API call using fallback user
+            return await this._checkVendorPermissionAPI(permission, fallbackUserId)
+          }
+        }
+      } catch (e) {
+        console.error('[PermissionsService] Error in fallback user check:', e)
+      }
       return false
     }
 
@@ -418,6 +463,18 @@ class PermissionsService {
       return cached.hasPermission
     }
 
+    // Make API call
+    return await this._checkVendorPermissionAPI(permission, userId)
+  }
+
+  /**
+   * Internal method to check vendor permission via API
+   * @param {string} permission - Permission to check
+   * @param {number|string} userId - User ID to check permission for
+   * @returns {Promise<boolean>}
+   * @private
+   */
+  async _checkVendorPermissionAPI(permission, userId) {
     try {
       const token = localStorage.getItem('session_token')
       if (!token) {
@@ -425,8 +482,12 @@ class PermissionsService {
         return false
       }
 
-      const url = `${API_BASE_URL}/api/rbac/vendor/?permission_type=${permission}`
-      console.log('[PermissionsService] Fetching Vendor permission from:', url)
+      // Fix URL path - API_BASE_URL already includes /api/tprm, so we just need rbac/vendor/
+      // Ensure proper URL construction without double slashes
+      const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL
+      const rbacPath = 'rbac/vendor'
+      const url = `${baseUrl}/${rbacPath}/?permission_type=${permission}`
+      console.log('[PermissionsService] Fetching Vendor permission from:', url, 'for user:', userId)
 
       const response = await fetch(url, {
         method: 'GET',
@@ -443,12 +504,13 @@ class PermissionsService {
         const hasPermission = data.has_permission || false
 
         // Cache the result
+        const cacheKey = `vendor_${userId}_${permission}`
         permissionCache.set(cacheKey, {
           hasPermission,
           timestamp: Date.now()
         })
 
-        console.log('[PermissionsService] Vendor Permission check result:', permission, '=', hasPermission)
+        console.log('[PermissionsService] Vendor Permission check result:', permission, '=', hasPermission, 'for user:', userId)
         return hasPermission
       } else {
         // If API fails, return false (deny access)

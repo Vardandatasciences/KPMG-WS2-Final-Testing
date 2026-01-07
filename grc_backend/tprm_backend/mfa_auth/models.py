@@ -3,9 +3,10 @@ from django.utils import timezone
 import hashlib
 import secrets
 import string
+from tprm_backend.utils.encrypted_fields_mixin import TPRMEncryptedFieldsMixin
 
 
-class User(models.Model):
+class User(TPRMEncryptedFieldsMixin, models.Model):
     userid = models.AutoField(db_column="UserId", primary_key=True)
     username = models.CharField(db_column="UserName", max_length=255)
     password = models.CharField(db_column="Password", max_length=255)
@@ -48,7 +49,7 @@ class User(models.Model):
 
 
 # --- MFA: Email OTP challenge table ---
-class MfaEmailChallenge(models.Model):
+class MfaEmailChallenge(TPRMEncryptedFieldsMixin, models.Model):
     STATUS_PENDING = "pending"
     STATUS_SATISFIED = "satisfied"
     STATUS_EXPIRED = "expired"
@@ -130,7 +131,7 @@ class MfaEmailChallenge(models.Model):
 
 
 # --- MFA: Audit log (optional but recommended) ---
-class MfaAuditLog(models.Model):
+class MfaAuditLog(TPRMEncryptedFieldsMixin, models.Model):
     EVT_ISSUED = "challenge_issued"
     EVT_OK = "challenge_ok"
     EVT_FAIL = "challenge_fail"

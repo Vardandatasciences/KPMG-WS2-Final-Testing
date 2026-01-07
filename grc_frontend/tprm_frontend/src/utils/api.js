@@ -1,8 +1,8 @@
 import axios from 'axios'
-import { getTprmApiBaseUrl } from '@/utils/backendEnv'
+import { getApiOrigin } from '@/utils/backendEnv'
 
-// Get API base URL from environment variable or use default
-const API_BASE_URL = getTprmApiBaseUrl()
+// Get API base URL - use origin so we can pass full paths like /api/v1/...
+const API_BASE_URL = getApiOrigin()
 
 const api = axios.create({
   baseURL: API_BASE_URL,
