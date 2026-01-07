@@ -138,7 +138,9 @@ class VendorPermission(BasePermission):
         logger.info(f"[Vendor Permission] Checking {required_permission} for user {user_id}, method {request.method}")
         
         # Check if user has the required permission
-        has_permission = RBACTPRMUtils.check_vendor_permission(user_id, required_permission)
+        # Use force_refresh=True to always get fresh data from database, bypassing ORM cache
+        # This ensures that recently granted permissions are immediately recognized
+        has_permission = RBACTPRMUtils.check_vendor_permission(user_id, required_permission, force_refresh=True)
         
         if not has_permission:
             logger.warning(f"[Vendor Permission] User {user_id} denied Vendor access: {required_permission}")

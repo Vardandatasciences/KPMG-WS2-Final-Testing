@@ -17,9 +17,17 @@ from ...rbac.permissions import (
     PolicyApprovePermission, PolicyEditPermission, PolicyVersioningPermission
 )
 
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
+
 
 @api_view(['POST'])
 @permission_classes([PolicyVersioningPermission])  # RBAC: Require PolicyVersioningPermission for creating policy versions
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def create_policy_version(request, policy_id):
     """
     Create a new version of a policy with its subpolicies.
@@ -31,6 +39,9 @@ def create_policy_version(request, policy_id):
     
     This is used from the Versioning.vue component.
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     print(f"DEBUG: Received version creation request for policy {policy_id}")
     print(f"DEBUG: Request data: {request.data}")
     print(f"DEBUG: Request user: {getattr(request.user, 'username', 'Anonymous')}")
@@ -77,7 +88,7 @@ def create_policy_version(request, policy_id):
         print(f"DEBUG: Request data: {policy_data}")
         
         # Get the original policy - use get_object_or_404 for better error handling
-        original_policy = get_object_or_404(Policy, PolicyId=policy_id)
+        original_policy = get_object_or_404(Policy, PolicyId=policy_id, tenant_id=tenant_id)
         
         # Verify policy exists and is active
         if original_policy.ActiveInactive != 'Active':
@@ -940,10 +951,15 @@ def create_policy_approval_for_version(policy_id, request=None):
 
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])  # RBAC: Require PolicyViewPermission for viewing policy versions
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policy_versions(request, policy_id=None):
     """
     Get all versions of a policy by its Identifier
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     # Log policy versions retrieval attempt
     send_log(
         module="Policy",
@@ -1053,10 +1069,15 @@ def get_policy_versions(request, policy_id=None):
 
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])  # RBAC: Require PolicyViewPermission for viewing all policy versions
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_all_policy_versions(request):
     """
     Get all policy versions in the system
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     # Log policy versions retrieval attempt
     send_log(
         module="Policy",
@@ -1135,10 +1156,15 @@ def get_all_policy_versions(request):
 
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])  # RBAC: Require PolicyViewPermission for viewing rejected policy versions
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_rejected_policy_versions(request, user_id=None):
     """
     Get all rejected policy versions for a specific user that can be edited and resubmitted
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     # Log rejected policy versions retrieval attempt
     send_log(
         module="Policy",
@@ -1275,11 +1301,16 @@ def get_rejected_policy_versions(request, user_id=None):
 
 @api_view(['PUT'])
 @permission_classes([PolicyEditPermission])  # RBAC: Require PolicyEditPermission for activating/deactivating policies
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def activate_deactivate_policy(request, policy_id):
     """
     Activate or deactivate a policy with date-based scheduling logic.
     When activating a policy, all previous versions with the same Identifier will be deactivated.
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     # Import security modules for safe logging
     from django.utils.html import escape as escape_html
     import shlex
@@ -1420,14 +1451,19 @@ def activate_deactivate_policy(request, policy_id):
 
 @api_view(['PUT'])
 @permission_classes([PolicyApprovePermission])  # RBAC: Require PolicyApprovePermission for approving policy versions
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def approve_policy_version(request, policy_id):
     """
     Approve a policy version and automatically deactivate all previous versions.
     This endpoint is specifically designed for the Versioning.vue component.
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Get the policy
-        policy = get_object_or_404(Policy, PolicyId=policy_id)
+        policy = get_object_or_404(Policy, PolicyId=policy_id, tenant_id=tenant_id)
         
         # Get the latest policy approval
         latest_approval = PolicyApproval.objects.filter(

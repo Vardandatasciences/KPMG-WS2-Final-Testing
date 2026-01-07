@@ -33,13 +33,25 @@ from ...rbac.decorators import (
 )
 from .framework_filter_helper import get_active_framework_filter, apply_framework_filter_to_audits, get_framework_sql_filter
 
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
+
 @api_view(['GET'])
 @permission_classes([AuditViewPermission])
 @audit_view_reports_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def generate_audit_report(request, audit_id):
     """
     Generate and download an audit report in DOCX format with tables for each finding
+    MULTI-TENANCY: Only generates reports for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print(f"DEBUG: generate_audit_report called for audit_id: {audit_id}")
         
@@ -53,14 +65,21 @@ def generate_audit_report(request, audit_id):
         version = request.query_params.get('version')
         print(f"DEBUG: Version parameter: {version}")
         
+        # Verify audit exists for tenant
+        try:
+            audit = Audit.objects.get(AuditId=audit_id, tenant_id=tenant_id)
+        except Audit.DoesNotExist:
+            return Response({"error": f"Audit {audit_id} not found"}, status=status.HTTP_404_NOT_FOUND)
+        
         # If version is provided, check if it has an ApprovedRejected status
         if version:
             with connection.cursor() as cursor:
                 cursor.execute("""
-                    SELECT ApprovedRejected
-                    FROM audit_version
-                    WHERE AuditId = %s AND Version = %s
-                """, [audit_id, version])
+                    SELECT av.ApprovedRejected
+                    FROM audit_version av
+                    JOIN audit a ON av.AuditId = a.AuditId
+                    WHERE av.AuditId = %s AND av.Version = %s AND a.tenant_id = %s
+                """, [audit_id, version, tenant_id])
                 
                 version_row = cursor.fetchone()
                 if not version_row:
@@ -76,8 +95,8 @@ def generate_audit_report(request, audit_id):
         output_file = os.path.join(temp_dir, f"audit_report_{audit_id}_{version if version else 'latest'}.docx")
         
         try:
-            # Generate the report file
-            report_file = generate_report_file(audit_id, output_file, version)
+            # Generate the report file, passing tenant_id
+            report_file = generate_report_file(audit_id, output_file, version, tenant_id)
             
             if not report_file or not os.path.exists(output_file):
                 print(f"ERROR: Failed to generate report for audit {audit_id}")
@@ -109,10 +128,10 @@ def generate_audit_report(request, audit_id):
                             auditor.UserName as auditor_name
                         FROM 
                             audit a
-                        JOIN users auditor ON a.auditor = auditor.UserId
-                        LEFT JOIN users reviewer ON a.reviewer = reviewer.UserId
-                        WHERE a.AuditId = %s
-                    """, [audit_id])
+                        JOIN users auditor ON a.auditor = auditor.UserId AND auditor.tenant_id = %s
+                        LEFT JOIN users reviewer ON a.reviewer = reviewer.UserId AND reviewer.tenant_id = %s
+                        WHERE a.AuditId = %s AND a.tenant_id = %s
+                    """, [tenant_id, tenant_id, audit_id, tenant_id])
                     
                     user_row = cursor.fetchone()
                     if user_row:
@@ -148,13 +167,14 @@ def generate_audit_report(request, audit_id):
         traceback.print_exc()
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-def get_audit_data(audit_id: int) -> Optional[Dict[str, Any]]:
+def get_audit_data(audit_id: int, tenant_id: int) -> Optional[Dict[str, Any]]:
     """
     Get all necessary audit data for report generation
+    MULTI-TENANCY: Requires tenant_id parameter for data isolation
     """
     try:
         with connection.cursor() as cursor:
-            # Get audit details
+            # Get audit details, filtered by tenant
             cursor.execute("""
                 SELECT 
                     a.Title, a.Scope, a.Objective, a.BusinessUnit,
@@ -164,17 +184,17 @@ def get_audit_data(audit_id: int) -> Optional[Dict[str, Any]]:
                     f.FrameworkName as Framework,
                     a.CompletionDate, a.ReviewDate
                 FROM audit a
-                LEFT JOIN policies p ON a.PolicyId = p.PolicyId
-                LEFT JOIN subpolicies sp ON a.SubPolicyId = sp.SubPolicyId
-                LEFT JOIN frameworks f ON a.FrameworkId = f.FrameworkId
-                WHERE a.AuditId = %s
-            """, [audit_id])
+                LEFT JOIN policies p ON a.PolicyId = p.PolicyId AND p.tenant_id = %s
+                LEFT JOIN subpolicies sp ON a.SubPolicyId = sp.SubPolicyId AND sp.tenant_id = %s
+                LEFT JOIN frameworks f ON a.FrameworkId = f.FrameworkId AND f.tenant_id = %s
+                WHERE a.AuditId = %s AND a.tenant_id = %s
+            """, [tenant_id, tenant_id, tenant_id, audit_id, tenant_id])
             audit_data = cursor.fetchone()
             
             if not audit_data:
                 return None
                 
-            # Get audit findings with compliance details
+            # Get audit findings with compliance details, filtered by tenant
             cursor.execute("""
                 SELECT 
                     af.ComplianceId,
@@ -202,9 +222,9 @@ def get_audit_data(audit_id: int) -> Optional[Dict[str, Any]]:
                     c.ComplianceTitle,
                     c.ComplianceItemDescription
                 FROM audit_findings af
-                LEFT JOIN compliance c ON af.ComplianceId = c.ComplianceId
-                WHERE af.AuditId = %s
-            """, [audit_id])
+                LEFT JOIN compliance c ON af.ComplianceId = c.ComplianceId AND c.tenant_id = %s
+                WHERE af.AuditId = %s AND af.tenant_id = %s
+            """, [tenant_id, audit_id, tenant_id])
             findings = cursor.fetchall()
             
             return {
@@ -215,13 +235,14 @@ def get_audit_data(audit_id: int) -> Optional[Dict[str, Any]]:
         print(f"Error getting audit data: {str(e)}")
         return None
 
-def generate_report_file(audit_id: int, output_path: str, version=None) -> Optional[str]:
+def generate_report_file(audit_id: int, output_path: str, version=None, tenant_id=None) -> Optional[str]:
     """
     Generate a professional audit compliance report in Word format with proper formatting
+    MULTI-TENANCY: Requires tenant_id parameter for data isolation
     """
     try:
-        # Get audit data
-        data = get_audit_data(audit_id)
+        # Get audit data, filtered by tenant
+        data = get_audit_data(audit_id, tenant_id)
         if not data:
             return None
             
@@ -510,13 +531,14 @@ def generate_report_file(audit_id: int, output_path: str, version=None) -> Optio
         traceback.print_exc()
         return None
 
-def create_incidents_for_findings(audit_id: int) -> None:
+def create_incidents_for_findings(audit_id: int, tenant_id: int) -> None:
     """
     Create incidents for non-compliant and partially compliant audit findings
+    MULTI-TENANCY: Requires tenant_id parameter for data isolation
     """
     try:
         with connection.cursor() as cursor:
-            # Get relevant audit findings and compliance details
+            # Get relevant audit findings and compliance details, filtered by tenant
             cursor.execute("""
                 SELECT 
                     af.ComplianceId,
@@ -528,13 +550,14 @@ def create_incidents_for_findings(audit_id: int) -> None:
                     c.PossibleDamage,
                     c.Mitigation
                 FROM audit_findings af
-                JOIN compliance c ON af.ComplianceId = c.ComplianceId
+                JOIN compliance c ON af.ComplianceId = c.ComplianceId AND c.tenant_id = %s
                 WHERE af.AuditId = %s 
+                AND af.tenant_id = %s
                 AND (
                     (af.Check = '0') OR  -- Not Compliant
                     (af.Check = '1')     -- Partially Compliant
                 )
-            """, [audit_id])
+            """, [tenant_id, audit_id, tenant_id])
             
             findings = cursor.fetchall()
             
@@ -553,23 +576,24 @@ def create_incidents_for_findings(audit_id: int) -> None:
                 possible_damage = finding[6]
                 mitigation = finding[7]
                 
-                # Check if incident already exists for this finding
+                # Check if incident already exists for this finding, filtered by tenant
                 cursor.execute("""
                     SELECT COUNT(*) 
-                    FROM incidents 
-                    WHERE AuditId = %s AND ComplianceId = %s
-                """, [audit_id, compliance_id])
+                    FROM incidents i
+                    JOIN audit a ON i.AuditId = a.AuditId
+                    WHERE i.AuditId = %s AND i.ComplianceId = %s AND a.tenant_id = %s
+                """, [audit_id, compliance_id, tenant_id])
                 
                 if cursor.fetchone()[0] > 0:
                     print(f"Incident already exists for AuditId {audit_id} and ComplianceId {compliance_id}")
                     continue
                 
-                # Get FrameworkId from the audit
-                cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s", [audit_id])
+                # Get FrameworkId from the audit, filtered by tenant
+                cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s AND tenant_id = %s", [audit_id, tenant_id])
                 framework_row = cursor.fetchone()
                 framework_id = framework_row[0] if framework_row else None
                 
-                # Create new incident
+                # Create new incident with tenant_id
                 cursor.execute("""
                     INSERT INTO incidents (
                         IncidentTitle,
@@ -584,9 +608,10 @@ def create_incidents_for_findings(audit_id: int) -> None:
                         Origin,
                         Comments,
                         Status,
-                        FrameworkId
+                        FrameworkId,
+                        tenant_id
                     ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                     )
                 """, [
                     f"Non-Compliance of {compliance_title}",
@@ -601,7 +626,8 @@ def create_incidents_for_findings(audit_id: int) -> None:
                     "Audit Finding",
                     comments,
                     "Open",
-                    framework_id
+                    framework_id,
+                    tenant_id  # MULTI-TENANCY: Add tenant_id to incident
                 ])
                 
                 print(f"Created incident for ComplianceId {compliance_id} in AuditId {audit_id}")
@@ -615,29 +641,41 @@ def create_incidents_for_findings(audit_id: int) -> None:
 @api_view(['POST'])
 @permission_classes([AuditReviewPermission])
 @audit_review_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def approve_audit_and_create_incidents(request, audit_id):
     """
     API endpoint to approve audit and create incidents for non-compliant findings
+    MULTI-TENANCY: Only approves audits and creates incidents for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
+        # Verify audit exists for tenant
+        try:
+            audit = Audit.objects.get(AuditId=audit_id, tenant_id=tenant_id)
+        except Audit.DoesNotExist:
+            return Response({"error": f"Audit {audit_id} not found"}, status=status.HTTP_404_NOT_FOUND)
+        
         with connection.cursor() as cursor:
-            # Update audit status
+            # Update audit status, filtered by tenant
             cursor.execute("""
                 UPDATE audit 
                 SET Status = 'Approved',
                     CompletionDate = %s
-                WHERE AuditId = %s
-            """, [datetime.now(), audit_id])
+                WHERE AuditId = %s AND tenant_id = %s
+            """, [datetime.now(), audit_id, tenant_id])
             
-            # Update LastChecklistItemVerified in audit_findings
+            # Update LastChecklistItemVerified in audit_findings, filtered by tenant
             cursor.execute("""
                 UPDATE audit_findings
                 SET LastChecklistItemVerified = %s
-                WHERE AuditId = %s
-            """, [datetime.now(), audit_id])
+                WHERE AuditId = %s AND tenant_id = %s
+            """, [datetime.now(), audit_id, tenant_id])
             
-            # Create incidents for non-compliant and partially compliant findings
-            create_incidents_for_findings(audit_id)
+            # Create incidents for non-compliant and partially compliant findings, filtered by tenant
+            create_incidents_for_findings(audit_id, tenant_id)
             
             return Response({
                 "message": "Audit approved and incidents created successfully",

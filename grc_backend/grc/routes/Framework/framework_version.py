@@ -16,10 +16,15 @@ from ...rbac.permissions import (
      PolicyFrameworkPermission, PolicyViewPermission,
     PolicyEditPermission, PolicyApprovalWorkflowPermission, PolicyVersioningPermission
 )
-
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
 
 @api_view(['POST'])
 @permission_classes([PolicyVersioningPermission])# RBAC: Require PolicyVersioningPermission for creating framework versions
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def create_framework_version(request, framework_id):
     """
     Create a new version of a framework with its policies and subpolicies.
@@ -31,6 +36,9 @@ def create_framework_version(request, framework_id):
     
     This is used from the Versioning.vue component.
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Log framework version creation attempt
     send_log(
         module="Framework",
@@ -68,7 +76,7 @@ def create_framework_version(request, framework_id):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
         # Get the original framework
-        original_framework = Framework.objects.get(FrameworkId=framework_id)
+        original_framework = Framework.objects.get(FrameworkId=framework_id, tenant_id=tenant_id)
         
         # Verify framework exists and is active
         if original_framework.ActiveInactive != 'Active':
@@ -141,7 +149,7 @@ def create_framework_version(request, framework_id):
         # Start database transaction
         with transaction.atomic():
             # Find the previous version record in FrameworkVersion table
-            previous_version_record = FrameworkVersion.objects.filter(
+            previous_version_record = FrameworkVersion.objects.filter(tenant_id=tenant_id, 
                 FrameworkId=original_framework
             ).first()
             
@@ -181,7 +189,7 @@ def create_framework_version(request, framework_id):
                     current_minor_part = current_version_float - current_major
                     
                     # Find the highest version for this major version by checking existing versions
-                    all_versions = FrameworkVersion.objects.filter(
+                    all_versions = FrameworkVersion.objects.filter(tenant_id=tenant_id, 
                 FrameworkId__Identifier=original_framework.Identifier
                     ).values_list('Version', flat=True)
                     
@@ -236,7 +244,7 @@ def create_framework_version(request, framework_id):
                 reviewer_id = framework_data.get('Reviewer')
                 print(f"DEBUG: Attempting to find reviewer by ID: {reviewer_id}")
                 try:
-                    reviewer_user = Users.objects.get(UserId=reviewer_id)
+                    reviewer_user = Users.objects.get(UserId=reviewer_id, tenant_id=tenant_id)
                     reviewer_name = reviewer_user.UserName
                     print(f"DEBUG: Found reviewer user: {reviewer_name}")
                 except Users.DoesNotExist:
@@ -379,10 +387,10 @@ def create_framework_version(request, framework_id):
                     
                     if original_policy_id:
                         try:
-                            original_policy = Policy.objects.get(PolicyId=original_policy_id)
+                            original_policy = Policy.objects.get(PolicyId=original_policy_id, tenant_id=tenant_id)
                             
                             # Find previous policy version
-                            previous_policy_version = PolicyVersion.objects.filter(
+                            previous_policy_version = PolicyVersion.objects.filter(tenant_id=tenant_id, 
                                 PolicyId=original_policy
                             ).first()
                             
@@ -840,10 +848,10 @@ def create_framework_approval_for_version(framework_id, request=None, framework_
     """
     try:
         # Get the framework
-        framework = Framework.objects.get(FrameworkId=framework_id)
+        framework = Framework.objects.get(FrameworkId=framework_id, tenant_id=tenant_id)
         
         # Check if an approval already exists for this framework
-        existing_approval = FrameworkApproval.objects.filter(
+        existing_approval = FrameworkApproval.objects.filter(tenant_id=tenant_id, 
             FrameworkId=framework,
             Version="u1",  # Only check for initial version
             ApprovedNot=None  # Only check for unapproved versions
@@ -1031,7 +1039,7 @@ def create_framework_approval_for_version(framework_id, request=None, framework_
                 policies_data.append(policy_dict)
         else:
             # Fallback to fetching from database if no frontend data provided
-            created_policies = Policy.objects.filter(FrameworkId=framework)
+            created_policies = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=framework)
             
             print(f"DEBUG: Found {created_policies.count()} policies for framework {framework.FrameworkId}")
             for policy in created_policies:
@@ -1063,7 +1071,7 @@ def create_framework_approval_for_version(framework_id, request=None, framework_
                 }
                 
                 # Get subpolicies for this policy
-                subpolicies = SubPolicy.objects.filter(PolicyId=policy)
+                subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy)
                 print(f"DEBUG: Found {subpolicies.count()} subpolicies for policy {policy.PolicyId}")
                 for subpolicy in subpolicies:
                     print(f"DEBUG: Processing subpolicy {subpolicy.SubPolicyId}: {subpolicy.SubPolicyName}")
@@ -1127,7 +1135,7 @@ def create_framework_approval_for_version(framework_id, request=None, framework_
         # Send notification to reviewer if available
         if reviewer_id:
             try:
-                reviewer_user = Users.objects.get(UserId=reviewer_id)
+                reviewer_user = Users.objects.get(UserId=reviewer_id, tenant_id=tenant_id)
                 reviewer_email = reviewer_user.Email
                 
                 if reviewer_email:
@@ -1160,10 +1168,15 @@ def create_framework_approval_for_version(framework_id, request=None, framework_
 
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])  # RBAC: Require PolicyViewPermission for viewing framework versions
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_framework_versions(request, framework_id=None):
     """
     Get all versions of a framework by its Identifier
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Log framework versions retrieval attempt
     send_log(
         module="Framework",
@@ -1178,16 +1191,16 @@ def get_framework_versions(request, framework_id=None):
     try:
         if framework_id:
             # Get the framework to find its identifier
-            framework = Framework.objects.get(FrameworkId=framework_id)
+            framework = Framework.objects.get(FrameworkId=framework_id, tenant_id=tenant_id)
             identifier = framework.Identifier
             
             # Find all frameworks with this identifier
-            frameworks = Framework.objects.filter(Identifier=identifier).order_by('-FrameworkId')
+            frameworks = Framework.objects.filter(tenant_id=tenant_id, Identifier=identifier).order_by('-FrameworkId')
             
             # Get the version information for each framework
             versions_data = []
             for fw in frameworks:
-                version_info = FrameworkVersion.objects.filter(FrameworkId=fw).first()
+                version_info = FrameworkVersion.objects.filter(tenant_id=tenant_id, FrameworkId=fw).first()
                 if version_info:
                     versions_data.append({
                         "FrameworkId": fw.FrameworkId,
@@ -1263,10 +1276,15 @@ def get_framework_versions(request, framework_id=None):
 
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission]) # RBAC: Require PolicyViewPermission for viewing all framework versions
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_all_framework_versions(request):
     """
     Get all framework versions in the system
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Log all framework versions retrieval attempt
     send_log(
         module="Framework",
@@ -1280,7 +1298,7 @@ def get_all_framework_versions(request):
     
     try:
         # Get all framework versions
-        framework_versions = FrameworkVersion.objects.all().order_by('-CreatedDate')
+        framework_versions = FrameworkVersion.objects.filter(tenant_id=tenant_id).order_by('-CreatedDate')
         
         versions_data = []
         for version in framework_versions:
@@ -1328,10 +1346,15 @@ def get_all_framework_versions(request):
 
 @api_view(['PUT'])
 @permission_classes([PolicyEditPermission]) # RBAC: Require PolicyEditPermission for activating/deactivating framework versions
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def activate_deactivate_framework_version(request, framework_id):
     """
     Activate or deactivate a specific framework version with date-based scheduling logic
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Log framework activation/deactivation attempt
     send_log(
         module="Framework",
@@ -1347,7 +1370,7 @@ def activate_deactivate_framework_version(request, framework_id):
     try:
         from datetime import date
         # Get the framework
-        framework = Framework.objects.get(FrameworkId=framework_id)
+        framework = Framework.objects.get(FrameworkId=framework_id, tenant_id=tenant_id)
         
         # Save current status
         current_status = framework.Status
@@ -1439,10 +1462,15 @@ def activate_deactivate_framework_version(request, framework_id):
 
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])  # RBAC: Require PolicyViewPermission for viewing rejected framework versions
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_rejected_framework_versions(request, user_id=None):
     """
     Get all rejected framework versions for a specific user that can be edited and resubmitted
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Log rejected framework versions retrieval attempt
     send_log(
         module="Framework",
@@ -1483,7 +1511,7 @@ def get_rejected_framework_versions(request, user_id=None):
         if user_id:
             query_filters['UserId'] = user_id
             
-        rejections = FrameworkApproval.objects.filter(**query_filters).order_by('-ApprovalId')
+        rejections = FrameworkApproval.objects.filter(tenant_id=tenant_id, **query_filters).order_by('-ApprovalId')
         
         # Group by FrameworkId to get only the latest rejection for each framework
         framework_rejections = {}
@@ -1501,7 +1529,7 @@ def get_rejected_framework_versions(request, user_id=None):
             framework = rejection.FrameworkId
             
             # Get version info
-            version_info = FrameworkVersion.objects.filter(FrameworkId=framework).first()
+            version_info = FrameworkVersion.objects.filter(tenant_id=tenant_id, FrameworkId=framework).first()
             
             rejection_data = {
                 "ApprovalId": rejection.ApprovalId,
@@ -1546,11 +1574,16 @@ def get_rejected_framework_versions(request, user_id=None):
 
 @api_view(['POST', 'PUT'])
 @permission_classes([PolicyApprovalWorkflowPermission])  # RBAC: Require PolicyApprovalWorkflowPermission for resubmitting rejected frameworks
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def resubmit_rejected_framework(request, framework_id):
     """
     Resubmit a rejected framework with updated data
     Accepts both POST and PUT methods to ensure compatibility with existing frontend
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Log framework resubmission attempt
     send_log(
         module="Framework",
@@ -1569,7 +1602,7 @@ def resubmit_rejected_framework(request, framework_id):
         print(f"DEBUG: Request data: {request.data}")
         
         # Get the framework
-        framework = Framework.objects.get(FrameworkId=framework_id)
+        framework = Framework.objects.get(FrameworkId=framework_id, tenant_id=tenant_id)
         print(f"DEBUG: Found framework with name: {framework.FrameworkName}, status: {framework.Status}")
         
         # Verify framework exists and is rejected
@@ -1578,7 +1611,7 @@ def resubmit_rejected_framework(request, framework_id):
             return Response({"error": "Only rejected frameworks can be resubmitted"}, status=status.HTTP_400_BAD_REQUEST)
         
         # Get the latest framework approval (should be a rejected reviewer version 'r1')
-        latest_approval = FrameworkApproval.objects.filter(
+        latest_approval = FrameworkApproval.objects.filter(tenant_id=tenant_id, 
             FrameworkId=framework,
             ApprovedNot=False,
             Version__startswith='r'
@@ -1668,7 +1701,7 @@ def resubmit_rejected_framework(request, framework_id):
                     # Get policy from database for update
                     try:
                         if policy_id:
-                            db_policy = Policy.objects.get(PolicyId=policy_id)
+                            db_policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
                             print(f"DEBUG: Found policy in database: {db_policy.PolicyName}")
                             
                             # Update policy fields in database
@@ -1792,7 +1825,7 @@ def resubmit_rejected_framework(request, framework_id):
                 print("DEBUG: Starting notification process")
                 # Get reviewer details
                 try:
-                    reviewer = Users.objects.get(UserId=latest_approval.ReviewerId)
+                    reviewer = Users.objects.get(UserId=latest_approval.ReviewerId, tenant_id=tenant_id)
                     reviewer_email = reviewer.Email
                     reviewer_name = reviewer.UserName
                     print(f"DEBUG: Found reviewer - Name: {reviewer_name}, Email: {reviewer_email}")
@@ -1802,7 +1835,7 @@ def resubmit_rejected_framework(request, framework_id):
                 
                 # Get submitter details
                 try:
-                    submitter = Users.objects.get(UserId=latest_approval.UserId)
+                    submitter = Users.objects.get(UserId=latest_approval.UserId, tenant_id=tenant_id)
                     submitter_name = submitter.UserName
                     print(f"DEBUG: Found submitter - Name: {submitter_name}")
                 except Users.DoesNotExist:
@@ -1906,11 +1939,16 @@ def resubmit_rejected_framework(request, framework_id):
 
 @api_view(['PUT'])
 @permission_classes([PolicyApprovalWorkflowPermission])  # RBAC: Require PolicyApprovalWorkflowPermission for resubmitting framework approvals
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def resubmit_framework_approval(request, framework_id):
     """
     Dedicated endpoint for the existing URL pattern used by frontend
     This handles resubmission of rejected frameworks with policy updates
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Log framework approval resubmission attempt
     send_log(
         module="Framework",
@@ -1928,7 +1966,7 @@ def resubmit_framework_approval(request, framework_id):
         print(f"DEBUG: Request data: {request.data}")
         
         # Get the framework
-        framework = Framework.objects.get(FrameworkId=framework_id)
+        framework = Framework.objects.get(FrameworkId=framework_id, tenant_id=tenant_id)
         print(f"DEBUG: Found framework with name: {framework.FrameworkName}, status: {framework.Status}")
         
         # Verify framework exists and is rejected
@@ -1937,7 +1975,7 @@ def resubmit_framework_approval(request, framework_id):
             return Response({"error": "Only rejected frameworks can be resubmitted"}, status=400)
         
         # Get the latest framework approval (should be a rejected reviewer version)
-        latest_approval = FrameworkApproval.objects.filter(
+        latest_approval = FrameworkApproval.objects.filter(tenant_id=tenant_id, 
             FrameworkId=framework,
             ApprovedNot=False,
             Version__startswith='r'
@@ -1950,7 +1988,7 @@ def resubmit_framework_approval(request, framework_id):
         print(f"DEBUG: Found latest approval with id: {latest_approval.ApprovalId}, version: {latest_approval.Version}")
         
         # Get the FIRST approval to maintain UserId consistency throughout the approval flow
-        first_approval = FrameworkApproval.objects.filter(
+        first_approval = FrameworkApproval.objects.filter(tenant_id=tenant_id, 
             FrameworkId=framework
         ).order_by('Version').first()  # Get the first approval by version
         
@@ -2034,7 +2072,7 @@ def resubmit_framework_approval(request, framework_id):
                     # Get policy from database for update
                     try:
                         if policy_id:
-                            db_policy = Policy.objects.get(PolicyId=policy_id)
+                            db_policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
                             print(f"DEBUG: Found policy in database: {db_policy.PolicyName}")
                             
                             # Update policy fields in database
@@ -2163,7 +2201,7 @@ def resubmit_framework_approval(request, framework_id):
                 print("DEBUG: Starting notification process")
                 # Get reviewer details
                 try:
-                    reviewer = Users.objects.get(UserId=latest_approval.ReviewerId)
+                    reviewer = Users.objects.get(UserId=latest_approval.ReviewerId, tenant_id=tenant_id)
                     reviewer_email = reviewer.Email
                     reviewer_name = reviewer.UserName
                     print(f"DEBUG: Found reviewer - Name: {reviewer_name}, Email: {reviewer_email}")
@@ -2173,7 +2211,7 @@ def resubmit_framework_approval(request, framework_id):
                 
                 # Get submitter details
                 try:
-                    submitter = Users.objects.get(UserId=latest_approval.UserId)
+                    submitter = Users.objects.get(UserId=latest_approval.UserId, tenant_id=tenant_id)
                     submitter_name = submitter.UserName
                     print(f"DEBUG: Found submitter - Name: {submitter_name}")
                 except Users.DoesNotExist:

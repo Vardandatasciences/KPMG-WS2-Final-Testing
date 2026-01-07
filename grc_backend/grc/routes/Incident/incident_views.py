@@ -36,6 +36,12 @@ from ...rbac.utils import RBACUtils
 from django.views.decorators.csrf import csrf_exempt
 from ...routes.Consent import require_consent
 
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
+
 # DRF Session auth variant that skips CSRF enforcement for API clients
 class CsrfExemptSessionAuthentication(SessionAuthentication):
     def enforce_csrf(self, request):
@@ -1362,10 +1368,16 @@ def validate_json_request_body(request, validation_rules):
 @authentication_classes([])
 @permission_classes([IncidentViewPermission])
 @rbac_required(required_permission='view_all_incident')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def incident_by_id(request, incident_id):
     """
     Get or update a specific incident by ID
+    MULTI-TENANCY: Only returns/updates incidents for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     # Get user info for logging
     user_id = getattr(request.user, 'id', None)
     username = getattr(request.user, 'username', 'Unknown')
@@ -1387,8 +1399,16 @@ def incident_by_id(request, incident_id):
             )
             return Response({'success': False, 'message': str(e)}, status=400)
         
-        # Get the incident
-        incident = Incident.objects.get(IncidentId=validated_incident_id)
+        # MULTI-TENANCY: Get the incident filtered by tenant
+        incident = Incident.objects.get(IncidentId=validated_incident_id, tenant_id=tenant_id)
+        
+        # MULTI-TENANCY: Validate tenant access for UPDATE operations
+        if request.method in ['PUT', 'PATCH']:
+            if not validate_tenant_access(request, incident):
+                return Response(
+                    {"error": "Access denied. Incident does not belong to your organization."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
         
         if request.method == 'GET':
             # RBAC Debug - Log user access attempt
@@ -1520,10 +1540,16 @@ def incident_by_id(request, incident_id):
 @authentication_classes([])
 @permission_classes([IncidentEditPermission])
 @rbac_required(required_permission='edit_incident')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def update_incident_by_id(request, incident_id):
     """
     Update a specific incident by ID
+    MULTI-TENANCY: Only updates incidents for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Validate path parameter
         try:
@@ -1534,8 +1560,15 @@ def update_incident_by_id(request, incident_id):
         # RBAC Debug - Log user access attempt
         debug_info = debug_user_permissions(request, "EDIT_INCIDENT", "incident", validated_incident_id)
         
-        # Get the incident
-        incident = Incident.objects.get(IncidentId=validated_incident_id)
+        # MULTI-TENANCY: Get the incident filtered by tenant
+        incident = Incident.objects.get(IncidentId=validated_incident_id, tenant_id=tenant_id)
+        
+        # MULTI-TENANCY: Validate tenant access
+        if not validate_tenant_access(request, incident):
+            return Response(
+                {"error": "Access denied. Incident does not belong to your organization."},
+                status=status.HTTP_403_FORBIDDEN
+            )
         
         # Use the serializer to update the incident
         serializer = IncidentSerializer(incident, data=request.data, partial=True)
@@ -1610,7 +1643,16 @@ def get_framework_policy_subpolicy_from_compliance(compliance_id):
 @authentication_classes([])
 @permission_classes([IncidentViewPermission])
 @rbac_required(required_permission='view_all_incident')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def list_incidents(request):
+    """
+    List incidents with filtering and pagination
+    MULTI-TENANCY: Only returns incidents for user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     # Reduced debug logging for better performance
     if settings.DEBUG:
         print(f"[DEBUG] list_incidents function called")
@@ -1746,10 +1788,10 @@ def list_incidents(request):
         print(f"Validated search: {search_query}, Sort: {sort_field} {sort_order}")
         print(f"Business Unit: {business_unit}, Business Category: {business_category}")
 
-    # Start with all incidents EXCEPT audit findings - optimized query with only necessary fields
+    # MULTI-TENANCY: Start with all incidents filtered by tenant EXCEPT audit findings - optimized query with only necessary fields
     # Add select_related to reduce database queries for related objects
     # Filter out audit findings to show only pure incidents
-    incidents = Incident.objects.only(
+    incidents = Incident.objects.filter(tenant_id=tenant_id).only(
         'IncidentId', 'IncidentTitle', 'Description', 'Date', 'Origin', 
         'RiskPriority', 'RiskCategory', 'Status', 'CreatedAt', 'Mitigation',
         'AssignerId', 'ReviewerId', 'RejectionSource', 'ComplianceId', 'FrameworkId',
@@ -1818,14 +1860,14 @@ def list_incidents(request):
     
     # Apply policy and subpolicy filters through compliance relationship
     if policy_id or subpolicy_id:
-        # Get all compliance IDs that match the filter chain - optimized with select_related
+        # MULTI-TENANCY: Get all compliance IDs that match the filter chain - optimized with select_related
         from ...models import Compliance, SubPolicy, Policy
-        compliance_ids = Compliance.objects.select_related('SubPolicy').all()
+        compliance_ids = Compliance.objects.filter(tenant_id=tenant_id).select_related('SubPolicy').all()
         if subpolicy_id:
-            compliance_ids = compliance_ids.filter(SubPolicy=subpolicy_id)
+            compliance_ids = compliance_ids.filter(SubPolicy=subpolicy_id, tenant_id=tenant_id)
         if policy_id:
-            subpolicies = SubPolicy.objects.filter(PolicyId=policy_id)
-            compliance_ids = compliance_ids.filter(SubPolicy__in=subpolicies.values_list('SubPolicyId', flat=True))
+            subpolicies = SubPolicy.objects.filter(PolicyId=policy_id, tenant_id=tenant_id)
+            compliance_ids = compliance_ids.filter(SubPolicy__in=subpolicies.values_list('SubPolicyId', flat=True), tenant_id=tenant_id)
         compliance_ids = list(compliance_ids.values_list('ComplianceId', flat=True))
         if settings.DEBUG:
             print(f"Applying policy/subpolicy filters - Policy: {policy_id}, SubPolicy: {subpolicy_id}")
@@ -1910,16 +1952,16 @@ def list_incidents(request):
     # Add assigner and reviewer names to each incident (safe and DB-agnostic)
     try:
         from ...models import Users
-        # Collect unique user IDs to resolve in one query - optimized
+        # MULTI-TENANCY: Collect unique user IDs to resolve in one query - optimized
         assigner_ids = {inc.get('AssignerId') for inc in serialized_data if inc.get('AssignerId')}
         reviewer_ids = {inc.get('ReviewerId') for inc in serialized_data if inc.get('ReviewerId')}
         user_ids = list(assigner_ids.union(reviewer_ids))
         id_to_name = {}
         if user_ids:
-            # Use select_related to optimize the query
+            # MULTI-TENANCY: Use select_related to optimize the query, filtered by tenant
             id_to_name = {
                 user.UserId: user.UserName
-                for user in Users.objects.filter(UserId__in=user_ids).only('UserId', 'UserName')
+                for user in Users.objects.filter(UserId__in=user_ids, tenant_id=tenant_id).only('UserId', 'UserName')
             }
         # Populate names without external services
         for incident_data in serialized_data:
@@ -2035,7 +2077,16 @@ import json
 @authentication_classes([])
 @permission_classes([IncidentEditPermission])
 @rbac_required(required_permission='edit_incident')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def update_incident_status(request, incident_id):
+    """
+    Update incident status
+    MULTI-TENANCY: Only updates incidents for user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     client_ip = get_client_ip(request)
     user_id = request.data.get('UserId')
     
@@ -2084,8 +2135,15 @@ def update_incident_status(request, incident_id):
             print(f"DEBUG: Validation error: {str(e)}")
             return Response({'error': str(e)}, status=400)
         
-        # Get the incident
-        incident = Incident.objects.get(IncidentId=validated_incident_id)
+        # MULTI-TENANCY: Get the incident filtered by tenant
+        incident = Incident.objects.get(IncidentId=validated_incident_id, tenant_id=tenant_id)
+        
+        # MULTI-TENANCY: Validate tenant access
+        if not validate_tenant_access(request, incident):
+            return Response(
+                {"error": "Access denied. Incident does not belong to your organization."},
+                status=status.HTTP_403_FORBIDDEN
+            )
         
         # Get validated data
         new_status = validated_data.get('status')
@@ -2292,7 +2350,16 @@ def update_incident_status(request, incident_id):
 @authentication_classes([])
 @rbac_required(required_permission='create_incident')
 @require_consent('create_incident')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def create_incident(request):
+    """
+    Create a new incident
+    MULTI-TENANCY: Incident will be automatically assigned to user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     # RBAC Debug - Log user access attempt
     debug_info = debug_user_permissions(request, "CREATE_INCIDENT", "incident", None)
     
@@ -2344,9 +2411,9 @@ def create_incident(request):
             authenticated_user_id = 1  # Default user ID
             print(f"[DEV] No authenticated user found, using default user ID: {authenticated_user_id}")
         
-        # Verify the user exists in our custom Users table
+        # MULTI-TENANCY: Verify the user exists in our custom Users table and belongs to tenant
         try:
-            authenticated_user = Users.objects.get(UserId=authenticated_user_id)
+            authenticated_user = Users.objects.get(UserId=authenticated_user_id, tenant_id=tenant_id)
             # Override any UserId sent from frontend with the authenticated user's ID
             validated_data['UserId'] = authenticated_user_id
             print(f"Setting incident UserId to authenticated user: {authenticated_user_id} ({authenticated_user.UserName})")
@@ -2508,7 +2575,16 @@ def incident_page(request):
 @authentication_classes([])
 @permission_classes([IncidentAssignPermission])
 @rbac_required(required_permission='assign_incident')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def assign_incident(request, incident_id):
+    """
+    Assign incident to assigner and reviewer
+    MULTI-TENANCY: Only assigns incidents for user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     client_ip = get_client_ip(request)
     user_id = request.data.get('userId')
     
@@ -2545,8 +2621,15 @@ def assign_incident(request, incident_id):
             )
             return Response({'error': str(e)}, status=400)
         
-        # Get the incident from the database
-        incident = Incident.objects.get(IncidentId=validated_incident_id)
+        # MULTI-TENANCY: Get the incident from the database filtered by tenant
+        incident = Incident.objects.get(IncidentId=validated_incident_id, tenant_id=tenant_id)
+        
+        # MULTI-TENANCY: Validate tenant access
+        if not validate_tenant_access(request, incident):
+            return Response(
+                {"error": "Access denied. Incident does not belong to your organization."},
+                status=status.HTTP_403_FORBIDDEN
+            )
         
         # Log incident assignment attempt
         send_log(
@@ -2821,14 +2904,36 @@ def assign_incident(request, incident_id):
 @authentication_classes([])
 @permission_classes([AuditViewPermission])
 @rbac_required(required_permission='view_audit_reports')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def unchecked_audit_findings(request):
-    findings = LastChecklistItemVerified.objects.filter(Complied__in=[0, 1])
+    """
+    Get unchecked audit findings
+    MULTI-TENANCY: Only returns findings for user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
+    # MULTI-TENANCY: Filter findings by tenant (through Compliance relationship)
+    findings = LastChecklistItemVerified.objects.filter(
+        Complied__in=[0, 1],
+        ComplianceId__tenant_id=tenant_id
+    )
     serializer = LastChecklistItemVerifiedSerializer(findings, many=True)
     return Response(serializer.data)
 
 @api_view(['GET'])
 @authentication_classes([])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def list_users(request):
+    """
+    List all users
+    MULTI-TENANCY: Only returns users for user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     # Get user info for logging
     user_id = getattr(request.user, 'id', None)
     username = getattr(request.user, 'username', 'Unknown')
@@ -2850,7 +2955,8 @@ def list_users(request):
         print(f"Request user: {request.user}")
         print(f"Request session: {request.session}")
         
-        users = Users.objects.all()
+        # MULTI-TENANCY: Filter users by tenant
+        users = Users.objects.filter(tenant_id=tenant_id)
         print(f"Found {users.count()} users in database")
         
         serializer = UserSerializer(users, many=True)
@@ -2894,12 +3000,21 @@ def list_users(request):
 @authentication_classes([])
 @permission_classes([IncidentViewPermission])
 @rbac_required(required_permission='view_all_incident')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def combined_incidents_and_audit_findings(request):
+    """
+    Get combined incidents and audit findings
+    MULTI-TENANCY: Only returns data for user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     # RBAC Debug - Log user access attempt
     debug_info = debug_user_permissions(request, "VIEW_INCIDENTS_AND_AUDIT_FINDINGS", "incident", None)
     
-    # Get all incidents from the database
-    all_incidents = Incident.objects.all()
+    # MULTI-TENANCY: Get all incidents from the database filtered by tenant
+    all_incidents = Incident.objects.filter(tenant_id=tenant_id)
     all_incidents_serialized = IncidentSerializer(all_incidents, many=True).data
     
     # Categorize by type
@@ -2913,7 +3028,8 @@ def combined_incidents_and_audit_findings(request):
             # Add criticality for audit incidents
             if item['ComplianceId']:
                 try:
-                    compliance = Compliance.objects.get(pk=item['ComplianceId'])
+                    # MULTI-TENANCY: Get compliance filtered by tenant
+                    compliance = Compliance.objects.get(pk=item['ComplianceId'], tenant_id=tenant_id)
                     item['criticality'] = compliance.Criticality if hasattr(compliance, 'Criticality') else None
                 except Compliance.DoesNotExist:
                     item['criticality'] = None
@@ -2924,8 +3040,11 @@ def combined_incidents_and_audit_findings(request):
             item['type'] = 'other'
             item['source'] = 'other'
     
-    # Get findings from lastchecklistitemverified with Complied = 0 or 1
-    audit_findings = LastChecklistItemVerified.objects.filter(Complied__in=[0, 1])
+    # MULTI-TENANCY: Get findings from lastchecklistitemverified with Complied = 0 or 1, filtered by tenant
+    audit_findings = LastChecklistItemVerified.objects.filter(
+        Complied__in=[0, 1],
+        ComplianceId__tenant_id=tenant_id
+    )
     audit_findings_serialized = LastChecklistItemVerifiedSerializer(audit_findings, many=True).data
     
     # Process each audit finding
@@ -2937,7 +3056,8 @@ def combined_incidents_and_audit_findings(request):
         # Get the complete compliance item details
         if item['ComplianceId']:
             try:
-                compliance = Compliance.objects.get(pk=item['ComplianceId'])
+                # MULTI-TENANCY: Get compliance filtered by tenant
+                compliance = Compliance.objects.get(pk=item['ComplianceId'], tenant_id=tenant_id)
                 item['compliance_name'] = compliance.ComplianceItemDescription
                 item['compliance_mitigation'] = compliance.mitigation if hasattr(compliance, 'mitigation') else None
                 item['criticality'] = compliance.Criticality if hasattr(compliance, 'Criticality') else None
@@ -2953,7 +3073,9 @@ def combined_incidents_and_audit_findings(request):
         # Check if there's a corresponding incident
         related_incident = None
         if item.get('FrameworkId') and item['ComplianceId']:
+            # MULTI-TENANCY: Filter related incidents by tenant
             related_incident = Incident.objects.filter(
+                tenant_id=tenant_id,
                 Origin__in=["Audit Finding", "Compliance Gap"],
                 # Adjust these field mappings based on your actual model relationships
                 FrameworkId=item['FrameworkId'],
@@ -2971,7 +3093,15 @@ def combined_incidents_and_audit_findings(request):
 @api_view(['POST'])
 @permission_classes([IncidentCreatePermission])
 @rbac_required(required_permission='create_incident')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def create_workflow(request):
+    """
+    Create a workflow
+    MULTI-TENANCY: Workflow will be automatically assigned to user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     client_ip = get_client_ip(request)
     user_id = request.data.get('userId')
     
@@ -3083,20 +3213,33 @@ def create_workflow(request):
 @api_view(['GET'])
 @permission_classes([IncidentViewPermission])
 @rbac_required(required_permission='view_all_incident')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def list_assigned_findings(request):
-    workflows = Workflow.objects.all()
+    """
+    List assigned findings
+    MULTI-TENANCY: Only returns findings for user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
+    # MULTI-TENANCY: Filter workflows by tenant (through related incidents/findings)
+    workflows = Workflow.objects.filter(
+        Q(IncidentId__tenant_id=tenant_id) | Q(finding_id__AuditId__tenant_id=tenant_id)
+    )
     result = []
     for wf in workflows:
         # Assigned Audit Finding
         if wf.finding_id:
             try:
-                finding = AuditFinding.objects.get(date=wf.finding_id)
+                # MULTI-TENANCY: Get finding filtered by tenant
+                finding = AuditFinding.objects.get(date=wf.finding_id, tenant_id=tenant_id)
                 result.append({
                     'type': 'finding',
                     'date': wf.finding_id,
                     'comment': finding.comment,
-                    'assignee': Users.objects.get(UserId=wf.assignee_id).UserName,
-                    'reviewer': Users.objects.get(UserId=wf.reviewer_id).UserName,
+                    'assignee': Users.objects.get(UserId=wf.assignee_id, tenant_id=tenant_id).UserName,
+                    'reviewer': Users.objects.get(UserId=wf.reviewer_id, tenant_id=tenant_id).UserName,
                     'assigned_at': wf.assigned_at,
                 })
             except AuditFinding.DoesNotExist:
@@ -3104,14 +3247,15 @@ def list_assigned_findings(request):
         # Assigned Incident
         elif wf.IncidentId:
             try:
-                incident = Incident.objects.get(IncidentId=wf.IncidentId)
+                # MULTI-TENANCY: Get incident filtered by tenant
+                incident = Incident.objects.get(IncidentId=wf.IncidentId, tenant_id=tenant_id)
                 result.append({
                     'type': 'incident',
                     'IncidentId': wf.IncidentId,
                     'incidenttitle': incident.incidenttitle,
                     'description': incident.description,
-                    'assignee': Users.objects.get(UserId=wf.assignee_id).UserName,
-                    'reviewer': Users.objects.get(UserId=wf.reviewer_id).UserName,
+                    'assignee': Users.objects.get(UserId=wf.assignee_id, tenant_id=tenant_id).UserName,
+                    'reviewer': Users.objects.get(UserId=wf.reviewer_id, tenant_id=tenant_id).UserName,
                     'assigned_at': wf.assigned_at,
                 })
             except Incident.DoesNotExist:
@@ -3122,7 +3266,15 @@ def list_assigned_findings(request):
 @authentication_classes([])
 @permission_classes([IncidentCreatePermission])
 @rbac_required(required_permission='create_incident')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def create_incident_from_audit_finding(request):
+    """
+    Create incident from audit finding
+    MULTI-TENANCY: Incident will be automatically assigned to user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     client_ip = get_client_ip(request)
     user_id = request.data.get('userId')
     
@@ -3155,12 +3307,14 @@ def create_incident_from_audit_finding(request):
     finding_id = validated_data.get('audit_finding_id')
 
     try:
-        finding = AuditFinding.objects.get(pk=finding_id)
+        # MULTI-TENANCY: Get finding filtered by tenant
+        finding = AuditFinding.objects.get(pk=finding_id, tenant_id=tenant_id)
     except AuditFinding.DoesNotExist:
         return Response({'error': 'Audit finding not found'}, status=status.HTTP_404_NOT_FOUND)
 
-    # Check if an incident already exists for this finding
+    # MULTI-TENANCY: Check if an incident already exists for this finding, filtered by tenant
     existing_incident = Incident.objects.filter(
+        tenant_id=tenant_id,
         Origin="Audit Finding",
         AuditId=finding.AuditId,
         ComplianceId=finding.ComplianceId
@@ -3212,7 +3366,15 @@ def create_incident_from_audit_finding(request):
 @authentication_classes([])
 @permission_classes([IncidentCreatePermission])
 @rbac_required(required_permission='create_incident')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def schedule_manual_incident(request):
+    """
+    Schedule manual incident
+    MULTI-TENANCY: Only schedules incidents for user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     client_ip = get_client_ip(request)
     user_id = request.data.get('userId')
     
@@ -3244,12 +3406,20 @@ def schedule_manual_incident(request):
     
     incident_id = validated_data.get('incident_id')
     try:
-        incident = Incident.objects.get(pk=incident_id, Origin="Manual")
+        # MULTI-TENANCY: Get incident filtered by tenant
+        incident = Incident.objects.get(pk=incident_id, Origin="Manual", tenant_id=tenant_id)
+        
+        # MULTI-TENANCY: Validate tenant access
+        if not validate_tenant_access(request, incident):
+            return Response(
+                {"error": "Access denied. Incident does not belong to your organization."},
+                status=status.HTTP_403_FORBIDDEN
+            )
         
         # Use the same logic as update_incident_status to create RiskInstance when escalating
         try:
-            # Check if RiskInstance already exists for this incident
-            existing_risk = RiskInstance.objects.filter(IncidentId=incident_id).first()
+            # MULTI-TENANCY: Check if RiskInstance already exists for this incident, filtered by tenant
+            existing_risk = RiskInstance.objects.filter(IncidentId=incident_id, tenant_id=tenant_id).first()
             
             if not existing_risk:
                 # Handle ComplianceId - only include if it's not null/empty
@@ -3319,7 +3489,15 @@ def schedule_manual_incident(request):
 @authentication_classes([])
 @permission_classes([IncidentEvaluatePermission])
 @rbac_required(required_permission='evaluate_assigned_incident')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def reject_incident(request):
+    """
+    Reject incident
+    MULTI-TENANCY: Only rejects incidents for user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     client_ip = get_client_ip(request)
     user_id = request.data.get('userId')
     
@@ -3365,7 +3543,16 @@ def reject_incident(request):
     
     if incident_id:
         try:
-            incident = Incident.objects.get(pk=incident_id)
+            # MULTI-TENANCY: Get incident filtered by tenant
+            incident = Incident.objects.get(pk=incident_id, tenant_id=tenant_id)
+            
+            # MULTI-TENANCY: Validate tenant access
+            if not validate_tenant_access(request, incident):
+                return Response(
+                    {"error": "Access denied. Incident does not belong to your organization."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
             incident.Status = "Rejected"
             incident.RejectionSource = rejection_source
             incident.save()
@@ -3383,10 +3570,19 @@ def reject_incident(request):
     
     elif audit_finding_id:
         try:
-            finding = AuditFinding.objects.get(pk=audit_finding_id)
+            # MULTI-TENANCY: Get finding filtered by tenant
+            finding = AuditFinding.objects.get(pk=audit_finding_id, tenant_id=tenant_id)
             
-            # Check if an incident already exists for this finding
+            # MULTI-TENANCY: Validate tenant access
+            if not validate_tenant_access(request, finding):
+                return Response(
+                    {"error": "Access denied. Audit finding does not belong to your organization."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # MULTI-TENANCY: Check if an incident already exists for this finding, filtered by tenant
             existing_incident = Incident.objects.filter(
+                tenant_id=tenant_id,
                 Origin="Audit Finding",
                 AuditId=finding.AuditId,
                 ComplianceId=finding.ComplianceId
@@ -3471,7 +3667,15 @@ from ...routes.Global.s3_fucntions import export_data
 @authentication_classes([])
 @permission_classes([IncidentViewPermission])
 @rbac_required(required_permission='view_all_incident')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def export_incidents(request):
+    """
+    Export incidents to various file formats
+    MULTI-TENANCY: Only exports incidents for user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     """
     Export incidents to various file formats.
     
@@ -3541,8 +3745,8 @@ def export_incidents(request):
                 except json.JSONDecodeError:
                     return Response({'error': 'Invalid JSON format in data field'}, status=400)
         else:
-            # Fetch all incidents from database with only necessary fields (excluding audit findings)
-            incidents = Incident.objects.exclude(Origin='Audit Finding').values(
+            # MULTI-TENANCY: Fetch all incidents from database filtered by tenant with only necessary fields (excluding audit findings)
+            incidents = Incident.objects.filter(tenant_id=tenant_id).exclude(Origin='Audit Finding').values(
                 'IncidentId', 'IncidentTitle', 'Date', 'RiskPriority', 'Origin', 'Status'
             ).order_by('-Date')
             incidents_data = list(incidents)
@@ -3625,10 +3829,15 @@ def export_incidents(request):
 
 @api_view(['GET'])
 @permission_classes([AuditFindingsAccessPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_audit_findings(request):
     """
     Get audit finding incidents from incidents table where origin = 'Audit Finding'
+    MULTI-TENANCY: Only returns findings for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     try:
         from django.db.models import Q
         
@@ -3683,9 +3892,12 @@ def get_audit_findings(request):
             additionalInfo={"status_filter": status_filter, "search_query": search_query, "framework_id": framework_id}
         )
             
-        # Query incidents with origin = "Audit Finding" or "AuditFinding" or "Compliance Gap"
+        # MULTI-TENANCY: Query incidents with origin = "Audit Finding" or "AuditFinding" or "Compliance Gap", filtered by tenant
         # Include both variations since database might have either format
-        queryset = Incident.objects.filter(Origin__in=['Audit Finding', 'AuditFinding', 'Compliance Gap'])
+        queryset = Incident.objects.filter(
+            tenant_id=tenant_id,
+            Origin__in=['Audit Finding', 'AuditFinding', 'Compliance Gap']
+        )
         
         # Apply framework filter if provided
         if framework_id:
@@ -4283,10 +4495,15 @@ def get_compliances(request):
 @authentication_classes([])
 @permission_classes([AuditViewPermission])
 @rbac_required(required_permission='view_audit_reports')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def audit_finding_detail(request, compliance_id):
     """
     Get detailed information for a specific audit finding by compliance ID
+    MULTI-TENANCY: Only returns findings for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     try:
         # Validate path parameter
         try:
@@ -4316,7 +4533,8 @@ def audit_finding_detail(request, compliance_id):
         compliance_data = {}
         try:
             if finding_dict['ComplianceId']:
-                compliance = Compliance.objects.get(ComplianceId=finding_dict['ComplianceId'])
+                # MULTI-TENANCY: Get compliance filtered by tenant
+                compliance = Compliance.objects.get(ComplianceId=finding_dict['ComplianceId'], tenant_id=tenant_id)
                 compliance_data = {
                     'ComplianceId': compliance.ComplianceId,
                     'ComplianceItemDescription': compliance.ComplianceItemDescription,
@@ -4336,7 +4554,8 @@ def audit_finding_detail(request, compliance_id):
         policy_data = {}
         try:
             if finding_dict['PolicyId']:
-                policy = Policy.objects.get(PolicyId=finding_dict['PolicyId'])
+                # MULTI-TENANCY: Get policy filtered by tenant
+                policy = Policy.objects.get(PolicyId=finding_dict['PolicyId'], tenant_id=tenant_id)
                 policy_data = {
                     'PolicyId': policy.PolicyId,
                     'PolicyName': policy.PolicyName
@@ -4348,7 +4567,8 @@ def audit_finding_detail(request, compliance_id):
         subpolicy_data = {}
         try:
             if finding_dict['SubPolicyId']:
-                subpolicy = SubPolicy.objects.get(SubPolicyId=finding_dict['SubPolicyId'])
+                # MULTI-TENANCY: Get subpolicy filtered by tenant
+                subpolicy = SubPolicy.objects.get(SubPolicyId=finding_dict['SubPolicyId'], tenant_id=tenant_id)
                 subpolicy_data = {
                     'SubPolicyId': subpolicy.SubPolicyId,
                     'SubPolicyName': subpolicy.SubPolicyName
@@ -4359,7 +4579,9 @@ def audit_finding_detail(request, compliance_id):
         # Check for related incidents
         related_incident = None
         try:
+            # MULTI-TENANCY: Filter incident by tenant
             incident = Incident.objects.filter(
+                tenant_id=tenant_id,
                 ComplianceId=validated_compliance_id,
                 Origin='Audit Finding'
             ).first()
@@ -4477,8 +4699,15 @@ def audit_finding_incident_detail(request, incident_id):
 @authentication_classes([])
 @permission_classes([IncidentViewPermission])
 @rbac_required(required_permission='view_all_incident')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def user_incidents(request, user_id):
-    """Get incidents assigned BY a specific user (where user is the assigner)"""
+    """
+    Get incidents assigned BY a specific user (where user is the assigner)
+    MULTI-TENANCY: Only returns incidents for user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     try:
         # Validate path parameter
         try:
@@ -4506,8 +4735,9 @@ def user_incidents(request, user_id):
         # - 'Rejected': incidents that were rejected
         # - 'Approved': incidents that were approved
         # - NULL or other statuses that aren't final/closed
-        # Exclude only final/closed statuses
+        # MULTI-TENANCY: Exclude only final/closed statuses, filtered by tenant
         incidents = Incident.objects.filter(
+            tenant_id=tenant_id,
             AssignerId=validated_user_id  # Filter by AssignerId (the person WHO assigned it)
         ).exclude(
             Status__in=['Closed', 'Completed', 'Cancelled']

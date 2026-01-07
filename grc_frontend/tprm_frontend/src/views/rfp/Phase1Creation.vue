@@ -240,7 +240,37 @@
           <CardContent class="p-6 space-y-6">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div class="space-y-2">
-                <Label html-for="rfpNumber">RFP Number *</Label>
+                <Label html-for="rfpNumber" class="flex items-center gap-2">
+                  <span>RFP Number *</span>
+                  <div class="rfp-data-type-circle-toggle-wrapper">
+                    <div class="rfp-data-type-circle-toggle">
+                      <div 
+                        class="rfp-circle-option rfp-personal-circle" 
+                        :class="{ active: getRFPDataType('rfpNumber') === 'personal' }"
+                        @click="setRFPDataType('rfpNumber', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="rfp-circle-option rfp-confidential-circle" 
+                        :class="{ active: getRFPDataType('rfpNumber') === 'confidential' }"
+                        @click="setRFPDataType('rfpNumber', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="rfp-circle-option rfp-regular-circle" 
+                        :class="{ active: getRFPDataType('rfpNumber') === 'regular' }"
+                        @click="setRFPDataType('rfpNumber', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </Label>
                 <Input
                   id="rfpNumber"
                   placeholder="e.g., RFP-2024-001"
@@ -248,7 +278,37 @@
                 />
               </div>
               <div class="space-y-2">
-                <Label html-for="title">RFP Title *</Label>
+                <Label html-for="title" class="flex items-center gap-2">
+                  <span>RFP Title *</span>
+                  <div class="rfp-data-type-circle-toggle-wrapper">
+                    <div class="rfp-data-type-circle-toggle">
+                      <div 
+                        class="rfp-circle-option rfp-personal-circle" 
+                        :class="{ active: getRFPDataType('title') === 'personal' }"
+                        @click="setRFPDataType('title', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="rfp-circle-option rfp-confidential-circle" 
+                        :class="{ active: getRFPDataType('title') === 'confidential' }"
+                        @click="setRFPDataType('title', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="rfp-circle-option rfp-regular-circle" 
+                        :class="{ active: getRFPDataType('title') === 'regular' }"
+                        @click="setRFPDataType('title', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </Label>
                 <Input
                   id="title"
                   placeholder="e.g., Cloud Infrastructure Services"
@@ -259,7 +319,37 @@
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div class="space-y-2">
-                <Label html-for="type">RFP Type *</Label>
+                <Label html-for="type" class="flex items-center gap-2">
+                  <span>RFP Type *</span>
+                  <div class="rfp-data-type-circle-toggle-wrapper">
+                    <div class="rfp-data-type-circle-toggle">
+                      <div 
+                        class="rfp-circle-option rfp-personal-circle" 
+                        :class="{ active: getRFPDataType('type') === 'personal' }"
+                        @click="setRFPDataType('type', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="rfp-circle-option rfp-confidential-circle" 
+                        :class="{ active: getRFPDataType('type') === 'confidential' }"
+                        @click="setRFPDataType('type', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="rfp-circle-option rfp-regular-circle" 
+                        :class="{ active: getRFPDataType('type') === 'regular' }"
+                        @click="setRFPDataType('type', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </Label>
                 <Select v-model="formData.type" :disabled="loadingRfpTypes">
                   <option value="" disabled>Select type</option>
                   <option v-for="rfpType in rfpTypes" :key="rfpType" :value="rfpType">
@@ -270,7 +360,37 @@
               </div>
               <div v-if="!hiddenFields.category" class="space-y-2">
                 <div class="flex items-center justify-between">
-                  <Label html-for="category">Category</Label>
+                  <Label html-for="category" class="flex items-center gap-2">
+                    <span>Category</span>
+                    <div class="rfp-data-type-circle-toggle-wrapper">
+                      <div class="rfp-data-type-circle-toggle">
+                        <div 
+                          class="rfp-circle-option rfp-personal-circle" 
+                          :class="{ active: getRFPDataType('category') === 'personal' }"
+                          @click="setRFPDataType('category', 'personal')"
+                          title="Personal Data"
+                        >
+                          <div class="rfp-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="rfp-circle-option rfp-confidential-circle" 
+                          :class="{ active: getRFPDataType('category') === 'confidential' }"
+                          @click="setRFPDataType('category', 'confidential')"
+                          title="Confidential Data"
+                        >
+                          <div class="rfp-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="rfp-circle-option rfp-regular-circle" 
+                          :class="{ active: getRFPDataType('category') === 'regular' }"
+                          @click="setRFPDataType('category', 'regular')"
+                          title="Regular Data"
+                        >
+                          <div class="rfp-circle-inner"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </Label>
                   <button
                     @click="hideField('category')"
                     type="button"
@@ -293,7 +413,37 @@
         </div>
 
             <div class="space-y-2">
-              <Label html-for="description">Description *</Label>
+              <Label html-for="description" class="flex items-center gap-2">
+                <span>Description *</span>
+                <div class="rfp-data-type-circle-toggle-wrapper">
+                  <div class="rfp-data-type-circle-toggle">
+                    <div 
+                      class="rfp-circle-option rfp-personal-circle" 
+                      :class="{ active: getRFPDataType('description') === 'personal' }"
+                      @click="setRFPDataType('description', 'personal')"
+                      title="Personal Data"
+                    >
+                      <div class="rfp-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="rfp-circle-option rfp-confidential-circle" 
+                      :class="{ active: getRFPDataType('description') === 'confidential' }"
+                      @click="setRFPDataType('description', 'confidential')"
+                      title="Confidential Data"
+                    >
+                      <div class="rfp-circle-inner"></div>
+                    </div>
+                    <div 
+                      class="rfp-circle-option rfp-regular-circle" 
+                      :class="{ active: getRFPDataType('description') === 'regular' }"
+                      @click="setRFPDataType('description', 'regular')"
+                      title="Regular Data"
+                    >
+                      <div class="rfp-circle-inner"></div>
+                    </div>
+                  </div>
+                </div>
+              </Label>
               <Textarea
                 id="description"
                 placeholder="Provide a detailed description of your requirements..."
@@ -618,7 +768,37 @@
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div class="space-y-2">
-                <Label html-for="issueDate">Issue Date *</Label>
+                <Label html-for="issueDate" class="flex items-center gap-2">
+                  <span>Issue Date *</span>
+                  <div class="rfp-data-type-circle-toggle-wrapper">
+                    <div class="rfp-data-type-circle-toggle">
+                      <div 
+                        class="rfp-circle-option rfp-personal-circle" 
+                        :class="{ active: getRFPDataType('issueDate') === 'personal' }"
+                        @click="setRFPDataType('issueDate', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="rfp-circle-option rfp-confidential-circle" 
+                        :class="{ active: getRFPDataType('issueDate') === 'confidential' }"
+                        @click="setRFPDataType('issueDate', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="rfp-circle-option rfp-regular-circle" 
+                        :class="{ active: getRFPDataType('issueDate') === 'regular' }"
+                        @click="setRFPDataType('issueDate', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </Label>
                 <Input
                   id="issueDate"
                   type="date"
@@ -626,7 +806,37 @@
                 />
               </div>
               <div class="space-y-2">
-                <Label html-for="deadline">Submission Deadline *</Label>
+                <Label html-for="deadline" class="flex items-center gap-2">
+                  <span>Submission Deadline *</span>
+                  <div class="rfp-data-type-circle-toggle-wrapper">
+                    <div class="rfp-data-type-circle-toggle">
+                      <div 
+                        class="rfp-circle-option rfp-personal-circle" 
+                        :class="{ active: getRFPDataType('deadline') === 'personal' }"
+                        @click="setRFPDataType('deadline', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="rfp-circle-option rfp-confidential-circle" 
+                        :class="{ active: getRFPDataType('deadline') === 'confidential' }"
+                        @click="setRFPDataType('deadline', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="rfp-circle-option rfp-regular-circle" 
+                        :class="{ active: getRFPDataType('deadline') === 'regular' }"
+                        @click="setRFPDataType('deadline', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </Label>
                 <input
                   id="deadline"
                   type="datetime-local"
@@ -830,7 +1040,37 @@
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div v-if="!hiddenFields.estimatedValue" class="space-y-2">
                 <div class="flex items-center justify-between">
-                  <Label html-for="estimatedValue">Estimated Value</Label>
+                  <Label html-for="estimatedValue" class="flex items-center gap-2">
+                    <span>Estimated Value</span>
+                    <div class="rfp-data-type-circle-toggle-wrapper">
+                      <div class="rfp-data-type-circle-toggle">
+                        <div 
+                          class="rfp-circle-option rfp-personal-circle" 
+                          :class="{ active: getRFPDataType('estimatedValue') === 'personal' }"
+                          @click="setRFPDataType('estimatedValue', 'personal')"
+                          title="Personal Data"
+                        >
+                          <div class="rfp-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="rfp-circle-option rfp-confidential-circle" 
+                          :class="{ active: getRFPDataType('estimatedValue') === 'confidential' }"
+                          @click="setRFPDataType('estimatedValue', 'confidential')"
+                          title="Confidential Data"
+                        >
+                          <div class="rfp-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="rfp-circle-option rfp-regular-circle" 
+                          :class="{ active: getRFPDataType('estimatedValue') === 'regular' }"
+                          @click="setRFPDataType('estimatedValue', 'regular')"
+                          title="Regular Data"
+                        >
+                          <div class="rfp-circle-inner"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </Label>
                   <button
                     @click="hideField('estimatedValue')"
                     type="button"
@@ -849,7 +1089,37 @@
               </div>
               <div v-if="!hiddenFields.currency" class="space-y-2">
                 <div class="flex items-center justify-between">
-                  <Label html-for="currency">Currency</Label>
+                  <Label html-for="currency" class="flex items-center gap-2">
+                    <span>Currency</span>
+                    <div class="rfp-data-type-circle-toggle-wrapper">
+                      <div class="rfp-data-type-circle-toggle">
+                        <div 
+                          class="rfp-circle-option rfp-personal-circle" 
+                          :class="{ active: getRFPDataType('currency') === 'personal' }"
+                          @click="setRFPDataType('currency', 'personal')"
+                          title="Personal Data"
+                        >
+                          <div class="rfp-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="rfp-circle-option rfp-confidential-circle" 
+                          :class="{ active: getRFPDataType('currency') === 'confidential' }"
+                          @click="setRFPDataType('currency', 'confidential')"
+                          title="Confidential Data"
+                        >
+                          <div class="rfp-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="rfp-circle-option rfp-regular-circle" 
+                          :class="{ active: getRFPDataType('currency') === 'regular' }"
+                          @click="setRFPDataType('currency', 'regular')"
+                          title="Regular Data"
+                        >
+                          <div class="rfp-circle-inner"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </Label>
                   <button
                     @click="hideField('currency')"
                     type="button"
@@ -870,7 +1140,37 @@
               </div>
               <div v-if="!hiddenFields.timeline" class="space-y-2">
                 <div class="flex items-center justify-between">
-                  <Label html-for="timeline">Project Timeline</Label>
+                  <Label html-for="timeline" class="flex items-center gap-2">
+                    <span>Project Timeline</span>
+                    <div class="rfp-data-type-circle-toggle-wrapper">
+                      <div class="rfp-data-type-circle-toggle">
+                        <div 
+                          class="rfp-circle-option rfp-personal-circle" 
+                          :class="{ active: getRFPDataType('timeline') === 'personal' }"
+                          @click="setRFPDataType('timeline', 'personal')"
+                          title="Personal Data"
+                        >
+                          <div class="rfp-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="rfp-circle-option rfp-confidential-circle" 
+                          :class="{ active: getRFPDataType('timeline') === 'confidential' }"
+                          @click="setRFPDataType('timeline', 'confidential')"
+                          title="Confidential Data"
+                        >
+                          <div class="rfp-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="rfp-circle-option rfp-regular-circle" 
+                          :class="{ active: getRFPDataType('timeline') === 'regular' }"
+                          @click="setRFPDataType('timeline', 'regular')"
+                          title="Regular Data"
+                        >
+                          <div class="rfp-circle-inner"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </Label>
                   <button
                     @click="hideField('timeline')"
                     type="button"
@@ -893,7 +1193,37 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div v-if="!hiddenFields.budgetMin" class="space-y-2">
                 <div class="flex items-center justify-between">
-                  <Label html-for="budgetMin">Minimum Budget</Label>
+                  <Label html-for="budgetMin" class="flex items-center gap-2">
+                    <span>Minimum Budget</span>
+                    <div class="rfp-data-type-circle-toggle-wrapper">
+                      <div class="rfp-data-type-circle-toggle">
+                        <div 
+                          class="rfp-circle-option rfp-personal-circle" 
+                          :class="{ active: getRFPDataType('budgetMin') === 'personal' }"
+                          @click="setRFPDataType('budgetMin', 'personal')"
+                          title="Personal Data"
+                        >
+                          <div class="rfp-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="rfp-circle-option rfp-confidential-circle" 
+                          :class="{ active: getRFPDataType('budgetMin') === 'confidential' }"
+                          @click="setRFPDataType('budgetMin', 'confidential')"
+                          title="Confidential Data"
+                        >
+                          <div class="rfp-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="rfp-circle-option rfp-regular-circle" 
+                          :class="{ active: getRFPDataType('budgetMin') === 'regular' }"
+                          @click="setRFPDataType('budgetMin', 'regular')"
+                          title="Regular Data"
+                        >
+                          <div class="rfp-circle-inner"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </Label>
                   <button
                     @click="hideField('budgetMin')"
                     type="button"
@@ -912,7 +1242,37 @@
               </div>
               <div v-if="!hiddenFields.budgetMax" class="space-y-2">
                 <div class="flex items-center justify-between">
-                  <Label html-for="budgetMax">Maximum Budget</Label>
+                  <Label html-for="budgetMax" class="flex items-center gap-2">
+                    <span>Maximum Budget</span>
+                    <div class="rfp-data-type-circle-toggle-wrapper">
+                      <div class="rfp-data-type-circle-toggle">
+                        <div 
+                          class="rfp-circle-option rfp-personal-circle" 
+                          :class="{ active: getRFPDataType('budgetMax') === 'personal' }"
+                          @click="setRFPDataType('budgetMax', 'personal')"
+                          title="Personal Data"
+                        >
+                          <div class="rfp-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="rfp-circle-option rfp-confidential-circle" 
+                          :class="{ active: getRFPDataType('budgetMax') === 'confidential' }"
+                          @click="setRFPDataType('budgetMax', 'confidential')"
+                          title="Confidential Data"
+                        >
+                          <div class="rfp-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="rfp-circle-option rfp-regular-circle" 
+                          :class="{ active: getRFPDataType('budgetMax') === 'regular' }"
+                          @click="setRFPDataType('budgetMax', 'regular')"
+                          title="Regular Data"
+                        >
+                          <div class="rfp-circle-inner"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </Label>
                   <button
                     @click="hideField('budgetMax')"
                     type="button"
@@ -933,7 +1293,37 @@
             
             <div v-if="!hiddenFields.evaluationPeriodEnd" class="space-y-2">
               <div class="flex items-center justify-between">
-                <Label html-for="evaluationPeriodEnd">Evaluation Period End</Label>
+                <Label html-for="evaluationPeriodEnd" class="flex items-center gap-2">
+                  <span>Evaluation Period End</span>
+                  <div class="rfp-data-type-circle-toggle-wrapper">
+                    <div class="rfp-data-type-circle-toggle">
+                      <div 
+                        class="rfp-circle-option rfp-personal-circle" 
+                        :class="{ active: getRFPDataType('evaluationPeriodEnd') === 'personal' }"
+                        @click="setRFPDataType('evaluationPeriodEnd', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="rfp-circle-option rfp-confidential-circle" 
+                        :class="{ active: getRFPDataType('evaluationPeriodEnd') === 'confidential' }"
+                        @click="setRFPDataType('evaluationPeriodEnd', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="rfp-circle-option rfp-regular-circle" 
+                        :class="{ active: getRFPDataType('evaluationPeriodEnd') === 'regular' }"
+                        @click="setRFPDataType('evaluationPeriodEnd', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </Label>
                 <button
                   @click="hideField('evaluationPeriodEnd')"
                   type="button"
@@ -1010,14 +1400,74 @@
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div class="space-y-2">
-                    <Label>Name</Label>
+                    <Label class="flex items-center gap-2">
+                      <span>Name</span>
+                      <div class="rfp-data-type-circle-toggle-wrapper">
+                        <div class="rfp-data-type-circle-toggle">
+                          <div 
+                            class="rfp-circle-option rfp-personal-circle" 
+                            :class="{ active: getCriteriaDataType(criterion.id, 'name') === 'personal' }"
+                            @click="setCriteriaDataType(criterion.id, 'name', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="rfp-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="rfp-circle-option rfp-confidential-circle" 
+                            :class="{ active: getCriteriaDataType(criterion.id, 'name') === 'confidential' }"
+                            @click="setCriteriaDataType(criterion.id, 'name', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="rfp-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="rfp-circle-option rfp-regular-circle" 
+                            :class="{ active: getCriteriaDataType(criterion.id, 'name') === 'regular' }"
+                            @click="setCriteriaDataType(criterion.id, 'name', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="rfp-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </Label>
                     <Input
                       placeholder="e.g., Technical Capability"
                       v-model="criterion.name"
                     />
                   </div>
                   <div class="space-y-2">
-                    <Label>Weight (%)</Label>
+                    <Label class="flex items-center gap-2">
+                      <span>Weight (%)</span>
+                      <div class="rfp-data-type-circle-toggle-wrapper">
+                        <div class="rfp-data-type-circle-toggle">
+                          <div 
+                            class="rfp-circle-option rfp-personal-circle" 
+                            :class="{ active: getCriteriaDataType(criterion.id, 'weight') === 'personal' }"
+                            @click="setCriteriaDataType(criterion.id, 'weight', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="rfp-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="rfp-circle-option rfp-confidential-circle" 
+                            :class="{ active: getCriteriaDataType(criterion.id, 'weight') === 'confidential' }"
+                            @click="setCriteriaDataType(criterion.id, 'weight', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="rfp-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="rfp-circle-option rfp-regular-circle" 
+                            :class="{ active: getCriteriaDataType(criterion.id, 'weight') === 'regular' }"
+                            @click="setCriteriaDataType(criterion.id, 'weight', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="rfp-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </Label>
                     <div class="relative">
                       <Input
                         type="number"
@@ -1038,7 +1488,37 @@
         </div>
 
                 <div class="space-y-2">
-                  <Label>Description</Label>
+                  <Label class="flex items-center gap-2">
+                    <span>Description</span>
+                    <div class="rfp-data-type-circle-toggle-wrapper">
+                      <div class="rfp-data-type-circle-toggle">
+                        <div 
+                          class="rfp-circle-option rfp-personal-circle" 
+                          :class="{ active: getCriteriaDataType(criterion.id, 'description') === 'personal' }"
+                          @click="setCriteriaDataType(criterion.id, 'description', 'personal')"
+                          title="Personal Data"
+                        >
+                          <div class="rfp-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="rfp-circle-option rfp-confidential-circle" 
+                          :class="{ active: getCriteriaDataType(criterion.id, 'description') === 'confidential' }"
+                          @click="setCriteriaDataType(criterion.id, 'description', 'confidential')"
+                          title="Confidential Data"
+                        >
+                          <div class="rfp-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="rfp-circle-option rfp-regular-circle" 
+                          :class="{ active: getCriteriaDataType(criterion.id, 'description') === 'regular' }"
+                          @click="setCriteriaDataType(criterion.id, 'description', 'regular')"
+                          title="Regular Data"
+                        >
+                          <div class="rfp-circle-inner"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </Label>
                   <Textarea
                     placeholder="Describe what this criterion evaluates..."
                     :rows="2"
@@ -1078,7 +1558,37 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div v-if="!hiddenFields.evaluationMethod" class="space-y-2">
                 <div class="flex items-center justify-between">
-                  <Label html-for="evaluationMethod">Evaluation Method</Label>
+                  <Label html-for="evaluationMethod" class="flex items-center gap-2">
+                    <span>Evaluation Method</span>
+                    <div class="rfp-data-type-circle-toggle-wrapper">
+                      <div class="rfp-data-type-circle-toggle">
+                        <div 
+                          class="rfp-circle-option rfp-personal-circle" 
+                          :class="{ active: getRFPDataType('evaluationMethod') === 'personal' }"
+                          @click="setRFPDataType('evaluationMethod', 'personal')"
+                          title="Personal Data"
+                        >
+                          <div class="rfp-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="rfp-circle-option rfp-confidential-circle" 
+                          :class="{ active: getRFPDataType('evaluationMethod') === 'confidential' }"
+                          @click="setRFPDataType('evaluationMethod', 'confidential')"
+                          title="Confidential Data"
+                        >
+                          <div class="rfp-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="rfp-circle-option rfp-regular-circle" 
+                          :class="{ active: getRFPDataType('evaluationMethod') === 'regular' }"
+                          @click="setRFPDataType('evaluationMethod', 'regular')"
+                          title="Regular Data"
+                        >
+                          <div class="rfp-circle-inner"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </Label>
                   <button
                     @click="hideField('evaluationMethod')"
                     type="button"
@@ -1096,7 +1606,37 @@
               </div>
               <div v-if="!hiddenFields.criticalityLevel" class="space-y-2">
                 <div class="flex items-center justify-between">
-                  <Label html-for="criticalityLevel">Criticality Level</Label>
+                  <Label html-for="criticalityLevel" class="flex items-center gap-2">
+                    <span>Criticality Level</span>
+                    <div class="rfp-data-type-circle-toggle-wrapper">
+                      <div class="rfp-data-type-circle-toggle">
+                        <div 
+                          class="rfp-circle-option rfp-personal-circle" 
+                          :class="{ active: getRFPDataType('criticalityLevel') === 'personal' }"
+                          @click="setRFPDataType('criticalityLevel', 'personal')"
+                          title="Personal Data"
+                        >
+                          <div class="rfp-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="rfp-circle-option rfp-confidential-circle" 
+                          :class="{ active: getRFPDataType('criticalityLevel') === 'confidential' }"
+                          @click="setRFPDataType('criticalityLevel', 'confidential')"
+                          title="Confidential Data"
+                        >
+                          <div class="rfp-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="rfp-circle-option rfp-regular-circle" 
+                          :class="{ active: getRFPDataType('criticalityLevel') === 'regular' }"
+                          @click="setRFPDataType('criticalityLevel', 'regular')"
+                          title="Regular Data"
+                        >
+                          <div class="rfp-circle-inner"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </Label>
                   <button
                     @click="hideField('criticalityLevel')"
                     type="button"
@@ -1117,7 +1657,37 @@
             
             <div v-if="!hiddenFields.geographicalScope" class="space-y-2">
               <div class="flex items-center justify-between">
-                <Label html-for="geographicalScope">Geographical Scope</Label>
+                <Label html-for="geographicalScope" class="flex items-center gap-2">
+                  <span>Geographical Scope</span>
+                  <div class="rfp-data-type-circle-toggle-wrapper">
+                    <div class="rfp-data-type-circle-toggle">
+                      <div 
+                        class="rfp-circle-option rfp-personal-circle" 
+                        :class="{ active: getRFPDataType('geographicalScope') === 'personal' }"
+                        @click="setRFPDataType('geographicalScope', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="rfp-circle-option rfp-confidential-circle" 
+                        :class="{ active: getRFPDataType('geographicalScope') === 'confidential' }"
+                        @click="setRFPDataType('geographicalScope', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="rfp-circle-option rfp-regular-circle" 
+                        :class="{ active: getRFPDataType('geographicalScope') === 'regular' }"
+                        @click="setRFPDataType('geographicalScope', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </Label>
                 <button
                   @click="hideField('geographicalScope')"
                   type="button"
@@ -1136,7 +1706,37 @@
             
             <div v-if="!hiddenFields.complianceRequirements" class="space-y-2">
               <div class="flex items-center justify-between">
-                <Label html-for="complianceRequirements">Compliance Requirements</Label>
+                <Label html-for="complianceRequirements" class="flex items-center gap-2">
+                  <span>Compliance Requirements</span>
+                  <div class="rfp-data-type-circle-toggle-wrapper">
+                    <div class="rfp-data-type-circle-toggle">
+                      <div 
+                        class="rfp-circle-option rfp-personal-circle" 
+                        :class="{ active: getRFPDataType('complianceRequirements') === 'personal' }"
+                        @click="setRFPDataType('complianceRequirements', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="rfp-circle-option rfp-confidential-circle" 
+                        :class="{ active: getRFPDataType('complianceRequirements') === 'confidential' }"
+                        @click="setRFPDataType('complianceRequirements', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="rfp-circle-option rfp-regular-circle" 
+                        :class="{ active: getRFPDataType('complianceRequirements') === 'regular' }"
+                        @click="setRFPDataType('complianceRequirements', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </Label>
                 <button
                   @click="hideField('complianceRequirements')"
                   type="button"
@@ -1160,8 +1760,36 @@
                   id="allowLateSubmissions"
                   v-model="formData.allowLateSubmissions"
                 />
-                <Label html-for="allowLateSubmissions" class="text-sm">
-                  Allow Late Submissions
+                <Label html-for="allowLateSubmissions" class="text-sm flex items-center gap-2">
+                  <span>Allow Late Submissions</span>
+                  <div class="rfp-data-type-circle-toggle-wrapper">
+                    <div class="rfp-data-type-circle-toggle">
+                      <div 
+                        class="rfp-circle-option rfp-personal-circle" 
+                        :class="{ active: getRFPDataType('allowLateSubmissions') === 'personal' }"
+                        @click="setRFPDataType('allowLateSubmissions', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="rfp-circle-option rfp-confidential-circle" 
+                        :class="{ active: getRFPDataType('allowLateSubmissions') === 'confidential' }"
+                        @click="setRFPDataType('allowLateSubmissions', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="rfp-circle-option rfp-regular-circle" 
+                        :class="{ active: getRFPDataType('allowLateSubmissions') === 'regular' }"
+                        @click="setRFPDataType('allowLateSubmissions', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
                 </Label>
                 <button
                   @click="hideField('allowLateSubmissions')"
@@ -1177,6 +1805,36 @@
                   id="autoApprove"
                   v-model="formData.autoApprove"
                 />
+                <Label html-for="autoPublish" class="text-sm flex items-center gap-2">
+                  <span>Auto-publish when approved</span>
+                  <div class="rfp-data-type-circle-toggle-wrapper">
+                    <div class="rfp-data-type-circle-toggle">
+                      <div 
+                        class="rfp-circle-option rfp-personal-circle" 
+                        :class="{ active: getRFPDataType('autoPublish') === 'personal' }"
+                        @click="setRFPDataType('autoPublish', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="rfp-circle-option rfp-confidential-circle" 
+                        :class="{ active: getRFPDataType('autoPublish') === 'confidential' }"
+                        @click="setRFPDataType('autoPublish', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="rfp-circle-option rfp-regular-circle" 
+                        :class="{ active: getRFPDataType('autoPublish') === 'regular' }"
+                        @click="setRFPDataType('autoPublish', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="rfp-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
                 <Label html-for="autoApprove" class="text-sm" title="When enabled, this RFP is automatically approved by the creator without going through the approval workflow">
                   Auto-approve (no approval workflow required)
                 </Label>
@@ -1543,7 +2201,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import axios from 'axios'
 import { useNotifications } from '@/composables/useNotifications'
@@ -1823,6 +2481,127 @@ const criteria = ref<EvaluationCriteria[]>([
     isVeto: false,
   },
 ])
+
+// Data type classification for RFP fields
+// Stores data types (personal, confidential, regular) for each field
+const rfpFieldDataTypes = reactive({
+  rfpNumber: 'regular',
+  title: 'regular',
+  description: 'regular',
+  type: 'regular',
+  category: 'regular',
+  issueDate: 'regular',
+  deadline: 'regular',
+  evaluationPeriodEnd: 'regular',
+  timeline: 'regular',
+  estimatedValue: 'confidential',
+  currency: 'regular',
+  budgetMin: 'confidential',
+  budgetMax: 'confidential',
+  evaluationMethod: 'regular',
+  criticalityLevel: 'regular',
+  geographicalScope: 'regular',
+  complianceRequirements: 'regular',
+  allowLateSubmissions: 'regular',
+  autoPublish: 'regular'
+})
+
+// Data type classification for evaluation criteria
+// Stores data types for each field in each criterion: { criterion_id: { field_name: 'data_type' } }
+const criteriaDataTypes = reactive({})
+
+// Method to set data type for an RFP field
+function setRFPDataType(fieldName: string, type: string) {
+  if (rfpFieldDataTypes.hasOwnProperty(fieldName)) {
+    rfpFieldDataTypes[fieldName] = type
+    console.log(`Data type selected for RFP field ${fieldName}:`, type)
+  }
+}
+
+// Get data type for an RFP field
+function getRFPDataType(fieldName: string) {
+  return rfpFieldDataTypes[fieldName] || 'regular'
+}
+
+// Method to set data type for a criterion field
+function setCriteriaDataType(criterionId: string, fieldName: string, type: string) {
+  if (!criteriaDataTypes[criterionId]) {
+    criteriaDataTypes[criterionId] = reactive({})
+  }
+  criteriaDataTypes[criterionId][fieldName] = type
+  console.log(`Data type selected for criterion ${criterionId}, field ${fieldName}:`, type)
+}
+
+// Get data type for a criterion field
+function getCriteriaDataType(criterionId: string, fieldName: string) {
+  return criteriaDataTypes[criterionId]?.[fieldName] || 'regular'
+}
+
+// Helper function to build data_inventory JSON for RFP
+function buildRFPDataInventory() {
+  const fieldLabelMap = {
+    rfpNumber: 'RFP Number',
+    title: 'RFP Title',
+    description: 'Description',
+    type: 'RFP Type',
+    category: 'Category',
+    issueDate: 'Issue Date',
+    deadline: 'Submission Deadline',
+    evaluationPeriodEnd: 'Evaluation Period End',
+    timeline: 'Project Timeline',
+    estimatedValue: 'Estimated Value',
+    currency: 'Currency',
+    budgetMin: 'Minimum Budget',
+    budgetMax: 'Maximum Budget',
+    evaluationMethod: 'Evaluation Method',
+    criticalityLevel: 'Criticality Level',
+    geographicalScope: 'Geographical Scope',
+    complianceRequirements: 'Compliance Requirements',
+    allowLateSubmissions: 'Allow Late Submissions',
+    autoPublish: 'Auto Publish'
+  }
+
+  const dataInventory = {}
+  
+  // Build flat structure: {"Field Label": "data_type"}
+  for (const [fieldName, dataType] of Object.entries(rfpFieldDataTypes)) {
+    if (fieldLabelMap[fieldName]) {
+      const fieldLabel = fieldLabelMap[fieldName]
+      dataInventory[fieldLabel] = dataType
+    }
+  }
+  
+  console.log('📋 RFP Data Inventory JSON:', JSON.stringify(dataInventory, null, 2))
+  return dataInventory
+}
+
+// Helper function to build data_inventory JSON for a criterion
+function buildCriteriaDataInventory(criterion: EvaluationCriteria) {
+  const fieldLabelMap = {
+    name: 'Criteria Name',
+    description: 'Criteria Description',
+    weight: 'Weight Percentage',
+    isVeto: 'Is Veto',
+    evaluationType: 'Evaluation Type',
+    minScore: 'Min Score',
+    maxScore: 'Max Score'
+  }
+  
+  const dataInventory = {}
+  const criterionId = criterion.id
+  
+  if (criterionId && criteriaDataTypes[criterionId]) {
+    for (const [fieldName, dataType] of Object.entries(criteriaDataTypes[criterionId])) {
+      if (fieldLabelMap[fieldName]) {
+        const fieldLabel = fieldLabelMap[fieldName]
+        dataInventory[fieldLabel] = dataType
+      }
+    }
+  }
+  
+  console.log(`📋 Criterion ${criterionId} Data Inventory JSON:`, JSON.stringify(dataInventory, null, 2))
+  return Object.keys(dataInventory).length > 0 ? dataInventory : {}
+}
 
 
 const totalWeight = computed(() => {
@@ -4183,6 +4962,7 @@ const handleSaveDraft = async () => {
       allow_late_submissions: Boolean(formData.value.allowLateSubmissions),
       auto_approve: Boolean(formData.value.autoApprove),
       status: 'DRAFT',
+      data_inventory: buildRFPDataInventory(),
       // Include custom fields - merge RFP type fields and categorized fields
       custom_fields: (() => {
         const mergedCustomFields: Record<string, any> = {}
@@ -4280,7 +5060,8 @@ const handleSaveDraft = async () => {
       veto_threshold: criterion.isVeto ? 50 : null, // Set veto threshold if it's a veto criterion
       min_word_count: null, // Not applicable for scoring type
       expected_boolean_answer: null, // Not applicable for scoring type
-      display_order: index // Set display order based on array position
+      display_order: index, // Set display order based on array position
+      data_inventory: buildCriteriaDataInventory(criterion) // Include data_inventory for each criterion
       // Note: created_by is set automatically by perform_create in the backend
     }))
     
@@ -4469,7 +5250,8 @@ const handleSaveDraft = async () => {
               min_word_count: criterionData.min_word_count || null,
               expected_boolean_answer: criterionData.expected_boolean_answer || null,
               display_order: Number(criterionData.display_order) || 0,
-              rfp: Number(savedRfpId) // ForeignKey field - pass RFP ID as integer
+              rfp: Number(savedRfpId), // ForeignKey field - pass RFP ID as integer
+              data_inventory: criterionData.data_inventory || {} // Include data_inventory for each criterion
               // Note: created_by is set automatically by perform_create in views.py
             }
             
@@ -6572,9 +7354,114 @@ nav::-webkit-scrollbar {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
+/* Data Type Classification Toggle Styles */
+.rfp-data-type-circle-toggle-wrapper {
+  align-items: center !important;
+  margin-left: 12px !important;
+  padding: 4px 8px !important;
+  background-color: white !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 16px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: relative !important;
+  z-index: 1 !important;
+  flex-shrink: 0 !important;
+}
+
+.rfp-data-type-circle-toggle {
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.rfp-circle-option {
+  width: 14px !important;
+  height: 14px !important;
+  border-radius: 50% !important;
+  border: 1.5px solid #d1d5db !important;
+  background-color: white !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.3s ease !important;
+  position: relative !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  flex-shrink: 0 !important;
+}
+
+.rfp-circle-option:hover {
+  transform: scale(1.2) !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12) !important;
+}
+
+.rfp-circle-inner {
+  width: 0 !important;
+  height: 0 !important;
+  border-radius: 50% !important;
+  transition: all 0.3s ease !important;
+  background-color: transparent !important;
+}
+
+.rfp-circle-option.active .rfp-circle-inner {
+  width: 9px !important;
+  height: 9px !important;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Personal Circle - Blue */
+.rfp-circle-option.rfp-personal-circle {
+  border: 1.5px solid #4f7cff !important;
+}
+
+.rfp-circle-option.rfp-personal-circle.active {
+  border: 1.5px solid #4f7cff !important;
+  background-color: rgba(79, 124, 255, 0.1) !important;
+  box-shadow: 0 0 6px rgba(79, 124, 255, 0.2) !important;
+}
+
+.rfp-circle-option.rfp-personal-circle.active .rfp-circle-inner {
+  background-color: #4f7cff !important;
+  box-shadow: 0 0 4px rgba(79, 124, 255, 0.35) !important;
+}
+
+/* Confidential Circle - Red */
+.rfp-circle-option.rfp-confidential-circle {
+  border: 1.5px solid #e63946 !important;
+}
+
+.rfp-circle-option.rfp-confidential-circle.active {
+  border: 1.5px solid #e63946 !important;
+  background-color: rgba(230, 57, 70, 0.1) !important;
+  box-shadow: 0 0 6px rgba(230, 57, 70, 0.2) !important;
+}
+
+.rfp-circle-option.rfp-confidential-circle.active .rfp-circle-inner {
+  background-color: #e63946 !important;
+  box-shadow: 0 0 4px rgba(230, 57, 70, 0.35) !important;
+}
+
+/* Regular Circle - Grey */
+.rfp-circle-option.rfp-regular-circle {
+  border: 1.5px solid #6c757d !important;
+}
+
+.rfp-circle-option.rfp-regular-circle.active {
+  border: 1.5px solid #6c757d !important;
+  background-color: rgba(108, 117, 125, 0.1) !important;
+  box-shadow: 0 0 6px rgba(108, 117, 125, 0.2) !important;
+}
+
+.rfp-circle-option.rfp-regular-circle.active .rfp-circle-inner {
+  background-color: #6c757d !important;
+  box-shadow: 0 0 4px rgba(108, 117, 125, 0.35) !important;
 /* Auto-adjusting tabs container */
 .tab-container {
-  display: flex;
   width: 100%;
   gap: 0;
   min-width: 0;

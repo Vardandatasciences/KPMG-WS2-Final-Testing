@@ -6,14 +6,18 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from ...rbac.permissions import RiskViewPermission
-
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
 @api_view(['GET'])
 @permission_classes([RiskViewPermission])  # RBAC: Require RiskViewPermission for viewing risk versions
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_all_versions(request, risk_id):
-    """
-    Get all versions for a specific risk ID
-    Returns list of versions with their data for comparison
-    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     print(f"\n=== GET ALL VERSIONS CALLED ===")
     print(f"Risk ID: {risk_id}")
     print(f"Risk ID type: {type(risk_id)}")
@@ -125,10 +129,12 @@ def get_all_versions(request, risk_id):
 
 @api_view(['GET'])
 @permission_classes([RiskViewPermission])  # RBAC: Require RiskViewPermission for viewing specific risk version
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_previous_version(request, risk_id, version):
-    """
-    Get detailed information for a specific version
-    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     print(f"\n=== GET PREVIOUS VERSION CALLED ===")
     print(f"Risk ID: {risk_id}")
     print(f"Requested Version: {version}")
@@ -209,11 +215,12 @@ def get_previous_version(request, risk_id, version):
 
 @api_view(['GET'])
 @permission_classes([RiskViewPermission])  # RBAC: Require RiskViewPermission for comparing risk versions
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_version_comparison(request, risk_id, version1, version2):
-    """
-    Compare two specific versions of a risk
-    Returns detailed comparison data
-    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     print(f"\n=== GET VERSION COMPARISON CALLED ===")
     print(f"Risk ID: {risk_id}")
     print(f"Version 1: {version1}")

@@ -69,6 +69,10 @@ export const API_ENDPOINTS = {
   CREATE_DATA_SUBJECT_REQUEST: `${API_BASE_URL}/api/data-subject-requests/create/`,
   UPDATE_DATA_SUBJECT_REQUEST_STATUS: (requestId) => `${API_BASE_URL}/api/data-subject-requests/${requestId}/update-status/`,
   
+  // TPRM Access Requests
+  TPRM_ACCESS_REQUESTS: (userId) => `${API_BASE_URL}/api/tprm/rbac/access-requests/${userId}/`,
+  TPRM_UPDATE_ACCESS_REQUEST_STATUS: (requestId) => `${API_BASE_URL}/api/tprm/rbac/access-requests/${requestId}/update-status/`,
+  
   // Profile Edit OTP
   PROFILE_EDIT_OTP_SEND: `${API_BASE_URL}/api/profile-edit-otp/send/`,
   PROFILE_EDIT_OTP_VERIFY: `${API_BASE_URL}/api/profile-edit-otp/verify/`,

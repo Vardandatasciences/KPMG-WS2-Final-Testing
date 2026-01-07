@@ -19,6 +19,12 @@ from django.db.models.functions import Coalesce
 from...rbac.decorators import audit_analytics_required
 from .framework_filter_helper import get_active_framework_filter, apply_framework_filter_to_audits, get_framework_sql_filter
 
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
+
 logger = logging.getLogger(__name__)
 
 # Custom function to calculate date difference in days
@@ -181,7 +187,15 @@ def get_audit_completion_metrics(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])  # Temporarily allow any access for testing
 @audit_analytics_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_non_compliance_count(request):
+    """
+    MULTI-TENANCY: Only returns counts for user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Group and count by Complied values ('0' and '1')
         compliance_stats = (
@@ -237,7 +251,15 @@ def get_non_compliance_count(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 @audit_analytics_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_audit_cycle_time(request):
+    """
+    MULTI-TENANCY: Only returns cycle times for audits in user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Get framework filter from session (priority) or query params (fallback)
         framework_id = get_active_framework_filter(request)
@@ -434,7 +456,15 @@ def get_audit_cycle_time(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 @audit_analytics_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_finding_rate(request):
+    """
+    MULTI-TENANCY: Only returns finding rates for audits in user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Get time period from query params (default to current year)
         period = request.GET.get('period', 'year')
@@ -582,7 +612,15 @@ def get_finding_rate(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 @audit_analytics_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_time_to_close_findings(request):
+    """
+    MULTI-TENANCY: Only returns closure times for findings in user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Get time period from query params (default to current year)
         period = request.GET.get('period', 'year')
@@ -750,7 +788,15 @@ def get_time_to_close_findings(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 @audit_analytics_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_non_compliance_issues(request):
+    """
+    MULTI-TENANCY: Only returns non-compliance issues for user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Get time period from query params (default to current year)
         period = request.GET.get('period', 'year')
@@ -787,7 +833,9 @@ def get_non_compliance_issues(request):
             SELECT COUNT(*) AS non_compliance_count
             FROM audit_findings af
             JOIN compliance c ON af.ComplianceId = c.ComplianceId
+            JOIN audit a ON af.AuditId = a.AuditId
             WHERE c.IsRisk = 1
+                AND a.tenant_id = %s
                 AND af.AssignedDate BETWEEN %s AND %s
                 {severity_filter}
         """
@@ -933,7 +981,9 @@ def get_non_compliance_issues(request):
             SELECT COUNT(*) AS prev_count
             FROM audit_findings af
             JOIN compliance c ON af.ComplianceId = c.ComplianceId
+            JOIN audit a ON af.AuditId = a.AuditId
             WHERE c.IsRisk = 1
+                AND a.tenant_id = %s
                 AND af.AssignedDate BETWEEN %s AND %s
                 {severity_filter}
         """
@@ -987,7 +1037,15 @@ def get_non_compliance_issues(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 @audit_analytics_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_severity_distribution(request):
+    """
+    MULTI-TENANCY: Only returns severity distribution for user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Get time period from query params (default to current year)
         period = request.GET.get('period', 'year')
@@ -1218,7 +1276,15 @@ def get_severity_distribution(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 @audit_analytics_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_findings_closure_rate(request):
+    """
+    MULTI-TENANCY: Only returns closure rates for user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Get time period from query params (default to current year)
         period = request.GET.get('period', 'year')
@@ -1431,7 +1497,15 @@ def get_findings_closure_rate(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 @audit_analytics_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_evidence_completion(request):
+    """
+    MULTI-TENANCY: Only returns evidence completion for user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Get audit ID filter if provided
         audit_id = request.GET.get('audit_id', None)
@@ -1600,7 +1674,15 @@ def get_evidence_completion(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 @audit_analytics_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_report_timeliness(request):
+    """
+    MULTI-TENANCY: Only returns report timeliness for user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Get time period from query params (default to current year)
         period = request.GET.get('period', 'year')
@@ -1834,7 +1916,15 @@ def get_report_timeliness(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 @audit_analytics_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_compliance_readiness(request):
+    """
+    MULTI-TENANCY: Only returns compliance readiness for user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Get framework or policy filter if provided
         framework_id = request.GET.get('framework_id', None)
@@ -2084,10 +2174,16 @@ def get_compliance_readiness(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def debug_mttd_calculation(request):
     """
     Debug endpoint to compare MTTD calculation with direct database query
+    MULTI-TENANCY: Only debugs calculations for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     print("debug_mttd_calculation called")
     
     from django.apps import apps
@@ -2193,10 +2289,16 @@ def debug_mttd_calculation(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def generate_sample_audit_data(request):
     """
     Generate sample audit data for testing KPI functions
+    MULTI-TENANCY: Only generates sample data for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         from django.utils import timezone
         from datetime import timedelta

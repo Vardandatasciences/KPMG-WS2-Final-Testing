@@ -5292,6 +5292,7 @@ def login_user(request):
             log_saved = False
             try:
                 logger.info(f"🔍 Attempting to log successful login for user {user.UserName} (ID: {user.UserId})")
+                from .models import GRCLog  # Import locally to avoid scoping issues
                 framework = _get_default_framework()
                 if framework:
                     client_ip = _get_client_ip(request)
@@ -5325,6 +5326,7 @@ def login_user(request):
             if not log_saved:
                 try:
                     logger.info(f"🔄 Retrying login log save with minimal data")
+                    from .models import GRCLog  # Import locally to avoid scoping issues
                     framework = _get_default_framework()
                     if framework:
                         client_ip = _get_client_ip(request)

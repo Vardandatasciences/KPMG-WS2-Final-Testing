@@ -38,6 +38,12 @@ from ...rbac.decorators import (
 )
 from .framework_filter_helper import get_active_framework_filter, apply_framework_filter_to_audits, get_framework_sql_filter
 
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
+
 def get_user_id_from_jwt(request):
     """
     Helper function to get user_id from JWT token
@@ -69,12 +75,18 @@ def get_user_id_from_jwt(request):
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AuditAssignPermission])
 @audit_assign_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_frameworks(request):
     """
     Get all frameworks
+    MULTI-TENANCY: Only returns frameworks for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
-        frameworks = Framework.objects.all()
+        frameworks = Framework.objects.filter(tenant_id=tenant_id)
         serializer = FrameworkSerializer(frameworks, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as e:
@@ -85,12 +97,18 @@ def get_frameworks(request):
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AuditAssignPermission])
 @audit_assign_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policies_by_framework(request, framework_id):
     """
     Get all policies for a specific framework
+    MULTI-TENANCY: Only returns policies for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
-        policies = Policy.objects.filter(FrameworkId=framework_id)
+        policies = Policy.objects.filter(FrameworkId=framework_id, tenant_id=tenant_id)
         serializer = PolicySerializer(policies, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as e:
@@ -101,13 +119,20 @@ def get_policies_by_framework(request, framework_id):
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AuditAssignPermission])
 @audit_assign_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_subpolicies(request):
-    """Return all subpolicies for a given policy (SubPolicyId, SubPolicyName, PolicyId)"""
+    """Return all subpolicies for a given policy (SubPolicyId, SubPolicyName, PolicyId)
+    MULTI-TENANCY: Only returns subpolicies for user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         policy_id = request.GET.get('policy_id')
         if not policy_id:
             return Response({'error': 'policy_id is required'}, status=status.HTTP_400_BAD_REQUEST)
-        subpolicies = SubPolicy.objects.filter(PolicyId=policy_id).values('SubPolicyId', 'SubPolicyName', 'PolicyId')
+        subpolicies = SubPolicy.objects.filter(PolicyId=policy_id, tenant_id=tenant_id).values('SubPolicyId', 'SubPolicyName', 'PolicyId')
         # Log the action
         user_id = request.user.id if request.user.is_authenticated else None
         send_log(
@@ -132,23 +157,24 @@ def get_subpolicies(request):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
  
-def get_compliances_by_scope(framework_id, policy_id=None, subpolicy_id=None):
+def get_compliances_by_scope(framework_id, policy_id=None, subpolicy_id=None, tenant_id=None):
     """
     Helper function to get compliances based on assignment scope
+    MULTI-TENANCY: Requires tenant_id parameter for data isolation
     """
     try:
         if subpolicy_id:
             # Case 3: Specific SubPolicy
-            return Compliance.objects.filter(SubPolicyId=subpolicy_id)
+            return Compliance.objects.filter(SubPolicyId=subpolicy_id, tenant_id=tenant_id)
         elif policy_id:
             # Case 2: Specific Policy - get all compliances from its subpolicies
-            subpolicies = SubPolicy.objects.filter(PolicyId=policy_id)
-            return Compliance.objects.filter(SubPolicyId__in=subpolicies)
+            subpolicies = SubPolicy.objects.filter(PolicyId=policy_id, tenant_id=tenant_id)
+            return Compliance.objects.filter(SubPolicyId__in=subpolicies, tenant_id=tenant_id)
         else:
             # Case 1: Entire Framework - get all compliances from all policies and their subpolicies
-            policies = Policy.objects.filter(FrameworkId=framework_id)
-            subpolicies = SubPolicy.objects.filter(PolicyId__in=policies)
-            return Compliance.objects.filter(SubPolicyId__in=subpolicies)
+            policies = Policy.objects.filter(FrameworkId=framework_id, tenant_id=tenant_id)
+            subpolicies = SubPolicy.objects.filter(PolicyId__in=policies, tenant_id=tenant_id)
+            return Compliance.objects.filter(SubPolicyId__in=subpolicies, tenant_id=tenant_id)
     except Exception as e:
         print(f"Error in get_compliances_by_scope: {str(e)}")
         return Compliance.objects.none()
@@ -158,15 +184,21 @@ def get_compliances_by_scope(framework_id, policy_id=None, subpolicy_id=None):
 @api_view(['GET'])
 @permission_classes([AuditAssignPermission])
 @audit_assign_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_assign_data(request):
     """
     Fetch frameworks, policies, subpolicies, and users for assignment data
+    MULTI-TENANCY: Only returns data for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
-        frameworks = Framework.objects.all().values('FrameworkId', 'FrameworkName')
-        policies = Policy.objects.all().values('PolicyId', 'PolicyName', 'FrameworkId_id')
-        subpolicies = SubPolicy.objects.all().values('SubPolicyId', 'SubPolicyName', 'PolicyId_id')
-        users = Users.objects.all().values('UserId', 'UserName')
+        frameworks = Framework.objects.filter(tenant_id=tenant_id).values('FrameworkId', 'FrameworkName')
+        policies = Policy.objects.filter(tenant_id=tenant_id).values('PolicyId', 'PolicyName', 'FrameworkId_id')
+        subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id).values('SubPolicyId', 'SubPolicyName', 'PolicyId_id')
+        users = Users.objects.filter(tenant_id=tenant_id).values('UserId', 'UserName')
 
         # Transform field names for frontend compatibility
         formatted_policies = []
@@ -198,10 +230,16 @@ def get_assign_data(request):
 @api_view(['GET'])
 @permission_classes([AuditViewAllPermission])
 @audit_view_all_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_all_audits(request):
     """
     Fetch all audits with related data for display in the audit table
+    MULTI-TENANCY: Only returns audits for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print("DEBUG: get_all_audits was called")
         
@@ -257,6 +295,7 @@ def get_all_audits(request):
                 LEFT JOIN 
                     audit_findings af ON a.AuditId = af.AuditId
                 WHERE 1=1
+                    AND a.TenantId = %s
                     {where_clause}
                 GROUP BY 
                     a.AuditId, a.Title, f.FrameworkName, p.PolicyName, sp.SubPolicyName, 
@@ -264,7 +303,14 @@ def get_all_audits(request):
                 ORDER BY 
                     a.AuditId DESC
             """
-            cursor.execute(query, params)
+            # MULTI-TENANCY: Add tenant_id to params
+            if isinstance(params, dict):
+                params['tenant_id'] = tenant_id
+                # Convert dict params to list for execute
+                execute_params = [tenant_id] + list(params.values())
+            else:
+                execute_params = [tenant_id] + (params if isinstance(params, list) else [])
+            cursor.execute(query, execute_params)
             print("DEBUG: SQL query executed successfully")
             columns = [col[0] for col in cursor.description]
             print(f"DEBUG: Result columns: {columns}")
@@ -311,10 +357,16 @@ def get_all_audits(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_all_audits_public(request):
     """
     Fetch all audits with related data for display in the audit table (public access)
+    MULTI-TENANCY: Only returns audits for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print("DEBUG: get_all_audits_public was called")
         # Using raw SQL for better performance and to join multiple tables
@@ -359,12 +411,14 @@ def get_all_audits_public(request):
                     users reviewer_user ON a.reviewer = reviewer_user.UserId
                 LEFT JOIN 
                     audit_findings af ON a.AuditId = af.AuditId
+                WHERE 
+                    a.TenantId = %s
                 GROUP BY 
                     a.AuditId, a.Title, f.FrameworkName, p.PolicyName, sp.SubPolicyName, 
                     auditor_user.UserName, a.DueDate, a.Frequency, reviewer_user.UserName, a.AuditType
                 ORDER BY 
                     a.AuditId DESC
-            """)
+            """, [tenant_id])
             print("DEBUG: SQL query executed successfully")
             columns = [col[0] for col in cursor.description]
             print(f"DEBUG: Result columns: {columns}")
@@ -414,11 +468,17 @@ def get_all_audits_public(request):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditConductPermission])
 @audit_conduct_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_my_audits(request):
     """
     Fetch audits assigned to the current user (as auditor)
     Uses JWT authentication to get user_id
+    MULTI-TENANCY: Only returns audits for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print("DEBUG: get_my_audits was called")
         
@@ -439,7 +499,7 @@ def get_my_audits(request):
         print(f"DEBUG: Framework filter for my_audits: {params.get('framework_id', 'None')}")
         
         # Merge parameters
-        query_params = {'user_id': user_id}
+        query_params = {'user_id': user_id, 'tenant_id': tenant_id}
         query_params.update(params)
         
         # Using raw SQL to join multiple tables and get comprehensive data
@@ -489,6 +549,7 @@ def get_my_audits(request):
                     audit_findings af ON a.AuditId = af.AuditId
                 WHERE 
                     a.auditor = %(user_id)s
+                    AND a.TenantId = %(tenant_id)s
                     {where_clause}
                 GROUP BY 
                     a.AuditId, a.Title, f.FrameworkName, p.PolicyName, sp.SubPolicyName, 
@@ -582,10 +643,16 @@ def get_my_audits(request):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditViewPermission])
 @audit_view_reports_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_audit_details(request, audit_id):
     """
     Fetch detailed information for a specific audit including compliance items
+    MULTI-TENANCY: Only returns audit details for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
 
         print("api--------------------------------------------------------",audit_id)
@@ -597,7 +664,7 @@ def get_audit_details(request, audit_id):
         
         # Check if audit exists
         try:
-            audit = Audit.objects.get(AuditId=audit_id)
+            audit = Audit.objects.get(AuditId=audit_id, tenant_id=tenant_id)
             print(f"DEBUG: Found audit record with ID {audit_id}")
         except Audit.DoesNotExist:
             print(f"DEBUG: Audit with ID {audit_id} not found")
@@ -885,10 +952,16 @@ def create_audit_version(audit_id, user_id, custom_version=None):
         return None
  
 @api_view(['GET'])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def check_audit_reports(request):
     """
     Check for existing audit reports based on framework, policy, and subpolicy IDs
+    MULTI-TENANCY: Only returns reports for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         framework_id = request.GET.get('framework_id')
         policy_id = request.GET.get('policy_id')
@@ -910,9 +983,9 @@ def check_audit_reports(request):
                 JOIN users auditor ON a.auditor = auditor.UserId
                 LEFT JOIN users reviewer ON a.reviewer = reviewer.UserId
             WHERE 
-                ar.FrameworkId = %s
+                ar.FrameworkId = %s AND a.TenantId = %s
         """
-        params = [framework_id]
+        params = [framework_id, tenant_id]
 
         if policy_id:
             query += " AND ar.PolicyId = %s"
@@ -946,12 +1019,18 @@ def check_audit_reports(request):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_users(request):
     """
     Get all users for allocation
+    MULTI-TENANCY: Only returns users for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
-        users = Users.objects.all()
+        users = Users.objects.filter(tenant_id=tenant_id)
         serializer = UserSerializer(users, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as e:
@@ -962,14 +1041,21 @@ def get_users(request):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditConductPermission])
 @audit_conduct_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def update_audit_status(request, audit_id):
-    """Update the status of an audit"""
+    """Update the status of an audit
+    MULTI-TENANCY: Only updates audits in user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print(f"DEBUG: Updating status for audit_id={audit_id}")
         print(f"DEBUG: Request data: {request.data}")
         
         # Get the audit record
-        audit = Audit.objects.get(AuditId=audit_id)
+        audit = Audit.objects.get(AuditId=audit_id, tenant_id=tenant_id)
         old_status = audit.Status
         new_status = request.data.get('status')
         
@@ -987,7 +1073,7 @@ def update_audit_status(request, audit_id):
             try:
                 # Need to get the reviewer information from the system - may need to adjust this based on your data model
                 # For now, assuming a system administrator or specific reviewer is configured
-                admin_users = Users.objects.filter(Role__contains='Admin')
+                admin_users = Users.objects.filter(Role__contains='Admin', tenant_id=tenant_id)
                 reviewer_emails = [admin.email for admin in admin_users if hasattr(admin, 'email')]
                 
                 # Send notification to each administrator/reviewer
@@ -1160,20 +1246,26 @@ def update_audit_status(request, audit_id):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_audit_status(request, audit_id):
     """
     Get just the status of a specific audit
+    MULTI-TENANCY: Only returns status for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print(f"DEBUG: get_audit_status called for audit_id: {audit_id}")
         
         try:
-            audit = Audit.objects.get(AuditId=audit_id)
+            audit = Audit.objects.get(AuditId=audit_id, tenant_id=tenant_id)
         except Audit.DoesNotExist:
             return Response({'error': 'Audit not found'}, status=status.HTTP_404_NOT_FOUND)
         
         # Get all audit findings
-        findings = AuditFinding.objects.filter(AuditId=audit_id)
+        findings = AuditFinding.objects.filter(AuditId=audit_id, tenant_id=tenant_id)
         total_findings = findings.count()
         
         # Count findings with different statuses
@@ -1226,12 +1318,18 @@ def get_audit_status(request, audit_id):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_all_compliance(request):
     """
     Get all compliance items
+    MULTI-TENANCY: Only returns compliance items for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
-        compliance_items = Compliance.objects.all()
+        compliance_items = Compliance.objects.filter(tenant_id=tenant_id)
         return Response({
             'count': len(compliance_items),
             'message': f'Found {len(compliance_items)} compliance items'
@@ -1243,10 +1341,16 @@ def get_all_compliance(request):
 @csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def create_compliance(request):
     """
     Create a new compliance item
+    MULTI-TENANCY: Only creates compliance items for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         from datetime import date
         
@@ -1262,7 +1366,7 @@ def create_compliance(request):
         
         # Get or validate SubPolicy
         try:
-            subpolicy = SubPolicy.objects.get(SubPolicyId=subpolicy_id)
+            subpolicy = SubPolicy.objects.get(SubPolicyId=subpolicy_id, tenant_id=tenant_id)
         except SubPolicy.DoesNotExist:
             return Response({'error': f'Subpolicy with ID {subpolicy_id} does not exist'}, 
                           status=status.HTTP_404_NOT_FOUND)
@@ -1270,6 +1374,7 @@ def create_compliance(request):
         # Create compliance item with default values for required fields
         compliance = Compliance.objects.create(
             SubPolicyId=subpolicy,
+            tenant_id=tenant_id,
             ComplianceItemDescription=description,
             IsRisk=request.data.get('is_risk', False),
             PossibleDamage=request.data.get('possible_damage', ''),
@@ -1298,12 +1403,18 @@ def create_compliance(request):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_compliance_by_subpolicy(request, subpolicy_id):
     """
     Get compliance items for a specific subpolicy
+    MULTI-TENANCY: Only returns compliance items for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
-        compliance_items = Compliance.objects.filter(SubPolicyId=subpolicy_id)
+        compliance_items = Compliance.objects.filter(SubPolicyId=subpolicy_id, tenant_id=tenant_id)
         from ...serializers import ComplianceSerializer
         serializer = ComplianceSerializer(compliance_items, many=True)
         return Response({
@@ -1316,16 +1427,22 @@ def get_compliance_by_subpolicy(request, subpolicy_id):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_audit_compliances(request, audit_id):
     """
     Get all compliances organized by policy and subpolicy hierarchy for a specific audit
+    MULTI-TENANCY: Only returns compliances for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print(f"DEBUG: get_audit_compliances called for audit_id: {audit_id}")
         
         # Check if audit exists
         try:
-            audit = Audit.objects.get(AuditId=audit_id)
+            audit = Audit.objects.get(AuditId=audit_id, tenant_id=tenant_id)
         except Audit.DoesNotExist:
             return Response({'error': 'Audit not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -1361,10 +1478,10 @@ def get_audit_compliances(request, audit_id):
                 JOIN 
                     policies p ON sp.PolicyId = p.PolicyId
                 WHERE 
-                    af.AuditId = %s
+                    af.AuditId = %s AND af.tenant_id = %s
                 ORDER BY 
                     p.PolicyId, sp.SubPolicyId, c.ComplianceId
-            """, [audit_id])
+            """, [audit_id, tenant_id])
             
             columns = [col[0] for col in cursor.description]
             findings = [dict(zip(columns, row)) for row in cursor.fetchall()]
@@ -1698,8 +1815,15 @@ def get_initial_audit_data(audit_id, compliance_id=None):
 @csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def update_audit_finding(request, compliance_id):
-    """Update an audit finding for a specific compliance item"""
+    """Update an audit finding for a specific compliance item
+    MULTI-TENANCY: Only updates findings for audits in user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     print(f"DEBUG: update_audit_finding called for compliance_id: {compliance_id}")
     print(f"DEBUG: Full request data: {request.data}")
     
@@ -1715,7 +1839,7 @@ def update_audit_finding(request, compliance_id):
         
         # Get the AuditFinding record using the audit_id from session
         try:
-            finding = AuditFinding.objects.get(ComplianceId=compliance_id, AuditId=audit_id)
+            finding = AuditFinding.objects.get(ComplianceId=compliance_id, AuditId=audit_id, tenant_id=tenant_id)
             print(f"DEBUG: Found AuditFinding with AuditId {audit_id}, ComplianceId {compliance_id}")
         except AuditFinding.DoesNotExist:
             print(f"ERROR: No finding found for compliance_id {compliance_id} with audit_id {audit_id}")
@@ -2236,10 +2360,16 @@ def add_majorminor_column(request):
 #         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
  
 @api_view(['GET'])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def fix_subpolicy_version_field(request):
     """
     Check and fix the Version field in the subpolicies table
+    MULTI-TENANCY: Only affects subpolicies for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         with connection.cursor() as cursor:
             # Check if the Version column exists
@@ -2298,11 +2428,17 @@ def fix_subpolicy_version_field(request):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditReviewPermission])
 @audit_review_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_my_reviews(request):
     """
     Fetch audits assigned to the current user (as reviewer)
     Uses JWT authentication to get user_id
+    MULTI-TENANCY: Only returns audits for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print("DEBUG: get_my_reviews was called")
 
@@ -2428,7 +2564,7 @@ def get_my_reviews(request):
             print(f"DEBUG: Framework filter for my_reviews: {fw_params.get('framework_id', 'None')}")
             
             # Merge parameters
-            query_params = {'user_id': user_id}
+            query_params = {'user_id': user_id, 'tenant_id': tenant_id}
             query_params.update(fw_params)
             
             query = f"""
@@ -2450,6 +2586,7 @@ def get_my_reviews(request):
                     audit_findings af ON a.AuditId = af.AuditId
                 WHERE 
                     a.reviewer = %(user_id)s
+                    AND a.TenantId = %(tenant_id)s
                     {where_clause}
                 GROUP BY 
                     {group_by_clause}
@@ -2594,12 +2731,17 @@ def get_my_reviews(request):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditConductPermission])
 @audit_conduct_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def upload_evidence(request, compliance_id):
     """
     Upload evidence for a specific audit finding
     - Supports auto-save functionality with tracking
     - Integrates with S3 storage for file uploads
+    MULTI-TENANCY: Only uploads evidence for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     try:
         is_auto_save = request.POST.get('auto_save', 'false').lower() == 'true'
         print(f"DEBUG: upload_evidence called for compliance_id: {compliance_id} (auto-save: {is_auto_save})")
@@ -2774,19 +2916,25 @@ def upload_evidence(request, compliance_id):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditConductPermission])
 @audit_conduct_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def submit_audit_findings(request, audit_id):
     """
     Mark an audit as ready for review and submit all findings.
     This is explicitly called when the auditor clicks "Submit for Review" button,
     not automatically when changing status.
+    MULTI-TENANCY: Only submits findings for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print(f"DEBUG: submit_audit_findings called for audit_id: {audit_id}")
         print(f"DEBUG: Request data: {request.data}")
         
         # Find the audit
         try:
-            audit = Audit.objects.get(AuditId=audit_id)
+            audit = Audit.objects.get(AuditId=audit_id, tenant_id=tenant_id)
         except Audit.DoesNotExist:
             return Response({'error': 'Audit not found'}, status=status.HTTP_404_NOT_FOUND)
         
@@ -2890,10 +3038,16 @@ def submit_audit_findings(request, audit_id):
 @csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def allocate_policy(request):
     """
     Allocate a policy to users and create audit findings based on the selected scope
+    MULTI-TENANCY: Only allocates policies for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         data = request.data.copy()
         print("="*50)
@@ -3890,8 +4044,10 @@ def get_audit_versions(request, audit_id):
                     audit_version av
                 LEFT JOIN
                     users u ON av.UserId = u.UserId
+                JOIN
+                    audit a ON av.AuditId = a.AuditId
                 WHERE 
-                    av.AuditId = %s
+                    av.AuditId = %s AND a.TenantId = %s
                 ORDER BY 
                     av.Version DESC
             """, [audit_id])
@@ -3958,10 +4114,12 @@ def get_audit_version_details(request, audit_id, version):
                     audit_version av
                 LEFT JOIN
                     users u ON av.UserId = u.UserId
+                JOIN
+                    audit a ON av.AuditId = a.AuditId
                 WHERE 
-                    av.AuditId = %s AND av.Version = %s
+                    av.AuditId = %s AND av.Version = %s AND a.tenant_id = %s
             """
-            cursor.execute(sql_query, [audit_id, version])
+            cursor.execute(sql_query, [audit_id, version, tenant_id])
             
             row = cursor.fetchone()
             if not row:
@@ -4375,10 +4533,16 @@ def save_review_progress(request, audit_id):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def check_audit_version(request, audit_id):
     """
     Debug endpoint to check if an audit version exists for a given audit ID
+    MULTI-TENANCY: Only checks versions for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print(f"DEBUG: check_audit_version called for audit_id: {audit_id}")
         
@@ -4537,13 +4701,19 @@ def get_next_version_number(audit_id, prefix):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditReviewPermission])
 @audit_review_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def load_review_data(request, audit_id):
     """
     Load the latest audit version data when a reviewer clicks 'Continue Review' button
     - Fetches the latest audit version (A-prefix) that is submitted for review
     - Returns the JSON data in a format for the reviewer to start reviewing
     - If any review data already exists (R-prefix), it loads that instead
+    MULTI-TENANCY: Only loads review data for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print(f"DEBUG: load_review_data called for audit_id: {audit_id}")
         
@@ -4576,8 +4746,8 @@ def load_review_data(request, audit_id):
         with connection.cursor() as cursor:
             # Fix SQL query to avoid formatting errors
             cursor.execute(
-                "SELECT Version, ExtractedInfo FROM audit_version WHERE AuditId = %s AND Version LIKE %s ORDER BY Version DESC LIMIT 1",
-                [audit_id, "R%"]
+                "SELECT av.Version, av.ExtractedInfo FROM audit_version av JOIN audit a ON av.AuditId = a.AuditId WHERE av.AuditId = %s AND a.TenantId = %s AND av.Version LIKE %s ORDER BY av.Version DESC LIMIT 1",
+                [audit_id, tenant_id, "R%"]
             )
             
             review_row = cursor.fetchone()
@@ -4702,13 +4872,19 @@ def load_review_data(request, audit_id):
 @csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def update_audit_version_review_data(request, audit_id, version_id):
     """
     Update an existing audit version with new review data
     - Only updates accept_reject and comments fields
     - Preserves all other data
     - Prints the updated JSON before saving
+    MULTI-TENANCY: Only updates versions for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print(f"DEBUG: update_audit_version_review_data called for audit_id: {audit_id}, version_id: {version_id}")
         print(f"DEBUG: Request data: {request.data}")
@@ -4716,10 +4892,11 @@ def update_audit_version_review_data(request, audit_id, version_id):
         # Check if the audit and version exist
         with connection.cursor() as cursor:
             cursor.execute("""
-                SELECT ExtractedInfo 
-                FROM audit_version 
-                WHERE AuditId = %s AND Version = %s
-            """, [audit_id, version_id])
+                SELECT av.ExtractedInfo 
+                FROM audit_version av
+                JOIN audit a ON av.AuditId = a.AuditId
+                WHERE av.AuditId = %s AND av.Version = %s AND a.TenantId = %s
+            """, [audit_id, version_id, tenant_id])
             
             version_row = cursor.fetchone()
             if not version_row:
@@ -4837,6 +5014,8 @@ def update_audit_version_review_data(request, audit_id, version_id):
 @csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def save_review_json(request, audit_id):
     """
     Save review JSON directly to audit_version table
@@ -4844,7 +5023,11 @@ def save_review_json(request, audit_id):
     - Updates only accept_reject and comments fields
     - Preserves all other data
     - Updates latest version instead of creating a new one
+    MULTI-TENANCY: Only saves review JSON for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print(f"DEBUG: save_review_json called for audit_id: {audit_id}")
         
@@ -4855,7 +5038,7 @@ def save_review_json(request, audit_id):
         
         # Find the audit
         try:
-            audit = Audit.objects.get(AuditId=audit_id)
+            audit = Audit.objects.get(AuditId=audit_id, tenant_id=tenant_id)
         except Audit.DoesNotExist:
             return Response({'error': 'Audit not found'}, status=status.HTTP_404_NOT_FOUND)
         
@@ -4872,8 +5055,8 @@ def save_review_json(request, audit_id):
             try:
                 # First look for any existing R-version (reviewer)
                 cursor.execute(
-                    "SELECT Version FROM audit_version WHERE AuditId = %s AND Version LIKE %s ORDER BY Version DESC LIMIT 1", 
-                    [audit_id, "R%"]
+                    "SELECT av.Version FROM audit_version av JOIN audit a ON av.AuditId = a.AuditId WHERE av.AuditId = %s AND a.tenant_id = %s AND av.Version LIKE %s ORDER BY av.Version DESC LIMIT 1", 
+                    [audit_id, tenant_id, "R%"]
                 )
                 version_row = cursor.fetchone()
                 if version_row:
@@ -5032,6 +5215,8 @@ def save_review_json(request, audit_id):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def update_audit_version_table(request):
     """
     Update audit_version table structure to match required schema
@@ -5043,7 +5228,11 @@ def update_audit_version_table(request):
     - ApproverId (int)
     - ApprovedRejected (varchar(45))
     - Date (datetime)
+    MULTI-TENANCY: Only affects audit_version table for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print("DEBUG: update_audit_version_table called")
         
@@ -5168,19 +5357,25 @@ def update_audit_version_table(request):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def load_latest_review_version(request, audit_id):
     """
     Load the latest review version JSON for an audit when a reviewer continues a task
     - Prioritizes loading the latest auditor version (A-prefix) for reviewers to see
     - Falls back to R-prefix (reviewer) versions if no A versions exist
     - Returns the JSON data for the review UI to restore the previous state
+    MULTI-TENANCY: Only loads review versions for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print(f"DEBUG: load_latest_review_version called for audit_id: {audit_id}")
         
         # Check if the audit exists
         try:
-            audit = Audit.objects.get(AuditId=audit_id)
+            audit = Audit.objects.get(AuditId=audit_id, tenant_id=tenant_id)
         except Audit.DoesNotExist:
             return Response({'error': 'Audit not found'}, status=status.HTTP_404_NOT_FOUND)
         
@@ -5392,12 +5587,18 @@ def get_empty_review_structure(audit_id, user_id):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def load_continuing_data(request, audit_id):
     """
     Load the appropriate version data for an auditor continuing after reviewer feedback
     - First checks if there's a reviewer version (R-prefix) that should be loaded
     - Falls back to latest auditor version (A-prefix) if no reviewer version exists
+    MULTI-TENANCY: Only loads continuing data for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print(f"DEBUG: load_continuing_data called for audit_id: {audit_id}")
         
@@ -5520,12 +5721,18 @@ def load_continuing_data(request, audit_id):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def load_audit_continuing_data(request, audit_id):
     """
     Load the appropriate version data for an auditor continuing after reviewer feedback
     - First checks if there's a reviewer version (R-prefix) that should be loaded
     - Falls back to latest auditor version (A-prefix) if no reviewer version exists
+    MULTI-TENANCY: Only loads continuing data for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print(f"DEBUG: load_audit_continuing_data called for audit_id: {audit_id}")
         
@@ -5779,10 +5986,16 @@ def load_audit_continuing_data(request, audit_id):
 @csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def save_audit_version(request, audit_id):
     """
     Save a new version of audit findings when auditor makes changes after review
+    MULTI-TENANCY: Only saves versions for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print(f"\n\n==== DEBUG: save_audit_version called for audit_id: {audit_id} ====")
         
@@ -6025,10 +6238,16 @@ def save_audit_version(request, audit_id):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_latest_reviewer_data(request, audit_id):
     """
     Get the latest reviewer data for an audit to show to the auditor
+    MULTI-TENANCY: Only returns reviewer data for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print(f"DEBUG: get_latest_reviewer_data called for audit_id: {audit_id}")
         
@@ -6106,10 +6325,16 @@ def get_latest_reviewer_data(request, audit_id):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def load_audit_with_reviewer_feedback(request, audit_id):
     """
     Load latest reviewer feedback for an auditor to continue working
+    MULTI-TENANCY: Only loads feedback for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print(f"DEBUG: load_audit_with_reviewer_feedback called for audit_id: {audit_id}")
         
@@ -6230,14 +6455,21 @@ def load_audit_with_reviewer_feedback(request, audit_id):
 @csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def debug_audit_status_transition(request, audit_id):
-    """Debug endpoint for tracking the audit status transition process"""
+    """Debug endpoint for tracking the audit status transition process
+    MULTI-TENANCY: Only debugs audits in user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     print(f"=== DEBUG: Status transition for audit_id={audit_id} ===")
     print(f"DEBUG: Request data: {request.data}")
     
     # Get the audit record
     try:
-        audit = Audit.objects.get(AuditId=audit_id)
+        audit = Audit.objects.get(AuditId=audit_id, tenant_id=tenant_id)
         print(f"DEBUG: Found audit: {audit.AuditId}, current status: {audit.Status}")
         
         # Get all audit findings for this audit
@@ -6267,8 +6499,15 @@ def debug_audit_status_transition(request, audit_id):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def debug_audit_version_schema(request):
-    """Debug endpoint to check the audit_version table schema"""
+    """Debug endpoint to check the audit_version table schema
+    MULTI-TENANCY: Only checks schema for user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         with connection.cursor() as cursor:
             cursor.execute("DESCRIBE audit_version")
@@ -6288,10 +6527,16 @@ def debug_audit_version_schema(request):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditViewPermission])
 @audit_view_reports_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_audit_finding_details(request, audit_findings_id):
     """
     Get detailed information for a specific audit finding by AuditFindingsId
+    MULTI-TENANCY: Only returns finding details for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         with connection.cursor() as cursor:
             cursor.execute("""
@@ -6389,13 +6634,19 @@ def get_audit_finding_details(request, audit_findings_id):
 @csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def save_audit_json_version(request, audit_id):
     """
     Save the complete audit data to the audit_version table
     - This function just saves the JSON to the version table
     - It doesn't update the audit status or the audit_findings table
     - Each compliance in the JSON will have review fields initialized with consistent format
+    MULTI-TENANCY: Only saves JSON versions for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print(f"\n==== DEBUG: save_audit_json_version called for audit_id: {audit_id} ====")
         
@@ -6532,13 +6783,19 @@ def save_audit_json_version(request, audit_id):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def generate_audit_report(request, audit_id):
     """
     Generate and download an audit report in DOCX format
+    MULTI-TENANCY: Only generates reports for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Get the audit details
-        audit = Audit.objects.get(pk=audit_id)
+        audit = Audit.objects.get(pk=audit_id, tenant_id=tenant_id)
         
         # Check if the audit is in ACCEPTED status (ACCEPTED or APPROVED)
         if audit.Status not in ['ACCEPTED', 'APPROVED']:
@@ -6686,8 +6943,15 @@ def generate_audit_report(request, audit_id):
 @csrf_exempt
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditViewPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def export_audit_compliances(request, format, item_type, item_id):
-    """Export audit compliances based on format and item type (framework, policy, subpolicy)"""
+    """Export audit compliances based on format and item type (framework, policy, subpolicy)
+    MULTI-TENANCY: Only exports compliances for user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print(f"Export request received: format={format}, item_type={item_type}, item_id={item_id}")
         

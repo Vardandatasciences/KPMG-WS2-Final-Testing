@@ -26,6 +26,11 @@ import json
 
 # Local imports
 from ...models import Incident, RiskInstance
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
 
 # Helper Functions
 def to_aware_datetime(value):
@@ -120,11 +125,17 @@ def safe_combine_date_time(date_value, time_value=None):
 
 @api_view(['GET'])
 @permission_classes([IncidentAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def incident_mttd(request):
     """
     Calculate Mean Time to Detect (MTTD) metrics from incidents table.
     Returns average time between CreatedAt and IdentifiedAt with trend data.
+    MULTI-TENANCY: Only calculates MTTD for incidents in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     print("incident_mttd called")
     
     from django.apps import apps
@@ -143,11 +154,12 @@ def incident_mttd(request):
         # Get the Incident model from the app registry
         Incident = apps.get_model('grc', 'Incident')
         
-        # Start with incidents that have both timestamps
+        # Start with incidents that have both timestamps, filtered by tenant
         # In this system, CreatedAt can be after IdentifiedAt (incident identified first, then created in system)
         incidents = Incident.objects.filter(
             IdentifiedAt__isnull=False,
-            CreatedAt__isnull=False
+            CreatedAt__isnull=False,
+            tenant_id=tenant_id
         )
         
         # Apply time range filter if specified
@@ -370,7 +382,13 @@ def incident_mttd(request):
 
 @api_view(['GET'])
 @permission_classes([IncidentAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def incident_mttr(request):
+    """MULTI-TENANCY: Only calculates MTTR for incidents in user's tenant"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         time_range = request.GET.get('timeRange', 'all')
         print(f"Calculating MTTR for time range: {time_range}")
@@ -378,18 +396,18 @@ def incident_mttr(request):
         # Import models here to avoid circular imports
         from ...models import Incident, RiskInstance
         
-        # Filter incidents based on time range
+        # Filter incidents based on time range, filtered by tenant
         if time_range == '7days':
             start_date = timezone.now() - timezone.timedelta(days=7)
-            incidents = Incident.objects.filter(IdentifiedAt__gte=start_date)
+            incidents = Incident.objects.filter(IdentifiedAt__gte=start_date, tenant_id=tenant_id)
         elif time_range == '30days':
             start_date = timezone.now() - timezone.timedelta(days=30)
-            incidents = Incident.objects.filter(IdentifiedAt__gte=start_date)
+            incidents = Incident.objects.filter(IdentifiedAt__gte=start_date, tenant_id=tenant_id)
         elif time_range == '90days':
             start_date = timezone.now() - timezone.timedelta(days=90)
-            incidents = Incident.objects.filter(IdentifiedAt__gte=start_date)
+            incidents = Incident.objects.filter(IdentifiedAt__gte=start_date, tenant_id=tenant_id)
         else:
-            incidents = Incident.objects.filter(IdentifiedAt__isnull=False)
+            incidents = Incident.objects.filter(IdentifiedAt__isnull=False, tenant_id=tenant_id)
         
         total_response_time = 0
         count = 0
@@ -403,7 +421,7 @@ def incident_mttr(request):
         for incident in incidents:
             try:
                 # Get all relevant response-related fields from RiskInstance
-                risk_instances = RiskInstance.objects.filter(
+                risk_instances = RiskInstance.objects.filter(tenant_id=tenant_id).filter(tenant_id=tenant_id).filter(
                     IncidentId=incident.IncidentId
                 ).values('CreatedAt', 'FirstResponseAt', 'MitigationCompletedDate', 'RiskInstanceId').order_by('CreatedAt')
                 
@@ -660,7 +678,12 @@ def incident_mttr(request):
 
 @api_view(['GET'])
 @permission_classes([IncidentAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def incident_mttc(request):
+    """MULTI-TENANCY: Only calculates MTTC for incidents in user's tenant"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     """Mean Time to Contain (MTTC) - time from incident identification to containment"""
     try:
         # Import the model here to avoid circular imports
@@ -671,7 +694,7 @@ def incident_mttc(request):
         print(f"Calculating MTTC for time range: {time_range}")
         
         # Get all incidents with containment data
-        risk_instances = RiskInstance.objects.filter(
+        risk_instances = RiskInstance.objects.filter(tenant_id=tenant_id).filter(
             MitigationCompletedDate__isnull=False,
             IncidentId__isnull=False,
         ).values('RiskInstanceId', 'MitigationCompletedDate', 'IncidentId')
@@ -687,7 +710,7 @@ def incident_mttc(request):
         
         if start_date:
             # Filter incidents by identification date
-            filtered_incidents = Incident.objects.filter(
+            filtered_incidents = Incident.objects.filter(tenant_id=tenant_id).filter(
                 IdentifiedAt__gte=start_date
             ).values_list('IncidentId', flat=True)
             
@@ -705,7 +728,8 @@ def incident_mttc(request):
                 # Get the associated incident
                 incident = Incident.objects.filter(
                     IncidentId=ri_data['IncidentId'],
-                    IdentifiedAt__isnull=False
+                    IdentifiedAt__isnull=False,
+                    tenant_id=tenant_id
                 ).first()
                 
                 if not incident:
@@ -832,7 +856,12 @@ def incident_mttc(request):
 
 @api_view(['GET'])
 @permission_classes([IncidentAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def incident_mttrv(request):
+    """MULTI-TENANCY: Only calculates MTTRV for incidents in user's tenant"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     """Mean Time to Resolve (MTTRv) - time from incident creation to resolution"""
     
     try:
@@ -856,7 +885,7 @@ def incident_mttrv(request):
             base_filter['CreatedAt__gte'] = start_date
         
         # First, let's check what incidents we have with the base filter
-        base_incidents = Incident.objects.filter(**base_filter)
+        base_incidents = Incident.objects.filter(tenant_id=tenant_id).filter(**base_filter)
         print(f"Base incidents with filter {base_filter}: {base_incidents.count()}")
         
         # Use a simpler approach - get incidents and their risk instances separately
@@ -864,12 +893,12 @@ def incident_mttrv(request):
         total_hours = 0
         
         # Get all incidents that match our base filter
-        incidents = Incident.objects.filter(**base_filter)
+        incidents = Incident.objects.filter(tenant_id=tenant_id).filter(**base_filter)
         print(f"Processing {incidents.count()} incidents for MTTRv calculation")
         
         for incident in incidents:
             # Get associated risk instances
-            risk_instances = RiskInstance.objects.filter(
+            risk_instances = RiskInstance.objects.filter(tenant_id=tenant_id).filter(
                 IncidentId=incident.IncidentId,
                 MitigationCompletedDate__isnull=False
             )
@@ -1043,9 +1072,14 @@ def incident_mttrv(request):
 
 @api_view(['GET'])
 @permission_classes([IncidentAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def incident_volume(request):
-    # Get all incidents
-    incidents = Incident.objects.all()
+    """MULTI-TENANCY: Only returns volume for incidents in user's tenant"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    # Get all incidents for tenant
+    incidents = Incident.objects.filter(tenant_id=tenant_id)
     
     # Count total incidents
     total_count = incidents.count()
@@ -1084,7 +1118,12 @@ def incident_volume(request):
 
 @api_view(['GET'])
 @permission_classes([IncidentAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def incidents_by_severity(request):
+    """MULTI-TENANCY: Only returns severity data for incidents in user's tenant"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     """Get percentage distribution of incidents by severity (RiskPriority)"""
     try:
         print("[DEBUG] Starting incidents_by_severity function")
@@ -1189,10 +1228,15 @@ def incidents_by_severity(request):
 
 @api_view(['GET'])
 @permission_classes([IncidentAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def incident_root_causes(request):
+    """MULTI-TENANCY: Only returns root causes for incidents in user's tenant"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     try:
-        # Get all incidents from the database
-        incidents = Incident.objects.all()
+        # Get all incidents from the database, filtered by tenant
+        incidents = Incident.objects.filter(tenant_id=tenant_id)
         
         # Count occurrences of each RiskCategory
         category_counts = {}
@@ -1236,10 +1280,15 @@ def incident_root_causes(request):
 
 @api_view(['GET'])
 @permission_classes([IncidentAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def incident_types(request):
+    """MULTI-TENANCY: Only returns types for incidents in user's tenant"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     try:
-        # Get all incidents from the database
-        incidents = Incident.objects.all()
+        # Get all incidents from the database, filtered by tenant
+        incidents = Incident.objects.filter(tenant_id=tenant_id)
         
         # Count occurrences of each RiskCategory
         type_counts = {}
@@ -1283,10 +1332,15 @@ def incident_types(request):
 
 @api_view(['GET'])
 @permission_classes([IncidentAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def incident_origins(request):
+    """MULTI-TENANCY: Only returns origins for incidents in user's tenant"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     try:
-        # Get all incidents from the database
-        incidents = Incident.objects.all()
+        # Get all incidents from the database, filtered by tenant
+        incidents = Incident.objects.filter(tenant_id=tenant_id)
         
         # Define expected origins - these are the origins you specified
         expected_origins = ['Compliance Gap', 'SIEM', 'Manual', 'Audit Finding']
@@ -1358,11 +1412,16 @@ def incident_origins(request):
 
 @api_view(['GET'])
 @permission_classes([IncidentAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def escalation_rate(request):
+    """MULTI-TENANCY: Only returns escalation rate for incidents in user's tenant"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     """Get incident escalation rate data for Scheduled incidents"""
     try:
-        # Get all incidents
-        incidents = Incident.objects.all()
+        # Get all incidents for tenant
+        incidents = Incident.objects.filter(tenant_id=tenant_id)
         total_count = incidents.count()
         
         print(f"[DEBUG] Total incidents: {total_count}")
@@ -1462,14 +1521,19 @@ def escalation_rate(request):
 
 @api_view(['GET'])
 @permission_classes([IncidentAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def repeat_rate(request):
+    """MULTI-TENANCY: Only returns repeat rate for incidents in user's tenant"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     """
     Get the percentage of incidents that are repeats based on the 'repeatednot' field.
     If repeatednot=1, the incident is repeated. If repeatednot=0, the incident is new.
     """
     try:
-        # Get all incidents
-        incidents = Incident.objects.all()
+        # Get all incidents for tenant
+        incidents = Incident.objects.filter(tenant_id=tenant_id)
         total_count = incidents.count()
         
         if total_count == 0:
@@ -1537,14 +1601,20 @@ def repeat_rate(request):
 
 @api_view(['GET'])
 @permission_classes([IncidentAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def incident_cost(request):
+    """MULTI-TENANCY: Only calculates cost for incidents in user's tenant"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print("===============================================")
         print("INCIDENT COST CALCULATION - START")
         print("===============================================")
         
-        # Get all incidents 
-        incidents = Incident.objects.all()
+        # Get all incidents for tenant
+        incidents = Incident.objects.filter(tenant_id=tenant_id)
         print(f"Total incidents found: {incidents.count()}")
         
         # Process incidents with cost data
@@ -1627,8 +1697,14 @@ def incident_cost(request):
 
 @api_view(['GET'])
 @permission_classes([IncidentAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def first_response_time(request):
-    """Get the average time from detection to first analyst response"""
+    """Get the average time from detection to first analyst response
+    MULTI-TENANCY: Only calculates for incidents in user's tenant"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     print("[INFO] Processing first_response_time API call")
 
     timeframe = request.GET.get('timeRange', 'all')
@@ -1646,10 +1722,11 @@ def first_response_time(request):
     
     print(f"[INFO] start_date calculated: {start_date}")
 
-    # Base queryset
+    # Base queryset, filtered by tenant
     queryset = RiskInstance.objects.select_related(None).filter(
         FirstResponseAt__isnull=False,
         IncidentId__isnull=False,
+        tenant_id=tenant_id
     )
     print(f"[INFO] Initial queryset count: {queryset.count()}")
 
@@ -1751,7 +1828,13 @@ def first_response_time(request):
 
 @api_view(['GET'])
 @permission_classes([IncidentAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def false_positive_rate(request):
+    """MULTI-TENANCY: Only calculates false positive rate for incidents in user's tenant"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     print("false_positive_rate called")
 
     # Get parameters
@@ -1778,10 +1861,11 @@ def false_positive_rate(request):
         print(f"Error parsing dates: {e}")
         return JsonResponse({'error': 'Invalid date format'}, status=400)
 
-    # Filter incidents in date range
+    # Filter incidents in date range, filtered by tenant
     incidents_qs = Incident.objects.filter(
         IdentifiedAt__date__gte=start_date,
-        IdentifiedAt__date__lte=end_date
+        IdentifiedAt__date__lte=end_date,
+        tenant_id=tenant_id
     )
     
     total_count = incidents_qs.count()
@@ -1809,7 +1893,13 @@ def false_positive_rate(request):
 
 @api_view(['GET'])
 @permission_classes([IncidentAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def detection_accuracy(request):
+    """MULTI-TENANCY: Only calculates detection accuracy for incidents in user's tenant"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     print("detection_accuracy called")
     
     start_date_str = request.GET.get('start_date')
@@ -1830,7 +1920,7 @@ def detection_accuracy(request):
         end_date = timezone.now().date()
         print(f"No end_date provided, defaulting to today: {end_date}")
 
-    incidents = Incident.objects.filter(IdentifiedAt__isnull=False)
+    incidents = Incident.objects.filter(IdentifiedAt__isnull=False, tenant_id=tenant_id)
 
     if start_date:
         incidents = incidents.filter(IdentifiedAt__date__gte=start_date)
@@ -1888,7 +1978,13 @@ def detection_accuracy(request):
 
 @api_view(['GET'])
 @permission_classes([IncidentAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def incident_closure_rate(request):
+    """MULTI-TENANCY: Only calculates closure rate for incidents in user's tenant"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     time_range = request.GET.get('timeRange', 'all')
     print(f"Received request for Incident Closure Rate with timeRange: {time_range}")
 
@@ -1904,8 +2000,8 @@ def incident_closure_rate(request):
         
     print(f"Filtering incidents from: {start_date if start_date else 'all time'}")
 
-    # Fetch relevant incidents from your Incident model (adjust model and field names)
-    incidents_qs = Incident.objects.all()
+    # Fetch relevant incidents from your Incident model, filtered by tenant
+    incidents_qs = Incident.objects.filter(tenant_id=tenant_id)
     if start_date:
         incidents_qs = incidents_qs.filter(CreatedAt__gte=start_date)
 
@@ -1964,12 +2060,18 @@ def incident_closure_rate(request):
 
 @api_view(['GET'])
 @permission_classes([IncidentAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def incident_reopened_count(request):
-    # Count total incidents
-    total_incidents = Incident.objects.count()
+    """MULTI-TENANCY: Only counts reopened incidents for user's tenant"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
+    # Count total incidents for tenant
+    total_incidents = Incident.objects.filter(tenant_id=tenant_id).count()
 
     # Count reopened incidents (ReopenedNot = 1)
-    reopened_incidents = Incident.objects.filter(ReopenedNot=1).count()
+    reopened_incidents = Incident.objects.filter(ReopenedNot=1, tenant_id=tenant_id).count()
 
     # Calculate percentage reopened safely
     percentage_reopened = (reopened_incidents / total_incidents * 100) if total_incidents > 0 else 0
@@ -1984,11 +2086,16 @@ def incident_reopened_count(request):
 
 @api_view(['GET'])
 @permission_classes([IncidentAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def incident_count(request):
     """
     Calculate the number of incidents detected and daily distribution.
     Returns total count and day-by-day breakdown.
+    MULTI-TENANCY: Only counts incidents for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     print("incident_count called")
     
     from django.db.models import Count
@@ -1998,8 +2105,8 @@ def incident_count(request):
     print(f"Incident count request with timeRange: {time_range}")
     
     try:
-        # Start with all incidents
-        incidents = Incident.objects.all()
+        # Start with all incidents for tenant
+        incidents = Incident.objects.filter(tenant_id=tenant_id)
         
         # Apply time range filter if specified
         now = timezone.now()
@@ -2028,7 +2135,7 @@ def incident_count(request):
             for i in range(6, -1, -1):
                 day_date = now - timezone.timedelta(days=i)
                 # Use the same base incidents queryset but filter by specific date
-                day_incidents = Incident.objects.filter(
+                day_incidents = Incident.objects.filter(tenant_id=tenant_id).filter(
                     CreatedAt__date=day_date.date()
                 ).count()
                 
@@ -2045,7 +2152,7 @@ def incident_count(request):
                 week_start = now - timezone.timedelta(weeks=i+1, days=now.weekday())
                 week_end = week_start + timezone.timedelta(days=6)
                 
-                week_incidents = Incident.objects.filter(
+                week_incidents = Incident.objects.filter(tenant_id=tenant_id).filter(
                     CreatedAt__date__gte=week_start.date(),
                     CreatedAt__date__lte=week_end.date()
                 ).count()
@@ -2060,7 +2167,7 @@ def incident_count(request):
             # Monthly data for last 90 days
             for i in range(2, -1, -1):
                 month_date = now - timezone.timedelta(days=60-i*30)
-                month_incidents = Incident.objects.filter(
+                month_incidents = Incident.objects.filter(tenant_id=tenant_id).filter(
                     CreatedAt__year=month_date.year,
                     CreatedAt__month=month_date.month
                 ).count()
@@ -2075,7 +2182,7 @@ def incident_count(request):
             # Monthly data for last 6 months
             for i in range(5, -1, -1):
                 month_date = now - timezone.timedelta(days=150-i*30)
-                month_incidents = Incident.objects.filter(
+                month_incidents = Incident.objects.filter(tenant_id=tenant_id).filter(
                     CreatedAt__year=month_date.year,
                     CreatedAt__month=month_date.month
                 ).count()
@@ -2120,10 +2227,16 @@ def incident_count(request):
 
 @api_view(['GET'])
 @permission_classes([IncidentAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def incident_metrics(request):
     """
     Fetch all incident metrics at once for the dashboard
+    MULTI-TENANCY: Only returns metrics for incidents in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     print("incident_metrics called")
     
     # Get filter parameters
@@ -2132,8 +2245,8 @@ def incident_metrics(request):
     priority = request.GET.get('priority', 'all')
     
     try:        
-        # Base queryset with filters
-        incidents = Incident.objects.all()
+        # Base queryset with filters, filtered by tenant
+        incidents = Incident.objects.filter(tenant_id=tenant_id)
         
         # Apply filters
         if time_range != 'all':
@@ -2159,9 +2272,9 @@ def incident_metrics(request):
             
         # Calculate basic metrics
         total_incidents = incidents.count()
-        pending_incidents = Incident.objects.filter(Status__iexact='Scheduled').count()
-        rejected_incidents = Incident.objects.filter(Status__iexact='Rejected').count()
-        resolved_incidents = Incident.objects.filter(Status__iexact='Mitigated').count()
+        pending_incidents = Incident.objects.filter(Status__iexact='Scheduled', tenant_id=tenant_id).count()
+        rejected_incidents = Incident.objects.filter(Status__iexact='Rejected', tenant_id=tenant_id).count()
+        resolved_incidents = Incident.objects.filter(Status__iexact='Mitigated', tenant_id=tenant_id).count()
         
         # Calculate MTTD - Mean Time to Detect
         mttd_incidents = incidents.filter(
@@ -2273,22 +2386,28 @@ def incident_metrics(request):
 
 @api_view(['GET'])
 @permission_classes([IncidentAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_incident_counts(request):
     """
     Get counts of incidents by status for the dashboard
+    MULTI-TENANCY: Only returns counts for incidents in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     print("Received request for incident counts")
 
     total_incidents = Incident.objects.count()
     print(f"Total incidents count: {total_incidents}")
 
-    pending_incidents = Incident.objects.filter(Status__iexact='Scheduled').count()
+    pending_incidents = Incident.objects.filter(Status__iexact='Scheduled', tenant_id=tenant_id).count()
     print(f"Pending incidents count (Scheduled): {pending_incidents}")
 
-    accepted_incidents = Incident.objects.filter(Status__iexact='Accepted').count()
+    accepted_incidents = Incident.objects.filter(Status__iexact='Accepted', tenant_id=tenant_id).count()
     print(f"Accepted incidents count: {accepted_incidents}")
     
-    rejected_incidents = Incident.objects.filter(Status__iexact='Rejected').count()
+    rejected_incidents = Incident.objects.filter(Status__iexact='Rejected', tenant_id=tenant_id).count()
     print(f"Rejected incidents count: {rejected_incidents}")
 
     resolved_incidents = Incident.objects.filter(Status__iexact='Mitigated').count()
@@ -2308,10 +2427,16 @@ def get_incident_counts(request):
 
 @api_view(['GET'])
 @permission_classes([IncidentAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def debug_incident_data(request):
     """
     Debug endpoint to show raw incident data for troubleshooting
+    MULTI-TENANCY: Only shows data for incidents in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     print("debug_incident_data called")
     
     from django.apps import apps
@@ -2321,8 +2446,8 @@ def debug_incident_data(request):
         # Get the Incident model from the app registry
         Incident = apps.get_model('grc', 'Incident')
         
-        # Get all incidents with their timestamps
-        all_incidents = list(Incident.objects.values(
+        # Get all incidents with their timestamps, filtered by tenant
+        all_incidents = list(Incident.objects.filter(tenant_id=tenant_id).values(
             'IncidentId', 
             'IncidentTitle', 
             'CreatedAt', 

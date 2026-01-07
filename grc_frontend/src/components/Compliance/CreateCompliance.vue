@@ -2293,7 +2293,13 @@ export default {
           console.log('✅ [CreateCompliance] Using cached framework data');
           const cachedFrameworks = complianceDataService.getData('frameworks') || [];
           
-          this.frameworks = cachedFrameworks.map(fw => ({
+          // Filter to only show active frameworks
+          const activeFrameworks = cachedFrameworks.filter(fw => {
+            const status = fw.ActiveInactive || fw.status || '';
+            return status.toLowerCase() === 'active';
+          });
+          
+          this.frameworks = activeFrameworks.map(fw => ({
             id: fw.FrameworkId || fw.id,
             name: fw.FrameworkName || fw.name
           }));
@@ -2306,7 +2312,13 @@ export default {
           
           // Handle the response data with success wrapper
           if (response.data.success && Array.isArray(response.data.frameworks)) {
-            this.frameworks = response.data.frameworks.map(fw => ({
+            // Filter to only show active frameworks
+            const activeFrameworks = response.data.frameworks.filter(fw => {
+              const status = fw.ActiveInactive || fw.status || '';
+              return status.toLowerCase() === 'active';
+            });
+            
+            this.frameworks = activeFrameworks.map(fw => ({
               id: fw.id || fw.FrameworkId,
               name: fw.name || fw.FrameworkName
             }));
@@ -2316,7 +2328,13 @@ export default {
             complianceDataService.setData('frameworks', response.data.frameworks);
             console.log('ℹ️ [CreateCompliance] Cache updated after direct API fetch');
           } else if (Array.isArray(response.data)) {
-            this.frameworks = response.data.map(fw => ({
+            // Filter to only show active frameworks
+            const activeFrameworks = response.data.filter(fw => {
+              const status = fw.ActiveInactive || fw.status || '';
+              return status.toLowerCase() === 'active';
+            });
+            
+            this.frameworks = activeFrameworks.map(fw => ({
               id: fw.id || fw.FrameworkId,
               name: fw.name || fw.FrameworkName
             }));

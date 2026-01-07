@@ -34,12 +34,23 @@ from ...models import (
 from ...routes.Global.s3_fucntions import create_direct_mysql_client
 from ...utils.file_compression import decompress_if_needed
 
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
+
 # Simple test endpoint
 @api_view(['GET'])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def test_endpoint(request):
     """Simple test endpoint to verify URL routing"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     return Response({
         'success': True,
         'message': 'Event handling endpoints are working!',
@@ -50,8 +61,13 @@ def test_endpoint(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_user_event_permissions(request):
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     Get user's event permissions for frontend RBAC
     """
     try:
@@ -88,21 +104,26 @@ def get_user_event_permissions(request):
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_frameworks_for_events(request):
     """
     Get all frameworks for event creation
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     print("DEBUG: get_frameworks_for_events called")
     print(f"DEBUG: Request path: {request.path}")
     print(f"DEBUG: Request method: {request.method}")
     
     try:
         # Try to get all frameworks first
-        all_frameworks = Framework.objects.all()
+        all_frameworks = Framework.objects.filter(tenant_id=tenant_id)
         print(f"DEBUG: Total frameworks in database: {all_frameworks.count()}")
         
         # Then filter for active ones
-        frameworks = Framework.objects.filter(ActiveInactive='Active').values(
+        frameworks = Framework.objects.filter(tenant_id=tenant_id, ActiveInactive='Active').values(
             'FrameworkId', 'FrameworkName'
         )
         
@@ -111,7 +132,7 @@ def get_frameworks_for_events(request):
         # If no active frameworks, return all frameworks
         if frameworks.count() == 0:
             print("DEBUG: No active frameworks found, returning all frameworks")
-            frameworks = Framework.objects.all().values(
+            frameworks = Framework.objects.filter(tenant_id=tenant_id).values(
                 'FrameworkId', 'FrameworkName'
             )
         
@@ -136,10 +157,15 @@ def get_frameworks_for_events(request):
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_modules_for_events(request):
     """
     Get all modules for event creation (simplified like event types)
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     print("DEBUG: get_modules_for_events called")
     print(f"DEBUG: Request path: {request.path}")
     print(f"DEBUG: Request method: {request.method}")
@@ -177,10 +203,15 @@ def get_modules_for_events(request):
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_event_types_by_framework(request):
     """
     Get event types based on framework selection
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     print("DEBUG: get_event_types_by_framework called")
     try:
         framework_name = request.GET.get('framework_name')
@@ -275,10 +306,15 @@ def get_event_types_by_framework(request):
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def create_event_type(request):
     """
     Create a new event type for a specific framework
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     print("DEBUG: create_event_type called")
     try:
         data = json.loads(request.body)
@@ -346,10 +382,15 @@ def create_event_type(request):
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def update_event_type_subtypes(request, event_type_id):
     """
     Update sub-event types for an existing event type
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     print("DEBUG: update_event_type_subtypes called")
     try:
         data = json.loads(request.body)
@@ -408,6 +449,8 @@ def update_event_type_subtypes(request, event_type_id):
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def create_module(request):
     """
     Create a new module
@@ -471,6 +514,8 @@ def create_module(request):
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_records_by_module(request):
     """
     Get records based on framework and module selection
@@ -505,7 +550,7 @@ def get_records_by_module(request):
             # Fetch policies for the selected framework
             print(f"DEBUG: Fetching policies for framework_id={framework_id}")
             try:
-                policies = Policy.objects.filter(
+                policies = Policy.objects.filter(tenant_id=tenant_id, 
                     FrameworkId=framework_id,
                     ActiveInactive='Active'
                 ).values(
@@ -515,17 +560,17 @@ def get_records_by_module(request):
                 print(f"DEBUG: Found {policies.count()} policies")
                 
                 # Debug: Check if there are any policies at all
-                all_policies = Policy.objects.all().count()
+                all_policies = Policy.objects.filter(tenant_id=tenant_id).count()
                 print(f"DEBUG: Total policies in database: {all_policies}")
                 
                 # Debug: Check policies for this framework regardless of status
-                framework_policies = Policy.objects.filter(FrameworkId=framework_id).count()
+                framework_policies = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=framework_id).count()
                 print(f"DEBUG: Total policies for framework {framework_id}: {framework_policies}")
                 
                 # If no active policies found, try to get any policies for this framework
                 if policies.count() == 0:
                     print(f"DEBUG: No active policies found, trying to get any policies for framework {framework_id}")
-                    policies = Policy.objects.filter(
+                    policies = Policy.objects.filter(tenant_id=tenant_id, 
                         FrameworkId=framework_id
                     ).values(
                         'PolicyId', 'PolicyName', 'PolicyDescription', 
@@ -552,7 +597,7 @@ def get_records_by_module(request):
         elif 'compliance' in module_lower:
             # Fetch compliance records for the selected framework
             print(f"DEBUG: Fetching compliance records for framework_id={framework_id}")
-            compliances = Compliance.objects.filter(
+            compliances = Compliance.objects.filter(tenant_id=tenant_id, 
                 SubPolicy__Policy__FrameworkId=framework_id,
                 ActiveInactive='Active'
             ).select_related('SubPolicy__Policy').values(
@@ -575,7 +620,7 @@ def get_records_by_module(request):
         elif 'audit' in module_lower:
             # Fetch audits for the selected framework
             print(f"DEBUG: Fetching audits for framework_id={framework_id}")
-            audits = Audit.objects.filter(
+            audits = Audit.objects.filter(tenant_id=tenant_id, 
                 FrameworkId=framework_id
             ).values(
                 'AuditId', 'Title', 'Scope', 'Status', 'AuditType'
@@ -595,7 +640,7 @@ def get_records_by_module(request):
         elif 'risk' in module_lower:
             # Fetch risks (these might not be directly linked to frameworks)
             print(f"DEBUG: Fetching risks for framework_id={framework_id}")
-            risks = Risk.objects.all().values(
+            risks = Risk.objects.filter(tenant_id=tenant_id).values(
                 'RiskId', 'RiskTitle', 'RiskDescription'
             )
             print(f"DEBUG: Found {risks.count()} risks")
@@ -612,7 +657,7 @@ def get_records_by_module(request):
         elif 'incident' in module_lower:
             # Fetch incidents
             print(f"DEBUG: Fetching incidents for framework_id={framework_id}")
-            incidents = Incident.objects.all().values(
+            incidents = Incident.objects.filter(tenant_id=tenant_id).values(
                 'IncidentId', 'IncidentTitle', 'Description', 'Status'
             )
             print(f"DEBUG: Found {incidents.count()} incidents")
@@ -629,7 +674,7 @@ def get_records_by_module(request):
         elif 'subpolicy' in module_lower:
             # Fetch subpolicies for the selected framework
             print(f"DEBUG: Fetching subpolicies for framework_id={framework_id}")
-            subpolicies = SubPolicy.objects.filter(
+            subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, 
                 Policy__FrameworkId=framework_id
             ).select_related('Policy').values(
                 'SubPolicyId', 'SubPolicyName', 'Description', 
@@ -678,15 +723,20 @@ def get_records_by_module(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_event_templates(request):
     """
     Get event templates for the template section
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     print("DEBUG: get_event_templates called")
     try:
         # Check if Event table exists, if not return empty templates
         try:
-            templates = Event.objects.filter(
+            templates = Event.objects.filter(tenant_id=tenant_id, 
                 IsTemplate=True,
                 Status='Approved'
             ).values(
@@ -733,6 +783,8 @@ def get_event_templates(request):
 @permission_classes([EventCreatePermission])
 @csrf_exempt
 @require_consent('create_event')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def create_event(request):
     """
     Create a new event
@@ -769,7 +821,7 @@ def create_event(request):
         framework_obj = None
         if framework_id:
             try:
-                framework_obj = Framework.objects.get(FrameworkId=framework_id)
+                framework_obj = Framework.objects.get(FrameworkId=framework_id, tenant_id=tenant_id)
                 print(f"DEBUG: Found framework: {framework_obj.FrameworkName}")
             except Framework.DoesNotExist:
                 print(f"DEBUG: Framework with ID {framework_id} not found")
@@ -784,14 +836,14 @@ def create_event(request):
         
         if data.get('owner_id'):
             try:
-                owner_obj = Users.objects.get(UserId=data.get('owner_id'))
+                owner_obj = Users.objects.get(UserId=data.get('owner_id', tenant_id=tenant_id))
                 print(f"DEBUG: Found owner: {owner_obj.FirstName} {owner_obj.LastName}")
             except Users.DoesNotExist:
                 print(f"DEBUG: Owner with ID {data.get('owner_id')} not found")
         
         if data.get('reviewer_id'):
             try:
-                reviewer_obj = Users.objects.get(UserId=data.get('reviewer_id'))
+                reviewer_obj = Users.objects.get(UserId=data.get('reviewer_id', tenant_id=tenant_id))
                 print(f"DEBUG: Found reviewer: {reviewer_obj.FirstName} {reviewer_obj.LastName}")
             except Users.DoesNotExist:
                 print(f"DEBUG: Reviewer with ID {data.get('reviewer_id')} not found")
@@ -961,7 +1013,7 @@ def create_event(request):
             'EndDate': end_date,
             'Status': data.get('status', initial_status),
             'Priority': data.get('priority', 'Medium'),
-            'CreatedBy': Users.objects.get(UserId=user_id) if user_id else None,
+            'CreatedBy': Users.objects.get(UserId=user_id, tenant_id=tenant_id) if user_id else None,
             'Owner': owner_obj,
             'Reviewer': reviewer_obj,
             'IsTemplate': is_template,
@@ -1005,7 +1057,7 @@ def create_event(request):
                     additional_framework_obj = None
                     if additional_record.get('framework_id'):
                         try:
-                            additional_framework_obj = Framework.objects.get(FrameworkId=additional_record['framework_id'])
+                            additional_framework_obj = Framework.objects.get(FrameworkId=additional_record['framework_id'], tenant_id=tenant_id)
                             print(f"DEBUG: Found additional framework: {additional_framework_obj.FrameworkName}")
                         except Framework.DoesNotExist:
                             print(f"DEBUG: Additional framework with ID {additional_record['framework_id']} not found")
@@ -1031,7 +1083,7 @@ def create_event(request):
                         'EndDate': end_date,
                         'Status': data.get('status', initial_status),
                         'Priority': data.get('priority', 'Medium'),
-                        'CreatedBy': Users.objects.get(UserId=user_id) if user_id else None,
+                        'CreatedBy': Users.objects.get(UserId=user_id, tenant_id=tenant_id) if user_id else None,
                         'Owner': owner_obj,
                         'Reviewer': reviewer_obj,
                         'IsTemplate': is_template,
@@ -1152,7 +1204,7 @@ def create_event(request):
                 # Send notifications for additional events if any
                 for additional_event_dict in created_events[1:]:
                     try:
-                        additional_event = Event.objects.get(EventId=additional_event_dict['EventId'])
+                        additional_event = Event.objects.get(EventId=additional_event_dict['EventId'], tenant_id=tenant_id)
                         send_event_notifications(additional_event, is_assigned=(additional_event.Owner is not None or additional_event.Reviewer is not None))
                     except Event.DoesNotExist:
                         pass
@@ -1193,10 +1245,15 @@ def create_event(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_events(request):
     """
     Get all events with optional filtering
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         # Get user ID for RBAC filtering
         user_id = RBACUtils.get_user_id_from_request(request)
@@ -1303,10 +1360,15 @@ def get_events(request):
 @api_view(['GET'])
 @permission_classes([EventViewAllPermission, EventViewModulePermission])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_document_handling_events(request):
     """
     Get document handling events from file_operations table
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         print("DEBUG: get_document_handling_events called")
         # Get user ID for RBAC filtering
@@ -1402,11 +1464,16 @@ def get_document_handling_events(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_events_list(request):
     """
     Get list of all events (including templates and RiskaVaire events)
     Shows comprehensive view of all events in the system
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         import random
         
@@ -1426,7 +1493,7 @@ def get_events_list(request):
             from ...models import Framework, Module
             
             # Fetch all active frameworks
-            frameworks = Framework.objects.filter(ActiveInactive='Active').values_list('FrameworkName', flat=True)
+            frameworks = Framework.objects.filter(tenant_id=tenant_id, ActiveInactive='Active').values_list('FrameworkName', flat=True)
             available_frameworks = list(frameworks)
             
             # Fetch all modules (Module model doesn't have is_active field)
@@ -1484,7 +1551,7 @@ def get_events_list(request):
                 
                 # Get the current user for sample events
                 try:
-                    current_user = Users.objects.get(UserId=user_id)
+                    current_user = Users.objects.get(UserId=user_id, tenant_id=tenant_id)
                     print(f"DEBUG: Using current user {user_id} for sample events")
                 except Users.DoesNotExist:
                     print(f"DEBUG: Current user {user_id} not found, using first available user")
@@ -1673,10 +1740,15 @@ def get_events_list(request):
 @api_view(['GET'])
 @permission_classes([EventViewAllPermission, EventViewModulePermission])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_event_details(request, event_id):
     """
     Get detailed information about a specific event
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         print(f"DEBUG: Fetching event details for ID: {event_id}")
         event = Event.objects.select_related(
@@ -1790,6 +1862,8 @@ def get_event_details(request, event_id):
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_current_user(request):
     """
     Get current logged-in user information
@@ -1803,7 +1877,7 @@ def get_current_user(request):
                 'message': 'User ID is required'
             }, status=400)
         
-        user = Users.objects.get(UserId=user_id)
+        user = Users.objects.get(UserId=user_id, tenant_id=tenant_id)
         user_data = {
             'id': user.UserId,
             'name': f"{user.FirstName} {user.LastName}".strip(),
@@ -1834,6 +1908,8 @@ def get_current_user(request):
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def test_dynamic_fields_endpoint(request):
     """
     Test endpoint to verify URL routing is working
@@ -1850,6 +1926,8 @@ def test_dynamic_fields_endpoint(request):
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_dynamic_fields_for_event(request):
     """
     Get dynamic fields configuration based on framework and event type selection
@@ -2095,6 +2173,8 @@ def parse_event_subtype_config(sub_event_config, sub_event_type_name):
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_users_for_reviewer(request):
     """
     Get all users except the current user for reviewer selection
@@ -2138,13 +2218,18 @@ def get_users_for_reviewer(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_events_for_calendar(request):
     """
     Get events for calendar display (recurring events only, including all event types)
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         # Get only recurring events for calendar - include ALL events
-        events_query = Event.objects.filter(
+        events_query = Event.objects.filter(tenant_id=tenant_id, 
             RecurrenceType='Recurring',
             IsTemplate=False
         ).select_related(
@@ -2200,6 +2285,8 @@ def get_events_for_calendar(request):
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def create_events_table(request):
     """
     Create the events table if it doesn't exist
@@ -2290,10 +2377,15 @@ def create_events_table(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def fix_events_table_schema(request):
     """
     Fix the events table schema by adding missing columns
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         from django.db import connection
         
@@ -2358,10 +2450,15 @@ def fix_events_table_schema(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_events_dashboard(request):
     """
     Get events dashboard analytics and KPIs with optional filters
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         from django.db.models import Count, Q
         from datetime import datetime, timedelta
@@ -2376,7 +2473,7 @@ def get_events_dashboard(request):
         
         # Build base query with filters - include ALL events (including RiskaVaire events)
         # Show all events in the dashboard for comprehensive view
-        base_query = Event.objects.filter(IsTemplate=False)
+        base_query = Event.objects.filter(tenant_id=tenant_id, IsTemplate=False)
         
         # Apply framework filtering using the standard framework filter helper
         from ..Policy.framework_filter_helper import apply_framework_filter, get_framework_filter_info
@@ -2571,6 +2668,8 @@ def get_events_dashboard(request):
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def approve_event(request, event_id):
     """
     Approve an event (reviewer action)
@@ -2588,7 +2687,7 @@ def approve_event(request, event_id):
         
         # Get the event
         try:
-            event = Event.objects.get(EventId=event_id)
+            event = Event.objects.get(EventId=event_id, tenant_id=tenant_id)
         except Event.DoesNotExist:
             return Response({
                 'success': False,
@@ -2629,7 +2728,7 @@ def approve_event(request, event_id):
             from datetime import datetime as dt
             
             # Get actor name
-            actor = Users.objects.filter(UserId=user_id).first()
+            actor = Users.objects.filter(tenant_id=tenant_id, UserId=user_id).first()
             actor_name = actor.UserName if actor else 'System'
             
             # Collect recipients
@@ -2708,6 +2807,8 @@ def approve_event(request, event_id):
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def reject_event(request, event_id):
     """
     Reject an event (reviewer action)
@@ -2725,7 +2826,7 @@ def reject_event(request, event_id):
         
         # Get the event
         try:
-            event = Event.objects.get(EventId=event_id)
+            event = Event.objects.get(EventId=event_id, tenant_id=tenant_id)
         except Event.DoesNotExist:
             return Response({
                 'success': False,
@@ -2766,7 +2867,7 @@ def reject_event(request, event_id):
             from datetime import datetime as dt
             
             # Get actor name
-            actor = Users.objects.filter(UserId=user_id).first()
+            actor = Users.objects.filter(tenant_id=tenant_id, UserId=user_id).first()
             actor_name = actor.UserName if actor else 'System'
             
             # Collect recipients
@@ -2845,6 +2946,8 @@ def reject_event(request, event_id):
 @permission_classes([EventEditPermission])
 @authentication_classes([CsrfExemptSessionAuthentication])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def update_event(request, event_id):
     """Update an event"""
     try:
@@ -2859,7 +2962,7 @@ def update_event(request, event_id):
         
         # Get the event
         try:
-            event = Event.objects.get(EventId=event_id)
+            event = Event.objects.get(EventId=event_id, tenant_id=tenant_id)
         except Event.DoesNotExist:
             return Response({
                 'success': False,
@@ -2953,7 +3056,7 @@ def update_event(request, event_id):
                 owner_name = data['owner'].strip()
                 if ' ' in owner_name:
                     first_name, last_name = owner_name.split(' ', 1)
-                    owner_user = Users.objects.filter(
+                    owner_user = Users.objects.filter(tenant_id=tenant_id, 
                         FirstName__iexact=first_name.strip(),
                         LastName__iexact=last_name.strip()
                     ).first()
@@ -2961,7 +3064,8 @@ def update_event(request, event_id):
                     # If no space, try to find by first name or last name
                     owner_user = Users.objects.filter(
                         models.Q(FirstName__iexact=owner_name) | 
-                        models.Q(LastName__iexact=owner_name)
+                        models.Q(LastName__iexact=owner_name),
+                        tenant_id=tenant_id
                     ).first()
                 
                 if owner_user:
@@ -2978,7 +3082,7 @@ def update_event(request, event_id):
                 reviewer_name = data['reviewer'].strip()
                 if ' ' in reviewer_name:
                     first_name, last_name = reviewer_name.split(' ', 1)
-                    reviewer_user = Users.objects.filter(
+                    reviewer_user = Users.objects.filter(tenant_id=tenant_id, 
                         FirstName__iexact=first_name.strip(),
                         LastName__iexact=last_name.strip()
                     ).first()
@@ -2986,7 +3090,8 @@ def update_event(request, event_id):
                     # If no space, try to find by first name or last name
                     reviewer_user = Users.objects.filter(
                         models.Q(FirstName__iexact=reviewer_name) | 
-                        models.Q(LastName__iexact=reviewer_name)
+                        models.Q(LastName__iexact=reviewer_name),
+                        tenant_id=tenant_id
                     ).first()
                 
                 if reviewer_user:
@@ -3009,7 +3114,7 @@ def update_event(request, event_id):
                 from datetime import datetime as dt
                 
                 # Get actor name
-                actor = Users.objects.filter(UserId=user_id).first()
+                actor = Users.objects.filter(tenant_id=tenant_id, UserId=user_id).first()
                 actor_name = actor.UserName if actor else 'System'
                 
                 # Collect recipients
@@ -3105,6 +3210,8 @@ def update_event(request, event_id):
 @permission_classes([EventArchivePermission])
 @authentication_classes([CsrfExemptSessionAuthentication])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def archive_event(request, event_id):
     """Archive an event"""
     try:
@@ -3119,7 +3226,7 @@ def archive_event(request, event_id):
         
         # Get the event
         try:
-            event = Event.objects.get(EventId=event_id)
+            event = Event.objects.get(EventId=event_id, tenant_id=tenant_id)
         except Event.DoesNotExist:
             return Response({
                 'success': False,
@@ -3161,11 +3268,13 @@ def archive_event(request, event_id):
 @permission_classes([AllowAny])
 @authentication_classes([CsrfExemptSessionAuthentication])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_archived_events(request):
     """Get all archived events (excluding integration and Riskavaire events)"""
     try:
         # Get archived events that are NOT from integrations or Riskavaire
-        archived_events_query = Event.objects.filter(
+        archived_events_query = Event.objects.filter(tenant_id=tenant_id, 
             Status='Archived'
         ).exclude(
             models.Q(FrameworkName__icontains='Integration') | 
@@ -3195,7 +3304,7 @@ def get_archived_events(request):
                     owner_name = f"User {event.Owner.UserId}"
             elif event.CreatedBy:
                 try:
-                    owner = Users.objects.get(UserId=event.CreatedBy.UserId)
+                    owner = Users.objects.get(UserId=event.CreatedBy.UserId, tenant_id=tenant_id)
                     owner_name = owner.username or f"User {event.CreatedBy.UserId}"
                 except (Users.DoesNotExist, AttributeError):
                     owner_name = f"User {event.CreatedBy.UserId if hasattr(event.CreatedBy, 'UserId') else 'Unknown'}"
@@ -3243,11 +3352,13 @@ def get_archived_events(request):
 @permission_classes([AllowAny])
 @authentication_classes([CsrfExemptSessionAuthentication])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_archived_queue_items(request):
     """Get archived queue items (integration and Riskavaire events)"""
     try:
         # Get archived events that are from integrations or Riskavaire
-        archived_queue_items = Event.objects.filter(
+        archived_queue_items = Event.objects.filter(tenant_id=tenant_id, 
             Status='Archived'
         ).filter(
             models.Q(FrameworkName__icontains='Integration') | 
@@ -3319,6 +3430,8 @@ def get_archived_queue_items(request):
 @permission_classes([AllowAny])
 @authentication_classes([CsrfExemptSessionAuthentication])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def unarchive_event(request, event_id):
     """Unarchive an event (change status from Archived to Pending Review)"""
     try:
@@ -3333,7 +3446,7 @@ def unarchive_event(request, event_id):
         
         # Get the event
         try:
-            event = Event.objects.get(EventId=event_id)
+            event = Event.objects.get(EventId=event_id, tenant_id=tenant_id)
         except Event.DoesNotExist:
             return Response({
                 'success': False,
@@ -3371,6 +3484,8 @@ def unarchive_event(request, event_id):
 @permission_classes([AllowAny])
 @authentication_classes([CsrfExemptSessionAuthentication])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def delete_event_permanently(request, event_id):
     """Permanently delete an event from the database"""
     try:
@@ -3385,7 +3500,7 @@ def delete_event_permanently(request, event_id):
         
         # Get the event
         try:
-            event = Event.objects.get(EventId=event_id)
+            event = Event.objects.get(EventId=event_id, tenant_id=tenant_id)
         except Event.DoesNotExist:
             return Response({
                 'success': False,
@@ -3425,6 +3540,8 @@ def delete_event_permanently(request, event_id):
 @permission_classes([AllowAny])
 @authentication_classes([CsrfExemptSessionAuthentication])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def attach_evidence(request, event_id):
     """Attach evidence to an event"""
     try:
@@ -3439,7 +3556,7 @@ def attach_evidence(request, event_id):
         
         # Get the event
         try:
-            event = Event.objects.get(EventId=event_id)
+            event = Event.objects.get(EventId=event_id, tenant_id=tenant_id)
         except Event.DoesNotExist:
             return Response({
                 'success': False,
@@ -3492,6 +3609,8 @@ def attach_evidence(request, event_id):
 @permission_classes([AllowAny])
 @authentication_classes([CsrfExemptSessionAuthentication])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def test_integration_db_connection(request):
     """
     Test connection to the integration database and create it if it doesn't exist
@@ -3565,6 +3684,8 @@ def test_integration_db_connection(request):
 @permission_classes([AllowAny])
 @authentication_classes([CsrfExemptSessionAuthentication])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_integration_events(request):
     """
     Get events from external integrations using integration_data_list table
@@ -3907,6 +4028,8 @@ def determine_category_from_integration_data(record, data, metadata):
 @permission_classes([AllowAny])
 @authentication_classes([CsrfExemptSessionAuthentication])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def create_event_from_integration(request):
     """
     Create an event from an integration item (Jira issue, etc.)
@@ -3972,7 +4095,7 @@ def create_event_from_integration(request):
                     
                     try:
                         # Get the user
-                        user = Users.objects.get(UserId=user_id) if user_id else None
+                        user = Users.objects.get(UserId=user_id, tenant_id=tenant_id) if user_id else None
                         
                         # Create event data from Jira issue
                         event_data = {
@@ -4052,7 +4175,7 @@ def create_event_from_integration(request):
                 'EndDate': None,
                 'Status': 'Pending Review',
                 'Priority': jira_issue['priority'] or 'Medium',
-                'CreatedBy': Users.objects.get(UserId=user_id) if user_id else None,
+                'CreatedBy': Users.objects.get(UserId=user_id, tenant_id=tenant_id) if user_id else None,
                 'Owner': None,  # Can be set later
                 'Reviewer': None,  # Can be set later
                 'IsTemplate': False
@@ -4464,7 +4587,7 @@ def upload_event_evidence(request, event_id):
         
         # Check if event exists
         try:
-            event = Event.objects.get(EventId=event_id)
+            event = Event.objects.get(EventId=event_id, tenant_id=tenant_id)
             print(f"DEBUG: Found event: {event.EventTitle}")
         except Event.DoesNotExist:
             return JsonResponse({
@@ -4592,7 +4715,7 @@ def get_event_evidence(request, event_id):
     try:
         # Check if event exists
         try:
-            event = Event.objects.get(EventId=event_id)
+            event = Event.objects.get(EventId=event_id, tenant_id=tenant_id)
             print(f"DEBUG: Found event: {event.EventTitle}")
         except Event.DoesNotExist:
             return JsonResponse({
@@ -4770,12 +4893,14 @@ def resolve_file_operation_evidence(evidence_urls, event):
 @authentication_classes([CsrfExemptSessionAuthentication])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_event_evidence_details(request, event_id):
     """Get detailed evidence information for a specific event"""
     try:
         # Check if event exists
         try:
-            event = Event.objects.get(EventId=event_id)
+            event = Event.objects.get(EventId=event_id, tenant_id=tenant_id)
             print(f"DEBUG: Found event: {event.EventTitle}")
         except Event.DoesNotExist:
             return JsonResponse({
@@ -4865,6 +4990,8 @@ def delete_event_evidence(request, event_id, evidence_id):
 @authentication_classes([])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def link_evidence_to_incident(request):
     """
     Link multiple selected events as evidence to an incident
@@ -4925,7 +5052,7 @@ def link_evidence_to_incident(request):
                 if event_db_id:
                     try:
                         from ...models import Event
-                        db_event = Event.objects.get(EventId=event_db_id)
+                        db_event = Event.objects.get(EventId=event_db_id, tenant_id=tenant_id)
                         if db_event.Evidence:
                             # Split semicolon-separated evidence URLs from database
                             event_evidence_data = [url.strip() for url in db_event.Evidence.split(';') if url.strip()]
@@ -5241,6 +5368,8 @@ def link_evidence_to_incident(request):
 @authentication_classes([])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_incident_linked_evidence(request, incident_id):
     """
     Get linked evidence for a specific incident
@@ -5290,7 +5419,7 @@ def get_incident_linked_evidence(request, incident_id):
                     if event_db_id:
                         try:
                             from ...models import Event
-                            db_event = Event.objects.get(EventId=event_db_id)
+                            db_event = Event.objects.get(EventId=event_db_id, tenant_id=tenant_id)
                             if db_event.Evidence:
                                 # Split semicolon-separated evidence URLs from database
                                 event_evidence_data = [url.strip() for url in db_event.Evidence.split(';') if url.strip()]
@@ -5418,6 +5547,8 @@ def get_incident_linked_evidence(request, incident_id):
 @authentication_classes([])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def download_linked_evidence_document(request, incident_id, evidence_id, document_index):
     """
     Download a document from linked evidence
@@ -5569,7 +5700,7 @@ def remove_event_evidence(request, event_id):
         
         # Check if event exists
         try:
-            event = Event.objects.get(EventId=event_id)
+            event = Event.objects.get(EventId=event_id, tenant_id=tenant_id)
             print(f"DEBUG: Found event: {event.EventTitle}")
         except Event.DoesNotExist:
             return JsonResponse({
@@ -5619,11 +5750,16 @@ def remove_event_evidence(request, event_id):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_file_operations(request):
     """
     Get file operations for Document Handling evidence
     Returns file operations from the file_operations table using Django ORM
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         # Get query parameters
         user_id = request.GET.get('user_id')

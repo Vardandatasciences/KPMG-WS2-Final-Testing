@@ -120,6 +120,8 @@ class VendorSLA(models.Model):
         ],
         default='PENDING'
     )
+    data_inventory = models.JSONField(null=True, blank=True, help_text="JSON mapping field labels to data types (personal, confidential, regular)")
+    retentionExpiry = models.DateField(blank=True, null=True, db_column='retentionExpiry', help_text="Data retention expiry date")
     
     # history = HistoricalRecords()
     
@@ -169,6 +171,8 @@ class SLAMetric(models.Model):
     )
     penalty = models.TextField(blank=True)
     measurement_methodology = models.TextField(blank=True)
+    data_inventory = models.JSONField(null=True, blank=True, help_text="JSON mapping metric field labels to data types (personal, confidential, regular)")
+    retentionExpiry = models.DateField(blank=True, null=True, db_column='retentionExpiry', help_text="Data retention expiry date")
     
     # history = HistoricalRecords()
     
@@ -177,6 +181,7 @@ class SLAMetric(models.Model):
         verbose_name_plural = _('SLA Metrics')
         ordering = ['metric_name']
         db_table = 'sla_metrics'
+    
     
     def __str__(self):
         return f"{self.metric_name} - {self.threshold}"

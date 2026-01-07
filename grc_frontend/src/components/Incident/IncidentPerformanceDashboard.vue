@@ -326,24 +326,34 @@ export default {
         
         // Handle the API response format
         let frameworksData = []
-        if (response.data.success && response.data.frameworks) {
+        if (response.data && response.data.success && response.data.frameworks) {
           frameworksData = response.data.frameworks
-        } else if (response.data.success && Array.isArray(response.data.data)) {
+        } else if (response.data && response.data.success && Array.isArray(response.data.data)) {
           frameworksData = response.data.data
-        } else if (Array.isArray(response.data)) {
+        } else if (response.data && Array.isArray(response.data)) {
           frameworksData = response.data
+        } else if (response.data && response.data.frameworks) {
+          frameworksData = response.data.frameworks
         } else {
           console.error('Unexpected frameworks response format:', response.data)
           this.frameworks = []
+          this.loadingFrameworks = false
           return
         }
         
-        this.frameworks = frameworksData.map(framework => ({
+        // Filter to only show active frameworks
+        const activeFrameworks = frameworksData.filter(fw => {
+          if (!fw) return false
+          const status = fw.ActiveInactive || fw.status || fw.activeInactive || '';
+          return status.toLowerCase() === 'active';
+        });
+        
+        this.frameworks = activeFrameworks.map(framework => ({
           id: framework.id || framework.FrameworkId,
           name: framework.name || framework.FrameworkName || 'Unknown Framework'
         }))
         
-        console.log('✅ Processed frameworks:', this.frameworks)
+        console.log('✅ Processed', this.frameworks.length, 'active frameworks:', this.frameworks)
         
         // After frameworks are loaded, try to set the selected framework
         await this.setSelectedFrameworkIfAvailable()

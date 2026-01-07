@@ -48,6 +48,12 @@ from django.db import transaction
 from ...models import Framework, Policy, SubPolicy, PolicyVersion, FrameworkVersion, PolicyApproval, FrameworkApproval, Users
 from ...serializers import FrameworkSerializer, PolicySerializer, SubPolicySerializer
 from ...routes.Global.notification_service import NotificationService
+
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
 from datetime import date, datetime
 import traceback
 import json
@@ -77,8 +83,13 @@ logger = logging.getLogger(__name__)
 # Test endpoint for debugging authentication
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def test_auth(request):
     """Test endpoint to check authentication status"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     print(f"DEBUG: test_auth - User object: {request.user}")
     print(f"DEBUG: test_auth - User type: {type(request.user)}")
     print(f"DEBUG: test_auth - User authenticated: {hasattr(request.user, 'is_authenticated') and request.user.is_authenticated}")
@@ -101,8 +112,13 @@ def test_auth(request):
 # Test endpoint for RBAC debugging
 @api_view(['GET'])
 @permission_classes([])  # No permission classes - allow all requests
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def test_rbac_debug(request):
     """Test endpoint to debug RBAC system"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     from ...models import RBAC
     from ...rbac.utils import RBACUtils
     
@@ -144,8 +160,13 @@ def test_rbac_debug(request):
 @api_view(['POST'])
 @permission_classes([])  # No permission classes - allow all requests
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def test_submit_review(request, policy_id):
     """Test endpoint to check submit-review functionality"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     print(f"DEBUG: test_submit_review - Request path: {request.path}")
     print(f"DEBUG: test_submit_review - Request method: {request.method}")
     print(f"DEBUG: test_submit_review - User object: {request.user}")
@@ -167,8 +188,13 @@ def test_submit_review(request, policy_id):
 @api_view(['POST'])
 @permission_classes([])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def simple_test_endpoint(request, policy_id):
     """Simple test endpoint with no authentication requirements"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     print(f"DEBUG: simple_test_endpoint - Function called successfully")
     return Response({
         'message': 'Simple test endpoint working',
@@ -228,11 +254,17 @@ Example payload:
 
 @api_view(['GET', 'POST'])
 @permission_classes([PolicyViewPermission, PolicyFrameworkPermission])  # RBAC: Require PolicyViewPermission for viewing frameworks, PolicyFrameworkPermission for creating frameworks
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def framework_list(request):
     """
     Secure framework list endpoint with SQL injection protection and proper connection management.
     Implements parameterized queries and follows principle of least privilege.
+    MULTI-TENANCY: Only returns/creates frameworks for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Import security modules
     from django.utils.html import escape as escape_html
     from django.db import connection, transaction
@@ -309,18 +341,32 @@ def framework_list(request):
             
             # Security: Use Django ORM with parameterized queries (SQL injection protection)
             try:
+                # MULTI-TENANCY: Ensure tenant_id is set
+                if tenant_id is None:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"[MULTITENANCY ERROR] framework_list: tenant_id is None - cannot filter data")
+                    return Response({
+                        'error': 'Tenant context not found',
+                        'detail': 'This endpoint requires tenant authentication'
+                    }, status=status.HTTP_403_FORBIDDEN)
+                
                 if include_all_for_identifiers:
                     # For identifier uniqueness checking, fetch ALL frameworks regardless of status
+                    # But still filter by ActiveInactive='Active' to show only active frameworks
+                    # MULTI-TENANCY: Filter by tenant
                     # Django ORM automatically uses parameterized queries
-                    frameworks = Framework.objects.select_related().all().only(
+                    frameworks = Framework.objects.filter(tenant=tenant_id, ActiveInactive='Active').select_related().all().only(
                         'FrameworkId', 'FrameworkName', 'CurrentVersion', 'FrameworkDescription',
                         'CreatedByName', 'CreatedByDate', 'Category', 'DocURL', 'Identifier',
                         'StartDate', 'EndDate', 'Status', 'ActiveInactive', 'Reviewer', 'InternalExternal'
                     )
                 elif include_all_status:
                     # For analytics and dropdown, fetch ALL frameworks regardless of status
+                    # But still filter by ActiveInactive='Active' to show only active frameworks in dropdowns
+                    # MULTI-TENANCY: Filter by tenant
                     # Django ORM automatically uses parameterized queries
-                    frameworks_query = Framework.objects.select_related().all()
+                    frameworks_query = Framework.objects.filter(tenant=tenant_id, ActiveInactive='Active').select_related().all()
                     
                     # NEW: Apply user filtering - include frameworks where user is creator OR reviewer
                     if filter_user_id:
@@ -334,7 +380,7 @@ def framework_list(request):
                         
                         # Filter by specific user - match against CreatedByName field OR framework IDs where user is reviewer
                         try:
-                            target_user = Users.objects.filter(UserId=filter_user_id).first()
+                            target_user = Users.objects.filter(tenant_id=tenant_id, UserId=filter_user_id).first()
                             if target_user:
                                 # Filter by: created by user OR user is reviewer
                                 frameworks_query = frameworks_query.filter(
@@ -365,7 +411,8 @@ def framework_list(request):
                     )
                 else:
                     # Default behavior - only approved and active frameworks
-                    frameworks_query = Framework.objects.select_related().filter(
+                    # MULTI-TENANCY: Filter by tenant
+                    frameworks_query = Framework.objects.filter(tenant=tenant_id).select_related().filter(
                         Status='Approved',
                         ActiveInactive='Active'
                     )
@@ -379,7 +426,7 @@ def framework_list(request):
                         
                         # Filter by specific user - match against CreatedByName field OR framework IDs where user is reviewer
                         try:
-                            target_user = Users.objects.filter(UserId=filter_user_id).first()
+                            target_user = Users.objects.filter(tenant_id=tenant_id, UserId=filter_user_id).first()
                             if target_user:
                                 # Filter by: created by user OR user is reviewer
                                 frameworks_query = frameworks_query.filter(
@@ -412,6 +459,10 @@ def framework_list(request):
                 # Security: Process data with proper sanitization
                 framework_data = []
                 for framework in frameworks:
+                    # Additional safety check: skip non-active frameworks for dropdowns
+                    if hasattr(framework, 'ActiveInactive') and framework.ActiveInactive and framework.ActiveInactive.lower() != 'active':
+                        continue
+                    
                     # Get the latest FrameworkApproval record for this framework to get ReviewerId
                     latest_approval = FrameworkApproval.objects.filter(
                         FrameworkId=framework.FrameworkId
@@ -427,7 +478,7 @@ def framework_list(request):
                         # Try to get reviewer name from Users table if ReviewerId is available
                         if reviewer_id:
                             try:
-                                reviewer_user = Users.objects.filter(UserId=reviewer_id).first()
+                                reviewer_user = Users.objects.filter(tenant_id=tenant_id, UserId=reviewer_id).first()
                                 if reviewer_user:
                                     reviewer_name = reviewer_user.UserName
                             except Exception as e:
@@ -640,7 +691,7 @@ def framework_list(request):
             
             # Check if framework name already exists
             framework_name = validated_data['FrameworkName']
-            existing_framework_with_name = Framework.objects.filter(
+            existing_framework_with_name = Framework.objects.filter(tenant_id=tenant_id, 
                 FrameworkName__iexact=framework_name
             ).first()
             
@@ -680,7 +731,7 @@ def framework_list(request):
                     identifier = escape_html(identifier)
                     
                     # Check if auto-generated identifier already exists
-                    existing_framework = Framework.objects.filter(Identifier=identifier).first()
+                    existing_framework = Framework.objects.filter(tenant_id=tenant_id, Identifier=identifier).first()
                     if existing_framework:
                         # Generate a new identifier with a different suffix
                         suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=3))
@@ -688,7 +739,7 @@ def framework_list(request):
                         identifier = escape_html(identifier)
                         
                         # Check again (should be rare to have conflicts)
-                        existing_framework = Framework.objects.filter(Identifier=identifier).first()
+                        existing_framework = Framework.objects.filter(tenant_id=tenant_id, Identifier=identifier).first()
                         if existing_framework:
                             # Add timestamp to ensure uniqueness
                             import time
@@ -709,7 +760,7 @@ def framework_list(request):
                 identifier = escape_html(identifier.strip())
                 
                 # Check if identifier already exists
-                existing_framework = Framework.objects.filter(Identifier=identifier).first()
+                existing_framework = Framework.objects.filter(tenant_id=tenant_id, Identifier=identifier).first()
                 if existing_framework:
                     return Response({
                         'error': f'Identifier "{identifier}" already exists. Please choose a different identifier.'
@@ -821,7 +872,7 @@ def framework_list(request):
                             policy_reviewer_id = policy_data.get('ReviewerId')
                             if policy_reviewer_id:
                                 try:
-                                    policy_reviewer = Users.objects.filter(
+                                    policy_reviewer = Users.objects.filter(tenant_id=tenant_id, 
                                         UserId=policy_reviewer_id
                                     ).only('UserName').first()
                                     
@@ -979,7 +1030,7 @@ def framework_list(request):
                             }
                             
                             # Security: Add subpolicies data with parameterized queries
-                            subpolicies = SubPolicy.objects.filter(PolicyId=policy).only(
+                            subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy).only(
                                 'SubPolicyId', 'SubPolicyName', 'CreatedByName', 'CreatedByDate',
                                 'Identifier', 'Description', 'Status', 'PermanentTemporary', 'Control'
                             )
@@ -1013,7 +1064,7 @@ def framework_list(request):
                         
                         if not creator_user_id and framework_data['CreatedByName']:
                             try:
-                                creator_user = Users.objects.filter(
+                                creator_user = Users.objects.filter(tenant_id=tenant_id, 
                                     UserName=framework_data['CreatedByName']
                                 ).only('UserId').first()
                                 creator_user_id = creator_user.UserId if creator_user else None
@@ -1150,10 +1201,15 @@ def framework_list(request):
  
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policies_by_framework(request, framework_id):
     """
     Get all policies for a specific framework
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Log policy retrieval attempt
     send_log(
         module="Policy",
@@ -1167,7 +1223,7 @@ def get_policies_by_framework(request, framework_id):
     )
     
     try:
-        policies = Policy.objects.filter(FrameworkId=framework_id)
+        policies = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=framework_id)
         serializer = PolicySerializer(policies, many=True)
         
         # Log successful policy retrieval
@@ -1208,12 +1264,17 @@ def get_policies_by_framework(request, framework_id):
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([PolicyViewPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_subpolicies_by_policy(request, policy_id):
     """
     Get all subpolicies for a specific policy
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
-        subpolicies = SubPolicy.objects.filter(PolicyId=policy_id)
+        subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy_id)
         serializer = SubPolicySerializer(subpolicies, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as e:
@@ -1245,8 +1306,13 @@ Also marks all related policies as inactive and all related subpolicies with Sta
 """
 @api_view(['GET', 'PUT', 'DELETE'])
 @permission_classes([PolicyFrameworkPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def framework_detail(request, pk):
-    framework = get_object_or_404(Framework, FrameworkId=pk)
+    framework = get_object_or_404(Framework, FrameworkId=pk, tenant_id=tenant_id)
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     
     if request.method == 'GET':
         # Log framework detail view attempt
@@ -1265,7 +1331,7 @@ def framework_detail(request, pk):
             return Response({'error': 'Framework is not approved or active'}, status=status.HTTP_403_FORBIDDEN)
         
         # Get all active and approved policies for this framework
-        policies = Policy.objects.filter(
+        policies = Policy.objects.filter(tenant_id=tenant_id, 
             FrameworkId=framework,
             Status='Approved',
             ActiveInactive='Active'
@@ -1294,7 +1360,7 @@ def framework_detail(request, pk):
             }
             
             # Get all subpolicies for this policy
-            subpolicies = SubPolicy.objects.filter(PolicyId=policy)
+            subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy)
             for subpolicy in subpolicies:
                 subpolicy_dict = {
                     'SubPolicyId': subpolicy.SubPolicyId,
@@ -1366,13 +1432,13 @@ def framework_detail(request, pk):
                 framework.save()
                 
                 # Set all related policies to inactive
-                policies = Policy.objects.filter(FrameworkId=framework)
+                policies = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=framework)
                 for policy in policies:
                     policy.ActiveInactive = 'Inactive'
                     policy.save()
                     
                     # Update Status of subpolicies since they don't have ActiveInactive field
-                    subpolicies = SubPolicy.objects.filter(PolicyId=policy)
+                    subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy)
                     for subpolicy in subpolicies:
                         subpolicy.Status = 'Inactive'
                         subpolicy.save()
@@ -1413,8 +1479,13 @@ Also marks all related subpolicies with Status='Inactive'.
 """
 @api_view(['GET', 'PUT', 'DELETE'])
 @permission_classes([PolicyViewPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def policy_detail(request, pk):
     # Log policy detail operation attempt
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     send_log(
         module="Policy",
         actionType="POLICY_DETAIL",
@@ -1428,7 +1499,7 @@ def policy_detail(request, pk):
     )
     
     try:
-        policy = Policy.objects.get(PolicyId=pk)
+        policy = Policy.objects.get(PolicyId=pk, tenant_id=tenant_id)
     except Policy.DoesNotExist:
         # Log policy not found error
         send_log(
@@ -1591,7 +1662,7 @@ def policy_detail(request, pk):
                 print(f"Updated policy {policy.PolicyId} status from {original_status} to Inactive and ActiveInactive from {original_active} to Inactive")
                 
                 # Update Status of subpolicies since they don't have ActiveInactive field
-                subpolicies = SubPolicy.objects.filter(PolicyId=policy.PolicyId)
+                subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy.PolicyId)
                 for subpolicy in subpolicies:
                     original_subpolicy_status = subpolicy.Status
                     subpolicy.Status = 'Inactive'
@@ -1601,14 +1672,14 @@ def policy_detail(request, pk):
                 # Create a policy approval record to track this change
                 try:
                     # Find the latest policy approval for this policy
-                    latest_approval = PolicyApproval.objects.filter(
+                    latest_approval = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
                         PolicyId=policy.PolicyId
                     ).order_by('-ApprovalId').first()
                     
                     if latest_approval:
                         # Create a new approval with 'r' version to mark the inactivation
                         r_versions = []
-                        for pa in PolicyApproval.objects.filter(Identifier=latest_approval.Identifier):
+                        for pa in PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, Identifier=latest_approval.Identifier):
                             if pa.Version and pa.Version.startswith('r') and pa.Version[1:].isdigit():
                                 r_versions.append(int(pa.Version[1:]))
                         
@@ -1658,7 +1729,7 @@ def policy_detail(request, pk):
                         "policy_name": policy.PolicyName,
                         "original_status": original_status,
                         "original_active_inactive": original_active,
-                        "subpolicies_affected": SubPolicy.objects.filter(PolicyId=policy.PolicyId).count()
+                        "subpolicies_affected": SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy.PolicyId).count()
                     }
                 )
                 
@@ -1712,11 +1783,16 @@ Example payload:
 """
 @api_view(['POST'])
 @permission_classes([PolicyCreatePermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def add_policy_to_framework(request, framework_id):
     """
     Secure add policy to framework endpoint with SQL injection protection and proper connection management.
     Implements parameterized queries and follows principle of least privilege.
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Import security modules
     from django.utils.html import escape as escape_html
     from django.db import transaction
@@ -1900,7 +1976,7 @@ def add_policy_to_framework(request, framework_id):
                     if policy_reviewer_id:
                         try:
                             # Security: Use parameterized queries with minimal data access
-                            policy_reviewer = Users.objects.filter(
+                            policy_reviewer = Users.objects.filter(tenant_id=tenant_id, 
                                 UserId=policy_reviewer_id
                             ).only('UserName', 'Email').first()
                             
@@ -1961,7 +2037,7 @@ def add_policy_to_framework(request, framework_id):
                     
                     # Check if policy name already exists in this framework
                     policy_name = escape_html(policy_data['PolicyName'])
-                    existing_policy = Policy.objects.filter(
+                    existing_policy = Policy.objects.filter(tenant_id=tenant_id, 
                         FrameworkId=framework,
                         PolicyName__iexact=policy_name
                     ).first()
@@ -2051,7 +2127,7 @@ def add_policy_to_framework(request, framework_id):
                         # Security: Get reviewer details using parameterized queries
                         if reviewer_id:
                             try:
-                                reviewer_obj = Users.objects.filter(
+                                reviewer_obj = Users.objects.filter(tenant_id=tenant_id, 
                                     UserId=reviewer_id
                                 ).only('UserName', 'Email').first()
                                 
@@ -2076,7 +2152,7 @@ def add_policy_to_framework(request, framework_id):
                             reviewer_email = None
                         
                         # Security: Get subpolicies using parameterized queries with minimal data access
-                        subpolicies = SubPolicy.objects.filter(PolicyId=policy).only(
+                        subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy).only(
                             'SubPolicyId', 'SubPolicyName', 'CreatedByName', 'CreatedByDate',
                             'Identifier', 'Description', 'Status', 'PermanentTemporary', 'Control'
                         )
@@ -2119,7 +2195,7 @@ def add_policy_to_framework(request, framework_id):
                         }
                         
                         # Check for existing policy approval to prevent duplicates
-                        existing_approval = PolicyApproval.objects.filter(
+                        existing_approval = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
                             PolicyId=policy.PolicyId,
                             UserId=user_id,
                             ReviewerId=reviewer_id,
@@ -2265,7 +2341,12 @@ def add_policy_to_framework(request, framework_id):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([PolicyApprovePermission])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def update_policy_approval(request, approval_id):
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Log policy approval update attempt
     send_log(
         module="Policy",
@@ -2302,7 +2383,7 @@ def update_policy_approval(request, approval_id):
         # Get the latest version with this prefix for this identifier
         try:
             r_versions = []
-            for pa in PolicyApproval.objects.filter(Identifier=approval.Identifier):
+            for pa in PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, Identifier=approval.Identifier):
                 if pa.Version and pa.Version.startswith(prefix) and len(pa.Version) > 1 and pa.Version[1:].isdigit():
                     r_versions.append(int(pa.Version[1:]))
             
@@ -2374,7 +2455,12 @@ def update_policy_approval(request, approval_id):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([PolicyApprovePermission])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def submit_policy_review(request, approval_id):
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Log policy review submission attempt
     send_log(
         module="Policy",
@@ -2404,7 +2490,7 @@ def submit_policy_review(request, approval_id):
         # Get the latest version with "r" prefix for this identifier
         try:
             r_versions = []
-            for pa in PolicyApproval.objects.filter(Identifier=approval.Identifier):
+            for pa in PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, Identifier=approval.Identifier):
                 if pa.Version and pa.Version.startswith('r') and pa.Version[1:].isdigit():
                     r_versions.append(int(pa.Version[1:]))
            
@@ -2466,7 +2552,7 @@ def submit_policy_review(request, approval_id):
             # Get the policy version record if needed
             policy_version = None
             if is_approved:
-                policy_version = PolicyVersion.objects.filter(
+                policy_version = PolicyVersion.objects.filter(tenant_id=tenant_id, 
                     PolicyId=policy,
                     Version=policy.CurrentVersion
                 ).first()
@@ -2505,7 +2591,7 @@ def submit_policy_review(request, approval_id):
                 
                 # Ensure CurrentVersion is set correctly
                 # Get the current policy version from PolicyVersion table
-                current_policy_version = PolicyVersion.objects.filter(
+                current_policy_version = PolicyVersion.objects.filter(tenant_id=tenant_id, 
                     PolicyId=policy
                 ).first()
                 
@@ -2517,7 +2603,7 @@ def submit_policy_review(request, approval_id):
                 print(f"Updated policy {policy.PolicyId} status to Approved and Active")
                 
                 # Update all subpolicies for this policy
-                subpolicies = SubPolicy.objects.filter(PolicyId=policy.PolicyId)
+                subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy.PolicyId)
                 for subpolicy in subpolicies:
                     # Update all subpolicies to match the policy status
                     subpolicy.Status = 'Approved'
@@ -2530,7 +2616,7 @@ def submit_policy_review(request, approval_id):
                 print(f"Updated policy {policy.PolicyId} status to Rejected")
                 
                 # Also update all subpolicies to Rejected
-                subpolicies = SubPolicy.objects.filter(PolicyId=policy.PolicyId)
+                subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy.PolicyId)
                 for subpolicy in subpolicies:
                     subpolicy.Status = 'Rejected'
                     subpolicy.save()
@@ -2546,8 +2632,8 @@ def submit_policy_review(request, approval_id):
         try:
             from ...routes.Global.notification_service import NotificationService
             notification_service = NotificationService()
-            submitter = Users.objects.get(UserId=new_approval.UserId)
-            reviewer = Users.objects.get(UserId=new_approval.ReviewerId)
+            submitter = Users.objects.get(UserId=new_approval.UserId, tenant_id=tenant_id)
+            reviewer = Users.objects.get(UserId=new_approval.ReviewerId, tenant_id=tenant_id)
             now_str = date.today().isoformat()
             if is_approved:
                 notification_data = {
@@ -2641,8 +2727,13 @@ def submit_policy_review(request, approval_id):
     
 @api_view(['POST'])
 @permission_classes([PolicyCreatePermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def add_subpolicy_to_policy(request, policy_id):
     # Import security modules
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     from django.utils.html import escape as escape_html
     import shlex
     
@@ -2670,7 +2761,7 @@ def add_subpolicy_to_policy(request, policy_id):
             return shlex.quote(str(url))
         return ""
     
-    policy = get_object_or_404(Policy, PolicyId=policy_id)
+    policy = get_object_or_404(Policy, PolicyId=policy_id, tenant_id=tenant_id)
    
     try:
         with transaction.atomic():
@@ -2694,7 +2785,7 @@ def add_subpolicy_to_policy(request, policy_id):
            
             # Check if subpolicy name is unique within the policy
             subpolicy_name = subpolicy_data.get('SubPolicyName')
-            if SubPolicy.objects.filter(PolicyId=policy.PolicyId, SubPolicyName=subpolicy_name).exists():
+            if SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy.PolicyId, SubPolicyName=subpolicy_name).exists():
                 # Log duplicate subpolicy name error
                 send_log(
                     module="Policy",
@@ -2785,10 +2876,15 @@ Soft-deletes a subpolicy by setting Status='Inactive'.
 """
 @api_view(['GET', 'PUT', 'DELETE'])
 @permission_classes([PolicyViewPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def subpolicy_detail(request, pk):
     """
     Retrieve, update or delete a subpolicy.
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Import security modules for PUT operations
     from django.utils.html import escape as escape_html
     import shlex
@@ -2965,10 +3061,15 @@ def subpolicy_detail(request, pk):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([PolicyApprovePermission])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def submit_subpolicy_review(request, pk):
     """
     Submit a review for a subpolicy
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     print(f"DEBUG: submit_subpolicy_review called for subpolicy {pk}")
     print(f"DEBUG: Request data: {request.data}")
     print(f"DEBUG: User: {request.user}")
@@ -3075,7 +3176,7 @@ def submit_subpolicy_review(request, pk):
         # Check if we already have an r version approval for today to prevent duplicates
         print(f"DEBUG: Checking for existing policy approval for PolicyId {policy.PolicyId} on {today}")
         
-        existing_today_approval = PolicyApproval.objects.filter(
+        existing_today_approval = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
             PolicyId=policy.PolicyId,
             ApprovedDate=today,
             Version__startswith='r'
@@ -3088,13 +3189,13 @@ def submit_subpolicy_review(request, pk):
             print(f"No existing approval found for today, creating new one for {status_value}")
             try:
                 # Find the latest policy approval for this policy
-                latest_approval = PolicyApproval.objects.filter(
+                latest_approval = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
                     PolicyId=policy.PolicyId
                 ).order_by('-ApprovalId').first()
                 
                 # Calculate next reviewer version
                 r_versions = []
-                for pa in PolicyApproval.objects.filter(PolicyId=policy.PolicyId):
+                for pa in PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, PolicyId=policy.PolicyId):
                     if pa.Version and pa.Version.startswith('r') and pa.Version[1:].isdigit():
                         r_versions.append(int(pa.Version[1:]))
                 
@@ -3185,9 +3286,9 @@ def submit_subpolicy_review(request, pk):
         reviewer = None
         submitter = None
         if new_approval and new_approval.ReviewerId:
-            reviewer = Users.objects.get(UserId=new_approval.ReviewerId)
+            reviewer = Users.objects.get(UserId=new_approval.ReviewerId, tenant_id=tenant_id)
         if new_approval and new_approval.UserId:
-            submitter = Users.objects.get(UserId=new_approval.UserId)
+            submitter = Users.objects.get(UserId=new_approval.UserId, tenant_id=tenant_id)
         if reviewer and reviewer.Email:
             # Security: XSS Protection - Escape HTML content before building email template
             notification_data = {
@@ -3228,10 +3329,15 @@ def submit_subpolicy_review(request, pk):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([PolicyApprovePermission])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def resubmit_subpolicy(request, pk):
     """
     Resubmit a rejected subpolicy with changes
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Import security modules
     from django.utils.html import escape as escape_html
     import shlex
@@ -3255,7 +3361,7 @@ def resubmit_subpolicy(request, pk):
         print(f"Resubmitting subpolicy {pk} for policy {policy_id}")
 
         # Get all versions for this policy to find the latest u version
-        policy_approvals = PolicyApproval.objects.filter(
+        policy_approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
             PolicyId=policy_id
         ).order_by('-Version')
 
@@ -3288,7 +3394,7 @@ def resubmit_subpolicy(request, pk):
         print(f"Updated subpolicy {pk} status from {original_status} to Under Review")
 
         # Get the policy
-        policy = Policy.objects.get(PolicyId=policy_id)
+        policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
         original_policy_status = policy.Status
         
         # Update policy status if needed
@@ -3344,9 +3450,9 @@ def resubmit_subpolicy(request, pk):
                 reviewer = None
                 submitter = None
                 if new_approval.ReviewerId:
-                    reviewer = Users.objects.get(UserId=new_approval.ReviewerId)
+                    reviewer = Users.objects.get(UserId=new_approval.ReviewerId, tenant_id=tenant_id)
                 if new_approval.UserId:
-                    submitter = Users.objects.get(UserId=new_approval.UserId)
+                    submitter = Users.objects.get(UserId=new_approval.UserId, tenant_id=tenant_id)
                 if reviewer and reviewer.Email:
                     # Security: XSS Protection - Escape HTML content before building email template
                     notification_data = {
@@ -3410,10 +3516,15 @@ def resubmit_subpolicy(request, pk):
 
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])  # RBAC: Require PolicyViewPermission for viewing policy versions
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policy_version(request, policy_id):
     """
     Get the latest version of a policy from the policy approvals table
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Log policy version retrieval attempt
     send_log(
         module="Policy",
@@ -3427,10 +3538,10 @@ def get_policy_version(request, policy_id):
     )
     
     try:
-        policy = get_object_or_404(Policy, PolicyId=policy_id)
+        policy = get_object_or_404(Policy, PolicyId=policy_id, tenant_id=tenant_id)
         
         # Instead of getting the attribute, find the latest approval version from the database
-        latest_approval = PolicyApproval.objects.filter(
+        latest_approval = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
             PolicyId=policy_id
         ).order_by('-Version').first()
         
@@ -3441,7 +3552,7 @@ def get_policy_version(request, policy_id):
                 version = latest_approval.Version
             else:
                 # Check if there are any user versions (u1, u2, etc.)
-                user_approvals = PolicyApproval.objects.filter(
+                user_approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
                     PolicyId=policy_id,
                     Version__startswith='u'
                 ).order_by('-Version')
@@ -3496,10 +3607,15 @@ def get_policy_version(request, policy_id):
 
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])  # RBAC: Require PolicyViewPermission for viewing subpolicy versions
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_subpolicy_version(request, subpolicy_id):
     """
     Get the latest version of a subpolicy from policy approvals
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Log subpolicy version retrieval attempt
     send_log(
         module="Policy",
@@ -3513,7 +3629,7 @@ def get_subpolicy_version(request, subpolicy_id):
     )
     
     try:
-        subpolicy = get_object_or_404(SubPolicy, SubPolicyId=subpolicy_id)
+        subpolicy = get_object_or_404(SubPolicy, SubPolicyId=subpolicy_id, tenant_id=tenant_id)
         policy_id = subpolicy.PolicyId.PolicyId if subpolicy.PolicyId else None
         
         if not policy_id:
@@ -3528,7 +3644,7 @@ def get_subpolicy_version(request, subpolicy_id):
         
         try:
             # Get all policy approvals for the parent policy
-            policy_approvals = PolicyApproval.objects.filter(
+            policy_approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
                 PolicyId=policy_id
             ).order_by('-Version')
             
@@ -3600,10 +3716,15 @@ def get_subpolicy_version(request, subpolicy_id):
 
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission]) # RBAC: Require PolicyViewPermission for viewing policy approvals
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_latest_policy_approval(request, policy_id):
     """
     Get the latest policy approval for a policy
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Log policy approval retrieval attempt
     send_log(
         module="Policy",
@@ -3617,7 +3738,7 @@ def get_latest_policy_approval(request, policy_id):
     )
     
     try:
-        latest_approval = PolicyApproval.objects.filter(
+        latest_approval = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
             PolicyId=policy_id
         ).order_by('-Version').first()
         
@@ -3669,10 +3790,15 @@ def get_latest_policy_approval(request, policy_id):
 
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])  # RBAC: Require PolicyViewPermission for viewing policy approvals by role
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_latest_policy_approval_by_role(request, policy_id, role):
     """
     Get the latest policy approval for a policy by role (reviewer/user)
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Log policy approval by role retrieval attempt
     send_log(
         module="Policy",
@@ -3689,12 +3815,12 @@ def get_latest_policy_approval_by_role(request, policy_id, role):
     try:
         # Filter by role - simplistic approach, you might need more complex logic
         if role == 'reviewer':
-            latest_approval = PolicyApproval.objects.filter(
+            latest_approval = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
                 PolicyId=policy_id,
                 IsReviewer=True
             ).order_by('-Version').first()
         else:  # user role
-            latest_approval = PolicyApproval.objects.filter(
+            latest_approval = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
                 PolicyId=policy_id,
                 IsReviewer=False
             ).order_by('-Version').first()
@@ -3748,11 +3874,16 @@ def get_latest_policy_approval_by_role(request, policy_id, role):
 
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])  # RBAC: Require PolicyViewPermission for viewing reviewer versions
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_latest_reviewer_version(request, policy_id=None, subpolicy_id=None):
     """
     Get the latest reviewer version (R1, R2, etc.) for a policy or subpolicy
     and return the complete policy approval data for that version
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Log reviewer version retrieval attempt
     send_log(
         module="Policy",
@@ -3772,11 +3903,11 @@ def get_latest_reviewer_version(request, policy_id=None, subpolicy_id=None):
         
         if policy_id:
             # Find the latest R version for a policy
-            policy = get_object_or_404(Policy, PolicyId=policy_id)
+            policy = get_object_or_404(Policy, PolicyId=policy_id, tenant_id=tenant_id)
             
             # Use Python filtering instead of MySQL regex to avoid character set issues
             r_approvals = []
-            all_approvals = PolicyApproval.objects.filter(PolicyId=policy_id).order_by('-Version')
+            all_approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, PolicyId=policy_id).order_by('-Version')
             
             for approval in all_approvals:
                 if approval.Version and approval.Version.startswith('R'):
@@ -3794,13 +3925,13 @@ def get_latest_reviewer_version(request, policy_id=None, subpolicy_id=None):
         
         elif subpolicy_id:
             # Find the latest R version for a subpolicy
-            subpolicy = get_object_or_404(SubPolicy, SubPolicyId=subpolicy_id)
+            subpolicy = get_object_or_404(SubPolicy, SubPolicyId=subpolicy_id, tenant_id=tenant_id)
             policy_id = subpolicy.PolicyId.PolicyId if subpolicy.PolicyId else None
             
             if policy_id:
                 # Use Python filtering instead of MySQL regex
                 r_approvals = []
-                all_approvals = PolicyApproval.objects.filter(PolicyId=policy_id).order_by('-Version')
+                all_approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, PolicyId=policy_id).order_by('-Version')
                 
                 for approval in all_approvals:
                     if approval.Version and approval.Version.startswith('R'):
@@ -3883,9 +4014,15 @@ def get_latest_reviewer_version(request, policy_id=None, subpolicy_id=None):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([PolicyApprovalWorkflowPermission])
 @csrf_exempt  # Temporarily disable CSRF for debugging
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def submit_policy_approval_review(request, policy_id):
     """
     Submit a review for a policy approval
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    """
     """
     print(f"DEBUG: ===== SUBMIT POLICY APPROVAL REVIEW CALLED =====")
     print(f"DEBUG: submit_policy_approval_review - Request path: {request.path}")
@@ -3959,7 +4096,7 @@ def submit_policy_approval_review(request, policy_id):
         else:
             print(f"DEBUG: User not properly authenticated - attempting to continue with policy review")
         
-        policy = Policy.objects.get(PolicyId=policy_id)
+        policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
         
         # Extract necessary data
         extracted_data = data.get('ExtractedData', {})
@@ -4006,7 +4143,7 @@ def submit_policy_approval_review(request, policy_id):
         approved_date = date.today()
         
         # Determine next version
-        policy_approvals = PolicyApproval.objects.filter(
+        policy_approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
             PolicyId=policy
         ).order_by('-Version')
         
@@ -4050,7 +4187,7 @@ def submit_policy_approval_review(request, policy_id):
         # Check for existing approval with same PolicyId, ReviewerId, Version, and ApprovedDate
         # For reviewer versions (r*), also check ApprovedDate to allow multiple reviews on different days
         # But prevent duplicates on the same day
-        existing_approval = PolicyApproval.objects.filter(
+        existing_approval = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
             PolicyId=policy.PolicyId,
             ReviewerId=reviewer_id,
             Version=new_version
@@ -4121,7 +4258,7 @@ def submit_policy_approval_review(request, policy_id):
             print(f"DEBUG: Current policy being approved: PolicyId={policy.PolicyId}, Version={policy.CurrentVersion}, Identifier={policy.Identifier}")
             
             # Method 1: Find by Identifier
-            previous_policies_by_identifier = Policy.objects.filter(
+            previous_policies_by_identifier = Policy.objects.filter(tenant_id=tenant_id, 
                 Identifier=policy.Identifier
             ).exclude(
                 PolicyId=policy.PolicyId
@@ -4133,13 +4270,13 @@ def submit_policy_approval_review(request, policy_id):
             previous_policies_by_version = []
             try:
                 # Get current policy's version record
-                current_policy_version = PolicyVersion.objects.filter(PolicyId=policy).first()
+                current_policy_version = PolicyVersion.objects.filter(tenant_id=tenant_id, PolicyId=policy).first()
                 if current_policy_version:
                     # Find all other policies with versions that have the same base identifier pattern
                     version_pattern = current_policy_version.Version
                     if '.' in version_pattern:
                         major_version = version_pattern.split('.')[0]
-                        related_versions = PolicyVersion.objects.filter(
+                        related_versions = PolicyVersion.objects.filter(tenant_id=tenant_id, 
                             Version__startswith=major_version + '.'
                         ).exclude(PolicyId=policy)
                         
@@ -4185,7 +4322,7 @@ def submit_policy_approval_review(request, policy_id):
                     deactivated_count += 1
                     
                     # Verify the save worked
-                    updated_policy = Policy.objects.get(PolicyId=prev_policy.PolicyId)
+                    updated_policy = Policy.objects.get(PolicyId=prev_policy.PolicyId, tenant_id=tenant_id)
                     print(f"DEBUG: Verified policy {prev_policy.PolicyId} after save: ActiveInactive={updated_policy.ActiveInactive}")
                 else:
                     print(f"DEBUG: Skipping policy {prev_policy.PolicyId} - already inactive")
@@ -4205,7 +4342,7 @@ def submit_policy_approval_review(request, policy_id):
         # Update subpolicies based on policy approval/rejection status
         if approved and policy.Status == 'Approved':
             # If policy is approved, approve all subpolicies that are under review
-            SubPolicy.objects.filter(PolicyId=policy.PolicyId, Status='Under Review').update(Status='Approved')
+            SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy.PolicyId, Status='Under Review').update(Status='Approved')
         elif not approved and policy.Status == 'Rejected':
             # If policy is rejected, check if any subpolicies were specifically rejected
             # and update their status accordingly
@@ -4226,8 +4363,8 @@ def submit_policy_approval_review(request, policy_id):
         try:
             from ...routes.Global.notification_service import NotificationService
             notification_service = NotificationService()
-            submitter = Users.objects.get(UserId=new_approval.UserId)
-            reviewer = Users.objects.get(UserId=new_approval.ReviewerId)
+            submitter = Users.objects.get(UserId=new_approval.UserId, tenant_id=tenant_id)
+            reviewer = Users.objects.get(UserId=new_approval.ReviewerId, tenant_id=tenant_id)
             now_str = date.today().isoformat()
             if is_approved:
                 notification_data = {
@@ -4308,10 +4445,15 @@ def submit_policy_approval_review(request, policy_id):
 
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])  # RBAC: Require PolicyViewPermission for viewing policy version history
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policy_version_history(request, policy_id):
     """
     Get the version history of a policy
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Log policy version history retrieval attempt
     send_log(
         module="Policy",
@@ -4325,7 +4467,7 @@ def get_policy_version_history(request, policy_id):
     )
     
     try:
-        approvals = PolicyApproval.objects.filter(
+        approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
             PolicyId=policy_id
         ).order_by('-Version')
         
@@ -4375,8 +4517,13 @@ def get_policy_version_history(request, policy_id):
 
 @api_view(['GET'])
 @permission_classes([PolicyApprovalWorkflowPermission])  # RBAC: Require PolicyApprovalWorkflowPermission for viewing reviewer's policy approvals
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def list_policy_approvals_for_reviewer(request):
     # Get reviewer ID from request
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     reviewer_id = request.user.id if hasattr(request.user, 'id') else None
     if not reviewer_id:
         reviewer_id = request.session.get('user_id')
@@ -4401,7 +4548,7 @@ def list_policy_approvals_for_reviewer(request):
     print(f"Fetching policy approvals for reviewer_id: {reviewer_id}")
     
     # Get all approvals for this reviewer
-    approvals = PolicyApproval.objects.filter(ReviewerId=reviewer_id)
+    approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, ReviewerId=reviewer_id)
     
     # Apply framework filter if provided
     if framework_id:
@@ -4446,8 +4593,13 @@ def list_policy_approvals_for_reviewer(request):
 
 @api_view(['GET'])
 @permission_classes([PolicyApprovalWorkflowPermission]) # RBAC: Require PolicyApprovalWorkflowPermission for viewing rejected policy approvals
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def list_rejected_policy_approvals_for_user(request, user_id):
     # Log rejected policy approvals listing for user
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     send_log(
         module="Policy",
         actionType="LIST_REJECTED_POLICY_APPROVALS_FOR_USER",
@@ -4463,6 +4615,7 @@ def list_rejected_policy_approvals_for_user(request, user_id):
     # and the approval status is rejected (ApprovedNot=0)
     rejected_approvals = PolicyApproval.objects.filter(
         Q(ReviewerId=user_id) | Q(UserId=user_id),
+        tenant_id=tenant_id,
         ApprovedNot=0  # Use 0 instead of False for consistency
     ).order_by('-ApprovalId')  # Get the most recent first
     
@@ -4495,10 +4648,15 @@ Returns an Excel file as attachment
 """
 @api_view(['POST'])
 @permission_classes([PolicyExportPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def export_policies_to_excel(request, framework_id):
     """
     Export framework policies and their subpolicies to various formats
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Log export policies to excel attempt
     send_log(
         module="Policy",
@@ -4515,15 +4673,15 @@ def export_policies_to_excel(request, framework_id):
 
     try:
         # Get the framework
-        framework = Framework.objects.get(FrameworkId=framework_id)
+        framework = Framework.objects.get(FrameworkId=framework_id, tenant_id=tenant_id)
         print(f"[EXPORT] Found framework: {framework.FrameworkName}")
 
         # Get all policies for this framework
         policy_id = request.data.get('policy_id')
         if policy_id:
-            policies = Policy.objects.filter(FrameworkId=framework_id, PolicyId=policy_id)
+            policies = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=framework_id, PolicyId=policy_id)
         else:
-            policies = Policy.objects.filter(FrameworkId=framework_id)
+            policies = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=framework_id)
         print(f"[EXPORT] Found {policies.count()} policies under framework {framework_id}")
 
         # Prepare data for export (one row per subpolicy, or one row per policy if no subpolicies)
@@ -4681,11 +4839,16 @@ def export_policies_to_excel(request, framework_id):
 
 @api_view(['GET'])
 @permission_classes([PolicyListPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def policy_list(request):
     """
     List all policies, or filter by status and framework_id
     Automatically applies framework filter from session if no explicit filter provided
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     from .framework_filter_helper import apply_framework_filter, get_framework_filter_info
     
     # Log policy list retrieval attempt
@@ -4707,7 +4870,7 @@ def policy_list(request):
     )
     
     # Start with all policies
-    policies = Policy.objects.all()
+    policies = Policy.objects.filter(tenant_id=tenant_id)
     
     # Apply status filter if provided
     if status_param is not None:
@@ -4737,8 +4900,13 @@ def policy_list(request):
 
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])  # RBAC: Require PolicyViewPermission for viewing users list
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def list_users(request):
     # Log users list retrieval attempt
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     send_log(
         module="Policy",
         actionType="LIST_USERS",
@@ -4750,7 +4918,7 @@ def list_users(request):
     )
     
     try:
-        users = Users.objects.all()
+        users = Users.objects.filter(tenant_id=tenant_id)
         data = [{
             'UserId': user.UserId,
             'UserName': user.UserName
@@ -4790,12 +4958,17 @@ def list_users(request):
         
 @api_view(['GET'])
 @permission_classes([])  # No permission required - public endpoint (also skipped in middleware)
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_framework_explorer_data(request):
     """
     API endpoint for the Framework Explorer page
     Returns frameworks with their status and counts of active/inactive policies
     Supports entity filtering based on query parameters
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Get entity filter parameter
     entity_filter = request.GET.get('entity', None)
     
@@ -4816,15 +4989,15 @@ def get_framework_explorer_data(request):
     try:
         # Get frameworks based on active_only parameter
         if active_only:
-            frameworks = Framework.objects.filter(ActiveInactive='Active')
+            frameworks = Framework.objects.filter(tenant_id=tenant_id, ActiveInactive='Active')
         else:
-            frameworks = Framework.objects.all()
+            frameworks = Framework.objects.filter(tenant_id=tenant_id)
        
         # Prepare response data with additional counts
         framework_data = []
         for fw in frameworks:
             # Base policy query for this framework
-            policy_query = Policy.objects.filter(FrameworkId=fw.FrameworkId)
+            policy_query = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=fw.FrameworkId)
             
             # Apply entity filtering if specified
             if entity_filter:
@@ -4862,11 +5035,12 @@ def get_framework_explorer_data(request):
         if entity_filter:
             # When filtering by entity, calculate summary based on filtered policies
             if entity_filter == 'all':
-                summary_policy_query = Policy.objects.filter(Entities__contains='all')
+                summary_policy_query = Policy.objects.filter(tenant_id=tenant_id, Entities__contains='all')
             else:
                 summary_policy_query = Policy.objects.filter(
                     models.Q(Entities__contains=[int(entity_filter)]) |
-                    models.Q(Entities__contains='all')
+                    models.Q(Entities__contains='all'),
+                    tenant_id=tenant_id
                 )
             active_policies = summary_policy_query.filter(ActiveInactive='Active').count()
             inactive_policies = summary_policy_query.filter(ActiveInactive='Inactive').count()
@@ -4878,16 +5052,16 @@ def get_framework_explorer_data(request):
             # No entity filter - use counts based on active_only parameter
             if active_only:
                 # When active_only is True, only count active frameworks
-                active_frameworks = Framework.objects.filter(ActiveInactive='Active').count()
+                active_frameworks = Framework.objects.filter(tenant_id=tenant_id, ActiveInactive='Active').count()
                 inactive_frameworks = 0
             else:
                 # Count all frameworks
-                active_frameworks = Framework.objects.filter(ActiveInactive='Active').count()
-                inactive_frameworks = Framework.objects.filter(ActiveInactive='Inactive').count()
+                active_frameworks = Framework.objects.filter(tenant_id=tenant_id, ActiveInactive='Active').count()
+                inactive_frameworks = Framework.objects.filter(tenant_id=tenant_id, ActiveInactive='Inactive').count()
             
             # Policy counts remain the same (all policies regardless of framework status)
-            active_policies = Policy.objects.filter(ActiveInactive='Active').count()
-            inactive_policies = Policy.objects.filter(ActiveInactive='Inactive').count()
+            active_policies = Policy.objects.filter(tenant_id=tenant_id, ActiveInactive='Active').count()
+            inactive_policies = Policy.objects.filter(tenant_id=tenant_id, ActiveInactive='Inactive').count()
        
         # Log successful framework explorer data retrieval
         send_log(
@@ -4937,11 +5111,16 @@ def get_framework_explorer_data(request):
  
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])  # RBAC: Require PolicyViewPermission for viewing framework policies
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_framework_policies(request, framework_id):
     """
     API endpoint for the Framework Policies page
     Returns policies for a specific framework with acknowledgment status
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Log framework policies retrieval attempt
     send_log(
         module="Policy",
@@ -4956,7 +5135,7 @@ def get_framework_policies(request, framework_id):
     
     try:
         # Check if framework exists
-        framework = get_object_or_404(Framework, FrameworkId=framework_id)
+        framework = get_object_or_404(Framework, FrameworkId=framework_id, tenant_id=tenant_id)
         
         # Get current user ID for acknowledgment status checking
         user_id = None
@@ -4984,7 +5163,7 @@ def get_framework_policies(request, framework_id):
             user_id = request.session.get('user_id')
        
         # Get policies for this framework
-        policies = Policy.objects.filter(FrameworkId=framework_id)
+        policies = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=framework_id)
        
         # Prepare response data
         policy_data = []
@@ -5057,12 +5236,17 @@ def get_framework_policies(request, framework_id):
  
 @api_view(['POST'])
 @permission_classes([PolicyEditPermission])  # RBAC: Require PolicyEditPermission for toggling framework status
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def toggle_framework_status(request, framework_id):
     """
     Toggle the ActiveInactive status of a framework
     When cascadeToApproved=True, also update the status of all approved policies
     but leave their subpolicies status unchanged
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Log framework status toggle attempt
     send_log(
         module="Policy",
@@ -5076,7 +5260,7 @@ def toggle_framework_status(request, framework_id):
     )
     
     try:
-        framework = get_object_or_404(Framework, FrameworkId=framework_id)
+        framework = get_object_or_404(Framework, FrameworkId=framework_id, tenant_id=tenant_id)
        
         # Toggle status
         new_status = 'Inactive' if framework.ActiveInactive == 'Active' else 'Active'
@@ -5101,7 +5285,7 @@ def toggle_framework_status(request, framework_id):
         cascade_to_approved = request.data.get('cascadeToApproved', False)
         if cascade_to_approved:
             # Get ALL policies for this framework (not just approved ones)
-            policies = Policy.objects.filter(
+            policies = Policy.objects.filter(tenant_id=tenant_id, 
                 FrameworkId=framework
             )
            
@@ -5120,7 +5304,7 @@ def toggle_framework_status(request, framework_id):
                 policies_affected += 1
                
                 # Also update all subpolicies for this policy
-                subpolicies = SubPolicy.objects.filter(PolicyId=policy)
+                subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy)
                 for subpolicy in subpolicies:
                     subpolicy.Status = new_status
                     subpolicy.save()
@@ -5175,12 +5359,17 @@ def toggle_framework_status(request, framework_id):
  
 @api_view(['POST'])
 @permission_classes([PolicyEditPermission])  # RBAC: Require PolicyEditPermission for toggling policy status
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def toggle_policy_status(request, policy_id):
     """
     Toggle the ActiveInactive status of a policy
     For deactivation (Active -> Inactive), use approval flow
     For activation (Inactive -> Active), direct toggle
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Log policy status toggle attempt
     send_log(
         module="Policy",
@@ -5198,7 +5387,7 @@ def toggle_policy_status(request, policy_id):
         print(f"DEBUG: Request data: {request.data}")
         
         try:
-            policy = Policy.objects.get(PolicyId=policy_id)
+            policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
         except Policy.DoesNotExist:
             return Response({"error": "Policy not found"}, status=status.HTTP_404_NOT_FOUND)
         print(f"DEBUG: Found policy: {policy.PolicyName}, ActiveInactive: {policy.ActiveInactive}")
@@ -5250,7 +5439,7 @@ def toggle_policy_status(request, policy_id):
             cascade_to_subpolicies = request.data.get('cascadeSubpolicies', False)
             if cascade_to_subpolicies:
                 # Get all subpolicies for this policy and update their status
-                subpolicies = SubPolicy.objects.filter(PolicyId=policy)
+                subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy)
                 for subpolicy in subpolicies:
                     # Only update ActiveInactive if the field exists, otherwise update Status
                     if hasattr(subpolicy, 'ActiveInactive'):
@@ -5314,11 +5503,16 @@ def toggle_policy_status(request, policy_id):
  
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])  # RBAC: Require PolicyViewPermission for viewing framework details
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_framework_details(request, framework_id):
     """
     API endpoint for detailed framework information
     Returns all details of a framework regardless of status
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Log framework details retrieval attempt
     send_log(
         module="Policy",
@@ -5333,7 +5527,7 @@ def get_framework_details(request, framework_id):
     
     try:
         # Get framework by ID
-        framework = get_object_or_404(Framework, FrameworkId=framework_id)
+        framework = get_object_or_404(Framework, FrameworkId=framework_id, tenant_id=tenant_id)
        
         # Create response data
         response_data = {
@@ -5389,11 +5583,16 @@ def get_framework_details(request, framework_id):
  
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission]) # RBAC: Require PolicyViewPermission for viewing policy details
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policy_details(request, policy_id):
     """
     API endpoint for detailed policy information
     Returns all details of a policy regardless of status
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Log policy details retrieval attempt
     send_log(
         module="Policy",
@@ -5408,10 +5607,10 @@ def get_policy_details(request, policy_id):
     
     try:
         # Get policy by ID
-        policy = get_object_or_404(Policy, PolicyId=policy_id)
+        policy = get_object_or_404(Policy, PolicyId=policy_id, tenant_id=tenant_id)
        
         # Get all subpolicies for this policy
-        subpolicies = SubPolicy.objects.filter(PolicyId=policy)
+        subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy)
         subpolicy_data = []
        
         for subpolicy in subpolicies:
@@ -5489,11 +5688,16 @@ def get_policy_details(request, policy_id):
 #all policies code
 @api_view(['GET'])
 @permission_classes([PolicyListPermission])  # RBAC: Require PolicyListPermission for viewing all frameworks
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def all_policies_get_frameworks(request):
     """
     API endpoint to get all frameworks for AllPolicies.vue component.
     Note: Framework list itself is not filtered, but shows which framework is active
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     from .framework_filter_helper import get_framework_filter_info
     
     # Log all policies frameworks retrieval attempt
@@ -5510,11 +5714,23 @@ def all_policies_get_frameworks(request):
     )
     
     try:
-        # Get all frameworks (don't filter the framework list itself)
-        frameworks = Framework.objects.all()
+        # Check if active_only parameter is set (for dropdowns)
+        active_only = request.GET.get('active_only', 'false').lower() == 'true'
+        
+        # Filter by tenant
+        if active_only:
+            # Show only active frameworks for dropdowns
+            frameworks = Framework.objects.filter(tenant=tenant_id, ActiveInactive='Active')
+        else:
+            # Get all frameworks (don't filter the framework list itself) - for table view
+            frameworks = Framework.objects.filter(tenant=tenant_id)
         
         frameworks_data = []
         for framework in frameworks:
+            # Additional safety check: skip non-active frameworks for dropdowns when active_only is true
+            if active_only and hasattr(framework, 'ActiveInactive') and framework.ActiveInactive and framework.ActiveInactive.lower() != 'active':
+                continue
+            
             framework_data = {
                 'id': framework.FrameworkId,
                 'name': framework.FrameworkName,
@@ -5572,10 +5788,15 @@ def all_policies_get_frameworks(request):
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])  # RBAC: Require PolicyViewPermission for viewing framework version policies
 @audit_view_reports_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def all_policies_get_framework_version_policies(request, version_id):
     """
     API endpoint to get all policies for a specific framework version for AllPolicies.vue component.
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Log all policies framework version policies retrieval attempt
     send_log(
         module="Policy",
@@ -5595,11 +5816,11 @@ def all_policies_get_framework_version_policies(request, version_id):
         
         # Get ALL policies for this framework (regardless of CurrentVersion)
         # This ensures we show all policies that belong to the framework
-        policies = Policy.objects.filter(FrameworkId=framework)
+        policies = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=framework)
         
         # Get ALL PolicyVersions for ALL policies in this framework
         # This is important because versions can be linked across different Policy records
-        all_framework_policy_versions = PolicyVersion.objects.filter(
+        all_framework_policy_versions = PolicyVersion.objects.filter(tenant_id=tenant_id, 
             PolicyId__in=policies.values_list('PolicyId', flat=True)
         )
         
@@ -5636,7 +5857,7 @@ def all_policies_get_framework_version_policies(request, version_id):
         
         # For each policy, check if ALL its versions are children
         for policy in policies:
-            policy_versions = PolicyVersion.objects.filter(PolicyId=policy)
+            policy_versions = PolicyVersion.objects.filter(tenant_id=tenant_id, PolicyId=policy)
             if policy_versions.exists():
                 all_are_children = all(
                     v.PreviousVersionId is not None and v.PreviousVersionId in all_versions_map
@@ -5788,7 +6009,7 @@ def all_policies_get_framework_version_policies(request, version_id):
         # For remaining policies, check if they should be shown or hidden
         for policy in policies:
             if policy.PolicyId not in policies_with_versions:
-                policy_versions = PolicyVersion.objects.filter(PolicyId=policy)
+                policy_versions = PolicyVersion.objects.filter(tenant_id=tenant_id, PolicyId=policy)
                 if policy_versions.exists():
                     # Check if ALL versions of this policy are children of other policies' versions
                     # This means their PreviousVersionId points to versions from OTHER policies
@@ -5892,11 +6113,16 @@ def all_policies_get_framework_version_policies(request, version_id):
 
 @api_view(['GET'])
 @permission_classes([PolicyListPermission])  # RBAC: Require PolicyListPermission for viewing all policies
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def all_policies_get_policies(request):
     """
     API endpoint to get all policies for AllPolicies.vue component.
     Automatically applies framework filter from session if no explicit filter provided
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     from .framework_filter_helper import apply_framework_filter_with_relation, get_framework_filter_info
     
     # Log all policies retrieval attempt
@@ -5916,7 +6142,7 @@ def all_policies_get_policies(request):
     
     try:
         # Start with all policies
-        policies_query = Policy.objects.all()
+        policies_query = Policy.objects.filter(tenant_id=tenant_id)
         
         # Apply explicit framework filter if provided in query params
         if framework_id_param:
@@ -5937,7 +6163,7 @@ def all_policies_get_policies(request):
             }
             
             # Get versions for this policy
-            policy_versions = PolicyVersion.objects.filter(PolicyId=policy)
+            policy_versions = PolicyVersion.objects.filter(tenant_id=tenant_id, PolicyId=policy)
             versions_data = []
             for version in policy_versions:
                 versions_data.append({
@@ -5986,11 +6212,16 @@ def all_policies_get_policies(request):
 
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])  # RBAC: Require PolicyViewPermission for viewing policy versions
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def all_policies_get_policy_versions(request, policy_id):
     """
     API endpoint to get all versions of a specific policy for AllPolicies.vue component.
     Implements a dedicated version that handles version chains through PreviousVersionId.
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Log all policies policy versions retrieval attempt
     send_log(
         module="Policy",
@@ -6015,7 +6246,7 @@ def all_policies_get_policy_versions(request, policy_id):
         
         # Get the base policy
         try:
-            policy = Policy.objects.get(PolicyId=policy_id)
+            policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
             print(f"Found policy: {policy.PolicyName} (ID: {policy.PolicyId})")
         except Policy.DoesNotExist:
             print(f"Policy with ID {policy_id} not found")
@@ -6032,7 +6263,7 @@ def all_policies_get_policy_versions(request, policy_id):
                            status=status.HTTP_404_NOT_FOUND)
         except PolicyVersion.MultipleObjectsReturned:
             # If there are multiple versions, get all of them
-            direct_versions = list(PolicyVersion.objects.filter(PolicyId=policy))
+            direct_versions = list(PolicyVersion.objects.filter(tenant_id=tenant_id, PolicyId=policy))
             print(f"Found {len(direct_versions)} direct versions for policy {policy_id}")
             direct_version = direct_versions[0]  # Just use the first one for starting the chain
         
@@ -6059,7 +6290,7 @@ def all_policies_get_policy_versions(request, policy_id):
                     to_process.append(current_version.PreviousVersionId)
                     
                 # Find versions that reference this one as their previous version
-                next_versions = PolicyVersion.objects.filter(PreviousVersionId=current_id)
+                next_versions = PolicyVersion.objects.filter(tenant_id=tenant_id, PreviousVersionId=current_id)
                 for next_ver in next_versions:
                     if next_ver.VersionId not in visited:
                         to_process.append(next_ver.VersionId)
@@ -6074,7 +6305,7 @@ def all_policies_get_policy_versions(request, policy_id):
                 version_policy = version.PolicyId
                 
                 # Count subpolicies for this policy
-                subpolicy_count = SubPolicy.objects.filter(PolicyId=version_policy).count()
+                subpolicy_count = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=version_policy).count()
                 
                 # Get previous version details if available
                 previous_version = None
@@ -6151,10 +6382,15 @@ def all_policies_get_policy_versions(request, policy_id):
 
 @api_view(['GET'])
 @permission_classes([PolicyListPermission])  # RBAC: Require PolicyListPermission for viewing all subpolicies
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def all_policies_get_subpolicies(request):
     """
     API endpoint to get all subpolicies for AllPolicies.vue component.
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Log all policies subpolicies retrieval attempt
     framework_id = request.GET.get('framework_id')
     send_log(
@@ -6175,12 +6411,12 @@ def all_policies_get_subpolicies(request):
         print(f"Framework filter: {framework_id}")
         
         # Start with all subpolicies
-        subpolicies_query = SubPolicy.objects.all()
+        subpolicies_query = SubPolicy.objects.filter(tenant_id=tenant_id)
         
         # If framework filter is provided, filter through policies
         if framework_id:
             try:
-                policy_ids = Policy.objects.filter(FrameworkId_id=framework_id).values_list('PolicyId', flat=True)
+                policy_ids = Policy.objects.filter(tenant_id=tenant_id, FrameworkId_id=framework_id).values_list('PolicyId', flat=True)
                 print(f"Found {len(policy_ids)} policies for framework {framework_id}")
                 subpolicies_query = subpolicies_query.filter(PolicyId_id__in=policy_ids)
             except Exception as e:
@@ -6194,7 +6430,7 @@ def all_policies_get_subpolicies(request):
             try:
                 # Get the policy this subpolicy belongs to
                 try:
-                    policy = Policy.objects.get(PolicyId=subpolicy.PolicyId_id)
+                    policy = Policy.objects.get(PolicyId=subpolicy.PolicyId_id, tenant_id=tenant_id)
                     policy_name = policy.PolicyName
                     department = policy.Department
                 except Policy.DoesNotExist:
@@ -6262,10 +6498,15 @@ def all_policies_get_subpolicies(request):
 
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])  # RBAC: Require PolicyViewPermission for viewing subpolicy details
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def all_policies_get_subpolicy_details(request, subpolicy_id):
     """
     API endpoint to get details of a specific subpolicy for AllPolicies.vue component.
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Log all policies subpolicy details retrieval attempt
     send_log(
         module="Policy",
@@ -6279,7 +6520,7 @@ def all_policies_get_subpolicy_details(request, subpolicy_id):
     )
     
     try:
-        subpolicy = get_object_or_404(SubPolicy, SubPolicyId=subpolicy_id)
+        subpolicy = get_object_or_404(SubPolicy, SubPolicyId=subpolicy_id, tenant_id=tenant_id)
         policy = subpolicy.PolicyId
         
         subpolicy_data = {
@@ -6334,11 +6575,16 @@ def all_policies_get_subpolicy_details(request, subpolicy_id):
 
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])  # RBAC: Require PolicyViewPermission for viewing framework versions
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def all_policies_get_framework_versions(request, framework_id):
     """
     API endpoint to get all versions of a specific framework for AllPolicies.vue component.
     Implements a dedicated version that handles version chains through PreviousVersionId.
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Log all policies framework versions retrieval attempt
     send_log(
         module="Policy",
@@ -6363,7 +6609,7 @@ def all_policies_get_framework_versions(request, framework_id):
         
         # Get the base framework
         try:
-            framework = Framework.objects.get(FrameworkId=framework_id)
+            framework = Framework.objects.get(FrameworkId=framework_id, tenant_id=tenant_id)
             print(f"Found framework: {framework.FrameworkName} (ID: {framework.FrameworkId})")
         except Framework.DoesNotExist:
             print(f"Framework with ID {framework_id} not found")
@@ -6402,7 +6648,7 @@ def all_policies_get_framework_versions(request, framework_id):
                 
                 # Count policies for this framework (without filtering by version)
                 # This gets all policies associated with this framework regardless of version
-                policy_count = Policy.objects.filter(
+                policy_count = Policy.objects.filter(tenant_id=tenant_id, 
                     FrameworkId=version_framework
                 ).count()
                 
@@ -6485,11 +6731,16 @@ def all_policies_get_framework_versions(request, framework_id):
 
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])  # RBAC: Require PolicyViewPermission for viewing policy version subpolicies
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def all_policies_get_policy_version_subpolicies(request, version_id):
     """
     API endpoint to get all subpolicies for a specific policy version for AllPolicies.vue component.
     Implements a dedicated version instead of using the existing get_policy_version_subpolicies function.
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Log all policies policy version subpolicies retrieval attempt
     send_log(
         module="Policy",
@@ -6524,7 +6775,7 @@ def all_policies_get_policy_version_subpolicies(request, version_id):
         
         # Get the policy this version belongs to
         try:
-            policy = Policy.objects.get(PolicyId=policy_version.PolicyId_id)
+            policy = Policy.objects.get(PolicyId=policy_version.PolicyId_id, tenant_id=tenant_id)
             print(f"Found policy: {policy.PolicyName} (ID: {policy.PolicyId})")
         except Policy.DoesNotExist:
             print(f"Policy with ID {policy_version.PolicyId_id} not found")
@@ -6532,7 +6783,7 @@ def all_policies_get_policy_version_subpolicies(request, version_id):
                            status=status.HTTP_404_NOT_FOUND)
         
         # Get subpolicies for this policy
-        subpolicies = SubPolicy.objects.filter(PolicyId=policy)
+        subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy)
         print(f"Found {len(subpolicies)} subpolicies for policy {policy.PolicyId}")
         
         subpolicies_data = []
@@ -6600,10 +6851,15 @@ def all_policies_get_policy_version_subpolicies(request, version_id):
 
 @api_view(['POST'])
 @permission_classes([PolicyExportPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def export_all_frameworks_policies(request):
     """
     Export all frameworks, their policies, and subpolicies to the requested format.
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     from ...models import Framework, Policy, SubPolicy
     from ...routes.Global.s3_fucntions import export_data
     from ...utils import send_log, get_client_ip
@@ -6614,12 +6870,12 @@ def export_all_frameworks_policies(request):
     user_id = request.user.id if request.user.is_authenticated else 'anonymous'
     try:
         # Gather all frameworks
-        frameworks = Framework.objects.all()
+        frameworks = Framework.objects.filter(tenant_id=tenant_id)
         export_data_list = []
         for framework in frameworks:
-            policies = Policy.objects.filter(FrameworkId=framework.FrameworkId)
+            policies = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=framework.FrameworkId)
             for policy in policies:
-                subpolicies = SubPolicy.objects.filter(PolicyId=policy.PolicyId)
+                subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy.PolicyId)
                 if subpolicies.exists():
                     for sub in subpolicies:
                         row = {
@@ -6737,25 +6993,30 @@ def export_all_frameworks_policies(request):
 
 @api_view(['GET'])
 @permission_classes([PolicyDashboardPermission])  # RBAC: Require PolicyDashboardPermission for policy dashboard
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policy_dashboard_summary(request):
     from .framework_filter_helper import apply_framework_filter_with_relation, get_framework_filter_info
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     
     # Apply framework filtering to all queries
-    policies_base = Policy.objects.all()
+    policies_base = Policy.objects.filter(tenant_id=tenant_id)
     policies_filtered = apply_framework_filter_with_relation(policies_base, request, 'FrameworkId_id')
     
     # Get filtered policy IDs for subpolicy filtering
     policy_ids = list(policies_filtered.values_list('PolicyId', flat=True))
     
     total_policies = policies_filtered.count()
-    total_subpolicies = SubPolicy.objects.filter(PolicyId__in=policy_ids).count() if policy_ids else 0
+    total_subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId__in=policy_ids).count() if policy_ids else 0
     active_policies = policies_filtered.filter(ActiveInactive='Active').count()
     inactive_policies = policies_filtered.filter(ActiveInactive='Inactive').count()
-    active_subpolicies = SubPolicy.objects.filter(PolicyId__in=policy_ids, Status='Approved').count() if policy_ids else 0
+    active_subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId__in=policy_ids, Status='Approved').count() if policy_ids else 0
     
     # Filter approvals by the filtered policies
-    approved_policies = PolicyApproval.objects.filter(PolicyId__in=policy_ids, ApprovedNot=1).count() if policy_ids else 0
-    total_approvals = PolicyApproval.objects.filter(PolicyId__in=policy_ids).count() if policy_ids else 0
+    approved_policies = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, PolicyId__in=policy_ids, ApprovedNot=1).count() if policy_ids else 0
+    total_approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, PolicyId__in=policy_ids).count() if policy_ids else 0
     approval_rate = (approved_policies / total_approvals) * 100 if total_approvals else 0
 
     # Get all filtered policies with their details
@@ -6780,21 +7041,31 @@ def get_policy_dashboard_summary(request):
 
 @api_view(['GET'])
 @permission_classes([PolicyAnalyticsPermission])  # RBAC: Require PolicyAnalyticsPermission for viewing policy status distribution
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policy_status_distribution(request):
     from .framework_filter_helper import apply_framework_filter_with_relation
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     
     # Apply framework filter
-    policies = apply_framework_filter_with_relation(Policy.objects.all(), request, 'FrameworkId_id')
+    policies = apply_framework_filter_with_relation(Policy.objects.filter(tenant_id=tenant_id), request, 'FrameworkId_id')
     status_counts = policies.values('Status').annotate(count=Count('Status'))
     return Response(status_counts)
 
 @api_view(['GET'])
 @permission_classes([PolicyAnalyticsPermission]) # RBAC: Require PolicyAnalyticsPermission for viewing reviewer workload
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_reviewer_workload(request):
     from .framework_filter_helper import apply_framework_filter_with_relation
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     
     # Apply framework filter
-    policies = apply_framework_filter_with_relation(Policy.objects.all(), request, 'FrameworkId_id')
+    policies = apply_framework_filter_with_relation(Policy.objects.filter(tenant_id=tenant_id), request, 'FrameworkId_id')
     reviewer_counts = policies.values('Reviewer').annotate(count=Count('Reviewer')).order_by('-count')
     return Response(reviewer_counts)
 
@@ -6803,14 +7074,19 @@ from datetime import timedelta
 
 @api_view(['GET'])
 @permission_classes([PolicyAnalyticsPermission])  # RBAC: Require PolicyAnalyticsPermission for viewing recent policy activity
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_recent_policy_activity(request):
     from .framework_filter_helper import apply_framework_filter_with_relation
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     
     one_week_ago = timezone.now().date() - timedelta(days=7)
     activities = []
     
     # Apply framework filter to policies
-    policies_filtered = apply_framework_filter_with_relation(Policy.objects.all(), request, 'FrameworkId_id')
+    policies_filtered = apply_framework_filter_with_relation(Policy.objects.filter(tenant_id=tenant_id), request, 'FrameworkId_id')
     
     # 1. Recent Policy Creation - using filtered policies
     recent_policies = policies_filtered.filter(CreatedByDate__gte=one_week_ago).order_by('-CreatedByDate')[:5]
@@ -6825,7 +7101,7 @@ def get_recent_policy_activity(request):
         })
     
     # 2. Recent Policy Approvals
-    recent_policy_approvals = PolicyApproval.objects.filter(
+    recent_policy_approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
         ApprovedDate__gte=one_week_ago,
         ApprovedNot=True
     ).select_related('PolicyId').order_by('-ApprovedDate')[:5]
@@ -6841,7 +7117,7 @@ def get_recent_policy_activity(request):
             })
     
     # 3. Recent Framework Creation
-    recent_frameworks = Framework.objects.filter(CreatedByDate__gte=one_week_ago).order_by('-CreatedByDate')[:5]
+    recent_frameworks = Framework.objects.filter(tenant_id=tenant_id, CreatedByDate__gte=one_week_ago).order_by('-CreatedByDate')[:5]
     for framework in recent_frameworks:
         activities.append({
             'type': 'framework_created',
@@ -6877,7 +7153,12 @@ from django.db.models import F, ExpressionWrapper, DurationField
 
 @api_view(['GET'])
 @permission_classes([PolicyAnalyticsPermission])  # RBAC: Require PolicyAnalyticsPermission for viewing average policy approval time
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_avg_policy_approval_time(request):
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         # Get all approved policies with approval dates, including the related Policy object
         approved_approvals = PolicyApproval.objects.select_related('PolicyId').filter(
@@ -6901,7 +7182,7 @@ def get_avg_policy_approval_time(request):
         count = 0
         for pid, approved_date in latest_approval_dates.items():
             try:
-                policy = Policy.objects.get(PolicyId=pid)
+                policy = Policy.objects.get(PolicyId=pid, tenant_id=tenant_id)
                 created_date = policy.CreatedByDate
                 if created_date and approved_date:
                     days = (approved_date - created_date).days
@@ -6920,11 +7201,16 @@ def get_avg_policy_approval_time(request):
 
 @api_view(['GET'])
 @permission_classes([PolicyAnalyticsPermission])  # RBAC: Require PolicyAnalyticsPermission for viewing framework status distribution
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_framework_status_distribution(request):
     """
     Get framework status distribution (Approved, Rejected, Under Review, etc.)
     Can show overall framework status OR policy status for a specific framework
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         # Check if a specific framework is selected
         framework_id = request.GET.get('framework_id')
@@ -6934,7 +7220,7 @@ def get_framework_status_distribution(request):
             print(f"DEBUG: Getting policy status distribution for framework {framework_id}")
             
             # Count policies by status for the specific framework
-            status_counts = Policy.objects.filter(
+            status_counts = Policy.objects.filter(tenant_id=tenant_id, 
                 FrameworkId=framework_id
             ).values('Status').annotate(
                 count=Count('Status')
@@ -6969,7 +7255,7 @@ def get_framework_status_distribution(request):
                 ]
             
             # Get total policies for this framework
-            total_policies = Policy.objects.filter(FrameworkId=framework_id).count()
+            total_policies = Policy.objects.filter(tenant_id=tenant_id, FrameworkId=framework_id).count()
             print(f"DEBUG: Total policies for framework {framework_id}: {total_policies}")
             
         else:
@@ -7041,7 +7327,12 @@ def get_framework_status_distribution(request):
 
 @api_view(['GET'])
 @permission_classes([PolicyAnalyticsPermission]) # RBAC: Require PolicyAnalyticsPermission for policy analytics
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policy_analytics(request):
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         x_axis = request.GET.get('x_axis', 'time')
         y_axis = request.GET.get('y_axis', 'count')
@@ -7050,7 +7341,7 @@ def get_policy_analytics(request):
         
         # Initialize base queryset
         if x_axis == 'subpolicy':
-            queryset = SubPolicy.objects.all()
+            queryset = SubPolicy.objects.filter(tenant_id=tenant_id)
             base_model = 'subpolicy'
             
             # Apply framework filter to subpolicies through policy relationship
@@ -7062,7 +7353,7 @@ def get_policy_analytics(request):
                 queryset = queryset.filter(PolicyId=policy_id)
                 
         elif x_axis == 'framework':
-            queryset = Framework.objects.all()
+            queryset = Framework.objects.filter(tenant_id=tenant_id)
             base_model = 'framework'
             
             # Apply framework filter
@@ -7070,7 +7361,7 @@ def get_policy_analytics(request):
                 queryset = queryset.filter(FrameworkId=framework_id)
                 
         else:
-            queryset = Policy.objects.all()
+            queryset = Policy.objects.filter(tenant_id=tenant_id)
             base_model = 'policy'
             
             # Apply framework filter to policies
@@ -7091,7 +7382,7 @@ def get_policy_analytics(request):
                 
                 if y_axis == 'status':
                     # Policy status distribution for specific framework
-                    status_counts = Policy.objects.filter(
+                    status_counts = Policy.objects.filter(tenant_id=tenant_id, 
                         FrameworkId=framework_id
                     ).values('Status').annotate(
                         count=Count('Status')
@@ -7118,7 +7409,7 @@ def get_policy_analytics(request):
                     
                 elif y_axis == 'activeInactive':
                     # Policy active/inactive distribution for specific framework
-                    active_counts = Policy.objects.filter(
+                    active_counts = Policy.objects.filter(tenant_id=tenant_id, 
                         FrameworkId=framework_id
                     ).values('ActiveInactive').annotate(
                         count=Count('ActiveInactive')
@@ -7144,7 +7435,7 @@ def get_policy_analytics(request):
                     
                 elif y_axis == 'category':
                     # Policy category distribution for specific framework
-                    category_counts = Policy.objects.filter(
+                    category_counts = Policy.objects.filter(tenant_id=tenant_id, 
                         FrameworkId=framework_id
                     ).values('PolicyCategory').annotate(
                         count=Count('PolicyCategory')
@@ -7163,7 +7454,7 @@ def get_policy_analytics(request):
                     
                 elif y_axis == 'createdByDate':
                     # Policy creation date distribution for specific framework
-                    date_counts = Policy.objects.filter(
+                    date_counts = Policy.objects.filter(tenant_id=tenant_id, 
                         FrameworkId=framework_id
                     ).values('CreatedByDate').annotate(
                         count=Count('CreatedByDate')
@@ -7182,7 +7473,7 @@ def get_policy_analytics(request):
                     
                 elif y_axis == 'createdByName':
                     # Policy creator distribution for specific framework
-                    creator_counts = Policy.objects.filter(
+                    creator_counts = Policy.objects.filter(tenant_id=tenant_id, 
                         FrameworkId=framework_id
                     ).values('CreatedByName').annotate(
                         count=Count('CreatedByName')
@@ -7201,7 +7492,7 @@ def get_policy_analytics(request):
                     
                 elif y_axis == 'department':
                     # Policy department distribution for specific framework
-                    dept_counts = Policy.objects.filter(
+                    dept_counts = Policy.objects.filter(tenant_id=tenant_id, 
                         FrameworkId=framework_id
                     ).values('Department').annotate(
                         count=Count('Department')
@@ -7409,7 +7700,7 @@ def get_policy_analytics(request):
                 version_counts = {fv['FrameworkId__Identifier']: fv['version_count'] for fv in framework_versions}
                 
                 # Get all frameworks first
-                frameworks = Framework.objects.all()
+                frameworks = Framework.objects.filter(tenant_id=tenant_id)
                 framework_id_to_identifier = {f.FrameworkId: f.Identifier for f in frameworks}
                 
                 # Add version count to each item in queryset
@@ -7532,7 +7823,7 @@ def get_policy_analytics(request):
                 ).filter(policy_count__gt=0)
 
                 # Get all policies for these frameworks
-                framework_policies = Policy.objects.filter(
+                framework_policies = Policy.objects.filter(tenant_id=tenant_id, 
                     FrameworkId__in=[f['FrameworkId'] for f in base_queryset]
                 ).values('FrameworkId', 'Department')
 
@@ -7752,11 +8043,16 @@ def get_policy_analytics(request):
 
 @api_view(['GET'])
 @permission_classes([PolicyKPIPermission])  # RBAC: Require PolicyKPIPermission for Performance KPIs page
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policy_kpis(request):
     """
     Get policy KPIs for the Performance KPIs page
     RBAC Protected: Requires policy_view permission
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     
     # Debug logging for RBAC
     try:
@@ -7777,11 +8073,11 @@ def get_policy_kpis(request):
         logger.error(f"[RBAC DEBUG] Error in debug logging: {debug_e}")
     
     try:
-        # Get total policies count
-        total_policies = Policy.objects.count()
+        # Get total policies count (filtered by tenant)
+        total_policies = Policy.objects.filter(tenant=tenant_id).count()
         
         # Get active policies count
-        active_policies = Policy.objects.filter(
+        active_policies = Policy.objects.filter(tenant=tenant_id, 
             ActiveInactive='Active'
         ).count()
 
@@ -7789,7 +8085,7 @@ def get_policy_kpis(request):
         total_users = Users.objects.count()
 
         # Get top 5 policies by acknowledgement rate
-        policies = Policy.objects.filter(ActiveInactive='Active').annotate(
+        policies = Policy.objects.filter(tenant=tenant_id, ActiveInactive='Active').annotate(
             acknowledgement_rate=Case(
                 When(AcknowledgementCount__gt=0, 
                      then=ExpressionWrapper(
@@ -7817,7 +8113,7 @@ def get_policy_kpis(request):
         monthly_counts = []
         
         # Get all policies with their creation dates
-        policies = Policy.objects.filter(
+        policies = Policy.objects.filter(tenant=tenant_id, 
             CreatedByDate__gte=twelve_months_ago
         ).values('CreatedByDate', 'ActiveInactive')
         
@@ -7850,7 +8146,9 @@ def get_policy_kpis(request):
         three_months_ago = date.today() - timedelta(days=90)
         
         # Get all policy versions with previous version links
+        # Filter through Policy relationship since PolicyVersion doesn't have direct tenant field
         policy_versions = PolicyVersion.objects.filter(
+            PolicyId__tenant=tenant_id,
             PreviousVersionId__isnull=False  # Has a previous version
         ).select_related('PolicyId')
         
@@ -7886,13 +8184,13 @@ def get_policy_kpis(request):
             revision_rate = (revised_policies / total_policies) * 100
             revision_rate = min(revision_rate, 100)  # Cap at 100%
 
-        # Calculate policy coverage by department
-        departments = Policy.objects.values_list('Department', flat=True).distinct()
+        # Calculate policy coverage by department (filtered by tenant)
+        departments = Policy.objects.filter(tenant=tenant_id).values_list('Department', flat=True).distinct()
         department_coverage = []
         
         for dept in departments:
             if dept:  # Skip empty department values
-                dept_policies = Policy.objects.filter(Department=dept)
+                dept_policies = Policy.objects.filter(tenant=tenant_id, Department=dept)
                 total_dept_policies = dept_policies.count()
                 if total_dept_policies > 0:
                     avg_coverage = dept_policies.aggregate(
@@ -7908,14 +8206,16 @@ def get_policy_kpis(request):
         # Sort departments by coverage rate in descending order
         department_coverage.sort(key=lambda x: x['coverage_rate'], reverse=True)
         
-        # Calculate overall average coverage rate
-        overall_coverage = Policy.objects.aggregate(
+        # Calculate overall average coverage rate (filtered by tenant)
+        overall_coverage = Policy.objects.filter(tenant=tenant_id).aggregate(
             avg_coverage=Coalesce(Avg('CoverageRate'), 0.0)
         )['avg_coverage']
 
         # Calculate average approval time metrics
         # Get all approved policies with their approval dates
+        # Filter through Policy relationship since PolicyApproval doesn't have direct tenant field
         approved_policies = PolicyApproval.objects.filter(
+            PolicyId__tenant=tenant_id,
             ApprovedNot=True,
             ApprovedDate__isnull=False
         ).select_related('PolicyId')
@@ -7981,7 +8281,12 @@ def get_policy_kpis(request):
 @permission_classes([AllowAny]) # Allow any authenticated user to acknowledge policies
 @authentication_classes([CsrfExemptSessionAuthentication])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def acknowledge_policy(request, policy_id):
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         # Extract user_id from JWT token or request.user
         user_id = None
@@ -8010,7 +8315,7 @@ def acknowledge_policy(request, policy_id):
                 'error': 'User not authenticated. Please login again.'
             }, status=status.HTTP_401_UNAUTHORIZED)
         
-        policy = Policy.objects.get(PolicyId=policy_id)
+        policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
         
         # Initialize acknowledged_users list if None
         # Handle case where AcknowledgedUserIds might be a string or None
@@ -8074,11 +8379,16 @@ def safe_isoformat(val):
 
 @api_view(['POST'])
 @permission_classes([PolicyTailoringPermission])  # Use proper permission class for tailoring
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def create_tailored_framework(request):
     """
     Create a new framework from the Tailoring page with policies and subpolicies
     This will automatically create the framework approval entry for the approval workflow
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     print(f"DEBUG: create_tailored_framework - Function called successfully")
     print(f"DEBUG: create_tailored_framework - User: {request.user}")
     print(f"DEBUG: create_tailored_framework - User ID: {getattr(request.user, 'UserId', 'No UserId')}")
@@ -8152,7 +8462,7 @@ def create_tailored_framework(request):
         reviewer_name = data.get('reviewer', '')
         reviewer_id = None
         if reviewer_name:
-            reviewer_user = Users.objects.filter(UserName=reviewer_name).first()
+            reviewer_user = Users.objects.filter(tenant_id=tenant_id, UserName=reviewer_name).first()
             if reviewer_user:
                 reviewer_id = reviewer_user.UserId
         
@@ -8436,7 +8746,7 @@ def create_tailored_framework(request):
                 }
                 
                 # Get subpolicies for this policy
-                subpolicies = SubPolicy.objects.filter(PolicyId=policy)
+                subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy)
                 for subpolicy in subpolicies:
                     subpolicy_dict = {
                         "SubPolicyId": subpolicy.SubPolicyId,
@@ -8478,7 +8788,7 @@ def create_tailored_framework(request):
             user_id = request.session.get('user_id')
             if not user_id:
                 # Try to get user ID from the framework creator name
-                created_by_user = Users.objects.filter(UserName=framework.CreatedByName).first()
+                created_by_user = Users.objects.filter(tenant_id=tenant_id, UserName=framework.CreatedByName).first()
                 if created_by_user:
                     user_id = created_by_user.UserId
                 else:
@@ -8502,14 +8812,14 @@ def create_tailored_framework(request):
             notification_service = NotificationService()
             reviewer_email = None
             if reviewer_id:
-                reviewer_user_obj = Users.objects.filter(UserId=reviewer_id).first()
+                reviewer_user_obj = Users.objects.filter(tenant_id=tenant_id, UserId=reviewer_id).first()
                 if reviewer_user_obj:
                     reviewer_email = reviewer_user_obj.Email
             # Get creator email
             creator_email = None
             creator_name = framework.CreatedByName
             if creator_name:
-                creator_user_obj = Users.objects.filter(UserName=creator_name).first()
+                creator_user_obj = Users.objects.filter(tenant_id=tenant_id, UserName=creator_name).first()
                 if creator_user_obj:
                     creator_email = creator_user_obj.Email
             # ------------------------------------------------------
@@ -8649,11 +8959,16 @@ def create_tailored_framework(request):
 @api_view(['POST'])
 @permission_classes([PolicyCreatePermission])
 @require_consent('create_policy')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def create_tailored_policy(request):
     """
     Create a new policy from the Tailoring page and automatically create policy approval entry
     This endpoint handles creating a new policy under a selected framework with approval workflow
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     # Log tailored policy creation attempt
     send_log(
         module="Policy",
@@ -8762,7 +9077,7 @@ def create_tailored_policy(request):
         
         # Get target framework
         try:
-            target_framework = Framework.objects.get(FrameworkId=target_framework_id)
+            target_framework = Framework.objects.get(FrameworkId=target_framework_id, tenant_id=tenant_id)
         except Framework.DoesNotExist:
             # Log framework not found error
             send_log(
@@ -8780,7 +9095,7 @@ def create_tailored_policy(request):
         
         # Check if policy name is unique within the framework
         policy_name = data.get('PolicyName')
-        if Policy.objects.filter(FrameworkId=target_framework, PolicyName=policy_name).exists():
+        if Policy.objects.filter(tenant_id=tenant_id, FrameworkId=target_framework, PolicyName=policy_name).exists():
             # Log duplicate policy name error
             send_log(
                 module="Policy",
@@ -8804,7 +9119,7 @@ def create_tailored_policy(request):
         reviewer_name = data.get('Reviewer', '')
         reviewer_id = None
         if reviewer_name:
-            reviewer_user = Users.objects.filter(UserName=reviewer_name).first()
+            reviewer_user = Users.objects.filter(tenant_id=tenant_id, UserName=reviewer_name).first()
             if reviewer_user:
                 reviewer_id = reviewer_user.UserId
         
@@ -8822,7 +9137,7 @@ def create_tailored_policy(request):
             # Try to get user ID from the creator name
             created_by_name = data.get('CreatedByName', '')
             if created_by_name:
-                created_by_user = Users.objects.filter(UserName=created_by_name).first()
+                created_by_user = Users.objects.filter(tenant_id=tenant_id, UserName=created_by_name).first()
                 if created_by_user:
                     user_id = created_by_user.UserId
             
@@ -8967,7 +9282,7 @@ def create_tailored_policy(request):
             # After creating the new policy, send notification to reviewer if email is available
             policy_reviewer_email = None
             if reviewer_name:
-                reviewer_user = Users.objects.filter(UserName=reviewer_name).first()
+                reviewer_user = Users.objects.filter(tenant_id=tenant_id, UserName=reviewer_name).first()
                 if reviewer_user:
                     policy_reviewer_email = reviewer_user.Email
             
@@ -8975,7 +9290,7 @@ def create_tailored_policy(request):
             policy_creator_email = None
             policy_creator_name = new_policy.CreatedByName
             if policy_creator_name:
-                creator_user = Users.objects.filter(UserName=policy_creator_name).first()
+                creator_user = Users.objects.filter(tenant_id=tenant_id, UserName=policy_creator_name).first()
                 if creator_user:
                     policy_creator_email = creator_user.Email
             
@@ -9173,7 +9488,7 @@ def create_tailored_policy(request):
             }
             
             # Check for existing policy approval to prevent duplicates
-            existing_approval = PolicyApproval.objects.filter(
+            existing_approval = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
                 PolicyId=new_policy.PolicyId,
                 UserId=user_id,
                 ReviewerId=reviewer_id,
@@ -9258,11 +9573,16 @@ def create_tailored_policy(request):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([PolicyApprovePermission])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def resubmit_policy_approval(request, approval_id):
     """
     Resubmit a rejected policy with updated data
     Creates new PolicyApproval record with incremented version
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         print(f"DEBUG: resubmit_policy_approval called for approval_id: {approval_id}")
         print(f"DEBUG: Request data: {request.data}")
@@ -9279,7 +9599,7 @@ def resubmit_policy_approval(request, approval_id):
             return Response({"error": "Only rejected or under review policies can be resubmitted"}, status=400)
             
         # Get the latest PolicyApproval to check its status
-        latest_approval = PolicyApproval.objects.filter(
+        latest_approval = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
             PolicyId=policy
         ).order_by('-Version').first()
         
@@ -9318,7 +9638,7 @@ def resubmit_policy_approval(request, approval_id):
         policy.Applicability = extracted_data.get('Applicability', policy.Applicability)
         
         # Preserve the original creator information
-        original_creator = Users.objects.filter(UserId=approval.UserId).first()
+        original_creator = Users.objects.filter(tenant_id=tenant_id, UserId=approval.UserId).first()
         if original_creator:
             policy.CreatedByName = original_creator.UserName
             extracted_data['CreatedByName'] = original_creator.UserName
@@ -9359,7 +9679,7 @@ def resubmit_policy_approval(request, approval_id):
         reviewer_id = approval.ReviewerId
 
         # Ensure creator information is preserved in ExtractedData
-        original_creator = Users.objects.filter(UserId=user_id).first()
+        original_creator = Users.objects.filter(tenant_id=tenant_id, UserId=user_id).first()
         if original_creator:
             extracted_data['CreatedByName'] = original_creator.UserName
             extracted_data['CreatedBy'] = original_creator.UserId
@@ -9386,9 +9706,9 @@ def resubmit_policy_approval(request, approval_id):
             reviewer = None
             submitter = None
             if new_policy_approval.ReviewerId:
-                reviewer = Users.objects.get(UserId=new_policy_approval.ReviewerId)
+                reviewer = Users.objects.get(UserId=new_policy_approval.ReviewerId, tenant_id=tenant_id)
             if new_policy_approval.UserId:
-                submitter = Users.objects.get(UserId=new_policy_approval.UserId)
+                submitter = Users.objects.get(UserId=new_policy_approval.UserId, tenant_id=tenant_id)
             if reviewer and reviewer.Email:
                 notification_data = {
                     'notification_type': 'policyResubmitted',
@@ -9423,17 +9743,22 @@ def resubmit_policy_approval(request, approval_id):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([PolicyApprovePermission])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def resubmit_policy_by_id(request, policy_id):
     """
     Resubmit a rejected policy with updated data using policy_id
     Creates new PolicyApproval record with incremented version
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         print(f"DEBUG: resubmit_policy_by_id called for policy_id: {policy_id}")
         print(f"DEBUG: Request data: {request.data}")
         
         # Get the policy directly
-        policy = Policy.objects.get(PolicyId=policy_id)
+        policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
         print(f"DEBUG: Found policy with name: {policy.PolicyName}, status: {policy.Status}")
         
         # Verify policy exists and can be resubmitted
@@ -9443,7 +9768,7 @@ def resubmit_policy_by_id(request, policy_id):
             return Response({"error": "Only rejected or under review policies can be resubmitted"}, status=400)
             
         # Get the latest PolicyApproval to check its status
-        latest_approval = PolicyApproval.objects.filter(
+        latest_approval = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
             PolicyId=policy
         ).order_by('-Version').first()
         
@@ -9485,13 +9810,13 @@ def resubmit_policy_by_id(request, policy_id):
         policy.Applicability = extracted_data.get('Applicability', policy.Applicability)
         
         # Get the original creator from the FIRST approval (initial submission) to maintain consistency
-        first_approval = PolicyApproval.objects.filter(
+        first_approval = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
             PolicyId=policy
         ).order_by('Version').first()  # Get the first approval by version
         
         original_creator = None
         if first_approval:
-            original_creator = Users.objects.filter(UserId=first_approval.UserId).first()
+            original_creator = Users.objects.filter(tenant_id=tenant_id, UserId=first_approval.UserId).first()
             print(f"DEBUG: Found original creator from first approval: {original_creator.UserName if original_creator else 'None'} (UserId: {first_approval.UserId})")
         
         if original_creator:
@@ -9580,8 +9905,8 @@ def update_policy_status_from_subpolicies(policy_id):
     try:
         from datetime import date
         print(f"DEBUG: Starting update_policy_status_from_subpolicies for policy_id: {policy_id}")
-        policy = Policy.objects.get(PolicyId=policy_id)
-        subpolicies = SubPolicy.objects.filter(PolicyId=policy)
+        policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
+        subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy)
         
         print(f"DEBUG: Found {subpolicies.count()} subpolicies for policy {policy_id}")
         
@@ -9654,11 +9979,11 @@ def deactivate_previous_version_policies(policy_id):
         print(f"DEBUG: Starting deactivate_previous_version_policies for policy_id: {policy_id}")
         
         # Get the current policy
-        current_policy = Policy.objects.get(PolicyId=policy_id)
+        current_policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
         print(f"DEBUG: Found current policy: {current_policy.PolicyName}, Identifier: {current_policy.Identifier}")
         
         # Get the current policy version
-        current_version = PolicyVersion.objects.filter(PolicyId=current_policy).first()
+        current_version = PolicyVersion.objects.filter(tenant_id=tenant_id, PolicyId=current_policy).first()
         if not current_version:
             print(f"DEBUG: No version information found for policy {policy_id}")
             return 0
@@ -9674,7 +9999,7 @@ def deactivate_previous_version_policies(policy_id):
         print(f"DEBUG: Found previous version ID: {previous_version_id}")
         
         # Get the previous version record
-        previous_version = PolicyVersion.objects.filter(VersionId=previous_version_id).first()
+        previous_version = PolicyVersion.objects.filter(tenant_id=tenant_id, VersionId=previous_version_id).first()
         if not previous_version:
             print(f"DEBUG: Previous version record {previous_version_id} not found")
             return 0
@@ -9704,7 +10029,12 @@ def deactivate_previous_version_policies(policy_id):
 
 @api_view(['GET'])
 @permission_classes([])  # No permission required - public endpoint (also skipped in middleware)
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policy_categories(request):
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         categories = PolicyCategory.objects.all()
         categories_data = []
@@ -9722,7 +10052,12 @@ def get_policy_categories(request):
 
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policy_subcategories(request):
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         policy_type = request.GET.get('policy_type')
         policy_category = request.GET.get('policy_category')
@@ -9743,8 +10078,13 @@ def get_policy_subcategories(request):
 
 @api_view(['POST'])
 @permission_classes([PolicyCreatePermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def save_policy_category(request):
     # Import security modules
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     from django.utils.html import escape as escape_html
     import shlex
     
@@ -9800,7 +10140,7 @@ def save_policy_category(request):
         
         if selected_framework_id:
             try:
-                target_framework = Framework.objects.get(FrameworkId=selected_framework_id)
+                target_framework = Framework.objects.get(FrameworkId=selected_framework_id, tenant_id=tenant_id)
                 print(f"✅ DEBUG: Found target framework: {target_framework.FrameworkName} (ID: {target_framework.FrameworkId})")
             except Framework.DoesNotExist:
                 print(f"❌ DEBUG: Framework {selected_framework_id} not found")
@@ -9864,12 +10204,17 @@ def save_policy_category(request):
 
 @api_view(['GET'])
 @permission_classes([])  # No permission required - public endpoint (also skipped in middleware)
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_entities(request):
     """
     Get all entities for the multi-select dropdown
     Uses cursor-based pagination for efficient querying
     Returns entities structured for frontend consumption
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         # Use raw SQL for cursor-based querying (more efficient for large datasets)
         from django.db import connection
@@ -9922,14 +10267,19 @@ def get_entities(request):
 
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policy_compliance_stats(request, policy_id):
     """
     Get compliance statistics for a specific policy from lastchecklistitemverified table
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         # Check if policy exists
         try:
-            policy = Policy.objects.get(PolicyId=policy_id)
+            policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
         except Policy.DoesNotExist:
             return Response({
                 'error': 'Policy not found'
@@ -9995,7 +10345,7 @@ def _handle_policy_status_change_request(request, policy_id, reason, reviewer_id
     
     # Get the policy
     try:
-        policy = Policy.objects.get(PolicyId=policy_id)
+        policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
         print(f"DEBUG: Found policy: {policy.PolicyName}")
     except Policy.DoesNotExist:
         print(f"ERROR: Policy with ID {policy_id} not found")
@@ -10016,7 +10366,7 @@ def _handle_policy_status_change_request(request, policy_id, reason, reviewer_id
     # Get reviewer email for the selected reviewer
     reviewer_email = None
     if reviewer_id:
-        reviewer_user = Users.objects.filter(UserId=reviewer_id).first()
+        reviewer_user = Users.objects.filter(tenant_id=tenant_id, UserId=reviewer_id).first()
         if reviewer_user:
             reviewer_email = reviewer_user.Email
     
@@ -10024,7 +10374,7 @@ def _handle_policy_status_change_request(request, policy_id, reason, reviewer_id
     
     # Collect subpolicies data for approval JSON
     subpolicies_data = []
-    subpolicies = SubPolicy.objects.filter(PolicyId=policy)
+    subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy)
     
     # Security: XSS Protection - Escape subpolicy text fields
     for subpolicy in subpolicies:
@@ -10087,7 +10437,7 @@ def _handle_policy_status_change_request(request, policy_id, reason, reviewer_id
     
     with transaction.atomic():
         # Check if there's already a pending status change request for this policy
-        existing_pending_request = PolicyApproval.objects.filter(
+        existing_pending_request = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
             PolicyId=policy,
             ExtractedData__request_type='status_change',
             ApprovedNot__isnull=True  # Not yet approved/rejected
@@ -10107,7 +10457,7 @@ def _handle_policy_status_change_request(request, policy_id, reason, reviewer_id
             print(f"DEBUG: Policy {policy.PolicyId} already has status 'Under Review'")
         
         # Determine the next user version
-        latest_user_version = PolicyApproval.objects.filter(
+        latest_user_version = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
             PolicyId=policy,
             Version__startswith='u'
         ).order_by('-ApprovalId').first()
@@ -10164,11 +10514,16 @@ def _handle_policy_status_change_request(request, policy_id, reason, reviewer_id
 
 @api_view(['POST'])
 @permission_classes([PolicyApprovalWorkflowPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def request_policy_status_change(request, policy_id):
     """
     Request approval for changing a policy's status from Active to Inactive
     Creates a policy approval entry that needs to be approved by a reviewer
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         print(f"DEBUG: API request_policy_status_change called for policy ID: {policy_id}")
         print(f"DEBUG: Request data: {request.data}")
@@ -10199,8 +10554,13 @@ def request_policy_status_change(request, policy_id):
 
 @api_view(['POST', 'GET'])
 @permission_classes([PolicyApprovalWorkflowPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def approve_policy_status_change(request, approval_id):
     print(f"DEBUG: ===== POLICY FUNCTION ENTRY POINT =====")
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     print(f"DEBUG: Policy function called with approval_id: {approval_id}")
     print(f"DEBUG: Request method: {request.method}")
     print(f"DEBUG: Request path: {request.path}")
@@ -10376,7 +10736,7 @@ def approve_policy_status_change(request, approval_id):
                 cascade_to_subpolicies = extracted_data.get('cascade_to_subpolicies', True)
                 if cascade_to_subpolicies:
                     # Get all subpolicies for this policy
-                    subpolicies = SubPolicy.objects.filter(PolicyId=policy)
+                    subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy)
                     
                     # Update their status to Inactive (only if not already inactive)
                     for subpolicy in subpolicies:
@@ -10406,7 +10766,7 @@ def approve_policy_status_change(request, approval_id):
                 }
             
             # Determine the next reviewer version
-            latest_reviewer_version = PolicyApproval.objects.filter(
+            latest_reviewer_version = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
                 PolicyId=policy,
                 Version__startswith='r'
             ).order_by('-ApprovalId').first()
@@ -10438,12 +10798,12 @@ def approve_policy_status_change(request, approval_id):
             submitter_email = None
             submitter_name = policy.CreatedByName
             if submitter_name:
-                submitter_user = Users.objects.filter(UserName=submitter_name).first()
+                submitter_user = Users.objects.filter(tenant_id=tenant_id, UserName=submitter_name).first()
                 if submitter_user:
                     submitter_email = submitter_user.Email
             reviewer_name = None
             if approval.ReviewerId:
-                reviewer_user = Users.objects.filter(UserId=approval.ReviewerId).first()
+                reviewer_user = Users.objects.filter(tenant_id=tenant_id, UserId=approval.ReviewerId).first()
                 if reviewer_user:
                     reviewer_name = reviewer_user.UserName
             
@@ -10497,18 +10857,23 @@ def approve_policy_status_change(request, approval_id):
 
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policy_status_change_requests(request):
     """
     Get all policy status change requests
     Include both pending and processed (approved/rejected) requests
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         # Find all policy approvals with request_type=status_change
         status_change_requests = []
         policy_status_map = {}  # To track the latest status for each policy
         
         # Get all approvals, not just those with ApprovedNot=None
-        approvals = PolicyApproval.objects.filter().order_by('-ApprovalId')
+        approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, ).order_by('-ApprovalId')
         
         # First pass: Get the latest status for each policy
         for approval in approvals:
@@ -10543,7 +10908,7 @@ def get_policy_status_change_requests(request):
                 # Get the subpolicies that would be affected if approved
                 affected_subpolicies = []
                 if approval.ExtractedData.get('cascade_to_subpolicies', True):
-                    subpolicies = SubPolicy.objects.filter(PolicyId=policy)
+                    subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy)
                     
                     for subpolicy in subpolicies:
                         affected_subpolicies.append({
@@ -10600,15 +10965,20 @@ def get_policy_status_change_requests(request):
 
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policy_status_change_requests_by_user(request, user_id=None):
     """
     Get policy status change requests filtered by user (creator/owner)
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         print(f"DEBUG: get_policy_status_change_requests_by_user called with user_id: {user_id}")
         
         # Base query for policy status change requests
-        approvals = PolicyApproval.objects.filter().order_by('-ApprovalId')
+        approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, ).order_by('-ApprovalId')
         
         if user_id:
             # Filter by specific user (creator/owner)
@@ -10639,7 +11009,7 @@ def get_policy_status_change_requests_by_user(request, user_id=None):
                     try:
                         # Ensure ReviewerId is a valid integer
                         reviewer_id_int = int(approval.ReviewerId)
-                        reviewer = Users.objects.get(UserId=reviewer_id_int)
+                        reviewer = Users.objects.get(UserId=reviewer_id_int, tenant_id=tenant_id)
                         reviewer_info = {
                             'UserId': reviewer.UserId,
                             'UserName': reviewer.UserName,
@@ -10652,7 +11022,7 @@ def get_policy_status_change_requests_by_user(request, user_id=None):
                 # Get the subpolicies that would be affected if approved
                 affected_subpolicies = []
                 if approval.ExtractedData.get('cascade_to_subpolicies', True):
-                    subpolicies = SubPolicy.objects.filter(PolicyId=policy)
+                    subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy)
                     
                     for subpolicy in subpolicies:
                         affected_subpolicies.append({
@@ -10703,7 +11073,7 @@ def get_policy_status_change_requests_by_user(request, user_id=None):
         print(f"DEBUG: Returning {len(status_change_requests)} policy status change requests for user {user_id}")
         
         # Debug: Print all approvals in database
-        all_approvals = PolicyApproval.objects.filter(
+        all_approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
             ExtractedData__request_type='status_change'
         ).values('ApprovalId', 'UserId', 'ReviewerId', 'PolicyId__PolicyName')
         print(f"DEBUG: All policy status change approvals in database: {list(all_approvals)}")
@@ -10716,16 +11086,21 @@ def get_policy_status_change_requests_by_user(request, user_id=None):
 
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policy_status_change_requests_by_reviewer(request, reviewer_id=None):
     """
     Get policy status change requests filtered by reviewer
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         print(f"DEBUG: get_policy_status_change_requests_by_reviewer called with reviewer_id: {reviewer_id}")
         
         # Base query for policy status change requests
         # Filter out records with invalid ReviewerId (non-integer values)
-        approvals = PolicyApproval.objects.filter(
+        approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
             ReviewerId__isnull=False
         ).exclude(
             ReviewerId__regex=r'^[a-zA-Z]'  # Exclude records where ReviewerId starts with letters
@@ -10760,7 +11135,7 @@ def get_policy_status_change_requests_by_reviewer(request, reviewer_id=None):
                     try:
                         # Ensure ReviewerId is a valid integer
                         reviewer_id_int = int(approval.ReviewerId)
-                        reviewer = Users.objects.get(UserId=reviewer_id_int)
+                        reviewer = Users.objects.get(UserId=reviewer_id_int, tenant_id=tenant_id)
                         reviewer_info = {
                             'UserId': reviewer.UserId,
                             'UserName': reviewer.UserName,
@@ -10773,7 +11148,7 @@ def get_policy_status_change_requests_by_reviewer(request, reviewer_id=None):
                 # Get the subpolicies that would be affected if approved
                 affected_subpolicies = []
                 if approval.ExtractedData.get('cascade_to_subpolicies', True):
-                    subpolicies = SubPolicy.objects.filter(PolicyId=policy)
+                    subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy)
                     
                     for subpolicy in subpolicies:
                         affected_subpolicies.append({
@@ -10824,7 +11199,7 @@ def get_policy_status_change_requests_by_reviewer(request, reviewer_id=None):
         print(f"DEBUG: Returning {len(status_change_requests)} policy status change requests for reviewer {reviewer_id}")
         
         # Debug: Print all approvals in database
-        all_approvals = PolicyApproval.objects.filter(
+        all_approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
             ExtractedData__request_type='status_change'
         ).values('ApprovalId', 'UserId', 'ReviewerId', 'PolicyId__PolicyName')
         print(f"DEBUG: All policy status change approvals in database: {list(all_approvals)}")
@@ -10837,17 +11212,22 @@ def get_policy_status_change_requests_by_reviewer(request, reviewer_id=None):
 
 @api_view(['POST'])
 @permission_classes([PolicyViewPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def test_policy_status_debug(request, policy_id):
     """
     Test endpoint to debug policy status change issues
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         print(f"DEBUG TEST: Policy ID: {policy_id}")
         print(f"DEBUG TEST: Request data: {request.data}")
         
         # Test 1: Can we get the policy?
         try:
-            policy = Policy.objects.get(PolicyId=policy_id)
+            policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
             print(f"DEBUG TEST: Policy found: {policy.PolicyName}")
         except Exception as e:
             print(f"DEBUG TEST: Policy fetch failed: {str(e)}")
@@ -10899,8 +11279,13 @@ def test_policy_status_debug(request, policy_id):
 from django.http import JsonResponse
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policy_extraction_progress(request, task_id):
     """Get the progress of policy extraction for a specific task"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         from grc.routes.UploadFramework.policy_text_extract import get_progress
         
@@ -10933,8 +11318,13 @@ def get_policy_extraction_progress(request, task_id):
 
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policy_counts_by_status(request):
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     Get policy counts by status for dashboard display
     Returns counts for Under Review, Approved, and Rejected policies
     Automatically applies framework filter from session
@@ -10958,7 +11348,7 @@ def get_policy_counts_by_status(request):
         from django.db.models import Count, Q
         
         # Apply framework filter
-        policies_filtered = apply_framework_filter_with_relation(Policy.objects.all(), request, 'FrameworkId_id')
+        policies_filtered = apply_framework_filter_with_relation(Policy.objects.filter(tenant_id=tenant_id), request, 'FrameworkId_id')
         
         # Get counts for each status
         pending_count = policies_filtered.filter(Status='Under Review').count()
@@ -11012,12 +11402,17 @@ def get_policy_counts_by_status(request):
 
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policies_paginated_by_status(request):
     """
     Get policies by status with pagination support
     Query params: status, limit, offset
     Automatically applies framework filter from session
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     from .framework_filter_helper import apply_framework_filter_with_relation, get_framework_filter_info
     
     try:
@@ -11038,7 +11433,7 @@ def get_policies_paginated_by_status(request):
         print(f"DEBUG: Fetching policies with status='{status_param}', limit={limit}, offset={offset}, framework_filter={filter_info}")
         
         # Get policies with the specified status
-        policies_queryset = Policy.objects.filter(Status=status_param)
+        policies_queryset = Policy.objects.filter(tenant_id=tenant_id, Status=status_param)
         
         # Apply framework filter from session
         policies_queryset = apply_framework_filter_with_relation(policies_queryset, request, 'FrameworkId_id')
@@ -11112,6 +11507,8 @@ from ...utils import send_log, get_client_ip
 @parser_classes([MultiPartParser, FormParser])
 @csrf_exempt
 @require_consent('upload_policy')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def upload_policy_document(request):
     """
     Upload a policy document to S3 via the RenderS3Client
@@ -11123,6 +11520,8 @@ def upload_policy_document(request):
     - type: Type of document (e.g., 'policy', 'framework', 'subpolicy')
     - policyName: Name of the policy (for reference)
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     # Import security modules
     from django.utils.html import escape as escape_html
     from django.conf import settings
@@ -11313,10 +11712,15 @@ def upload_policy_document(request):
 
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])  # RBAC: Require PolicyViewPermission for viewing policy approvals
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def list_policy_approvals_for_user(request, user_id):
     """
     Get all policy approvals created by a specific user (My Tasks)
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         framework_id = request.GET.get('framework_id', None)
         print(f"🔍 DEBUG: list_policy_approvals_for_user called with framework_id: {framework_id}")
@@ -11335,7 +11739,7 @@ def list_policy_approvals_for_user(request, user_id):
         )
         
         # Filter policy approvals by UserId (creator)
-        policy_approvals = PolicyApproval.objects.filter(
+        policy_approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
             UserId=user_id
         ).order_by('-ApprovalId')
         
@@ -11352,7 +11756,7 @@ def list_policy_approvals_for_user(request, user_id):
                 print(f"✅ Framework filter applied through Policy relationship. Found {policy_approvals.count()} policy approvals.")
                 
                 # Additional debug: Check if any approvals exist
-                total_approvals = PolicyApproval.objects.filter(UserId=user_id).count()
+                total_approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, UserId=user_id).count()
                 print(f"🔍 DEBUG: Total approvals for user {user_id}: {total_approvals}")
                 print(f"🔍 DEBUG: Filtered approvals for framework {framework_id_int}: {policy_approvals.count()}")
                 
@@ -11360,7 +11764,7 @@ def list_policy_approvals_for_user(request, user_id):
                 if policy_approvals.count() == 0:
                     print(f"⚠️ DEBUG: No policy approvals found for framework {framework_id_int}")
                     # Get all frameworks that have policy approvals for this user through Policy relationship
-                    frameworks_with_approvals = PolicyApproval.objects.filter(
+                    frameworks_with_approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
                         UserId=user_id,
                         PolicyId__isnull=False
                     ).values_list('PolicyId__FrameworkId', flat=True).distinct()
@@ -11370,7 +11774,7 @@ def list_policy_approvals_for_user(request, user_id):
                     try:
                         from ..models import Framework
                         if frameworks_with_approvals:
-                            framework_names = Framework.objects.filter(FrameworkId__in=frameworks_with_approvals).values('FrameworkId', 'FrameworkName')
+                            framework_names = Framework.objects.filter(tenant_id=tenant_id, FrameworkId__in=frameworks_with_approvals).values('FrameworkId', 'FrameworkName')
                             print(f"🔍 DEBUG: Framework names with data: {list(framework_names)}")
                     except Exception as e:
                         print(f"❌ ERROR: Could not fetch framework names: {e}")
@@ -11420,10 +11824,15 @@ def list_policy_approvals_for_user(request, user_id):
 
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])  # RBAC: Require PolicyViewPermission for viewing reviewer policy approvals
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def list_policy_approvals_for_reviewer_by_id(request, user_id):
     """
     Get all policy approvals assigned to a specific reviewer (Reviewer Tasks)
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         framework_id = request.GET.get('framework_id', None)
         print(f"🔍 DEBUG: list_policy_approvals_for_reviewer_by_id called with framework_id: {framework_id}")
@@ -11442,7 +11851,7 @@ def list_policy_approvals_for_reviewer_by_id(request, user_id):
         )
         
         # Filter policy approvals by ReviewerId
-        policy_approvals = PolicyApproval.objects.filter(
+        policy_approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
             ReviewerId=user_id
         ).order_by('-ApprovalId')
         
@@ -11459,7 +11868,7 @@ def list_policy_approvals_for_reviewer_by_id(request, user_id):
                 print(f"✅ Framework filter applied to reviewer approvals through Policy relationship. Found {policy_approvals.count()} policy approvals.")
                 
                 # Additional debug: Check if any approvals exist
-                total_approvals = PolicyApproval.objects.filter(ReviewerId=user_id).count()
+                total_approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, ReviewerId=user_id).count()
                 print(f"🔍 DEBUG: Total reviewer approvals for user {user_id}: {total_approvals}")
                 print(f"🔍 DEBUG: Filtered reviewer approvals for framework {framework_id_int}: {policy_approvals.count()}")
                 
@@ -11467,7 +11876,7 @@ def list_policy_approvals_for_reviewer_by_id(request, user_id):
                 if policy_approvals.count() == 0:
                     print(f"⚠️ DEBUG: No reviewer policy approvals found for framework {framework_id_int}")
                     # Get all frameworks that have reviewer policy approvals for this user through Policy relationship
-                    frameworks_with_reviewer_approvals = PolicyApproval.objects.filter(
+                    frameworks_with_reviewer_approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
                         ReviewerId=user_id,
                         PolicyId__isnull=False
                     ).values_list('PolicyId__FrameworkId', flat=True).distinct()
@@ -11477,7 +11886,7 @@ def list_policy_approvals_for_reviewer_by_id(request, user_id):
                     try:
                         from ..models import Framework
                         if frameworks_with_reviewer_approvals:
-                            framework_names = Framework.objects.filter(FrameworkId__in=frameworks_with_reviewer_approvals).values('FrameworkId', 'FrameworkName')
+                            framework_names = Framework.objects.filter(tenant_id=tenant_id, FrameworkId__in=frameworks_with_reviewer_approvals).values('FrameworkId', 'FrameworkName')
                             print(f"🔍 DEBUG: Framework names with reviewer data: {list(framework_names)}")
                     except Exception as e:
                         print(f"❌ ERROR: Could not fetch framework names: {e}")
@@ -11529,11 +11938,16 @@ def list_policy_approvals_for_reviewer_by_id(request, user_id):
 # New file upload endpoint for policy documents
 @api_view(['GET'])
 @permission_classes([PolicyViewPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policy_review_history(request, policy_id):
     """
     Get the review history/revisions for a specific policy
     Returns all approval records (r1, r2, etc.) for tracking reviewer actions
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         # Log policy review history access attempt
         send_log(
@@ -11548,10 +11962,10 @@ def get_policy_review_history(request, policy_id):
         )
 
         # Get the policy to validate it exists
-        policy = get_object_or_404(Policy, PolicyId=policy_id)
+        policy = get_object_or_404(Policy, PolicyId=policy_id, tenant_id=tenant_id)
         
         # Get all approval records for this policy, ordered by version
-        approvals = PolicyApproval.objects.filter(
+        approvals = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
             PolicyId=policy
         ).select_related('ReviewerId').order_by('-ApprovalId')  # Latest first
         
@@ -11561,7 +11975,7 @@ def get_policy_review_history(request, policy_id):
             reviewer_name = "Unknown"
             if approval.ReviewerId:
                 try:
-                    reviewer = Users.objects.get(UserId=approval.ReviewerId)
+                    reviewer = Users.objects.get(UserId=approval.ReviewerId, tenant_id=tenant_id)
                     reviewer_name = reviewer.UserName
                 except Users.DoesNotExist:
                     reviewer_name = "Unknown"
@@ -11639,11 +12053,16 @@ def get_policy_review_history(request, policy_id):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([PolicyApprovePermission])  # RBAC: Require PolicyApprovePermission for rejecting subpolicies
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def reject_subpolicy(request, pk):
     """
     Dedicated endpoint for rejecting a subpolicy with cascading rejection
     When one subpolicy is rejected, all subpolicies and parent policy are rejected
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         # Log subpolicy rejection attempt
         send_log(
@@ -11672,7 +12091,7 @@ def reject_subpolicy(request, pk):
             return Response({'error': 'Parent policy not found'}, status=status.HTTP_404_NOT_FOUND)
         
         # Get all subpolicies of the same parent policy
-        all_subpolicies = SubPolicy.objects.filter(PolicyId=parent_policy)
+        all_subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=parent_policy)
         
         # Count of subpolicies being rejected
         subpolicy_count = all_subpolicies.count()
@@ -11690,14 +12109,14 @@ def reject_subpolicy(request, pk):
         
         # Create a policy approval record with rejection details
         # Find the latest policy approval for this policy
-        latest_approval = PolicyApproval.objects.filter(
+        latest_approval = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
             PolicyId=parent_policy
         ).order_by('-ApprovalId').first()
         
         if latest_approval:
             # Create a new approval record with rejection
             r_versions = []
-            for pa in PolicyApproval.objects.filter(PolicyId=parent_policy):
+            for pa in PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, PolicyId=parent_policy):
                 if pa.Version and pa.Version.startswith('r') and pa.Version[1:].isdigit():
                     r_versions.append(int(pa.Version[1:]))
             
@@ -11806,10 +12225,15 @@ def reject_subpolicy(request, pk):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])  # No RBAC required for departments
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_departments(request):
     """
     Fetch all departments from the database
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         from ...models import Department
         
@@ -11846,10 +12270,15 @@ def get_departments(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])  # No RBAC required for saving departments
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def save_department(request):
     """
     Save a new department to the database
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         from ...models import Department
         from django.utils import timezone
@@ -11916,8 +12345,13 @@ def save_department(request):
 # Test endpoint for tailoring permissions
 @api_view(['GET'])
 @permission_classes([PolicyTailoringPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def test_tailoring_permissions(request):
     """Test endpoint to verify tailoring permissions"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     return Response({
         'message': 'Tailoring permissions working correctly!',
         'user': str(request.user),

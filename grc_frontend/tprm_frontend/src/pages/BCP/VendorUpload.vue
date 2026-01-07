@@ -54,7 +54,37 @@
             <div class="unified-form">
               <div class="form-row">
                 <div>
-                  <label for="strategy-name" class="label">Strategy Name *</label>
+                  <label for="strategy-name" class="label flex items-center gap-2">
+                    <span>Strategy Name *</span>
+                    <div class="bcp-data-type-circle-toggle-wrapper">
+                      <div class="bcp-data-type-circle-toggle">
+                        <div 
+                          class="bcp-circle-option bcp-personal-circle" 
+                          :class="{ active: getPlanDataType('strategyName') === 'personal' }"
+                          @click="setPlanDataType('strategyName', 'personal')"
+                          title="Personal Data"
+                        >
+                          <div class="bcp-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="bcp-circle-option bcp-confidential-circle" 
+                          :class="{ active: getPlanDataType('strategyName') === 'confidential' }"
+                          @click="setPlanDataType('strategyName', 'confidential')"
+                          title="Confidential Data"
+                        >
+                          <div class="bcp-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="bcp-circle-option bcp-regular-circle" 
+                          :class="{ active: getPlanDataType('strategyName') === 'regular' }"
+                          @click="setPlanDataType('strategyName', 'regular')"
+                          title="Regular Data"
+                        >
+                          <div class="bcp-circle-inner"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </label>
                   <input
                     id="strategy-name"
                     class="input"
@@ -66,6 +96,37 @@
 
               <div class="form-row">
                 <div>
+                  <label for="plan-name" class="label flex items-center gap-2">
+                    <span>Plan Name *</span>
+                    <div class="bcp-data-type-circle-toggle-wrapper">
+                      <div class="bcp-data-type-circle-toggle">
+                        <div 
+                          class="bcp-circle-option bcp-personal-circle" 
+                          :class="{ active: getPlanDataType('planName') === 'personal' }"
+                          @click="setPlanDataType('planName', 'personal')"
+                          title="Personal Data"
+                        >
+                          <div class="bcp-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="bcp-circle-option bcp-confidential-circle" 
+                          :class="{ active: getPlanDataType('planName') === 'confidential' }"
+                          @click="setPlanDataType('planName', 'confidential')"
+                          title="Confidential Data"
+                        >
+                          <div class="bcp-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="bcp-circle-option bcp-regular-circle" 
+                          :class="{ active: getPlanDataType('planName') === 'regular' }"
+                          @click="setPlanDataType('planName', 'regular')"
+                          title="Regular Data"
+                        >
+                          <div class="bcp-circle-inner"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </label>
                   <label for="plan-type-select" class="label">Plan Type *</label>
                   <div class="custom-dropdown-wrapper">
                     <div 
@@ -136,6 +197,91 @@
 
               <div class="form-row">
                 <div>
+                  <label for="scope" class="label flex items-center gap-2">
+                    <span>Scope</span>
+                    <div class="bcp-data-type-circle-toggle-wrapper">
+                      <div class="bcp-data-type-circle-toggle">
+                        <div 
+                          class="bcp-circle-option bcp-personal-circle" 
+                          :class="{ active: getPlanDataType('scope') === 'personal' }"
+                          @click="setPlanDataType('scope', 'personal')"
+                          title="Personal Data"
+                        >
+                          <div class="bcp-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="bcp-circle-option bcp-confidential-circle" 
+                          :class="{ active: getPlanDataType('scope') === 'confidential' }"
+                          @click="setPlanDataType('scope', 'confidential')"
+                          title="Confidential Data"
+                        >
+                          <div class="bcp-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="bcp-circle-option bcp-regular-circle" 
+                          :class="{ active: getPlanDataType('scope') === 'regular' }"
+                          @click="setPlanDataType('scope', 'regular')"
+                          title="Regular Data"
+                        >
+                          <div class="bcp-circle-inner"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </label>
+                  <select
+                    id="scope"
+                    class="select"
+                    v-model="currentDoc.scope"
+                  >
+                    <option value="">Select scope</option>
+                    <option v-for="scope in scopeOptions" :key="scope.id" :value="scope.value">
+                      {{ scope.value }}
+                    </option>
+                  </select>
+                </div>
+                <div>
+                  <label for="criticality" class="label flex items-center gap-2">
+                    <span>Criticality *</span>
+                    <div class="bcp-data-type-circle-toggle-wrapper">
+                      <div class="bcp-data-type-circle-toggle">
+                        <div 
+                          class="bcp-circle-option bcp-personal-circle" 
+                          :class="{ active: getPlanDataType('criticality') === 'personal' }"
+                          @click="setPlanDataType('criticality', 'personal')"
+                          title="Personal Data"
+                        >
+                          <div class="bcp-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="bcp-circle-option bcp-confidential-circle" 
+                          :class="{ active: getPlanDataType('criticality') === 'confidential' }"
+                          @click="setPlanDataType('criticality', 'confidential')"
+                          title="Confidential Data"
+                        >
+                          <div class="bcp-circle-inner"></div>
+                        </div>
+                        <div 
+                          class="bcp-circle-option bcp-regular-circle" 
+                          :class="{ active: getPlanDataType('criticality') === 'regular' }"
+                          @click="setPlanDataType('criticality', 'regular')"
+                          title="Regular Data"
+                        >
+                          <div class="bcp-circle-inner"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </label>
+                  <select
+                    id="criticality"
+                    class="select"
+                    v-model="currentDoc.criticality"
+                  >
+                    <option value="">Select criticality</option>
+                    <option value="LOW">LOW</option>
+                    <option value="MEDIUM">MEDIUM</option>
+                    <option value="HIGH">HIGH</option>
+                    <option value="CRITICAL">CRITICAL</option>
+                  </select>
                   <label for="scope-select" class="label">Scope</label>
                   <div class="custom-dropdown-wrapper">
                     <div 
@@ -234,7 +380,37 @@
               </div>
 
               <div>
-                <label for="file-upload" class="label">File *</label>
+                <label for="file-upload" class="label flex items-center gap-2">
+                  <span>File *</span>
+                  <div class="bcp-data-type-circle-toggle-wrapper">
+                    <div class="bcp-data-type-circle-toggle">
+                      <div 
+                        class="bcp-circle-option bcp-personal-circle" 
+                        :class="{ active: getPlanDataType('file') === 'personal' }"
+                        @click="setPlanDataType('file', 'personal')"
+                        title="Personal Data"
+                      >
+                        <div class="bcp-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="bcp-circle-option bcp-confidential-circle" 
+                        :class="{ active: getPlanDataType('file') === 'confidential' }"
+                        @click="setPlanDataType('file', 'confidential')"
+                        title="Confidential Data"
+                      >
+                        <div class="bcp-circle-inner"></div>
+                      </div>
+                      <div 
+                        class="bcp-circle-option bcp-regular-circle" 
+                        :class="{ active: getPlanDataType('file') === 'regular' }"
+                        @click="setPlanDataType('file', 'regular')"
+                        title="Regular Data"
+                      >
+                        <div class="bcp-circle-inner"></div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
                 <div class="file-upload-area" @click="triggerFileUpload">
                   <svg class="h-6 w-6 text-muted-foreground mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
@@ -380,6 +556,50 @@ export default {
 
     const documents = ref([])
 
+    // Data type classification for plan fields
+    const planFieldDataTypes = reactive({
+      strategyName: 'regular',
+      planName: 'regular',
+      scope: 'regular',
+      criticality: 'regular',
+      file: 'confidential'
+    })
+
+    // Method to set data type for a plan field
+    const setPlanDataType = (fieldName, type) => {
+      if (planFieldDataTypes.hasOwnProperty(fieldName)) {
+        planFieldDataTypes[fieldName] = type
+        console.log(`Data type selected for plan field ${fieldName}:`, type)
+      }
+    }
+
+    // Get data type for a plan field
+    const getPlanDataType = (fieldName) => {
+      return planFieldDataTypes[fieldName] || 'regular'
+    }
+
+    // Helper function to build data_inventory JSON for plan
+    const buildPlanDataInventory = () => {
+      const fieldLabelMap = {
+        strategyName: 'Strategy Name',
+        planName: 'Plan Name',
+        scope: 'Scope',
+        criticality: 'Criticality',
+        file: 'File'
+      }
+
+      const dataInventory = {}
+      
+      // Build flat structure: {"Field Label": "data_type"}
+      for (const [fieldName, dataType] of Object.entries(planFieldDataTypes)) {
+        if (fieldLabelMap[fieldName]) {
+          const fieldLabel = fieldLabelMap[fieldName]
+          dataInventory[fieldLabel] = dataType
+        }
+      }
+      
+      console.log('📋 Plan Data Inventory JSON:', JSON.stringify(dataInventory, null, 2))
+      return dataInventory
     const fetchPlanTypes = async () => {
       try {
         console.log('Fetching plan types from API')
@@ -626,14 +846,16 @@ export default {
         const formData = new FormData()
         formData.append('strategyName', strategyName.value)
         
+        // Add document metadata with data_inventory
         // Add document metadata with planType per document
         formData.append('documents', JSON.stringify(documents.value.map(doc => ({
-          planType: doc.planType,
           planName: doc.planName,
-          scope: doc.scope,
           criticality: doc.criticality,
-          fileName: doc.fileName
+          data_inventory: buildPlanDataInventory()
         }))))
+        
+        // Add data_inventory for the strategy
+        formData.append('data_inventory', JSON.stringify(buildPlanDataInventory()))
         
         // Add files
         console.log('Documents to upload:', documents.value)
@@ -877,7 +1099,10 @@ export default {
       editDocument,
       removeDocument,
       submitDocuments,
-      loadMockData
+      loadMockData,
+      setPlanDataType,
+      getPlanDataType,
+      buildPlanDataInventory
     }
   }
 }
@@ -885,4 +1110,113 @@ export default {
 
 <style scoped>
 @import './VendorUpload.css';
+
+/* Data Type Classification Toggle Styles */
+.bcp-data-type-circle-toggle-wrapper {
+  display: inline-flex !important;
+  align-items: center !important;
+  margin-left: 12px !important;
+  padding: 4px 8px !important;
+  background-color: white !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 16px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: relative !important;
+  z-index: 1 !important;
+  flex-shrink: 0 !important;
+}
+
+.bcp-data-type-circle-toggle {
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.bcp-circle-option {
+  width: 14px !important;
+  height: 14px !important;
+  border-radius: 50% !important;
+  border: 1.5px solid #d1d5db !important;
+  background-color: white !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.3s ease !important;
+  position: relative !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  flex-shrink: 0 !important;
+}
+
+.bcp-circle-option:hover {
+  transform: scale(1.2) !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12) !important;
+}
+
+.bcp-circle-inner {
+  width: 0 !important;
+  height: 0 !important;
+  border-radius: 50% !important;
+  transition: all 0.3s ease !important;
+  background-color: transparent !important;
+}
+
+.bcp-circle-option.active .bcp-circle-inner {
+  width: 9px !important;
+  height: 9px !important;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Personal Circle - Blue */
+.bcp-circle-option.bcp-personal-circle {
+  border: 1.5px solid #4f7cff !important;
+}
+
+.bcp-circle-option.bcp-personal-circle.active {
+  border: 1.5px solid #4f7cff !important;
+  background-color: rgba(79, 124, 255, 0.1) !important;
+  box-shadow: 0 0 6px rgba(79, 124, 255, 0.2) !important;
+}
+
+.bcp-circle-option.bcp-personal-circle.active .bcp-circle-inner {
+  background-color: #4f7cff !important;
+  box-shadow: 0 0 4px rgba(79, 124, 255, 0.35) !important;
+}
+
+/* Confidential Circle - Red */
+.bcp-circle-option.bcp-confidential-circle {
+  border: 1.5px solid #e63946 !important;
+}
+
+.bcp-circle-option.bcp-confidential-circle.active {
+  border: 1.5px solid #e63946 !important;
+  background-color: rgba(230, 57, 70, 0.1) !important;
+  box-shadow: 0 0 6px rgba(230, 57, 70, 0.2) !important;
+}
+
+.bcp-circle-option.bcp-confidential-circle.active .bcp-circle-inner {
+  background-color: #e63946 !important;
+  box-shadow: 0 0 4px rgba(230, 57, 70, 0.35) !important;
+}
+
+/* Regular Circle - Grey */
+.bcp-circle-option.bcp-regular-circle {
+  border: 1.5px solid #6c757d !important;
+}
+
+.bcp-circle-option.bcp-regular-circle.active {
+  border: 1.5px solid #6c757d !important;
+  background-color: rgba(108, 117, 125, 0.1) !important;
+  box-shadow: 0 0 6px rgba(108, 117, 125, 0.2) !important;
+}
+
+.bcp-circle-option.bcp-regular-circle.active .bcp-circle-inner {
+  background-color: #6c757d !important;
+  box-shadow: 0 0 4px rgba(108, 117, 125, 0.35) !important;
+}
 </style>

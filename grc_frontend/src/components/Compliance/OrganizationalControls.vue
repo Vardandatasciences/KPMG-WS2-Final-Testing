@@ -729,7 +729,9 @@ export default {
   methods: {
     async loadFrameworks() {
       try {
-        const response = await axiosInstance.get('/api/all-policies/frameworks/');
+        const response = await axiosInstance.get('/api/all-policies/frameworks/', {
+          params: { active_only: 'true' }
+        });
         console.log('Frameworks API response:', response.data);
         
         if (response.data.success && response.data.frameworks) {

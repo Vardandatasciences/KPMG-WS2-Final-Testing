@@ -34,6 +34,12 @@ from ...rbac.decorators import (
 )
 from .framework_filter_helper import get_active_framework_filter, apply_framework_filter_to_audits, get_framework_sql_filter
 
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
+
 # DRF Session auth variant that skips CSRF enforcement for API clients
 class CsrfExemptSessionAuthentication(SessionAuthentication):
     def enforce_csrf(self, request):
@@ -88,8 +94,8 @@ def save_report_to_db(audit_id: int, report_url: str, version: str = None) -> bo
                 ) SELECT 
                     %s, %s, PolicyId, SubPolicyId, FrameworkId 
                 FROM audit 
-                WHERE AuditId = %s
-            """, [audit_id, report_url, audit_id])
+                WHERE AuditId = %s AND tenant_id = %s
+            """, [audit_id, report_url, audit_id, tenant_id])
             return True
     except Exception as e:
         print(f"Error saving report to DB: {str(e)}")
@@ -131,7 +137,7 @@ def save_review_version(
         print(datetime.datetime.now(),"------------------------------------------------------------------------------")
         with connection.cursor() as cursor:
             # Get FrameworkId from the audit
-            cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s", [audit_id])
+            cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s AND tenant_id = %s", [audit_id, tenant_id])
             framework_row = cursor.fetchone()
             framework_id = framework_row[0] if framework_row else None
             
@@ -215,11 +221,12 @@ def get_latest_version(audit_id: int) -> Optional[Dict[str, Any]]:
             # Updated query to sort by datetime (created_at) and get the most recent
             cursor.execute("""
                 SELECT Version, ExtractedInfo, Date, UserId, ApprovedRejected
-                FROM audit_version 
-                WHERE AuditId = %s
-                ORDER BY Date DESC, Version DESC
+                FROM audit_version av
+                JOIN audit a ON av.AuditId = a.AuditId
+                WHERE av.AuditId = %s AND a.tenant_id = %s
+                ORDER BY av.Date DESC, av.Version DESC
                 LIMIT 1
-            """, [audit_id])
+            """, [audit_id, tenant_id])
             result = cursor.fetchone()
             if result:
                 return {
@@ -521,8 +528,8 @@ def create_incidents_for_findings(audit_id: int) -> None:
             cursor.execute("""
                 SELECT Title, Scope, Objective, BusinessUnit, FrameworkId, AuditType
                 FROM audit
-                WHERE AuditId = %s
-            """, [audit_id])
+                WHERE AuditId = %s AND tenant_id = %s
+            """, [audit_id, tenant_id])
             audit_row = cursor.fetchone()
             is_ai_audit = audit_row and audit_row[5] == 'A' if audit_row else False
             audit_data = {
@@ -562,12 +569,13 @@ def create_incidents_for_findings(audit_id: int) -> None:
                     c.Mitigation
                 FROM audit_findings af
                 JOIN compliance c ON af.ComplianceId = c.ComplianceId
-                WHERE af.AuditId = %s 
+                JOIN audit a ON af.AuditId = a.AuditId
+                WHERE af.AuditId = %s AND a.tenant_id = %s
                 AND (
                     (af.Check = '0') OR  -- Not Compliant
                     (af.Check = '1')     -- Partially Compliant
                 )
-            """, [audit_id])
+            """, [audit_id, tenant_id])
             
             findings = cursor.fetchall()
             
@@ -761,10 +769,16 @@ def create_incidents_for_findings(audit_id: int) -> None:
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditReviewPermission])
 @audit_review_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def update_audit_review_status(request, audit_id):
     """
     Update the review status of an audit and handle rejection/acceptance flows.
+    MULTI-TENANCY: Only updates review status for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     print("--------------reviewing.py update_review_status---------------------------------------")
     try:
         print(f"DEBUG: update_review_status called for audit_id: {audit_id}")
@@ -835,7 +849,7 @@ def update_audit_review_status(request, audit_id):
         
         # Find and update the audit
         try:
-            audit = Audit.objects.get(AuditId=audit_id)
+            audit = Audit.objects.get(AuditId=audit_id, tenant_id=tenant_id)
             print(f"DEBUG: Found audit with ID {audit_id}, current status: {audit.Status}, review status: {audit.ReviewStatus}")
         except Audit.DoesNotExist:
             return Response({'error': 'Audit not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -896,12 +910,14 @@ def update_audit_review_status(request, audit_id):
                                 ReviewComments = %s,
                                 ReviewRejected = 1,
                                 ReviewDate = %s
-                            WHERE AuditId = %s AND ComplianceId = %s
+                            JOIN audit a ON audit_findings.AuditId = a.AuditId
+                            WHERE audit_findings.AuditId = %s AND a.tenant_id = %s AND audit_findings.ComplianceId = %s
                         """, [
                             review.get('review_status'),
                             review.get('review_comments', ''),
                             current_time,
                             audit_id,
+                            tenant_id,
                             review.get('compliance_id')
                         ])
                 else:
@@ -912,11 +928,13 @@ def update_audit_review_status(request, audit_id):
                             ReviewComments = %s,
                             ReviewRejected = 1,
                             ReviewDate = %s
-                        WHERE AuditId = %s
+                        JOIN audit a ON audit_findings.AuditId = a.AuditId
+                        WHERE audit_findings.AuditId = %s AND a.tenant_id = %s
                     """, [
                         review_comments or 'Audit rejected',
                         current_time,
-                        audit_id
+                        audit_id,
+                        tenant_id
                     ])
                     
                 # Update version data to indicate rejection
@@ -1576,10 +1594,16 @@ def update_audit_review_status(request, audit_id):
 @csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def test_json_extraction(request):
     """
     Test endpoint to extract risks and mitigations from JSON data
+    MULTI-TENANCY: Only processes data for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         json_data = request.data.get('json_data')
         if not json_data:
@@ -1612,10 +1636,16 @@ def test_json_extraction(request):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditReviewPermission])
 @audit_review_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def load_latest_review_data(request, audit_id):
     """
     Load the latest version data for review, sorted by datetime
+    MULTI-TENANCY: Only loads review data for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Get the latest version data
         latest_version = get_latest_version(audit_id)

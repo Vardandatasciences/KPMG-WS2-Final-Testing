@@ -48,6 +48,13 @@ class PlanCreateSerializer(serializers.Serializer):
         required=False,
         default='MEDIUM'
     )
+    data_inventory = serializers.JSONField(required=False, allow_null=True)
+    
+    def validate_data_inventory(self, value):
+        """Ensure data_inventory is always a dictionary"""
+        if not isinstance(value, dict):
+            return {}
+        return value
 
 
 class PlanUpdateSerializer(serializers.Serializer):
@@ -68,6 +75,13 @@ class PlanUpdateSerializer(serializers.Serializer):
         required=False
     )
     rejection_reason = serializers.CharField(required=False, allow_null=True)
+    data_inventory = serializers.JSONField(required=False, allow_null=True)
+    
+    def validate_data_inventory(self, value):
+        """Ensure data_inventory is always a dictionary"""
+        if not isinstance(value, dict):
+            return {}
+        return value
 
 
 # =============================================================================
@@ -153,6 +167,13 @@ class EvaluationUpdateSerializer(serializers.Serializer):
     weighted_score = serializers.DecimalField(max_digits=6, decimal_places=2, required=False, allow_null=True)
     criteria_json = serializers.JSONField(required=False, allow_null=True)
     evaluator_comments = serializers.CharField(required=False, allow_null=True)
+    data_inventory = serializers.JSONField(required=False, allow_null=True)
+    
+    def validate_data_inventory(self, value):
+        """Ensure data_inventory is always a dictionary"""
+        if not isinstance(value, dict):
+            return {}
+        return value
 
 
 # =============================================================================

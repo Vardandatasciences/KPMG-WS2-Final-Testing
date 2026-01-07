@@ -206,6 +206,72 @@ export default {
           name: 'Event Handling',
           description: 'Event logs and tracking',
           icon: 'fas fa-calendar-alt'
+        },
+        {
+          key: 'vendor',
+          name: 'Vendor',
+          description: 'Vendor management and onboarding',
+          icon: 'fas fa-building'
+        },
+        {
+          key: 'vendor_contract',
+          name: 'Vendor Contract',
+          description: 'Vendor contracts and agreements',
+          icon: 'fas fa-file-contract'
+        },
+        {
+          key: 'contract_term',
+          name: 'Contract Terms',
+          description: 'Contract terms and conditions',
+          icon: 'fas fa-list-alt'
+        },
+        {
+          key: 'contract_clause',
+          name: 'Contract Clauses',
+          description: 'Contract clauses and provisions',
+          icon: 'fas fa-gavel'
+        },
+        {
+          key: 'vendor_sla',
+          name: 'Vendor SLA',
+          description: 'Vendor service level agreements',
+          icon: 'fas fa-handshake'
+        },
+        {
+          key: 'sla_metric',
+          name: 'SLA Metrics',
+          description: 'SLA performance metrics',
+          icon: 'fas fa-chart-line'
+        },
+        {
+          key: 'rfp',
+          name: 'RFP',
+          description: 'Request for Proposal management',
+          icon: 'fas fa-file-alt'
+        },
+        {
+          key: 'rfp_evaluation_criteria',
+          name: 'RFP Evaluation Criteria',
+          description: 'RFP evaluation criteria and scoring',
+          icon: 'fas fa-clipboard-list'
+        },
+        {
+          key: 'rfp_type_custom_fields',
+          name: 'RFP Type Custom Fields',
+          description: 'RFP type custom field configurations',
+          icon: 'fas fa-cog'
+        },
+        {
+          key: 'bcp_drp_plan',
+          name: 'BCP/DRP Plan',
+          description: 'Business Continuity and Disaster Recovery plans',
+          icon: 'fas fa-shield-alt'
+        },
+        {
+          key: 'bcp_drp_evaluation',
+          name: 'BCP/DRP Evaluation',
+          description: 'BCP/DRP plan evaluations',
+          icon: 'fas fa-check-circle'
         }
       ],
       // Pages/Endpoints where data is saved for each module
@@ -546,6 +612,357 @@ export default {
             endpoint: '/api/events/log/',
             description: 'Log system event',
             icon: 'fas fa-list'
+          }
+        ],
+        vendor: [
+          { 
+            key: 'vendor_create', 
+            name: 'Create Vendor', 
+            endpoint: '/api/tprm/vendor-core/vendors/',
+            description: 'Create new vendor',
+            icon: 'fas fa-plus-circle'
+          },
+          { 
+            key: 'vendor_update', 
+            name: 'Update Vendor', 
+            endpoint: '/api/tprm/vendor-core/vendors/{id}/',
+            description: 'Update existing vendor',
+            icon: 'fas fa-edit'
+          },
+          { 
+            key: 'vendor_category_create', 
+            name: 'Create Vendor Category', 
+            endpoint: '/api/tprm/vendor-core/vendor-categories/',
+            description: 'Create vendor category',
+            icon: 'fas fa-tag'
+          },
+          { 
+            key: 'vendor_contact_create', 
+            name: 'Create Vendor Contact', 
+            endpoint: '/api/tprm/vendor-core/vendor-contacts/',
+            description: 'Create vendor contact',
+            icon: 'fas fa-user-plus'
+          },
+          { 
+            key: 'vendor_document_upload', 
+            name: 'Upload Vendor Document', 
+            endpoint: '/api/tprm/vendor-core/vendor-documents/',
+            description: 'Upload vendor document',
+            icon: 'fas fa-upload'
+          },
+          { 
+            key: 'vendor_submit_registration', 
+            name: 'Submit Vendor Registration', 
+            endpoint: '/api/tprm/vendor-core/temp-vendors/vendor_submit_registration/',
+            description: 'Submit vendor registration',
+            icon: 'fas fa-paper-plane'
+          }
+        ],
+        vendor_contract: [
+          { 
+            key: 'contract_create', 
+            name: 'Create Contract', 
+            endpoint: '/api/tprm/contracts/contracts/create/',
+            description: 'Create new vendor contract',
+            icon: 'fas fa-plus-circle'
+          },
+          { 
+            key: 'contract_update', 
+            name: 'Update Contract', 
+            endpoint: '/api/tprm/contracts/contracts/{id}/update/',
+            description: 'Update existing contract',
+            icon: 'fas fa-edit'
+          },
+          { 
+            key: 'contract_archive', 
+            name: 'Archive Contract', 
+            endpoint: '/api/tprm/contracts/contracts/{id}/archive/',
+            description: 'Archive contract',
+            icon: 'fas fa-archive'
+          },
+          { 
+            key: 'contract_restore', 
+            name: 'Restore Contract', 
+            endpoint: '/api/tprm/contracts/contracts/{id}/restore/',
+            description: 'Restore archived contract',
+            icon: 'fas fa-undo'
+          },
+          { 
+            key: 'contract_version_create', 
+            name: 'Create Contract Version', 
+            endpoint: '/api/tprm/contracts/contracts/{id}/create-version/',
+            description: 'Create contract version',
+            icon: 'fas fa-code-branch'
+          },
+          { 
+            key: 'contract_amendment_create', 
+            name: 'Create Amendment', 
+            endpoint: '/api/tprm/contracts/contracts/{id}/amendments/create/',
+            description: 'Create contract amendment',
+            icon: 'fas fa-file-signature'
+          },
+          { 
+            key: 'contract_subcontract_create', 
+            name: 'Create Subcontract', 
+            endpoint: '/api/tprm/contracts/contracts/{id}/subcontracts/create/',
+            description: 'Create subcontract',
+            icon: 'fas fa-sitemap'
+          }
+        ],
+        contract_term: [
+          { 
+            key: 'contract_term_create', 
+            name: 'Create Contract Term', 
+            endpoint: '/api/tprm/contracts/contracts/{id}/terms/create/',
+            description: 'Create contract term',
+            icon: 'fas fa-plus-circle'
+          },
+          { 
+            key: 'contract_term_update', 
+            name: 'Update Contract Term', 
+            endpoint: '/api/tprm/contracts/contracts/{id}/terms/{term_id}/update/',
+            description: 'Update contract term',
+            icon: 'fas fa-edit'
+          },
+          { 
+            key: 'contract_term_delete', 
+            name: 'Delete Contract Term', 
+            endpoint: '/api/tprm/contracts/contracts/{id}/terms/{term_id}/delete/',
+            description: 'Delete contract term',
+            icon: 'fas fa-trash'
+          }
+        ],
+        contract_clause: [
+          { 
+            key: 'contract_clause_create', 
+            name: 'Create Contract Clause', 
+            endpoint: '/api/tprm/contracts/contracts/{id}/clauses/create/',
+            description: 'Create contract clause',
+            icon: 'fas fa-plus-circle'
+          },
+          { 
+            key: 'contract_clause_update', 
+            name: 'Update Contract Clause', 
+            endpoint: '/api/tprm/contracts/contracts/{id}/clauses/{clause_id}/update/',
+            description: 'Update contract clause',
+            icon: 'fas fa-edit'
+          },
+          { 
+            key: 'contract_clause_delete', 
+            name: 'Delete Contract Clause', 
+            endpoint: '/api/tprm/contracts/contracts/{id}/clauses/{clause_id}/delete/',
+            description: 'Delete contract clause',
+            icon: 'fas fa-trash'
+          }
+        ],
+        vendor_sla: [
+          { 
+            key: 'sla_create', 
+            name: 'Create SLA', 
+            endpoint: '/api/tprm/slas/',
+            description: 'Create new vendor SLA',
+            icon: 'fas fa-plus-circle'
+          },
+          { 
+            key: 'sla_update', 
+            name: 'Update SLA', 
+            endpoint: '/api/tprm/slas/{id}/',
+            description: 'Update existing SLA',
+            icon: 'fas fa-edit'
+          },
+          { 
+            key: 'sla_submit', 
+            name: 'Submit SLA', 
+            endpoint: '/api/tprm/slas/{id}/submit/',
+            description: 'Submit SLA for approval',
+            icon: 'fas fa-paper-plane'
+          },
+          { 
+            key: 'sla_approve', 
+            name: 'Approve SLA', 
+            endpoint: '/api/tprm/slas/{id}/approve/',
+            description: 'Approve SLA',
+            icon: 'fas fa-check-circle'
+          }
+        ],
+        sla_metric: [
+          { 
+            key: 'sla_metric_create', 
+            name: 'Create SLA Metric', 
+            endpoint: '/api/tprm/slas/metrics/',
+            description: 'Create new SLA metric',
+            icon: 'fas fa-plus-circle'
+          },
+          { 
+            key: 'sla_metric_update', 
+            name: 'Update SLA Metric', 
+            endpoint: '/api/tprm/slas/metrics/{id}/',
+            description: 'Update existing SLA metric',
+            icon: 'fas fa-edit'
+          },
+          { 
+            key: 'sla_metric_delete', 
+            name: 'Delete SLA Metric', 
+            endpoint: '/api/tprm/slas/metrics/{id}/',
+            description: 'Delete SLA metric',
+            icon: 'fas fa-trash'
+          }
+        ],
+        rfp: [
+          { 
+            key: 'rfp_create', 
+            name: 'Create RFP', 
+            endpoint: '/api/tprm/rfp/',
+            description: 'Create new RFP',
+            icon: 'fas fa-plus-circle'
+          },
+          { 
+            key: 'rfp_update', 
+            name: 'Update RFP', 
+            endpoint: '/api/tprm/rfp/{id}/',
+            description: 'Update existing RFP',
+            icon: 'fas fa-edit'
+          },
+          { 
+            key: 'rfp_submit_for_review', 
+            name: 'Submit RFP for Review', 
+            endpoint: '/api/tprm/rfp/{id}/submit_for_review/',
+            description: 'Submit RFP for review',
+            icon: 'fas fa-paper-plane'
+          },
+          { 
+            key: 'rfp_publish', 
+            name: 'Publish RFP', 
+            endpoint: '/api/tprm/rfp/{id}/publish/',
+            description: 'Publish RFP',
+            icon: 'fas fa-bullhorn'
+          },
+          { 
+            key: 'rfp_award', 
+            name: 'Award RFP', 
+            endpoint: '/api/tprm/rfp/{id}/award/',
+            description: 'Award RFP to vendor',
+            icon: 'fas fa-trophy'
+          },
+          { 
+            key: 'rfp_document_upload', 
+            name: 'Upload RFP Document', 
+            endpoint: '/api/tprm/rfp/upload-document/',
+            description: 'Upload RFP document',
+            icon: 'fas fa-upload'
+          },
+          { 
+            key: 'rfp_version_create', 
+            name: 'Create RFP Version', 
+            endpoint: '/api/tprm/rfp/rfps/{id}/edit_with_versioning/',
+            description: 'Create RFP version',
+            icon: 'fas fa-code-branch'
+          }
+        ],
+        rfp_evaluation_criteria: [
+          { 
+            key: 'rfp_evaluation_criteria_create', 
+            name: 'Create Evaluation Criteria', 
+            endpoint: '/api/tprm/rfp/evaluation-criteria/',
+            description: 'Create RFP evaluation criteria',
+            icon: 'fas fa-plus-circle'
+          },
+          { 
+            key: 'rfp_evaluation_criteria_update', 
+            name: 'Update Evaluation Criteria', 
+            endpoint: '/api/tprm/rfp/evaluation-criteria/{id}/',
+            description: 'Update RFP evaluation criteria',
+            icon: 'fas fa-edit'
+          },
+          { 
+            key: 'rfp_evaluation_criteria_delete', 
+            name: 'Delete Evaluation Criteria', 
+            endpoint: '/api/tprm/rfp/evaluation-criteria/{id}/',
+            description: 'Delete RFP evaluation criteria',
+            icon: 'fas fa-trash'
+          }
+        ],
+        rfp_type_custom_fields: [
+          { 
+            key: 'rfp_type_custom_fields_create', 
+            name: 'Create RFP Type Custom Fields', 
+            endpoint: '/api/tprm/rfp/rfp-types/',
+            description: 'Create RFP type custom fields',
+            icon: 'fas fa-plus-circle'
+          },
+          { 
+            key: 'rfp_type_custom_fields_update', 
+            name: 'Update RFP Type Custom Fields', 
+            endpoint: '/api/tprm/rfp/rfp-types/{id}/',
+            description: 'Update RFP type custom fields',
+            icon: 'fas fa-edit'
+          }
+        ],
+        bcp_drp_plan: [
+          { 
+            key: 'bcp_drp_plan_create', 
+            name: 'Create BCP/DRP Plan', 
+            endpoint: '/api/tprm/bcpdrp/plans/',
+            description: 'Create new BCP/DRP plan',
+            icon: 'fas fa-plus-circle'
+          },
+          { 
+            key: 'bcp_drp_plan_update', 
+            name: 'Update BCP/DRP Plan', 
+            endpoint: '/api/tprm/bcpdrp/plans/{id}/',
+            description: 'Update existing BCP/DRP plan',
+            icon: 'fas fa-edit'
+          },
+          { 
+            key: 'bcp_drp_plan_upload', 
+            name: 'Upload BCP/DRP Plan', 
+            endpoint: '/api/tprm/bcpdrp/vendor-upload/',
+            description: 'Upload BCP/DRP plan document',
+            icon: 'fas fa-upload'
+          },
+          { 
+            key: 'bcp_drp_plan_ocr_extract', 
+            name: 'Extract OCR Data', 
+            endpoint: '/api/tprm/bcpdrp/ocr/plans/{id}/extract/',
+            description: 'Extract data from plan via OCR',
+            icon: 'fas fa-scanner'
+          },
+          { 
+            key: 'bcp_drp_plan_approve', 
+            name: 'Approve BCP/DRP Plan', 
+            endpoint: '/api/tprm/bcpdrp/plans/{id}/approve/',
+            description: 'Approve BCP/DRP plan',
+            icon: 'fas fa-check-circle'
+          },
+          { 
+            key: 'bcp_drp_plan_reject', 
+            name: 'Reject BCP/DRP Plan', 
+            endpoint: '/api/tprm/bcpdrp/plans/{id}/reject/',
+            description: 'Reject BCP/DRP plan',
+            icon: 'fas fa-times-circle'
+          }
+        ],
+        bcp_drp_evaluation: [
+          { 
+            key: 'bcp_drp_evaluation_create', 
+            name: 'Create Evaluation', 
+            endpoint: '/api/tprm/bcpdrp/evaluations/{plan_id}/save/',
+            description: 'Create BCP/DRP evaluation',
+            icon: 'fas fa-plus-circle'
+          },
+          { 
+            key: 'bcp_drp_evaluation_update', 
+            name: 'Update Evaluation', 
+            endpoint: '/api/tprm/bcpdrp/evaluations/{plan_id}/save/',
+            description: 'Update BCP/DRP evaluation',
+            icon: 'fas fa-edit'
+          },
+          { 
+            key: 'bcp_drp_evaluation_save', 
+            name: 'Save Evaluation', 
+            endpoint: '/api/tprm/bcpdrp/evaluations/{plan_id}/save/',
+            description: 'Save BCP/DRP evaluation',
+            icon: 'fas fa-save'
           }
         ]
       }

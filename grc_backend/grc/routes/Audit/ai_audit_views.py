@@ -37,6 +37,12 @@ from ...rbac.decorators import (
 )
 from .framework_filter_helper import get_active_framework_filter, apply_framework_filter_to_audits, get_framework_sql_filter
 
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
+
 # DRF Session auth variant that skips CSRF enforcement for API clients
 class CsrfExemptSessionAuthentication(SessionAuthentication):
     def enforce_csrf(self, request):
@@ -47,10 +53,16 @@ class CsrfExemptSessionAuthentication(SessionAuthentication):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditReviewPermission])
 @audit_review_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def review_ai_audit_findings(request, audit_id):
     """
     Review and approve/reject AI audit findings
+    MULTI-TENANCY: Only reviews findings for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         data = request.data
         mapping_id = data.get('mapping_id')
@@ -63,11 +75,21 @@ def review_ai_audit_findings(request, audit_id):
                 'error': 'Mapping ID and compliance status are required'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Get the mapping (this would need to be implemented with raw SQL if needed)
+        # Verify audit exists for tenant
+        try:
+            audit = Audit.objects.get(AuditId=audit_id, tenant_id=tenant_id)
+        except Audit.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': 'Audit not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Get the mapping, filtered by tenant
         try:
             mapping = AuditDocumentMapping.objects.get(
                 MappingId=mapping_id,
-                DocumentId__AuditId=audit_id
+                DocumentId__AuditId=audit_id,
+                tenant_id=tenant_id
             )
         except AuditDocumentMapping.DoesNotExist:
             return Response({

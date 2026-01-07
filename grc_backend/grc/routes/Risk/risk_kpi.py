@@ -23,6 +23,12 @@ from rest_framework.permissions import AllowAny
 from ...rbac.permissions import RiskAnalyticsPermission, RiskViewPermission
 from ...rbac.decorators import rbac_required
 
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
+
 # Import models
 from ...models import RiskInstance, Risk, Incident, Compliance, BusinessUnit, Users, Department
 
@@ -39,17 +45,22 @@ def decimal_to_float(obj):
 
 @api_view(['GET'])
 @permission_classes([RiskAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_kpi_data(request):
     """Return all KPI data for the risk dashboard using real database queries"""
     
     try:
+        # MULTI-TENANCY: Extract tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        
         # Active Risks - Count of risks with status 'Assigned'
-        active_risks = RiskInstance.objects.filter(RiskStatus='Assigned').count()
+        active_risks = RiskInstance.objects.filter(tenant_id=tenant_id, RiskStatus='Assigned').count()
         
         # Risk Exposure - Calculate weighted average exposure (capped at 100%)
-        total_risks = RiskInstance.objects.filter(RiskExposureRating__isnull=False).count()
+        total_risks = RiskInstance.objects.filter(tenant_id=tenant_id, RiskExposureRating__isnull=False).count()
         if total_risks > 0:
-            total_exposure = RiskInstance.objects.aggregate(
+            total_exposure = RiskInstance.objects.filter(tenant_id=tenant_id).aggregate(
                 total_exposure=Sum('RiskExposureRating')
             )['total_exposure'] or 0
             # Calculate average exposure and cap at 100
@@ -60,14 +71,17 @@ def risk_kpi_data(request):
         
         # Risk Recurrence - Count of risks with recurrence = 'yes'
         risk_recurrence = RiskInstance.objects.filter(
+            tenant_id=tenant_id,
             RiskFormDetails__icontains='"riskrecurrence":"yes"'
         ).count()
     
     # Risk Mitigation Completion Rate
         total_with_mitigation = RiskInstance.objects.filter(
+            tenant_id=tenant_id,
             MitigationStatus__isnull=False
         ).count()
         completed_mitigations = RiskInstance.objects.filter(
+            tenant_id=tenant_id,
             MitigationStatus=RiskInstance.MITIGATION_COMPLETED
         ).count()
         completion_rate = round((completed_mitigations / total_with_mitigation) * 100) if total_with_mitigation > 0 else 0
@@ -75,6 +89,7 @@ def risk_kpi_data(request):
     # Average Time to Remediate Critical Risks
         avg_remediation_time = 0
         completed_risks = RiskInstance.objects.filter(
+            tenant_id=tenant_id,
             MitigationStatus=RiskInstance.MITIGATION_COMPLETED,
             MitigationCompletedDate__isnull=False,
             MitigationDueDate__isnull=False
@@ -90,8 +105,9 @@ def risk_kpi_data(request):
             avg_remediation_time = round(total_days / count) if count > 0 else 0
         
         # Rate of Recurrence - Percentage of risks marked as recurring
-        total_risks = RiskInstance.objects.count()
+        total_risks = RiskInstance.objects.filter(tenant_id=tenant_id).count()
         recurring_risks = RiskInstance.objects.filter(
+            tenant_id=tenant_id,
             RiskFormDetails__icontains='"riskrecurrence":"yes"'
         ).count()
         recurrence_rate = round((recurring_risks / total_risks) * 100, 1) if total_risks > 0 else 0
@@ -99,6 +115,7 @@ def risk_kpi_data(request):
         # Average Time to Incident Response - Using CreatedAt for calculation
         avg_response_time = 0
         risks_with_created = RiskInstance.objects.filter(
+            tenant_id=tenant_id,
             CreatedAt__isnull=False
         )
         
@@ -118,6 +135,7 @@ def risk_kpi_data(request):
         # Cost of Mitigation - Based on exposure rating
         cost_factor = 1000
         total_exposure_for_cost = RiskInstance.objects.filter(
+            tenant_id=tenant_id,
             MitigationStatus=RiskInstance.MITIGATION_COMPLETED
         ).aggregate(
             total=Sum('RiskExposureRating')
@@ -128,6 +146,7 @@ def risk_kpi_data(request):
         from django.utils import timezone
         thirty_days_ago = timezone.now() - timedelta(days=30)
         new_risks_count = RiskInstance.objects.filter(
+            tenant_id=tenant_id,
             CreatedAt__gte=thirty_days_ago
         ).count()
         identification_rate = round((new_risks_count / 30) * 100) if new_risks_count > 0 else 0
@@ -135,6 +154,7 @@ def risk_kpi_data(request):
         # Due Mitigation Actions - Overdue mitigations
         today = timezone.now().date()
         due_mitigation = RiskInstance.objects.filter(
+            tenant_id=tenant_id,
             MitigationDueDate__lt=today,
             MitigationStatus__in=[RiskInstance.MITIGATION_PENDING, RiskInstance.MITIGATION_IN_PROGRESS]
         ).count()
@@ -143,10 +163,10 @@ def risk_kpi_data(request):
         classification_accuracy = 85  # Default value, could be calculated based on business rules
         
         # Risk Severity Distribution - Based on RiskExposureRating
-        critical_count = RiskInstance.objects.filter(RiskExposureRating__gte=80).count()
-        high_count = RiskInstance.objects.filter(RiskExposureRating__gte=60, RiskExposureRating__lt=80).count()
-        medium_count = RiskInstance.objects.filter(RiskExposureRating__gte=40, RiskExposureRating__lt=60).count()
-        low_count = RiskInstance.objects.filter(RiskExposureRating__lt=40).count()
+        critical_count = RiskInstance.objects.filter(tenant_id=tenant_id, RiskExposureRating__gte=80).count()
+        high_count = RiskInstance.objects.filter(tenant_id=tenant_id, RiskExposureRating__gte=60, RiskExposureRating__lt=80).count()
+        medium_count = RiskInstance.objects.filter(tenant_id=tenant_id, RiskExposureRating__gte=40, RiskExposureRating__lt=60).count()
+        low_count = RiskInstance.objects.filter(tenant_id=tenant_id, RiskExposureRating__lt=40).count()
         
         severity_levels = {
             'Critical': critical_count,
@@ -156,7 +176,7 @@ def risk_kpi_data(request):
         }
         
         # Risk Exposure Score - Average exposure rating
-        exposure_score = RiskInstance.objects.aggregate(
+        exposure_score = RiskInstance.objects.filter(tenant_id=tenant_id).aggregate(
             avg_exposure=Avg('RiskExposureRating')
         )['avg_exposure'] or 0
         exposure_score = round(float(exposure_score))
@@ -171,6 +191,7 @@ def risk_kpi_data(request):
             month_start = timezone.now().replace(day=1) - timedelta(days=30*i)
             month_end = month_start + timedelta(days=30)
             month_count = RiskInstance.objects.filter(
+                tenant_id=tenant_id,
                 CreatedAt__gte=month_start,
                 CreatedAt__lt=month_end
             ).count()
@@ -179,9 +200,10 @@ def risk_kpi_data(request):
         
         # Risk Reduction Trend
         six_months_ago = timezone.now() - timedelta(days=180)
-        start_risks = RiskInstance.objects.filter(CreatedAt__lt=six_months_ago).count()
-        new_risks = RiskInstance.objects.filter(CreatedAt__gte=six_months_ago).count()
+        start_risks = RiskInstance.objects.filter(tenant_id=tenant_id, CreatedAt__lt=six_months_ago).count()
+        new_risks = RiskInstance.objects.filter(tenant_id=tenant_id, CreatedAt__gte=six_months_ago).count()
         end_risks = RiskInstance.objects.filter(
+            tenant_id=tenant_id,
             RiskStatus__in=['Mitigated', 'Closed', 'Resolved']
         ).count()
         
@@ -240,16 +262,21 @@ def risk_kpi_data(request):
 
 @api_view(['GET'])
 @permission_classes([RiskAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_exposure_trend(request):
     """Return data for risk exposure trend over time using real database values"""
     #print"==== RISK EXPOSURE TREND ENDPOINT CALLED ====")
     
     try:
+        # MULTI-TENANCY: Extract tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        
         # Get optional parameters for flexibility
         months_count = int(request.GET.get('months', 6))  # Default to 6 months
         
         # Get the current total risk exposure (sum of all RiskExposureRating values)
-        total_exposure = RiskInstance.objects.aggregate(
+        total_exposure = RiskInstance.objects.filter(tenant_id=tenant_id).aggregate(
             total=Sum('RiskExposureRating')
         )['total'] or 0
         
@@ -282,6 +309,7 @@ def risk_exposure_trend(request):
             
             # Query for risks in this month and sum their exposure ratings
             month_exposure = RiskInstance.objects.filter(
+                tenant_id=tenant_id,
                 CreatedAt__gte=start_date,
                 CreatedAt__lte=end_date
             ).aggregate(
@@ -337,10 +365,15 @@ def risk_exposure_trend(request):
 
 @api_view(['GET'])
 @permission_classes([RiskAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_reduction_trend(request):
     #print"==== RISK REDUCTION TREND ENDPOINT CALLED ====")
     
     try:
+        # MULTI-TENANCY: Extract tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        
         period = request.GET.get('period', 'month')
         today = timezone.now().date()
         
@@ -368,6 +401,7 @@ def risk_reduction_trend(request):
         #printf"Previous period: {prev_start} to {prev_end}")
         
         start_exposure_query = RiskInstance.objects.filter(
+            tenant_id=tenant_id,
             CreatedAt__lt=current_start
         ).exclude(
             MitigationStatus__iexact='Completed',
@@ -378,6 +412,7 @@ def risk_reduction_trend(request):
         #printf"Exposure at start: {start_exposure}")
         
         new_exposure_query = RiskInstance.objects.filter(
+            tenant_id=tenant_id,
             CreatedAt__gte=current_start,
             CreatedAt__lte=current_end
         ).aggregate(total=Sum('RiskExposureRating'))
@@ -386,6 +421,7 @@ def risk_reduction_trend(request):
         #printf"New exposure: {new_exposure}")
         
         mitigated_exposure_query = RiskInstance.objects.filter(
+            tenant_id=tenant_id,
             MitigationCompletedDate__gte=current_start,
             MitigationCompletedDate__lte=current_end,
             MitigationStatus__iexact='Completed'
@@ -395,6 +431,7 @@ def risk_reduction_trend(request):
         #printf"Mitigated exposure: {mitigated_exposure}")
         
         end_exposure_query = RiskInstance.objects.filter(
+            tenant_id=tenant_id,
             CreatedAt__lte=current_end
         ).exclude(
             MitigationStatus__iexact='Completed',
@@ -443,16 +480,21 @@ def risk_reduction_trend(request):
 @api_view(['GET'])
 @permission_classes([RiskAnalyticsPermission])
 #@permission_classes([RiskAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def high_criticality_risks(request):
     """Return data for high criticality risks from the database"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     print("==== HIGH CRITICALITY RISKS ENDPOINT CALLED ====")
     
     try:
         # Get count of high criticality risks
-        high_count = RiskInstance.objects.filter(Criticality__iexact='High').count()
+        high_count = RiskInstance.objects.filter(tenant_id=tenant_id, Criticality__iexact='High').count()
         
         # Get count of critical criticality risks
-        critical_count = RiskInstance.objects.filter(Criticality__iexact='Critical').count()
+        critical_count = RiskInstance.objects.filter(tenant_id=tenant_id, Criticality__iexact='Critical').count()
         
         # Total high criticality risks
         total_count = high_count + critical_count
@@ -462,7 +504,7 @@ def high_criticality_risks(request):
         #printf"Total high criticality risks: {total_count}")
         
         # Calculate percentage of total risks
-        total_risks = RiskInstance.objects.count()
+        total_risks = RiskInstance.objects.filter(tenant_id=tenant_id).count()
         percentage = round((total_count / total_risks) * 100, 1) if total_risks > 0 else 0
         
         #printf"Percentage of total risks: {percentage}% ({total_count}/{total_risks})")
@@ -494,12 +536,14 @@ def high_criticality_risks(request):
             
             # Query for high criticality risks in this month
             month_high_count = RiskInstance.objects.filter(
+                tenant_id=tenant_id,
                 Criticality__iexact='High',
                 CreatedAt__gte=start_date,
                 CreatedAt__lte=end_date
             ).count()
             
             month_critical_count = RiskInstance.objects.filter(
+                tenant_id=tenant_id,
                 Criticality__iexact='Critical',
                 CreatedAt__gte=start_date,
                 CreatedAt__lte=end_date
@@ -539,10 +583,15 @@ def high_criticality_risks(request):
 @api_view(['GET'])
 @permission_classes([RiskAnalyticsPermission])
 #@permission_classes([RiskAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_identification_rate(request):
     """
     Calculate the risk identification rate (number of new risks identified per period)
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     #print"==== RISK IDENTIFICATION RATE ENDPOINT CALLED ====")
     
     try:
@@ -572,7 +621,7 @@ def risk_identification_rate(request):
         #printf"Analyzing risk identification from {start_date} to {today}")
         
         # Base queryset - risks created in the specified period
-        queryset = RiskInstance.objects.filter(CreatedAt__gte=start_date, CreatedAt__lte=today)
+        queryset = RiskInstance.objects.filter(tenant_id=tenant_id, CreatedAt__gte=start_date, CreatedAt__lte=today)
         
         # Apply category filter if specified
         if category and category.lower() != 'all':
@@ -681,11 +730,16 @@ def risk_identification_rate(request):
 @api_view(['GET'])
 @permission_classes([RiskAnalyticsPermission])
 #@permission_classes([RiskAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def due_mitigation(request):
     """
     Calculate percentage of mitigation tasks that are past due date and incomplete
     by analyzing the RiskInstance table
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     #print"==== DUE MITIGATION ENDPOINT CALLED ====")
     
     try:
@@ -695,6 +749,7 @@ def due_mitigation(request):
         
         # Base queryset - only include risks with mitigation data
         queryset = RiskInstance.objects.filter(
+            tenant_id=tenant_id,
             MitigationDueDate__isnull=False
         )
         
@@ -779,7 +834,7 @@ def due_mitigation(request):
             prev_period_start = prev_period_end - timedelta(days=30)
         
         # Calculate previous period's overdue percentage
-        prev_queryset = RiskInstance.objects.filter(
+        prev_queryset = RiskInstance.objects.filter(tenant_id=tenant_id, 
             MitigationDueDate__isnull=False,
             CreatedAt__gte=prev_period_start,
             CreatedAt__lte=prev_period_end
@@ -836,8 +891,11 @@ def due_mitigation(request):
 @api_view(['GET'])
 @permission_classes([RiskAnalyticsPermission])
 #@permission_classes([RiskAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def classification_accuracy(request):
-    """Return data for risk classification accuracy using real database queries"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     
     try:
         # Calculate overall accuracy based on consistent risk categorization
@@ -864,13 +922,13 @@ def classification_accuracy(request):
         categories = ['Compliance', 'Operational', 'Security', 'Financial', 'Strategic', 'Technology']
         
         for category in categories:
-            category_risks = RiskInstance.objects.filter(
+            category_risks = RiskInstance.objects.filter(tenant_id=tenant_id, 
                 RiskCategory__icontains=category
             ).count()
             
             if category_risks > 0:
                 # Consider risks with complete information as accurate
-                accurate_category_risks = RiskInstance.objects.filter(
+                accurate_category_risks = RiskInstance.objects.filter(tenant_id=tenant_id, 
                     RiskCategory__icontains=category
                 ).exclude(
                     RiskDescription__isnull=True
@@ -890,13 +948,13 @@ def classification_accuracy(request):
             month_end = month_start + timedelta(days=30)
             
             # Get risks created in this month
-            month_risks = RiskInstance.objects.filter(
+            month_risks = RiskInstance.objects.filter(tenant_id=tenant_id, 
                 CreatedAt__gte=month_start,
                 CreatedAt__lt=month_end
             ).count()
             
             # Get accurate risks in this month (with complete information)
-            accurate_month_risks = RiskInstance.objects.filter(
+            accurate_month_risks = RiskInstance.objects.filter(tenant_id=tenant_id, 
                 CreatedAt__gte=month_start,
                 CreatedAt__lt=month_end
             ).exclude(
@@ -954,8 +1012,12 @@ def classification_accuracy(request):
 @api_view(['GET'])
 @permission_classes([RiskAnalyticsPermission])
 #@permission_classes([RiskAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def improvement_initiatives(request):
-    """Return data for improvement initiatives KPI"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         #print"==== IMPROVEMENT INITIATIVES ENDPOINT CALLED ====")
         
@@ -963,6 +1025,7 @@ def improvement_initiatives(request):
         today = timezone.now().date()
         
         # Execute SQL query to get improvement initiative statistics
+        # MULTI-TENANCY: Filter by tenant_id
         with connection.cursor() as cursor:
             cursor.execute("""
                 SELECT 
@@ -970,8 +1033,9 @@ def improvement_initiatives(request):
                     SUM(CASE WHEN MitigationStatus = 'Completed' THEN 1 ELSE 0 END) as completed_count,
                     ROUND(SUM(CASE WHEN MitigationStatus = 'Completed' THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1) as completion_percentage
                 FROM risk_instance
-                WHERE RiskMitigation IS NOT NULL AND RiskMitigation != '';
-            """)
+                WHERE RiskMitigation IS NOT NULL AND RiskMitigation != ''
+                AND TenantId = %s;
+            """, [tenant_id])
             row = cursor.fetchone()
             
             # Safely handle potential None values
@@ -980,6 +1044,7 @@ def improvement_initiatives(request):
             completion_percentage = float(row[2]) if row and row[2] is not None else 0
         
         # Get initiatives by category
+        # MULTI-TENANCY: Filter by tenant_id
         categories = {}
         with connection.cursor() as cursor:
             cursor.execute("""
@@ -990,8 +1055,9 @@ def improvement_initiatives(request):
                     ROUND(SUM(CASE WHEN MitigationStatus = 'Completed' THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1) as percentage
                 FROM risk_instance
                 WHERE RiskMitigation IS NOT NULL AND RiskMitigation != ''
+                AND TenantId = %s
                 GROUP BY Category;
-            """)
+            """, [tenant_id])
             for row in cursor.fetchall():
                 if row[0]:  # Check if category is not None
                     category = row[0]
@@ -1032,12 +1098,17 @@ def improvement_initiatives(request):
 @api_view(['GET'])
 @permission_classes([RiskAnalyticsPermission])
 #@permission_classes([RiskAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_impact(request):
-    """Return data for risk impact on operations and finances"""
-    #print"==== RISK IMPACT ON OPERATIONS AND FINANCES ENDPOINT CALLED ====")
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
+#print"==== RISK IMPACT ON OPERATIONS AND FINANCES ENDPOINT CALLED ====")
     
     try:
         # Use the exact SQL query from the screenshot to get average operational impact
+        # MULTI-TENANCY: Filter by tenant_id
         with connection.cursor() as cursor:
             cursor.execute("""
                 SELECT 
@@ -1045,7 +1116,8 @@ def risk_impact(request):
                 FROM risk_instance
                 WHERE JSON_EXTRACT(RiskFormDetails, '$.operationalimpact') IS NOT NULL
                 AND JSON_EXTRACT(RiskFormDetails, '$.operationalimpact') != '0'
-            """)
+                AND TenantId = %s
+            """, [tenant_id])
             row = cursor.fetchone()
             
             if row and row[0] is not None:
@@ -1056,6 +1128,7 @@ def risk_impact(request):
             #printf"Average operational impact from SQL: {avg_operational_impact}")
 
         # Get financial impact data
+        # MULTI-TENANCY: Filter by tenant_id
         with connection.cursor() as cursor:
             cursor.execute("""
                 SELECT 
@@ -1063,7 +1136,8 @@ def risk_impact(request):
                 FROM risk_instance
                 WHERE JSON_EXTRACT(RiskFormDetails, '$.financialloss') IS NOT NULL
                 AND JSON_EXTRACT(RiskFormDetails, '$.financialloss') != '0'
-            """)
+                AND TenantId = %s
+            """, [tenant_id])
             row = cursor.fetchone()
             
             if row and row[0] is not None:
@@ -1074,6 +1148,7 @@ def risk_impact(request):
             #printf"Average financial impact from SQL: {avg_financial_impact}")
         
         # For the chart, get individual risk data points
+        # MULTI-TENANCY: Filter by tenant_id
         with connection.cursor() as cursor:
             cursor.execute("""
                 SELECT 
@@ -1085,8 +1160,9 @@ def risk_impact(request):
                 AND JSON_EXTRACT(RiskFormDetails, '$.operationalimpact') != '0'
                 AND JSON_EXTRACT(RiskFormDetails, '$.financialloss') IS NOT NULL
                 AND JSON_EXTRACT(RiskFormDetails, '$.financialloss') != '0'
+                AND TenantId = %s
                 LIMIT 20
-            """)
+            """, [tenant_id])
             rows = cursor.fetchall()
             
             # Convert raw data into the format expected by the frontend
@@ -1222,9 +1298,13 @@ def risk_impact(request):
 @api_view(['GET'])
 @permission_classes([RiskAnalyticsPermission])
 #@permission_classes([RiskAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_severity(request):
-    """Return data for risk severity based on potential consequences"""
-    #print"==== RISK SEVERITY ENDPOINT CALLED ====")
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
+#print"==== RISK SEVERITY ENDPOINT CALLED ====")
     
     try:
         # Get optional filters
@@ -1236,7 +1316,7 @@ def risk_severity(request):
         #printf"Total risk count in database: {risk_count}")
         
         # Base queryset
-        queryset = RiskInstance.objects.all()
+        queryset = RiskInstance.objects.filter(tenant_id=tenant_id)
         
         # Apply time filter if specified
         if time_range != 'all':
@@ -1455,12 +1535,17 @@ def risk_severity(request):
 @api_view(['GET'])
 @permission_classes([RiskAnalyticsPermission])
 #@permission_classes([RiskAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_exposure_score(request):
-    """Return data for risk exposure score using real data from risk_instance table"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     from django.db import connection
     MAX_EXPOSURE = 10.0  # The max possible exposure score (scale 0-10)
 
     # Query all risks with valid exposure, impact, and likelihood
+    # MULTI-TENANCY: Filter by tenant_id
     with connection.cursor() as cursor:
         cursor.execute("""
             SELECT 
@@ -1477,7 +1562,8 @@ def risk_exposure_score(request):
                 RiskExposureRating IS NOT NULL AND RiskExposureRating != '' AND
                 RiskImpact IS NOT NULL AND RiskImpact != '' AND
                 RiskLikelihood IS NOT NULL AND RiskLikelihood != ''
-        """)
+                AND TenantId = %s
+        """, [tenant_id])
         rows = cursor.fetchall()
         columns = [col[0] for col in cursor.description]
 
@@ -1535,16 +1621,18 @@ def risk_exposure_score(request):
 @api_view(['GET'])
 @permission_classes([RiskAnalyticsPermission])
 #@permission_classes([RiskAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_resilience(request):
-    """
-    Return data for risk resilience to absorb shocks from real database values
-    based on expecteddowntime and recoverytime from risk form details
-    """
-    #print"==== RISK RESILIENCE ENDPOINT CALLED ====")
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
+#print"==== RISK RESILIENCE ENDPOINT CALLED ====")
     
     try:
         # Call the helper function to get resilience data
-        result = get_risk_resilience_by_category()
+        # MULTI-TENANCY: Pass tenant_id to helper function
+        result = get_risk_resilience_by_category(tenant_id)
         
         # Format the response structure
         category_data = []
@@ -1605,14 +1693,16 @@ def risk_resilience(request):
             'trendData': []
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-def get_risk_resilience_by_category():
+def get_risk_resilience_by_category(tenant_id):
     """
     Helper function to calculate risk resilience metrics by category
     based on expected downtime and recovery time
+    MULTI-TENANCY: Filters by tenant_id
     """
     # Fetch all categories and JSON details from the DB
+    # MULTI-TENANCY: Filter by tenant_id
     with connection.cursor() as cursor:
-        cursor.execute("SELECT Category, RiskFormDetails FROM risk_instance WHERE Category IS NOT NULL")
+        cursor.execute("SELECT Category, RiskFormDetails FROM risk_instance WHERE Category IS NOT NULL AND TenantId = %s", [tenant_id])
         rows = cursor.fetchall()
 
     # Aggregate by category
@@ -1654,14 +1744,17 @@ def get_risk_resilience_by_category():
 @api_view(['GET'])
 @permission_classes([RiskAnalyticsPermission])
 #@permission_classes([RiskAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_assessment_frequency(request):
-    """Return data for frequency of risk assessment review using real database queries"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     
     try:
         from django.utils import timezone
         
         # Calculate average review frequency based on CreatedAt
-        risks_with_created = RiskInstance.objects.filter(
+        risks_with_created = RiskInstance.objects.filter(tenant_id=tenant_id, 
             CreatedAt__isnull=False
         )
         
@@ -1684,7 +1777,7 @@ def risk_assessment_frequency(request):
         categories = ['Security', 'Operational', 'Compliance', 'Financial', 'Strategic', 'Technology']
         
         for category in categories:
-            category_risks = RiskInstance.objects.filter(
+            category_risks = RiskInstance.objects.filter(tenant_id=tenant_id, 
                 Category__icontains=category,
                 CreatedAt__isnull=False
             )
@@ -1702,7 +1795,7 @@ def risk_assessment_frequency(request):
                 category_frequencies[category] = 60
         
         # Most frequently reviewed risks - based on creation date
-        most_reviewed_risks = RiskInstance.objects.filter(
+        most_reviewed_risks = RiskInstance.objects.filter(tenant_id=tenant_id, 
             CreatedAt__isnull=False
         ).order_by('-CreatedAt')[:5]
         
@@ -1721,7 +1814,7 @@ def risk_assessment_frequency(request):
         
         # Overdue reviews - risks that haven't been updated in a while
         thirty_days_ago = timezone.now() - timedelta(days=30)
-        overdue_risks = RiskInstance.objects.filter(
+        overdue_risks = RiskInstance.objects.filter(tenant_id=tenant_id, 
             CreatedAt__lt=thirty_days_ago.date(),
             RiskStatus__in=['Assigned', 'In Progress']
         ).order_by('CreatedAt')[:5]
@@ -1746,7 +1839,7 @@ def risk_assessment_frequency(request):
             month_start = timezone.now().replace(day=1) - timedelta(days=30*i)
             month_end = month_start + timedelta(days=30)
             
-            month_count = RiskInstance.objects.filter(
+            month_count = RiskInstance.objects.filter(tenant_id=tenant_id, 
                 CreatedAt__gte=month_start.date(),
                 CreatedAt__lt=month_end.date()
             ).count()
@@ -1793,19 +1886,17 @@ def risk_assessment_frequency(request):
 @api_view(['GET'])
 @permission_classes([RiskAnalyticsPermission])
 #@permission_classes([RiskAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_approval_rate_cycle(request):
-    """
-    Return data for risk approval rate and review cycles
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     
-    Returns:
-      - approvalRate: Percentage of risks approved
-      - avgReviewCycles: Average number of review cycles per risk 
-      - maxReviewCycles: Maximum review cycles among all risks
-    """
-    #print"==== RISK APPROVAL RATE CYCLE ENDPOINT CALLED ====")
+#print"==== RISK APPROVAL RATE CYCLE ENDPOINT CALLED ====")
     
     try:
         # Use the SQL query logic from get_risk_approval_metrics
+        # MULTI-TENANCY: Filter by tenant_id
         with connection.cursor() as cursor:
             cursor.execute("""
                 SELECT 
@@ -1815,8 +1906,9 @@ def risk_approval_rate_cycle(request):
                     ROUND(AVG(ReviewerCount), 1) AS avg_review_cycles,
                     MAX(ReviewerCount) AS max_review_cycles
                 FROM risk_instance
-                WHERE ReviewerCount IS NOT NULL;
-            """)
+                WHERE ReviewerCount IS NOT NULL
+                AND TenantId = %s;
+            """, [tenant_id])
             row = cursor.fetchone()
             
             approval_rate = row[0] if row and row[0] is not None else 0
@@ -1847,9 +1939,13 @@ def risk_approval_rate_cycle(request):
 @api_view(['GET'])
 @permission_classes([RiskAnalyticsPermission])
 #@permission_classes([RiskAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_register_update_frequency(request):
-    """Return data for frequency of risk register updates"""
-    #print"==== RISK REGISTER UPDATE FREQUENCY ENDPOINT CALLED ====")
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
+#print"==== RISK REGISTER UPDATE FREQUENCY ENDPOINT CALLED ====")
     
     try:
         # Calculate average days between risk updates using the provided SQL logic
@@ -1887,7 +1983,7 @@ def risk_register_update_frequency(request):
             month_start = month_end.replace(day=1)
             
             # Count risks created in this month
-            month_count = Risk.objects.filter(
+            month_count = Risk.objects.filter(tenant_id=tenant_id, 
                 CreatedAt__gte=month_start,
                 CreatedAt__lte=month_end
             ).count()
@@ -1924,20 +2020,26 @@ def risk_register_update_frequency(request):
 @api_view(['GET'])
 @permission_classes([RiskAnalyticsPermission])
 #@permission_classes([RiskAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_recurrence_probability(request):
-    """Return data for risk recurrence probability KPI"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         #print"==== RISK RECURRENCE PROBABILITY ENDPOINT CALLED ====")
         
         # Execute SQL query to get recurrence probability statistics
+        # MULTI-TENANCY: Filter by tenant_id
         with connection.cursor() as cursor:
             cursor.execute("""
                 SELECT 
                     COUNT(*) as total_count,
                     SUM(CASE WHEN RecurrenceCount > 0 THEN 1 ELSE 0 END) as recurring_count,
                     ROUND(SUM(CASE WHEN RecurrenceCount > 0 THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0), 1) as probability_percent
-                FROM risk_instance;
-            """)
+                FROM risk_instance
+                WHERE TenantId = %s;
+            """, [tenant_id])
             row = cursor.fetchone()
             
             # Safely handle potential None values
@@ -1946,6 +2048,7 @@ def risk_recurrence_probability(request):
             probability_percent = float(row[2]) if row and row[2] is not None else 0
         
         # Get recurrence by category
+        # MULTI-TENANCY: Filter by tenant_id
         categories = {}
         with connection.cursor() as cursor:
             cursor.execute("""
@@ -1955,8 +2058,9 @@ def risk_recurrence_probability(request):
                     SUM(CASE WHEN RecurrenceCount > 0 THEN 1 ELSE 0 END) as recurring,
                     ROUND(SUM(CASE WHEN RecurrenceCount > 0 THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0), 1) as percentage
                 FROM risk_instance
+                WHERE TenantId = %s
                 GROUP BY Category;
-            """)
+            """, [tenant_id])
             for row in cursor.fetchall():
                 if row[0]:  # Check if category is not None
                     category = row[0]
@@ -1971,6 +2075,7 @@ def risk_recurrence_probability(request):
                     }
         
         # Get top recurring risks
+        # MULTI-TENANCY: Filter by tenant_id
         top_risks = []
         with connection.cursor() as cursor:
             cursor.execute("""
@@ -1981,9 +2086,10 @@ def risk_recurrence_probability(request):
                     RecurrenceCount
                 FROM risk_instance
                 WHERE RecurrenceCount > 0
+                AND TenantId = %s
                 ORDER BY RecurrenceCount DESC
                 LIMIT 5;
-            """)
+            """, [tenant_id])
             for row in cursor.fetchall():
                 risk_id = int(row[0]) if row[0] is not None else 0
                 risk_title = row[1] if row[1] is not None else "Unknown"
@@ -2017,17 +2123,19 @@ def risk_recurrence_probability(request):
 @api_view(['GET'])
 @permission_classes([RiskAnalyticsPermission])
 # @permission_classes([RiskAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def active_risks_kpi(request):
-    """
-    Get the active risks KPI data from the database
-    """
-    #print"==== ACTIVE RISKS KPI ENDPOINT CALLED ====")
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
+#print"==== ACTIVE RISKS KPI ENDPOINT CALLED ====")
     #printf"Request method: {request.method}")
     #printf"Request headers: {request.headers}")
     
     try:
         # Get active risks count (RiskStatus = 'Assigned')
-        active_risks_query = RiskInstance.objects.filter(RiskStatus='Assigned')
+        active_risks_query = RiskInstance.objects.filter(tenant_id=tenant_id, RiskStatus='Assigned')
         active_risks_count = active_risks_query.count()
         
         #printf"Found {active_risks_count} active risks with status 'Assigned'")
@@ -2063,7 +2171,7 @@ def active_risks_kpi(request):
             end_date = datetime(next_year, next_month, 1).date() - timedelta(days=1)
             
             # Query for active risks in this month
-            month_count = RiskInstance.objects.filter(
+            month_count = RiskInstance.objects.filter(tenant_id=tenant_id, 
                 RiskStatus='Assigned',
                 CreatedAt__gte=start_date,
                 CreatedAt__lte=end_date
@@ -2119,8 +2227,12 @@ def active_risks_kpi(request):
 @api_view(['GET'])
 @permission_classes([RiskAnalyticsPermission])
 # @permission_classes([RiskAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def mitigation_completion_rate(request):
-    """Return data for mitigation completion rate KPI"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Get date range from query parameters or use default (last 30 days)
         time_range = request.GET.get('timeRange', '30days')
@@ -2144,12 +2256,12 @@ def mitigation_completion_rate(request):
         #printf"Calculating mitigation completion rate from {start_date} to {end_date}")
         
         # 1. Get total mitigation tasks (all time, not just period)
-        total_mitigations = RiskInstance.objects.filter(
+        total_mitigations = RiskInstance.objects.filter(tenant_id=tenant_id, 
             MitigationStatus__isnull=False
         ).count()
         
         # 2. Get completed mitigation tasks (all time, not just period)
-        completed_mitigations = RiskInstance.objects.filter(
+        completed_mitigations = RiskInstance.objects.filter(tenant_id=tenant_id, 
             MitigationStatus='Completed'
         ).count()
         
@@ -2159,7 +2271,7 @@ def mitigation_completion_rate(request):
             completion_percentage = (completed_mitigations / total_mitigations) * 100
         
         # 4. Calculate average days to mitigation (all time)
-        avg_days_query = RiskInstance.objects.filter(
+        avg_days_query = RiskInstance.objects.filter(tenant_id=tenant_id, 
             MitigationStatus='Completed',
             MitigationCompletedDate__isnull=False,
             MitigationDueDate__isnull=False
@@ -2175,7 +2287,7 @@ def mitigation_completion_rate(request):
         avg_days = avg_days_query['avg_days'] if avg_days_query['avg_days'] else 0
         
         # 5. Get overdue mitigations (all time)
-        overdue_mitigations = RiskInstance.objects.filter(
+        overdue_mitigations = RiskInstance.objects.filter(tenant_id=tenant_id, 
             MitigationDueDate__lt=today,
             MitigationStatus__in=['Pending', 'Work In Progress']
         ).count()
@@ -2203,12 +2315,12 @@ def mitigation_completion_rate(request):
             month_start = datetime(prev_year, prev_month, 1).date()
             
             # Get completion rate for this month
-            month_total = RiskInstance.objects.filter(
+            month_total = RiskInstance.objects.filter(tenant_id=tenant_id, 
                 CreatedAt__range=[month_start, month_end],
                 MitigationDueDate__isnull=False
             ).count()
             
-            month_completed = RiskInstance.objects.filter(
+            month_completed = RiskInstance.objects.filter(tenant_id=tenant_id, 
                 CreatedAt__range=[month_start, month_end],
                 MitigationStatus='Completed',
                 MitigationCompletedDate__isnull=False
@@ -2258,18 +2370,20 @@ def mitigation_completion_rate(request):
 @api_view(['GET'])
 @permission_classes([RiskAnalyticsPermission])
 # @permission_classes([RiskAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def avg_remediation_time(request):
-    """
-    Get average time to remediate critical risks
-    """
-    #print"==== AVG REMEDIATION TIME ENDPOINT CALLED ====")
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
+#print"==== AVG REMEDIATION TIME ENDPOINT CALLED ====")
     
     try:
         # Optional filter for risk priority
         priority = request.GET.get('priority', 'Critical')
         
         # Calculate average days to remediate for critical risks
-        queryset = RiskInstance.objects.filter(
+        queryset = RiskInstance.objects.filter(tenant_id=tenant_id, 
             RiskPriority__iexact=priority,
             MitigationStatus='Completed',
             CreatedAt__isnull=False,
@@ -2311,7 +2425,7 @@ def avg_remediation_time(request):
             months.append(month_name)
             
             # Query for critical risks remediated in this month
-            month_avg_query = RiskInstance.objects.filter(
+            month_avg_query = RiskInstance.objects.filter(tenant_id=tenant_id, 
                 RiskPriority__iexact=priority,
                 MitigationStatus='Completed',
                 MitigationCompletedDate__gte=month_start,
@@ -2340,14 +2454,14 @@ def avg_remediation_time(request):
         current_value = trend_data[-1] if trend_data else avg_days
         
         # Get overdue critical risks (exceeded SLA)
-        overdue_risks = RiskInstance.objects.filter(
+        overdue_risks = RiskInstance.objects.filter(tenant_id=tenant_id, 
             RiskPriority__iexact=priority,
             MitigationStatus__in=['Work in Progress', 'Not Started'],
             CreatedAt__lt=today - timedelta(days=sla_days)
         ).count()
         
         # Get total active critical risks
-        total_active = RiskInstance.objects.filter(
+        total_active = RiskInstance.objects.filter(tenant_id=tenant_id, 
             RiskPriority__iexact=priority,
             MitigationStatus__in=['Work in Progress', 'Not Started']
         ).count()
@@ -2399,12 +2513,13 @@ def avg_remediation_time(request):
 @api_view(['GET'])
 @permission_classes([RiskAnalyticsPermission])
 # @permission_classes([RiskAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def recurrence_rate(request):
-    """
-    Calculate and return the rate of risk recurrence 
-    (how often risks reoccur after being closed)
-    """
-    #print"==== RECURRENCE RATE ENDPOINT CALLED ====")
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
+#print"==== RECURRENCE RATE ENDPOINT CALLED ====")
     
     try:
         # Get optional filters
@@ -2412,7 +2527,7 @@ def recurrence_rate(request):
         category = request.GET.get('category', 'all')
         
         # Base queryset
-        queryset = RiskInstance.objects.filter(
+        queryset = RiskInstance.objects.filter(tenant_id=tenant_id, 
             RiskStatus__isnull=False,
             RecurrenceCount__isnull=False
         )
@@ -2567,12 +2682,13 @@ def recurrence_rate(request):
 @api_view(['GET'])
 @permission_classes([RiskAnalyticsPermission])
 # @permission_classes([RiskAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def avg_incident_response_time(request):
-    """
-    Calculate the average time between incident detection and response start
-    based on the incident table data
-    """
-    #print"==== AVG INCIDENT RESPONSE TIME ENDPOINT CALLED ====")
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
+#print"==== AVG INCIDENT RESPONSE TIME ENDPOINT CALLED ====")
     
     try:
         # Get optional filters
@@ -2749,11 +2865,13 @@ def avg_incident_response_time(request):
 @api_view(['GET'])
 @permission_classes([RiskAnalyticsPermission])
 # @permission_classes([RiskAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def mitigation_cost(request):
-    """
-    Calculate and return the cost of mitigation for risks
-    """
-    #print"==== MITIGATION COST ENDPOINT CALLED ====")
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
+#print"==== MITIGATION COST ENDPOINT CALLED ====")
     
     try:
         # Get optional filters
@@ -2777,7 +2895,7 @@ def mitigation_cost(request):
                 start_date = today - timedelta(days=30)  # Default to 30 days
         
         # Query for risks with completed mitigations in the period
-        queryset = RiskInstance.objects.filter(
+        queryset = RiskInstance.objects.filter(tenant_id=tenant_id, 
             MitigationStatus='Completed'
         )
         
@@ -2836,7 +2954,7 @@ def mitigation_cost(request):
             months.append(month_name)
             
             # Get total exposure for risks mitigated in this month
-            month_exposure = RiskInstance.objects.filter(
+            month_exposure = RiskInstance.objects.filter(tenant_id=tenant_id, 
                 MitigationStatus='Completed',
                 MitigationCompletedDate__gte=month_start,
                 MitigationCompletedDate__lte=month_end
@@ -2859,7 +2977,7 @@ def mitigation_cost(request):
             if not cat:
                 continue
                 
-            cat_exposure = RiskInstance.objects.filter(
+            cat_exposure = RiskInstance.objects.filter(tenant_id=tenant_id, 
                 MitigationStatus='Completed',
                 Category=cat
             )
@@ -2901,7 +3019,7 @@ def mitigation_cost(request):
             prev_period_end = today - timedelta(days=30)
             prev_period_start = prev_period_end - timedelta(days=30)
         
-        prev_exposure = RiskInstance.objects.filter(
+        prev_exposure = RiskInstance.objects.filter(tenant_id=tenant_id, 
             MitigationStatus='Completed',
             MitigationCompletedDate__gte=prev_period_start,
             MitigationCompletedDate__lte=prev_period_end
@@ -2966,10 +3084,13 @@ def mitigation_cost(request):
 
 @api_view(['GET'])
 @permission_classes([RiskAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_assessment_consensus(request):
-    """Return data for risk assessment consensus"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     
-    # In a real implementation, this would query your database for risk assessment consensus data
+# In a real implementation, this would query your database for risk assessment consensus data
     # For demonstration, we'll generate realistic sample data
     
     # Overall consensus percentage
@@ -3016,8 +3137,11 @@ def risk_assessment_consensus(request):
 
 @api_view(['GET'])
 @permission_classes([RiskAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_tolerance_thresholds(request):
-    """Return data for organizational risk tolerance thresholds using real database queries"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     
     try:
         # Define tolerance thresholds (these could be stored in a configuration table)
@@ -3037,7 +3161,7 @@ def risk_tolerance_thresholds(request):
         
         for category, config in threshold_config.items():
             # Get current exposure for this category
-            category_risks = RiskInstance.objects.filter(
+            category_risks = RiskInstance.objects.filter(tenant_id=tenant_id, 
                 RiskCategory__icontains=category
             )
             
@@ -3104,7 +3228,7 @@ def risk_tolerance_thresholds(request):
                 month_end = month_start + timedelta(days=30)
                 
                 # Get risks created in this month for this category
-                month_risks = RiskInstance.objects.filter(
+                month_risks = RiskInstance.objects.filter(tenant_id=tenant_id, 
                     RiskCategory__icontains=category,
                     CreatedAt__gte=month_start,
                     CreatedAt__lt=month_end
@@ -3165,20 +3289,26 @@ def risk_tolerance_thresholds(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 # @permission_classes([RiskAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def risk_appetite(request):
-    """Return risk appetite data for the organization based on risk instances"""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         #print"==== RISK APPETITE ENDPOINT CALLED ====")
         
         # Use raw SQL query similar to what the user ran in MySQL Workbench
         from django.db import connection
         
+        # MULTI-TENANCY: Filter by tenant_id
         with connection.cursor() as cursor:
             cursor.execute("""
                 SELECT AVG(CAST(Appetite AS FLOAT)) AS avg_appetite
                 FROM risk_instance
                 WHERE Appetite IS NOT NULL AND Appetite <> ''
-            """)
+                AND TenantId = %s
+            """, [tenant_id])
             row = cursor.fetchone()
             
             avg_appetite = row[0] if row and row[0] is not None else None
@@ -3237,9 +3367,9 @@ def risk_appetite(request):
 #@permission_classes([AllowAny])
 @rbac_required(required_permission='create_risk')
 def upload_risk_evidence(request):
-    """
-    Upload risk evidence files using S3 functionality
-    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     # Handle preflight OPTIONS request
     if request.method == 'OPTIONS':
         response = JsonResponse({})
@@ -3436,9 +3566,9 @@ def upload_risk_evidence(request):
 #@permission_classes([AllowAny])
 @rbac_required(required_permission='edit_risk')
 def delete_risk_evidence(request, file_id):
-    """
-    Delete risk evidence file using S3 functionality
-    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Import the S3 client here to avoid circular imports
         from ...routes.Global.s3_fucntions import create_direct_mysql_client
@@ -3480,9 +3610,9 @@ def delete_risk_evidence(request, file_id):
 @permission_classes([AllowAny])
 # @permission_classes([RiskAnalyticsPermission])
 def get_incident_names_for_risk_scoring(request):
-    """
-    Get incident names for risk scoring component
-    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         from django.db import connection
         with connection.cursor() as cursor:
@@ -3519,9 +3649,9 @@ def get_incident_names_for_risk_scoring(request):
 @permission_classes([AllowAny])
 # @permission_classes([RiskAnalyticsPermission])
 def get_compliance_names_for_risk_scoring(request):
-    """
-    Get compliance names for risk scoring component
-    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         from django.db import connection
         with connection.cursor() as cursor:
@@ -3558,9 +3688,9 @@ def get_compliance_names_for_risk_scoring(request):
 @permission_classes([AllowAny])
 # @permission_classes([RiskAnalyticsPermission])
 def get_business_units_for_risk_scoring(request):
-    """
-    Get business units for risk scoring component
-    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         from django.db import connection
         with connection.cursor() as cursor:
@@ -3600,10 +3730,12 @@ def get_business_units_for_risk_scoring(request):
 @api_view(['GET'])
 #@permission_classes([AllowAny])
 @permission_classes([RiskAnalyticsPermission])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_risk_instances_with_names(request):
-    """
-    Get risk instances with incident names, compliance names, and business unit names
-    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         from django.db import connection
         with connection.cursor() as cursor:
@@ -3622,8 +3754,9 @@ def get_risk_instances_with_names(request):
                 LEFT JOIN users u ON ri.UserId = u.UserId
                 LEFT JOIN department d ON u.DepartmentId = d.DepartmentId
                 LEFT JOIN businessunits bu ON d.BusinessUnitId = bu.BusinessUnitId
+                WHERE ri.TenantId = %s
                 ORDER BY ri.CreatedAt DESC
-            """)
+            """, [tenant_id])
             
             columns = [col[0] for col in cursor.description]
             risk_instances_data = []

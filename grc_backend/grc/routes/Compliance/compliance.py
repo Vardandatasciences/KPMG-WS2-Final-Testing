@@ -17,18 +17,28 @@ from ...rbac.decorators import (
     compliance_view_required, compliance_create_required, compliance_edit_required,
     compliance_approve_required
 )
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
 
 @api_view(['POST'])
 @permission_classes([ComplianceCreatePermission])
 @compliance_create_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def add_compliance(request, subpolicy_id):
     """
     Add a new compliance item to a subpolicy
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         with transaction.atomic():
             # Get the subpolicy
-            subpolicy = get_object_or_404(SubPolicy, SubPolicyId=subpolicy_id)
+            subpolicy = get_object_or_404(SubPolicy, SubPolicyId=subpolicy_id, tenant_id=tenant_id)
             
             # Copy request data and add subpolicy_id
             data = request.data.copy()
@@ -99,12 +109,17 @@ def add_compliance(request, subpolicy_id):
 @api_view(['GET'])
 @permission_classes([ComplianceViewPermission])
 @compliance_view_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_compliance_version(request, compliance_id):
     """
     Get the latest version of a compliance item from the policy approvals table
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
-        compliance = get_object_or_404(Compliance, ComplianceId=compliance_id)
+        compliance = get_object_or_404(Compliance, ComplianceId=compliance_id, tenant_id=tenant_id)
         
         # Find the latest approval version from the database
         latest_approval = ComplianceApproval.objects.filter(
@@ -143,17 +158,22 @@ def get_compliance_version(request, compliance_id):
 @api_view(['GET'])
 @permission_classes([ComplianceViewPermission])
 @compliance_view_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_latest_reviewer_version(request, compliance_id):
     """
     Get the latest reviewer version (R1, R2, etc.) for a compliance item
     and return the complete policy approval data for that version
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         latest_r_version = 'R1'  # Default if no reviewer versions found
         approval_data = None
         
         # Find the latest R version for a compliance
-        compliance = get_object_or_404(Compliance, ComplianceId=compliance_id)
+        compliance = get_object_or_404(Compliance, ComplianceId=compliance_id, tenant_id=tenant_id)
         
         # Use Python filtering to find R versions
         r_approvals = []
@@ -188,13 +208,18 @@ def get_latest_reviewer_version(request, compliance_id):
 @api_view(['GET'])
 @permission_classes([ComplianceViewPermission])
 @compliance_view_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_pending_compliance_approvals(request):
     """
     Get all compliance items with 'Under Review' status from both ComplianceApproval and Compliance tables
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         # Get all compliance records directly from Compliance table with Under Review status
-        under_review_compliances = Compliance.objects.filter(Status__icontains='review')
+        under_review_compliances = Compliance.objects.filter(tenant_id=tenant_id, Status__icontains='review')
         
         # Also find all compliance approvals with compliance type and Under Review status
         pending_approvals = ComplianceApproval.objects.filter(
@@ -238,7 +263,7 @@ def get_pending_compliance_approvals(request):
                     
                     # Create a real ComplianceApproval record that can be referenced later
                     # Find the parent policy through the subpolicy
-                    subpolicy = SubPolicy.objects.get(SubPolicyId=compliance.SubPolicyId.SubPolicyId)
+                    subpolicy = SubPolicy.objects.get(SubPolicyId=compliance.SubPolicyId.SubPolicyId, tenant_id=tenant_id)
                     
                     # Get user and reviewer IDs from request
                     user_id = request.user.id if hasattr(request.user, 'id') else None
@@ -311,10 +336,15 @@ def get_pending_compliance_approvals(request):
 @api_view(['PUT'])
 @permission_classes([ComplianceApprovePermission])
 @compliance_approve_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def submit_compliance_review(request, approval_id):
     """
     Submit a review for a compliance item
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         # Get the compliance approval
         approval = get_object_or_404(ComplianceApproval, pk=approval_id)
@@ -365,7 +395,7 @@ def submit_compliance_review(request, approval_id):
         
         if compliance_id:
             try:
-                compliance = Compliance.objects.get(ComplianceId=compliance_id)
+                compliance = Compliance.objects.get(ComplianceId=compliance_id, tenant_id=tenant_id)
                 # Update compliance status to match approval
                 if approval.ApprovedNot is True:
                     compliance.Status = 'Approved'
@@ -390,10 +420,15 @@ def submit_compliance_review(request, approval_id):
 @api_view(['PUT'])
 @permission_classes([ComplianceApprovePermission])
 @compliance_approve_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def resubmit_compliance_approval(request, approval_id):
     """
     Resubmit a rejected compliance for review
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         # Get the compliance approval
         approval = get_object_or_404(ComplianceApproval, pk=approval_id)
@@ -433,7 +468,7 @@ def resubmit_compliance_approval(request, approval_id):
         
         if compliance_id:
             try:
-                compliance = Compliance.objects.get(ComplianceId=compliance_id)
+                compliance = Compliance.objects.get(ComplianceId=compliance_id, tenant_id=tenant_id)
                 # Update compliance data from ExtractedData
                 compliance.ComplianceItemDescription = approval.ExtractedData.get('ComplianceItemDescription', compliance.ComplianceItemDescription)
                 compliance.Criticality = approval.ExtractedData.get('Criticality', compliance.Criticality)
@@ -460,12 +495,17 @@ def resubmit_compliance_approval(request, approval_id):
 @api_view(['GET'])
 @permission_classes([ComplianceViewPermission])
 @compliance_view_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_compliance_status(request, compliance_id):
     """
     Get the status of a compliance item directly from the Compliance table
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
-        compliance = get_object_or_404(Compliance, ComplianceId=compliance_id)
+        compliance = get_object_or_404(Compliance, ComplianceId=compliance_id, tenant_id=tenant_id)
         
         return Response({
             'compliance_id': compliance_id,
@@ -479,10 +519,15 @@ def get_compliance_status(request, compliance_id):
 @api_view(['GET'])
 @permission_classes([ComplianceViewPermission])
 @compliance_view_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_compliances_by_type(request, type, id):
     """
     Get all compliances based on framework, policy, or subpolicy ID
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         compliances = []
         
@@ -564,12 +609,17 @@ def get_compliances_by_type(request, type, id):
 @api_view(['GET'])
 @permission_classes([ComplianceViewPermission])
 @compliance_view_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_frameworks(request):
     """
     Get all frameworks
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
-        frameworks = Framework.objects.all().order_by('FrameworkId')
+        frameworks = Framework.objects.filter(tenant_id=tenant_id).order_by('FrameworkId')
         frameworks_data = []
         
         for framework in frameworks:
@@ -602,12 +652,17 @@ def get_frameworks(request):
 @api_view(['GET'])
 @permission_classes([ComplianceViewPermission])
 @compliance_view_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policies(request, framework_id):
     """
     Get all policies for a framework
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
-        policies = Policy.objects.filter(
+        policies = Policy.objects.filter(tenant_id=tenant_id, 
             FrameworkId=framework_id
         ).order_by('PolicyId')
         
@@ -645,12 +700,17 @@ def get_policies(request, framework_id):
 @api_view(['GET'])
 @permission_classes([ComplianceViewPermission])
 @compliance_view_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_subpolicies(request, policy_id):
     """
     Get all subpolicies for a policy
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
-        subpolicies = SubPolicy.objects.filter(
+        subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, 
             PolicyId=policy_id
         ).order_by('SubPolicyId')
         
@@ -684,10 +744,15 @@ def get_subpolicies(request, policy_id):
 @api_view(['GET'])
 @permission_classes([ComplianceViewPermission])
 @compliance_view_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_compliance_dashboard_with_filters(request):
     """
     Get compliance dashboard data with framework and other filters
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         # Get filter parameters from request
         framework_id = request.query_params.get('framework_id')
@@ -806,23 +871,28 @@ def get_compliance_dashboard_with_filters(request):
 @api_view(['GET'])
 @permission_classes([ComplianceViewPermission])
 @compliance_view_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def test_framework_filter(request):
     """
     Test endpoint to debug framework filtering
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
     try:
         framework_id = request.query_params.get('framework_id')
         
         print(f"Testing framework filter with ID: {framework_id}")
         
         # Get all frameworks
-        frameworks = Framework.objects.all()
+        frameworks = Framework.objects.filter(tenant_id=tenant_id)
         frameworks_data = [{'id': f.FrameworkId, 'name': f.FrameworkName} for f in frameworks]
         
         # Get compliance count for the framework if provided
         compliance_count = 0
         if framework_id and framework_id != '':
-            compliance_count = Compliance.objects.filter(
+            compliance_count = Compliance.objects.filter(tenant_id=tenant_id, 
                 SubPolicy__PolicyId__FrameworkId=framework_id
             ).count()
         

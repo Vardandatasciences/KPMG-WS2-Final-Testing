@@ -39,6 +39,12 @@ from ...routes.Global.s3_fucntions import create_direct_mysql_client
 from ...authentication import verify_jwt_token
 from .audit_views import create_audit_version
 
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
+
 # DRF Session auth variant that skips CSRF enforcement for API clients
 class CsrfExemptSessionAuthentication(SessionAuthentication):
     def enforce_csrf(self, request):
@@ -51,13 +57,19 @@ logger = logging.getLogger(__name__)
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([IsAuthenticated])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def trigger_database_analysis(request, audit_id):
     """
     Manually trigger database analysis for a specific audit.
     This will analyze all database records and create evidence entries in ai_audit_data.
     
     POST /api/ai-audit/{audit_id}/trigger-database-analysis/
+    MULTI-TENANCY: Only triggers analysis for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         logger.info(f"🔍 Manual database analysis triggered for audit {audit_id}")
         
@@ -66,8 +78,8 @@ def trigger_database_analysis(request, audit_id):
             cursor.execute("""
                 SELECT FrameworkId, Title, Status
                 FROM audit
-                WHERE AuditId = %s
-            """, [int(audit_id)])
+                WHERE AuditId = %s AND tenant_id = %s
+            """, [int(audit_id), tenant_id])
             audit_row = cursor.fetchone()
             
             if not audit_row:
@@ -366,7 +378,7 @@ class AIAuditDocumentUploadView(View):
             try:
                 from django.db import connection
                 with connection.cursor() as cursor:
-                    cursor.execute("SELECT AuditId, AuditType FROM audit WHERE AuditId = %s", [audit_id])
+                    cursor.execute("SELECT AuditId, AuditType FROM audit WHERE AuditId = %s AND tenant_id = %s", [audit_id, tenant_id])
                     audit_row = cursor.fetchone()
                     
                 if audit_row:
@@ -1463,7 +1475,7 @@ class AIAuditDocumentUploadView(View):
                     # Update audit status to "Work In Progress" when auto-check starts
                     try:
                         from ...models import Audit
-                        audit_obj = Audit.objects.get(AuditId=int(audit_id) if str(audit_id).isdigit() else audit_id)
+                        audit_obj = Audit.objects.get(AuditId=int(audit_id) if str(audit_id).isdigit() else audit_id, tenant_id=tenant_id)
                         if audit_obj.Status == 'Yet to Start':
                             audit_obj.Status = 'Work In Progress'
                             audit_obj.save()
@@ -1978,8 +1990,9 @@ def save_ai_compliance_to_checklist(audit_id, document_id, analyses, user_id, fr
                         
                         # Check if audit finding already exists
                         cursor.execute("""
-                            SELECT AuditFindingsId FROM audit_findings 
-                            WHERE AuditId = %s AND ComplianceId = %s
+                            SELECT af.AuditFindingsId FROM audit_findings af
+                            JOIN audit a ON af.AuditId = a.AuditId
+                            WHERE af.AuditId = %s AND a.tenant_id = %s AND af.ComplianceId = %s
                         """, [int(audit_id) if str(audit_id).isdigit() else audit_id, compliance_id])
                         
                         existing_finding = cursor.fetchone()
@@ -2038,7 +2051,8 @@ def save_ai_compliance_to_checklist(audit_id, document_id, analyses, user_id, fr
                                     WhatToVerify = %s,
                                     SuggestedActionPlan = %s,
                                     CheckedDate = NOW()
-                                WHERE AuditId = %s AND ComplianceId = %s
+                                JOIN audit a ON audit_findings.AuditId = a.AuditId
+                                WHERE audit_findings.AuditId = %s AND a.tenant_id = %s AND audit_findings.ComplianceId = %s
                             """, [
                                 check_value,
                                 comments[:1000] if len(comments) > 1000 else comments,
@@ -2299,8 +2313,15 @@ class AIAuditDocumentsView(View):
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([IsAuthenticated])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def map_audit_document_api(request, audit_id, document_id):
-    """Update the policy/sub-policy mapping for a specific uploaded document."""
+    """Update the policy/sub-policy mapping for a specific uploaded document.
+    MULTI-TENANCY: Only maps documents for audits in user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         policy_id = request.data.get('policy_id')
         subpolicy_id = request.data.get('subpolicy_id')
@@ -2315,7 +2336,9 @@ def map_audit_document_api(request, audit_id, document_id):
             # Verify the document belongs to this audit
             cursor.execute(
                 """
-                SELECT document_id FROM audit_document 
+                SELECT ad.document_id FROM audit_document ad
+                JOIN audit a ON ad.audit_id = a.AuditId
+                WHERE ad.audit_id = %s AND a.tenant_id = %s
                 WHERE document_id = %s AND audit_id = %s
                 """,
                 [int(document_id), int(audit_id) if str(audit_id).isdigit() else audit_id]
@@ -2349,12 +2372,13 @@ def map_audit_document_api(request, audit_id, document_id):
             try:
                 cursor.execute(
                     """
-                    UPDATE audit_document
-                    SET policy_id = COALESCE(%s, policy_id),
-                        subpolicy_id = COALESCE(%s, subpolicy_id)
-                    WHERE document_id = %s
+                    UPDATE audit_document ad
+                    JOIN audit a ON ad.audit_id = a.AuditId
+                    SET ad.policy_id = COALESCE(%s, ad.policy_id),
+                        ad.subpolicy_id = COALESCE(%s, ad.subpolicy_id)
+                    WHERE ad.document_id = %s AND a.tenant_id = %s
                     """,
-                    [policy_id, subpolicy_id, int(document_id)]
+                    [policy_id, subpolicy_id, int(document_id), tenant_id]
                 )
                 updated = cursor.rowcount
             except Exception as e:
@@ -2539,8 +2563,15 @@ def trigger_audit_reprocessing_on_json_update(audit_id, framework_id):
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([IsAuthenticated])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def start_ai_audit_processing_api(request, audit_id):
-    """Start AI processing for all pending documents with real AI/ML analysis"""
+    """Start AI processing for all pending documents with real AI/ML analysis
+    MULTI-TENANCY: Only processes documents for audits in user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         logger.info(f"🚀 Starting AI processing for audit {audit_id}")
         
@@ -2560,9 +2591,10 @@ def start_ai_audit_processing_api(request, audit_id):
         with connection.cursor() as cursor:
             cursor.execute("""
                 SELECT document_id, document_name, document_path, document_type, file_size, mime_type
-                FROM audit_document 
-                WHERE audit_id = %s AND ai_processing_status = 'pending'
-            """, [int(audit_id) if str(audit_id).isdigit() else audit_id])
+                FROM audit_document ad
+                JOIN audit a ON ad.audit_id = a.AuditId
+                WHERE ad.audit_id = %s AND a.tenant_id = %s AND ad.ai_processing_status = 'pending'
+            """, [int(audit_id) if str(audit_id).isdigit() else audit_id, tenant_id])
             
             documents = cursor.fetchall()
         
@@ -4486,7 +4518,7 @@ def _check_document_compliance_internal(audit_id, document_id, user_id=None, sel
                             # All documents processed - update audit status to "Under review" (not "Completed" yet - needs reviewer approval)
                             from ...models import Audit
                             try:
-                                audit_obj = Audit.objects.get(AuditId=int(audit_id) if str(audit_id).isdigit() else audit_id)
+                                audit_obj = Audit.objects.get(AuditId=int(audit_id) if str(audit_id).isdigit() else audit_id, tenant_id=tenant_id)
                                 current_status = audit_obj.Status
                                 logger.info(f"🔍 Current audit status: '{current_status}'")
                                 
@@ -4645,8 +4677,15 @@ def _compute_basic_signals(inferred_schema: dict) -> dict:
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([IsAuthenticated])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def check_document_compliance(request, audit_id, document_id):
-    """Run compliance check for a single mapped document using OpenAI."""
+    """Run compliance check for a single mapped document using OpenAI.
+    MULTI-TENANCY: Only checks compliance for audits in user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Check authentication using JWT (like other endpoints)
         from ...rbac.utils import RBACUtils
@@ -4673,7 +4712,7 @@ def check_document_compliance(request, audit_id, document_id):
                 """
                 SELECT Title, Objective, Scope, BusinessUnit, AuditType, DueDate
                 FROM audit
-                WHERE AuditId = %s
+                WHERE AuditId = %s AND tenant_id = %s
                 """,
                 [int(audit_id) if str(audit_id).isdigit() else audit_id]
             )
@@ -5368,7 +5407,7 @@ def check_document_compliance(request, audit_id, document_id):
                         
                         if total_docs > 0 and (completed_docs + failed_docs) == total_docs:
                             from ...models import Audit
-                            audit_obj = Audit.objects.get(AuditId=int(audit_id) if str(audit_id).isdigit() else audit_id)
+                            audit_obj = Audit.objects.get(AuditId=int(audit_id) if str(audit_id).isdigit() else audit_id, tenant_id=tenant_id)
                             if audit_obj.Status not in ['Under review', 'Completed']:
                                 # Get auditor user_id for creating audit_version (extract integer ID from User object if needed)
                                 auditor_id = audit_obj.Auditor if hasattr(audit_obj, 'Auditor') and audit_obj.Auditor else None
@@ -6275,11 +6314,17 @@ def _check_compliance_with_combined_evidence_internal(audit_id, compliance_ids, 
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([IsAuthenticated])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def check_compliance_with_combined_evidence(request, audit_id):
     """
     Check compliance by combining ALL evidence (documents + database records) for each requirement.
     This implements the correct audit approach: one judgment per compliance requirement based on all available evidence.
+    MULTI-TENANCY: Only checks compliance for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         from ...rbac.utils import RBACUtils
         user_id = RBACUtils.get_user_id_from_request(request)
@@ -6329,11 +6374,17 @@ def check_compliance_with_combined_evidence(request, audit_id):
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([IsAuthenticated])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def check_all_documents_compliance(request, audit_id):
     """
     Run compliance check for all mapped documents in an audit.
     Automatically uses combined evidence approach when both document and database evidence exist.
+    MULTI-TENANCY: Only checks compliance for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Check authentication using JWT (like other endpoints)
         from ...rbac.utils import RBACUtils
@@ -6475,8 +6526,15 @@ def check_all_documents_compliance(request, audit_id):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditConductPermission, AuditReviewPermission])
 @audit_conduct_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def delete_audit_document_api(request, audit_id, document_id):
-    """Delete an audit document"""
+    """Delete an audit document
+    MULTI-TENANCY: Only deletes documents for audits in user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         logger.info(f"🗑️ Deleting document {document_id} from audit {audit_id}")
         
@@ -6667,11 +6725,17 @@ def delete_audit_document_api(request, audit_id, document_id):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditConductPermission, AuditReviewPermission])
 @audit_conduct_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def delete_all_audit_documents_api(request, audit_id):
     """
     Delete ALL ai_audit_data rows for a given audit.
     Used by the UI 'Delete All' to quickly clear evidence/documents.
+    MULTI-TENANCY: Only deletes documents for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         logger.info(f"🗑️ Bulk delete requested for all documents/evidence of audit {audit_id}")
 
@@ -6719,8 +6783,15 @@ def delete_all_audit_documents_api(request, audit_id):
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([IsAuthenticated])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def download_audit_report(request, audit_id):
-    """Generate a comprehensive AI audit report and return it as a download."""
+    """Generate a comprehensive AI audit report and return it as a download.
+    MULTI-TENANCY: Only generates reports for audits in user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         logger.info(f"📊 Generating comprehensive AI audit report for audit {audit_id}")
         
@@ -7924,8 +7995,15 @@ def _generate_audit_recommendations(compliance_summary, documents, audit_row=Non
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([IsAuthenticated])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def test_structured_compliance_api(request, audit_id):
-    """Test the structured compliance checking with a sample document"""
+    """Test the structured compliance checking with a sample document
+    MULTI-TENANCY: Only tests for audits in user's tenant
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # TODO: Implement structured_compliance_checker module
         # from .structured_compliance_checker import check_document_structured_compliance
@@ -7985,11 +8063,17 @@ def test_structured_compliance_api(request, audit_id):
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([IsAuthenticated])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_relevant_documents_for_audit(request, audit_id):
     """
     Get documents from file_operations that are relevant to this audit.
     Filters by framework and optionally by selected policies/subpolicies/compliances.
+    MULTI-TENANCY: Only returns documents for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         logger.info(f"📋 Getting relevant documents for audit {audit_id}")
         
@@ -8007,7 +8091,7 @@ def get_relevant_documents_for_audit(request, audit_id):
             cursor.execute("""
                 SELECT AuditId, FrameworkId, PolicyId, SubPolicyId
                 FROM audit
-                WHERE AuditId = %s
+                WHERE AuditId = %s AND tenant_id = %s
             """, [int(audit_id) if str(audit_id).isdigit() else audit_id])
             audit_row = cursor.fetchone()
             

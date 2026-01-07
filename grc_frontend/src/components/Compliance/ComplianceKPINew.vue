@@ -1136,7 +1136,13 @@ export default {
           const cachedFrameworks = complianceDataService.getData('frameworks') || []
           
           this.frameworks = cachedFrameworks
-            .filter(f => f && (f.id || f.FrameworkId)) // Filter out invalid frameworks
+            .filter(f => {
+              // Filter out invalid frameworks
+              if (!f || (!f.id && !f.FrameworkId)) return false;
+              // Filter to only show active frameworks
+              const status = f.ActiveInactive || f.status || '';
+              return status.toLowerCase() === 'active';
+            })
             .map(f => ({
               id: f.id || f.FrameworkId,
               name: f.name || f.FrameworkName || `Framework ${f.id || f.FrameworkId}`,
@@ -1158,7 +1164,13 @@ export default {
             if (response.data.success && response.data.data) {
               // Standard structure: { success: true, data: [...] }
               this.frameworks = (response.data.data || [])
-                .filter(f => f && (f.id || f.FrameworkId)) // Filter out invalid frameworks
+                .filter(f => {
+                  // Filter out invalid frameworks
+                  if (!f || (!f.id && !f.FrameworkId)) return false;
+                  // Filter to only show active frameworks
+                  const status = f.ActiveInactive || f.status || '';
+                  return status.toLowerCase() === 'active';
+                })
                 .map(f => ({
                   id: f.id || f.FrameworkId,
                   name: f.name || f.FrameworkName || `Framework ${f.id || f.FrameworkId}`,
@@ -1174,7 +1186,13 @@ export default {
             } else if (Array.isArray(response.data)) {
               // Direct array structure: [...]
               this.frameworks = (response.data || [])
-                .filter(f => f && (f.id || f.FrameworkId)) // Filter out invalid frameworks
+                .filter(f => {
+                  // Filter out invalid frameworks
+                  if (!f || (!f.id && !f.FrameworkId)) return false;
+                  // Filter to only show active frameworks
+                  const status = f.ActiveInactive || f.status || '';
+                  return status.toLowerCase() === 'active';
+                })
                 .map(f => ({
                   id: f.id || f.FrameworkId,
                   name: f.name || f.FrameworkName || `Framework ${f.id || f.FrameworkId}`,

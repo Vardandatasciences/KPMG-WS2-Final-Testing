@@ -17,6 +17,12 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.parsers import MultiPartParser, FormParser
 from .framework_filter_helper import get_active_framework_filter, apply_framework_filter_to_audits, get_framework_sql_filter
 
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
+
 # Custom authentication class for CSRF exempt sessions
 class CsrfExemptSessionAuthentication(SessionAuthentication):
     def enforce_csrf(self, request):
@@ -54,11 +60,17 @@ class DateTimeEncoder(json.JSONEncoder):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditConductPermission])
 @audit_conduct_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_audit_task_details(request, audit_id):
     """
     Get detailed information about a specific audit for the task view.
     Load the latest version data from audit_version table if available.
+    MULTI-TENANCY: Only returns audit details for user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Validate audit_id parameter
         try:
@@ -95,8 +107,8 @@ def get_audit_task_details(request, audit_id):
                 LEFT JOIN
                     subpolicies sp ON a.SubPolicyId = sp.SubPolicyId
                 WHERE 
-                    a.AuditId = %s
-            """, [validated_audit_id])
+                    a.AuditId = %s AND a.tenant_id = %s
+            """, [validated_audit_id, tenant_id])
             
             audit_row = cursor.fetchone()
             if not audit_row:
@@ -121,12 +133,13 @@ def get_audit_task_details(request, audit_id):
 
             # Check for the latest version in audit_version table
             cursor.execute("""
-                SELECT Version, ExtractedInfo, Date 
-                FROM audit_version 
-                WHERE AuditId = %s 
-                ORDER BY Date DESC, Version DESC 
+                SELECT av.Version, av.ExtractedInfo, av.Date 
+                FROM audit_version av
+                JOIN audit a ON av.AuditId = a.AuditId
+                WHERE av.AuditId = %s AND a.tenant_id = %s
+                ORDER BY av.Date DESC, av.Version DESC 
                 LIMIT 1
-            """, [validated_audit_id])
+            """, [validated_audit_id, tenant_id])
             
             version_row = cursor.fetchone()
             
@@ -178,8 +191,10 @@ def get_audit_task_details(request, audit_id):
                     
                     # Add compliance IDs from audit_findings table to ensure we get newly added compliances
                     cursor.execute("""
-                        SELECT DISTINCT ComplianceId FROM audit_findings WHERE AuditId = %s
-                    """, [validated_audit_id])
+                        SELECT DISTINCT af.ComplianceId FROM audit_findings af
+                        JOIN audit a ON af.AuditId = a.AuditId
+                        WHERE af.AuditId = %s AND a.tenant_id = %s
+                    """, [validated_audit_id, tenant_id])
                     
                     for finding_row in cursor.fetchall():
                         compliance_ids.add(finding_row[0])
@@ -226,9 +241,10 @@ def get_audit_task_details(request, audit_id):
                                 SELECT 
                                     `Check`, Evidence, Comments, HowToVerify, Impact, 
                                     Recommendation, DetailsOfFinding, MajorMinor
-                                FROM audit_findings 
-                                WHERE AuditId = %s AND ComplianceId = %s
-                            """, [validated_audit_id, compliance_id])
+                                FROM audit_findings af
+                                JOIN audit a ON af.AuditId = a.AuditId
+                                WHERE af.AuditId = %s AND a.tenant_id = %s AND af.ComplianceId = %s
+                            """, [validated_audit_id, tenant_id, compliance_id])
                             
                             finding_row = cursor.fetchone()
                             if finding_row:
@@ -488,7 +504,7 @@ def get_audit_task_details(request, audit_id):
                 initial_version_data['overall_review_comments'] = ''
                 
                 # Get FrameworkId from the audit
-                cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s", [validated_audit_id])
+                cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s AND tenant_id = %s", [validated_audit_id, tenant_id])
                 framework_row = cursor.fetchone()
                 framework_id = framework_row[0] if framework_row else None
                 
@@ -541,10 +557,16 @@ def get_audit_task_details(request, audit_id):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditConductPermission])
 @audit_conduct_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def save_audit_version(request, audit_id):
     """
     Save audit form data as a version in audit_version table.
+    MULTI-TENANCY: Only saves versions for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     # Handle preflight OPTIONS request
     if request.method == 'OPTIONS':
         response = JsonResponse({})
@@ -588,11 +610,12 @@ def save_audit_version(request, audit_id):
         with connection.cursor() as cursor:
             # First check for latest R version to get review data
             cursor.execute("""
-                SELECT Version, ExtractedInfo FROM audit_version 
-                WHERE AuditId = %s AND Version LIKE 'R%%' 
-                ORDER BY CAST(SUBSTRING(Version, 2) AS UNSIGNED) DESC 
+                SELECT av.Version, av.ExtractedInfo FROM audit_version av
+                JOIN audit a ON av.AuditId = a.AuditId
+                WHERE av.AuditId = %s AND a.tenant_id = %s AND av.Version LIKE 'R%%' 
+                ORDER BY CAST(SUBSTRING(av.Version, 2) AS UNSIGNED) DESC 
                 LIMIT 1
-            """, [validated_audit_id])
+            """, [validated_audit_id, tenant_id])
             
             r_version_result = cursor.fetchone()
             latest_review_data = {}
@@ -618,11 +641,12 @@ def save_audit_version(request, audit_id):
 
             # Get the current highest version number for this audit with 'A' prefix
             cursor.execute("""
-                SELECT Version, ExtractedInfo FROM audit_version 
-                WHERE AuditId = %s AND Version LIKE 'A%%' 
-                ORDER BY CAST(SUBSTRING(Version, 2) AS UNSIGNED) DESC 
+                SELECT av.Version, av.ExtractedInfo FROM audit_version av
+                JOIN audit a ON av.AuditId = a.AuditId
+                WHERE av.AuditId = %s AND a.tenant_id = %s AND av.Version LIKE 'A%%' 
+                ORDER BY CAST(SUBSTRING(av.Version, 2) AS UNSIGNED) DESC 
                 LIMIT 1
-            """, [validated_audit_id])
+            """, [validated_audit_id, tenant_id])
             
             result = cursor.fetchone()
             existing_metadata = {}
@@ -749,8 +773,8 @@ def save_audit_version(request, audit_id):
             cursor.execute("""
                 UPDATE audit
                 SET Comments = %s
-                WHERE AuditId = %s
-            """, [validated_data.get('overall_comments', ''), validated_audit_id])
+                WHERE AuditId = %s AND tenant_id = %s
+            """, [validated_data.get('overall_comments', ''), validated_audit_id, tenant_id])
             
             # Get FrameworkId from the audit
             cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s", [validated_audit_id])
@@ -807,10 +831,16 @@ def save_audit_version(request, audit_id):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditConductPermission])
 @audit_conduct_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def send_audit_for_review(request, audit_id):
     """
     Update audit status to "Under Review" when auditor sends it for review.
+    MULTI-TENANCY: Only updates audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     # Handle preflight OPTIONS request
     if request.method == 'OPTIONS':
         response = JsonResponse({})
@@ -853,8 +883,8 @@ def send_audit_for_review(request, audit_id):
             cursor.execute("""
                 UPDATE audit 
                 SET Status = 'Under review'
-                WHERE AuditId = %s
-            """, [validated_audit_id])
+                WHERE AuditId = %s AND tenant_id = %s
+            """, [validated_audit_id, tenant_id])
             
             # Check if the update was successful
             if cursor.rowcount == 0:
@@ -899,10 +929,15 @@ def send_audit_for_review(request, audit_id):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditConductPermission])
 @audit_conduct_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def update_audit_findings(request):
     """
     This endpoint is now deprecated - all updates should go through versioning system.
+    MULTI-TENANCY: Only affects audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     return JsonResponse({
         'error': 'Direct audit findings updates are not allowed. Please use the versioning system.',
         'success': False
@@ -914,11 +949,16 @@ def update_audit_findings(request):
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
 @permission_classes([AuditConductPermission])
 @audit_conduct_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def upload_evidence_to_s3(request):
     """
     Upload evidence files to S3 using the RenderS3Client.
     Handles both compliance evidence and audit evidence uploads.
+    MULTI-TENANCY: Only uploads evidence for audits in user's tenant
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
     # Handle preflight OPTIONS request
     if request.method == 'OPTIONS':
         response = JsonResponse({})

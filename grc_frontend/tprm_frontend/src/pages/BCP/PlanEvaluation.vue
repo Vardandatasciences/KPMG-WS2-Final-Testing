@@ -261,7 +261,37 @@
                 <h4 class="section-subtitle">Quick Score Input</h4>
                 <div class="score-inputs-grid">
                   <div class="score-input-group">
-                    <label class="label">Coverage Score</label>
+                    <label class="label flex items-center gap-2">
+                      <span>Coverage Score</span>
+                      <div class="bcp-data-type-circle-toggle-wrapper">
+                        <div class="bcp-data-type-circle-toggle">
+                          <div 
+                            class="bcp-circle-option bcp-personal-circle" 
+                            :class="{ active: getEvaluationDataType('coverage_score') === 'personal' }"
+                            @click="setEvaluationDataType('coverage_score', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="bcp-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="bcp-circle-option bcp-confidential-circle" 
+                            :class="{ active: getEvaluationDataType('coverage_score') === 'confidential' }"
+                            @click="setEvaluationDataType('coverage_score', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="bcp-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="bcp-circle-option bcp-regular-circle" 
+                            :class="{ active: getEvaluationDataType('coverage_score') === 'regular' }"
+                            @click="setEvaluationDataType('coverage_score', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="bcp-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
                     <input 
                       type="number" 
                       min="0" 
@@ -274,7 +304,37 @@
                     />
                   </div>
                   <div class="score-input-group">
-                    <label class="label">Quality Score</label>
+                    <label class="label flex items-center gap-2">
+                      <span>Quality Score</span>
+                      <div class="bcp-data-type-circle-toggle-wrapper">
+                        <div class="bcp-data-type-circle-toggle">
+                          <div 
+                            class="bcp-circle-option bcp-personal-circle" 
+                            :class="{ active: getEvaluationDataType('quality_score') === 'personal' }"
+                            @click="setEvaluationDataType('quality_score', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="bcp-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="bcp-circle-option bcp-confidential-circle" 
+                            :class="{ active: getEvaluationDataType('quality_score') === 'confidential' }"
+                            @click="setEvaluationDataType('quality_score', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="bcp-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="bcp-circle-option bcp-regular-circle" 
+                            :class="{ active: getEvaluationDataType('quality_score') === 'regular' }"
+                            @click="setEvaluationDataType('quality_score', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="bcp-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
                     <input 
                       type="number" 
                       min="0" 
@@ -287,7 +347,37 @@
                     />
                   </div>
                   <div class="score-input-group">
-                    <label class="label">Compliance Score</label>
+                    <label class="label flex items-center gap-2">
+                      <span>Compliance Score</span>
+                      <div class="bcp-data-type-circle-toggle-wrapper">
+                        <div class="bcp-data-type-circle-toggle">
+                          <div 
+                            class="bcp-circle-option bcp-personal-circle" 
+                            :class="{ active: getEvaluationDataType('compliance_score') === 'personal' }"
+                            @click="setEvaluationDataType('compliance_score', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="bcp-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="bcp-circle-option bcp-confidential-circle" 
+                            :class="{ active: getEvaluationDataType('compliance_score') === 'confidential' }"
+                            @click="setEvaluationDataType('compliance_score', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="bcp-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="bcp-circle-option bcp-regular-circle" 
+                            :class="{ active: getEvaluationDataType('compliance_score') === 'regular' }"
+                            @click="setEvaluationDataType('compliance_score', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="bcp-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
                     <input 
                       type="number" 
                       min="0" 
@@ -300,7 +390,37 @@
                     />
                   </div>
                   <div v-if="selectedEvaluationData?.plan_type === 'DRP'" class="score-input-group">
-                    <label class="label">Recovery Score</label>
+                    <label class="label flex items-center gap-2">
+                      <span>Recovery Score</span>
+                      <div class="bcp-data-type-circle-toggle-wrapper">
+                        <div class="bcp-data-type-circle-toggle">
+                          <div 
+                            class="bcp-circle-option bcp-personal-circle" 
+                            :class="{ active: getEvaluationDataType('recovery_capability_score') === 'personal' }"
+                            @click="setEvaluationDataType('recovery_capability_score', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="bcp-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="bcp-circle-option bcp-confidential-circle" 
+                            :class="{ active: getEvaluationDataType('recovery_capability_score') === 'confidential' }"
+                            @click="setEvaluationDataType('recovery_capability_score', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="bcp-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="bcp-circle-option bcp-regular-circle" 
+                            :class="{ active: getEvaluationDataType('recovery_capability_score') === 'regular' }"
+                            @click="setEvaluationDataType('recovery_capability_score', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="bcp-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
                     <input 
                       type="number" 
                       min="0" 
@@ -313,7 +433,37 @@
                     />
                   </div>
                   <div class="score-input-group overall-score">
-                    <label class="label">Overall Score</label>
+                    <label class="label flex items-center gap-2">
+                      <span>Overall Score</span>
+                      <div class="bcp-data-type-circle-toggle-wrapper">
+                        <div class="bcp-data-type-circle-toggle">
+                          <div 
+                            class="bcp-circle-option bcp-personal-circle" 
+                            :class="{ active: getEvaluationDataType('overall_score') === 'personal' }"
+                            @click="setEvaluationDataType('overall_score', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="bcp-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="bcp-circle-option bcp-confidential-circle" 
+                            :class="{ active: getEvaluationDataType('overall_score') === 'confidential' }"
+                            @click="setEvaluationDataType('overall_score', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="bcp-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="bcp-circle-option bcp-regular-circle" 
+                            :class="{ active: getEvaluationDataType('overall_score') === 'regular' }"
+                            @click="setEvaluationDataType('overall_score', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="bcp-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
                     <input 
                       type="number" 
                       min="0" 
@@ -326,7 +476,37 @@
                     />
                   </div>
                   <div class="score-input-group">
-                    <label class="label">Weighted Score</label>
+                    <label class="label flex items-center gap-2">
+                      <span>Weighted Score</span>
+                      <div class="bcp-data-type-circle-toggle-wrapper">
+                        <div class="bcp-data-type-circle-toggle">
+                          <div 
+                            class="bcp-circle-option bcp-personal-circle" 
+                            :class="{ active: getEvaluationDataType('weighted_score') === 'personal' }"
+                            @click="setEvaluationDataType('weighted_score', 'personal')"
+                            title="Personal Data"
+                          >
+                            <div class="bcp-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="bcp-circle-option bcp-confidential-circle" 
+                            :class="{ active: getEvaluationDataType('weighted_score') === 'confidential' }"
+                            @click="setEvaluationDataType('weighted_score', 'confidential')"
+                            title="Confidential Data"
+                          >
+                            <div class="bcp-circle-inner"></div>
+                          </div>
+                          <div 
+                            class="bcp-circle-option bcp-regular-circle" 
+                            :class="{ active: getEvaluationDataType('weighted_score') === 'regular' }"
+                            @click="setEvaluationDataType('weighted_score', 'regular')"
+                            title="Regular Data"
+                          >
+                            <div class="bcp-circle-inner"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
                     <input 
                       type="number" 
                       min="0" 
@@ -361,7 +541,37 @@
                       <!-- Coverage Question 1 -->
                       <div class="question-item">
                         <div class="question-header">
-                          <label class="question-label">Is scope comprehensive and well-defined?</label>
+                          <label class="question-label flex items-center gap-2">
+                            <span>Is scope comprehensive and well-defined?</span>
+                            <div class="bcp-data-type-circle-toggle-wrapper">
+                              <div class="bcp-data-type-circle-toggle">
+                                <div 
+                                  class="bcp-circle-option bcp-personal-circle" 
+                                  :class="{ active: getEvaluationDataType('scope_comprehensive') === 'personal' }"
+                                  @click="setEvaluationDataType('scope_comprehensive', 'personal')"
+                                  title="Personal Data"
+                                >
+                                  <div class="bcp-circle-inner"></div>
+                                </div>
+                                <div 
+                                  class="bcp-circle-option bcp-confidential-circle" 
+                                  :class="{ active: getEvaluationDataType('scope_comprehensive') === 'confidential' }"
+                                  @click="setEvaluationDataType('scope_comprehensive', 'confidential')"
+                                  title="Confidential Data"
+                                >
+                                  <div class="bcp-circle-inner"></div>
+                                </div>
+                                <div 
+                                  class="bcp-circle-option bcp-regular-circle" 
+                                  :class="{ active: getEvaluationDataType('scope_comprehensive') === 'regular' }"
+                                  @click="setEvaluationDataType('scope_comprehensive', 'regular')"
+                                  title="Regular Data"
+                                >
+                                  <div class="bcp-circle-inner"></div>
+                                </div>
+                              </div>
+                            </div>
+                          </label>
                           <div class="yes-no-options">
                             <label class="radio-option">
                               <input type="radio" name="coverage_scope_comprehensive" value="yes" class="radio-item" v-model="evaluationData.yes_no_responses.coverage_scope_comprehensive" />
@@ -402,7 +612,37 @@
                       <!-- Coverage Question 2 -->
                       <div class="question-item">
                         <div class="question-header">
-                          <label class="question-label">Are RTO/RPO targets adequate and realistic?</label>
+                          <label class="question-label flex items-center gap-2">
+                            <span>Are RTO/RPO targets adequate and realistic?</span>
+                            <div class="bcp-data-type-circle-toggle-wrapper">
+                              <div class="bcp-data-type-circle-toggle">
+                                <div 
+                                  class="bcp-circle-option bcp-personal-circle" 
+                                  :class="{ active: getEvaluationDataType('rto_rpo_adequate') === 'personal' }"
+                                  @click="setEvaluationDataType('rto_rpo_adequate', 'personal')"
+                                  title="Personal Data"
+                                >
+                                  <div class="bcp-circle-inner"></div>
+                                </div>
+                                <div 
+                                  class="bcp-circle-option bcp-confidential-circle" 
+                                  :class="{ active: getEvaluationDataType('rto_rpo_adequate') === 'confidential' }"
+                                  @click="setEvaluationDataType('rto_rpo_adequate', 'confidential')"
+                                  title="Confidential Data"
+                                >
+                                  <div class="bcp-circle-inner"></div>
+                                </div>
+                                <div 
+                                  class="bcp-circle-option bcp-regular-circle" 
+                                  :class="{ active: getEvaluationDataType('rto_rpo_adequate') === 'regular' }"
+                                  @click="setEvaluationDataType('rto_rpo_adequate', 'regular')"
+                                  title="Regular Data"
+                                >
+                                  <div class="bcp-circle-inner"></div>
+                                </div>
+                              </div>
+                            </div>
+                          </label>
                           <div class="yes-no-options">
                             <label class="radio-option">
                               <input type="radio" name="coverage_rto_rpo_adequate" value="yes" class="radio-item" v-model="evaluationData.yes_no_responses.coverage_rto_rpo_adequate" />
@@ -443,7 +683,37 @@
                       <!-- Coverage Question 3 -->
                       <div class="question-item">
                         <div class="question-header">
-                          <label class="question-label">Are all critical services identified and prioritized?</label>
+                          <label class="question-label flex items-center gap-2">
+                            <span>Are all critical services identified and prioritized?</span>
+                            <div class="bcp-data-type-circle-toggle-wrapper">
+                              <div class="bcp-data-type-circle-toggle">
+                                <div 
+                                  class="bcp-circle-option bcp-personal-circle" 
+                                  :class="{ active: getEvaluationDataType('critical_services_listed') === 'personal' }"
+                                  @click="setEvaluationDataType('critical_services_listed', 'personal')"
+                                  title="Personal Data"
+                                >
+                                  <div class="bcp-circle-inner"></div>
+                                </div>
+                                <div 
+                                  class="bcp-circle-option bcp-confidential-circle" 
+                                  :class="{ active: getEvaluationDataType('critical_services_listed') === 'confidential' }"
+                                  @click="setEvaluationDataType('critical_services_listed', 'confidential')"
+                                  title="Confidential Data"
+                                >
+                                  <div class="bcp-circle-inner"></div>
+                                </div>
+                                <div 
+                                  class="bcp-circle-option bcp-regular-circle" 
+                                  :class="{ active: getEvaluationDataType('critical_services_listed') === 'regular' }"
+                                  @click="setEvaluationDataType('critical_services_listed', 'regular')"
+                                  title="Regular Data"
+                                >
+                                  <div class="bcp-circle-inner"></div>
+                                </div>
+                              </div>
+                            </div>
+                          </label>
                           <div class="yes-no-options">
                             <label class="radio-option">
                               <input type="radio" name="coverage_critical_services_listed" value="yes" class="radio-item" v-model="evaluationData.yes_no_responses.coverage_critical_services_listed" />
@@ -488,7 +758,37 @@
                       <!-- Quality Question 1 -->
                       <div class="question-item">
                         <div class="question-header">
-                          <label class="question-label">Are roles and responsibilities clearly defined?</label>
+                          <label class="question-label flex items-center gap-2">
+                            <span>Are roles and responsibilities clearly defined?</span>
+                            <div class="bcp-data-type-circle-toggle-wrapper">
+                              <div class="bcp-data-type-circle-toggle">
+                                <div 
+                                  class="bcp-circle-option bcp-personal-circle" 
+                                  :class="{ active: getEvaluationDataType('roles_responsibilities_clear') === 'personal' }"
+                                  @click="setEvaluationDataType('roles_responsibilities_clear', 'personal')"
+                                  title="Personal Data"
+                                >
+                                  <div class="bcp-circle-inner"></div>
+                                </div>
+                                <div 
+                                  class="bcp-circle-option bcp-confidential-circle" 
+                                  :class="{ active: getEvaluationDataType('roles_responsibilities_clear') === 'confidential' }"
+                                  @click="setEvaluationDataType('roles_responsibilities_clear', 'confidential')"
+                                  title="Confidential Data"
+                                >
+                                  <div class="bcp-circle-inner"></div>
+                                </div>
+                                <div 
+                                  class="bcp-circle-option bcp-regular-circle" 
+                                  :class="{ active: getEvaluationDataType('roles_responsibilities_clear') === 'regular' }"
+                                  @click="setEvaluationDataType('roles_responsibilities_clear', 'regular')"
+                                  title="Regular Data"
+                                >
+                                  <div class="bcp-circle-inner"></div>
+                                </div>
+                              </div>
+                            </div>
+                          </label>
                           <div class="yes-no-options">
                             <label class="radio-option">
                               <input type="radio" name="quality_roles_responsibilities_clear" value="yes" class="radio-item" v-model="evaluationData.yes_no_responses.quality_roles_responsibilities_clear" />
@@ -529,7 +829,37 @@
                       <!-- Quality Question 2 -->
                       <div class="question-item">
                         <div class="question-header">
-                          <label class="question-label">Are communication plans comprehensive and tested?</label>
+                          <label class="question-label flex items-center gap-2">
+                            <span>Are communication plans comprehensive and tested?</span>
+                            <div class="bcp-data-type-circle-toggle-wrapper">
+                              <div class="bcp-data-type-circle-toggle">
+                                <div 
+                                  class="bcp-circle-option bcp-personal-circle" 
+                                  :class="{ active: getEvaluationDataType('communication_plans_solid') === 'personal' }"
+                                  @click="setEvaluationDataType('communication_plans_solid', 'personal')"
+                                  title="Personal Data"
+                                >
+                                  <div class="bcp-circle-inner"></div>
+                                </div>
+                                <div 
+                                  class="bcp-circle-option bcp-confidential-circle" 
+                                  :class="{ active: getEvaluationDataType('communication_plans_solid') === 'confidential' }"
+                                  @click="setEvaluationDataType('communication_plans_solid', 'confidential')"
+                                  title="Confidential Data"
+                                >
+                                  <div class="bcp-circle-inner"></div>
+                                </div>
+                                <div 
+                                  class="bcp-circle-option bcp-regular-circle" 
+                                  :class="{ active: getEvaluationDataType('communication_plans_solid') === 'regular' }"
+                                  @click="setEvaluationDataType('communication_plans_solid', 'regular')"
+                                  title="Regular Data"
+                                >
+                                  <div class="bcp-circle-inner"></div>
+                                </div>
+                              </div>
+                            </div>
+                          </label>
                           <div class="yes-no-options">
                             <label class="radio-option">
                               <input type="radio" name="quality_communication_plans_solid" value="yes" class="radio-item" v-model="evaluationData.yes_no_responses.quality_communication_plans_solid" />
@@ -574,7 +904,37 @@
                       <!-- Compliance Question 1 -->
                       <div class="question-item">
                         <div class="question-header">
-                          <label class="question-label">Do regulatory references align with current requirements?</label>
+                          <label class="question-label flex items-center gap-2">
+                            <span>Do regulatory references align with current requirements?</span>
+                            <div class="bcp-data-type-circle-toggle-wrapper">
+                              <div class="bcp-data-type-circle-toggle">
+                                <div 
+                                  class="bcp-circle-option bcp-personal-circle" 
+                                  :class="{ active: getEvaluationDataType('regulatory_references_align') === 'personal' }"
+                                  @click="setEvaluationDataType('regulatory_references_align', 'personal')"
+                                  title="Personal Data"
+                                >
+                                  <div class="bcp-circle-inner"></div>
+                                </div>
+                                <div 
+                                  class="bcp-circle-option bcp-confidential-circle" 
+                                  :class="{ active: getEvaluationDataType('regulatory_references_align') === 'confidential' }"
+                                  @click="setEvaluationDataType('regulatory_references_align', 'confidential')"
+                                  title="Confidential Data"
+                                >
+                                  <div class="bcp-circle-inner"></div>
+                                </div>
+                                <div 
+                                  class="bcp-circle-option bcp-regular-circle" 
+                                  :class="{ active: getEvaluationDataType('regulatory_references_align') === 'regular' }"
+                                  @click="setEvaluationDataType('regulatory_references_align', 'regular')"
+                                  title="Regular Data"
+                                >
+                                  <div class="bcp-circle-inner"></div>
+                                </div>
+                              </div>
+                            </div>
+                          </label>
                           <div class="yes-no-options">
                             <label class="radio-option">
                               <input type="radio" name="compliance_regulatory" value="yes" class="radio-item" v-model="evaluationData.yes_no_responses.compliance_regulatory" />
@@ -619,7 +979,37 @@
                       <!-- Recovery Question 1 -->
                       <div class="question-item">
                         <div class="question-header">
-                          <label class="question-label">Is recovery capability adequate for business needs?</label>
+                          <label class="question-label flex items-center gap-2">
+                            <span>Is recovery capability adequate for business needs?</span>
+                            <div class="bcp-data-type-circle-toggle-wrapper">
+                              <div class="bcp-data-type-circle-toggle">
+                                <div 
+                                  class="bcp-circle-option bcp-personal-circle" 
+                                  :class="{ active: getEvaluationDataType('recovery_capability_adequate') === 'personal' }"
+                                  @click="setEvaluationDataType('recovery_capability_adequate', 'personal')"
+                                  title="Personal Data"
+                                >
+                                  <div class="bcp-circle-inner"></div>
+                                </div>
+                                <div 
+                                  class="bcp-circle-option bcp-confidential-circle" 
+                                  :class="{ active: getEvaluationDataType('recovery_capability_adequate') === 'confidential' }"
+                                  @click="setEvaluationDataType('recovery_capability_adequate', 'confidential')"
+                                  title="Confidential Data"
+                                >
+                                  <div class="bcp-circle-inner"></div>
+                                </div>
+                                <div 
+                                  class="bcp-circle-option bcp-regular-circle" 
+                                  :class="{ active: getEvaluationDataType('recovery_capability_adequate') === 'regular' }"
+                                  @click="setEvaluationDataType('recovery_capability_adequate', 'regular')"
+                                  title="Regular Data"
+                                >
+                                  <div class="bcp-circle-inner"></div>
+                                </div>
+                              </div>
+                            </div>
+                          </label>
                           <div class="yes-no-options">
                             <label class="radio-option">
                               <input type="radio" name="recovery_capability" value="yes" class="radio-item" v-model="evaluationData.yes_no_responses.recovery_capability" />
@@ -677,7 +1067,37 @@
         <div v-if="selectedEvaluationData" class="evaluation-bottom-section">
           <!-- Comments Section -->
           <div class="comments-section">
-            <h3 class="section-title">Evaluator Comments</h3>
+            <h3 class="section-title flex items-center gap-2">
+              <span>Evaluator Comments</span>
+              <div class="bcp-data-type-circle-toggle-wrapper">
+                <div class="bcp-data-type-circle-toggle">
+                  <div 
+                    class="bcp-circle-option bcp-personal-circle" 
+                    :class="{ active: getEvaluationDataType('evaluator_comments') === 'personal' }"
+                    @click="setEvaluationDataType('evaluator_comments', 'personal')"
+                    title="Personal Data"
+                  >
+                    <div class="bcp-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="bcp-circle-option bcp-confidential-circle" 
+                    :class="{ active: getEvaluationDataType('evaluator_comments') === 'confidential' }"
+                    @click="setEvaluationDataType('evaluator_comments', 'confidential')"
+                    title="Confidential Data"
+                  >
+                    <div class="bcp-circle-inner"></div>
+                  </div>
+                  <div 
+                    class="bcp-circle-option bcp-regular-circle" 
+                    :class="{ active: getEvaluationDataType('evaluator_comments') === 'regular' }"
+                    @click="setEvaluationDataType('evaluator_comments', 'regular')"
+                    title="Regular Data"
+                  >
+                    <div class="bcp-circle-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </h3>
             <textarea 
               class="textarea"
               placeholder="Enter your overall assessment and recommendations..."
@@ -712,7 +1132,7 @@
 
 <script setup lang="ts">
 import './PlanEvaluation.css'
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '../../services/api_bcp.js'
 import { useNotifications } from '@/composables/useNotifications'
@@ -806,6 +1226,89 @@ const evaluationData = ref<any>({
 
 const selectedEvaluationData = ref<any>(null)
 const isLoadingPlanDetails = ref(false)
+
+// Data type classification for evaluation fields
+const evaluationFieldDataTypes = reactive({
+  overall_score: 'regular',
+  quality_score: 'regular',
+  coverage_score: 'regular',
+  recovery_capability_score: 'regular',
+  compliance_score: 'regular',
+  weighted_score: 'regular',
+  evaluator_comments: 'regular',
+  // Yes/No responses
+  coverage_scope_comprehensive: 'regular',
+  coverage_rto_rpo_adequate: 'regular',
+  coverage_critical_services_listed: 'regular',
+  quality_roles_responsibilities_clear: 'regular',
+  quality_communication_plans_solid: 'regular',
+  compliance_regulatory: 'regular',
+  recovery_capability: 'regular',
+  // Coverage criteria
+  scope_comprehensive: 'regular',
+  rto_rpo_adequate: 'regular',
+  critical_services_listed: 'regular',
+  // Quality criteria
+  roles_responsibilities_clear: 'regular',
+  communication_plans_solid: 'regular',
+  // Compliance criteria
+  regulatory_references_align: 'regular',
+  // Recovery criteria
+  recovery_capability_adequate: 'regular'
+})
+
+// Method to set data type for an evaluation field
+const setEvaluationDataType = (fieldName: string, type: string) => {
+  if (evaluationFieldDataTypes.hasOwnProperty(fieldName)) {
+    evaluationFieldDataTypes[fieldName] = type
+    console.log(`Data type selected for evaluation field ${fieldName}:`, type)
+  }
+}
+
+// Get data type for an evaluation field
+const getEvaluationDataType = (fieldName: string) => {
+  return evaluationFieldDataTypes[fieldName] || 'regular'
+}
+
+// Helper function to build data_inventory JSON for evaluation
+const buildEvaluationDataInventory = () => {
+  const fieldLabelMap = {
+    overall_score: 'Overall Score',
+    quality_score: 'Quality Score',
+    coverage_score: 'Coverage Score',
+    recovery_capability_score: 'Recovery Capability Score',
+    compliance_score: 'Compliance Score',
+    weighted_score: 'Weighted Score',
+    evaluator_comments: 'Evaluator Comments',
+    coverage_scope_comprehensive: 'Coverage - Scope Comprehensive',
+    coverage_rto_rpo_adequate: 'Coverage - RTO/RPO Adequate',
+    coverage_critical_services_listed: 'Coverage - Critical Services Listed',
+    quality_roles_responsibilities_clear: 'Quality - Roles Responsibilities Clear',
+    quality_communication_plans_solid: 'Quality - Communication Plans Solid',
+    compliance_regulatory: 'Compliance - Regulatory',
+    recovery_capability: 'Recovery - Capability',
+    scope_comprehensive: 'Scope Comprehensive',
+    rto_rpo_adequate: 'RTO/RPO Adequate',
+    critical_services_listed: 'Critical Services Listed',
+    roles_responsibilities_clear: 'Roles Responsibilities Clear',
+    communication_plans_solid: 'Communication Plans Solid',
+    regulatory_references_align: 'Regulatory References Align',
+    recovery_capability_adequate: 'Recovery Capability Adequate'
+  }
+
+  const dataInventory = {}
+  
+  // Build flat structure: {"Field Label": "data_type"}
+  for (const [fieldName, dataType] of Object.entries(evaluationFieldDataTypes)) {
+    if (fieldLabelMap[fieldName]) {
+      const fieldLabel = fieldLabelMap[fieldName]
+      dataInventory[fieldLabel] = dataType
+    }
+  }
+  
+  console.log('📋 Evaluation Data Inventory JSON:', JSON.stringify(dataInventory, null, 2))
+  return dataInventory
+}
 
 // Computed properties
 const isAllSelected = computed(() => {
@@ -1142,7 +1645,8 @@ const saveDraft = async () => {
   try {
     const saveData = {
       ...evaluationData.value,
-      is_final_submission: false
+      is_final_submission: false,
+      data_inventory: buildEvaluationDataInventory()
     }
     console.log('Saving draft with data:', saveData)
     
@@ -1184,7 +1688,8 @@ const submitEvaluation = async () => {
   try {
     const submitData = {
       ...evaluationData.value,
-      is_final_submission: true
+      is_final_submission: true,
+      data_inventory: buildEvaluationDataInventory()
     }
     console.log('Submitting evaluation with data:', submitData)
     
@@ -1615,3 +2120,114 @@ const loadMockData = async () => {
   })
 }
 </script>
+
+<style scoped>
+/* Data Type Classification Toggle Styles */
+.bcp-data-type-circle-toggle-wrapper {
+  display: inline-flex !important;
+  align-items: center !important;
+  margin-left: 12px !important;
+  padding: 4px 8px !important;
+  background-color: white !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 16px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: relative !important;
+  z-index: 1 !important;
+  flex-shrink: 0 !important;
+}
+
+.bcp-data-type-circle-toggle {
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.bcp-circle-option {
+  width: 14px !important;
+  height: 14px !important;
+  border-radius: 50% !important;
+  border: 1.5px solid #d1d5db !important;
+  background-color: white !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.3s ease !important;
+  position: relative !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  flex-shrink: 0 !important;
+}
+
+.bcp-circle-option:hover {
+  transform: scale(1.2) !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12) !important;
+}
+
+.bcp-circle-inner {
+  width: 0 !important;
+  height: 0 !important;
+  border-radius: 50% !important;
+  transition: all 0.3s ease !important;
+  background-color: transparent !important;
+}
+
+.bcp-circle-option.active .bcp-circle-inner {
+  width: 9px !important;
+  height: 9px !important;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Personal Circle - Blue */
+.bcp-circle-option.bcp-personal-circle {
+  border: 1.5px solid #4f7cff !important;
+}
+
+.bcp-circle-option.bcp-personal-circle.active {
+  border: 1.5px solid #4f7cff !important;
+  background-color: rgba(79, 124, 255, 0.1) !important;
+  box-shadow: 0 0 6px rgba(79, 124, 255, 0.2) !important;
+}
+
+.bcp-circle-option.bcp-personal-circle.active .bcp-circle-inner {
+  background-color: #4f7cff !important;
+  box-shadow: 0 0 4px rgba(79, 124, 255, 0.35) !important;
+}
+
+/* Confidential Circle - Red */
+.bcp-circle-option.bcp-confidential-circle {
+  border: 1.5px solid #e63946 !important;
+}
+
+.bcp-circle-option.bcp-confidential-circle.active {
+  border: 1.5px solid #e63946 !important;
+  background-color: rgba(230, 57, 70, 0.1) !important;
+  box-shadow: 0 0 6px rgba(230, 57, 70, 0.2) !important;
+}
+
+.bcp-circle-option.bcp-confidential-circle.active .bcp-circle-inner {
+  background-color: #e63946 !important;
+  box-shadow: 0 0 4px rgba(230, 57, 70, 0.35) !important;
+}
+
+/* Regular Circle - Grey */
+.bcp-circle-option.bcp-regular-circle {
+  border: 1.5px solid #6c757d !important;
+}
+
+.bcp-circle-option.bcp-regular-circle.active {
+  border: 1.5px solid #6c757d !important;
+  background-color: rgba(108, 117, 125, 0.1) !important;
+  box-shadow: 0 0 6px rgba(108, 117, 125, 0.2) !important;
+}
+
+.bcp-circle-option.bcp-regular-circle.active .bcp-circle-inner {
+  background-color: #6c757d !important;
+  box-shadow: 0 0 4px rgba(108, 117, 125, 0.35) !important;
+}
+</style>

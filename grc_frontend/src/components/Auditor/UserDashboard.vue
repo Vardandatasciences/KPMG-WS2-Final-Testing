@@ -501,10 +501,17 @@ export default {
     const fetchFrameworks = async () => {
       try {
         console.log('Fetching frameworks...')
-        const response = await axios.get(API_ENDPOINTS.COMPLIANCE_ALL_POLICIES_FRAMEWORKS)
+        const response = await axios.get(API_ENDPOINTS.COMPLIANCE_ALL_POLICIES_FRAMEWORKS, {
+          params: { active_only: 'true' }
+        })
         console.log('Frameworks response:', response.data)
         if (response.data && Array.isArray(response.data)) {
-          frameworks.value = response.data
+          // Filter to only show active frameworks
+          const activeFrameworks = response.data.filter(fw => {
+            const status = fw.status || fw.ActiveInactive || '';
+            return status.toLowerCase() === 'active';
+          });
+          frameworks.value = activeFrameworks
           console.log('Frameworks loaded:', frameworks.value)
           return true
         } else {

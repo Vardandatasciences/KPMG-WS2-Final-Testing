@@ -35,7 +35,10 @@ from ...rbac.decorators import rbac_required
 from ...utils.ai_cache import cached_llm_call
 from ...utils.document_preprocessor import preprocess_document, calculate_document_hash
 from ...utils.few_shot_prompts import get_field_extraction_prompt
-
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
 # Phase 3 Optimizations
 from ...utils.rag_system import (
     add_document_to_rag,
@@ -1169,13 +1172,12 @@ def parse_risks_from_text(text: str, document_hash: str = None) -> list[dict]:
 @csrf_exempt
 @rbac_required(required_permission='create_risk')
 @rate_limit_decorator(requests_per_minute=10, requests_per_hour=100)  # Phase 3: Rate limiting
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def upload_and_process_risk_document(request):
-    """
-    Upload a document and process it to extract COMPLETE risk data
-    (fills missing fields via Ollama).
-    Saves the uploaded document to MEDIA_ROOT/ai_uploads/risk/
-    """
-
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     print(f"📤 Upload request for risk document")
     print(f"📤 Request data: {request.POST}")
     print(f"📤 Request files: {request.FILES}")
@@ -1329,6 +1331,9 @@ def upload_and_process_risk_document(request):
             request_id = f"risk_doc_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{hash(file_name)}"
             
             def process_document():
+                # MULTI-TENANCY: Extract tenant_id from request
+                tenant_id = get_tenant_id_from_request(request)
+                
                 return parse_risks_from_text(text, document_hash=document_hash)
             
             # Use queuing for heavy processing
@@ -1414,11 +1419,12 @@ def upload_and_process_risk_document(request):
 @parser_classes([MultiPartParser, FormParser])
 @csrf_exempt
 @rbac_required(required_permission='create_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def save_extracted_risks(request):
-    """
-    Save extracted/reviewed risks to the database.
-    (Does not set RiskId, ComplianceId, FrameworkId here.)
-    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         data = json.loads(request.body or "{}")
         risks_data = data.get('risks', [])
@@ -1473,8 +1479,12 @@ def save_extracted_risks(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 @rbac_required(required_permission='view_all_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def test_openai_connection(request):
-    """Quick check that OpenAI API responds."""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         if not OPENAI_API_KEY:
             return JsonResponse({
@@ -1505,8 +1515,12 @@ def test_openai_connection(request):
 @parser_classes([MultiPartParser, FormParser])
 @csrf_exempt
 @rbac_required(required_permission='create_risk')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def test_file_upload(request):
-    """Simple test endpoint for file uploads."""
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         if 'file' not in request.FILES:
             return JsonResponse({'status': 'error', 'message': 'No file found in request'}, status=400)

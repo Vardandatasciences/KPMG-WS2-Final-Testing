@@ -21,6 +21,12 @@ from ...models import (
 )
 from ..Global.logging_service import send_log
 
+# MULTI-TENANCY: Import tenant utilities for data isolation
+from ...tenant_utils import (
+    require_tenant, tenant_filter, get_tenant_id_from_request,
+    validate_tenant_access, get_tenant_aware_queryset
+)
+
 
 def get_client_ip(request):
     """Get client IP address from request"""
@@ -76,6 +82,8 @@ def mark_acknowledgement_notification_as_read(user_id, policy_name, acknowledgem
 @api_view(['POST'])
 @permission_classes([])  # Empty list = no permission check
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def create_acknowledgement_request(request):
     """
     Create a new policy acknowledgement request
@@ -92,6 +100,9 @@ def create_acknowledgement_request(request):
         "send_notifications": true  // optional
     }
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     print(f"DEBUG: create_acknowledgement_request called - Method: {request.method}, Path: {request.path}")
     print(f"DEBUG: User: {request.user if hasattr(request, 'user') else 'No user'}")
     print(f"DEBUG: Data: {request.data if hasattr(request, 'data') else 'No data'}")
@@ -101,7 +112,7 @@ def create_acknowledgement_request(request):
         policy_id = data.get('policy_id')
         
         # Validate policy exists
-        policy = get_object_or_404(Policy, PolicyId=policy_id)
+        policy = get_object_or_404(Policy, PolicyId=policy_id, tenant_id=tenant_id)
         
         # Get current user - handle multiple ways user might be set
         user_id = None
@@ -131,7 +142,7 @@ def create_acknowledgement_request(request):
                 'error': 'User not authenticated. Please login again.'
             }, status=status.HTTP_401_UNAUTHORIZED)
         
-        user = get_object_or_404(Users, UserId=user_id)
+        user = get_object_or_404(Users, UserId=user_id, tenant_id=tenant_id)
         
         # Get policy version (use current if not provided)
         policy_version = data.get('policy_version', policy.CurrentVersion)
@@ -259,7 +270,7 @@ def create_acknowledgement_request(request):
         
         # Add database users
         for target_user_id in target_user_ids:
-            target_user = Users.objects.get(UserId=target_user_id)
+            target_user = Users.objects.get(UserId=target_user_id, tenant_id=tenant_id)
             
             # Generate unique token for external access
             unique_token = secrets.token_urlsafe(32)
@@ -419,16 +430,22 @@ def create_acknowledgement_request(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policy_acknowledgement_requests(request, policy_id):
     """
     Get all acknowledgement requests for a specific policy
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
-        policy = get_object_or_404(Policy, PolicyId=policy_id)
+        policy = get_object_or_404(Policy, PolicyId=policy_id, tenant_id=tenant_id)
         
         # Get all acknowledgement requests for this policy
         requests = PolicyAcknowledgementRequest.objects.filter(
-            PolicyId=policy
+            PolicyId=policy,
+            tenant_id=tenant_id
         ).select_related('CreatedBy').order_by('-CreatedAt')
         
         requests_data = []
@@ -464,10 +481,15 @@ def get_policy_acknowledgement_requests(request, policy_id):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_user_pending_acknowledgements(request):
     """
     Get all pending acknowledgements for the current user
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print(f"DEBUG: get_user_pending_acknowledgements called")
         print(f"DEBUG: User: {request.user if hasattr(request, 'user') else 'No user'}")
@@ -506,7 +528,7 @@ def get_user_pending_acknowledgements(request):
             }, status=status.HTTP_401_UNAUTHORIZED)
         
         try:
-            user = Users.objects.get(UserId=user_id)
+            user = Users.objects.get(UserId=user_id, tenant_id=tenant_id)
             print(f"DEBUG: Found user: {user.UserName}")
         except Users.DoesNotExist:
             print(f"DEBUG: User {user_id} not found")
@@ -520,7 +542,8 @@ def get_user_pending_acknowledgements(request):
         # Get all pending acknowledgements for this user
         pending_acks = PolicyAcknowledgementUser.objects.filter(
             UserId=user,
-            Status__in=['Pending', 'Overdue']
+            Status__in=['Pending', 'Overdue'],
+            tenant_id=tenant_id
         ).select_related('AcknowledgementRequest', 'AcknowledgementRequest__PolicyId')
         
         print(f"DEBUG: Found {pending_acks.count()} pending acknowledgements")
@@ -567,6 +590,8 @@ def get_user_pending_acknowledgements(request):
 @api_view(['POST'])
 @permission_classes([])  # Empty list = no permission check
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def acknowledge_policy(request, acknowledgement_user_id):
     """
     Record user acknowledgement
@@ -576,6 +601,9 @@ def acknowledge_policy(request, acknowledgement_user_id):
         "comments": "I have reviewed and understood the policy"  // optional
     }
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print(f"DEBUG: acknowledge_policy called for acknowledgement_user_id={acknowledgement_user_id}")
         
@@ -721,20 +749,27 @@ def acknowledge_policy(request, acknowledgement_user_id):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_acknowledgement_report(request, acknowledgement_request_id):
     """
     Get detailed report for an acknowledgement request (Admin view)
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Get acknowledgement request
         ack_request = get_object_or_404(
             PolicyAcknowledgementRequest,
-            AcknowledgementRequestId=acknowledgement_request_id
+            AcknowledgementRequestId=acknowledgement_request_id,
+            tenant_id=tenant_id
         )
         
         # Get all user acknowledgements
         user_acks = PolicyAcknowledgementUser.objects.filter(
-            AcknowledgementRequest=ack_request
+            AcknowledgementRequest=ack_request,
+            tenant_id=tenant_id
         ).select_related('UserId').order_by('-AcknowledgedAt', 'UserId__UserName')
         
         users_data = []
@@ -791,13 +826,18 @@ def get_acknowledgement_report(request, acknowledgement_request_id):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_users_for_acknowledgement(request):
     """
     Get list of users that can be assigned acknowledgements
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Get all active users
-        users = Users.objects.filter(IsActive='Y').order_by('UserName')
+        users = Users.objects.filter(IsActive='Y', tenant_id=tenant_id).order_by('UserName')
         
         # Get role information from RBAC table
         from ...models import RBAC
@@ -807,7 +847,7 @@ def get_users_for_acknowledgement(request):
             # Try to get role from RBAC table
             role = 'User'  # Default role
             try:
-                rbac_user = RBAC.objects.filter(user_id=user.UserId, is_active='Y').first()
+                rbac_user = RBAC.objects.filter(user_id=user.UserId, is_active='Y', tenant_id=tenant_id).first()
                 if rbac_user:
                     role = rbac_user.role
             except Exception:
@@ -838,15 +878,21 @@ def get_users_for_acknowledgement(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def cancel_acknowledgement_request(request, acknowledgement_request_id):
     """
     Cancel an acknowledgement request
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Get acknowledgement request
         ack_request = get_object_or_404(
             PolicyAcknowledgementRequest,
-            AcknowledgementRequestId=acknowledgement_request_id
+            AcknowledgementRequestId=acknowledgement_request_id,
+            tenant_id=tenant_id
         )
         
         # Check if already completed

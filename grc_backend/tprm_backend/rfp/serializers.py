@@ -31,6 +31,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
 class RFPEvaluationCriteriaSerializer(serializers.ModelSerializer):
     """Serializer for RFP Evaluation Criteria"""
     rfp_id = serializers.SerializerMethodField()
+    data_inventory = serializers.JSONField(required=False, allow_null=True)
     
     class Meta:
         model = RFPEvaluationCriteria
@@ -39,9 +40,15 @@ class RFPEvaluationCriteriaSerializer(serializers.ModelSerializer):
             'weight_percentage', 'evaluation_type', 'min_score', 
             'max_score', 'median_score', 'is_mandatory', 
             'veto_enabled', 'veto_threshold', 'min_word_count',
-            'expected_boolean_answer', 'display_order', 'created_by'
+            'expected_boolean_answer', 'display_order', 'created_by', 'data_inventory'
         ]
         read_only_fields = ['criteria_id', 'rfp_id', 'created_by']  # created_by is set by perform_create
+    
+    def validate_data_inventory(self, value):
+        """Ensure data_inventory is always a dictionary"""
+        if not isinstance(value, dict):
+            return {}
+        return value
     
     def get_rfp_id(self, obj):
         """Get rfp_id from ForeignKey relationship or directly from the object"""
@@ -98,6 +105,7 @@ class RFPSerializer(serializers.ModelSerializer):
     approved_by_details = serializers.SerializerMethodField()
     primary_reviewer_details = serializers.SerializerMethodField()
     executive_reviewer_details = serializers.SerializerMethodField()
+    data_inventory = serializers.JSONField(required=False, allow_null=True)
     
     class Meta:
         model = RFP
@@ -113,13 +121,19 @@ class RFPSerializer(serializers.ModelSerializer):
             'compliance_requirements', 'custom_fields', 'final_evaluation_score',
             'award_decision_date', 'award_justification', 'documents', 'evaluation_criteria',
             'created_by_details', 'approved_by_details', 'primary_reviewer_details',
-            'executive_reviewer_details'
+            'executive_reviewer_details', 'data_inventory'
         ]
         read_only_fields = [
             'rfp_id', 'rfp_number', 'created_at', 'updated_at', 
             'created_by_details', 'approved_by_details', 'primary_reviewer_details',
             'executive_reviewer_details'
         ]
+    
+    def validate_data_inventory(self, value):
+        """Ensure data_inventory is always a dictionary"""
+        if not isinstance(value, dict):
+            return {}
+        return value
     
     def get_created_by_details(self, obj):
         if obj.created_by:
@@ -305,10 +319,18 @@ class RFPCreateSerializer(RFPSerializer):
 
 class RFPTypeCustomFieldsSerializer(serializers.ModelSerializer):
     """Serializer for RFP Type Custom Fields"""
+    data_inventory = serializers.JSONField(required=False, allow_null=True)
+    
     class Meta:
         model = RFPTypeCustomFields
-        fields = ['rfp_type_id', 'rfp_type', 'custom_fields']
+        fields = ['rfp_type_id', 'rfp_type', 'custom_fields', 'response_fields', 'data_inventory']
         read_only_fields = ['rfp_type_id']
+    
+    def validate_data_inventory(self, value):
+        """Ensure data_inventory is always a dictionary"""
+        if not isinstance(value, dict):
+            return {}
+        return value
 
 
 class RFPListSerializer(serializers.ModelSerializer):
