@@ -34,6 +34,8 @@ from django.core.files.base import ContentFile
 from rest_framework.response import Response
 from ...rbac.permissions import AuditConductPermission, AuditReviewPermission
 from ...rbac.decorators import audit_conduct_required
+from ...utils.file_compression import decompress_if_needed
+from ...routes.Global.s3_fucntions import create_direct_mysql_client
 from ...authentication import verify_jwt_token
 from .audit_views import create_audit_version
 
@@ -699,7 +701,46 @@ class AIAuditDocumentUploadView(View):
                     for chunk in file.chunks():
                         destination.write(chunk)
                 
+                # Decompress if needed (client-side compression)
+                compression_metadata = None
+                full_path, was_compressed, compression_stats = decompress_if_needed(full_path)
+                if was_compressed:
+                    compression_metadata = compression_stats
+                    # Update file extension after decompression (remove .gz)
+                    file_extension = os.path.splitext(full_path)[1].lower()
+                    # Update file_path to reflect decompressed filename
+                    file_path = os.path.join('ai_audit_documents', os.path.basename(full_path))
+                    logger.info(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
+                
                 logger.info(f"📤 File saved to: {full_path}")
+                
+                # Upload to S3 for backup and cloud storage
+                try:
+                    logger.info(f"☁️ Uploading file to S3...")
+                    s3_client = create_direct_mysql_client()
+                    connection_test = s3_client.test_connection()
+                    if connection_test.get('overall_success', False):
+                        # Generate unique filename for S3
+                        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                        s3_filename = f"ai_audit_{timestamp}_{os.path.basename(full_path)}"
+                        upload_result = s3_client.upload(
+                            file_path=full_path,
+                            user_id=str(user_id) if user_id else 'system',
+                            custom_file_name=s3_filename,
+                            module='Audit'
+                        )
+                        if upload_result.get('success'):
+                            aws_file_link = upload_result['file_info']['url']
+                            s3_key = upload_result['file_info'].get('s3Key', '')
+                            stored_name = upload_result['file_info'].get('storedName', s3_filename)
+                            logger.info(f"✅ File uploaded to S3: {aws_file_link}")
+                        else:
+                            logger.warning(f"⚠️ S3 upload failed: {upload_result.get('error', 'Unknown error')}")
+                    else:
+                        logger.warning(f"⚠️ S3 service unavailable, continuing with local file")
+                except Exception as s3_error:
+                    logger.warning(f"⚠️ S3 upload error (continuing with local file): {str(s3_error)}")
+                
                 logger.info(f"📤 File will be stored ONCE with path: {file_path}")
                 logger.info(f"📤 This path will be reused for all {len(mappings)} mapping(s)")
                 

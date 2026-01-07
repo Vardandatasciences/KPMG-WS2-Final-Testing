@@ -22,12 +22,46 @@ def safe_isoformat(val):
 # Logging service configuration
 LOGGING_SERVICE_URL = None  # Disabled external logging service
 
+def sanitize_ip_address(ip_address):
+    """
+    Sanitize IP address to fit database column (max 45 characters).
+    - Strips whitespace
+    - Removes port numbers (IPv4 only)
+    - Truncates to 45 characters
+    
+    Args:
+        ip_address: IP address string (can be None)
+        
+    Returns:
+        Sanitized IP address string (max 45 chars) or None
+    """
+    if not ip_address:
+        return None
+    
+    # Strip whitespace
+    sanitized_ip = str(ip_address).strip()
+    
+    # Remove port number if present (IPv4 only, not IPv6)
+    if ':' in sanitized_ip and not sanitized_ip.startswith('['):
+        parts = sanitized_ip.split(':')
+        if len(parts) == 2 and '.' in parts[0]:
+            # Likely IPv4 with port (e.g., "192.168.1.1:8080")
+            sanitized_ip = parts[0]
+    
+    # Truncate to max 45 characters (database column limit)
+    sanitized_ip = sanitized_ip[:45] if len(sanitized_ip) > 45 else sanitized_ip
+    
+    return sanitized_ip
+
 def send_log(module, actionType, description=None, userId=None, userName=None,
              userRole=None, entityType=None, logLevel='INFO', ipAddress=None,
              additionalInfo=None, entityId=None):
    
     # Create log entry in database
     try:
+        # Sanitize IP address using helper function
+        sanitized_ip = sanitize_ip_address(ipAddress)
+        
         # Prepare data for GRCLog model
         log_data = {
             'Timestamp': datetime.now(),
@@ -39,7 +73,7 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
             'EntityType': entityType,
             'EntityId': str(entityId) if entityId else None,
             'LogLevel': logLevel,
-            'IPAddress': ipAddress,
+            'IPAddress': sanitized_ip,
             'AdditionalInfo': additionalInfo
         }
        
@@ -96,7 +130,18 @@ def get_client_ip(request):
     """Get client IP address from request"""
     x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
     if x_forwarded_for:
-        ip = x_forwarded_for.split(',')[0]
+        ip = x_forwarded_for.split(',')[0].strip()
     else:
-        ip = request.META.get('REMOTE_ADDR')
+        ip = request.META.get('REMOTE_ADDR', 'unknown')
+    
+    # Sanitize IP: remove port if present, truncate to 45 chars
+    if ip and ip != 'unknown':
+        # Remove port number if present (IPv4 only, not IPv6)
+        if ':' in ip and not ip.startswith('['):
+            parts = ip.split(':')
+            if len(parts) == 2 and '.' in parts[0]:
+                ip = parts[0]
+        # Truncate to max 45 characters
+        ip = ip[:45] if len(ip) > 45 else ip
+    
     return ip 

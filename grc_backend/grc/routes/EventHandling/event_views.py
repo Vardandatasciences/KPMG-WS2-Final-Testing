@@ -32,6 +32,7 @@ from ...models import (
     SubPolicy, Users, EventType, Module, FileOperations
 )
 from ...routes.Global.s3_fucntions import create_direct_mysql_client
+from ...utils.file_compression import decompress_if_needed
 
 # MULTI-TENANCY: Import tenant utilities for data isolation
 from ...tenant_utils import (
@@ -4295,11 +4296,21 @@ def s3_upload_file(request):
         import os
         
         try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.name)[1]) as temp_file:
+            file_ext = os.path.splitext(file.name)[1]
+            with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as temp_file:
                 for chunk in file.chunks():
                     temp_file.write(chunk)
                 temp_file_path = temp_file.name
             print(f"DEBUG: Temporary file created: {temp_file_path}")
+            
+            # Decompress if needed (client-side compression)
+            compression_metadata = None
+            temp_file_path, was_compressed, compression_stats = decompress_if_needed(temp_file_path)
+            if was_compressed:
+                compression_metadata = compression_stats
+                # Update file extension after decompression (remove .gz)
+                file_ext = os.path.splitext(temp_file_path)[1]
+                print(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
         except Exception as e:
             print(f"DEBUG: Error creating temporary file: {str(e)}")
             return JsonResponse({

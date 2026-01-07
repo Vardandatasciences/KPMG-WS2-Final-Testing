@@ -763,6 +763,10 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
    
     # Create log entry in database
     try:
+        # Sanitize IP address to fit database column (max 45 chars)
+        from grc.utils import sanitize_ip_address
+        sanitized_ip = sanitize_ip_address(ipAddress)
+        
         # Prepare data for GRCLog model
         log_data = {
             'Module': module,
@@ -773,7 +777,7 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
             'EntityType': entityType,
             'EntityId': entityId,
             'LogLevel': logLevel,
-            'IPAddress': ipAddress,
+            'IPAddress': sanitized_ip,
             'AdditionalInfo': additionalInfo
         }
        

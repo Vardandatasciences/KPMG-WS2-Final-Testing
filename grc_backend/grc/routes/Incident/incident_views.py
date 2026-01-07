@@ -68,6 +68,7 @@ from ...routes.Global.validation import SecureValidator, ValidationError, Incide
 from contextlib import contextmanager
 import logging
 import requests
+from ...utils.file_compression import decompress_if_needed
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -84,6 +85,10 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
    
     # Create log entry in database
     try:
+        # Sanitize IP address to fit database column (max 45 chars)
+        from grc.utils import sanitize_ip_address
+        sanitized_ip = sanitize_ip_address(ipAddress)
+        
         # Prepare data for GRCLog model
         log_data = {
             'Module': module,
@@ -94,7 +99,7 @@ def send_log(module, actionType, description=None, userId=None, userName=None,
             'EntityType': entityType,
             'EntityId': str(entityId) if entityId is not None else None,
             'LogLevel': logLevel,
-            'IPAddress': ipAddress,
+            'IPAddress': sanitized_ip,
             'AdditionalInfo': additionalInfo
         }
        
@@ -7591,6 +7596,17 @@ class FileUploadView(View):
                 for chunk in file.chunks():
                     f.write(chunk)
             
+            # Decompress if needed (client-side compression)
+            compression_metadata = None
+            secure_path_str = str(secure_path)
+            secure_path_str, was_compressed, compression_stats = decompress_if_needed(secure_path_str)
+            if was_compressed:
+                compression_metadata = compression_stats
+                secure_path = Path(secure_path_str)
+                # Update file extension after decompression (remove .gz)
+                file_ext = Path(secure_path_str).suffix.lower()
+                print(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
+            
             # Set secure file permissions (read-only for owner, no execute)
             secure_path.chmod(0o644)
             
@@ -7832,6 +7848,15 @@ def upload_evidence_file(request):
                             temp_file.write(chunk)
                         temp_file_path = temp_file.name
                     print(f"DEBUG: Temporary file created: {temp_file_path}")
+                    
+                    # Decompress if needed (client-side compression)
+                    compression_metadata = None
+                    temp_file_path, was_compressed, compression_stats = decompress_if_needed(temp_file_path)
+                    if was_compressed:
+                        compression_metadata = compression_stats
+                        # Update file extension after decompression (remove .gz)
+                        file_ext = Path(temp_file_path).suffix.lower()
+                        print(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
                 except Exception as e:
                     print(f"DEBUG: Error creating temporary file: {str(e)}")
                     return JsonResponse({

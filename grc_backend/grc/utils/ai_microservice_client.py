@@ -169,3 +169,5 @@ def get_ai_client() -> AIMicroserviceClient:
         _ai_client = AIMicroserviceClient()
     return _ai_client
 
+
+

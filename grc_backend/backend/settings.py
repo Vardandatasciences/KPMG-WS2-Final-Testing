@@ -133,6 +133,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Enterprise Security Headers Middleware - Adds comprehensive security headers to all responses
+    "grc.middleware.EnterpriseSecurityHeadersMiddleware",
     "grc.middleware.JWTAuthenticationMiddleware",
     # MULTI-TENANCY: Add tenant context middleware (after JWT authentication)
     "grc.tenant_middleware.TenantContextMiddleware",

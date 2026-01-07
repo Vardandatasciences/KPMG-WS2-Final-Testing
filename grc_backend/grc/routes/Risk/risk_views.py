@@ -40,6 +40,7 @@ from .framework_filter_helper import (
 )
 
 # Import secure file upload utilities from incident views
+from ...utils.file_compression import decompress_if_needed
 from ..Incident.incident_views import (
     SecureFileUploadHandler, get_s3_client, get_client_ip, send_log
 )
@@ -5439,6 +5440,15 @@ def upload_risk_evidence_file(request):
                             temp_file.write(chunk)
                         temp_file_path = temp_file.name
                     print(f"DEBUG: Temporary file created: {temp_file_path}")
+                    
+                    # Decompress if needed (client-side compression)
+                    compression_metadata = None
+                    temp_file_path, was_compressed, compression_stats = decompress_if_needed(temp_file_path)
+                    if was_compressed:
+                        compression_metadata = compression_stats
+                        # Update file extension after decompression (remove .gz)
+                        file_ext = Path(temp_file_path).suffix.lower()
+                        print(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
                 except Exception as e:
                     print(f"DEBUG: Error creating temporary file: {str(e)}")
                     return JsonResponse({
