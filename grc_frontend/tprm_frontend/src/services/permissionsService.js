@@ -2,7 +2,8 @@
  * Permissions Service for RBAC checks
  * Handles permission verification before showing pages
  */
-import { getTprmApiBaseUrl } from '@/utils/backendEnv'
+// Use relative import so this service also works when dynamically imported from grc_frontend
+import { getTprmApiBaseUrl } from '../utils/backendEnv'
 
 const API_BASE_URL = getTprmApiBaseUrl()
 

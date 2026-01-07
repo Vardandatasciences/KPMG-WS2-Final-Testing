@@ -1,3 +1,0 @@
-# TPRM Vendor Apps Package
-
-

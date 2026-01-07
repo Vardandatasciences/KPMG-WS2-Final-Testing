@@ -1,11 +1,12 @@
 from rest_framework import serializers
 from django.db import transaction
 from django.contrib.auth.models import User
+from tprm_backend.utils.base_serializer import AutoDecryptingModelSerializer
 from .models import RFP, RFPEvaluationCriteria, CustomUser, RFPTypeCustomFields
 from .validators import validate_rfp_data
 
 
-class UserSerializer(serializers.ModelSerializer):
+class UserSerializer(AutoDecryptingModelSerializer):
     """Serializer for User model (for reviewer information)"""
     class Meta:
         model = User
@@ -13,7 +14,7 @@ class UserSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class CustomUserSerializer(serializers.ModelSerializer):
+class CustomUserSerializer(AutoDecryptingModelSerializer):
     """Serializer for CustomUser model"""
     full_name = serializers.SerializerMethodField()
     
@@ -28,7 +29,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
         return f"{obj.first_name} {obj.last_name}".strip()
 
 
-class RFPEvaluationCriteriaSerializer(serializers.ModelSerializer):
+class RFPEvaluationCriteriaSerializer(AutoDecryptingModelSerializer):
     """Serializer for RFP Evaluation Criteria"""
     rfp_id = serializers.SerializerMethodField()
     data_inventory = serializers.JSONField(required=False, allow_null=True)
@@ -98,7 +99,7 @@ class RFPEvaluationCriteriaSerializer(serializers.ModelSerializer):
 
 
 
-class RFPSerializer(serializers.ModelSerializer):
+class RFPSerializer(AutoDecryptingModelSerializer):
     """Serializer for RFP model"""
     evaluation_criteria = RFPEvaluationCriteriaSerializer(many=True, required=False)
     created_by_details = serializers.SerializerMethodField()
@@ -317,7 +318,7 @@ class RFPCreateSerializer(RFPSerializer):
         return data
 
 
-class RFPTypeCustomFieldsSerializer(serializers.ModelSerializer):
+class RFPTypeCustomFieldsSerializer(AutoDecryptingModelSerializer):
     """Serializer for RFP Type Custom Fields"""
     data_inventory = serializers.JSONField(required=False, allow_null=True)
     
@@ -333,7 +334,7 @@ class RFPTypeCustomFieldsSerializer(serializers.ModelSerializer):
         return value
 
 
-class RFPListSerializer(serializers.ModelSerializer):
+class RFPListSerializer(AutoDecryptingModelSerializer):
     """Simplified serializer for listing RFPs"""
     created_by_name = serializers.SerializerMethodField()
     criteria_count = serializers.SerializerMethodField()

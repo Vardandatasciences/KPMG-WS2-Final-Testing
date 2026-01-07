@@ -1,7 +1,8 @@
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
+from tprm_backend.utils.encrypted_fields_mixin import TPRMEncryptedFieldsMixin
 
-class Framework(models.Model):
+class Framework(TPRMEncryptedFieldsMixin, models.Model):
     FrameworkId = models.AutoField(primary_key=True)
     FrameworkName = models.CharField(max_length=255)
     CurrentVersion = models.FloatField()
@@ -25,7 +26,7 @@ class Framework(models.Model):
     def __str__(self):
         return f"{self.FrameworkName} (v{self.CurrentVersion})"
 
-class ComplianceMapping(models.Model):
+class ComplianceMapping(TPRMEncryptedFieldsMixin, models.Model):
     AUDIT_FREQUENCY_CHOICES = [
         ('DAILY', 'Daily'),
         ('WEEKLY', 'Weekly'),

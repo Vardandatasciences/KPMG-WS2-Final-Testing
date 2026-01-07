@@ -3981,7 +3981,8 @@ async updatePassword() {
                   // Clear TPRM permission cache
                   // The permissionsService is in tprm_frontend, which is a sibling directory
                   // From grc_frontend/src/components/Login/ to grc_frontend/tprm_frontend/src/services/
-                  const permissionsServiceModule = await import('../../tprm_frontend/src/services/permissionsService.js');
+                  // ../../.. = src/components/Login -> src -> grc_frontend
+                  const permissionsServiceModule = await import('../../../tprm_frontend/src/services/permissionsService.js');
                   const permissionsService = permissionsServiceModule.default || permissionsServiceModule;
                   
                   if (permissionsService) {

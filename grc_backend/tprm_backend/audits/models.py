@@ -5,9 +5,10 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.contrib.auth.models import User
 from tprm_backend.slas.models import VendorSLA, SLAMetric
+from tprm_backend.utils.encrypted_fields_mixin import TPRMEncryptedFieldsMixin
 
 
-class Audit(models.Model):
+class Audit(TPRMEncryptedFieldsMixin, models.Model):
     """Audit model matching MySQL schema."""
     audit_id = models.BigAutoField(primary_key=True)
     title = models.CharField(max_length=255)
@@ -91,7 +92,7 @@ class Audit(models.Model):
         return f"{self.title} - {self.status}"
 
 
-class StaticQuestionnaire(models.Model):
+class StaticQuestionnaire(TPRMEncryptedFieldsMixin, models.Model):
     """Static questionnaires matching tprm_db schema."""
     question_id = models.AutoField(primary_key=True)
     metric_name = models.CharField(max_length=255)
@@ -119,7 +120,7 @@ class StaticQuestionnaire(models.Model):
         return f"{self.question_text[:50]}..."
 
 
-class AuditVersion(models.Model):
+class AuditVersion(TPRMEncryptedFieldsMixin, models.Model):
     """Audit versions matching tprm_db schema."""
     version_id = models.AutoField(primary_key=True)
     audit_id = models.IntegerField()
@@ -155,7 +156,7 @@ class AuditVersion(models.Model):
         return f"Version {self.version_number} - {self.audit_id}"
 
 
-class AuditFinding(models.Model):
+class AuditFinding(TPRMEncryptedFieldsMixin, models.Model):
     """Audit findings matching tprm_db schema."""
     audit_finding_id = models.AutoField(primary_key=True)
     audit_id = models.IntegerField()
@@ -181,7 +182,7 @@ class AuditFinding(models.Model):
         return f"Finding for Audit {self.audit_id}"
 
 
-class AuditReport(models.Model):
+class AuditReport(TPRMEncryptedFieldsMixin, models.Model):
     """Audit reports matching tprm_db schema."""
     report_id = models.AutoField(primary_key=True)
     audit_id = models.IntegerField()

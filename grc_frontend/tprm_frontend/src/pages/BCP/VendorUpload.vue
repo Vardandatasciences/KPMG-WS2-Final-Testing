@@ -600,6 +600,8 @@ export default {
       
       console.log('📋 Plan Data Inventory JSON:', JSON.stringify(dataInventory, null, 2))
       return dataInventory
+    }
+    
     const fetchPlanTypes = async () => {
       try {
         console.log('Fetching plan types from API')
@@ -849,8 +851,11 @@ export default {
         // Add document metadata with data_inventory
         // Add document metadata with planType per document
         formData.append('documents', JSON.stringify(documents.value.map(doc => ({
+          planType: doc.planType,
           planName: doc.planName,
+          scope: doc.scope || '',
           criticality: doc.criticality,
+          fileName: doc.fileName,
           data_inventory: buildPlanDataInventory()
         }))))
         

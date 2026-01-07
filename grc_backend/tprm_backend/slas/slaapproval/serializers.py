@@ -1,9 +1,10 @@
 from rest_framework import serializers
 from django.utils import timezone
+from tprm_backend.utils.base_serializer import AutoDecryptingModelSerializer
 from .models import SLAApproval
 
 
-class SLAApprovalAssignmentSerializer(serializers.ModelSerializer):
+class SLAApprovalAssignmentSerializer(AutoDecryptingModelSerializer):
     """Serializer for SLA approval assignment with enhanced SLA details"""
     
     sla_details = serializers.SerializerMethodField()
@@ -88,7 +89,7 @@ class SLAApprovalAssignmentSerializer(serializers.ModelSerializer):
         return None
 
 
-class SLAApprovalCreateAssignmentSerializer(serializers.ModelSerializer):
+class SLAApprovalCreateAssignmentSerializer(AutoDecryptingModelSerializer):
     """Serializer for creating SLA approval assignments"""
     
     class Meta:

@@ -1,9 +1,10 @@
 from django.db import models
 from django.utils import timezone
 from django.conf import settings
+from tprm_backend.utils.encrypted_fields_mixin import TPRMEncryptedFieldsMixin
 
 
-class SLAApproval(models.Model):
+class SLAApproval(TPRMEncryptedFieldsMixin, models.Model):
     """Model for SLA approval workflow"""
     
     OBJECT_TYPE_CHOICES = [

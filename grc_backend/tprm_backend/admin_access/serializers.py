@@ -3,10 +3,11 @@ Serializers for Admin Access Control
 """
 from rest_framework import serializers
 from django.db import models
+from tprm_backend.utils.base_serializer import AutoDecryptingModelSerializer
 from .models import User, RBACTPRM
 
 
-class UserSerializer(serializers.ModelSerializer):
+class UserSerializer(AutoDecryptingModelSerializer):
     """Serializer for User model"""
     full_name = serializers.SerializerMethodField()
     total_permissions = serializers.SerializerMethodField()
@@ -53,7 +54,7 @@ class UserSerializer(serializers.ModelSerializer):
             return "0 / 0"
 
 
-class RBACTPRMSerializer(serializers.ModelSerializer):
+class RBACTPRMSerializer(AutoDecryptingModelSerializer):
     """Serializer for RBAC TPRM permissions"""
     
     class Meta:

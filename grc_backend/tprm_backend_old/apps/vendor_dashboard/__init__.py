@@ -1,1 +1,0 @@
-# Vendor Dashboard Application

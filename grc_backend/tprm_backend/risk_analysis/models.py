@@ -2,11 +2,12 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
 import uuid
+from tprm_backend.utils.encrypted_fields_mixin import TPRMEncryptedFieldsMixin
 
 # Removed TPRMModule and ModuleData models - using entity-data-row approach
 
 
-class Risk(models.Model):
+class Risk(TPRMEncryptedFieldsMixin, models.Model):
     """Risk prediction model"""
     PRIORITY_CHOICES = [
         ('Critical', 'Critical'),

@@ -317,6 +317,50 @@ export default {
       } finally {
         this.isRequesting = false
       }
+    },
+
+    // Navigate back to previous page or a sensible module dashboard
+    goBack() {
+      if (window.history.length > 1) {
+        this.$router.go(-1)
+      } else {
+        // Go to appropriate module's home page
+        const storedPath = this.errorInfo?.path || ''
+
+        if (storedPath.includes('/bcp') || storedPath.includes('/vendor-upload') || storedPath.includes('/library')) {
+          this.$router.push('/vendor-upload')
+        } else if (storedPath.includes('/contract')) {
+          this.$router.push('/contracts')
+        } else if (storedPath.includes('/rfp')) {
+          this.$router.push('/rfp/dashboard')
+        } else {
+          this.$router.push('/dashboard')
+        }
+      }
+    },
+
+    // Navigate directly to the correct dashboard based on denied path
+    goHome() {
+      const storedPath = this.errorInfo?.path || ''
+
+      if (storedPath.includes('/bcp') || storedPath.includes('/vendor-upload') || storedPath.includes('/library')) {
+        // BCP module
+        this.$router.push('/dashboard')
+      } else if (storedPath.includes('/contract')) {
+        // Contract module
+        this.$router.push('/contractdashboard')
+      } else if (storedPath.includes('/rfp')) {
+        // RFP module
+        this.$router.push('/rfp/dashboard')
+      } else {
+        // Default dashboard
+        this.$router.push('/dashboard')
+      }
+    },
+
+    // Simple support contact handler
+    contactSupport() {
+      alert('Please contact your system administrator for access to this page.')
     }
   }
 }
@@ -417,105 +461,3 @@ export default {
   border: 1px solid #f5c6cb;
 }
 </style>
-  </div>
-</template>
-
-<script setup>
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { Button } from '@/components/ui'
-import { ShieldX, ArrowLeft, Home, Mail } from 'lucide-vue-next'
-
-const router = useRouter()
-
-// Props
-const props = defineProps({
-  message: {
-    type: String,
-    default: ''
-  },
-  errorCode: {
-    type: String,
-    default: ''
-  },
-  permission: {
-    type: String,
-    default: ''
-  }
-})
-
-// Reactive state for error info
-const errorInfo = ref({
-  message: props.message || 'You do not have permission to access this page. Please contact your administrator if you believe this is an error.',
-  code: props.errorCode || '403',
-  path: '',
-  permission: props.permission || '',
-  permissionRequired: ''
-})
-
-// Load error info from sessionStorage on mount
-onMounted(() => {
-  try {
-    const storedError = sessionStorage.getItem('access_denied_error')
-    if (storedError) {
-      const parsedError = JSON.parse(storedError)
-      errorInfo.value = {
-        message: parsedError.message || errorInfo.value.message,
-        code: parsedError.code || errorInfo.value.code,
-        path: parsedError.path || '',
-        permission: parsedError.permission || '',
-        permissionRequired: parsedError.permissionRequired || ''
-      }
-      // Clear the error from sessionStorage after reading
-      sessionStorage.removeItem('access_denied_error')
-    }
-  } catch (e) {
-    console.error('Error reading access denied info:', e)
-  }
-})
-
-// Methods
-const goBack = () => {
-  if (window.history.length > 1) {
-    router.go(-1)
-  } else {
-    // Go to appropriate module's home page
-    const storedPath = errorInfo.value.path || ''
-    
-    if (storedPath.includes('/bcp') || storedPath.includes('/vendor-upload') || storedPath.includes('/library')) {
-      router.push('/vendor-upload')
-    } else if (storedPath.includes('/contract')) {
-      router.push('/contracts')
-    } else if (storedPath.includes('/rfp')) {
-      router.push('/rfp/dashboard')
-    } else {
-      router.push('/dashboard')
-    }
-  }
-}
-
-const goHome = () => {
-  // Detect which module we're in based on the stored path
-  const storedPath = errorInfo.value.path || ''
-  
-  if (storedPath.includes('/bcp') || storedPath.includes('/vendor-upload') || storedPath.includes('/library')) {
-    // BCP module
-    router.push('/dashboard')
-  } else if (storedPath.includes('/contract')) {
-    // Contract module
-    router.push('/contractdashboard')
-  } else if (storedPath.includes('/rfp')) {
-    // RFP module
-    router.push('/rfp/dashboard')
-  } else {
-    // Default dashboard
-    router.push('/dashboard')
-  }
-}
-
-const contactSupport = () => {
-  // You can implement contact support functionality here
-  // For now, we'll just show an alert
-  alert('Please contact your system administrator for access to this page.')
-}
-</script>

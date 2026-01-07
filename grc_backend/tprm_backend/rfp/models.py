@@ -2,9 +2,10 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 import json
+from tprm_backend.utils.encrypted_fields_mixin import TPRMEncryptedFieldsMixin
 
 
-class RFP(models.Model):
+class RFP(TPRMEncryptedFieldsMixin, models.Model):
     """
     Model for Request for Proposal (RFP) data
     """
