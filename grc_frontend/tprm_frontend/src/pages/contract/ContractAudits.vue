@@ -292,7 +292,12 @@ const loadAudits = async (searchQuery = '') => {
     }
     const response = await contractAuditApi.getContractAudits(params)
     if (response.success) {
-      allAudits.value = response.data.results || response.data || []
+      // Handle different response formats
+      allAudits.value = response.results || response.data || []
+      console.log('[Contract Audits] Loaded audits:', allAudits.value.length)
+      if (allAudits.value.length > 0) {
+        console.log('[Contract Audits] Sample audit:', allAudits.value[0])
+      }
     } else {
       console.error('Error loading contract audits:', response.error)
       allAudits.value = []
@@ -306,16 +311,30 @@ const loadAudits = async (searchQuery = '') => {
 }
 
 // Filter audits to show only those assigned to current user, where user is auditor, or where user is reviewer
+// Note: Backend already filters for users without permission, but we still filter here for consistency
+// and to handle cases where backend returns all audits for users with permission
 const myAudits = computed(() => {
   if (!currentUser.value) return []
   
   const currentUserId = currentUser.value.userid || currentUser.value.user_id
   
-  return allAudits.value.filter(audit => 
-    audit.assignee_id == currentUserId || 
-    audit.auditor_id == currentUserId || 
-    audit.reviewer_id == currentUserId
-  )
+  if (!currentUserId || !allAudits.value.length) {
+    return allAudits.value
+  }
+  
+  // Filter to show audits where user is assignee, auditor, or reviewer
+  // Use == for loose comparison to handle string/int mismatches
+  const filtered = allAudits.value.filter(audit => {
+    const isAssigned = (
+      (audit.assignee_id != null && Number(audit.assignee_id) === Number(currentUserId)) ||
+      (audit.auditor_id != null && Number(audit.auditor_id) === Number(currentUserId)) ||
+      (audit.reviewer_id != null && Number(audit.reviewer_id) === Number(currentUserId))
+    )
+    return isAssigned
+  })
+  
+  console.log('[Contract Audits] Filtered audits:', filtered.length, 'out of', allAudits.value.length)
+  return filtered
 })
 
 // Filter by search term

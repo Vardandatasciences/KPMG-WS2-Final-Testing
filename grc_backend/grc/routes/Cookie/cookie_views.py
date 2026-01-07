@@ -23,6 +23,11 @@ def get_client_ip(request):
         ip = x_forwarded_for.split(',')[0].strip()
     else:
         ip = request.META.get('REMOTE_ADDR', 'unknown')
+    # Ensure IP address doesn't exceed database column length (50 chars)
+    # IPv6 addresses can be up to 45 chars, so 50 is sufficient
+    # Truncate to 50 to match database VARCHAR(50) constraint
+    if len(ip) > 50:
+        ip = ip[:50]
     return ip
 
 

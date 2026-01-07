@@ -188,3 +188,4 @@ GROUP BY TenantId, status;
 
 **To verify**: Check the API response `count` field - if it shows 26, multitenancy is perfect and frontend is just filtering the display.
 
+

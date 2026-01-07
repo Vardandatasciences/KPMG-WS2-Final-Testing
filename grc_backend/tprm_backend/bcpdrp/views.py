@@ -2,14 +2,15 @@
 Function-based views for BCP/DRP API with RBAC integration
 Following the pattern from rbac/example_views.py
 """
-from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.decorators import api_view, authentication_classes, permission_classes, parser_classes
 from rest_framework.response import Response
 from rest_framework import status, permissions
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.permissions import IsAuthenticated, BasePermission
 from django.http import HttpRequest
 from django.db.models import Q, Max
-from django.db import models, connection
+from django.db import models, connection, transaction
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
@@ -18,6 +19,7 @@ import requests
 import logging
 import json
 import jwt
+import traceback
 from tprm_backend.bcpdrp.utils import success_response, error_response, not_found_response, validation_error_response
 from tprm_backend.bcpdrp.models import Plan, Dropdown, Questionnaire, Question, BcpDetails, DrpDetails, Evaluation, Users, BcpDrpApprovals, TestAssignmentsResponses, QuestionnaireTemplate
 from tprm_backend.bcpdrp.serializers import (
@@ -288,6 +290,53 @@ def generate_risks_for_plan_evaluation(plan_id, evaluation_id=None, tenant_id=No
         return None
 
 
+def sanitize_json_for_db(data):
+    """
+    Recursively sanitize JSON data to ensure it can be serialized to database JSONField.
+    Removes undefined values, converts non-serializable types, and ensures dict/list structure.
+    
+    Args:
+        data: The data to sanitize (dict, list, or primitive)
+        
+    Returns:
+        Sanitized data that can be safely stored in JSONField
+    """
+    if data is None:
+        return None
+    
+    if isinstance(data, dict):
+        sanitized = {}
+        for key, value in data.items():
+            # Skip None keys or undefined-like values
+            if key is None:
+                continue
+            # Recursively sanitize nested structures
+            sanitized_value = sanitize_json_for_db(value)
+            # Only include if value is not None (unless it's explicitly None in dict context)
+            sanitized[key] = sanitized_value
+        return sanitized
+    
+    elif isinstance(data, list):
+        sanitized = []
+        for item in data:
+            sanitized_item = sanitize_json_for_db(item)
+            sanitized.append(sanitized_item)
+        return sanitized
+    
+    elif isinstance(data, (str, int, float, bool)):
+        return data
+    
+    else:
+        # Try to convert to string if it's not a basic type
+        try:
+            # Attempt JSON serialization to check if it's serializable
+            json.dumps(data)
+            return data
+        except (TypeError, ValueError):
+            # If not serializable, convert to string
+            return str(data)
+
+
 def generate_risks_for_entity(entity, table, row_id):
     """
     Helper function to call the Risk Generation service directly (legacy method)
@@ -532,6 +581,7 @@ def strategy_list_view(request):
 
 
 @api_view(['POST'])
+@parser_classes([MultiPartParser, FormParser, JSONParser])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('create_strategy')
@@ -645,10 +695,25 @@ def vendor_upload_view(request):
                 logger.warning(f"File not found for document: {file_name}")
                 continue
             
-            # Validate file type
-            allowed_types = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
-            if uploaded_file.content_type not in allowed_types:
-                return error_response(f"Invalid file type for {uploaded_file.name}. Only PDF, DOC, and DOCX files are allowed.", status.HTTP_400_BAD_REQUEST)
+            # Validate file type (case-insensitive check)
+            allowed_types = [
+                'application/pdf', 
+                'application/msword', 
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            ]
+            content_type = uploaded_file.content_type.lower() if uploaded_file.content_type else ''
+            file_extension = os.path.splitext(uploaded_file.name)[1].lower()
+            allowed_extensions = ['.pdf', '.doc', '.docx']
+            
+            # Check both content type and file extension
+            is_valid_type = any(allowed.lower() == content_type for allowed in allowed_types)
+            is_valid_extension = file_extension in allowed_extensions
+            
+            if not (is_valid_type or is_valid_extension):
+                return error_response(
+                    f"Invalid file type for {uploaded_file.name} (type: {uploaded_file.content_type}). Only PDF, DOC, and DOCX files are allowed.", 
+                    status.HTTP_400_BAD_REQUEST
+                )
             
             # Validate file size (max 10MB)
             max_size = 10 * 1024 * 1024  # 10MB
@@ -669,8 +734,8 @@ def vendor_upload_view(request):
             sha256_hash = hashlib.sha256(file_content).hexdigest()
             
             # Get next plan_id
-            # MULTI-TENANCY: Filter by tenant
-            max_plan = Plan.objects.filter(tenant_id=tenant_id).aggregate(max_id=models.Max('plan_id'))
+            # NOTE: plan_id is PRIMARY KEY and must be unique across ALL tenants, not per-tenant
+            max_plan = Plan.objects.aggregate(max_id=models.Max('plan_id'))
             plan_id = (max_plan['max_id'] or 0) + 1
             
             # Get data_inventory from document data or use the one from request
@@ -717,8 +782,14 @@ def vendor_upload_view(request):
         }, status.HTTP_201_CREATED)
         
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
         logger.error(f"Error uploading vendor documents: {str(e)}")
-        return error_response("Failed to upload documents", status.HTTP_500_INTERNAL_SERVER_ERROR)
+        logger.error(f"Traceback: {error_details}")
+        return error_response(
+            f"Failed to upload documents: {str(e)}", 
+            status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 # =============================================================================
@@ -1715,11 +1786,27 @@ def evaluation_save_view(request, plan_id):
             created = False
         except Evaluation.DoesNotExist:
             # Get the next evaluation_id manually since auto-increment might not be working
-            # MULTI-TENANCY: Filter by tenant
-            max_id = Evaluation.objects.filter(tenant_id=tenant_id).aggregate(max_id=models.Max('evaluation_id'))['max_id']
-            next_id = (max_id or 0) + 1
+            # Get max_id from ALL evaluations (not filtered by tenant) since evaluation_id is a global primary key
+            # Use database transaction to prevent race conditions
+            with transaction.atomic():
+                # Get the maximum evaluation_id from ALL evaluations to ensure uniqueness
+                max_id_result = Evaluation.objects.aggregate(max_id=models.Max('evaluation_id'))
+                max_id = max_id_result['max_id']
+                next_id = (max_id or 0) + 1
+                
+                # Check if this ID already exists (race condition protection)
+                max_retries = 10
+                retry_count = 0
+                while Evaluation.objects.filter(evaluation_id=next_id).exists() and retry_count < max_retries:
+                    next_id += 1
+                    retry_count += 1
+                    logger.warning(f"Evaluation ID {next_id - 1} already exists, trying {next_id}")
+                
+                if retry_count >= max_retries:
+                    logger.error(f"Could not find available evaluation_id after {max_retries} retries")
+                    return error_response("Failed to generate unique evaluation ID. Please try again.", status.HTTP_500_INTERNAL_SERVER_ERROR)
             
-            logger.info(f"Creating new evaluation {next_id} for plan {plan_id}")
+            logger.info(f"Creating new evaluation {next_id} for plan {plan_id} (max_id was {max_id})")
             
             # Convert scores to proper types (handle 0 values correctly)
             overall_score = float(evaluation_data.get('overall_score')) if evaluation_data.get('overall_score') is not None and evaluation_data.get('overall_score') != '' else None
@@ -1733,32 +1820,104 @@ def evaluation_save_view(request, plan_id):
             eval_data_inventory = evaluation_data.get('data_inventory', {})
             if not isinstance(eval_data_inventory, dict):
                 eval_data_inventory = {}
+            
+            # Sanitize criteria_json to ensure it can be serialized
+            criteria_json_data = evaluation_data.get('criteria_json', {})
+            if not isinstance(criteria_json_data, dict):
+                criteria_json_data = {}
+            else:
+                # Sanitize the criteria_json to remove any non-serializable values
+                try:
+                    criteria_json_data = sanitize_json_for_db(criteria_json_data)
+                    # Verify it can be serialized
+                    json.dumps(criteria_json_data)
+                except Exception as json_error:
+                    logger.warning(f"Error sanitizing criteria_json, using empty dict: {str(json_error)}")
+                    criteria_json_data = {}
+            
             # Determine initial status based on is_final_submission
             is_final = evaluation_data.get('is_final_submission', False)
             initial_status = 'SUBMITTED' if is_final else 'IN_PROGRESS'
             
+            # Get current datetime based on USE_TZ setting
+            if settings.USE_TZ:
+                current_datetime = timezone.now()
+            else:
+                from datetime import datetime
+                current_datetime = datetime.now()
+            
             # MULTI-TENANCY: Set tenant_id
-            evaluation = Evaluation.objects.create(
-                evaluation_id=next_id,
-                plan_id=plan_id,
-                assigned_to_user_id=evaluation_data.get('assigned_to_user_id', 1),
-                assigned_by_user_id=evaluation_data.get('assigned_by_user_id', 1),
-                status=initial_status,
-                started_at=timezone.now(),
-                submitted_at=timezone.now() if is_final else None,
-                tenant_id=tenant_id,  # MULTI-TENANCY: Set tenant_id
-                overall_score=overall_score,
-                quality_score=quality_score,
-                coverage_score=coverage_score,
-                recovery_capability_score=recovery_capability_score,
-                compliance_score=compliance_score,
-                weighted_score=weighted_score,
-                criteria_json=evaluation_data.get('criteria_json', {}),
-                evaluator_comments=evaluation_data.get('evaluator_comments', ''),
-                data_inventory=eval_data_inventory
-            )
-            created = True
-            logger.info(f"Successfully created evaluation {evaluation.evaluation_id} with status {initial_status}")
+            # Validate and get user IDs
+            assigned_to_user_id = evaluation_data.get('assigned_to_user_id')
+            if assigned_to_user_id is None:
+                # Try to get from request user if available
+                if hasattr(request, 'user') and request.user and hasattr(request.user, 'id'):
+                    assigned_to_user_id = request.user.id
+                else:
+                    assigned_to_user_id = 1  # Default fallback
+            try:
+                assigned_to_user_id = int(assigned_to_user_id)
+            except (ValueError, TypeError):
+                assigned_to_user_id = 1
+            
+            assigned_by_user_id = evaluation_data.get('assigned_by_user_id')
+            if assigned_by_user_id is None:
+                # Try to get from request user if available
+                if hasattr(request, 'user') and request.user and hasattr(request.user, 'id'):
+                    assigned_by_user_id = request.user.id
+                else:
+                    assigned_by_user_id = 1  # Default fallback
+            try:
+                assigned_by_user_id = int(assigned_by_user_id)
+            except (ValueError, TypeError):
+                assigned_by_user_id = 1
+            
+            # Use transaction to ensure atomic creation
+            try:
+                with transaction.atomic():
+                    evaluation = Evaluation.objects.create(
+                        evaluation_id=next_id,
+                        plan_id=plan_id,
+                        assigned_to_user_id=assigned_to_user_id,
+                        assigned_by_user_id=assigned_by_user_id,
+                        status=initial_status,
+                        started_at=current_datetime,
+                        submitted_at=current_datetime if is_final else None,
+                        tenant_id=tenant_id,  # MULTI-TENANCY: Set tenant_id
+                        overall_score=overall_score,
+                        quality_score=quality_score,
+                        coverage_score=coverage_score,
+                        recovery_capability_score=recovery_capability_score,
+                        compliance_score=compliance_score,
+                        weighted_score=weighted_score,
+                        criteria_json=criteria_json_data,
+                        evaluator_comments=evaluation_data.get('evaluator_comments', ''),
+                        data_inventory=eval_data_inventory
+                    )
+                created = True
+                logger.info(f"Successfully created evaluation {evaluation.evaluation_id} with status {initial_status}")
+            except Exception as create_error:
+                error_message = str(create_error)
+                logger.error(f"Error creating evaluation: {error_message}")
+                logger.error(f"Traceback: {traceback.format_exc()}")
+                logger.error(f"Evaluation data: plan_id={plan_id}, tenant_id={tenant_id}, next_id={next_id}, started_at={current_datetime}, submitted_at={current_datetime if is_final else None}")
+                logger.error(f"criteria_json type: {type(criteria_json_data)}, value: {criteria_json_data}")
+                
+                # If it's a duplicate key error, try to get the existing evaluation for this plan
+                if 'Duplicate entry' in error_message or '1062' in error_message:
+                    logger.warning(f"Duplicate key error detected, attempting to retrieve existing evaluation for plan {plan_id}")
+                    try:
+                        # Double-check if evaluation exists now (might have been created by concurrent request)
+                        evaluation = Evaluation.objects.get(plan_id=plan_id, tenant_id=tenant_id)
+                        created = False
+                        logger.info(f"Found existing evaluation {evaluation.evaluation_id} for plan {plan_id}, will update instead")
+                    except Evaluation.DoesNotExist:
+                        # If still doesn't exist, it's a real error
+                        logger.error(f"Evaluation still doesn't exist after duplicate key error - this is unexpected")
+                        return error_response(f"Failed to create evaluation due to ID conflict. Please try again. Error: {error_message}", status.HTTP_500_INTERNAL_SERVER_ERROR)
+                else:
+                    # For other errors, re-raise
+                    raise
             
             # If it's a final submission, update approval status
             if is_final:
@@ -1784,24 +1943,53 @@ def evaluation_save_view(request, plan_id):
         if not created:
             # Update existing evaluation
             logger.info(f"Updating existing evaluation {evaluation.evaluation_id} for plan {plan_id}")
+            logger.info(f"Current scores before update - overall: {evaluation.overall_score}, quality: {evaluation.quality_score}, coverage: {evaluation.coverage_score}, compliance: {evaluation.compliance_score}, weighted: {evaluation.weighted_score}")
+            logger.info(f"Scores in request data - overall: {evaluation_data.get('overall_score')}, quality: {evaluation_data.get('quality_score')}, coverage: {evaluation_data.get('coverage_score')}, compliance: {evaluation_data.get('compliance_score')}, weighted: {evaluation_data.get('weighted_score')}")
             
             # Update scores with proper type conversion (handle 0 values correctly)
-            if 'overall_score' in evaluation_data and evaluation_data['overall_score'] is not None and evaluation_data['overall_score'] != '':
-                evaluation.overall_score = float(evaluation_data['overall_score'])
-            if 'quality_score' in evaluation_data and evaluation_data['quality_score'] is not None and evaluation_data['quality_score'] != '':
-                evaluation.quality_score = float(evaluation_data['quality_score'])
-            if 'coverage_score' in evaluation_data and evaluation_data['coverage_score'] is not None and evaluation_data['coverage_score'] != '':
-                evaluation.coverage_score = float(evaluation_data['coverage_score'])
-            if 'recovery_capability_score' in evaluation_data and evaluation_data['recovery_capability_score'] is not None and evaluation_data['recovery_capability_score'] != '':
-                evaluation.recovery_capability_score = float(evaluation_data['recovery_capability_score'])
-            if 'compliance_score' in evaluation_data and evaluation_data['compliance_score'] is not None and evaluation_data['compliance_score'] != '':
-                evaluation.compliance_score = float(evaluation_data['compliance_score'])
-            if 'weighted_score' in evaluation_data and evaluation_data['weighted_score'] is not None and evaluation_data['weighted_score'] != '':
-                evaluation.weighted_score = float(evaluation_data['weighted_score'])
+            # Note: We need to check if the key exists and the value is not None/empty string
+            # But we also need to allow 0 as a valid score value (0 is falsy but valid)
+            score_fields = [
+                'overall_score', 'quality_score', 'coverage_score', 
+                'recovery_capability_score', 'compliance_score', 'weighted_score'
+            ]
+            
+            for score_field in score_fields:
+                if score_field in evaluation_data:
+                    score_value = evaluation_data[score_field]
+                    # Check if value is not None and not empty string
+                    # Note: 0 is a valid score, so we check explicitly for None and empty string
+                    if score_value is not None and score_value != '':
+                        try:
+                            float_value = float(score_value)
+                            setattr(evaluation, score_field, float_value)
+                            logger.info(f"Updated {score_field} to {float_value}")
+                        except (ValueError, TypeError) as e:
+                            logger.warning(f"Invalid {score_field} value: {score_value} (type: {type(score_value)}), error: {e}")
+                    elif score_value == '' or score_value is None:
+                        # Explicitly set to None if empty string or None is provided
+                        setattr(evaluation, score_field, None)
+                        logger.info(f"Set {score_field} to None (empty value provided)")
             
             # Update other fields
             if 'criteria_json' in evaluation_data:
-                evaluation.criteria_json = evaluation_data['criteria_json']
+                criteria_json_data = evaluation_data['criteria_json']
+                if not isinstance(criteria_json_data, dict):
+                    criteria_json_data = {}
+                else:
+                    # Sanitize the criteria_json to remove any non-serializable values
+                    try:
+                        criteria_json_data = sanitize_json_for_db(criteria_json_data)
+                        # Verify it can be serialized
+                        json.dumps(criteria_json_data)
+                    except Exception as json_error:
+                        logger.warning(f"Error sanitizing criteria_json, using existing value: {str(json_error)}")
+                        # If sanitization fails, try to keep existing value or use empty dict
+                        if not hasattr(evaluation, 'criteria_json') or not isinstance(evaluation.criteria_json, dict):
+                            criteria_json_data = {}
+                        else:
+                            criteria_json_data = evaluation.criteria_json
+                evaluation.criteria_json = criteria_json_data
             if 'evaluator_comments' in evaluation_data:
                 evaluation.evaluator_comments = evaluation_data['evaluator_comments']
             if 'data_inventory' in evaluation_data:
@@ -1813,7 +2001,12 @@ def evaluation_save_view(request, plan_id):
             # Update status based on whether it's a draft or final submission
             if evaluation_data.get('is_final_submission', False):
                 evaluation.status = 'SUBMITTED'
-                evaluation.submitted_at = timezone.now()
+                # Get current datetime based on USE_TZ setting
+                if settings.USE_TZ:
+                    evaluation.submitted_at = timezone.now()
+                else:
+                    from datetime import datetime
+                    evaluation.submitted_at = datetime.now()
                 logger.info(f"Setting evaluation {evaluation.evaluation_id} status to SUBMITTED")
                 
                 # Update corresponding approval status to 'COMMENTED'
@@ -1843,8 +2036,10 @@ def evaluation_save_view(request, plan_id):
             try:
                 evaluation.save()
                 logger.info(f"Successfully saved evaluation {evaluation.evaluation_id}")
+                logger.info(f"Scores after save - overall: {evaluation.overall_score}, quality: {evaluation.quality_score}, coverage: {evaluation.coverage_score}, compliance: {evaluation.compliance_score}, weighted: {evaluation.weighted_score}")
             except Exception as save_error:
                 logger.error(f"Error saving evaluation: {str(save_error)}")
+                logger.error(f"Traceback: {traceback.format_exc()}")
                 raise
         
         response_data = {
@@ -1857,8 +2052,18 @@ def evaluation_save_view(request, plan_id):
         return success_response(response_data)
         
     except Exception as e:
+        error_traceback = traceback.format_exc()
         logger.error(f"Error saving evaluation: {str(e)}")
-        return error_response("Failed to save evaluation", status.HTTP_500_INTERNAL_SERVER_ERROR)
+        logger.error(f"Traceback: {error_traceback}")
+        logger.error(f"Request data: {request.data}")
+        # Include error details in response for debugging (only in DEBUG mode)
+        error_message = f"Failed to save evaluation: {str(e)}"
+        try:
+            if settings.DEBUG:
+                error_message = f"{error_message}\n\nTraceback:\n{error_traceback}"
+        except:
+            pass
+        return error_response(error_message, status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['PATCH'])
@@ -2192,12 +2397,24 @@ def approval_assignment_create_view(request):
         # Get assignment data from request
         data = request.data
         
+        # Log received data for debugging
+        logger.info(f"Received assignment data: {json.dumps(data, default=str)}")
+        logger.info(f"Request data type: {type(data)}, Keys: {list(data.keys()) if isinstance(data, dict) else 'N/A'}")
+        
         # Get no_approval_needed flag
         no_approval_needed = data.get('no_approval_needed', False)
+        logger.info(f"no_approval_needed flag: {no_approval_needed}")
         
-        # If no approval needed, ensure assigner and assignee are the same
-        if no_approval_needed and data.get('assigner_id') != data.get('assignee_id'):
-            return validation_error_response("When 'no approval needed' is checked, assigner and assignee must be the same")
+        # If no approval needed, set assignee to same as assigner
+        if no_approval_needed:
+            if not data.get('assignee_id') or data.get('assignee_id') != data.get('assigner_id'):
+                # Auto-set assignee to assigner when no approval needed
+                data['assignee_id'] = data['assigner_id']
+                data['assignee_name'] = data.get('assigner_name', '')
+                logger.info(f"Auto-setting assignee to assigner ({data['assigner_id']}) for no-approval assignment")
+        elif data.get('assigner_id') != data.get('assignee_id'):
+            # Only validate if no_approval_needed is False
+            pass  # This is fine, different assigner and assignee
         
         # Validate required fields
         required_fields = ['workflow_name', 'plan_type', 'assigner_id', 'assigner_name', 
@@ -2207,18 +2424,56 @@ def approval_assignment_create_view(request):
         if not no_approval_needed:
             required_fields.extend(['assignee_id', 'assignee_name'])
         
+        # Check each required field and log which ones are missing
+        missing_fields = []
         for field in required_fields:
-            if not data.get(field):
-                return validation_error_response(f"{field.replace('_', ' ').title()} is required")
+            field_value = data.get(field)
+            # Check if field is missing, None, or empty string (but allow 0 and False as valid values)
+            if field_value is None or (isinstance(field_value, str) and field_value.strip() == ''):
+                missing_fields.append(field)
+                logger.warning(f"Missing required field: {field} (value: {field_value}, type: {type(field_value)})")
+        
+        if missing_fields:
+            error_msg = f"Missing required fields: {', '.join([f.replace('_', ' ').title() for f in missing_fields])}"
+            logger.error(f"Validation failed: {error_msg}")
+            logger.error(f"Received data: {json.dumps(data, default=str)}")
+            return validation_error_response(error_msg)
         
         # Validate user IDs exist
         try:
-            assigner = Users.objects.get(user_id=data['assigner_id'])
+            # MULTI-TENANCY: Try to filter by tenant if available, but allow without tenant for backward compatibility
+            # Users model has a 'tenant' ForeignKey, so use tenant_id (Django auto-created field)
+            try:
+                if tenant_id:
+                    assigner = Users.objects.get(user_id=data['assigner_id'], tenant_id=tenant_id)
+                else:
+                    assigner = Users.objects.get(user_id=data['assigner_id'])
+            except Users.DoesNotExist:
+                # Fallback: try without tenant filter
+                try:
+                    assigner = Users.objects.get(user_id=data['assigner_id'])
+                except Users.DoesNotExist:
+                    logger.error(f"Assigner user not found - assigner_id: {data.get('assigner_id')}, tenant_id: {tenant_id}")
+                    return validation_error_response(f"Invalid assigner user ID: {data.get('assigner_id')}")
+            
             # Only validate assignee if provided
             if data.get('assignee_id'):
-                assignee = Users.objects.get(user_id=data['assignee_id'])
-        except Users.DoesNotExist:
-            return validation_error_response("Invalid assigner or assignee user ID")
+                try:
+                    if tenant_id:
+                        assignee = Users.objects.get(user_id=data['assignee_id'], tenant_id=tenant_id)
+                    else:
+                        assignee = Users.objects.get(user_id=data['assignee_id'])
+                except Users.DoesNotExist:
+                    # Fallback: try without tenant filter
+                    try:
+                        assignee = Users.objects.get(user_id=data['assignee_id'])
+                    except Users.DoesNotExist:
+                        logger.error(f"Assignee user not found - assignee_id: {data.get('assignee_id')}, tenant_id: {tenant_id}")
+                        return validation_error_response(f"Invalid assignee user ID: {data.get('assignee_id')}")
+        except Exception as user_error:
+            logger.error(f"Error validating users: {str(user_error)}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return error_response(f"Error validating users: {str(user_error)}", status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # Validate object type
         valid_object_types = ['PLAN EVALUATION', 'NEW QUESTIONNAIRE', 'QUESTIONNAIRE RESPONSE']
@@ -2228,41 +2483,77 @@ def approval_assignment_create_view(request):
         # Validate plan type
         # Get valid plan types from dropdown table
         # MULTI-TENANCY: Filter by tenant
-        valid_plan_types = list(Dropdown.objects.filter(source='plan_type', tenant_id=tenant_id).values_list('value', flat=True))
-        if data['plan_type'] not in valid_plan_types:
-            return validation_error_response(f"Plan type must be one of: {', '.join(valid_plan_types)}")
+        try:
+            if tenant_id:
+                valid_plan_types = list(Dropdown.objects.filter(source='plan_type', tenant_id=tenant_id).values_list('value', flat=True))
+            else:
+                # Fallback: get all plan types without tenant filter
+                valid_plan_types = list(Dropdown.objects.filter(source='plan_type').values_list('value', flat=True))
+            
+            if not valid_plan_types:
+                logger.warning(f"No plan types found in dropdown for tenant {tenant_id}, allowing any plan type")
+                # Don't validate if no plan types found (backward compatibility)
+            elif data['plan_type'] not in valid_plan_types:
+                return validation_error_response(f"Plan type must be one of: {', '.join(valid_plan_types)}")
+        except Exception as plan_type_error:
+            logger.warning(f"Error validating plan type: {plan_type_error}, allowing plan type: {data['plan_type']}")
+            # Continue with validation if plan type check fails
         
         # Generate workflow_id (simple auto-increment for now)
         # MULTI-TENANCY: Filter by tenant
-        max_workflow_id = BcpDrpApprovals.objects.filter(tenant_id=tenant_id).aggregate(max_id=models.Max('workflow_id'))['max_id']
-        next_workflow_id = (max_workflow_id or 0) + 1
+        try:
+            if tenant_id:
+                max_workflow_id = BcpDrpApprovals.objects.filter(tenant_id=tenant_id).aggregate(max_id=models.Max('workflow_id'))['max_id']
+            else:
+                max_workflow_id = BcpDrpApprovals.objects.aggregate(max_id=models.Max('workflow_id'))['max_id']
+            next_workflow_id = (max_workflow_id or 0) + 1
+        except Exception as workflow_error:
+            logger.error(f"Error generating workflow_id: {workflow_error}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            # Fallback: use a simple increment
+            next_workflow_id = 1
         
-        # Parse and convert due_date to timezone-aware datetime
+        # Parse and convert due_date to datetime
+        # Handle timezone based on USE_TZ setting
         due_date_str = data['due_date']
         try:
             # Parse the datetime string from the frontend (format: "2025-10-02T08:35")
             due_date_naive = datetime.fromisoformat(due_date_str)
-            # Make it timezone-aware
-            due_date = timezone.make_aware(due_date_naive)
+            
+            # Check if USE_TZ is enabled in settings
+            if settings.USE_TZ:
+                # Make it timezone-aware if USE_TZ is True
+                due_date = timezone.make_aware(due_date_naive)
+            else:
+                # Keep it naive if USE_TZ is False (MySQL requirement)
+                due_date = due_date_naive
         except (ValueError, TypeError) as e:
+            logger.error(f"Error parsing due_date: {str(e)}, due_date_str: {due_date_str}")
             return validation_error_response(f"Invalid due_date format: {due_date_str}")
         
         # Create approval assignment
         # MULTI-TENANCY: Set tenant_id
-        approval = BcpDrpApprovals.objects.create(
-            workflow_id=next_workflow_id,
-            workflow_name=data['workflow_name'],
-            assigner_id=data['assigner_id'],
-            assigner_name=data['assigner_name'],
-            assignee_id=data['assignee_id'],
-            assignee_name=data['assignee_name'],
-            object_type=data['object_type'],
-            object_id=data['object_id'],
-            plan_type=data['plan_type'],
-            due_date=due_date,
-            status='ASSIGNED',
-            tenant_id=tenant_id  # MULTI-TENANCY: Set tenant_id
-        )
+        try:
+            approval = BcpDrpApprovals.objects.create(
+                workflow_id=next_workflow_id,
+                workflow_name=data['workflow_name'],
+                assigner_id=data['assigner_id'],
+                assigner_name=data['assigner_name'],
+                assignee_id=data['assignee_id'],
+                assignee_name=data['assignee_name'],
+                object_type=data['object_type'],
+                object_id=data['object_id'],
+                plan_type=data['plan_type'],
+                due_date=due_date,
+                status='ASSIGNED',
+                tenant_id=tenant_id  # MULTI-TENANCY: Set tenant_id
+            )
+            logger.info(f"Successfully created approval assignment {approval.approval_id} for plan {data['object_id']}")
+        except Exception as create_error:
+            logger.error(f"Error creating approval assignment: {str(create_error)}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            logger.error(f"Data being saved: workflow_id={next_workflow_id}, workflow_name={data['workflow_name']}, tenant_id={tenant_id}")
+            raise  # Re-raise to be caught by outer exception handler
         
         # If no approval needed, auto-approve the object
         if no_approval_needed:
@@ -2288,8 +2579,19 @@ def approval_assignment_create_view(request):
         }, status.HTTP_201_CREATED)
         
     except Exception as e:
+        error_traceback = traceback.format_exc()
         logger.error(f"Error creating approval assignment: {str(e)}")
-        return error_response("Failed to create approval assignment", status.HTTP_500_INTERNAL_SERVER_ERROR)
+        logger.error(f"Traceback: {error_traceback}")
+        logger.error(f"Request data: {request.data}")
+        # Include error details in response for debugging (only in DEBUG mode)
+        error_message = f"Failed to create approval assignment: {str(e)}"
+        try:
+            from django.conf import settings as django_settings
+            if django_settings.DEBUG:
+                error_message = f"{error_message}\n\nTraceback:\n{error_traceback}"
+        except:
+            pass
+        return error_response(error_message, status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 def auto_approve_object(approval):
@@ -2674,20 +2976,69 @@ def questionnaire_assignments_list_view(request):
         # Order by most recent first
         queryset = queryset.order_by('-assigned_at')
         
+        # Import decrypt function for question_text decryption
+        from tprm_backend.utils.data_encryption import decrypt_data
+        
         # Transform the data
         assignments_data = []
         for assignment in queryset:
             # Parse the answer_text JSON to get question count and metadata
+            # Use answer_text_plain to get decrypted JSON (answer_text field is encrypted)
             questions_data = {}
             total_questions = 0
+            decrypted_answer_text = None
+            
             try:
-                if assignment.answer_text:
-                    answer_data = json.loads(assignment.answer_text)
-                    questions_data = answer_data.get('questions_data', {})
+                # Get decrypted answer_text using _plain property
+                answer_text_value = getattr(assignment, 'answer_text_plain', None) or assignment.answer_text
+                
+                if answer_text_value:
+                    answer_data = json.loads(answer_text_value)
+                    raw_questions_data = answer_data.get('questions_data', [])
                     total_questions = answer_data.get('assignment_metadata', {}).get('total_questions', 0)
-            except (json.JSONDecodeError, KeyError):
+                    
+                    # Decrypt question_text values inside the JSON
+                    # Questions were encrypted when stored from the Question model
+                    if isinstance(raw_questions_data, list):
+                        questions_data = []
+                        for question in raw_questions_data:
+                            decrypted_question = question.copy()
+                            # Decrypt question_text if it's encrypted
+                            if 'question_text' in decrypted_question and decrypted_question['question_text']:
+                                try:
+                                    # Try to decrypt - if it fails, use original value
+                                    decrypted_text = decrypt_data(decrypted_question['question_text'])
+                                    decrypted_question['question_text'] = decrypted_text
+                                except Exception as decrypt_error:
+                                    # If decryption fails, use original (might already be decrypted)
+                                    logger.debug(f"Could not decrypt question_text for question {decrypted_question.get('question_id')}: {decrypt_error}")
+                            questions_data.append(decrypted_question)
+                    elif isinstance(raw_questions_data, dict):
+                        # Handle dict format
+                        questions_data = {}
+                        for key, question in raw_questions_data.items():
+                            decrypted_question = question.copy() if isinstance(question, dict) else question
+                            if isinstance(question, dict) and 'question_text' in decrypted_question and decrypted_question['question_text']:
+                                try:
+                                    decrypted_text = decrypt_data(decrypted_question['question_text'])
+                                    decrypted_question['question_text'] = decrypted_text
+                                except Exception as decrypt_error:
+                                    logger.debug(f"Could not decrypt question_text for question {key}: {decrypt_error}")
+                            questions_data[key] = decrypted_question
+                    
+                    # Store decrypted answer_text for response
+                    answer_data['questions_data'] = questions_data
+                    decrypted_answer_text = json.dumps(answer_data)
+                    
+            except (json.JSONDecodeError, KeyError) as e:
+                logger.warning(f"Error parsing answer_text for assignment {assignment.assignment_response_id}: {e}")
                 questions_data = {}
                 total_questions = 0
+                decrypted_answer_text = assignment.answer_text
+            
+            # Get decrypted owner_comment using _plain property
+            owner_comment_decrypted = getattr(assignment, 'owner_comment_plain', None) or assignment.owner_comment
+            reason_comment_decrypted = getattr(assignment, 'reason_comment_plain', None) or assignment.reason_comment
             
             assignment_data = {
                 'assignment_response_id': assignment.assignment_response_id,
@@ -2702,15 +3053,15 @@ def questionnaire_assignments_list_view(request):
                 'started_at': assignment.started_at.isoformat() if assignment.started_at else None,
                 'submitted_at': assignment.submitted_at.isoformat() if assignment.submitted_at else None,
                 'owner_decision': assignment.owner_decision,
-                'owner_comment': assignment.owner_comment,
+                'owner_comment': owner_comment_decrypted,  # Use decrypted value
                 'response_status': assignment.response_status,
-                'answer_text': assignment.answer_text,
-                'reason_comment': assignment.reason_comment,
+                'answer_text': decrypted_answer_text,  # Use decrypted JSON
+                'reason_comment': reason_comment_decrypted,  # Use decrypted value
                 'evidence_uri': assignment.evidence_uri,
                 'created_at': assignment.created_at.isoformat() if assignment.created_at else None,
                 'updated_at': assignment.updated_at.isoformat() if assignment.updated_at else None,
                 'total_questions': total_questions,
-                'questions_data': questions_data
+                'questions_data': questions_data  # Contains decrypted question_text values
             }
             assignments_data.append(assignment_data)
         
@@ -2766,10 +3117,12 @@ def questionnaire_assignment_save_answers_view(request, assignment_id):
             return error_response("Assignment not found", status.HTTP_404_NOT_FOUND)
         
         # Parse existing answer_text if it exists
+        # Use answer_text_plain to get decrypted JSON (answer_text field is encrypted)
         existing_data = {}
-        if assignment.answer_text:
+        answer_text_value = getattr(assignment, 'answer_text_plain', None) or assignment.answer_text
+        if answer_text_value:
             try:
-                existing_data = json.loads(assignment.answer_text)
+                existing_data = json.loads(answer_text_value)
                 logger.info(f"Parsed existing data structure: {type(existing_data.get('questions_data', {}))}")
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse existing answer_text: {e}")
@@ -2953,85 +3306,141 @@ def questionnaire_assignment_create_view(request):
             return error_response("Questionnaire not found or does not belong to tenant", status.HTTP_404_NOT_FOUND)
         
         # Get all questions for the questionnaire to create a single assignment record with JSON data
-        # Use default database connection to access test_questions table
+        # Use tprm database connection to access test_questions table (in tprm_integration database)
+        # The test_questions table is in tprm_integration database, not grc2
         # MULTI-TENANCY: Filter by tenant in SQL query
         from django.db import connections
-        with connections['default'].cursor() as cursor:
-            cursor.execute("""
-                SELECT q.question_id, q.question_text, q.answer_type, q.is_required
-                FROM test_questions q
-                INNER JOIN test_questionnaires tq ON q.questionnaire_id = tq.questionnaire_id
-                WHERE q.questionnaire_id = %s 
-                AND tq.TenantId = %s
-                ORDER BY q.seq_no, q.question_id
-            """, [data['questionnaire_id'], tenant_id])
-            
-            questions = cursor.fetchall()
-            
-            if not questions:
-                return error_response("No questions found for this questionnaire", status.HTTP_400_BAD_REQUEST)
-            
-            # Prepare questions data as JSON
-            questions_data = []
-            question_ids = []
-            
-            for question_row in questions:
-                question_id, question_text, answer_type, is_required = question_row
-                question_ids.append(question_id)
+        from django.conf import settings
+        
+        # Use 'tprm' connection for test_questions table (in tprm_integration database)
+        # Fall back to 'default' if 'tprm' connection is not available
+        db_connection = 'tprm'
+        try:
+            # Check if 'tprm' connection exists in settings
+            if 'tprm' not in settings.DATABASES:
+                logger.warning("'tprm' database connection not found in settings, falling back to 'default'")
+                db_connection = 'default'
+            else:
+                logger.info(f"Using 'tprm' database connection for test_questions table (tprm_integration)")
+        except Exception as db_check_error:
+            logger.warning(f"Error checking database connections: {db_check_error}, using 'tprm' connection")
+        
+        # Query test_questions table - try tprm connection first, fallback to default
+        questions = None
+        try:
+            with connections[db_connection].cursor() as cursor:
+                cursor.execute("""
+                    SELECT q.question_id, q.question_text, q.answer_type, q.is_required
+                    FROM test_questions q
+                    INNER JOIN test_questionnaires tq ON q.questionnaire_id = tq.questionnaire_id
+                    WHERE q.questionnaire_id = %s 
+                    AND tq.TenantId = %s
+                    ORDER BY q.seq_no, q.question_id
+                """, [data['questionnaire_id'], tenant_id])
                 
-                # Parse metadata from question_text if it exists
-                question_text_clean = question_text
-                choice_options = []
-                allow_document_upload = False
-                
-                if '<!--METADATA:' in question_text:
-                    parts = question_text.split('<!--METADATA:')
-                    if len(parts) > 1:
-                        question_text_clean = parts[0].strip()
-                        metadata_str = parts[1].replace('-->', '').strip()
-                        try:
-                            metadata = json.loads(metadata_str)
-                            choice_options = metadata.get('choice_options', [])
-                            allow_document_upload = metadata.get('allow_document_upload', False)
-                        except json.JSONDecodeError:
-                            pass
-                
-                questions_data.append({
-                    'question_id': question_id,
-                    'question_text': question_text_clean,
-                    'answer_type': answer_type,
-                    'is_required': bool(is_required),
-                    'choice_options': choice_options,
-                    'allow_document_upload': allow_document_upload,
-                    'answer': None,  # Will be filled when user responds
-                    'status': 'PENDING'
-                })
+                questions = cursor.fetchall()
+        except Exception as db_error:
+            # If tprm connection fails, try default connection as fallback
+            if db_connection == 'tprm':
+                logger.warning(f"Failed to query test_questions using 'tprm' connection: {db_error}, trying 'default' connection")
+                db_connection = 'default'
+                try:
+                    with connections[db_connection].cursor() as cursor:
+                        cursor.execute("""
+                            SELECT q.question_id, q.question_text, q.answer_type, q.is_required
+                            FROM test_questions q
+                            INNER JOIN test_questionnaires tq ON q.questionnaire_id = tq.questionnaire_id
+                            WHERE q.questionnaire_id = %s 
+                            AND tq.TenantId = %s
+                            ORDER BY q.seq_no, q.question_id
+                        """, [data['questionnaire_id'], tenant_id])
+                        
+                        questions = cursor.fetchall()
+                except Exception as fallback_error:
+                    # Re-raise the error if default connection also fails
+                    logger.error(f"Failed to query test_questions with both connections: {fallback_error}")
+                    raise
+            else:
+                # Re-raise the error if default connection also fails
+                logger.error(f"Failed to query test_questions: {db_error}")
+                raise
+        
+        # Validate that questions were found
+        if not questions:
+            return error_response("No questions found for this questionnaire", status.HTTP_400_BAD_REQUEST)
+        
+        # Import decrypt function for question_text decryption
+        from tprm_backend.utils.data_encryption import decrypt_data
+        
+        # Prepare questions data as JSON
+        questions_data = []
+        question_ids = []
+        
+        for question_row in questions:
+            question_id, question_text, answer_type, is_required = question_row
+            question_ids.append(question_id)
             
-            # Create a single assignment record with all questions as JSON
-            # MULTI-TENANCY: Set tenant_id
-            assignment = TestAssignmentsResponses.objects.create(
-                plan_id=data['plan_id'],
-                questionnaire_id=data['questionnaire_id'],
-                question_id=question_ids[0] if question_ids else None,  # Store first question_id for compatibility
-                assigned_to_user_id=data['assigned_to_user_id'],
-                assigned_by_user_id=assigned_by_user_id,
-                due_date=data['due_date'],
-                status='ASSIGNED',
-                response_status='IN_PROGRESS',
-                answer_text=json.dumps({
-                    'question_ids': question_ids,
-                    'questions_data': questions_data,
-                    'assignment_metadata': {
-                        'total_questions': len(questions_data),
-                        'assigned_at': timezone.now().isoformat(),
-                        'questionnaire_version': 'current'
-                    }
-                }),
-                tenant_id=tenant_id  # MULTI-TENANCY: Set tenant_id
-            )
+            # Decrypt question_text (it's encrypted in the database)
+            try:
+                decrypted_question_text = decrypt_data(question_text)
+            except Exception as decrypt_error:
+                # If decryption fails, use original (might already be decrypted or not encrypted)
+                logger.debug(f"Could not decrypt question_text for question {question_id}: {decrypt_error}")
+                decrypted_question_text = question_text
             
-            assignment_id = assignment.assignment_response_id
-            logger.info(f"Created single assignment record {assignment_id} with {len(question_ids)} questions as JSON")
+            # Parse metadata from question_text if it exists
+            question_text_clean = decrypted_question_text
+            choice_options = []
+            allow_document_upload = False
+            
+            if '<!--METADATA:' in decrypted_question_text:
+                parts = decrypted_question_text.split('<!--METADATA:')
+                if len(parts) > 1:
+                    question_text_clean = parts[0].strip()
+                    metadata_str = parts[1].replace('-->', '').strip()
+                    try:
+                        metadata = json.loads(metadata_str)
+                        choice_options = metadata.get('choice_options', [])
+                        allow_document_upload = metadata.get('allow_document_upload', False)
+                    except json.JSONDecodeError:
+                        pass
+            
+            questions_data.append({
+                'question_id': question_id,
+                'question_text': question_text_clean,
+                'answer_type': answer_type,
+                'is_required': bool(is_required),
+                'choice_options': choice_options,
+                'allow_document_upload': allow_document_upload,
+                'answer': None,  # Will be filled when user responds
+                'status': 'PENDING'
+            })
+        
+        # Create a single assignment record with all questions as JSON
+        # MULTI-TENANCY: Set tenant_id
+        assignment = TestAssignmentsResponses.objects.create(
+            plan_id=data['plan_id'],
+            questionnaire_id=data['questionnaire_id'],
+            question_id=question_ids[0] if question_ids else None,  # Store first question_id for compatibility
+            assigned_to_user_id=data['assigned_to_user_id'],
+            assigned_by_user_id=assigned_by_user_id,
+            due_date=data['due_date'],
+            status='ASSIGNED',
+            response_status='IN_PROGRESS',
+            answer_text=json.dumps({
+                'question_ids': question_ids,
+                'questions_data': questions_data,
+                'assignment_metadata': {
+                    'total_questions': len(questions_data),
+                    'assigned_at': timezone.now().isoformat(),
+                    'questionnaire_version': 'current'
+                }
+            }),
+            tenant_id=tenant_id  # MULTI-TENANCY: Set tenant_id
+        )
+        
+        assignment_id = assignment.assignment_response_id
+        logger.info(f"Created single assignment record {assignment_id} with {len(question_ids)} questions as JSON")
         
         return JsonResponse({
             'status': 'success',

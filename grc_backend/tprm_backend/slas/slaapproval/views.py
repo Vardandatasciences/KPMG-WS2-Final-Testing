@@ -15,6 +15,9 @@ import jwt
 from tprm_backend.rbac.tprm_decorators import rbac_sla_required, rbac_contract_required
 from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
 
+# MULTI-TENANCY: Import tenant utilities for filtering
+from tprm_backend.core.tenant_utils import get_tenant_id_from_request
+
 from .models import SLAApproval
 from .serializers import (
     SLAApprovalAssignmentSerializer,
@@ -126,8 +129,12 @@ def health_check(request):
 def approval_list(request):
     """
     List all SLA approvals with filtering and pagination
+    MULTI-TENANCY: Filters approvals by tenant to ensure tenant isolation
     """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        
         # Get query parameters
         assignee_id = request.GET.get('assignee_id')
         object_type = request.GET.get('object_type')
@@ -139,17 +146,41 @@ def approval_list(request):
         page = int(request.GET.get('page', 1))
         page_size = min(int(request.GET.get('page_size', 20)), 100)
         
-        logger.info(f"SLA approval list request - assignee_id: {assignee_id}, filters: {request.GET}")
+        logger.info(f"SLA approval list request - assignee_id: {assignee_id}, tenant_id: {tenant_id}, filters: {request.GET}")
         
         current_user_id = get_authenticated_user_id(request)
 
-        # Build query - if assignee_id is provided, filter by it, otherwise use current_user_id
-        if assignee_id:
-            queryset = SLAApproval.objects.filter(assignee_id=assignee_id)
-        elif current_user_id is not None:
-            queryset = SLAApproval.objects.filter(assignee_id=current_user_id)
+        # MULTI-TENANCY: Filter by tenant_id through SLA relationship FIRST
+        # Get all SLA IDs that belong to this tenant
+        from tprm_backend.slas.models import VendorSLA
+        if tenant_id:
+            tenant_sla_ids = list(VendorSLA.objects.filter(tenant_id=tenant_id).values_list('sla_id', flat=True))
+            logger.info(f"[SLA Approval List] Found {len(tenant_sla_ids)} SLAs for tenant {tenant_id}")
+            logger.info(f"[SLA Approval List] Tenant SLA IDs: {tenant_sla_ids[:10]}..." if len(tenant_sla_ids) > 10 else f"[SLA Approval List] Tenant SLA IDs: {tenant_sla_ids}")
+        else:
+            tenant_sla_ids = None
+            logger.warning("[SLA Approval List] No tenant_id found for SLA approval list request")
+
+        # MULTI-TENANCY: Start with tenant-filtered approvals (filter by tenant FIRST)
+        if tenant_id and tenant_sla_ids is not None:
+            queryset = SLAApproval.objects.filter(sla_id__in=tenant_sla_ids)
+            logger.info(f"[SLA Approval List] Started with {queryset.count()} approvals for tenant {tenant_id}")
         else:
             queryset = SLAApproval.objects.none()
+            logger.warning(f"[SLA Approval List] Tenant {tenant_id} has no SLAs - returning empty queryset")
+        
+        # THEN filter by assignee_id if explicitly provided (this narrows down the tenant-filtered results)
+        # Only filter by assignee_id if it's explicitly provided in the request
+        # If not provided, show all approvals for the tenant (admin view)
+        # But only if we have tenant-filtered results
+        if queryset.exists():
+            if assignee_id and assignee_id != 'null' and assignee_id != '':
+                # Explicitly filter by provided assignee_id
+                queryset = queryset.filter(assignee_id=assignee_id)
+                logger.info(f"[SLA Approval List] Filtered by assignee_id={assignee_id}: {queryset.count()} approvals")
+            else:
+                # No assignee_id filter - show all approvals for tenant (admin view)
+                logger.info(f"[SLA Approval List] No assignee filter - showing all {queryset.count()} approvals for tenant {tenant_id}")
         
         # Apply additional filters
         if object_type:
@@ -214,10 +245,23 @@ def approval_list(request):
 def approval_detail(request, pk):
     """
     Get details of a specific SLA approval
+    MULTI-TENANCY: Verifies approval belongs to tenant
     """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        
         approval = SLAApproval.objects.get(approval_id=pk)
-        serializer = SLAApprovalAssignmentSerializer(approval)
+        
+        # MULTI-TENANCY: Verify approval belongs to tenant through SLA relationship
+        if tenant_id:
+            from tprm_backend.slas.models import VendorSLA
+            sla = VendorSLA.objects.filter(sla_id=approval.sla_id, tenant_id=tenant_id).first()
+            if not sla:
+                logger.warning(f"Approval {pk} SLA {approval.sla_id} not found for tenant {tenant_id}")
+                return Response({'error': 'Approval not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        serializer = SLAApprovalAssignmentSerializer(approval, context={'request': request})
         
         return Response({
             'success': True,
@@ -252,7 +296,7 @@ def approval_create(request):
         if data.get('assignee_id') and not data.get('assignee_name'):
             data['assignee_name'] = f"User {data['assignee_id']}"
         
-        serializer = SLAApprovalCreateAssignmentSerializer(data=data)
+        serializer = SLAApprovalCreateAssignmentSerializer(data=data, context={'request': request})
         
         if serializer.is_valid():
             approval = serializer.save()
@@ -260,16 +304,27 @@ def approval_create(request):
             # Update SLA status to UNDER_REVIEW if it's a SLA creation approval
             if approval.object_type == 'SLA_CREATION' and approval.sla_id:
                 try:
-                    from slas.models import VendorSLA
-                    sla = VendorSLA.objects.get(sla_id=approval.sla_id)
-                    if sla.status == 'PENDING':
-                        sla.status = 'PENDING'  # Keep as PENDING until approved
-                        sla.save()
-                        logger.info(f"Updated SLA {approval.sla_id} status to PENDING")
-                except:
-                    logger.warning(f"SLA {approval.sla_id} not found for status update")
+                    from tprm_backend.slas.models import VendorSLA
+                    from tprm_backend.core.tenant_utils import get_tenant_id_from_request
+                    
+                    # MULTI-TENANCY: Filter by tenant_id when getting SLA
+                    tenant_id = get_tenant_id_from_request(request)
+                    sla_query = VendorSLA.objects.filter(sla_id=approval.sla_id)
+                    if tenant_id:
+                        sla_query = sla_query.filter(tenant_id=tenant_id)
+                    
+                    sla = sla_query.first()
+                    if sla:
+                        if sla.status == 'PENDING':
+                            sla.status = 'PENDING'  # Keep as PENDING until approved
+                            sla.save()
+                            logger.info(f"Updated SLA {approval.sla_id} status to PENDING")
+                    else:
+                        logger.warning(f"SLA {approval.sla_id} not found for status update (tenant_id: {tenant_id})")
+                except Exception as e:
+                    logger.warning(f"SLA {approval.sla_id} not found for status update: {str(e)}")
             
-            response_serializer = SLAApprovalAssignmentSerializer(approval)
+            response_serializer = SLAApprovalAssignmentSerializer(approval, context={'request': request})
             
             return Response({
                 'success': True,
@@ -296,17 +351,29 @@ def approval_bulk_create(request):
     Create multiple SLA approvals at once
     """
     try:
-        serializer = SLAApprovalBulkCreateSerializer(data=request.data)
+        serializer = SLAApprovalBulkCreateSerializer(data=request.data, context={'request': request})
         
         if serializer.is_valid():
             approvals = serializer.save()
             
             # Update SLA statuses to PENDING for SLA creation approvals
+            from tprm_backend.core.tenant_utils import get_tenant_id_from_request
+            tenant_id = get_tenant_id_from_request(request)
+            
             for approval in approvals:
                 if approval.object_type == 'SLA_CREATION' and approval.sla_id:
                     try:
-                        from slas.models import VendorSLA
-                        sla = VendorSLA.objects.get(sla_id=approval.sla_id)
+                        from tprm_backend.slas.models import VendorSLA
+                        
+                        # MULTI-TENANCY: Filter by tenant_id when getting SLA
+                        sla_query = VendorSLA.objects.filter(sla_id=approval.sla_id)
+                        if tenant_id:
+                            sla_query = sla_query.filter(tenant_id=tenant_id)
+                        
+                        sla = sla_query.first()
+                        if not sla:
+                            logger.warning(f"SLA {approval.sla_id} not found for status update (tenant_id: {tenant_id})")
+                            continue
                         if sla.status == 'PENDING':
                             sla.status = 'PENDING'  # Keep as PENDING until approved
                             sla.save()
@@ -314,7 +381,7 @@ def approval_bulk_create(request):
                     except:
                         logger.warning(f"SLA {approval.sla_id} not found for status update")
             
-            response_serializer = SLAApprovalAssignmentSerializer(approvals, many=True)
+            response_serializer = SLAApprovalAssignmentSerializer(approvals, many=True, context={'request': request})
             
             return Response({
                 'success': True,
@@ -343,18 +410,50 @@ def approval_update(request, pk):
     try:
         approval = SLAApproval.objects.get(approval_id=pk)
         current_user_id = get_authenticated_user_id(request)
+        
+        # MULTI-TENANCY: Verify the approval belongs to the current tenant
+        tenant_id = get_tenant_id_from_request(request)
+        if tenant_id:
+            from tprm_backend.slas.models import VendorSLA
+            sla_query = VendorSLA.objects.filter(sla_id=approval.sla_id)
+            if tenant_id:
+                sla_query = sla_query.filter(tenant_id=tenant_id)
+            if not sla_query.exists():
+                return Response(
+                    {'error': 'Approval not found for your tenant'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
 
-        if current_user_id is None or current_user_id != int(approval.assignee_id):
+        # Check if user has ApproveContract permission (decorator already checked, but verify)
+        # Users with ApproveContract permission can update any approval
+        has_permission = False
+        if current_user_id:
+            has_permission = RBACTPRMUtils.check_contract_permission(current_user_id, 'ApproveContract')
+        
+        # Allow update if:
+        # 1. User is the assigned approver (assignee_id), OR
+        # 2. User has ApproveContract permission
+        if current_user_id is None:
             return Response(
-                {'error': 'Only the assigned approver can update this SLA approval'},
+                {'error': 'Authentication required'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        is_assignee = current_user_id == int(approval.assignee_id)
+        
+        if not is_assignee and not has_permission:
+            return Response(
+                {'error': 'Only the assigned approver or users with ApproveContract permission can update this SLA approval'},
                 status=status.HTTP_403_FORBIDDEN
             )
+        
+        logger.info(f"[Approval Update] User {current_user_id} updating approval {pk} (is_assignee: {is_assignee}, has_permission: {has_permission})")
         
         # Only allow updating status and comment_text
         allowed_fields = ['status', 'comment_text']
         update_data = {k: v for k, v in request.data.items() if k in allowed_fields}
         
-        serializer = SLAApprovalAssignmentSerializer(approval, data=update_data, partial=True)
+        serializer = SLAApprovalAssignmentSerializer(approval, data=update_data, partial=True, context={'request': request})
         
         if serializer.is_valid():
             serializer.save()
@@ -407,10 +506,21 @@ def approval_delete(request, pk):
 def approval_stats(request):
     """
     Get SLA approval statistics
+    MULTI-TENANCY: Filters statistics by tenant to ensure tenant isolation
     """
     try:
-        # Get base queryset
-        queryset = SLAApproval.objects.all()
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        
+        # MULTI-TENANCY: Filter by tenant_id through SLA relationship
+        from tprm_backend.slas.models import VendorSLA
+        if tenant_id:
+            tenant_sla_ids = list(VendorSLA.objects.filter(tenant_id=tenant_id).values_list('sla_id', flat=True))
+            queryset = SLAApproval.objects.filter(sla_id__in=tenant_sla_ids)
+            logger.info(f"Filtered approval stats by tenant {tenant_id} - {len(tenant_sla_ids)} SLAs")
+        else:
+            queryset = SLAApproval.objects.all()
+            logger.warning("No tenant_id found for approval stats request")
         
         # Apply filters if provided
         assignee_id = request.GET.get('assignee_id')
@@ -495,9 +605,20 @@ def sla_approvals_list(request, sla_id):
     try:
         # Verify SLA exists
         try:
-            from slas.models import VendorSLA
-            sla = VendorSLA.objects.get(sla_id=sla_id)
-        except:
+            from tprm_backend.slas.models import VendorSLA
+            from tprm_backend.core.tenant_utils import get_tenant_id_from_request
+            
+            # MULTI-TENANCY: Filter by tenant_id when getting SLA
+            tenant_id = get_tenant_id_from_request(request)
+            sla_query = VendorSLA.objects.filter(sla_id=sla_id)
+            if tenant_id:
+                sla_query = sla_query.filter(tenant_id=tenant_id)
+            
+            sla = sla_query.first()
+            if not sla:
+                return Response({'error': f'SLA not found (tenant_id: {tenant_id})'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error getting SLA {sla_id}: {str(e)}")
             return Response({'error': 'SLA not found'}, status=status.HTTP_404_NOT_FOUND)
         
         # Get approvals for this SLA
@@ -535,8 +656,21 @@ def get_assigner_approvals(request):
     """
     Get SLA approvals where the current user is the assigner (for review)
     Admin view: if no assigner_id provided, return all approvals
+    MULTI-TENANCY: Filters approvals by tenant to ensure tenant isolation
     """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        
+        # MULTI-TENANCY: Filter by tenant_id through SLA relationship
+        from tprm_backend.slas.models import VendorSLA
+        if tenant_id:
+            tenant_sla_ids = list(VendorSLA.objects.filter(tenant_id=tenant_id).values_list('sla_id', flat=True))
+            logger.info(f"Found {len(tenant_sla_ids)} SLAs for tenant {tenant_id}")
+        else:
+            tenant_sla_ids = None
+            logger.warning("No tenant_id found for get_assigner_approvals request")
+        
         # Get query parameters
         assigner_id = request.GET.get('assigner_id')
         status_filter = request.GET.get('status')
@@ -554,6 +688,11 @@ def get_assigner_approvals(request):
             queryset = SLAApproval.objects.filter(assigner_id=current_user_id)
         else:
             queryset = SLAApproval.objects.none()
+        
+        # MULTI-TENANCY: Filter by tenant_id through SLA relationship
+        if tenant_id and tenant_sla_ids is not None:
+            queryset = queryset.filter(sla_id__in=tenant_sla_ids)
+            logger.info(f"Filtered assigner approvals by tenant {tenant_id} - {queryset.count()} approvals found")
         
         # Apply additional filters
         if status_filter:
@@ -602,42 +741,133 @@ def available_users(request):
     """
     Get users with ApproveContract permission for SLA approval assignment
     Returns users who can be assigned as assigner or assignee for SLA approvals
+    MULTI-TENANCY: Filters users by tenant when available, falls back to all users if tenant not found
     """
     try:
-        from mfa_auth.models import User
+        # MULTI-TENANCY: Get tenant_id from request (optional - function works without it)
+        from tprm_backend.core.tenant_utils import get_tenant_id_from_request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            logger.info("Tenant ID not found for available_users, proceeding without tenant filter (fallback mode)")
         
-        # Get all active users
-        all_users = User.objects.filter(
-            is_active_raw__in=['Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true']
-        ).order_by('userid')
-        
+        # Import required models with error handling
         users_with_permission = []
-        for user in all_users:
-            user_id = user.userid
+        try:
+            from tprm_backend.mfa_auth.models import User
+            logger.info("Successfully imported User model")
             
-            # Check if user has ApproveContract permission
-            has_approve_permission = RBACTPRMUtils.check_contract_permission(user_id, 'ApproveContract')
+            # Get all active users (filter by is_active_raw which can be 'Y', 'YES', '1', 'TRUE')
+            # MULTI-TENANCY: Try filtering by tenant_id first
+            try:
+                if tenant_id:
+                    all_users = User.objects.filter(
+                        is_active_raw__in=['Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true'],
+                        tenant_id=tenant_id
+                    ).order_by('userid')
+                    logger.info(f"Filtered users by tenant_id={tenant_id}")
+                else:
+                    all_users = User.objects.filter(
+                        is_active_raw__in=['Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true']
+                    ).order_by('userid')
+                    logger.info("Using all active users (no tenant filter)")
+            except Exception as filter_error:
+                logger.warning(f"Filtering by tenant_id failed: {filter_error}, trying without tenant filter")
+                all_users = User.objects.filter(
+                    is_active_raw__in=['Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true']
+                ).order_by('userid')
+                logger.info("Using all active users (fallback)")
             
-            if has_approve_permission:
-                full_name = f"{user.first_name} {user.last_name}".strip()
-                display_name = full_name if full_name else user.username
+            logger.info(f"Found {all_users.count()} active users in database")
+            
+            # Filter users who have ApproveContract permission
+            for user in all_users:
+                user_id = user.userid
                 
-                user_data = {
-                    'user_id': user_id,
-                    'username': user.username,
-                    'name': display_name,
-                    'display_name': display_name,
-                    'role': 'approver'
-                }
-                users_with_permission.append(user_data)
+                # Check if user has ApproveContract permission
+                has_approve_permission = RBACTPRMUtils.check_contract_permission(user_id, 'ApproveContract')
+                
+                if has_approve_permission:
+                    full_name = f"{user.first_name} {user.last_name}".strip()
+                    display_name = full_name if full_name else user.username
+                    
+                    user_data = {
+                        'user_id': user_id,
+                        'username': user.username,
+                        'name': display_name,
+                        'display_name': display_name,
+                        'role': 'approver'
+                    }
+                    users_with_permission.append(user_data)
+                    logger.info(f"User with ApproveContract permission: {user_data}")
+            
+            logger.info(f"Returning {len(users_with_permission)} users with ApproveContract permission to frontend")
+            
+        except ImportError as import_err:
+            logger.warning(f"User model import failed: {import_err}, trying raw SQL fallback")
+            # Fallback to raw SQL if import fails
+            from django.db import connection
+            
+            with connection.cursor() as cursor:
+                try:
+                    if tenant_id:
+                        cursor.execute(
+                            "SELECT UserId, UserName, FirstName, LastName, Email, IsActive FROM users WHERE IsActive IN ('Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true') AND TenantId = %s ORDER BY UserId",
+                            [tenant_id]
+                        )
+                        logger.info(f"Executed raw SQL with TenantId filter for tenant_id={tenant_id}")
+                    else:
+                        cursor.execute(
+                            "SELECT UserId, UserName, FirstName, LastName, Email, IsActive FROM users WHERE IsActive IN ('Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true') ORDER BY UserId"
+                        )
+                        logger.info("Executed raw SQL without TenantId filter")
+                except Exception as sql_filter_error:
+                    logger.warning(f"Raw SQL filtering by TenantId failed: {sql_filter_error}, trying without TenantId")
+                    cursor.execute(
+                        "SELECT UserId, UserName, FirstName, LastName, Email, IsActive FROM users WHERE IsActive IN ('Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true') ORDER BY UserId"
+                    )
+                    logger.info("Executed raw SQL without TenantId filter (fallback)")
+                
+                for row in cursor.fetchall():
+                    user_id, username, first_name, last_name, email, is_active = row
+                    if is_active and is_active.upper() in ['Y', 'YES', '1', 'TRUE']:
+                        # Check if user has ApproveContract permission
+                        has_approve_permission = RBACTPRMUtils.check_contract_permission(user_id, 'ApproveContract')
+                        
+                        if has_approve_permission:
+                            full_name = f"{first_name or ''} {last_name or ''}".strip()
+                            display_name = full_name if full_name else (username or f"User {user_id}")
+                            
+                            user_data = {
+                                'user_id': user_id,
+                                'username': username or f"user_{user_id}",
+                                'name': display_name,
+                                'display_name': display_name,
+                                'role': 'approver'
+                            }
+                            users_with_permission.append(user_data)
+            
+            logger.info(f"Returning {len(users_with_permission)} users from raw SQL fallback")
         
-        logger.info(f"Returning {len(users_with_permission)} users with ApproveContract permission")
-        
-        return Response(users_with_permission)
+        return Response({
+            'success': True,
+            'data': users_with_permission,
+            'count': len(users_with_permission)
+        })
         
     except Exception as e:
-        logger.error(f"Error getting available users: {str(e)}")
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        # Log error and return empty list
+        logger.error(f"Error fetching users with ApproveContract permission: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return Response(
+            {
+                'success': False,
+                'error': 'Failed to fetch users',
+                'message': 'Unable to retrieve users with ApproveContract permission. Please try again later.',
+                'data': []
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 @api_view(['POST'])
@@ -657,11 +887,44 @@ def approve_sla(request, approval_id):
             return Response({'error': 'Approval not found'}, status=status.HTTP_404_NOT_FOUND)
         
         current_user_id = get_authenticated_user_id(request)
-        if current_user_id is None or current_user_id != int(approval.assignee_id):
+        
+        # MULTI-TENANCY: Verify the approval belongs to the current tenant
+        tenant_id = get_tenant_id_from_request(request)
+        if tenant_id:
+            from tprm_backend.slas.models import VendorSLA
+            sla_query = VendorSLA.objects.filter(sla_id=approval.sla_id)
+            if tenant_id:
+                sla_query = sla_query.filter(tenant_id=tenant_id)
+            if not sla_query.exists():
+                return Response(
+                    {'error': 'Approval not found for your tenant'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        
+        # Check if user has ApproveContract permission
+        # Users with ApproveContract permission can approve any approval
+        has_permission = False
+        if current_user_id:
+            has_permission = RBACTPRMUtils.check_contract_permission(current_user_id, 'ApproveContract')
+        
+        # Allow approval if:
+        # 1. User is the assigned approver (assignee_id), OR
+        # 2. User has ApproveContract permission
+        if current_user_id is None:
             return Response(
-                {'error': 'Only the assigned approver can approve this SLA'},
+                {'error': 'Authentication required'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        is_assignee = current_user_id == int(approval.assignee_id)
+        
+        if not is_assignee and not has_permission:
+            return Response(
+                {'error': 'Only the assigned approver or users with ApproveContract permission can approve this SLA'},
                 status=status.HTTP_403_FORBIDDEN
             )
+        
+        logger.info(f"[Approve SLA] User {current_user_id} approving approval {approval_id} (is_assignee: {is_assignee}, has_permission: {has_permission})")
         
         # Update approval status to APPROVED
         approval.status = 'APPROVED'
@@ -671,17 +934,27 @@ def approve_sla(request, approval_id):
         # Update SLA status to APPROVED
         if approval.sla_id:
             try:
-                from slas.models import VendorSLA
-                sla = VendorSLA.objects.get(sla_id=approval.sla_id)
-                sla.status = 'ACTIVE'
-                sla.approval_status = 'APPROVED'
-                sla.save()
-                logger.info(f"SLA {approval.sla_id} approved")
-            except:
-                logger.warning(f"SLA {approval.sla_id} not found for approval")
+                from tprm_backend.slas.models import VendorSLA
+                
+                # MULTI-TENANCY: Filter by tenant_id when getting SLA
+                # tenant_id already retrieved above (line 892)
+                sla_query = VendorSLA.objects.filter(sla_id=approval.sla_id)
+                if tenant_id:
+                    sla_query = sla_query.filter(tenant_id=tenant_id)
+                
+                sla = sla_query.first()
+                if sla:
+                    sla.status = 'ACTIVE'
+                    sla.approval_status = 'APPROVED'
+                    sla.save()
+                    logger.info(f"SLA {approval.sla_id} approved (tenant_id: {tenant_id})")
+                else:
+                    logger.warning(f"SLA {approval.sla_id} not found for approval (tenant_id: {tenant_id})")
+            except Exception as e:
+                logger.warning(f"SLA {approval.sla_id} not found for approval: {str(e)}")
         
         # Serialize updated approval
-        serializer = SLAApprovalAssignmentSerializer(approval)
+        serializer = SLAApprovalAssignmentSerializer(approval, context={'request': request})
         
         return Response({
             'success': True,
@@ -711,11 +984,48 @@ def reject_sla(request, approval_id):
             return Response({'error': 'Approval not found'}, status=status.HTTP_404_NOT_FOUND)
         
         current_user_id = get_authenticated_user_id(request)
-        if current_user_id is None or current_user_id != int(approval.assignee_id):
+        
+        # MULTI-TENANCY: Verify the approval belongs to the current tenant
+        tenant_id = get_tenant_id_from_request(request)
+        if tenant_id:
+            from tprm_backend.slas.models import VendorSLA
+            sla_query = VendorSLA.objects.filter(sla_id=approval.sla_id)
+            if tenant_id:
+                sla_query = sla_query.filter(tenant_id=tenant_id)
+            if not sla_query.exists():
+                return Response(
+                    {'error': 'Approval not found for your tenant'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        
+        # Check if user has RejectContract or ApproveContract permission
+        # Users with these permissions can reject any approval
+        has_reject_permission = False
+        has_approve_permission = False
+        if current_user_id:
+            has_reject_permission = RBACTPRMUtils.check_contract_permission(current_user_id, 'RejectContract')
+            has_approve_permission = RBACTPRMUtils.check_contract_permission(current_user_id, 'ApproveContract')
+        
+        has_permission = has_reject_permission or has_approve_permission
+        
+        # Allow rejection if:
+        # 1. User is the assigned approver (assignee_id), OR
+        # 2. User has RejectContract or ApproveContract permission
+        if current_user_id is None:
             return Response(
-                {'error': 'Only the assigned approver can reject this SLA'},
+                {'error': 'Authentication required'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        is_assignee = current_user_id == int(approval.assignee_id)
+        
+        if not is_assignee and not has_permission:
+            return Response(
+                {'error': 'Only the assigned approver or users with RejectContract/ApproveContract permission can reject this SLA'},
                 status=status.HTTP_403_FORBIDDEN
             )
+        
+        logger.info(f"[Reject SLA] User {current_user_id} rejecting approval {approval_id} (is_assignee: {is_assignee}, has_reject_permission: {has_reject_permission}, has_approve_permission: {has_approve_permission})")
         
         # Get rejection reason
         rejection_reason = request.data.get('rejection_reason', '')
@@ -729,17 +1039,27 @@ def reject_sla(request, approval_id):
         # Update SLA status to REJECTED
         if approval.sla_id:
             try:
-                from slas.models import VendorSLA
-                sla = VendorSLA.objects.get(sla_id=approval.sla_id)
-                sla.status = 'EXPIRED'  # Mark as expired when rejected
-                sla.approval_status = 'REJECTED'
-                sla.save()
-                logger.info(f"SLA {approval.sla_id} rejected")
-            except:
-                logger.warning(f"SLA {approval.sla_id} not found for rejection")
+                from tprm_backend.slas.models import VendorSLA
+                
+                # MULTI-TENANCY: Filter by tenant_id when getting SLA
+                # tenant_id already retrieved above (line 989)
+                sla_query = VendorSLA.objects.filter(sla_id=approval.sla_id)
+                if tenant_id:
+                    sla_query = sla_query.filter(tenant_id=tenant_id)
+                
+                sla = sla_query.first()
+                if sla:
+                    sla.status = 'EXPIRED'  # Mark as expired when rejected
+                    sla.approval_status = 'REJECTED'
+                    sla.save()
+                    logger.info(f"SLA {approval.sla_id} rejected (tenant_id: {tenant_id})")
+                else:
+                    logger.warning(f"SLA {approval.sla_id} not found for rejection (tenant_id: {tenant_id})")
+            except Exception as e:
+                logger.warning(f"SLA {approval.sla_id} not found for rejection: {str(e)}")
         
         # Serialize updated approval
-        serializer = SLAApprovalAssignmentSerializer(approval)
+        serializer = SLAApprovalAssignmentSerializer(approval, context={'request': request})
         
         return Response({
             'success': True,

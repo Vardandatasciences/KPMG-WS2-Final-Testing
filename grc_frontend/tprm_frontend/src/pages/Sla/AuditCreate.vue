@@ -331,7 +331,22 @@ const loadData = async () => {
     approvedSLAs.value = slasData
 
     // Load available users (only those with PerformContractAudit permission)
-    const usersData = await apiService.getAvailableUsers()
+    const usersResponse = await apiService.getAvailableUsers()
+    
+    // Handle different response formats
+    let usersData = []
+    if (usersResponse && usersResponse.success && Array.isArray(usersResponse.data)) {
+      usersData = usersResponse.data
+    } else if (usersResponse && Array.isArray(usersResponse)) {
+      usersData = usersResponse
+    } else if (usersResponse && usersResponse.data && Array.isArray(usersResponse.data)) {
+      usersData = usersResponse.data
+    } else {
+      console.error('Error loading users:', usersResponse?.error || usersResponse?.message || 'Unknown error')
+      PopupService.error(usersResponse?.error || usersResponse?.message || 'Failed to load users for assignment.', 'Loading Error')
+      usersData = []
+    }
+    
     // All returned users have PerformContractAudit permission, so show them in both dropdowns
     // Users can be assigned as either auditor or reviewer
     auditors.value = usersData
@@ -339,12 +354,13 @@ const loadData = async () => {
     
     // Pre-select the logged-in user as the auditor by default
     if (currentUserId.value && usersData.length > 0) {
-      const currentUserInList = usersData.find(user => 
-        user.user_id === currentUserId.value
-      )
+      const currentUserInList = usersData.find(user => {
+        const userId = user.user_id || user.userid || user.id
+        return userId == currentUserId.value || userId === currentUserId.value
+      })
       if (currentUserInList) {
-        selectedAuditorId.value = currentUserInList.user_id
-        console.log('Pre-selected current user as auditor:', currentUserInList)
+        selectedAuditorId.value = currentUserInList.user_id || currentUserInList.userid || currentUserInList.id
+        console.log('Pre-selected current user as auditor:', selectedAuditorId.value)
       }
     }
   } catch (error) {

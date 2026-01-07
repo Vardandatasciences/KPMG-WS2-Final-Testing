@@ -368,15 +368,67 @@ const { showSuccess, showError, showWarning, showInfo } = useNotifications()
 const currentUser = computed(() => store.state.auth.currentUser)
 
 // Check if current user is the assigned reviewer
+// User can review if they are:
+// 1. The assigned reviewer (reviewer_id)
+// 2. The assignee (assignee_id)
+// 3. The auditor (auditor_id)
+// 4. OR have PerformContractAudit permission
 const isAssignedReviewer = computed(() => {
-  if (!currentUser.value || !audit.value) return false
-  const userId = currentUser.value.id || currentUser.value.user_id || currentUser.value.userid
-  return userId && userId === audit.value.reviewer_id
+  if (!currentUser.value || !audit.value) {
+    console.log('[Review Access Check] No currentUser or audit:', { hasUser: !!currentUser.value, hasAudit: !!audit.value })
+    return false
+  }
+  
+  // Check multiple possible user ID field names (handle different formats)
+  const userId = currentUser.value.id || 
+                 currentUser.value.user_id || 
+                 currentUser.value.userid || 
+                 currentUser.value.UserId ||  // Capital U, capital I
+                 currentUser.value.userId ||  // camelCase
+                 currentUser.value.USER_ID
+  
+  if (!userId) {
+    console.log('[Review Access Check] No userId found in currentUser:', currentUser.value)
+    console.log('[Review Access Check] Available keys:', Object.keys(currentUser.value || {}))
+    return false
+  }
+  
+  // Convert to numbers for comparison to handle string/int mismatches
+  const currentUserId = Number(userId)
+  const auditReviewerId = audit.value.reviewer_id ? Number(audit.value.reviewer_id) : null
+  const auditAssigneeId = audit.value.assignee_id ? Number(audit.value.assignee_id) : null
+  const auditAuditorId = audit.value.auditor_id ? Number(audit.value.auditor_id) : null
+  
+  // Check if user is assigned as reviewer, assignee, or auditor
+  const isReviewer = auditReviewerId !== null && currentUserId === auditReviewerId
+  const isAssignee = auditAssigneeId !== null && currentUserId === auditAssigneeId
+  const isAuditor = auditAuditorId !== null && currentUserId === auditAuditorId
+  
+  console.log('[Review Access Check]', {
+    currentUserId,
+    auditReviewerId,
+    auditAssigneeId,
+    auditAuditorId,
+    isReviewer,
+    isAssignee,
+    isAuditor,
+    result: isReviewer || isAssignee || isAuditor
+  })
+  
+  // Allow review access if user is reviewer, assignee, or auditor
+  return isReviewer || isAssignee || isAuditor
 })
 
 // Check if user has access to review this audit
+// User can review if they have reviewer access AND audit is under review
 const canReview = computed(() => {
-  return isAssignedReviewer.value && audit.value?.status === 'under_review'
+  const canReviewResult = isAssignedReviewer.value && audit.value?.status === 'under_review'
+  console.log('[Review Can Review Check]', {
+    isAssignedReviewer: isAssignedReviewer.value,
+    auditStatus: audit.value?.status,
+    canReview: canReviewResult
+  })
+  return canReviewResult
 })
 
 const loading = ref(true)
@@ -459,10 +511,32 @@ const loadAuditData = async () => {
       sla.value = slaData.find(s => s.sla_id === auditData.sla_id) || null
     }
     
-    // Load auditor and reviewer
-    const usersData = await apiService.getAvailableUsers()
-    auditor.value = usersData.find(u => u.user_id === auditData.auditor_id) || null
-    reviewer.value = usersData.find(u => u.user_id === auditData.reviewer_id) || null
+    // Load auditor and reviewer - these are users with PerformContractAudit permission
+    const usersResponse = await apiService.getAvailableUsers()
+    
+    // Handle different response formats
+    let usersData = []
+    if (usersResponse && usersResponse.success && Array.isArray(usersResponse.data)) {
+      usersData = usersResponse.data
+    } else if (usersResponse && Array.isArray(usersResponse)) {
+      usersData = usersResponse
+    } else if (usersResponse && usersResponse.data && Array.isArray(usersResponse.data)) {
+      usersData = usersResponse.data
+    } else {
+      console.error('Error loading users:', usersResponse?.error || usersResponse?.message || 'Unknown error')
+      usersData = []
+    }
+    
+    // Find auditor and reviewer by matching user IDs (handle different field names)
+    auditor.value = usersData.find(u => {
+      const uId = u.user_id || u.userid || u.id || u.UserId || u.userId
+      return uId && (Number(uId) === Number(auditData.auditor_id))
+    }) || null
+    reviewer.value = usersData.find(u => {
+      const uId = u.user_id || u.userid || u.id || u.UserId || u.userId
+      return uId && (Number(uId) === Number(auditData.reviewer_id))
+    }) || null
+    console.log('[Review] Users loaded:', { auditor: auditor.value, reviewer: reviewer.value, auditData })
     
     // Load versions
     const versionsData = await apiService.getAuditVersions(auditId)
