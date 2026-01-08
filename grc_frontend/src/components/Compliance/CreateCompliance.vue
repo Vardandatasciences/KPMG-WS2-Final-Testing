@@ -1390,7 +1390,7 @@ export default {
           RiskType: 45,
           RiskCategory: 45,
           RiskBusinessImpact: 45,
-          Applicability: 450
+          Applicability: null  // No character limit
         },
         
         // Field minimum length requirements
@@ -1884,7 +1884,7 @@ export default {
         case 'Applicability':
           result = this.validateOptionalString(
             value, 'Applicability', 
-            rules.maxLengths.Applicability, 
+            null,  // No character limit
             rules.textPattern
           );
           break;

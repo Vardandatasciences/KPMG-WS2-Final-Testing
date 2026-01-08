@@ -60,9 +60,18 @@ class EncryptedFieldsMixin:
         # Get list of fields to encrypt for this model
         encrypted_fields = self.get_encrypted_fields()
         
+        # CRITICAL: Never encrypt password fields - they must be hashed, not encrypted!
+        # Passwords should use Django's password hashing (PBKDF2, bcrypt, etc.), not encryption
+        password_field_names = ['password', 'Password', 'user_password', 'userPassword']
+        
         if encrypted_fields:
             # Encrypt each field if it has a value and isn't already encrypted
             for field_name in encrypted_fields:
+                # Skip password fields - they should be hashed, not encrypted
+                if field_name.lower() in [p.lower() for p in password_field_names]:
+                    logger.warning(f"Skipping encryption of password field '{field_name}' for {self.__class__.__name__}. Passwords must be hashed, not encrypted!")
+                    continue
+                
                 if hasattr(self, field_name):
                     try:
                         field_value = getattr(self, field_name)

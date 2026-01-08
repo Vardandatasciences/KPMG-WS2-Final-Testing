@@ -85,7 +85,6 @@ import { ShieldX, ArrowLeft, Home, Mail } from 'lucide-vue-next'
 import Button from '@/components/ui/button.vue'
 
 export default {
-  name: 'AccessDenied',
   components: {
     ShieldX,
     ArrowLeft,

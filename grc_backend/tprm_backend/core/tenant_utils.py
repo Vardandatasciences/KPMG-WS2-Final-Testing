@@ -74,10 +74,22 @@ def require_tenant(view_func):
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
         if not hasattr(request, 'tenant') or request.tenant is None:
+            # Get user info for debugging
+            user_id = getattr(request.user, 'userid', None) if hasattr(request, 'user') else None
+            auth_header = request.headers.get('Authorization', 'No auth header')
+            
             logger.warning(f"[Tenant Utils] Tenant required but not found for {request.method} {request.path}")
+            logger.warning(f"[Tenant Utils] User ID: {user_id}, Auth header present: {bool(auth_header and auth_header != 'No auth header')}")
+            logger.warning(f"[Tenant Utils] Request has tenant attr: {hasattr(request, 'tenant')}, Tenant value: {getattr(request, 'tenant', 'not set')}")
+            
             return JsonResponse({
                 'error': 'Tenant context not found',
-                'detail': 'This endpoint requires tenant authentication'
+                'detail': 'This endpoint requires tenant authentication. Please ensure your JWT token includes tenant_id.',
+                'debug_info': {
+                    'user_id': user_id,
+                    'has_auth': bool(auth_header and auth_header != 'No auth header'),
+                    'path': request.path
+                }
             }, status=403)
         
         return view_func(request, *args, **kwargs)

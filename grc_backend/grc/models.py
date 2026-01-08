@@ -264,6 +264,10 @@ class Users(EncryptedFieldsMixin, models.Model):
 
 class CategoryBusinessUnit(EncryptedFieldsMixin, models.Model):
     id = models.AutoField(primary_key=True)
+    # MULTI-TENANCY: Link category to tenant
+    tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='category_business_units', null=True, blank=True,
+                               help_text="Tenant this category belongs to")
     source = models.CharField(max_length=50)
     value = models.CharField(max_length=255)
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')

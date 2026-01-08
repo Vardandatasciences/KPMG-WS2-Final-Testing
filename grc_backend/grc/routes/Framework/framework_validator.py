@@ -1606,7 +1606,7 @@ def validate_framework_version_policy_data(data: Dict[str, Any], index: int) -> 
         data.get('ReviewerName', ''), 
         f'ReviewerName for policy {index}', 
         max_length=255, 
-        allow_empty=False
+        allow_empty=True  # Allow empty for framework versioning - policies use framework reviewer
     )
     
     validated['Reviewer'] = data.get('Reviewer')  # Can be ID or name
@@ -1798,7 +1798,7 @@ def validate_framework_version_new_policy_data(data: Dict[str, Any], index: int)
         data.get('ReviewerName', ''), 
         f'ReviewerName for new policy {index}', 
         max_length=255, 
-        allow_empty=False
+        allow_empty=True  # Allow empty for framework versioning - policies use framework reviewer
     )
     
     validated['Applicability'] = validate_string(
