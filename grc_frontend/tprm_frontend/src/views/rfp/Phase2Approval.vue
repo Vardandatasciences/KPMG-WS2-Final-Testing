@@ -1,5 +1,19 @@
 <template>
   <div class="space-y-6">
+    <!-- Permission Error Banner -->
+    <div v-if="permissionError" class="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
+      <div class="flex">
+        <div class="flex-shrink-0">
+          <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+          </svg>
+        </div>
+        <div class="ml-3">
+          <p class="text-sm text-yellow-700 font-medium">{{ permissionError }}</p>
+        </div>
+      </div>
+    </div>
+    
     <!-- Header -->
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
       <div>
@@ -150,8 +164,6 @@
 <script setup lang="ts">
 import { ref, h, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useNotifications } from '@/composables/useNotifications'
-import loggingService from '@/services/loggingService'
 import { 
   FileText, 
   RefreshCw,
@@ -170,13 +182,11 @@ import Badge from '@/components_rfp/ui/Badge.vue'
 const { success, error } = rfpUseToast()
 const router = useRouter()
 
-// Reactive data for RFP management
-const { showSuccess, showError, showWarning, showInfo } = useNotifications()
-
 const rfps = ref([])
 const users = ref([])
 const selectedUserId = ref('')
 const loading = ref(false)
+const permissionError = ref(null)
 
 
 // Computed properties
@@ -190,26 +200,54 @@ const filteredRFPs = computed(() => {
 // Methods for RFP management
 const fetchUsers = async () => {
   try {
-    const url = buildApiUrl(API_ENDPOINTS.RFP_APPROVAL.USERS)
-    const data = await apiCall(url)
-    users.value = data
+    console.log('🔄 Fetching users...')
+    // Use the correct API endpoint for users (using rfp/users/ path)
+    const url = `${API_CONFIG.BASE_URL}/rfp/users/`
+    console.log('📍 Fetching users from URL:', url)
+    const data = await apiCall(url, { skipRedirect: true })
+    users.value = data || []
+    console.log(`✅ Fetched ${users.value.length} users`)
+    if (permissionError.value && users.value.length > 0) {
+      // Clear permission error if we successfully fetched users
+      permissionError.value = null
+    }
   } catch (err) {
-    console.error('Error fetching users:', err)
-    error('Error', 'Failed to fetch users from database')
+    console.error('❌ Error fetching users:', err)
+    const errorMsg = err?.message || err?.toString() || 'Unknown error'
+    // Show error but don't stop page from rendering
+    console.warn('⚠️ Page will display with limited functionality')
+    if (errorMsg.includes('permission') || errorMsg.includes('403')) {
+      permissionError.value = 'You do not have permission to view users. Contact your administrator.'
+    }
     users.value = []
   }
 }
 
 const fetchRFPs = async () => {
+  // Prevent multiple simultaneous fetches
+  if (loading.value) {
+    console.log('⏳ RFP fetch already in progress, skipping...')
+    return
+  }
+  
   loading.value = true
   try {
-    // Use the correct API endpoint for RFPs
-    const url = `${API_CONFIG.BASE_URL}/v1/rfps/`
-    const data = await apiCall(url)
-    rfps.value = data.results || data // Handle pagination if present
+    console.log('🔄 Fetching RFPs...')
+    // Use the correct API endpoint for RFPs (using rfp/rfps/ path)
+    const url = `${API_CONFIG.BASE_URL}/rfp/rfps/`
+    console.log('📍 Fetching from URL:', url)
+    const data = await apiCall(url, { skipRedirect: true })
+    rfps.value = data?.results || data || [] // Handle pagination if present
+    console.log(`✅ Fetched ${rfps.value.length} RFPs`)
+    if (permissionError.value && rfps.value.length > 0) {
+      // Clear permission error if we successfully fetched RFPs
+      permissionError.value = null
+    }
   } catch (err) {
-    console.error('Error fetching RFPs:', err)
-    error('Error', 'Failed to fetch RFPs from database')
+    console.error('❌ Error fetching RFPs:', err)
+    const errorMsg = err?.message || err?.response?.data?.message || err?.toString() || 'Unknown error'
+    // Show error but allow page to display
+    console.warn('⚠️ Page will display empty state')
     rfps.value = []
   } finally {
     loading.value = false
@@ -270,10 +308,10 @@ const proceedToVendorSelection = (rfp: any) => {
   // Store the selected RFP data for the vendor selection page
   localStorage.setItem('selectedRFP', JSON.stringify(rfp))
   
-    // Navigate to Phase 3 Vendor Selection
-    window.location.href = '/rfp-vendor-selection'
-  
   success('Proceeding to Vendor Selection', `RFP ${rfp.rfp_number} is ready for vendor selection.`)
+  
+  // Navigate to Phase 3 Vendor Selection using Vue Router
+  router.push('/rfp-vendor-selection')
 }
 
 const getActionText = (status: string) => {
@@ -292,9 +330,15 @@ const getActionText = (status: string) => {
 
 // Initialize data on component mount
 onMounted(async () => {
-  await loggingService.logPageView('RFP', 'Phase 2 - RFP Approval')
-  await fetchUsers()
-  fetchRFPs()
+  console.log('📋 Initializing RFP Approval page...')
+  try {
+    await fetchUsers()
+    await fetchRFPs()
+    console.log('✅ RFP Approval page initialized successfully')
+  } catch (err) {
+    console.error('❌ Error initializing RFP Approval page:', err)
+    error('Initialization Error', 'Failed to load page data. Please refresh.')
+  }
 })
 </script>
 

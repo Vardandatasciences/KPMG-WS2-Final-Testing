@@ -3241,7 +3241,7 @@ class CookiePreferences(EncryptedFieldsMixin, models.Model):
     AnalyticsCookies = models.BooleanField(default=False, db_column='AnalyticsCookies')
     MarketingCookies = models.BooleanField(default=False, db_column='MarketingCookies')
     PreferencesSaved = models.BooleanField(default=False, db_column='PreferencesSaved')
-    IpAddress = models.CharField(max_length=50, db_column='IpAddress', null=True, blank=True)
+    IpAddress = models.CharField(max_length=128, db_column='IpAddress', null=True, blank=True)
     UserAgent = models.TextField(db_column='UserAgent', null=True, blank=True)
     CreatedAt = models.DateTimeField(auto_now_add=True, db_column='CreatedAt')
     UpdatedAt = models.DateTimeField(auto_now=True, db_column='UpdatedAt')

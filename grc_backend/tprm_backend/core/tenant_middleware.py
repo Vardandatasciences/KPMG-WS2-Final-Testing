@@ -185,12 +185,12 @@ class TenantContextMiddleware(MiddlewareMixin):
                         # Query users table to get tenant_id
                         # The users table has columns: userid, username, tenant_id, etc.
                         cursor.execute("""
-                            SELECT u.tenant_id, t.tenant_id, t.name, t.status
+                            SELECT u.TenantId, t.tenant_id, t.name, t.status
                             FROM users u
-                            LEFT JOIN tenant t ON u.tenant_id = t.tenant_id
-                            WHERE u.userid = %s OR u.id = %s OR u.user_id = %s
+                            LEFT JOIN tenant t ON u.TenantId = t.tenant_id
+                            WHERE u.UserId = %s
                             LIMIT 1
-                        """, [user_id, user_id, user_id])
+                        """, [user_id])
                         
                         result = cursor.fetchone()
                         

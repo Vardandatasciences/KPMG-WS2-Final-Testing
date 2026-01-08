@@ -183,6 +183,7 @@ urlpatterns = [
     
     # TPRM RFP Management APIs
     path('api/tprm/rfp/', include('tprm_backend.rfp.urls')),
+    path('api/tprm/v1/', include('tprm_backend.rfp.urls')),  # Frontend compatibility for /api/tprm/v1/
     path('api/tprm/rfp-approval/', include('tprm_backend.rfp_approval.urls')),
     path('api/tprm/rfp-risk-analysis/', include('tprm_backend.rfp_risk_analysis.urls')),
     
@@ -233,6 +234,7 @@ urlpatterns = [
     path('api/tprm/v1/risk-analysis-vendor/', include('tprm_backend.risk_analysis_vendor.urls')),
     
     # Frontend v1 compatibility routes
+    path('api/v1/', include('tprm_backend.rfp.urls')),  # Frontend compatibility for /api/v1/ (includes KPI endpoints)
     path('api/v1/rfps/', include('tprm_backend.rfp.urls')),  # Frontend compatibility for /api/v1/rfps/
     path('api/v1/vendor-approval/', include('tprm_backend.apps.vendor_approval.urls')),  # Frontend compatibility for /api/v1/vendor-approval/
     path('api/v1/vendor-core/', include('tprm_backend.apps.vendor_core.urls')),  # Frontend compatibility for /api/v1/vendor-core/

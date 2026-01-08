@@ -7461,6 +7461,7 @@ nav::-webkit-scrollbar {
 .rfp-circle-option.rfp-regular-circle.active .rfp-circle-inner {
   background-color: #6c757d !important;
   box-shadow: 0 0 4px rgba(108, 117, 125, 0.35) !important;
+}
 /* Auto-adjusting tabs container */
 .tab-container {
   width: 100%;
