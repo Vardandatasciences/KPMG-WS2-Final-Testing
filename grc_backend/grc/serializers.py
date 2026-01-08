@@ -3,6 +3,7 @@ from .models import Framework, Policy, SubPolicy, PolicyApproval, ComplianceAppr
 from datetime import date
 from django.contrib.auth.models import User
 from datetime import date
+import json
 from .utils.base_serializer import AutoDecryptingModelSerializer
 
 # Import all models
@@ -860,13 +861,64 @@ class RiskInstanceSerializer(AutoDecryptingModelSerializer):
     
     def to_representation(self, instance):
         """
-        Override to ensure all fields are properly serialized
+        Override to ensure all fields are properly serialized and encrypted fields are decrypted
         """
         # Get the default representation
         representation = super().to_representation(instance)
         
         # The SerializerMethodField methods above handle date/datetime fields
-        # This method can be used for any additional processing if needed
+        
+        # Handle decryption of encrypted fields, especially RiskMitigation
+        # Check if RiskMitigation is encrypted and decrypt it
+        if 'RiskMitigation' in representation and representation['RiskMitigation']:
+            try:
+                # Try to get decrypted value using _plain property
+                if hasattr(instance, 'RiskMitigation_plain'):
+                    decrypted_value = instance.RiskMitigation_plain
+                    
+                    # If RiskMitigation is a JSONField, it might be decrypted as a string
+                    # If it's a string, try to parse it as JSON
+                    if isinstance(decrypted_value, str):
+                        try:
+                            # Try to parse as JSON
+                            parsed_json = json.loads(decrypted_value)
+                            representation['RiskMitigation'] = parsed_json
+                        except (json.JSONDecodeError, TypeError):
+                            # If it's not valid JSON, use the decrypted string as-is
+                            representation['RiskMitigation'] = decrypted_value
+                    else:
+                        # Already a dict/list, use it directly
+                        representation['RiskMitigation'] = decrypted_value
+                # Also handle other encrypted fields that might need decryption
+                elif hasattr(instance, 'get_plain_fields_dict'):
+                    plain_fields = instance.get_plain_fields_dict()
+                    if 'RiskMitigation' in plain_fields:
+                        decrypted_value = plain_fields['RiskMitigation']
+                        if isinstance(decrypted_value, str):
+                            try:
+                                parsed_json = json.loads(decrypted_value)
+                                representation['RiskMitigation'] = parsed_json
+                            except (json.JSONDecodeError, TypeError):
+                                representation['RiskMitigation'] = decrypted_value
+                        else:
+                            representation['RiskMitigation'] = decrypted_value
+            except Exception as e:
+                # If decryption fails, log the error but continue with encrypted value
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Error decrypting RiskMitigation for RiskInstance {instance.RiskInstanceId}: {e}")
+        
+        # Decrypt other encrypted fields if they exist
+        try:
+            if hasattr(instance, 'get_plain_fields_dict'):
+                plain_fields = instance.get_plain_fields_dict()
+                for field_name in plain_fields:
+                    if field_name in representation and field_name != 'RiskMitigation':
+                        representation[field_name] = plain_fields[field_name]
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.debug(f"Error decrypting other fields for RiskInstance {instance.RiskInstanceId}: {e}")
         
         return representation
 

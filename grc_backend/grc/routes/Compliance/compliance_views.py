@@ -642,10 +642,10 @@ class ComplianceInputValidator:
             errors['ComplianceVersion'] = [str(e)]
         
         try:
-            # Validate Applicability (optional, max 450 chars)
+            # Validate Applicability (optional, no character limit)
             validated_data['Applicability'] = cls.validate_optional_string(
                 request_data.get('Applicability'), 'Applicability',
-                max_length=450, pattern=cls.TEXT_PATTERN
+                max_length=None, pattern=cls.TEXT_PATTERN
             )
         except ValidationError as e:
             errors['Applicability'] = [str(e)]
@@ -1068,6 +1068,9 @@ def create_compliance(request):
 
     print(f"Received request data: {request.data}")
     
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     # Determine the user performing this action (prefer JWT, then session)
     try:
         user_id = RBACUtils.get_user_id_from_request(request)
@@ -1177,6 +1180,7 @@ def create_compliance(request):
         
         new_compliance = Compliance.objects.create(
             SubPolicy=subpolicy,
+            tenant_id=tenant_id,  # MULTI-TENANCY: Assign tenant to compliance
             ComplianceTitle=validated_data['ComplianceTitle'],
             ComplianceItemDescription=validated_data['ComplianceItemDescription'],
             ComplianceType=validated_data['ComplianceType'],
@@ -2010,10 +2014,10 @@ def get_compliance_dashboard(request):
             errors['ComplianceVersion'] = [str(e)]
         
         try:
-            # Validate Applicability (optional, max 450 chars)
+            # Validate Applicability (optional, no character limit)
             validated_data['Applicability'] = cls.validate_optional_string(
                 request_data.get('Applicability'), 'Applicability',
-                max_length=450, pattern=cls.TEXT_PATTERN
+                max_length=None, pattern=cls.TEXT_PATTERN
             )
         except ValidationError as e:
             errors['Applicability'] = [str(e)]
@@ -2143,6 +2147,9 @@ def get_compliances_by_subpolicy(request, subpolicy_id):
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def submit_compliance_review(request, approval_id):
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print(f"\n=== SUBMIT COMPLIANCE REVIEW DEBUG ===")
         print(f"Approval ID: {approval_id}")
@@ -2930,8 +2937,8 @@ def get_policy_approvals_by_reviewer(request):
                         from datetime import datetime, timedelta
                         default_due_date = datetime.now().date() + timedelta(days=7)
                         
-                        # Check for existing policy approval to prevent duplicates
-                        existing_approval = PolicyApproval.objects.filter(
+                        # Check for existing compliance approval to prevent duplicates
+                        existing_approval = ComplianceApproval.objects.filter(
                             Identifier=compliance.Identifier,
                             UserId=creator_id,
                             ReviewerId=reviewer_id,
@@ -2940,20 +2947,37 @@ def get_policy_approvals_by_reviewer(request):
                         ).first()
                         
                         if existing_approval:
-                            print(f"DEBUG: ⚠️ Duplicate prevention: Policy approval already exists for Identifier {compliance.Identifier} with ApprovalId: {existing_approval.ApprovalId}")
+                            print(f"DEBUG: ⚠️ Duplicate prevention: Compliance approval already exists for Identifier {compliance.Identifier} with ApprovalId: {existing_approval.ApprovalId}")
                             print(f"  - Skipping duplicate creation")
                             new_approval = existing_approval
                         else:
-                            new_approval = PolicyApproval.objects.create(
-                            Identifier=compliance.Identifier,
-                            ExtractedData=extracted_data,
-                            UserId=creator_id,
-                            ReviewerId=reviewer_id,
-                            ApprovedNot=None,
-                            Version="u1",
-                            ApprovalDueDate=default_due_date
-                        )
-                            print(f"DEBUG: ✅ Created new PolicyApproval for Identifier {compliance.Identifier} with ApprovalId: {new_approval.ApprovalId}")
+                            # Get PolicyId and FrameworkId from compliance
+                            policy_id = None
+                            framework_id = None
+                            if compliance.SubPolicy and compliance.SubPolicy.PolicyId:
+                                policy_id = compliance.SubPolicy.PolicyId
+                                if hasattr(policy_id, 'FrameworkId_id') and policy_id.FrameworkId_id is not None:
+                                    framework_id = policy_id.FrameworkId_id
+                            
+                            # Create ComplianceApproval (NOT PolicyApproval) for compliance items
+                            creation_data = {
+                                'Identifier': compliance.Identifier,
+                                'ExtractedData': extracted_data,
+                                'UserId': creator_id,
+                                'ReviewerId': reviewer_id,
+                                'ApprovedNot': None,
+                                'Version': "u1",
+                                'ApprovalDueDate': default_due_date
+                            }
+                            
+                            # Add PolicyId and FrameworkId if available
+                            if policy_id:
+                                creation_data['PolicyId'] = policy_id
+                            if framework_id:
+                                creation_data['FrameworkId_id'] = framework_id
+                            
+                            new_approval = ComplianceApproval.objects.create(**creation_data)
+                            print(f"DEBUG: ✅ Created new ComplianceApproval for Identifier {compliance.Identifier} with ApprovalId: {new_approval.ApprovalId}")
                         approval_dict = {
                             'ApprovalId': new_approval.ApprovalId,
                             'Identifier': new_approval.Identifier,
@@ -2967,10 +2991,11 @@ def get_policy_approvals_by_reviewer(request):
                         }
                         approvals.append(approval_dict)
         
-        # Get pending deactivation requests
+        # Get pending deactivation requests for compliance items
+        # Compliance deactivation requests are stored in ComplianceApproval, not PolicyApproval
         # print("\n=== QUERYING DEACTIVATION REQUESTS ===")
         # print("Fetching pending deactivation requests...")
-        deactivation_requests = PolicyApproval.objects.filter(
+        deactivation_requests = ComplianceApproval.objects.filter(
             ReviewerId=reviewer_id,
             ApprovedNot=None
         ).exclude(ExtractedData=None)
@@ -3675,6 +3700,9 @@ class ComplianceVersioningValidator:
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def deactivate_compliance(request, compliance_id):
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print("\n\n==== DEBUGGING DEACTIVATE_COMPLIANCE ====")
         print(f"Received deactivation request for compliance_id: {compliance_id}")
@@ -3831,6 +3859,9 @@ def deactivate_compliance(request, compliance_id):
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def approve_compliance_deactivation(request, approval_id):
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print(f"\n\n==== DEBUGGING APPROVE_DEACTIVATION ====")
         print(f"Approving deactivation request for approval_id: {approval_id}")
@@ -3947,6 +3978,9 @@ def approve_compliance_deactivation(request, approval_id):
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def reject_compliance_deactivation(request, approval_id):
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print(f"\n\n==== DEBUGGING REJECT_DEACTIVATION ====")
         print(f"Rejecting deactivation request for approval_id: {approval_id}")
@@ -6907,6 +6941,9 @@ def edit_compliance(request, compliance_id):
     """
     Edit an existing compliance item
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         # Debug logging
         #print(f"DEBUG: Received edit_compliance request for ID {compliance_id}")
@@ -6934,7 +6971,7 @@ def edit_compliance(request, compliance_id):
         current_user_name = 'Unknown User'
         if current_user_id:
             try:
-                user_obj = Users.objects.only('FirstName', 'LastName', 'UserName').get(UserId=current_user_id)
+                user_obj = Users.objects.only('FirstName', 'LastName', 'UserName').get(UserId=current_user_id, tenant_id=tenant_id)
                 current_user_name = (user_obj.FirstName + ' ' + user_obj.LastName).strip() if user_obj.FirstName or user_obj.LastName else user_obj.UserName
             except Exception:
                 current_user_name = 'Unknown User'
@@ -6942,7 +6979,8 @@ def edit_compliance(request, compliance_id):
         # Get the compliance item with related objects to avoid N+1 queries
         compliance = get_object_or_404(
             Compliance.objects.select_related('SubPolicy', 'SubPolicy__PolicyId', 'SubPolicy__PolicyId__FrameworkId'),
-            ComplianceId=compliance_id
+            ComplianceId=compliance_id,
+            tenant_id=tenant_id
         )
         
         # Get the latest version of this compliance by Identifier
@@ -7049,6 +7087,7 @@ def edit_compliance(request, compliance_id):
         # Create a new compliance instance with updated data
         new_compliance = Compliance.objects.create(
             SubPolicy=compliance.SubPolicy,  # Use the ForeignKey field directly
+            tenant_id=tenant_id,  # MULTI-TENANCY: Assign tenant to compliance
             PreviousComplianceVersionId=latest_version,  # Store reference to the latest version object
             ComplianceTitle=request.data.get('ComplianceTitle', ''),
             ComplianceItemDescription=request.data.get('ComplianceItemDescription', ''),
@@ -7231,6 +7270,9 @@ def clone_compliance(request, compliance_id):
     """
     Clone an existing compliance item
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print(f"\n=== CLONE_COMPLIANCE DEBUG ===")
         print(f"Cloning compliance ID: {compliance_id}")
@@ -7337,6 +7379,7 @@ def clone_compliance(request, compliance_id):
         # Create new compliance instance
         new_compliance = Compliance.objects.create(
             SubPolicy_id=target_subpolicy_id,  # Use target subpolicy ID from request
+            tenant_id=tenant_id,  # MULTI-TENANCY: Assign tenant to compliance
             ComplianceTitle=compliance_title,
             ComplianceItemDescription=data.get('ComplianceItemDescription', source_compliance.ComplianceItemDescription),
             ComplianceType=data.get('ComplianceType', source_compliance.ComplianceType),
@@ -8014,8 +8057,12 @@ def get_compliance_approvals_by_reviewer(request, user_id):
             return Response({'error': f'Invalid reviewer_id: {str(e)}. Must be a valid integer.'}, status=400)
         
         print(f"🔍 DEBUG: Filtering compliance approvals by ReviewerId: {reviewer_id}")
-        approvals = ComplianceApproval.objects.filter(ReviewerId=reviewer_id).order_by('-ApprovalId')
-        print(f"✅ Found {approvals.count()} compliance approvals for reviewer {reviewer_id} (before framework filter)")
+        # Filter for pending approvals (ApprovedNot=None) to show only items that need review
+        approvals = ComplianceApproval.objects.filter(
+            ReviewerId=reviewer_id,
+            ApprovedNot=None  # Only show pending approvals
+        ).order_by('-ApprovalId')
+        print(f"✅ Found {approvals.count()} pending compliance approvals for reviewer {reviewer_id} (before framework filter)")
         
         # Log all framework IDs in the results before filtering
         if approvals.exists():
@@ -8520,10 +8567,10 @@ def get_compliance_approvals_by_reviewer(request, user_id):
             errors['ComplianceVersion'] = [str(e)]
         
         try:
-            # Validate Applicability (optional, max 450 chars)
+            # Validate Applicability (optional, no character limit)
             validated_data['Applicability'] = cls.validate_optional_string(
                 request_data.get('Applicability'), 'Applicability',
-                max_length=450, pattern=cls.TEXT_PATTERN
+                max_length=None, pattern=cls.TEXT_PATTERN
             )
         except ValidationError as e:
             errors['Applicability'] = [str(e)]
