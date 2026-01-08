@@ -10,6 +10,7 @@ from rest_framework import status
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from ...models import CookiePreferences, Users
+from ...authentication import get_user_from_jwt
 import logging
 import uuid
 
@@ -59,21 +60,55 @@ def save_cookie_preferences(request):
         session_id = data.get('session_id')
         
         # Log the received user_id for debugging
-        logger.info(f"[Cookie] Received user_id: {user_id} (type: {type(user_id).__name__}), session_id: {session_id}")
+        logger.info(f"[Cookie] Received user_id from request body: {user_id} (type: {type(user_id).__name__}), session_id: {session_id}")
+        
+        # Check if Authorization header is present
+        auth_header = request.headers.get('Authorization', '')
+        logger.info(f"[Cookie] Authorization header present: {bool(auth_header)}, starts with Bearer: {auth_header.startswith('Bearer ') if auth_header else False}")
+        
+        # CRITICAL: If user_id is None/null/not provided, try to get it from JWT token (for logged-in users)
+        # This ensures that logged-in users always have their preferences saved with their user_id
+        # Also check if user_id is explicitly None or string 'null'
+        user = None  # Initialize user object
+        if not user_id or user_id == 'null' or user_id == 'None':
+            logger.info(f"[Cookie] user_id is null/missing in request body, attempting to extract from JWT token...")
+            # Try to get user from JWT token - this returns the user object directly
+            jwt_user = get_user_from_jwt(request)
+            if jwt_user:
+                user = jwt_user  # Use the user object directly
+                user_id = jwt_user.UserId
+                logger.info(f"[Cookie] ✅ User ID extracted from JWT token: {user_id} (User: {jwt_user.UserName})")
+            else:
+                logger.warning(f"[Cookie] ⚠️ Could not extract user from JWT token (token may be missing or invalid)")
+            # Also check if request.user is available (from authentication middleware)
+            if not user and hasattr(request, 'user') and request.user and request.user.is_authenticated:
+                try:
+                    # request.user might be a Users object or have UserId attribute
+                    if hasattr(request.user, 'UserId'):
+                        user_id = request.user.UserId
+                        user = request.user  # Use request.user directly if it's a Users object
+                        logger.info(f"[Cookie] User ID extracted from request.user: {user_id}")
+                    elif hasattr(request.user, 'id'):
+                        user_id = request.user.id
+                        logger.info(f"[Cookie] User ID extracted from request.user.id: {user_id}")
+                except Exception as e:
+                    logger.warning(f"[Cookie] Could not extract user_id from request.user: {str(e)}")
+        else:
+            logger.info(f"[Cookie] Using user_id from request body: {user_id}")
         
         # If no session_id provided, generate one
         if not session_id:
             session_id = str(uuid.uuid4())
             logger.info(f"[Cookie] Generated new session_id: {session_id}")
         
-        # Validate user_id if provided
-        user = None
-        if user_id:
+        # If we have user_id but not user object, fetch the user object
+        if user_id and not user:
             try:
                 user = Users.objects.get(UserId=user_id)
                 logger.info(f"[Cookie] Found user: {user.UserId} - {user.UserName}")
             except Users.DoesNotExist:
                 logger.warning(f"[Cookie] User {user_id} not found, saving preferences without user")
+                user = None
         
         # Get IP and User Agent
         ip_address = get_client_ip(request)
@@ -84,8 +119,12 @@ def save_cookie_preferences(request):
         # Priority: 1) By user_id (if provided), 2) By session_id
         existing = None
         if user_id:
-            # First try to find by user_id
-            existing = CookiePreferences.objects.filter(UserId=user_id).order_by('-CreatedAt').first()
+            # First try to find by user object (if user was found)
+            if user:
+                existing = CookiePreferences.objects.filter(UserId=user).order_by('-CreatedAt').first()
+            else:
+                # If user_id was provided but user not found, try by user_id directly
+                existing = CookiePreferences.objects.filter(UserId__UserId=user_id).order_by('-CreatedAt').first()
             if existing:
                 logger.info(f"[Cookie] Found existing preference for user {user_id}: PreferenceId={existing.PreferenceId}, UserId={existing.UserId.UserId if existing.UserId else 'NULL'}")
             else:
@@ -128,11 +167,12 @@ def save_cookie_preferences(request):
             existing.SessionId = session_id
             existing.IpAddress = ip_address
             existing.UserAgent = user_agent
-            # ALWAYS update UserId if user is provided (even if it was set before)
+            # ALWAYS update UserId if user is provided (this covers both request body and JWT-extracted user)
+            # This ensures that if user logged in after saving preferences anonymously, they get linked
             if user:
-                # Always update UserId when user is provided
+                # Always update UserId when user is available (either from request body or JWT)
                 existing.UserId = user
-                logger.info(f"[Cookie] Setting/updating preference {existing.PreferenceId} UserId to {user.UserId}")
+                logger.info(f"[Cookie] Setting/updating preference {existing.PreferenceId} UserId to {user.UserId} (from {'request body' if data.get('user_id') else 'JWT token'})")
             else:
                 # Only log if no user provided, but don't clear existing UserId
                 if existing.UserId:
@@ -213,7 +253,8 @@ def get_cookie_preferences(request):
         # Try to find preference
         preference = None
         if user_id:
-            preference = CookiePreferences.objects.filter(UserId=user_id).order_by('-CreatedAt').first()
+            # Filter by UserId field (ForeignKey), not the user_id integer
+            preference = CookiePreferences.objects.filter(UserId__UserId=user_id).order_by('-CreatedAt').first()
         
         if not preference and session_id:
             preference = CookiePreferences.objects.filter(SessionId=session_id).order_by('-CreatedAt').first()

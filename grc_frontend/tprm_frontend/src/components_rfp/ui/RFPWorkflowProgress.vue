@@ -80,9 +80,12 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { rfpCn } from '@/utils/rfpUtils.js'
 import Icons from './Icons.vue'
 import Button from './Button.vue'
+
+const router = useRouter()
 
 interface RFPPhase {
   id: string
@@ -241,20 +244,20 @@ const getLineClasses = (currentPhase: RFPPhase, nextPhase: RFPPhase) => {
 
 const handlePhaseClick = (phase: RFPPhase) => {
   if (phase.status !== 'pending' && phase.route) {
-    // Navigate directly to the phase page for MPA setup
-    window.location.href = phase.route
+    // Navigate directly to the phase page using Vue Router
+    router.push(phase.route)
   }
 }
 
 const handleViewClick = (phase: RFPPhase) => {
   if (phase.route) {
-    window.location.href = phase.route
+    router.push(phase.route)
   }
 }
 
 const handleStartClick = (phase: RFPPhase) => {
   if (phase.route) {
-    window.location.href = phase.route
+    router.push(phase.route)
   }
 }
 </script>

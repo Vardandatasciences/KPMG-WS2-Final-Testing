@@ -143,11 +143,11 @@ def tenant_filter(view_func):
                             with connections['default'].cursor() as cursor:
                                 # Query users table to get tenant_id
                                 cursor.execute("""
-                                    SELECT tenant_id
+                                    SELECT TenantId
                                     FROM users
-                                    WHERE userid = %s OR id = %s OR user_id = %s
+                                    WHERE UserId = %s
                                     LIMIT 1
-                                """, [user_id, user_id, user_id])
+                                """, [user_id])
                                 
                                 result = cursor.fetchone()
                                 

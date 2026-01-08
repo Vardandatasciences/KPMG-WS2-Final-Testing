@@ -85,15 +85,43 @@
 import { API_ENDPOINTS, API_CONFIG, getAuthToken } from '../config/api.js'
 import { getCurrentUserId } from '../utils/session.js'
 import axios from 'axios'
+import { ShieldX, ArrowLeft, Home, Mail } from 'lucide-vue-next'
+import Button from './ui/button.vue'
 
 export default {
   name: 'AccessDenied',
+  components: {
+    ShieldX,
+    ArrowLeft,
+    Home,
+    Mail,
+    Button
+  },
   data() {
     return {
       isRequesting: false,
       requestSubmitted: false,
       message: '',
       messageType: 'success' // 'success' or 'error'
+    }
+  },
+  computed: {
+    errorInfo() {
+      try {
+        const accessDeniedInfo = sessionStorage.getItem('access_denied_error')
+        if (accessDeniedInfo) {
+          return JSON.parse(accessDeniedInfo)
+        }
+      } catch (e) {
+        console.error('Error parsing access denied info:', e)
+      }
+      return {
+        message: 'You do not have permission to access this page.',
+        code: '403',
+        permission: null,
+        permissionRequired: null,
+        path: null
+      }
     }
   },
   mounted() {

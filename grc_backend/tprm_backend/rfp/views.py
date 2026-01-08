@@ -1062,7 +1062,8 @@ class RFPTypeCustomFieldsViewSet(RFPAuthenticationMixin, viewsets.ReadOnlyModelV
         """
         Get list of unique RFP types (just the rfp_type values)
         """
-        rfp_types = RFPTypeCustomFields.objects.values_list('rfp_type', flat=True).distinct().order_by('rfp_type')
+        # MULTI-TENANCY: Use tenant-aware queryset
+        rfp_types = self.get_queryset().values_list('rfp_type', flat=True).distinct().order_by('rfp_type')
         return Response({
             'success': True,
             'rfp_types': list(rfp_types)
@@ -1083,8 +1084,8 @@ class RFPTypeCustomFieldsViewSet(RFPAuthenticationMixin, viewsets.ReadOnlyModelV
             }, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            # Get the first matching record for this rfp_type
-            rfp_type_record = RFPTypeCustomFields.objects.filter(rfp_type=rfp_type).first()
+            # MULTI-TENANCY: Use tenant-aware queryset
+            rfp_type_record = self.get_queryset().filter(rfp_type=rfp_type).first()
             
             if not rfp_type_record:
                 return Response({
