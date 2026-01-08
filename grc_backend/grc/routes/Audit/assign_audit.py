@@ -512,7 +512,7 @@ def create_audit(request):
                             cursor.execute("""
                                 SELECT FrameworkId, FrameworkName 
                                 FROM frameworks 
-                                WHERE FrameworkId = %s AND tenant_id = %s
+                                WHERE FrameworkId = %s AND TenantId = %s
                             """, [audit.FrameworkId_id, tenant_id])
                             framework = cursor.fetchone()
                             
@@ -533,7 +533,7 @@ def create_audit(request):
                                     WHERE c.SubPolicyId = %s
                                     AND c.PermanentTemporary = 'Permanent'
                                     AND c.Status = 'Approved'
-                                    AND c.tenant_id = %s
+                                    AND c.TenantId = %s
                                     AND c.ActiveInactive = 'Active'
                                 """, [audit.SubPolicyId_id, tenant_id])
                                 
@@ -545,8 +545,8 @@ def create_audit(request):
                                     INNER JOIN subpolicies sp ON c.SubPolicyId = sp.SubPolicyId
                                     WHERE sp.PolicyId = %s
                                     AND c.PermanentTemporary = 'Permanent'
-                                    AND c.tenant_id = %s
-                                    AND sp.tenant_id = %s
+                                    AND c.TenantId = %s
+                                    AND sp.TenantId = %s
                                     AND c.Status = 'Approved'
                                     AND c.ActiveInactive = 'Active'
                                 """, [audit.PolicyId_id, tenant_id, tenant_id])
@@ -560,9 +560,9 @@ def create_audit(request):
                                     INNER JOIN policies p ON sp.PolicyId = p.PolicyId
                                     WHERE p.FrameworkId = %s
                                     AND c.PermanentTemporary = 'Permanent'
-                                    AND c.tenant_id = %s
-                                    AND sp.tenant_id = %s
-                                    AND p.tenant_id = %s
+                                    AND c.TenantId = %s
+                                    AND sp.TenantId = %s
+                                    AND p.TenantId = %s
                                     AND c.Status = 'Approved'
                                     AND c.ActiveInactive = 'Active'
                                 """, [audit.FrameworkId_id, tenant_id, tenant_id, tenant_id])
@@ -579,7 +579,7 @@ def create_audit(request):
                                     cursor.execute("""
                                         INSERT INTO audit_findings (
                                             `AuditId`, `ComplianceId`, `UserId`, `Evidence`, 
-                                            `Check`, `Comments`, `MajorMinor`, `AssignedDate`, `FrameworkId`, `ReviewRejected`, `tenant_id`
+                                            `Check`, `Comments`, `MajorMinor`, `AssignedDate`, `FrameworkId`, `ReviewRejected`, `TenantId`
                                         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                                     """, [
                                         audit.AuditId, compliance_id, audit.Auditor_id,
@@ -1343,7 +1343,7 @@ def get_compliance_count(request):
             cursor.execute("""
                 SELECT PolicyId, PolicyName 
                 FROM policies 
-                WHERE PolicyId = %s AND tenant_id = %s
+                WHERE PolicyId = %s AND TenantId = %s
             """, [policy_id, tenant_id])
             policy = cursor.fetchone()
             
@@ -1361,7 +1361,7 @@ def get_compliance_count(request):
                     AND c.PermanentTemporary = 'Permanent'
                     AND c.Status = 'Approved'
                     AND c.ActiveInactive = 'Active'
-                    AND c.tenant_id = %s
+                    AND c.TenantId = %s
                 """, [subpolicy_id, tenant_id])
                 
                 count = cursor.fetchone()[0]
@@ -1377,7 +1377,7 @@ def get_compliance_count(request):
                     AND c.PermanentTemporary = 'Permanent'
                     AND c.Status = 'Approved'
                     AND c.ActiveInactive = 'Active'
-                    AND c.tenant_id = %s
+                    AND c.TenantId = %s
                     LIMIT 5
                 """, [subpolicy_id, tenant_id])
                 
@@ -1386,7 +1386,7 @@ def get_compliance_count(request):
                 cursor.execute("""
                     SELECT sp.SubPolicyId, sp.SubPolicyName
                     FROM subpolicies sp
-                    WHERE sp.PolicyId = %s AND sp.tenant_id = %s
+                    WHERE sp.PolicyId = %s AND sp.TenantId = %s
                 """, [policy_id, tenant_id])
                 
                 subpolicies = cursor.fetchall()
@@ -1413,7 +1413,7 @@ def get_compliance_count(request):
                     AND c.PermanentTemporary = 'Permanent'
                     AND c.Status = 'Approved'
                     AND c.ActiveInactive = 'Active'
-                    AND c.tenant_id = %s
+                    AND c.TenantId = %s
                 """, subpolicy_ids + [tenant_id])
                 
                 count = cursor.fetchone()[0]
@@ -1429,7 +1429,7 @@ def get_compliance_count(request):
                     AND c.PermanentTemporary = 'Permanent'
                     AND c.Status = 'Approved'
                     AND c.ActiveInactive = 'Active'
-                    AND c.tenant_id = %s
+                    AND c.TenantId = %s
                     LIMIT 5
                 """, subpolicy_ids + [tenant_id])
             
@@ -1470,7 +1470,7 @@ def get_compliance_count(request):
                     WHERE PermanentTemporary = 'Permanent'
                     AND Status = 'Approved'
                     AND ActiveInactive = 'Active'
-                    AND tenant_id = %s
+                    AND TenantId = %s
                 """, [tenant_id])
                 total_permanent = cursor.fetchone()[0]
                 
@@ -1479,7 +1479,7 @@ def get_compliance_count(request):
                     FROM compliance
                     WHERE PermanentTemporary = 'Permanent'
                     AND Status = 'Approved'
-                    AND tenant_id = %s
+                    AND TenantId = %s
                 """, [tenant_id])
                 total_approved = cursor.fetchone()[0]
                 
@@ -1489,7 +1489,7 @@ def get_compliance_count(request):
                     WHERE PermanentTemporary = 'Permanent'
                     AND Status = 'Approved'
                     AND ActiveInactive = 'Active'
-                    AND tenant_id = %s
+                    AND TenantId = %s
                 """, [tenant_id])
                 total_active = cursor.fetchone()[0]
                 
@@ -1537,7 +1537,7 @@ def get_report_details(request):
                 FROM reports r
                 LEFT JOIN users u ON r.AuditorId = u.UserId
                 WHERE r.ReportId IN ({placeholders})
-                AND r.tenant_id = %s
+                AND r.TenantId = %s
             """, report_ids + [tenant_id])
             
             columns = [col[0] for col in cursor.description]

@@ -97,29 +97,33 @@ def get_user_profile(request, user_id):
         from .data_masking import get_masking_service
         masking_service = get_masking_service()
         
-        # Get decrypted values for encrypted fields
-        email_plain = user.email_plain
-        phone_plain = user.phone_plain
-        address_plain = user.address_plain
+        # Get decrypted values for encrypted fields using _plain properties
+        # These properties are provided by EncryptedFieldsMixin
+        email_plain = getattr(user, 'email_plain', None) or getattr(user, 'Email', None)
+        phone_plain = getattr(user, 'phone_plain', None) or getattr(user, 'PhoneNumber', None)
+        address_plain = getattr(user, 'address_plain', None) or getattr(user, 'Address', None)
+        username_plain = getattr(user, 'UserName_plain', None) or getattr(user, 'UserName', None)
+        firstname_plain = getattr(user, 'FirstName_plain', None) or getattr(user, 'FirstName', None)
+        lastname_plain = getattr(user, 'LastName_plain', None) or getattr(user, 'LastName', None)
         
         # Mask sensitive data for display (using decrypted values)
         masked_data = {
-            'firstName': masking_service.mask_name(user.FirstName) if user.FirstName else None,
-            'lastName': masking_service.mask_name(user.LastName) if user.LastName else None,
+            'firstName': masking_service.mask_name(firstname_plain) if firstname_plain else None,
+            'lastName': masking_service.mask_name(lastname_plain) if lastname_plain else None,
             'email': masking_service.mask_email(email_plain) if email_plain else None,
             'phoneNumber': masking_service.mask_phone(phone_plain) if phone_plain else None,
             'address': masking_service.mask_address(address_plain) if address_plain else None,
-            'username': masking_service.mask_name(user.UserName) if user.UserName else None,
+            'username': masking_service.mask_name(username_plain) if username_plain else None,
             'isActive': user.IsActive,
             'departmentId': user.DepartmentId,
             # Include original values for editing (decrypted values)
             'original': {
-                'firstName': user.FirstName,
-                'lastName': user.LastName,
+                'firstName': firstname_plain,  # Use decrypted first name
+                'lastName': lastname_plain,  # Use decrypted last name
                 'email': email_plain,  # Use decrypted email
                 'phoneNumber': phone_plain,  # Use decrypted phone
                 'address': address_plain,  # Use decrypted address
-                'username': user.UserName
+                'username': username_plain  # Use decrypted username
             }
         }
         
@@ -169,9 +173,28 @@ def get_current_user(request):
                 status=status.HTTP_401_UNAUTHORIZED
             )
         
+        # Decrypt username if it's encrypted (RBAC might have encrypted username)
+        username = rbac_record.username
+        if username:
+            try:
+                from .data_encryption import decrypt_data, is_encrypted_data
+                if isinstance(username, str) and is_encrypted_data(username):
+                    username = decrypt_data(username)
+            except Exception as e:
+                logger.debug(f"Could not decrypt RBAC username: {e}")
+        
+        # Also try to get decrypted username from Users model
+        try:
+            user = Users.objects.get(UserId=user_id)
+            username_plain = getattr(user, 'UserName_plain', None) or getattr(user, 'UserName', None)
+            if username_plain:
+                username = username_plain
+        except Users.DoesNotExist:
+            pass
+        
         user_data = {
             'UserId': user_id,
-            'UserName': rbac_record.username,
+            'UserName': username,
             'role': rbac_record.role,
             'permissions': RBACUtils.get_user_permissions_summary(user_id)
         }

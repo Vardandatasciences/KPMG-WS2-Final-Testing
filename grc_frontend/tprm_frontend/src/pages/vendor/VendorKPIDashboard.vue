@@ -249,6 +249,7 @@
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from '@/config/axios'
+import { getTprmApiV1Url } from '@/utils/backendEnv'
 import PopupModal from '@/popup/PopupModal.vue'
 import { PopupService } from '@/popup/popupService'
 import { useNotifications } from '@/composables/useNotifications'
@@ -270,7 +271,7 @@ const router = useRouter()
 // Comprehensive KPIs
 // Function to fetch screening match rate
 const fetchScreeningMatchRate = async () => {
-  const apiUrl = '/api/v1/vendor-dashboard/screening-match-rate/';
+  const apiUrl = getTprmApiV1Url('vendor-dashboard/screening-match-rate/');
   console.log('Attempting to fetch screening match rate from:', apiUrl);
   
   try {
@@ -322,7 +323,7 @@ const fetchScreeningMatchRate = async () => {
 
 // Function to fetch questionnaire overdue rate
 const fetchQuestionnaireOverdueRate = async () => {
-  const apiUrl = '/api/v1/vendor-dashboard/questionnaire-overdue-rate/';
+  const apiUrl = getTprmApiV1Url('vendor-dashboard/questionnaire-overdue-rate/');
   console.log('Attempting to fetch questionnaire overdue rate from:', apiUrl);
   
   try {
@@ -377,7 +378,7 @@ const fetchQuestionnaireOverdueRate = async () => {
 
 // Function to fetch vendors flagged in OFAC/PEP lists
 const fetchVendorsFlaggedOFACPEP = async () => {
-  const apiUrl = '/api/v1/vendor-dashboard/vendors-flagged-ofac-pep/';
+  const apiUrl = getTprmApiV1Url('vendor-dashboard/vendors-flagged-ofac-pep/');
   console.log('Attempting to fetch vendors flagged in OFAC/PEP from:', apiUrl);
   
   try {
@@ -440,7 +441,7 @@ const fetchVendorsFlaggedOFACPEP = async () => {
 
 // Function to fetch vendor acceptance time
 const fetchVendorAcceptanceTime = async () => {
-  const apiUrl = '/api/v1/vendor-dashboard/vendor-acceptance-time/';
+  const apiUrl = getTprmApiV1Url('vendor-dashboard/vendor-acceptance-time/');
   console.log('Attempting to fetch vendor acceptance time from:', apiUrl);
   
   try {
@@ -556,7 +557,7 @@ const fetchVendorAcceptanceTime = async () => {
 
 // Function to fetch vendor registration completion rate
 const fetchVendorRegistrationCompletionRate = async () => {
-  const apiUrl = '/api/v1/vendor-dashboard/vendor-registration-completion-rate/';
+  const apiUrl = getTprmApiV1Url('vendor-dashboard/vendor-registration-completion-rate/');
   console.log('Attempting to fetch vendor registration completion rate from:', apiUrl);
   
   try {
@@ -615,7 +616,7 @@ const fetchVendorRegistrationCompletionRate = async () => {
 
 // Function to fetch vendor registration time
 const fetchVendorRegistrationTime = async () => {
-  const apiUrl = '/api/v1/vendor-dashboard/vendor-registration-time/';
+  const apiUrl = getTprmApiV1Url('vendor-dashboard/vendor-registration-time/');
   console.log('Attempting to fetch vendor registration time from:', apiUrl);
   
   try {
@@ -669,7 +670,7 @@ const fetchVendorRegistrationTime = async () => {
 
 // Function to fetch vendor alerts
 const fetchVendorAlerts = async () => {
-  const apiUrl = '/api/v1/vendor-dashboard/alerts/';
+  const apiUrl = getTprmApiV1Url('vendor-dashboard/alerts/');
   console.log('Attempting to fetch vendor alerts from:', apiUrl);
   
   try {
@@ -700,7 +701,7 @@ const fetchVendorAlerts = async () => {
 
 // Function to fetch KPI categories
 const fetchKPICategories = async () => {
-  const apiUrl = '/api/v1/vendor-dashboard/kpi-categories/';
+  const apiUrl = getTprmApiV1Url('vendor-dashboard/kpi-categories/');
   console.log('Attempting to fetch KPI categories from:', apiUrl);
   
   try {
@@ -874,7 +875,7 @@ const exportToPDF = async () => {
     console.log('PDF Export Data:', reportData);
     console.log('KPIs:', vendor_comprehensiveKPIs.value);
 
-    const response = await axios.post('/api/v1/vendor-dashboard/export/pdf/', reportData, {
+    const response = await axios.post(getTprmApiV1Url('vendor-dashboard/export/pdf/'), reportData, {
       responseType: 'blob'
     });
 
@@ -914,7 +915,7 @@ const exportToExcel = async () => {
       categories: vendor_kpiCategories.value
     };
 
-    const response = await axios.post('/api/v1/vendor-dashboard/export/excel/', reportData, {
+    const response = await axios.post(getTprmApiV1Url('vendor-dashboard/export/excel/'), reportData, {
       responseType: 'blob'
     });
 

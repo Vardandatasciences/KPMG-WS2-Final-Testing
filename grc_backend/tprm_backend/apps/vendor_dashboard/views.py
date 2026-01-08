@@ -406,7 +406,7 @@ class VendorsFlaggedOFACPEPAPIView(APIView):
                 # MULTI-TENANCY: Filter by tenant
                 cursor.execute("""
                     SELECT 
-                        DATE_FORMAT(tv.created_at, '%Y-%m') AS month,
+                        DATE_FORMAT(tv.created_at, '%%Y-%%m') AS month,
                         COUNT(DISTINCT tv.id) AS flagged_vendors_count
                     FROM temp_vendor tv
                     JOIN external_screening_results esr ON tv.id = esr.vendor_id
@@ -416,7 +416,7 @@ class VendorsFlaggedOFACPEPAPIView(APIView):
                       AND sm.match_type IN ('OFAC - sdn', 'PEP')
                       AND tv.created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
                       AND tv.TenantId = %s
-                    GROUP BY DATE_FORMAT(tv.created_at, '%Y-%m')
+                    GROUP BY DATE_FORMAT(tv.created_at, '%%Y-%%m')
                     ORDER BY month ASC
                 """, [tenant_id])
                 historical_data = cursor.fetchall()
@@ -531,7 +531,7 @@ class VendorAcceptanceTimeAPIView(APIView):
                         v.vendor_id,
                         v.company_name,
                         DATEDIFF(v.created_at, tv.created_at) AS acceptance_days,
-                        DATE_FORMAT(v.created_at, '%Y-%m') AS approval_month
+                        DATE_FORMAT(v.created_at, '%%Y-%%m') AS approval_month
                     FROM vendors v
                     JOIN temp_vendor tv ON v.vendor_code = tv.vendor_code
                     WHERE v.status = 'APPROVED'
@@ -577,13 +577,13 @@ class VendorAcceptanceTimeAPIView(APIView):
                 # Step 4: Get monthly trend data (last 12 months)
                 cursor.execute("""
                     SELECT 
-                        DATE_FORMAT(v.created_at, '%Y-%m') AS month,
+                        DATE_FORMAT(v.created_at, '%%Y-%%m') AS month,
                         AVG(DATEDIFF(v.created_at, tv.created_at)) AS avg_acceptance_time
                     FROM vendors v
                     JOIN temp_vendor tv ON v.vendor_code = tv.vendor_code
                     WHERE v.status = 'APPROVED'
                       AND v.created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
-                    GROUP BY DATE_FORMAT(v.created_at, '%Y-%m')
+                    GROUP BY DATE_FORMAT(v.created_at, '%%Y-%%m')
                     ORDER BY month ASC
                 """)
                 monthly_trend = cursor.fetchall()

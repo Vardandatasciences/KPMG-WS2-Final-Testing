@@ -78,7 +78,7 @@ def trigger_database_analysis(request, audit_id):
             cursor.execute("""
                 SELECT FrameworkId, Title, Status
                 FROM audit
-                WHERE AuditId = %s AND tenant_id = %s
+                WHERE AuditId = %s AND TenantId = %s
             """, [int(audit_id), tenant_id])
             audit_row = cursor.fetchone()
             
@@ -378,7 +378,7 @@ class AIAuditDocumentUploadView(View):
             try:
                 from django.db import connection
                 with connection.cursor() as cursor:
-                    cursor.execute("SELECT AuditId, AuditType FROM audit WHERE AuditId = %s AND tenant_id = %s", [audit_id, tenant_id])
+                    cursor.execute("SELECT AuditId, AuditType FROM audit WHERE AuditId = %s AND TenantId = %s", [audit_id, tenant_id])
                     audit_row = cursor.fetchone()
                     
                 if audit_row:
@@ -1992,8 +1992,8 @@ def save_ai_compliance_to_checklist(audit_id, document_id, analyses, user_id, fr
                         cursor.execute("""
                             SELECT af.AuditFindingsId FROM audit_findings af
                             JOIN audit a ON af.AuditId = a.AuditId
-                            WHERE af.AuditId = %s AND a.tenant_id = %s AND af.ComplianceId = %s
-                        """, [int(audit_id) if str(audit_id).isdigit() else audit_id, compliance_id])
+                            WHERE af.AuditId = %s AND a.TenantId = %s AND af.ComplianceId = %s
+                        """, [int(audit_id) if str(audit_id).isdigit() else audit_id, tenant_id, compliance_id])
                         
                         existing_finding = cursor.fetchone()
                         
@@ -2034,25 +2034,25 @@ def save_ai_compliance_to_checklist(audit_id, document_id, analyses, user_id, fr
                         if existing_finding:
                             # Update existing finding with ALL fields
                             cursor.execute("""
-                                UPDATE audit_findings
-                                SET `Check` = %s,
-                                    Comments = %s,
-                                    Evidence = %s,
-                                    HowToVerify = %s,
-                                    Impact = %s,
-                                    Recommendation = %s,
-                                    DetailsOfFinding = %s,
-                                    MajorMinor = %s,
-                                    SeverityRating = %s,
-                                    PredictiveRisks = %s,
-                                    CorrectiveActions = %s,
-                                    UnderlyingCause = %s,
-                                    WhyToVerify = %s,
-                                    WhatToVerify = %s,
-                                    SuggestedActionPlan = %s,
-                                    CheckedDate = NOW()
-                                JOIN audit a ON audit_findings.AuditId = a.AuditId
-                                WHERE audit_findings.AuditId = %s AND a.tenant_id = %s AND audit_findings.ComplianceId = %s
+                                UPDATE audit_findings af
+                                JOIN audit a ON af.AuditId = a.AuditId
+                                SET af.`Check` = %s,
+                                    af.Comments = %s,
+                                    af.Evidence = %s,
+                                    af.HowToVerify = %s,
+                                    af.Impact = %s,
+                                    af.Recommendation = %s,
+                                    af.DetailsOfFinding = %s,
+                                    af.MajorMinor = %s,
+                                    af.SeverityRating = %s,
+                                    af.PredictiveRisks = %s,
+                                    af.CorrectiveActions = %s,
+                                    af.UnderlyingCause = %s,
+                                    af.WhyToVerify = %s,
+                                    af.WhatToVerify = %s,
+                                    af.SuggestedActionPlan = %s,
+                                    af.CheckedDate = NOW()
+                                WHERE af.AuditId = %s AND a.TenantId = %s AND af.ComplianceId = %s
                             """, [
                                 check_value,
                                 comments[:1000] if len(comments) > 1000 else comments,
@@ -2070,6 +2070,7 @@ def save_ai_compliance_to_checklist(audit_id, document_id, analyses, user_id, fr
                                 what_to_verify,
                                 suggested_action_plan,
                                 int(audit_id) if str(audit_id).isdigit() else audit_id,
+                                tenant_id,
                                 compliance_id
                             ])
                             logger.info(f"✅ Updated audit finding (ID: {existing_finding[0]}) for compliance {compliance_id} with ALL AI-generated fields")
@@ -2338,10 +2339,9 @@ def map_audit_document_api(request, audit_id, document_id):
                 """
                 SELECT ad.document_id FROM audit_document ad
                 JOIN audit a ON ad.audit_id = a.AuditId
-                WHERE ad.audit_id = %s AND a.tenant_id = %s
-                WHERE document_id = %s AND audit_id = %s
+                WHERE ad.document_id = %s AND ad.audit_id = %s AND a.TenantId = %s
                 """,
-                [int(document_id), int(audit_id) if str(audit_id).isdigit() else audit_id]
+                [int(document_id), int(audit_id) if str(audit_id).isdigit() else audit_id, tenant_id]
             )
             if not cursor.fetchone():
                 return Response({
@@ -2376,7 +2376,7 @@ def map_audit_document_api(request, audit_id, document_id):
                     JOIN audit a ON ad.audit_id = a.AuditId
                     SET ad.policy_id = COALESCE(%s, ad.policy_id),
                         ad.subpolicy_id = COALESCE(%s, ad.subpolicy_id)
-                    WHERE ad.document_id = %s AND a.tenant_id = %s
+                    WHERE ad.document_id = %s AND a.TenantId = %s
                     """,
                     [policy_id, subpolicy_id, int(document_id), tenant_id]
                 )
@@ -2593,7 +2593,7 @@ def start_ai_audit_processing_api(request, audit_id):
                 SELECT document_id, document_name, document_path, document_type, file_size, mime_type
                 FROM audit_document ad
                 JOIN audit a ON ad.audit_id = a.AuditId
-                WHERE ad.audit_id = %s AND a.tenant_id = %s AND ad.ai_processing_status = 'pending'
+                WHERE ad.audit_id = %s AND a.TenantId = %s AND ad.ai_processing_status = 'pending'
             """, [int(audit_id) if str(audit_id).isdigit() else audit_id, tenant_id])
             
             documents = cursor.fetchall()
@@ -4712,7 +4712,7 @@ def check_document_compliance(request, audit_id, document_id):
                 """
                 SELECT Title, Objective, Scope, BusinessUnit, AuditType, DueDate
                 FROM audit
-                WHERE AuditId = %s AND tenant_id = %s
+                WHERE AuditId = %s AND TenantId = %s
                 """,
                 [int(audit_id) if str(audit_id).isdigit() else audit_id]
             )
@@ -8091,8 +8091,8 @@ def get_relevant_documents_for_audit(request, audit_id):
             cursor.execute("""
                 SELECT AuditId, FrameworkId, PolicyId, SubPolicyId
                 FROM audit
-                WHERE AuditId = %s AND tenant_id = %s
-            """, [int(audit_id) if str(audit_id).isdigit() else audit_id])
+                WHERE AuditId = %s AND TenantId = %s
+            """, [int(audit_id) if str(audit_id).isdigit() else audit_id, tenant_id])
             audit_row = cursor.fetchone()
             
             if not audit_row:

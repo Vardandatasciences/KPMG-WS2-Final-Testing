@@ -853,39 +853,20 @@ def get_my_approvals(request):
 
             include_statuses = [s.strip().upper() for s in include_status_param.split(',') if s.strip()]
 
-        # Ensure we're using the tprm_integrations database
-        # The default connection should point to tprm_integration, but verify it
+        # Use tprm database connection for vendor approval queries
         import logging
-        import os
         from django.db import connections as db_connections
         logger = logging.getLogger(__name__)
         
-        db_connection = db_connections['default']
-        db_name = db_connection.settings_dict.get('NAME', '')
-        
-        # Log the database being used for debugging
-        logger.info(f"[My Approvals] Using database: {db_name} for user_id: {user_id}")
-        
-        # If the database is not tprm_integration, try to fix it
-        if 'tprm' not in db_name.lower() and db_name != 'tprm_integration':
-            logger.warning(f"[My Approvals] WARNING: Database connection is using '{db_name}' instead of 'tprm_integration'.")
-            
-            # Check if there's a 'tprm' connection defined
-            if 'tprm' in db_connections.databases:
-                db_connection = db_connections['tprm']
-                db_name = db_connection.settings_dict.get('NAME', '')
-                logger.info(f"[My Approvals] Switching to 'tprm' connection, now using database: {db_name}")
-            else:
-                # The environment variable might be overriding the default
-                # Check what DB_NAME is set to
-                env_db_name = os.environ.get('DB_NAME', '')
-                if env_db_name and env_db_name != 'tprm_integration':
-                    logger.error(f"[My Approvals] ERROR: DB_NAME environment variable is set to '{env_db_name}' but should be 'tprm_integration'.")
-                    logger.error(f"[My Approvals] Please set DB_NAME=tprm_integration in your environment variables.")
-                
-                # Log warning - the connection will be used as-is
-                # The proper fix is to set DB_NAME=tprm_integration in environment variables
-                logger.warning(f"[My Approvals] Attempting to use database '{db_name}' - queries may fail if tables don't exist.")
+        # Use tprm connection if available, otherwise fall back to default
+        if 'tprm' in db_connections.databases:
+            db_connection = db_connections['tprm']
+            db_name = db_connection.settings_dict.get('NAME', 'tprm_integration')
+            logger.info(f"[My Approvals] Using tprm database connection: {db_name} for user_id: {user_id}")
+        else:
+            db_connection = db_connections['default']
+            db_name = db_connection.settings_dict.get('NAME', '')
+            logger.warning(f"[My Approvals] tprm connection not found, using default: {db_name}")
 
         # Initialize rows variable before try block
         rows = []
@@ -941,7 +922,7 @@ def get_my_approvals(request):
                         
                         JOIN approval_workflows aw ON ar.workflow_id = aw.workflow_id
                         
-                        LEFT JOIN tprm_integration.temp_vendor tv ON JSON_EXTRACT(ar.request_data, '$.vendor_id') = tv.id
+                        LEFT JOIN temp_vendor tv ON JSON_EXTRACT(ar.request_data, '$.vendor_id') = tv.id
 
                         WHERE ast.assigned_user_id = %s
 
@@ -1007,7 +988,7 @@ def get_my_approvals(request):
 
                         JOIN approval_workflows aw ON ar.workflow_id = aw.workflow_id
                         
-                        LEFT JOIN tprm_integration.temp_vendor tv ON JSON_EXTRACT(ar.request_data, '$.vendor_id') = tv.id
+                        LEFT JOIN temp_vendor tv ON JSON_EXTRACT(ar.request_data, '$.vendor_id') = tv.id
 
                         WHERE ast.assigned_user_id = %s
 
@@ -1223,16 +1204,20 @@ def get_user_assigned_stages(request, user_id):
         if not tenant_id:
             return Response({'error': 'Tenant context not found'}, status=403)
 
-        # Ensure we're using the tprm_integrations database
+        # Use tprm database connection for vendor approval queries
         import logging
         from django.db import connections as db_connections
         logger = logging.getLogger(__name__)
         
-        db_connection = db_connections['default']
-        db_name = db_connection.settings_dict.get('NAME', '')
-        
-        # Log the database being used for debugging
-        logger.info(f"[Assigned Stages] Using database: {db_name} for user_id: {user_id}")
+        # Use tprm connection if available, otherwise fall back to default
+        if 'tprm' in db_connections.databases:
+            db_connection = db_connections['tprm']
+            db_name = db_connection.settings_dict.get('NAME', 'tprm_integration')
+            logger.info(f"[Assigned Stages] Using tprm database connection: {db_name} for user_id: {user_id}")
+        else:
+            db_connection = db_connections['default']
+            db_name = db_connection.settings_dict.get('NAME', '')
+            logger.warning(f"[Assigned Stages] tprm connection not found, using default: {db_name}")
 
         # Initialize stages list
         stages = []
@@ -1270,8 +1255,8 @@ def get_user_assigned_stages(request, user_id):
 
                     JOIN approval_workflows w ON a.workflow_id = w.workflow_id
                     
-                    -- Ensure temp_vendor is read from the TPRM database (not grc2)
-                    LEFT JOIN tprm_integration.temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
+                    -- Ensure temp_vendor is read from the current database (should be tprm_integration after connection switch)
+                    LEFT JOIN temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
 
                     WHERE s.assigned_user_id = %s
 
@@ -2051,76 +2036,90 @@ def get_approvals_by_requester(request):
 
 
 
-        with connections['default'].cursor() as cursor:
-
-            sql = (
-
-                """
-
-                SELECT 
-
-                    ar.approval_id,
-
-                    ar.request_title,
-
-                    ar.priority,
-
-                    ar.overall_status,
-
-                    ar.submission_date,
-
-                    ar.created_at,
-
-                    ar.updated_at,
-
-                    w.workflow_type,
-
-                    COUNT(s.stage_id) AS stage_count
-
-                FROM approval_requests ar
-
-                JOIN approval_workflows w ON w.workflow_id = ar.workflow_id
-
-                LEFT JOIN approval_stages s ON s.approval_id = ar.approval_id
-
-                LEFT JOIN temp_vendor tv ON JSON_EXTRACT(ar.request_data, '$.vendor_id') = tv.id
-
-                WHERE CAST(ar.requester_id AS CHAR) = %s
-
-                AND w.business_object_type = 'Vendor'
-                
-                AND (tv.TenantId = %s OR tv.TenantId IS NULL)
-
-                {flow_clause}
-
-                GROUP BY 
-
-                    ar.approval_id, ar.request_title, ar.priority, ar.overall_status,
-
-                    ar.submission_date, ar.created_at, ar.updated_at, w.workflow_type
-
-                ORDER BY ar.created_at DESC
-
-                """
-
-            )
-
-
-
-            params = [str(requester_id), tenant_id]
+        # Use tprm database connection for vendor approval queries
+        import logging
+        from django.db import connections as db_connections
+        logger = logging.getLogger(__name__)
+        
+        # Use tprm connection if available, otherwise fall back to default
+        if 'tprm' in db_connections.databases:
+            db_connection = db_connections['tprm']
+            db_name = db_connection.settings_dict.get('NAME', 'tprm_integration')
+            logger.info(f"[Get Approvals By Requester] Using tprm database connection: {db_name} for requester_id: {requester_id}")
+        else:
+            db_connection = db_connections['default']
+            db_name = db_connection.settings_dict.get('NAME', '')
+            logger.warning(f"[Get Approvals By Requester] tprm connection not found, using default: {db_name}")
+        
+        with db_connection.cursor() as cursor:
+            # Check if temp_vendor table exists
+            cursor.execute("SHOW TABLES LIKE 'temp_vendor'")
+            temp_vendor_exists = cursor.fetchone() is not None
+            
+            # Build SQL query based on whether temp_vendor table exists
+            if temp_vendor_exists:
+                sql = (
+                    """
+                    SELECT 
+                        ar.approval_id,
+                        ar.request_title,
+                        ar.priority,
+                        ar.overall_status,
+                        ar.submission_date,
+                        ar.created_at,
+                        ar.updated_at,
+                        w.workflow_type,
+                        COUNT(s.stage_id) AS stage_count
+                    FROM approval_requests ar
+                    JOIN approval_workflows w ON w.workflow_id = ar.workflow_id
+                    LEFT JOIN approval_stages s ON s.approval_id = ar.approval_id
+                    LEFT JOIN temp_vendor tv ON JSON_EXTRACT(ar.request_data, '$.vendor_id') = tv.id
+                    WHERE CAST(ar.requester_id AS CHAR) = %s
+                    AND w.business_object_type = 'Vendor'
+                    AND (tv.TenantId = %s OR tv.TenantId IS NULL)
+                    {flow_clause}
+                    GROUP BY 
+                        ar.approval_id, ar.request_title, ar.priority, ar.overall_status,
+                        ar.submission_date, ar.created_at, ar.updated_at, w.workflow_type
+                    ORDER BY ar.created_at DESC
+                    """
+                )
+                params = [str(requester_id), tenant_id]
+            else:
+                # If temp_vendor doesn't exist, query without tenant filtering via temp_vendor
+                sql = (
+                    """
+                    SELECT 
+                        ar.approval_id,
+                        ar.request_title,
+                        ar.priority,
+                        ar.overall_status,
+                        ar.submission_date,
+                        ar.created_at,
+                        ar.updated_at,
+                        w.workflow_type,
+                        COUNT(s.stage_id) AS stage_count
+                    FROM approval_requests ar
+                    JOIN approval_workflows w ON w.workflow_id = ar.workflow_id
+                    LEFT JOIN approval_stages s ON s.approval_id = ar.approval_id
+                    WHERE CAST(ar.requester_id AS CHAR) = %s
+                    AND w.business_object_type = 'Vendor'
+                    {flow_clause}
+                    GROUP BY 
+                        ar.approval_id, ar.request_title, ar.priority, ar.overall_status,
+                        ar.submission_date, ar.created_at, ar.updated_at, w.workflow_type
+                    ORDER BY ar.created_at DESC
+                    """
+                )
+                params = [str(requester_id)]
 
             flow_clause = ''
-
             if flow_filter:
-
                 flow_clause = 'AND w.workflow_type = %s'
-
                 params.append(flow_filter)
 
             cursor.execute(sql.format(flow_clause=flow_clause), params)
-
             columns = [col[0] for col in cursor.description]
-
             rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
 
 
@@ -2154,15 +2153,21 @@ def get_approvals_by_requester(request):
         return Response(data, status=status.HTTP_200_OK)
 
     except Exception as e:
-
-        print(f"Error fetching approvals by requester: {str(e)}")
-
+        import logging
+        logger = logging.getLogger(__name__)
+        error_msg = str(e)
+        logger.error(f"[Get Approvals By Requester] Error: {error_msg}")
+        
+        # Check if it's a table not found error
+        if "temp_vendor" in error_msg.lower() and ("doesn't exist" in error_msg.lower() or "does not exist" in error_msg.lower()):
+            logger.warning(f"[Get Approvals By Requester] temp_vendor table not found, but should have been handled. Error: {error_msg}")
+            # Return empty result instead of error if temp_vendor doesn't exist
+            return Response([], status=status.HTTP_200_OK)
+        
+        print(f"Error fetching approvals by requester: {error_msg}")
         return Response({
-
             'error': 'Failed to fetch approvals by requester',
-
-            'details': str(e)
-
+            'details': error_msg
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -2315,42 +2320,60 @@ def get_request_with_stages(request, approval_id: str):
         if not tenant_id:
             return Response({'error': 'Tenant context not found'}, status=403)
 
-        with connections['default'].cursor() as cursor:
+        # Use tprm database connection for vendor approval queries
+        import logging
+        from django.db import connections as db_connections
+        logger = logging.getLogger(__name__)
+        
+        # Use tprm connection if available, otherwise fall back to default
+        if 'tprm' in db_connections.databases:
+            db_connection = db_connections['tprm']
+            db_name = db_connection.settings_dict.get('NAME', 'tprm_integration')
+            logger.info(f"[Get Request With Stages] Using tprm database connection: {db_name} for approval_id: {approval_id}")
+        else:
+            db_connection = db_connections['default']
+            db_name = db_connection.settings_dict.get('NAME', '')
+            logger.warning(f"[Get Request With Stages] tprm connection not found, using default: {db_name}")
 
-            # Get the approval request with workflow info
-            # MULTI-TENANCY: Filter by tenant
-
-            cursor.execute(
-
-                """
-
-                SELECT 
-
-                    a.approval_id, a.workflow_id, a.request_title, a.request_description,
-
-                    a.requester_id, a.requester_department, a.priority, a.request_data,
-
-                    a.overall_status, a.submission_date, a.completion_date, a.created_at,
-
-                    w.workflow_type, w.workflow_name
-
-                FROM approval_requests a
-
-                JOIN approval_workflows w ON a.workflow_id = w.workflow_id
-                
-                LEFT JOIN temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
-
-                WHERE a.approval_id = %s
-
-                AND w.business_object_type = 'Vendor'
-                
-                AND (tv.TenantId = %s OR tv.TenantId IS NULL)
-
-                """,
-
-                [approval_id, tenant_id]
-
-            )
+        with db_connection.cursor() as cursor:
+            # Check if temp_vendor table exists
+            cursor.execute("SHOW TABLES LIKE 'temp_vendor'")
+            temp_vendor_exists = cursor.fetchone() is not None
+            
+            # Build SQL query based on whether temp_vendor table exists
+            if temp_vendor_exists:
+                cursor.execute(
+                    """
+                    SELECT 
+                        a.approval_id, a.workflow_id, a.request_title, a.request_description,
+                        a.requester_id, a.requester_department, a.priority, a.request_data,
+                        a.overall_status, a.submission_date, a.completion_date, a.created_at,
+                        w.workflow_type, w.workflow_name
+                    FROM approval_requests a
+                    JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+                    LEFT JOIN temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
+                    WHERE a.approval_id = %s
+                    AND w.business_object_type = 'Vendor'
+                    AND (tv.TenantId = %s OR tv.TenantId IS NULL)
+                    """,
+                    [approval_id, tenant_id]
+                )
+            else:
+                # If temp_vendor doesn't exist, query without tenant filtering via temp_vendor
+                cursor.execute(
+                    """
+                    SELECT 
+                        a.approval_id, a.workflow_id, a.request_title, a.request_description,
+                        a.requester_id, a.requester_department, a.priority, a.request_data,
+                        a.overall_status, a.submission_date, a.completion_date, a.created_at,
+                        w.workflow_type, w.workflow_name
+                    FROM approval_requests a
+                    JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+                    WHERE a.approval_id = %s
+                    AND w.business_object_type = 'Vendor'
+                    """,
+                    [approval_id]
+                )
 
             row = cursor.fetchone()
 
@@ -5763,15 +5786,12 @@ def dashboard_stats(request):
         if not tenant_id:
             return Response({'error': 'Tenant context not found'}, status=403)
 
-        from django.db import connections
-
-        cursor = connections['default'].cursor()
-
-        
+        # Use tprm database connection for vendor approval queries
+        cursor = connections['tprm'].cursor()
 
         # Get basic counts filtered by business_object_type = 'Vendor' and tenant
         # MULTI-TENANCY: Filter by tenant
-
+        # Use temp_vendor from tprm database (no database prefix needed since we're using tprm connection)
         cursor.execute("""
 
             SELECT 
@@ -5798,8 +5818,6 @@ def dashboard_stats(request):
 
         """, [tenant_id])
 
-        
-
         result = cursor.fetchone()
 
         total_requests = result[0] or 0
@@ -5816,7 +5834,7 @@ def dashboard_stats(request):
 
         # Get workflow type breakdown filtered by business_object_type = 'Vendor' and tenant
         # MULTI-TENANCY: Filter by tenant
-
+        # Use temp_vendor since the table exists in that database
         cursor.execute("""
 
             SELECT 
@@ -5839,8 +5857,6 @@ def dashboard_stats(request):
 
         """, [tenant_id])
 
-        
-
         workflow_breakdown = {}
 
         for row in cursor.fetchall():
@@ -5851,7 +5867,7 @@ def dashboard_stats(request):
 
         # Get priority breakdown filtered by business_object_type = 'Vendor' and tenant
         # MULTI-TENANCY: Filter by tenant
-
+        # Use temp_vendor since the table exists in that database
         cursor.execute("""
 
             SELECT 
@@ -5874,8 +5890,6 @@ def dashboard_stats(request):
 
         """, [tenant_id])
 
-        
-
         priority_breakdown = {}
 
         for row in cursor.fetchall():
@@ -5893,7 +5907,8 @@ def dashboard_stats(request):
         
 
         week_ago = timezone.now() - timedelta(days=7)
-
+        
+        # Use temp_vendor since the table exists in that database
         cursor.execute("""
 
             SELECT COUNT(*) as recent_activity
@@ -5911,8 +5926,6 @@ def dashboard_stats(request):
             AND a.created_at >= %s
 
         """, [tenant_id, week_ago])
-
-        
 
         result = cursor.fetchone()
 
@@ -5945,52 +5958,60 @@ def dashboard_stats(request):
     except Exception as e:
 
         print(f"Error in dashboard stats: {str(e)}")
+        import traceback
+        traceback.print_exc()
 
         # Fallback to basic counts filtered by business_object_type = 'Vendor'
-
-        cursor = connections['default'].cursor()
-
-        cursor.execute("""
-
-            SELECT 
-
-                COUNT(*) as total_requests,
-
-                SUM(CASE WHEN a.overall_status = 'PENDING' THEN 1 ELSE 0 END) as pending_requests,
-
-                SUM(CASE WHEN a.overall_status = 'IN_PROGRESS' THEN 1 ELSE 0 END) as in_progress_requests,
-
-                SUM(CASE WHEN a.overall_status = 'APPROVED' THEN 1 ELSE 0 END) as approved_requests,
-
-                SUM(CASE WHEN a.overall_status = 'REJECTED' THEN 1 ELSE 0 END) as rejected_requests
-
-            FROM approval_requests a
-
-            JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+        try:
+            # Use tprm database connection for vendor approval queries
+            cursor = connections['tprm'].cursor()
             
-            LEFT JOIN temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
+            # Use temp_vendor from tprm database (no database prefix needed since we're using tprm connection)
+            cursor.execute("""
 
-            WHERE w.business_object_type = 'Vendor'
-            
-            AND (tv.TenantId = %s OR tv.TenantId IS NULL)
+                SELECT 
 
-        """)
+                    COUNT(*) as total_requests,
 
-        
+                    SUM(CASE WHEN a.overall_status = 'PENDING' THEN 1 ELSE 0 END) as pending_requests,
 
-        result = cursor.fetchone()
+                    SUM(CASE WHEN a.overall_status = 'IN_PROGRESS' THEN 1 ELSE 0 END) as in_progress_requests,
 
-        total_requests = result[0] or 0
+                    SUM(CASE WHEN a.overall_status = 'APPROVED' THEN 1 ELSE 0 END) as approved_requests,
 
-        pending_requests = result[1] or 0
+                    SUM(CASE WHEN a.overall_status = 'REJECTED' THEN 1 ELSE 0 END) as rejected_requests
 
-        in_progress_requests = result[2] or 0
+                FROM approval_requests a
 
-        approved_requests = result[3] or 0
+                JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+                
+                LEFT JOIN temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
 
-        rejected_requests = result[4] or 0
+                WHERE w.business_object_type = 'Vendor'
+                
+                AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
-        
+            """, [tenant_id])
+
+            result = cursor.fetchone()
+
+            total_requests = result[0] or 0 if result else 0
+
+            pending_requests = result[1] or 0 if result and len(result) > 1 else 0
+
+            in_progress_requests = result[2] or 0 if result and len(result) > 2 else 0
+
+            approved_requests = result[3] or 0 if result and len(result) > 3 else 0
+
+            rejected_requests = result[4] or 0 if result and len(result) > 4 else 0
+
+        except Exception as fallback_error:
+            print(f"Error in fallback query: {str(fallback_error)}")
+            total_requests = 0
+            pending_requests = 0
+            in_progress_requests = 0
+            approved_requests = 0
+            rejected_requests = 0
 
         return Response({
 
@@ -6033,7 +6054,8 @@ def recent_requests(request):
         if not tenant_id:
             return Response({'error': 'Tenant context not found'}, status=403)
 
-        cursor = connections['default'].cursor()
+        # Use tprm database connection for vendor approval queries
+        cursor = connections['tprm'].cursor()
 
         
 
@@ -6058,10 +6080,9 @@ def recent_requests(request):
             return Response([])
 
         
-
         # Fetch recent requests with workflow details
         # MULTI-TENANCY: Filter by tenant
-
+        # Use temp_vendor from tprm database (no database prefix needed since we're using tprm connection)
         cursor.execute("""
 
             SELECT 
@@ -6155,7 +6176,8 @@ def user_tasks(request, user_id):
         if not tenant_id:
             return Response({'error': 'Tenant context not found'}, status=403)
 
-        cursor = connections['default'].cursor()
+        # Use tprm database connection for vendor approval queries
+        cursor = connections['tprm'].cursor()
 
         
 
@@ -6190,10 +6212,9 @@ def user_tasks(request, user_id):
             return Response([])
 
         
-
         # Fetch user's assigned stages that are pending or in progress
         # MULTI-TENANCY: Filter by tenant
-
+        # Use temp_vendor from tprm database (no database prefix needed since we're using tprm connection)
         cursor.execute("""
 
             SELECT 
@@ -6315,7 +6336,8 @@ def user_requests(request, user_id):
         if not tenant_id:
             return Response({'error': 'Tenant context not found'}, status=403)
 
-        cursor = connections['default'].cursor()
+        # Use tprm database connection for vendor approval queries
+        cursor = connections['tprm'].cursor()
 
         
 
@@ -6340,10 +6362,9 @@ def user_requests(request, user_id):
             return Response([])
 
         
-
         # Fetch requests created by the user with workflow details
         # MULTI-TENANCY: Filter by tenant
-
+        # Use temp_vendor from tprm database (no database prefix needed since we're using tprm connection)
         cursor.execute("""
 
             SELECT 

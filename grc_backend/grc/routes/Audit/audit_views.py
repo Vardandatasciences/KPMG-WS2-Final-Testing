@@ -270,6 +270,7 @@ def get_all_audits(request):
                          WHERE sp2.PolicyId = a.PolicyId 
                          LIMIT 1)
                     ) as subpolicy,
+                    a.BusinessUnit as business_unit,
                     auditor_user.UserName as auditor,
                     a.DueDate as duedate,
                     a.Frequency as frequency,
@@ -298,7 +299,7 @@ def get_all_audits(request):
                     AND a.TenantId = %s
                     {where_clause}
                 GROUP BY 
-                    a.AuditId, a.Title, f.FrameworkName, p.PolicyName, sp.SubPolicyName, 
+                    a.AuditId, a.Title, f.FrameworkName, p.PolicyName, sp.SubPolicyName, a.BusinessUnit,
                     auditor_user.UserName, a.DueDate, a.Frequency, reviewer_user.UserName, a.AuditType
                 ORDER BY 
                     a.AuditId DESC
@@ -316,6 +317,17 @@ def get_all_audits(request):
             print(f"DEBUG: Result columns: {columns}")
             audits = [dict(zip(columns, row)) for row in cursor.fetchall()]
             print(f"DEBUG: Fetched {len(audits)} audit records")
+
+        # AUTO-DECRYPT: Automatically decrypt all encrypted fields
+        from grc.utils.auto_decrypt_helper import decrypt_query_results
+        audits = decrypt_query_results(audits, {
+            'title': 'Audit',
+            'framework': 'Framework',
+            'policy': 'Policy',
+            'subpolicy': 'SubPolicy',
+            'auditor': 'Users',
+            'reviewer': 'Users',
+        })
 
         # Process frequency to display text instead of number
         for audit in audits:
@@ -387,6 +399,7 @@ def get_all_audits_public(request):
                     f.FrameworkName as framework,
                     p.PolicyName as policy,
                     sp.SubPolicyName as subpolicy,
+                    a.BusinessUnit as business_unit,
                     auditor_user.UserName as auditor,
                     a.DueDate as duedate,
                     a.Frequency as frequency,
@@ -414,7 +427,7 @@ def get_all_audits_public(request):
                 WHERE 
                     a.TenantId = %s
                 GROUP BY 
-                    a.AuditId, a.Title, f.FrameworkName, p.PolicyName, sp.SubPolicyName, 
+                    a.AuditId, a.Title, f.FrameworkName, p.PolicyName, sp.SubPolicyName, a.BusinessUnit,
                     auditor_user.UserName, a.DueDate, a.Frequency, reviewer_user.UserName, a.AuditType
                 ORDER BY 
                     a.AuditId DESC
@@ -424,6 +437,18 @@ def get_all_audits_public(request):
             print(f"DEBUG: Result columns: {columns}")
             audits = [dict(zip(columns, row)) for row in cursor.fetchall()]
             print(f"DEBUG: Fetched {len(audits)} audit records")
+
+        # AUTO-DECRYPT: Automatically decrypt all encrypted fields
+        from grc.utils.auto_decrypt_helper import decrypt_query_results
+        audits = decrypt_query_results(audits, {
+            'title': 'Audit',
+            'framework': 'Framework',
+            'policy': 'Policy',
+            'subpolicy': 'SubPolicy',
+            'business_unit': 'Audit',
+            'auditor': 'Users',
+            'reviewer': 'Users',
+        })
 
         # Process frequency to display text instead of number
         for audit in audits:
@@ -563,6 +588,18 @@ def get_my_audits(request):
             print(f"DEBUG: My audits query columns: {columns}")
             audits = [dict(zip(columns, row)) for row in cursor.fetchall()]
             print(f"DEBUG: Fetched {len(audits)} my audits")
+
+        # AUTO-DECRYPT: Automatically decrypt all encrypted fields
+        from grc.utils.auto_decrypt_helper import decrypt_query_results
+        audits = decrypt_query_results(audits, {
+            'title': 'Audit',
+            'framework': 'Framework',
+            'policy': 'Policy',
+            'subpolicy': 'SubPolicy',
+            'reviewer': 'Users',
+            'assignee': 'Users',
+            'business_unit': 'Audit',
+        })
 
         # Process and format audit data for display
         for audit in audits:
@@ -1478,7 +1515,7 @@ def get_audit_compliances(request, audit_id):
                 JOIN 
                     policies p ON sp.PolicyId = p.PolicyId
                 WHERE 
-                    af.AuditId = %s AND af.tenant_id = %s
+                    af.AuditId = %s AND af.TenantId = %s
                 ORDER BY 
                     p.PolicyId, sp.SubPolicyId, c.ComplianceId
             """, [audit_id, tenant_id])
@@ -4073,6 +4110,7 @@ def get_audit_versions(request, audit_id):
 @csrf_exempt
 @api_view(['GET'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
+@tenant_filter
 def get_audit_version_details(request, audit_id, version):
     """
     Get detailed information for a specific audit version
@@ -4080,9 +4118,12 @@ def get_audit_version_details(request, audit_id, version):
     try:
         print(f"DEBUG: get_audit_version_details called for audit_id: {audit_id}, version: {version}")
         
+        # MULTI-TENANCY: Extract tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        
         # Check if the audit exists
         try:
-            audit = Audit.objects.get(AuditId=audit_id)
+            audit = Audit.objects.get(AuditId=audit_id, TenantId=tenant_id)
         except Audit.DoesNotExist:
             return Response({'error': 'Audit not found'}, status=status.HTTP_404_NOT_FOUND)
         
@@ -4117,7 +4158,7 @@ def get_audit_version_details(request, audit_id, version):
                 JOIN
                     audit a ON av.AuditId = a.AuditId
                 WHERE 
-                    av.AuditId = %s AND av.Version = %s AND a.tenant_id = %s
+                    av.AuditId = %s AND av.Version = %s AND a.TenantId = %s
             """
             cursor.execute(sql_query, [audit_id, version, tenant_id])
             
@@ -5055,7 +5096,7 @@ def save_review_json(request, audit_id):
             try:
                 # First look for any existing R-version (reviewer)
                 cursor.execute(
-                    "SELECT av.Version FROM audit_version av JOIN audit a ON av.AuditId = a.AuditId WHERE av.AuditId = %s AND a.tenant_id = %s AND av.Version LIKE %s ORDER BY av.Version DESC LIMIT 1", 
+                    "SELECT av.Version FROM audit_version av JOIN audit a ON av.AuditId = a.AuditId WHERE av.AuditId = %s AND a.TenantId = %s AND av.Version LIKE %s ORDER BY av.Version DESC LIMIT 1", 
                     [audit_id, tenant_id, "R%"]
                 )
                 version_row = cursor.fetchone()
