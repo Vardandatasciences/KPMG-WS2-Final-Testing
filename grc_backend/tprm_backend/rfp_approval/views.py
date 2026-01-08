@@ -6,11 +6,13 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
-from django.db import connection, transaction, models
+from django.db import connection, transaction, models, connections
 from django.utils import timezone
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
+from django.conf import settings
+from datetime import datetime
 import uuid
 import json
 from .models import ApprovalWorkflows, ApprovalStages, ApprovalRequests, ApprovalComments, ApprovalRequestVersions
@@ -29,6 +31,56 @@ from tprm_backend.core.tenant_utils import (
     require_tenant,
     tenant_filter
 )
+
+
+def make_naive_datetime(dt):
+    """
+    Convert timezone-aware datetime to naive datetime for MySQL compatibility.
+    MySQL backend does not support timezone-aware datetimes when USE_TZ is False.
+    
+    Args:
+        dt: datetime object (can be timezone-aware or naive, or None)
+    
+    Returns:
+        Naive datetime object, or None if input is None
+    """
+    if dt is None:
+        return None
+    
+    # If it's a string, try to parse it first
+    if isinstance(dt, str):
+        try:
+            # Try ISO format first
+            if 'T' in dt or ' ' in dt:
+                dt = datetime.fromisoformat(dt.replace('Z', '+00:00'))
+            else:
+                # Try date-only format
+                dt = datetime.strptime(dt, '%Y-%m-%d')
+        except (ValueError, AttributeError):
+            # If parsing fails, return None
+            return None
+    
+    # If it's already a datetime object, check if it's timezone-aware
+    if hasattr(dt, 'tzinfo') and dt.tzinfo is not None:
+        # Convert to naive datetime
+        return dt.replace(tzinfo=None)
+    
+    # Already naive, return as-is
+    return dt
+
+
+def get_naive_now():
+    """
+    Get current datetime as naive datetime for MySQL compatibility.
+    
+    Returns:
+        Naive datetime object
+    """
+    now = timezone.now()
+    # If timezone-aware, make it naive
+    if hasattr(now, 'tzinfo') and now.tzinfo is not None:
+        return now.replace(tzinfo=None)
+    return now
 
 
 def update_rfp_status_based_on_approval(approval_request):
@@ -212,7 +264,7 @@ def update_rfp_status_based_on_approval(approval_request):
                 
                 # Only save if status changed
                 if rfp.status != old_status:
-                    rfp.updated_at = timezone.now()
+                    rfp.updated_at = get_naive_now()
                     rfp.save()
                     print(f"✅ RFP {rfp.rfp_id} status changed from {old_status} to {rfp.status}")
                 else:
@@ -549,7 +601,7 @@ def create_approval_version(approval_id, stage_id, old_status, new_status, user_
             'is_current': True,
             'is_approved': new_status == 'APPROVED',
             'change_reason': change_reason or f"Stage status change: {old_status} → {new_status}",
-            'created_at': timezone.now()
+            'created_at': get_naive_now()
         }
         
         # Mark previous versions as not current
@@ -772,10 +824,10 @@ def workflows(request):
                         'department': stage_config.get('department', ''),
                         'stage_type': stage_config.get('stage_type', 'SEQUENTIAL'),
                         'stage_status': 'PENDING',
-                        'deadline_date': stage_config.get('deadline_date'),
+                        'deadline_date': make_naive_datetime(stage_config.get('deadline_date')),
                         'is_mandatory': stage_config.get('is_mandatory', True),
-                        'created_at': timezone.now(),
-                        'updated_at': timezone.now(),
+                        'created_at': get_naive_now(),
+                        'updated_at': get_naive_now(),
                         'tenant_id': tenant_id  # MULTI-TENANCY: Add tenant_id
                     }
 
@@ -796,7 +848,7 @@ def workflows(request):
                         approval_id = f"AR_{uuid.uuid4().hex[:8].upper()}"
                         
                         # Calculate expiry date (30 days from now by default)
-                        expiry_date = timezone.now() + timezone.timedelta(days=30)
+                        expiry_date = get_naive_now() + timezone.timedelta(days=30)
                         
                         # Determine priority based on RFP criticality
                         priority_map = {
@@ -822,10 +874,10 @@ def workflows(request):
                                 'proposal_data': proposal
                             }),
                             'overall_status': 'DRAFT',
-                            'submission_date': timezone.now(),
+                            'submission_date': get_naive_now(),
                             'expiry_date': expiry_date,
-                            'created_at': timezone.now(),
-                            'updated_at': timezone.now(),
+                            'created_at': get_naive_now(),
+                            'updated_at': get_naive_now(),
                             'tenant_id': tenant_id  # MULTI-TENANCY: Set tenant_id
                         }
                         
@@ -851,10 +903,10 @@ def workflows(request):
                                 'department': stage_config.get('department', ''),
                                 'stage_type': 'PARALLEL',  # All evaluators work in parallel
                                 'stage_status': 'PENDING',
-                                'deadline_date': stage_config.get('deadline_date'),
+                                'deadline_date': make_naive_datetime(stage_config.get('deadline_date')),
                                 'is_mandatory': stage_config.get('is_mandatory', True),
-                                'created_at': timezone.now(),
-                                'updated_at': timezone.now(),
+                                'created_at': get_naive_now(),
+                                'updated_at': get_naive_now(),
                                 'tenant_id': tenant_id  # MULTI-TENANCY: Set tenant_id
                             }
                             
@@ -870,7 +922,7 @@ def workflows(request):
                     approval_id = f"AR_{uuid.uuid4().hex[:8].upper()}"
                     
                     # Calculate expiry date (30 days from now by default)
-                    expiry_date = timezone.now() + timezone.timedelta(days=30)
+                    expiry_date = get_naive_now() + timezone.timedelta(days=30)
                     
                     # Create approval request for committee evaluation
                     approval_request_data = {
@@ -883,10 +935,10 @@ def workflows(request):
                         'priority': 'HIGH',
                         'request_data': json.dumps(rfp_data),
                         'overall_status': 'PENDING',
-                        'submission_date': timezone.now(),
+                        'submission_date': get_naive_now(),
                         'expiry_date': expiry_date,
-                        'created_at': timezone.now(),
-                        'updated_at': timezone.now(),
+                        'created_at': get_naive_now(),
+                        'updated_at': get_naive_now(),
                         'tenant_id': tenant_id  # MULTI-TENANCY: Set tenant_id
                     }
                     
@@ -911,10 +963,10 @@ def workflows(request):
                             'department': stage_config.get('department', 'Committee'),
                             'stage_type': 'PARALLEL',  # All committee members work in parallel
                             'stage_status': 'PENDING',
-                            'deadline_date': stage_config.get('deadline_date'),
+                            'deadline_date': make_naive_datetime(stage_config.get('deadline_date')),
                             'is_mandatory': stage_config.get('is_mandatory', True),
-                            'created_at': timezone.now(),
-                            'updated_at': timezone.now(),
+                            'created_at': get_naive_now(),
+                            'updated_at': get_naive_now(),
                             'tenant_id': tenant_id  # MULTI-TENANCY: Set tenant_id
                         }
                         
@@ -934,7 +986,7 @@ def workflows(request):
                         approval_id = f"AR_{uuid.uuid4().hex[:8].upper()}"
                         
                         # Calculate expiry date (30 days from now by default)
-                        expiry_date = timezone.now() + timezone.timedelta(days=30)
+                        expiry_date = get_naive_now() + timezone.timedelta(days=30)
                         
                         # Determine priority based on RFP criticality
                         priority_map = {
@@ -956,10 +1008,10 @@ def workflows(request):
                             'priority': priority,
                             'request_data': json.dumps(rfp_data),
                             'overall_status': 'DRAFT',
-                            'submission_date': timezone.now(),
+                            'submission_date': get_naive_now(),
                             'expiry_date': expiry_date,
-                            'created_at': timezone.now(),
-                            'updated_at': timezone.now(),
+                            'created_at': get_naive_now(),
+                            'updated_at': get_naive_now(),
                             'tenant_id': tenant_id  # MULTI-TENANCY: Set tenant_id
                         }
                         
@@ -985,10 +1037,10 @@ def workflows(request):
                                 'department': stage_config.get('department', ''),
                                 'stage_type': stage_config.get('stage_type', 'SEQUENTIAL'),
                                 'stage_status': 'PENDING',
-                                'deadline_date': stage_config.get('deadline_date'),
+                                'deadline_date': make_naive_datetime(stage_config.get('deadline_date')),
                                 'is_mandatory': stage_config.get('is_mandatory', True),
-                                'created_at': timezone.now(),
-                                'updated_at': timezone.now(),
+                                'created_at': get_naive_now(),
+                                'updated_at': get_naive_now(),
                                 'tenant_id': tenant_id  # MULTI-TENANCY: Set tenant_id
                             }
                             
@@ -1020,7 +1072,7 @@ def workflows(request):
                         if not created:
                             # Update existing RFP with approval_workflow_id
                             rfp.approval_workflow_id = workflow_id
-                            rfp.updated_at = timezone.now()
+                            rfp.updated_at = get_naive_now()
                             rfp.save()
                             print(f"Updated existing RFP {rfp.rfp_id} with approval_workflow_id: {workflow_id}")
                         else:
@@ -1081,6 +1133,112 @@ def workflows(request):
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
+@api_view(['GET', 'PATCH', 'DELETE'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([SimpleAuthenticatedPermission])
+@rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
+def workflow_detail(request, workflow_id):
+    """
+    Handle individual workflow operations (GET, PATCH, DELETE)
+    MULTI-TENANCY: Only allows operations on workflows belonging to the tenant
+    """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
+    try:
+        # Get the workflow - try with tenant_id first, then without for cross-tenant access
+        try:
+            workflow = ApprovalWorkflows.objects.get(workflow_id=workflow_id, tenant_id=tenant_id)
+        except ApprovalWorkflows.DoesNotExist:
+            # Try without tenant filter for cross-tenant access
+            try:
+                workflow = ApprovalWorkflows.objects.get(workflow_id=workflow_id)
+            except ApprovalWorkflows.DoesNotExist:
+                return Response({
+                    'error': f'Workflow {workflow_id} not found'
+                }, status=404)
+        
+        if request.method == 'GET':
+            # Get stages for this workflow
+            stages = ApprovalStages.objects.filter(approval_id=workflow_id)
+            stages_data = []
+            
+            for stage in stages:
+                stages_data.append({
+                    'stage_id': stage.stage_id,
+                    'stage_order': stage.stage_order,
+                    'stage_name': stage.stage_name,
+                    'stage_description': stage.stage_description,
+                    'assigned_user_id': stage.assigned_user_id,
+                    'assigned_user_name': stage.assigned_user_name,
+                    'assigned_user_role': stage.assigned_user_role,
+                    'department': stage.department,
+                    'stage_type': stage.stage_type,
+                    'stage_status': stage.stage_status,
+                    'deadline_date': stage.deadline_date,
+                    'is_mandatory': stage.is_mandatory
+                })
+            
+            return Response({
+                'workflow_id': workflow.workflow_id,
+                'workflow_name': workflow.workflow_name,
+                'workflow_type': workflow.workflow_type,
+                'description': workflow.description,
+                'business_object_type': workflow.business_object_type,
+                'is_active': workflow.is_active,
+                'created_by': workflow.created_by,
+                'created_at': workflow.created_at,
+                'updated_at': workflow.updated_at,
+                'stages': stages_data
+            })
+        
+        elif request.method == 'PATCH':
+            # Update workflow fields
+            data = request.data
+            
+            # Update is_active if provided
+            if 'is_active' in data:
+                workflow.is_active = bool(data['is_active'])
+            
+            # Update other fields if provided
+            if 'workflow_name' in data:
+                workflow.workflow_name = data['workflow_name']
+            if 'description' in data:
+                workflow.description = data['description']
+            if 'workflow_type' in data:
+                workflow.workflow_type = data['workflow_type']
+            
+            workflow.save()
+            
+            return Response({
+                'success': True,
+                'message': 'Workflow updated successfully',
+                'workflow_id': workflow.workflow_id,
+                'is_active': workflow.is_active
+            })
+        
+        elif request.method == 'DELETE':
+            # Delete workflow (soft delete by setting is_active to False)
+            workflow.is_active = False
+            workflow.save()
+            
+            return Response({
+                'success': True,
+                'message': 'Workflow deactivated successfully',
+                'workflow_id': workflow.workflow_id
+            })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response({
+            'error': f'Failed to process workflow operation: {str(e)}'
+        }, status=500)
+
+
 @api_view(['GET'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
@@ -1090,9 +1248,8 @@ def workflows(request):
 def users(request):
     """
     Get all users for dropdown selection
-    Filtered based on workflow_type:
-    - For 'rfp_creation': Only Management and Executive roles
-    - For other workflows: Admin, System Owner, Procurement, Sourcing, Management, Executive
+    Only fetches users with Management and Executive roles from rbac_tprm table
+    Fetches users directly from tprm_integration database (users table)
     MULTI-TENANCY: Ensures tenant context is present
     """
     tenant_id = get_tenant_id_from_request(request)
@@ -1100,87 +1257,133 @@ def users(request):
         return Response({'error': 'Tenant context not found'}, status=403)
     
     try:
-        # Import required models
-        from rfp.models import CustomUser
-        from django.contrib.auth.models import User
-        import django.db as db
+        # Only fetch users with Management and Executive roles from rbac_tprm
+        allowed_roles = ['Management', 'Executive']
         
-        # Get workflow_type from query parameters
-        workflow_type = request.query_params.get('workflow_type', '')
+        print(f"[users] Fetching users with roles: {allowed_roles} from tprm_integration database")
         
-        # Get all active users from the database
-        # MULTI-TENANCY: Filter by tenant (if CustomUser has tenant_id field)
-        all_users = CustomUser.objects.filter(is_active='Y').order_by('first_name', 'last_name')
-        # Note: If CustomUser has tenant_id: .filter(tenant_id=tenant_id)
+        # Use 'tprm' connection to access tprm_integration database
+        db_connection = 'tprm'
+        try:
+            if 'tprm' not in connections.databases:
+                print("[users] Warning: 'tprm' database connection not found, falling back to 'default'")
+                db_connection = 'default'
+            else:
+                db_name = connections[db_connection].settings_dict.get('NAME', 'unknown')
+                print(f"[users] Using 'tprm' database connection: {db_name} for tprm_integration database")
+        except Exception as db_check_error:
+            print(f"[users] Warning: Error checking database connections: {db_check_error}, using 'tprm' connection")
+            db_connection = 'tprm'
         
-        # Determine which roles to filter by based on workflow_type
-        if workflow_type == 'rfp_creation':
-            # For RFP creation: Only Management and Executive
-            allowed_roles = ['Management', 'Executive']
-        else:
-            # For other workflows: Admin, System Owner, Procurement, Sourcing, Management, Executive
-            allowed_roles = ['Admin', 'System Owner', 'Procurement', 'Sourcing', 'Management', 'Executive']
-        
-        print(f"Workflow type: {workflow_type}")
-        print(f"Allowed roles: {allowed_roles}")
-        
-        # Get user IDs with allowed roles from rbac_tprm
-        with connection.cursor() as cursor:
-            # Build the SQL IN clause dynamically
-            placeholders = ','.join(['%s'] * len(allowed_roles))
-            query = f"""
-                SELECT DISTINCT UserId 
-                FROM rbac_tprm 
-                WHERE Role IN ({placeholders}) 
-                AND IsActive = 'Y'
-            """
-            cursor.execute(query, allowed_roles)
-            allowed_user_ids = [row[0] for row in cursor.fetchall()]
-        
-        # Filter users based on allowed roles
         users_data = []
-        print(f"Total users in database: {all_users.count()}")
-        print(f"Users with allowed roles: {len(allowed_user_ids)}")
         
-        for user in all_users:
-            # Check if user has an allowed role in rbac_tprm
-            if user.user_id in allowed_user_ids:
-                # Get user's role from rbac_tprm
-                user_role = 'User'  # Default
-                with connection.cursor() as cursor:
+        try:
+            with connections[db_connection].cursor() as cursor:
+                # Query users directly from tprm_integration database
+                # Join with rbac_tprm to get only users with Management or Executive roles
+                placeholders = ','.join(['%s'] * len(allowed_roles))
+                query = f"""
+                    SELECT DISTINCT 
+                        u.UserId,
+                        u.UserName,
+                        u.Email,
+                        u.FirstName,
+                        u.LastName,
+                        r.Role
+                    FROM users u
+                    INNER JOIN rbac_tprm r ON u.UserId = r.UserId
+                    WHERE r.Role IN ({placeholders})
+                    AND r.IsActive = 'Y'
+                    AND (u.IsActive = 'Y' OR u.IsActive IS NULL OR u.IsActive = 1)
+                    ORDER BY u.FirstName, u.LastName, u.UserName
+                """
+                print(f"[users] Executing query: {query}")
+                print(f"[users] Query parameters: {allowed_roles}")
+                cursor.execute(query, allowed_roles)
+                
+                results = cursor.fetchall()
+                print(f"[users] Found {len(results)} users with Management/Executive roles")
+                
+                for row in results:
+                    user_id, username, email, first_name, last_name, role = row
+                    
+                    user_data = {
+                        'id': str(user_id),  # Convert to string for consistency
+                        'username': username or f'user_{user_id}',
+                        'first_name': first_name or 'Unknown',
+                        'last_name': last_name or 'User',
+                        'email': email or '',
+                        'role': role or 'User',
+                        'department': 'General',  # Department info not in users table
+                        'is_active': True
+                    }
+                    users_data.append(user_data)
+                    print(f"[users] Added user: {user_data['first_name']} {user_data['last_name']} ({role})")
+        
+        except Exception as query_error:
+            print(f"[users] Error querying tprm_integration database: {str(query_error)}")
+            import traceback
+            traceback.print_exc()
+            # Try fallback: query users table separately
+            try:
+                print("[users] Attempting fallback: querying users and rbac_tprm separately")
+                with connections[db_connection].cursor() as cursor:
+                    # First get user IDs with allowed roles
                     placeholders = ','.join(['%s'] * len(allowed_roles))
                     query = f"""
-                        SELECT Role 
+                        SELECT DISTINCT UserId, Role
                         FROM rbac_tprm 
-                        WHERE UserId = %s 
-                        AND Role IN ({placeholders})
-                        LIMIT 1
+                        WHERE Role IN ({placeholders}) 
+                        AND IsActive = 'Y'
                     """
-                    cursor.execute(query, [user.user_id] + allowed_roles)
-                    result = cursor.fetchone()
-                    if result:
-                        user_role = result[0]
-                
-                # Only add users who have an allowed role
-                user_data = {
-                    'id': str(user.user_id),  # Convert to string for consistency
-                    'username': user.username,
-                    'first_name': user.first_name or 'Unknown',
-                    'last_name': user.last_name or 'User',
-                    'email': user.email or '',
-                    'role': user_role,
-                    'department': f'Department {user.department_id}' if user.department_id else 'General',
-                    'is_active': user.is_active == 'Y'
-                }
-                users_data.append(user_data)
-                print(f"Added user: {user_data['first_name']} {user_data['last_name']} ({user_role})")
+                    cursor.execute(query, allowed_roles)
+                    role_mappings = {row[0]: row[1] for row in cursor.fetchall()}
+                    print(f"[users] Found {len(role_mappings)} user IDs with allowed roles")
+                    
+                    if role_mappings:
+                        user_ids = list(role_mappings.keys())
+                        placeholders = ','.join(['%s'] * len(user_ids))
+                        query = f"""
+                            SELECT UserId, UserName, Email, FirstName, LastName
+                            FROM users
+                            WHERE UserId IN ({placeholders})
+                            AND (IsActive = 'Y' OR IsActive IS NULL OR IsActive = 1)
+                            ORDER BY FirstName, LastName, UserName
+                        """
+                        cursor.execute(query, user_ids)
+                        
+                        for row in cursor.fetchall():
+                            user_id, username, email, first_name, last_name = row
+                            user_data = {
+                                'id': str(user_id),
+                                'username': username or f'user_{user_id}',
+                                'first_name': first_name or 'Unknown',
+                                'last_name': last_name or 'User',
+                                'email': email or '',
+                                'role': role_mappings.get(user_id, 'User'),
+                                'department': 'General',
+                                'is_active': True
+                            }
+                            users_data.append(user_data)
+                            print(f"[users] Added user (fallback): {user_data['first_name']} {user_data['last_name']} ({user_data['role']})")
+            except Exception as fallback_error:
+                print(f"[users] Fallback query also failed: {str(fallback_error)}")
+                import traceback
+                traceback.print_exc()
         
-        print(f"Total users returned: {len(users_data)}")
+        print(f"[users] Total users returned: {len(users_data)}")
+        if len(users_data) == 0:
+            print("[users] WARNING: No users found with Management or Executive roles!")
+            print("[users] This might indicate:")
+            print("[users]   1. No users exist in tprm_integration.users table")
+            print("[users]   2. No users have Management or Executive roles in rbac_tprm table")
+            print("[users]   3. Database connection issue")
+        
         return Response(users_data)
         
     except Exception as e:
         # Fallback to mock data if database query fails
-        print(f"Error fetching users from database: {e}")
+        print(f"[users] Error fetching users from database: {e}")
         import traceback
         traceback.print_exc()
         users_data = [
@@ -1544,6 +1747,511 @@ def get_proposal_id_from_approval(request, approval_id):
         return Response({'error': 'Approval request not found'}, status=404)
     except Exception as e:
         return Response({'error': str(e)}, status=500)
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([SimpleAuthenticatedPermission])
+@rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
+def get_rfp_id_from_approval(request, approval_id):
+    """
+    Get RFP ID from approval_id by looking up the workflow and RFP relationship
+    MULTI-TENANCY: Only returns RFP IDs for tenant's approval requests
+    """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
+    try:
+        # Get the approval request - try with tenant_id first, then without if not found
+        approval_request = None
+        try:
+            approval_request = ApprovalRequests.objects.get(approval_id=approval_id, tenant_id=tenant_id)
+            print(f"✅ [get_rfp_id_from_approval] Found approval request with tenant_id: {approval_id} (tenant: {tenant_id})")
+        except ApprovalRequests.DoesNotExist:
+            print(f"⚠️ [get_rfp_id_from_approval] Approval request {approval_id} not found with tenant_id {tenant_id}, trying without tenant filter...")
+            # Try without tenant filter to see if it exists with different tenant
+            try:
+                approval_request = ApprovalRequests.objects.get(approval_id=approval_id)
+                print(f"⚠️ [get_rfp_id_from_approval] Found approval request {approval_id} but with different tenant_id: {approval_request.tenant_id} (expected: {tenant_id})")
+                # If tenant mismatch, use the approval request's actual tenant_id for RFP lookup
+                # This allows cross-tenant access when needed (e.g., for committee evaluations)
+                if approval_request.tenant_id and approval_request.tenant_id != tenant_id:
+                    print(f"⚠️ [get_rfp_id_from_approval] Tenant mismatch detected. Will use approval's tenant_id ({approval_request.tenant_id}) for RFP lookup")
+                    # Continue processing with the approval request's tenant_id
+            except ApprovalRequests.DoesNotExist:
+                # List all approval_ids for debugging
+                all_approvals = ApprovalRequests.objects.values_list('approval_id', flat=True)[:20]
+                print(f"🔍 [get_rfp_id_from_approval] Approval request {approval_id} not found. Available approval_ids (first 20): {list(all_approvals)}")
+                raise
+        
+        # Determine effective tenant_id to use for RFP lookup
+        # If approval belongs to different tenant, use its tenant_id for RFP lookup
+        effective_tenant_id = approval_request.tenant_id if approval_request.tenant_id else tenant_id
+        if approval_request.tenant_id and approval_request.tenant_id != tenant_id:
+            print(f"⚠️ [get_rfp_id_from_approval] Using approval's tenant_id ({effective_tenant_id}) for RFP lookup instead of request tenant_id ({tenant_id})")
+        
+        print(f"🔍 [get_rfp_id_from_approval] Processing approval_id: {approval_id}, workflow_id: {approval_request.workflow_id}, effective_tenant_id: {effective_tenant_id}")
+        
+        rfp_id = None
+        request_data = None  # Initialize request_data for use in later methods
+        
+        # Method 1: Try to find RFP by approval_workflow_id (which matches the workflow_id in approval_requests)
+        try:
+            if effective_tenant_id:
+                rfp = RFP.objects.get(approval_workflow_id=approval_request.workflow_id, tenant_id=effective_tenant_id)
+            else:
+                rfp = RFP.objects.get(approval_workflow_id=approval_request.workflow_id)
+            rfp_id = rfp.rfp_id
+            print(f"✅ [get_rfp_id_from_approval] Found RFP by workflow_id: {rfp.rfp_id}")
+            # RFP found, return it immediately
+            return Response({
+                'rfp_id': rfp_id,
+                'approval_id': approval_id,
+                'workflow_id': approval_request.workflow_id
+            })
+        except RFP.DoesNotExist:
+            print(f"⚠️ [get_rfp_id_from_approval] No RFP found for workflow_id: {approval_request.workflow_id} with tenant {effective_tenant_id}")
+            
+            # Try to find RFP by workflow_id without tenant filter (in case tenant_id mismatch)
+            try:
+                rfp = RFP.objects.get(approval_workflow_id=approval_request.workflow_id)
+                rfp_id = rfp.rfp_id
+                print(f"✅ [get_rfp_id_from_approval] Found RFP by workflow_id (without tenant filter): {rfp.rfp_id}")
+                # RFP found, return it immediately
+                return Response({
+                    'rfp_id': rfp_id,
+                    'approval_id': approval_id,
+                    'workflow_id': approval_request.workflow_id,
+                    'note': 'Found without tenant filter (cross-tenant access)'
+                })
+            except RFP.DoesNotExist:
+                print(f"⚠️ [get_rfp_id_from_approval] No RFP found for workflow_id (with or without tenant), trying request_data and other methods...")
+                # Method 2: Try to extract RFP ID from request_data (only if RFP not found by workflow_id)
+                try:
+                    request_data_raw = approval_request.request_data
+                    print(f"🔍 [get_rfp_id_from_approval] Raw request_data type: {type(request_data_raw)}")
+                    print(f"🔍 [get_rfp_id_from_approval] Raw request_data (first 500 chars): {str(request_data_raw)[:500] if request_data_raw else 'None'}")
+                    
+                    request_data = request_data_raw
+                    if isinstance(request_data, str):
+                        try:
+                            request_data = json.loads(request_data)
+                            print(f"✅ [get_rfp_id_from_approval] Successfully parsed JSON request_data")
+                        except json.JSONDecodeError as json_err:
+                            print(f"❌ [get_rfp_id_from_approval] Failed to parse JSON: {str(json_err)}")
+                            request_data = None
+                    
+                    if request_data:
+                        print(f"🔍 [get_rfp_id_from_approval] Parsed request_data type: {type(request_data)}")
+                        if isinstance(request_data, dict):
+                            print(f"🔍 [get_rfp_id_from_approval] request_data keys: {list(request_data.keys())[:20]}")
+                        
+                        # Try different possible keys for RFP ID
+                        rfp_id = (
+                            request_data.get('rfp_id') or
+                            request_data.get('rfpId') or
+                            request_data.get('id') or
+                            request_data.get('RFP_ID') or
+                            request_data.get('RFPID') or
+                            None
+                        )
+                        
+                        # If it's an array, try to get from first item
+                        if not rfp_id and isinstance(request_data, list) and len(request_data) > 0:
+                            print(f"🔍 [get_rfp_id_from_approval] request_data is a list with {len(request_data)} items")
+                            first_item = request_data[0]
+                            if isinstance(first_item, dict):
+                                print(f"🔍 [get_rfp_id_from_approval] First item keys: {list(first_item.keys())[:20]}")
+                                rfp_id = (
+                                    first_item.get('rfp_id') or
+                                    first_item.get('rfpId') or
+                                    first_item.get('id') or
+                                    first_item.get('RFP_ID') or
+                                    first_item.get('RFPID') or
+                                    None
+                                )
+                        
+                        # Method 3: Try to search recursively in nested structures
+                        if not rfp_id and isinstance(request_data, dict):
+                            def find_rfp_id_recursive(obj, depth=0, max_depth=3):
+                                if depth > max_depth:
+                                    return None
+                                if isinstance(obj, dict):
+                                    # Check all keys for rfp_id variations
+                                    for key, value in obj.items():
+                                        if key.lower() in ['rfp_id', 'rfpid', 'id'] and value:
+                                            return value
+                                        # Recursively search nested dicts
+                                        if isinstance(value, (dict, list)):
+                                            result = find_rfp_id_recursive(value, depth + 1, max_depth)
+                                            if result:
+                                                return result
+                                elif isinstance(obj, list):
+                                    for item in obj:
+                                        result = find_rfp_id_recursive(item, depth + 1, max_depth)
+                                        if result:
+                                            return result
+                                return None
+                            
+                            rfp_id = find_rfp_id_recursive(request_data)
+                            if rfp_id:
+                                print(f"✅ [get_rfp_id_from_approval] Found RFP ID recursively: {rfp_id}")
+                        
+                        if rfp_id:
+                            print(f"✅ [get_rfp_id_from_approval] Found RFP ID from request_data: {rfp_id}")
+                            # Verify the RFP exists using effective tenant_id
+                            try:
+                                if effective_tenant_id:
+                                    rfp = RFP.objects.get(rfp_id=rfp_id, tenant_id=effective_tenant_id)
+                                else:
+                                    rfp = RFP.objects.get(rfp_id=rfp_id)
+                                print(f"✅ [get_rfp_id_from_approval] Verified RFP exists: {rfp.rfp_id}")
+                            except RFP.DoesNotExist:
+                                # Try without tenant filter as fallback
+                                try:
+                                    rfp = RFP.objects.get(rfp_id=rfp_id)
+                                    print(f"✅ [get_rfp_id_from_approval] Verified RFP exists (without tenant filter): {rfp.rfp_id}")
+                                except RFP.DoesNotExist:
+                                    print(f"⚠️ [get_rfp_id_from_approval] RFP ID {rfp_id} from request_data not found in database")
+                                    rfp_id = None
+                        else:
+                            print(f"❌ [get_rfp_id_from_approval] Could not find RFP ID in request_data")
+                    else:
+                        print(f"❌ [get_rfp_id_from_approval] request_data is None or could not be parsed")
+                        
+                except Exception as data_error:
+                    print(f"❌ [get_rfp_id_from_approval] Error extracting RFP ID from request_data: {str(data_error)}")
+                    import traceback
+                    print(traceback.format_exc())
+        
+        # Method 4: Try to find RFP through stages if still not found
+        if not rfp_id:
+            print(f"🔍 [get_rfp_id_from_approval] Trying to find RFP through stages...")
+            try:
+                from .models import ApprovalStages
+                # Try with effective tenant_id first, then without filter
+                stages = ApprovalStages.objects.filter(approval_id=approval_id, tenant_id=effective_tenant_id)
+                if not stages.exists():
+                    stages = ApprovalStages.objects.filter(approval_id=approval_id)
+                
+                for stage in stages:
+                    # Try to get RFP ID from stage's response_data
+                    if hasattr(stage, 'response_data') and stage.response_data:
+                        try:
+                            stage_response_data = stage.response_data
+                            if isinstance(stage_response_data, str):
+                                stage_response_data = json.loads(stage_response_data)
+                            
+                            if isinstance(stage_response_data, dict):
+                                stage_rfp_id = (
+                                    stage_response_data.get('rfp_id') or
+                                    stage_response_data.get('rfpId') or
+                                    stage_response_data.get('id') or
+                                    None
+                                )
+                                if stage_rfp_id:
+                                    # Verify it exists using effective tenant_id
+                                    try:
+                                        if effective_tenant_id:
+                                            rfp = RFP.objects.get(rfp_id=stage_rfp_id, tenant_id=effective_tenant_id)
+                                        else:
+                                            rfp = RFP.objects.get(rfp_id=stage_rfp_id)
+                                        rfp_id = stage_rfp_id
+                                        print(f"✅ [get_rfp_id_from_approval] Found RFP ID from stage response_data: {rfp_id}")
+                                        break
+                                    except RFP.DoesNotExist:
+                                        # Try without tenant filter
+                                        try:
+                                            rfp = RFP.objects.get(rfp_id=stage_rfp_id)
+                                            rfp_id = stage_rfp_id
+                                            print(f"✅ [get_rfp_id_from_approval] Found RFP ID from stage response_data (without tenant filter): {rfp_id}")
+                                            break
+                                        except RFP.DoesNotExist:
+                                            continue
+                        except Exception:
+                            continue
+            except Exception as stage_error:
+                print(f"⚠️ [get_rfp_id_from_approval] Error checking stages: {str(stage_error)}")
+        
+        # Method 5: Try to find RFP by matching request_data fields (scope, employee_count, etc.)
+        # Parse request_data if not already parsed
+        if not rfp_id and not request_data:
+            try:
+                request_data_raw = approval_request.request_data
+                if request_data_raw:
+                    if isinstance(request_data_raw, str):
+                        try:
+                            request_data = json.loads(request_data_raw)
+                        except json.JSONDecodeError:
+                            request_data = None
+                    else:
+                        request_data = request_data_raw
+            except Exception:
+                request_data = None
+        
+        if not rfp_id and request_data:
+            print(f"🔍 [get_rfp_id_from_approval] Trying to find RFP by matching request_data fields...")
+            try:
+                # Try to match by request title or description
+                request_title = approval_request.request_title or ''
+                request_description = approval_request.request_description or ''
+                
+                # Search for RFPs with matching title or description using effective tenant_id
+                if effective_tenant_id:
+                    matching_rfps = RFP.objects.filter(tenant_id=effective_tenant_id)
+                else:
+                    matching_rfps = RFP.objects.all()
+                
+                # Try to match by title
+                if request_title:
+                    title_matches = matching_rfps.filter(rfp_title__icontains=request_title[:50])  # Use first 50 chars
+                    if title_matches.exists():
+                        # If multiple matches, prefer one with matching workflow_id
+                        if approval_request.workflow_id:
+                            workflow_match = title_matches.filter(approval_workflow_id=approval_request.workflow_id).first()
+                            if workflow_match:
+                                rfp_id = workflow_match.rfp_id
+                                print(f"✅ [get_rfp_id_from_approval] Found RFP by title and workflow match: {rfp_id}")
+                        if not rfp_id:
+                            rfp_id = title_matches.first().rfp_id
+                            print(f"✅ [get_rfp_id_from_approval] Found RFP by title match: {rfp_id}")
+                
+                # If still not found, try to match by description or other fields
+                if not rfp_id and request_description:
+                    desc_matches = matching_rfps.filter(description__icontains=request_description[:100])
+                    if desc_matches.exists():
+                        rfp_id = desc_matches.first().rfp_id
+                        print(f"✅ [get_rfp_id_from_approval] Found RFP by description match: {rfp_id}")
+                
+            except Exception as match_error:
+                print(f"⚠️ [get_rfp_id_from_approval] Error matching RFP by fields: {str(match_error)}")
+        
+        # Method 6: If still not found, try to get any RFP associated with this workflow_id (even if approval_workflow_id doesn't match)
+        if not rfp_id:
+            print(f"🔍 [get_rfp_id_from_approval] Trying to find any RFP for workflow_id: {approval_request.workflow_id}...")
+            try:
+                # Check if there are any RFPs that might be related through other means
+                # This is a last resort - return the first RFP for this tenant if workflow matching fails
+                # But only if we're sure this is an RFP workflow
+                from .models import ApprovalWorkflows
+                try:
+                    workflow = ApprovalWorkflows.objects.get(workflow_id=approval_request.workflow_id, tenant_id=tenant_id)
+                    if workflow.business_object_type == 'RFP':
+                        # This is an RFP workflow, so try to find any RFP that might be related
+                        if tenant_id:
+                            any_rfp = RFP.objects.filter(tenant_id=tenant_id).first()
+                        else:
+                            any_rfp = RFP.objects.first()
+                        if any_rfp:
+                            print(f"⚠️ [get_rfp_id_from_approval] Using fallback RFP: {any_rfp.rfp_id} (workflow is RFP type but no direct match found)")
+                            # Don't use this as it might be wrong - instead return error with helpful message
+                except ApprovalWorkflows.DoesNotExist:
+                    pass
+            except Exception as fallback_error:
+                print(f"⚠️ [get_rfp_id_from_approval] Error in fallback search: {str(fallback_error)}")
+        
+        # Method 7: If still not found, try to find any RFP that might be related by searching all RFPs
+        if not rfp_id:
+            print(f"🔍 [get_rfp_id_from_approval] Trying final fallback: search all RFPs for tenant {tenant_id}...")
+            try:
+                # Get all RFPs for this tenant and see if any match by title or other criteria using effective tenant_id
+                if effective_tenant_id:
+                    all_rfps = RFP.objects.filter(tenant_id=effective_tenant_id)
+                else:
+                    all_rfps = RFP.objects.all()
+                
+                # Try to match by request title
+                request_title = approval_request.request_title or ''
+                if request_title:
+                    # Remove common prefixes like "Approval Request" or "RFP Approval"
+                    clean_title = request_title.replace('Approval Request', '').replace('RFP Approval:', '').replace('AR_', '').strip()
+                    if clean_title:
+                        title_matches = all_rfps.filter(rfp_title__icontains=clean_title[:50])
+                        if title_matches.exists():
+                            rfp_id = title_matches.first().rfp_id
+                            print(f"✅ [get_rfp_id_from_approval] Found RFP by cleaned title match: {rfp_id}")
+                
+                # If still not found and we have a workflow_id, try to find RFP created around the same time
+                if not rfp_id and approval_request.created_at:
+                    # Find RFPs created within 1 day of the approval request
+                    from django.utils import timezone
+                    from datetime import timedelta
+                    time_window_start = approval_request.created_at - timedelta(days=1)
+                    time_window_end = approval_request.created_at + timedelta(days=1)
+                    time_matches = all_rfps.filter(created_at__gte=time_window_start, created_at__lte=time_window_end)
+                    if time_matches.exists():
+                        rfp_id = time_matches.first().rfp_id
+                        print(f"⚠️ [get_rfp_id_from_approval] Found RFP by time window match (may not be correct): {rfp_id}")
+                        
+            except Exception as final_fallback_error:
+                print(f"⚠️ [get_rfp_id_from_approval] Error in final fallback: {str(final_fallback_error)}")
+        
+        if not rfp_id:
+            error_msg = f'No RFP ID found for approval request {approval_id}. Workflow ID: {approval_request.workflow_id}'
+            print(f"❌ [get_rfp_id_from_approval] {error_msg}")
+            print(f"🔍 [get_rfp_id_from_approval] Approval request details:")
+            print(f"   - request_title: {approval_request.request_title}")
+            print(f"   - request_description: {approval_request.request_description}")
+            print(f"   - workflow_id: {approval_request.workflow_id}")
+            print(f"   - tenant_id: {approval_request.tenant_id}")
+            print(f"   - request_data: {str(approval_request.request_data)[:200] if approval_request.request_data else 'None/Empty'}")
+            
+            # List available RFPs for debugging
+            try:
+                if effective_tenant_id:
+                    available_rfps = RFP.objects.filter(tenant_id=effective_tenant_id).values_list('rfp_id', 'rfp_title', 'approval_workflow_id')[:10]
+                    print(f"🔍 [get_rfp_id_from_approval] Available RFPs for tenant {effective_tenant_id}: {list(available_rfps)}")
+            except Exception as debug_err:
+                print(f"⚠️ [get_rfp_id_from_approval] Error listing available RFPs: {str(debug_err)}")
+            
+            return Response({
+                'error': error_msg,
+                'approval_id': approval_id,
+                'workflow_id': approval_request.workflow_id,
+                'request_title': approval_request.request_title,
+                'request_data_preview': str(approval_request.request_data)[:200] if approval_request.request_data else None,
+                'suggestion': 'Check if RFP exists and has approval_workflow_id set to match workflow_id'
+            }, status=404)
+        
+        return Response({
+            'rfp_id': rfp_id,
+            'approval_id': approval_id,
+            'workflow_id': approval_request.workflow_id
+        })
+        
+    except ApprovalRequests.DoesNotExist as e:
+        error_msg = f'Approval request {approval_id} not found for tenant {tenant_id}'
+        print(f"❌ [get_rfp_id_from_approval] {error_msg}")
+        
+        # Last resort: Try to find RFP through stages even if approval request doesn't exist
+        print(f"🔍 [get_rfp_id_from_approval] Attempting to find RFP through stages with approval_id: {approval_id}")
+        rfp_id_from_stages = None
+        try:
+            from .models import ApprovalStages
+            # Try with tenant_id first
+            stages = ApprovalStages.objects.filter(approval_id=approval_id, tenant_id=tenant_id)
+            if not stages.exists():
+                # Try without tenant_id filter
+                stages = ApprovalStages.objects.filter(approval_id=approval_id)
+            
+            if stages.exists():
+                print(f"✅ [get_rfp_id_from_approval] Found {stages.count()} stage(s) with approval_id {approval_id}")
+                first_stage = stages.first()
+                
+                # Try to get workflow_id from approval request (even if it has different tenant)
+                approval_req = ApprovalRequests.objects.filter(approval_id=approval_id).first()
+                if approval_req:
+                    workflow_id = approval_req.workflow_id
+                    print(f"🔍 [get_rfp_id_from_approval] Found approval request with workflow_id: {workflow_id}")
+                    
+                    # Try to find RFP by workflow_id using approval request's tenant_id
+                    effective_lookup_tenant_id = approval_req.tenant_id if approval_req and approval_req.tenant_id else tenant_id
+                    try:
+                        if effective_lookup_tenant_id:
+                            rfp = RFP.objects.get(approval_workflow_id=workflow_id, tenant_id=effective_lookup_tenant_id)
+                        else:
+                            rfp = RFP.objects.get(approval_workflow_id=workflow_id)
+                        rfp_id_from_stages = rfp.rfp_id
+                        print(f"✅ [get_rfp_id_from_approval] Found RFP {rfp.rfp_id} through stage workflow lookup")
+                    except RFP.DoesNotExist:
+                        # Try without tenant filter
+                        try:
+                            rfp = RFP.objects.get(approval_workflow_id=workflow_id)
+                            rfp_id_from_stages = rfp.rfp_id
+                            print(f"✅ [get_rfp_id_from_approval] Found RFP {rfp.rfp_id} through stage workflow lookup (without tenant filter)")
+                        except RFP.DoesNotExist:
+                            print(f"⚠️ [get_rfp_id_from_approval] No RFP found for workflow_id {workflow_id}")
+                
+                # If still not found, try to extract from stage's response_data or approval request's request_data
+                if not rfp_id_from_stages:
+                    try:
+                        # First try to get from approval request's request_data (if we have it)
+                        if approval_req and approval_req.request_data:
+                            approval_request_data = approval_req.request_data
+                            if isinstance(approval_request_data, str):
+                                try:
+                                    approval_request_data = json.loads(approval_request_data)
+                                except json.JSONDecodeError:
+                                    approval_request_data = None
+                            
+                            if isinstance(approval_request_data, dict):
+                                rfp_id_from_stages = (
+                                    approval_request_data.get('rfp_id') or
+                                    approval_request_data.get('rfpId') or
+                                    approval_request_data.get('id') or
+                                    None
+                                )
+                                if rfp_id_from_stages:
+                                    print(f"✅ [get_rfp_id_from_approval] Found RFP ID from approval request_data: {rfp_id_from_stages}")
+                        
+                        # If not found, try stage's response_data
+                        if not rfp_id_from_stages and hasattr(first_stage, 'response_data') and first_stage.response_data:
+                            stage_response_data = first_stage.response_data
+                            if isinstance(stage_response_data, str):
+                                try:
+                                    stage_response_data = json.loads(stage_response_data)
+                                except json.JSONDecodeError:
+                                    stage_response_data = None
+                            
+                            if isinstance(stage_response_data, dict):
+                                rfp_id_from_stages = (
+                                    stage_response_data.get('rfp_id') or
+                                    stage_response_data.get('rfpId') or
+                                    stage_response_data.get('id') or
+                                    None
+                                )
+                                if rfp_id_from_stages:
+                                    print(f"✅ [get_rfp_id_from_approval] Found RFP ID from stage response_data: {rfp_id_from_stages}")
+                        
+                        # Verify RFP exists if we found an ID
+                        if rfp_id_from_stages:
+                            try:
+                                # Use approval request's tenant_id if available, otherwise use request tenant_id
+                                lookup_tenant_id = approval_req.tenant_id if approval_req and approval_req.tenant_id else tenant_id
+                                if lookup_tenant_id:
+                                    rfp = RFP.objects.get(rfp_id=rfp_id_from_stages, tenant_id=lookup_tenant_id)
+                                else:
+                                    rfp = RFP.objects.get(rfp_id=rfp_id_from_stages)
+                                print(f"✅ [get_rfp_id_from_approval] Verified RFP {rfp.rfp_id} exists")
+                            except RFP.DoesNotExist:
+                                # Try without tenant filter as fallback
+                                try:
+                                    rfp = RFP.objects.get(rfp_id=rfp_id_from_stages)
+                                    print(f"✅ [get_rfp_id_from_approval] Verified RFP {rfp.rfp_id} exists (without tenant filter)")
+                                except RFP.DoesNotExist:
+                                    print(f"⚠️ [get_rfp_id_from_stages] RFP {rfp_id_from_stages} not found in database")
+                                    rfp_id_from_stages = None
+                    except Exception as stage_data_err:
+                        print(f"⚠️ [get_rfp_id_from_approval] Error extracting RFP ID from stage/approval data: {str(stage_data_err)}")
+                        import traceback
+                        print(traceback.format_exc())
+                
+        except Exception as stage_lookup_err:
+            print(f"⚠️ [get_rfp_id_from_approval] Error in stage lookup fallback: {str(stage_lookup_err)}")
+            import traceback
+            print(traceback.format_exc())
+        
+        if rfp_id_from_stages:
+            return Response({
+                'rfp_id': rfp_id_from_stages,
+                'approval_id': approval_id,
+                'note': 'Found through stage lookup (approval request not found)'
+            })
+        
+        return Response({
+            'error': error_msg,
+            'approval_id': approval_id,
+            'tenant_id': tenant_id,
+            'suggestion': 'Check if approval_id exists or if tenant_id is correct. Also check if stages exist for this approval_id.'
+        }, status=404)
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"❌ [get_rfp_id_from_approval] Unexpected error: {str(e)}")
+        print(f"❌ [get_rfp_id_from_approval] Traceback: {error_trace}")
+        return Response({'error': f'Internal server error: {str(e)}'}, status=500)
 
 @api_view(['GET'])
 @authentication_classes([JWTAuthentication])
@@ -2952,8 +3660,16 @@ def get_rfp_details_for_change_request(request, rfp_id):
             
             if all_criteria_count > 0:
                 # Show sample of what rfp_ids have criteria
-                from django.db import connection
-                with connection.cursor() as cursor:
+                # Use 'tprm' connection to access rfp_evaluation_criteria table (in tprm_integration database)
+                db_connection = 'tprm'
+                try:
+                    if 'tprm' not in connections.databases:
+                        print("Warning: 'tprm' database connection not found, falling back to 'default'")
+                        db_connection = 'default'
+                except Exception as db_check_error:
+                    print(f"Warning: Error checking database connections: {db_check_error}, using 'tprm' connection")
+                
+                with connections[db_connection].cursor() as cursor:
                     cursor.execute("""
                         SELECT DISTINCT rfp_id, COUNT(*) as cnt 
                         FROM rfp_evaluation_criteria 
@@ -3064,8 +3780,16 @@ def get_rfp_details_for_change_request(request, rfp_id):
         # METHOD 2: Use raw SQL as fallback if related manager didn't work
         if len(evaluation_criteria) == 0:
             try:
-                from django.db import connection
-                with connection.cursor() as cursor:
+                # Use 'tprm' connection to access rfp_evaluation_criteria table (in tprm_integration database)
+                db_connection = 'tprm'
+                try:
+                    if 'tprm' not in connections.databases:
+                        print("Warning: 'tprm' database connection not found, falling back to 'default'")
+                        db_connection = 'default'
+                except Exception as db_check_error:
+                    print(f"Warning: Error checking database connections: {db_check_error}, using 'tprm' connection")
+                
+                with connections[db_connection].cursor() as cursor:
                     # First, check what rfp_id we're working with
                     rfp_id_value = rfp.rfp_id
                     print(f"🔍 METHOD 2: Raw SQL fallback for rfp_id={rfp_id_value} (type: {type(rfp_id_value)})")
@@ -3266,14 +3990,35 @@ def get_rfp_details(request, rfp_id):
     
     try:
         # Get RFP by ID
-        # MULTI-TENANCY: Filter by tenant
-        rfp = RFP.objects.get(rfp_id=rfp_id, tenant_id=tenant_id)
+        # MULTI-TENANCY: Try with tenant filter first, then without if not found (for cross-tenant access)
+        rfp = None
+        try:
+            rfp = RFP.objects.get(rfp_id=rfp_id, tenant_id=tenant_id)
+            print(f"✅ [get_rfp_details] Found RFP {rfp_id} with tenant {tenant_id}")
+        except RFP.DoesNotExist:
+            # Try without tenant filter (for cross-tenant access when RFP is linked to approval)
+            print(f"⚠️ [get_rfp_details] RFP {rfp_id} not found with tenant {tenant_id}, trying without tenant filter...")
+            try:
+                rfp = RFP.objects.get(rfp_id=rfp_id)
+                print(f"✅ [get_rfp_details] Found RFP {rfp_id} without tenant filter (cross-tenant access)")
+            except RFP.DoesNotExist:
+                raise
         
-        # Get evaluation criteria for this RFP - use raw SQL to ensure data is fetched
+        # Get evaluation criteria for this RFP - use tprm database connection
         evaluation_criteria = []
         try:
-            from django.db import connection
-            with connection.cursor() as cursor:
+            # Use 'tprm' connection to access rfp_evaluation_criteria table (in tprm_integration database)
+            db_connection = 'tprm'
+            try:
+                if 'tprm' not in connections.databases:
+                    print("Warning: 'tprm' database connection not found, falling back to 'default'")
+                    db_connection = 'default'
+                else:
+                    print(f"Using 'tprm' database connection for rfp_evaluation_criteria table (tprm_integration)")
+            except Exception as db_check_error:
+                print(f"Warning: Error checking database connections: {db_check_error}, using 'tprm' connection")
+            
+            with connections[db_connection].cursor() as cursor:
                 cursor.execute("""
                     SELECT criteria_id, rfp_id, criteria_name, criteria_description, 
                            weight_percentage, evaluation_type, min_score, max_score, 
@@ -3673,10 +4418,13 @@ def change_requests(request):
 
             # Collect candidate stages that need creator action
             # MULTI-TENANCY: Filter by tenant
+            # Include both REJECTED and REQUEST_CHANGES to handle any legacy data
             candidate_stages = ApprovalStages.objects.filter(
-                stage_status__in=['REJECTED'],  # Using REJECTED as REQUEST_CHANGES is mapped to REJECTED
+                stage_status__in=['REJECTED', 'REQUEST_CHANGES'],  # REQUEST_CHANGES is mapped to REJECTED, but check both for legacy data
                 tenant_id=tenant_id
             ).order_by('-updated_at')
+
+            print(f"[DEBUG] Found {candidate_stages.count()} candidate stages with REJECTED/REQUEST_CHANGES status for tenant {tenant_id}")
 
             for stage in candidate_stages:
                 try:
@@ -3689,12 +4437,15 @@ def change_requests(request):
                     try:
                         workflow = ApprovalWorkflows.objects.get(workflow_id=approval_request.workflow_id, tenant_id=tenant_id)
                         if (workflow.business_object_type or '').upper() != 'RFP':
+                            print(f"[DEBUG] Skipping stage {stage.stage_id}: workflow {workflow.workflow_id} is not RFP type (type: {workflow.business_object_type})")
                             continue
                     except ApprovalWorkflows.DoesNotExist:
+                        print(f"[DEBUG] Skipping stage {stage.stage_id}: workflow {approval_request.workflow_id} not found")
                         continue
 
                     # Optionally filter by creator
                     if creator_id and str(approval_request.requester_id) != str(creator_id):
+                        print(f"[DEBUG] Skipping stage {stage.stage_id}: creator mismatch (requester: {approval_request.requester_id}, filter: {creator_id})")
                         continue
 
                     # Resolve RFP title/id from request_data when available
@@ -3761,10 +4512,15 @@ def change_requests(request):
                         'priority': approval_request.priority or 'MEDIUM',
                         'requested_at': requested_at,
                     })
-                except Exception:
-                    # Skip any malformed records, continue listing others
+                    print(f"[DEBUG] Added change request for stage {stage.stage_id}, RFP {rfp_id}")
+                except Exception as e:
+                    # Skip any malformed records, but log the error for debugging
+                    import traceback
+                    print(f"[DEBUG] Error processing stage {stage.stage_id}: {str(e)}")
+                    traceback.print_exc()
                     continue
 
+            print(f"[DEBUG] Returning {len(change_requests_list)} change requests for tenant {tenant_id}")
             return JsonResponse({
                 'success': True,
                 'change_requests': change_requests_list,
@@ -4004,4 +4760,136 @@ def respond_to_change_request(request):
             'success': False,
             'error': 'Failed to respond to change request',
             'message': str(e)
+        }, status=500)
+
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([SimpleAuthenticatedPermission])
+@rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
+def get_workflow_changes(request, workflow_id):
+    """
+    Get workflow changes history
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
+    try:
+        # Get the workflow
+        try:
+            workflow = ApprovalWorkflows.objects.get(workflow_id=workflow_id, tenant_id=tenant_id)
+        except ApprovalWorkflows.DoesNotExist:
+            # Try without tenant filter for cross-tenant access
+            try:
+                workflow = ApprovalWorkflows.objects.get(workflow_id=workflow_id)
+            except ApprovalWorkflows.DoesNotExist:
+                return Response({
+                    'error': f'Workflow {workflow_id} not found'
+                }, status=404)
+        
+        changes = []
+        
+        # Add creation record
+        changes.append({
+            'id': 1,
+            'change_type': 'Created',
+            'description': 'Workflow was initially created',
+            'changed_by': workflow.created_by,
+            'changed_by_name': f'User {workflow.created_by}',
+            'changed_at': workflow.created_at.isoformat() if workflow.created_at else None,
+            'old_values': None,
+            'new_values': {
+                'workflow_name': workflow.workflow_name,
+                'workflow_type': workflow.workflow_type,
+                'description': workflow.description,
+                'business_object_type': workflow.business_object_type,
+                'is_active': workflow.is_active
+            }
+        })
+        
+        # Check if workflow was updated (created_at != updated_at)
+        if workflow.updated_at and workflow.created_at:
+            if workflow.updated_at > workflow.created_at:
+                # Try to get user info for the updater
+                updater_name = f"User {workflow.created_by}"
+                try:
+                    # Try to get user from users table directly
+                    from django.db import connections
+                    with connections['default'].cursor() as cursor:
+                        cursor.execute("""
+                            SELECT first_name, last_name, username 
+                            FROM users 
+                            WHERE id = %s
+                        """, [workflow.created_by])
+                        row = cursor.fetchone()
+                        if row:
+                            first_name, last_name, username = row
+                            if first_name or last_name:
+                                updater_name = f"{first_name or ''} {last_name or ''}".strip()
+                            elif username:
+                                updater_name = username
+                except Exception as user_err:
+                    print(f"Could not fetch user info: {user_err}")
+                    updater_name = f"User {workflow.created_by}"
+                
+                changes.append({
+                    'id': 2,
+                    'change_type': 'Updated',
+                    'description': 'Workflow was modified',
+                    'changed_by': workflow.created_by,
+                    'changed_by_name': updater_name,
+                    'changed_at': workflow.updated_at.isoformat() if workflow.updated_at else None,
+                    'old_values': {
+                        'description': workflow.description  # We don't have old values, so use current
+                    },
+                    'new_values': {
+                        'workflow_name': workflow.workflow_name,
+                        'workflow_type': workflow.workflow_type,
+                        'description': workflow.description,
+                        'business_object_type': workflow.business_object_type,
+                        'is_active': workflow.is_active
+                    }
+                })
+        
+        # Get approval requests for this workflow to check for version history
+        approval_requests = ApprovalRequests.objects.filter(
+            workflow_id=workflow_id,
+            tenant_id=tenant_id
+        )[:5]  # Limit to first 5 for performance
+        
+        # Get version history from approval request versions
+        version_count = 0
+        for approval_request in approval_requests:
+            versions = ApprovalRequestVersions.objects.filter(
+                approval_id=approval_request.approval_id
+            ).order_by('-created_at')[:3]  # Get latest 3 versions per approval
+            
+            for version in versions:
+                version_count += 1
+                changes.append({
+                    'id': len(changes) + 1,
+                    'change_type': 'Version',
+                    'description': version.changes_summary or f'Version {version.version_number} created',
+                    'changed_by': version.created_by,
+                    'changed_by_name': version.created_by_name or f'User {version.created_by}',
+                    'changed_at': version.created_at.isoformat() if version.created_at else None,
+                    'old_values': None,
+                    'new_values': {
+                        'version_number': version.version_number,
+                        'version_type': version.version_type,
+                        'change_reason': version.change_reason
+                    }
+                })
+        
+        return Response(changes)
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response({
+            'error': f'Failed to get workflow changes: {str(e)}'
         }, status=500)

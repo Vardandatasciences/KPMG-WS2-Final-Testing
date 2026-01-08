@@ -3,6 +3,7 @@ import uuid
 import hashlib
 import logging
 import threading
+import re
 from django.shortcuts import get_object_or_404
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -597,12 +598,12 @@ def create_rfp_response(request):
                         'error': f'Invalid rfpId format: {rfp_id}'
                     }, status=400)
                 
-                # CRITICAL: Find invitation ONLY by invitation_id - no fallbacks
-                # Invitations are created during vendor selection, not here
+                # CRITICAL: Find invitation by invitation_id
+                # For open RFPs, create invitation on-the-fly if it doesn't exist
                 # MULTI-TENANCY: Filter invitation by tenant
                 if invitation_id:
                     try:
-                        # Try to find by unique_token first (for string tokens like INV12345)
+                        # Try to find by unique_token first (for string tokens like INV12345 or open-rfp-*)
                         invitation = VendorInvitation.objects.select_related('vendor').get(
                             unique_token=invitation_id,
                             tenant_id=tenant_id
@@ -618,17 +619,114 @@ def create_rfp_response(request):
                             )
                             print(f"[SUCCESS] Found invitation by numeric ID: {numeric_id}, invitation_id={invitation.invitation_id}")
                         except (ValueError, VendorInvitation.DoesNotExist):
+                            # For open RFPs, create invitation on-the-fly if it doesn't exist
+                            if submission_source == 'open':
+                                print(f"[INFO] Open RFP submission - creating invitation on-the-fly: {invitation_id}")
+                                try:
+                                    # Generate invitation URL for open RFP
+                                    external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000')
+                                    if not external_base_url.startswith('http://localhost') and not external_base_url.startswith('https://localhost'):
+                                        port_match = re.search(r':(\d+)', external_base_url)
+                                        port = port_match.group(1) if port_match else '3000'
+                                        external_base_url = f'http://localhost:{port}'
+                                    
+                                    from urllib.parse import urlencode
+                                    base_url = f"{external_base_url}/submit/open"
+                                    params = {'rfpId': str(rfp_id)}
+                                    invitation_url = f"{base_url}?{urlencode(params)}"
+                                    
+                                    # Create invitation for open RFP
+                                    invitation = VendorInvitation.objects.create(
+                                        rfp_id=rfp_id,
+                                        vendor=None,  # No specific vendor for open RFPs
+                                        vendor_email=contact_email or '',
+                                        vendor_name=vendor_name or '',
+                                        vendor_phone=contact_phone or '',
+                                        company_name=org or '',
+                                        invitation_url=invitation_url,
+                                        unique_token=invitation_id,  # Use the provided invitation_id as unique_token
+                                        is_matched_vendor=False,
+                                        submission_source='open',
+                                        invitation_status='CREATED',
+                                        custom_message='',
+                                        tenant_id=tenant_id,  # MULTI-TENANCY: Set tenant_id
+                                        utm_parameters=utm_params if utm_params else {
+                                            'utm_source': 'rfp_portal',
+                                            'utm_medium': 'public',
+                                            'utm_campaign': 'open_rfp',
+                                            'utm_content': f'open_rfp_{rfp_id}'
+                                        }
+                                    )
+                                    print(f"[SUCCESS] Created invitation on-the-fly for open RFP: invitation_id={invitation.invitation_id}, unique_token={invitation_id}")
+                                except Exception as create_error:
+                                    logger.error(f"[create_rfp_response] Failed to create invitation for open RFP: {str(create_error)}")
+                                    return JsonResponse({
+                                        'success': False,
+                                        'error': f'Failed to create invitation for open RFP: {str(create_error)}'
+                                    }, status=500)
+                            else:
+                                # For invited submissions, invitation must exist
+                                return JsonResponse({
+                                    'success': False,
+                                    'error': f'Invitation not found: {invitation_id}. Invitations must be created during vendor selection.'
+                                }, status=404)
+                else:
+                    # If no invitation_id provided, check if it's an open RFP
+                    if submission_source == 'open':
+                        # For open RFPs without invitation_id, generate one
+                        import time
+                        invitation_id = f"open-rfp-{rfp_id}-{int(time.time() * 1000)}"
+                        print(f"[INFO] Open RFP submission without invitation_id - generating: {invitation_id}")
+                        try:
+                            # Generate invitation URL for open RFP
+                            external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000')
+                            if not external_base_url.startswith('http://localhost') and not external_base_url.startswith('https://localhost'):
+                                port_match = re.search(r':(\d+)', external_base_url)
+                                port = port_match.group(1) if port_match else '3000'
+                                external_base_url = f'http://localhost:{port}'
+                            
+                            from urllib.parse import urlencode
+                            base_url = f"{external_base_url}/submit/open"
+                            params = {'rfpId': str(rfp_id)}
+                            invitation_url = f"{base_url}?{urlencode(params)}"
+                            
+                            # Create invitation for open RFP
+                            invitation = VendorInvitation.objects.create(
+                                rfp_id=rfp_id,
+                                vendor=None,
+                                vendor_email=contact_email or '',
+                                vendor_name=vendor_name or '',
+                                vendor_phone=contact_phone or '',
+                                company_name=org or '',
+                                invitation_url=invitation_url,
+                                unique_token=invitation_id,
+                                is_matched_vendor=False,
+                                submission_source='open',
+                                invitation_status='CREATED',
+                                custom_message='',
+                                tenant_id=tenant_id,
+                                utm_parameters=utm_params if utm_params else {
+                                    'utm_source': 'rfp_portal',
+                                    'utm_medium': 'public',
+                                    'utm_campaign': 'open_rfp',
+                                    'utm_content': f'open_rfp_{rfp_id}'
+                                }
+                            )
+                            print(f"[SUCCESS] Created invitation for open RFP without invitation_id: invitation_id={invitation.invitation_id}")
+                        except Exception as create_error:
+                            logger.error(f"[create_rfp_response] Failed to create invitation for open RFP: {str(create_error)}")
                             return JsonResponse({
                                 'success': False,
-                                'error': f'Invitation not found: {invitation_id}. Invitations must be created during vendor selection.'
-                            }, status=404)
-                else:
-                    return JsonResponse({
-                        'success': False,
-                        'error': 'Invitation ID is required. Invitations must be created during vendor selection.'
-                    }, status=400)
+                                'error': f'Failed to create invitation for open RFP: {str(create_error)}'
+                            }, status=500)
+                    else:
+                        return JsonResponse({
+                            'success': False,
+                            'error': 'Invitation ID is required. Invitations must be created during vendor selection.'
+                        }, status=400)
                 
                 # CRITICAL: vendor_id comes from invitation table OR from request (for open RFPs)
+                # For open RFPs, vendor_id can be None - it's allowed
                 if invitation:
                     # Get vendor_id from invitation if it has a matched vendor
                     if invitation.vendor:
@@ -636,13 +734,18 @@ def create_rfp_response(request):
                         print(f"[CRITICAL] Using vendor_id from invitation.vendor: {vendor_id}")
                     else:
                         # For open RFPs, invitation.vendor might be NULL
-                        # Use vendor_id from request if provided (it should match the invitation)
+                        # Use vendor_id from request if provided, otherwise allow None for open RFPs
                         if vendor_id:
                             print(f"[CRITICAL] Invitation has no matched vendor, using vendor_id from request: {vendor_id}")
+                        elif submission_source == 'open':
+                            # For open RFPs, vendor_id can be None - this is allowed
+                            print(f"[INFO] Open RFP submission without vendor_id - this is allowed")
+                            vendor_id = None
                         else:
+                            # For invited submissions, vendor_id is required
                             return JsonResponse({
                                 'success': False,
-                                'error': 'Invitation does not have a matched vendor and no vendorId provided in request. Please provide vendorId for open RFP submissions.'
+                                'error': 'Invitation does not have a matched vendor and no vendorId provided in request. Please provide vendorId for invited RFP submissions.'
                             }, status=400)
                 else:
                     return JsonResponse({
@@ -850,11 +953,12 @@ def create_rfp_response(request):
                 rfp_response = existing_response
             else:
                 # CRITICAL: vendor_id comes from invitation or request
-                # For open RFPs, invitation.vendor might be NULL, so we use vendor_id from request
-                if not vendor_id:
+                # For open RFPs, vendor_id can be None - this is allowed
+                # Only require vendor_id for invited submissions
+                if not vendor_id and submission_source != 'open':
                     return JsonResponse({
                         'success': False,
-                        'error': 'Vendor ID is required. Must be provided in request or come from invitation.'
+                        'error': 'Vendor ID is required for invited RFP submissions. Must be provided in request or come from invitation.'
                     }, status=400)
                 
                 vendor_id_to_use = vendor_id
@@ -884,6 +988,23 @@ def create_rfp_response(request):
                         final_check_response = RFPResponse.objects.filter(
                             rfp=rfp,
                             vendor_id=vendor_id_to_use,
+                            tenant_id=tenant_id
+                        ).first()
+                elif invitation:
+                    # For open RFPs without vendor_id, check by invitation_id
+                    try:
+                        # MULTI-TENANCY: Filter by tenant
+                        final_check_response = RFPResponse.objects.select_for_update(nowait=True).filter(
+                            rfp=rfp,
+                            invitation_id=invitation.invitation_id,
+                            tenant_id=tenant_id
+                        ).first()
+                    except Exception:
+                        # If lock fails, try without lock
+                        # MULTI-TENANCY: Filter by tenant
+                        final_check_response = RFPResponse.objects.filter(
+                            rfp=rfp,
+                            invitation_id=invitation.invitation_id,
                             tenant_id=tenant_id
                         ).first()
                 
@@ -2325,36 +2446,130 @@ def get_rfp_evaluation_criteria(request, rfp_number):
     MULTI-TENANCY: Extracts tenant_id from RFP to ensure tenant isolation
     """
     try:
+        logger.info(f'[get_rfp_evaluation_criteria] Request received - rfp_number: {rfp_number}, path: {request.path}')
+        
         # Support both rfp_number from URL and rfp_id from query params
         # For DRF Request, use request.query_params instead of request.GET
         rfp_id = request.query_params.get('rfp_id') or request.GET.get('rfp_id')
+        logger.info(f'[get_rfp_evaluation_criteria] rfp_id from query: {rfp_id}, rfp_number from URL: {rfp_number}')
         
         rfp = None
+        # Prioritize rfp_id from query params if available (more reliable)
         if rfp_id:
             # Try to get RFP by rfp_id first
             try:
                 rfp_id_int = int(rfp_id)
+                logger.info(f'[get_rfp_evaluation_criteria] Looking up RFP by rfp_id: {rfp_id_int}')
                 try:
                     rfp = RFP.objects.get(rfp_id=rfp_id_int)
+                    logger.info(f'[get_rfp_evaluation_criteria] Found RFP by rfp_id: {rfp.rfp_id}, rfp_number: {rfp.rfp_number}')
                 except RFP.DoesNotExist:
+                    logger.error(f'[get_rfp_evaluation_criteria] RFP with id {rfp_id_int} not found')
                     return JsonResponse({
                         'success': False,
                         'error': f'RFP with id {rfp_id_int} not found'
                     }, status=404)
-            except (ValueError, TypeError):
+            except (ValueError, TypeError) as e:
+                logger.error(f'[get_rfp_evaluation_criteria] Invalid rfp_id format: {rfp_id}, error: {str(e)}')
                 return JsonResponse({
                     'success': False,
                     'error': f'Invalid rfp_id: {rfp_id}'
                 }, status=400)
         else:
             # Use rfp_number from URL
+            logger.info(f'[get_rfp_evaluation_criteria] Looking up RFP by rfp_number: {rfp_number}')
+            rfp = None
+            
+            # Try exact match first
             try:
                 rfp = RFP.objects.get(rfp_number=rfp_number)
+                logger.info(f'[get_rfp_evaluation_criteria] Found RFP by exact rfp_number: {rfp.rfp_id}, rfp_number: {rfp.rfp_number}')
             except RFP.DoesNotExist:
-                return JsonResponse({
-                    'success': False,
-                    'error': f'RFP with number {rfp_number} not found'
-                }, status=404)
+                logger.warning(f'[get_rfp_evaluation_criteria] Exact match not found, trying case-insensitive lookup')
+                # Try case-insensitive lookup
+                try:
+                    rfp = RFP.objects.get(rfp_number__iexact=rfp_number)
+                    logger.info(f'[get_rfp_evaluation_criteria] Found RFP by case-insensitive rfp_number: {rfp.rfp_id}, rfp_number: {rfp.rfp_number}')
+                except RFP.DoesNotExist:
+                    # Try to find by partial match (in case of URL encoding issues or extra characters)
+                    logger.warning(f'[get_rfp_evaluation_criteria] Case-insensitive match not found, trying partial match')
+                    partial_match = RFP.objects.filter(rfp_number__icontains=rfp_number).first()
+                    if partial_match:
+                        rfp = partial_match
+                        logger.info(f'[get_rfp_evaluation_criteria] Found RFP by partial match: {rfp.rfp_id}, rfp_number: {rfp.rfp_number}')
+                    else:
+                        # Try to extract numeric ID if rfp_number looks like it contains an ID
+                        # Some RFPs might be referenced by ID in the number
+                        import re
+                        numbers = re.findall(r'\d+', rfp_number)
+                        if numbers:
+                            # Try the last number as potential rfp_id
+                            for num_str in reversed(numbers):
+                                try:
+                                    potential_id = int(num_str)
+                                    if potential_id > 0:
+                                        try:
+                                            rfp = RFP.objects.get(rfp_id=potential_id)
+                                            logger.info(f'[get_rfp_evaluation_criteria] Found RFP by extracted ID {potential_id}: rfp_id={rfp.rfp_id}, rfp_number={rfp.rfp_number}')
+                                            break
+                                        except RFP.DoesNotExist:
+                                            continue
+                                except ValueError:
+                                    continue
+                        
+                        # If still not found, return error with helpful information
+                        if rfp is None:
+                            logger.error(f'[get_rfp_evaluation_criteria] RFP with number {rfp_number} not found after all lookup attempts')
+                            
+                            # Get some sample RFP numbers for debugging
+                            try:
+                                sample_rfps = RFP.objects.all()[:10]
+                                sample_numbers = [r.rfp_number for r in sample_rfps]
+                                logger.info(f'[get_rfp_evaluation_criteria] Sample RFP numbers in database: {sample_numbers}')
+                            except Exception as e:
+                                logger.warning(f'[get_rfp_evaluation_criteria] Could not fetch sample RFPs: {e}')
+                                sample_numbers = []
+                            
+                            # Try to find similar RFP numbers
+                            try:
+                                similar_rfps = RFP.objects.filter(rfp_number__icontains=rfp_number[:15] if len(rfp_number) > 15 else rfp_number)[:5]
+                                similar_numbers = [r.rfp_number for r in similar_rfps]
+                                logger.info(f'[get_rfp_evaluation_criteria] Similar RFP numbers found: {similar_numbers}')
+                            except Exception as e:
+                                logger.warning(f'[get_rfp_evaluation_criteria] Could not fetch similar RFPs: {e}')
+                                similar_numbers = []
+                            
+                            error_msg = f'RFP with number "{rfp_number}" not found'
+                            if similar_numbers:
+                                error_msg += f'. Similar RFPs found: {", ".join(similar_numbers[:3])}'
+                            
+                            # Instead of returning 404, return empty criteria list for better UX
+                            # This allows the frontend to continue working even if RFP number is wrong
+                            logger.warning(f'[get_rfp_evaluation_criteria] RFP not found, returning empty criteria list')
+                            return JsonResponse({
+                                'success': True,
+                                'criteria': [],
+                                'rfp_id': None,
+                                'rfp_title': None,
+                                'rfp_number': rfp_number,
+                                'total_count': 0,
+                                'warning': error_msg,
+                                'similar_rfps': similar_numbers[:5] if similar_numbers else []
+                            })
+        
+        # Ensure rfp was found
+        if rfp is None:
+            logger.warning(f'[get_rfp_evaluation_criteria] RFP lookup failed - rfp is None, returning empty criteria')
+            # Return empty criteria instead of 404 for better UX
+            return JsonResponse({
+                'success': True,
+                'criteria': [],
+                'rfp_id': None,
+                'rfp_title': None,
+                'rfp_number': rfp_number,
+                'total_count': 0,
+                'warning': f'RFP lookup failed for: {rfp_number}. Returning empty criteria list.'
+            })
         
         # MULTI-TENANCY: Extract tenant_id from RFP and set it on request
         # This allows tenant-aware queries without requiring tenant in the request
@@ -2372,10 +2587,13 @@ def get_rfp_evaluation_criteria(request, rfp_number):
             request.tenant_id = tenant_id
         
         # Filter criteria by tenant if available
+        logger.info(f'[get_rfp_evaluation_criteria] Filtering criteria for tenant_id: {tenant_id}')
         if tenant_id:
             criteria_queryset = rfp.evaluation_criteria.filter(tenant_id=tenant_id).order_by('display_order')
         else:
             criteria_queryset = rfp.evaluation_criteria.all().order_by('display_order')
+        
+        logger.info(f'[get_rfp_evaluation_criteria] Found {criteria_queryset.count()} criteria for RFP {rfp.rfp_id}')
         
         criteria = []
         try:
@@ -2384,7 +2602,7 @@ def get_rfp_evaluation_criteria(request, rfp_number):
                     'criteria_id': criterion.criteria_id,
                     'criteria_name': criterion.criteria_name,
                     'criteria_description': criterion.criteria_description,
-                    'weight_percentage': float(criterion.weight_percentage),
+                    'weight_percentage': float(criterion.weight_percentage) if criterion.weight_percentage else 0,
                     'evaluation_type': criterion.evaluation_type,
                     'is_mandatory': criterion.is_mandatory,
                     'min_score': float(criterion.min_score) if criterion.min_score else None,
@@ -2397,6 +2615,7 @@ def get_rfp_evaluation_criteria(request, rfp_number):
             print(f"Error loading evaluation criteria: {e}")
             criteria = []
         
+        logger.info(f'[get_rfp_evaluation_criteria] Returning {len(criteria)} criteria for RFP {rfp.rfp_id}')
         return JsonResponse({
             'success': True,
             'criteria': criteria,

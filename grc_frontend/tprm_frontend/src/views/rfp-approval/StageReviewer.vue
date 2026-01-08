@@ -235,7 +235,7 @@
                 </div>
                 <button 
                   v-if="!hasRfpDetails(stage)"
-                  @click="loadRfpDetailsForStage(stage)"
+                  @click="() => loadRfpDetailsForStage(stage)"
                   :disabled="loadingRfpDetails"
                   class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                 >
@@ -848,7 +848,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { API_CONFIG, API_ENDPOINTS, buildApiUrl, apiCall } from '@/config/api.js'
+import { API_CONFIG, API_ENDPOINTS, apiCall } from '@/config/api.js'
 import { useRfpApi } from '@/composables/useRfpApi'
 import PopupModal from '@/popup/PopupModal.vue'
 import { PopupService } from '@/popup/popupService'
@@ -910,7 +910,7 @@ const stageDecision = reactive({
 
     const fetchUsers = async () => {
       try {
-        const url = buildApiUrl(API_ENDPOINTS.RFP_APPROVAL.USERS)
+        const url = getTprmApiUrl('rfp-approval/users/')
         const data = await apiCall(url)
         users.value = data
       } catch (error) {
@@ -947,15 +947,25 @@ const stageDecision = reactive({
     }
 
     const fetchRfpDetails = async (rfpId) => {
-      if (!rfpId) {
+      // Ensure rfpId is not a Promise - if it is, await it
+      let resolvedRfpId = rfpId
+      if (rfpId && typeof rfpId.then === 'function') {
+        console.log('⚠️ RFP ID is a Promise, awaiting resolution...')
+        resolvedRfpId = await rfpId
+      }
+      
+      if (!resolvedRfpId) {
         console.log('⚠️ No RFP ID provided to fetchRfpDetails')
         return null
       }
       
+      // Convert to string to ensure it's not an object
+      const rfpIdString = String(resolvedRfpId)
+      
       try {
         loadingRfpDetails.value = true
-        console.log('📡 Fetching RFP details for RFP ID:', rfpId)
-        const url = buildApiUrl(`/rfp-details/${rfpId}/`)
+        console.log('📡 Fetching RFP details for RFP ID:', rfpIdString)
+        const url = getTprmApiUrl(`rfp-approval/rfp-details/${rfpIdString}/`)
         console.log('📡 API URL:', url)
         const data = await apiCall(url)
         console.log('✅ RFP Details fetched successfully:', data)
@@ -971,7 +981,7 @@ const stageDecision = reactive({
       }
     }
 
-    const extractRfpIdFromStage = (stage) => {
+    const extractRfpIdFromStage = async (stage) => {
       console.log('🔍 Extracting RFP ID from stage:', stage.stage_id)
       console.log('🔍 Full stage object:', JSON.stringify(stage, null, 2))
       
@@ -1045,6 +1055,32 @@ const stageDecision = reactive({
         }
       }
       
+      // Fallback: Try to get RFP ID from backend using approval_id
+      if (stage.approval_id) {
+        try {
+          console.log('🔍 Attempting backend lookup for RFP ID using approval_id:', stage.approval_id)
+          const response = await fetch(getTprmApiUrl(`rfp-approval/get-rfp-id-from-approval/${stage.approval_id}/`), {
+            method: 'GET',
+            headers: {
+              ...getAuthHeaders(),
+              'Content-Type': 'application/json',
+            },
+          })
+          
+          if (response.ok) {
+            const data = await response.json()
+            if (data.rfp_id) {
+              console.log('✅ Found RFP ID from backend:', data.rfp_id)
+              return data.rfp_id
+            }
+          } else {
+            console.log('⚠️ Backend lookup failed with status:', response.status)
+          }
+        } catch (error) {
+          console.log('⚠️ Backend lookup error:', error)
+        }
+      }
+      
       console.log('⚠️ No RFP ID found in stage data')
       return null
     }
@@ -1053,7 +1089,7 @@ const stageDecision = reactive({
       if (!selectedUserId.value) return
       
       try {
-         const url = buildApiUrl(`${API_ENDPOINTS.RFP_APPROVAL.USER_APPROVALS}?user_id=${selectedUserId.value}`)
+         const url = getTprmApiUrl(`rfp-approval/user-approvals/?user_id=${selectedUserId.value}`)
          const data = await apiCall(url)
          console.log('📡 API Response (user stages):', data.length, 'stages') // Debug log
          
@@ -1086,7 +1122,7 @@ const stageDecision = reactive({
          if (targetApprovalId) {
            console.log('🔍 Fetching ALL stages for approval:', targetApprovalId)
            try {
-             const allStagesUrl = buildApiUrl(`${API_ENDPOINTS.RFP_APPROVAL.STAGES}?approval_id=${targetApprovalId}`)
+             const allStagesUrl = getTprmApiUrl(`rfp-approval/stages/?approval_id=${targetApprovalId}`)
              console.log('📡 All stages URL:', allStagesUrl)
              const allStagesData = await apiCall(allStagesUrl)
              console.log('✅ Fetched ALL stages for workflow:', allStagesData.length, 'stages')
@@ -1216,7 +1252,7 @@ const stageDecision = reactive({
          
          // Automatically load RFP details for each stage
          for (const stage of assignedStages.value) {
-           const rfpId = extractRfpIdFromStage(stage)
+           const rfpId = await extractRfpIdFromStage(stage)
            if (rfpId) {
              console.log('🔍 Auto-loading RFP details for RFP ID:', rfpId)
              await loadRfpDetailsForStage(stage)
@@ -1323,7 +1359,7 @@ const filterSequentialStages = async (stages) => {
         }
 
         // Submit stage decision
-        const url = buildApiUrl(API_ENDPOINTS.RFP_APPROVAL.UPDATE_STAGE_STATUS)
+        const url = getTprmApiUrl('rfp-approval/update-stage-status/')
         await apiCall(url, {
           method: 'POST',
           body: JSON.stringify({
@@ -1529,7 +1565,7 @@ const getStageStatusLabel = (status) => {
        try {
          // Only start review if stage is PENDING
          if (stage.stage_status === 'PENDING') {
-           const url = buildApiUrl('/start-stage-review/')
+           const url = getTprmApiUrl('rfp-approval/start-stage-review/')
            await apiCall(url, {
              method: 'POST',
              body: JSON.stringify({
@@ -1811,7 +1847,7 @@ const isProposalEvaluation = (stage) => {
 
 const loadRfpDetailsForStage = async (stage) => {
   console.log('🔄 Loading RFP details for stage:', stage.stage_id)
-  const rfpId = extractRfpIdFromStage(stage)
+  const rfpId = await extractRfpIdFromStage(stage)
   if (rfpId) {
     console.log('✅ RFP ID extracted:', rfpId)
     const details = await fetchRfpDetails(rfpId)
@@ -1921,7 +1957,7 @@ const openDocument = async (document) => {
     if (fileId) {
       console.log('📄 No direct URL found, fetching from s3_files table with ID:', fileId)
       try {
-        const fileUrl = buildApiUrl(`/document-url/${fileId}/`)
+        const fileUrl = getTprmApiUrl(`rfp-approval/document-url/${fileId}/`)
         const response = await apiCall(fileUrl)
         
         if (response.url) {
@@ -1964,7 +2000,7 @@ const loadVersionHistory = async (stage) => {
     loadingVersions.value = true
     console.log('🔄 Loading version history for approval:', stage.approval_id)
     
-    const url = buildApiUrl(`/approval-version-history/${stage.approval_id}/`)
+    const url = getTprmApiUrl(`rfp-approval/approval-version-history/${stage.approval_id}/`)
     const response = await apiCall(url)
     
     if (response.success && response.versions) {
@@ -2030,7 +2066,7 @@ const editRFPForChanges = async (stage) => {
     console.log('🔍 Stage object:', JSON.stringify(stage, null, 2))
     
     // Extract RFP ID from stage data
-    const rfpId = extractRfpIdFromStage(stage)
+    const rfpId = await extractRfpIdFromStage(stage)
     
     if (!rfpId) {
       showMessage('No RFP ID found for this stage. Cannot edit RFP.', 'error')
@@ -2157,7 +2193,7 @@ const approveVersion = async (version) => {
   try {
     console.log('🔍 Approving version:', version.version_id)
     
-    const url = buildApiUrl(`/approval-request-versions/${version.version_id}/approve/`)
+    const url = getTprmApiUrl(`rfp-approval/approval-request-versions/${version.version_id}/approve/`)
     const response = await apiCall(url, {
       method: 'POST',
       body: JSON.stringify({
@@ -2186,7 +2222,7 @@ const createChangeRequest = async (stage) => {
     console.log('🔍 Creating change request for stage:', stage.stage_id)
     
     // Extract RFP ID from stage data
-    const rfpId = extractRfpIdFromStage(stage)
+    const rfpId = await extractRfpIdFromStage(stage)
     
     if (!rfpId) {
       console.error('No RFP ID found for stage')
@@ -2206,7 +2242,7 @@ const createChangeRequest = async (stage) => {
       priority: 'medium'
     }
     
-    const url = buildApiUrl('/change-requests/')
+    const url = getTprmApiUrl('rfp-approval/change-requests/')
     const response = await apiCall(url, {
       method: 'POST',
       body: JSON.stringify(changeRequestData)

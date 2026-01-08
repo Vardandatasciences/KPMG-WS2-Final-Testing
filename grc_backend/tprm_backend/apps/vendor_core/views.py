@@ -1331,8 +1331,8 @@ class TempVendorViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
         """Get user data based on UserId from temp_vendor and rfp_responses tables"""
         try:
             # Import RFPResponses from vendor_questionnaire and RBAC model
-            from apps.vendor_questionnaire.models import RFPResponses
-            from rbac.models import RBACTPRM
+            from tprm_backend.apps.vendor_questionnaire.models import RFPResponses
+            from tprm_backend.rbac.models import RBACTPRM
             from django.db import connection
             
             # Get UserId from query params, default to 64 (logged in user)
