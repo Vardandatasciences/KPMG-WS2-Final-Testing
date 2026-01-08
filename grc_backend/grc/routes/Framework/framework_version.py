@@ -149,8 +149,10 @@ def create_framework_version(request, framework_id):
         # Start database transaction
         with transaction.atomic():
             # Find the previous version record in FrameworkVersion table
-            previous_version_record = FrameworkVersion.objects.filter(tenant_id=tenant_id, 
-                FrameworkId=original_framework
+            # FrameworkVersion doesn't have tenant_id, filter through FrameworkId relationship
+            previous_version_record = FrameworkVersion.objects.filter(
+                FrameworkId=original_framework,
+                FrameworkId__tenant_id=tenant_id
             ).first()
             
             # Enhanced version calculation logic with major/minor support
@@ -189,8 +191,10 @@ def create_framework_version(request, framework_id):
                     current_minor_part = current_version_float - current_major
                     
                     # Find the highest version for this major version by checking existing versions
-                    all_versions = FrameworkVersion.objects.filter(tenant_id=tenant_id, 
-                FrameworkId__Identifier=original_framework.Identifier
+                    # FrameworkVersion doesn't have tenant_id, filter through FrameworkId relationship
+                    all_versions = FrameworkVersion.objects.filter(
+                        FrameworkId__Identifier=original_framework.Identifier,
+                        FrameworkId__tenant_id=tenant_id
                     ).values_list('Version', flat=True)
                     
                     # Filter versions that belong to the same major version
@@ -390,8 +394,10 @@ def create_framework_version(request, framework_id):
                             original_policy = Policy.objects.get(PolicyId=original_policy_id, tenant_id=tenant_id)
                             
                             # Find previous policy version
-                            previous_policy_version = PolicyVersion.objects.filter(tenant_id=tenant_id, 
-                                PolicyId=original_policy
+                            # PolicyVersion doesn't have tenant_id, filter through PolicyId relationship
+                            previous_policy_version = PolicyVersion.objects.filter(
+                                PolicyId=original_policy,
+                                PolicyId__tenant_id=tenant_id
                             ).first()
                             
                             # Security: Sanitize policy data before database storage
@@ -847,12 +853,17 @@ def create_framework_approval_for_version(framework_id, request=None, framework_
     Helper function to create a framework approval entry for a new framework version
     """
     try:
+        # MULTI-TENANCY: Extract tenant_id from request
+        tenant_id = get_tenant_id_from_request(request) if request else None
+        
         # Get the framework
         framework = Framework.objects.get(FrameworkId=framework_id, tenant_id=tenant_id)
         
         # Check if an approval already exists for this framework
-        existing_approval = FrameworkApproval.objects.filter(tenant_id=tenant_id, 
+        # FrameworkApproval doesn't have tenant_id, filter through FrameworkId relationship
+        existing_approval = FrameworkApproval.objects.filter(
             FrameworkId=framework,
+            FrameworkId__tenant_id=tenant_id,
             Version="u1",  # Only check for initial version
             ApprovedNot=None  # Only check for unapproved versions
         ).first()
@@ -898,22 +909,28 @@ def create_framework_approval_for_version(framework_id, request=None, framework_
         # For approval, we need reviewer ID, not name
         reviewer_id = None
         if framework.Reviewer:
-            # Try to look up reviewer ID by name
+            # Try to look up reviewer ID by name with tenant filtering
             try:
-                reviewer = Users.objects.filter(UserName=framework.Reviewer).first()
+                reviewer = Users.objects.filter(UserName=framework.Reviewer, tenant_id=tenant_id).first()
                 if reviewer:
                     reviewer_id = reviewer.UserId
+                    print(f"DEBUG: Found reviewer ID {reviewer_id} for reviewer name '{framework.Reviewer}'")
                 else:
                     # If not found and the Reviewer looks like a number, use it as ID
                     if isinstance(framework.Reviewer, str) and framework.Reviewer.isdigit():
                         reviewer_id = int(framework.Reviewer)
+                        print(f"DEBUG: Using reviewer ID directly from Reviewer field: {reviewer_id}")
                     else:
+                        print(f"WARNING: Reviewer '{framework.Reviewer}' not found, using default reviewer ID 2")
                         reviewer_id = 2  # Default reviewer id
             except Exception as e:
                 print(f"Error finding reviewer ID: {str(e)}")
                 reviewer_id = 2  # Default to reviewer ID 2
         else:
+            print(f"WARNING: Framework has no Reviewer field, using default reviewer ID 2")
             reviewer_id = 2  # Default reviewer id
+        
+        print(f"DEBUG: Final reviewer_id for framework approval: {reviewer_id}")
         
         # Collect policies and subpolicies data for approval JSON
         policies_data = []
@@ -1200,7 +1217,11 @@ def get_framework_versions(request, framework_id=None):
             # Get the version information for each framework
             versions_data = []
             for fw in frameworks:
-                version_info = FrameworkVersion.objects.filter(tenant_id=tenant_id, FrameworkId=fw).first()
+                # FrameworkVersion doesn't have tenant_id, filter through FrameworkId relationship
+                version_info = FrameworkVersion.objects.filter(
+                    FrameworkId=fw,
+                    FrameworkId__tenant_id=tenant_id
+                ).first()
                 if version_info:
                     versions_data.append({
                         "FrameworkId": fw.FrameworkId,
@@ -1298,7 +1319,10 @@ def get_all_framework_versions(request):
     
     try:
         # Get all framework versions
-        framework_versions = FrameworkVersion.objects.filter(tenant_id=tenant_id).order_by('-CreatedDate')
+        # FrameworkVersion doesn't have tenant_id, filter through FrameworkId relationship
+        framework_versions = FrameworkVersion.objects.filter(
+            FrameworkId__tenant_id=tenant_id
+        ).order_by('-CreatedDate')
         
         versions_data = []
         for version in framework_versions:
@@ -1529,7 +1553,11 @@ def get_rejected_framework_versions(request, user_id=None):
             framework = rejection.FrameworkId
             
             # Get version info
-            version_info = FrameworkVersion.objects.filter(tenant_id=tenant_id, FrameworkId=framework).first()
+            # FrameworkVersion doesn't have tenant_id, filter through FrameworkId relationship
+            version_info = FrameworkVersion.objects.filter(
+                FrameworkId=framework,
+                FrameworkId__tenant_id=tenant_id
+            ).first()
             
             rejection_data = {
                 "ApprovalId": rejection.ApprovalId,

@@ -857,6 +857,10 @@ class RFPUnmatchedVendor(models.Model):
                                related_name='rfp_unmatched_vendors', null=True, blank=True,
                                help_text="Tenant this unmatched vendor belongs to")
     
+    # Foreign key to RFP - using BigIntegerField to match database schema (see get_unmatched_vendors query)
+    rfp_id = models.BigIntegerField(db_index=True, null=True, blank=True,
+                                   help_text="RFP ID this unmatched vendor is associated with")
+    
     invitation_id = models.BigIntegerField(blank=True, null=True, default=None)
     vendor_name = models.CharField(max_length=255)
     vendor_email = models.CharField(max_length=255)

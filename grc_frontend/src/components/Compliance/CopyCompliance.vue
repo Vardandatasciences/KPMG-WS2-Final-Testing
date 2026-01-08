@@ -1411,7 +1411,7 @@ export default {
           RiskType: 45,
           RiskCategory: 45,
           RiskBusinessImpact: 45,
-          Applicability: 45
+          Applicability: null  // No character limit
         },
         
         // Field minimum length requirements

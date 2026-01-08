@@ -38,8 +38,10 @@ def get_next_reviewer_version(framework):
     print(f"DEBUG: get_next_reviewer_version called for framework {framework.FrameworkId}")
     
     # Check if there's already a reviewer version for this framework
-    latest_reviewer_version = FrameworkApproval.objects.filter(tenant_id=tenant_id, 
+    # FrameworkApproval doesn't have tenant_id, filter through FrameworkId relationship
+    latest_reviewer_version = FrameworkApproval.objects.filter(
         FrameworkId=framework,
+        FrameworkId__tenant_id=framework.tenant_id,
         Version__startswith='r'
     ).order_by('-ApprovalId').first()
     
@@ -63,8 +65,10 @@ def get_next_user_version(framework):
     Helper function to determine the next user version for a framework
     """
     # Check if there's already a user version for this framework
-    latest_user_version = FrameworkApproval.objects.filter(tenant_id=tenant_id, 
+    # FrameworkApproval doesn't have tenant_id, filter through FrameworkId relationship
+    latest_user_version = FrameworkApproval.objects.filter(
         FrameworkId=framework,
+        FrameworkId__tenant_id=framework.tenant_id,
         Version__startswith='u'
     ).order_by('-ApprovalId').first()
     
@@ -101,8 +105,10 @@ def fix_framework_versioning(framework_id=None):
                 print(f"DEBUG: Fixing versioning for framework {framework.FrameworkId}: {framework.FrameworkName}")
                 
                 # Get all approvals for this framework, ordered by creation time
-                approvals = FrameworkApproval.objects.filter(tenant_id=tenant_id, 
-                    FrameworkId=framework
+                # FrameworkApproval doesn't have tenant_id, filter through FrameworkId relationship
+                approvals = FrameworkApproval.objects.filter(
+                    FrameworkId=framework,
+                    FrameworkId__tenant_id=tenant_id
                 ).order_by('ApprovalId')
                 
                 user_version_count = 0
@@ -944,8 +950,10 @@ def submit_framework_review(request, framework_id):
                 # Ensure CurrentVersion is preserved during approval
                 # We do this by not touching the CurrentVersion field
                 # or by setting it explicitly from the framework version record
-                current_framework_version = FrameworkVersion.objects.filter(tenant_id=tenant_id, 
-                    FrameworkId=framework
+                # FrameworkVersion doesn't have tenant_id, filter through FrameworkId relationship
+                current_framework_version = FrameworkVersion.objects.filter(
+                    FrameworkId=framework,
+                    FrameworkId__tenant_id=tenant_id
                 ).first()
                 if current_framework_version:
                     print(f"Setting CurrentVersion to {current_framework_version.Version} for framework {framework_id}")
@@ -993,8 +1001,10 @@ def submit_framework_review(request, framework_id):
                 print("DEBUG: Method 1 - Using PreviousVersionId relationship")
                 try:
                     # Get the version record for the current framework
-                    current_framework_version = FrameworkVersion.objects.filter(tenant_id=tenant_id, 
-                        FrameworkId=framework
+                    # FrameworkVersion doesn't have tenant_id, filter through FrameworkId relationship
+                    current_framework_version = FrameworkVersion.objects.filter(
+                        FrameworkId=framework,
+                        FrameworkId__tenant_id=tenant_id
                     ).first()
                     
                     if current_framework_version:
@@ -1435,8 +1445,10 @@ def approve_reject_subpolicy_in_framework(request, framework_id, policy_id, subp
                 return Response({"error": f"Subpolicy {subpolicy_id} not found in your organization"}, status=status.HTTP_404_NOT_FOUND)
         
         # Get the latest framework approval
-        latest_approval = FrameworkApproval.objects.filter(tenant_id=tenant_id, 
-            FrameworkId=framework
+        # FrameworkApproval doesn't have tenant_id, filter through FrameworkId relationship
+        latest_approval = FrameworkApproval.objects.filter(
+            FrameworkId=framework,
+            FrameworkId__tenant_id=tenant_id
         ).order_by('-ApprovalId').first()
         
         if not latest_approval:
@@ -1747,8 +1759,10 @@ def approve_reject_policy_in_framework(request, framework_id, policy_id):
                 return Response({"error": f"Policy {policy_id} not found in your organization"}, status=status.HTTP_404_NOT_FOUND)
         
         # Get the latest framework approval
-        latest_approval = FrameworkApproval.objects.filter(tenant_id=tenant_id, 
-            FrameworkId=framework
+        # FrameworkApproval doesn't have tenant_id, filter through FrameworkId relationship
+        latest_approval = FrameworkApproval.objects.filter(
+            FrameworkId=framework,
+            FrameworkId__tenant_id=tenant_id
         ).order_by('-ApprovalId').first()
         
         if not latest_approval:
@@ -1957,8 +1971,10 @@ def approve_entire_framework_final(request, framework_id):
         print(f"DEBUG: Found framework: {framework.FrameworkName} (ID: {framework.FrameworkId}), Status: {framework.Status}, ActiveInactive: {framework.ActiveInactive}")
         
         # Get the latest framework approval
-        latest_approval = FrameworkApproval.objects.filter(tenant_id=tenant_id, 
-            FrameworkId=framework
+        # FrameworkApproval doesn't have tenant_id, filter through FrameworkId relationship
+        latest_approval = FrameworkApproval.objects.filter(
+            FrameworkId=framework,
+            FrameworkId__tenant_id=tenant_id
         ).order_by('-ApprovalId').first()
         
         if not latest_approval:
@@ -1990,9 +2006,10 @@ def approve_entire_framework_final(request, framework_id):
                 print(f"DEBUG: Framework {framework_id} set to 'Active' because StartDate {framework.StartDate} <= today {today} or StartDate is None")
             
             # Ensure CurrentVersion is set correctly from the FrameworkVersion record (with tenant filter)
+            # FrameworkVersion doesn't have tenant_id, filter through FrameworkId relationship
             current_framework_version = FrameworkVersion.objects.filter(
-                tenant_id=tenant_id,
-                FrameworkId=framework
+                FrameworkId=framework,
+                FrameworkId__tenant_id=tenant_id
             ).first()
             if current_framework_version:
                 print(f"DEBUG: Setting CurrentVersion to {current_framework_version.Version} for framework {framework_id}")
@@ -2041,8 +2058,10 @@ def approve_entire_framework_final(request, framework_id):
             
             # Method 1: Check if there's a previous version record for this framework
             try:
-                latest_version = FrameworkVersion.objects.filter(tenant_id=tenant_id, 
-                    FrameworkId=framework
+                # FrameworkVersion doesn't have tenant_id, filter through FrameworkId relationship
+                latest_version = FrameworkVersion.objects.filter(
+                    FrameworkId=framework,
+                    FrameworkId__tenant_id=tenant_id
                 ).order_by('-Version').first()
                 
                 if latest_version and latest_version.PreviousVersionId:
@@ -2358,8 +2377,10 @@ def get_rejected_frameworks_for_user(request, framework_id=None, user_id=None):
             print(f"DEBUG: Processing rejected framework {framework.FrameworkId}: {framework.FrameworkName}")
             
             # Get the latest approval for this framework
-            latest_approval = FrameworkApproval.objects.filter(tenant_id=tenant_id, 
+            # FrameworkApproval doesn't have tenant_id, filter through FrameworkId relationship
+            latest_approval = FrameworkApproval.objects.filter(
                 FrameworkId=framework.FrameworkId,
+                FrameworkId__tenant_id=tenant_id,
                 ApprovedNot=False  # Must be rejected
             ).order_by('-ApprovalId').first()
             
@@ -3484,15 +3505,20 @@ def get_status_change_requests_by_reviewer(request, reviewer_id=None):
         print(f"DEBUG: get_status_change_requests_by_reviewer called with reviewer_id: {reviewer_id}")
         
         # If reviewer_id is provided, filter by that reviewer and tenant
+        # Note: Filter out None FrameworkId records and only get those with valid FrameworkId
         if reviewer_id:
             approvals = FrameworkApproval.objects.filter(
                 ReviewerId=reviewer_id,
+                FrameworkId__isnull=False,  # Exclude records with None FrameworkId
                 FrameworkId__tenant_id=tenant_id
             ).order_by('-ApprovalId')
             print(f"DEBUG: Found {approvals.count()} framework approvals for reviewer {reviewer_id}")
         else:
             # Get all approvals for the tenant if no reviewer specified
-            approvals = FrameworkApproval.objects.filter(FrameworkId__tenant_id=tenant_id).order_by('-ApprovalId')
+            approvals = FrameworkApproval.objects.filter(
+                FrameworkId__isnull=False,  # Exclude records with None FrameworkId
+                FrameworkId__tenant_id=tenant_id
+            ).order_by('-ApprovalId')
             print(f"DEBUG: Found {approvals.count()} total framework approvals for tenant")
         
         status_change_requests = []
@@ -3503,6 +3529,10 @@ def get_status_change_requests_by_reviewer(request, reviewer_id=None):
             if is_status_change_request(approval):
                 try:
                     framework = approval.FrameworkId
+                    # Skip if FrameworkId is None
+                    if framework is None:
+                        logger.warning(f"Skipping approval {approval.ApprovalId} - FrameworkId is None")
+                        continue
                     framework_name = framework.FrameworkName
                     
                     if framework_name not in framework_status_map:
@@ -3519,6 +3549,10 @@ def get_status_change_requests_by_reviewer(request, reviewer_id=None):
             if is_status_change_request(approval):
                 try:
                     framework = approval.FrameworkId
+                    # Skip if FrameworkId is None
+                    if framework is None:
+                        logger.warning(f"Skipping approval {approval.ApprovalId} - FrameworkId is None")
+                        continue
                     framework_name = framework.FrameworkName
                 except Exception as e:
                     logger.warning(f"Skipping approval {approval.ApprovalId} - Framework not found: {str(e)}")
@@ -3597,9 +3631,9 @@ def get_status_change_requests_by_reviewer(request, reviewer_id=None):
         print(f"DEBUG: Returning {len(status_change_requests)} framework status change requests for reviewer {reviewer_id}")
         
         # Debug: Print all approvals in database (with tenant filter)
+        # Note: FrameworkApproval doesn't have tenant_id, so filter through FrameworkId__tenant_id
         all_approvals = FrameworkApproval.objects.filter(
             Q(ExtractedData__request_type='status_change') | Q(ExtractedData__type='framework'),
-            tenant_id=tenant_id,
             FrameworkId__tenant_id=tenant_id
         ).values('ApprovalId', 'UserId', 'ReviewerId', 'FrameworkId__FrameworkName')
         print(f"DEBUG: All status change approvals in database: {list(all_approvals)}")
