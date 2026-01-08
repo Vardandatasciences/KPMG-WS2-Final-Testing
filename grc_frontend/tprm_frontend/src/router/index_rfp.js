@@ -225,12 +225,26 @@ const router = createRouter({
 // Navigation guard with MFA authentication, RBAC permissions, and document title
 router.beforeEach(async (to, from, next) => {
   const isAuthenticated = authService.isAuthenticated()
-  const publicRoutes = ['/login', '/otp-verification', '/access-denied']
-  const isPublicRoute = publicRoutes.includes(to.path)
+  const publicRoutes = [
+    '/login', 
+    '/otp-verification', 
+    '/access-denied',
+    '/vendor-portal',
+    '/submit',
+    '/submit/open',
+    '/test-vendor-portal',
+    '/vendor-portal-direct'
+  ]
+  // Check if the route is public (either in publicRoutes or doesn't require auth)
+  const isPublicRoute = publicRoutes.includes(to.path) || 
+                        to.path.startsWith('/vendor-portal/') || 
+                        to.path.startsWith('/submit') ||
+                        !to.meta.requiresAuth
   
   console.log('RFP Router - Authentication status:', isAuthenticated)
   console.log('RFP Router - Is public route:', isPublicRoute)
   console.log('RFP Router - Required permission:', to.meta.permission)
+  console.log('RFP Router - Requires Auth:', to.meta.requiresAuth)
   
   // Update document title
   if (to.meta.title) {
@@ -238,7 +252,7 @@ router.beforeEach(async (to, from, next) => {
   }
   
   // If trying to access protected route without authentication
-  if (!isPublicRoute && !isAuthenticated) {
+  if (to.meta.requiresAuth && !isAuthenticated) {
     console.log('RFP Router - Not authenticated, redirecting to login')
     next('/login')
     return
@@ -251,8 +265,8 @@ router.beforeEach(async (to, from, next) => {
     return
   }
   
-  // Check RBAC permissions for protected routes
-  if (isAuthenticated && to.meta.permission && to.path !== '/access-denied') {
+  // Check RBAC permissions for protected routes (skip for public routes)
+  if (isAuthenticated && to.meta.permission && to.meta.requiresAuth && to.path !== '/access-denied') {
     try {
       // Dynamically import permissions service to avoid circular dependencies
       const { default: permissionsService } = await import('@/services/permissionsService')
