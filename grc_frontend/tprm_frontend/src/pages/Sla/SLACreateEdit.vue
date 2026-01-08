@@ -1611,7 +1611,11 @@
       </div>
     </div>
   </div>
-  
+
+  <!-- TPRM Consent Modal - Always render but control visibility from component -->
+  <TPRMConsentModal
+    ref="consentModalRef"
+  />
 </template>
 
 <script setup>
@@ -1628,6 +1632,8 @@ import { useNotifications } from '@/composables/useNotifications'
 import { usePermissions } from '@/composables/usePermissions'
 import loggingService from '@/services/loggingService'
 import { getTprmApiUrl } from '@/utils/backendEnv'
+import TPRMConsentModal from '@/components/Consent/TPRMConsentModal.vue'
+import { executeWithTPRMConsent, TPRM_CONSENT_ACTIONS } from '@/utils/tprmConsentManager.js'
 
 const router = useRouter()
 const { showSLASuccess, showSLAError, showSLAWarning, showInfo } = useNotifications()
@@ -1636,6 +1642,10 @@ const { withPermissionCheck } = usePermissions()
 const isDraft = ref(true)
 const createdDate = computed(() => new Date().toLocaleDateString())
 const formKey = ref(0)
+
+// Consent modal
+const consentModalRef = ref(null)
+const showConsentModal = ref(false)
 
 // OCR simulation state
 const ocrProgress = ref(0)
@@ -2389,7 +2399,8 @@ async function handleSaveDraft() {
       data_inventory: buildSLADataInventory()
     }
     
-    const response = await saveSLA(slaData)
+    // Save draft without requiring consent
+    const response = await saveSLA(slaData, false)
     
     if (response) {
       isDraft.value = true
@@ -2492,7 +2503,17 @@ async function handleSubmitForApproval() {
     console.log('Normalized SLA Data for submission:', slaData)
     console.log('Normalized Metrics:', slaData.metrics)
     
-    const response = await saveSLA(slaData)
+    // Submit for approval - require consent if enabled
+    // The consent modal will be shown by executeWithTPRMConsent if consent is required
+    const response = await saveSLA(slaData, true)
+    
+    // Check if submission was cancelled due to consent rejection
+    if (response === null) {
+      // Consent was rejected - user cancelled the action
+      console.log('[SLA Submit] Submission cancelled - consent not accepted')
+      PopupService.info('Submission cancelled. You must accept the consent to submit the SLA for approval.', 'Consent Required')
+      return
+    }
     
     if (response && response.sla_id) {
       isDraft.value = false
@@ -2518,7 +2539,13 @@ async function handleSubmitForApproval() {
   } catch (error) {
     console.error('Error submitting SLA:', error)
     
-    // Show error notification
+    // Check if error is due to consent rejection
+    if (error.message && (error.message.includes('consent') || error.message.includes('Consent') || error.message.includes('cancelled'))) {
+      PopupService.warning('Submission cancelled. You must accept the consent to submit the SLA for approval.', 'Consent Required')
+      return
+    }
+    
+    // Show error notification for other errors
     await showSLAError('submission_failed', error.message || 'Unknown error occurred', {
       sla_name: formData.sla_name
     })
@@ -2686,15 +2713,79 @@ function normalizeFrequency(frequency) {
   return frequencyMap[normalized] || 'MONTHLY'
 }
 
-// API functions
-async function saveSLA(slaData) {
+// Consent modal show function
+async function showTPRMConsentModal(actionType, config) {
+  console.log('[TPRM Consent] Showing consent modal for action:', actionType, 'config:', config)
+  
+  if (!consentModalRef.value) {
+    console.error('[TPRM Consent] Consent modal ref not available - waiting for component to mount')
+    // Wait a bit for component to mount
+    await nextTick()
+    if (!consentModalRef.value) {
+      console.error('[TPRM Consent] Consent modal ref still not available after nextTick')
+      return false
+    }
+  }
+  
   try {
-    console.log('Sending SLA data to backend:', slaData)
+    // Show the modal and wait for user response
+    // The modal component handles its own visibility internally
+    const accepted = await consentModalRef.value.show(actionType, config)
     
-    // Wrap API call with permission check
-    const result = await withPermissionCheck(
-      () => apiService.createSLA(slaData)
-    )
+    console.log('[TPRM Consent] Consent modal result:', accepted)
+    
+    // Ensure boolean return value
+    return accepted === true || accepted === 'true'
+  } catch (error) {
+    console.error('[TPRM Consent] Error showing consent modal:', error)
+    // If modal was cancelled/rejected, return false
+    if (error.message && error.message.includes('cancelled')) {
+      return false
+    }
+    return false
+  }
+}
+
+// API functions
+async function saveSLA(slaData, requireConsent = true) {
+  try {
+    console.log('Sending SLA data to backend:', slaData, 'requireConsent:', requireConsent)
+    
+    // Helper function to actually save the SLA
+    const saveSLAAction = async (consentConfig) => {
+      console.log('[SLA Save] saveSLAAction called with consentConfig:', consentConfig)
+      
+      // Add consent data to SLA data if consent was provided
+      if (consentConfig) {
+        console.log('[SLA Save] Adding consent data to SLA:', {
+          config_id: consentConfig.config_id || consentConfig.ConfigId,
+          framework_id: consentConfig.framework_id || consentConfig.FrameworkId || 1
+        })
+        slaData.consent_accepted = true
+        slaData.consent_config_id = consentConfig.config_id || consentConfig.ConfigId
+        slaData.framework_id = consentConfig.framework_id || consentConfig.FrameworkId || 1 // Use config's framework_id
+      } else {
+        console.log('[SLA Save] No consent config provided - saving without consent')
+      }
+      
+      // Wrap API call with permission check
+      return await withPermissionCheck(
+        () => apiService.createSLA(slaData)
+      )
+    }
+    
+    let result
+    if (requireConsent) {
+      // Wrap API call with permission check and consent check
+      result = await executeWithTPRMConsent(
+        TPRM_CONSENT_ACTIONS.CREATE_SLA,
+        saveSLAAction,
+        showTPRMConsentModal
+      )
+    } else {
+      // Skip consent check for drafts
+      result = await saveSLAAction(null)
+    }
     
     // Log the CREATE action
     await loggingService.logSLACreate(
@@ -2711,6 +2802,13 @@ async function saveSLA(slaData) {
     return result
   } catch (error) {
     console.error('Error saving SLA:', error)
+    
+    // Check if error is due to consent rejection
+    if (error.message && (error.message.includes('consent') || error.message.includes('Consent'))) {
+      PopupService.warning('SLA creation cancelled - consent not accepted', 'Consent Required')
+      return null
+    }
+    
     throw error
   }
 }

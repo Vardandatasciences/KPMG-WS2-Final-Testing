@@ -64,6 +64,19 @@
         </button>
       </div>
 
+      <!-- Consent Type Selector -->
+      <div class="consent-type-selector">
+        <label class="consent-type-label">
+          <i class="fas fa-filter"></i>
+          Show Consents:
+        </label>
+        <select v-model="consentType" @change="onConsentTypeChange" class="consent-type-select">
+          <option value="grc">GRC Only</option>
+          <option value="tprm">TPRM Only</option>
+          <option value="all">All (GRC + TPRM)</option>
+        </select>
+      </div>
+
       <!-- Consent Configurations Table -->
       <div class="configurations-card">
         <div class="card-header">
@@ -85,11 +98,14 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="config in configurations" :key="config.config_id" class="config-row">
+              <tr v-for="config in filteredConfigurations" :key="config.config_id" class="config-row">
                 <td>
                   <div class="action-info">
                     <i :class="getActionIcon(config.action_type)"></i>
-                    <span class="action-label">{{ config.action_label }}</span>
+                    <span class="action-label">
+                      {{ config.action_label }}
+                      <span v-if="config.is_tprm" class="tprm-badge">TPRM</span>
+                    </span>
                   </div>
                 </td>
                 <td class="text-center">
@@ -156,13 +172,16 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="acceptance in consentHistory" :key="acceptance.acceptance_id">
+              <tr v-for="acceptance in consentHistory" :key="acceptance.acceptance_id || acceptance.AcceptanceId || Math.random()">
                 <td>{{ acceptance.user_name }}</td>
                 <td>
-                  <span class="action-badge">{{ acceptance.action_label }}</span>
+                  <span class="action-badge">
+                    {{ acceptance.action_label }}
+                    <span v-if="acceptance.is_tprm" class="tprm-badge-small">TPRM</span>
+                  </span>
                 </td>
-                <td>{{ formatDateTime(acceptance.accepted_at) }}</td>
-                <td class="text-muted">{{ acceptance.ip_address || 'N/A' }}</td>
+                <td>{{ formatDateTime(acceptance.accepted_at || acceptance.AcceptedAt) }}</td>
+                <td class="text-muted">{{ acceptance.ip_address || acceptance.IpAddress || 'N/A' }}</td>
               </tr>
             </tbody>
           </table>
@@ -203,21 +222,61 @@ export default {
       userRole: null,
       frameworks: [],
       loadingFrameworks: false,
-      showFrameworkSelector: false
+      showFrameworkSelector: false,
+      consentType: 'all', // 'grc' or 'tprm' or 'all' - default to 'all' to show both
+      tprmConfigurations: []
     };
+  },
+  computed: {
+    filteredConfigurations() {
+      // Combine GRC and TPRM configurations based on consentType
+      let allConfigs = [];
+      
+      console.log('[ConsentConfiguration] 🔍 filteredConfigurations called');
+      console.log('[ConsentConfiguration]   - consentType:', this.consentType);
+      console.log('[ConsentConfiguration]   - GRC configs count:', this.configurations.length);
+      console.log('[ConsentConfiguration]   - TPRM configs count:', this.tprmConfigurations.length);
+      console.log('[ConsentConfiguration]   - GRC configs:', this.configurations);
+      console.log('[ConsentConfiguration]   - TPRM configs:', this.tprmConfigurations);
+      
+      if (this.consentType === 'grc') {
+        allConfigs = [...this.configurations];
+        console.log('[ConsentConfiguration] ✅ Filter: GRC Only -', allConfigs.length, 'configs');
+      } else if (this.consentType === 'tprm') {
+        allConfigs = [...this.tprmConfigurations];
+        console.log('[ConsentConfiguration] ✅ Filter: TPRM Only -', allConfigs.length, 'configs');
+      } else if (this.consentType === 'all') {
+        allConfigs = [...this.configurations, ...this.tprmConfigurations];
+        console.log('[ConsentConfiguration] ✅ Filter: All (GRC + TPRM) -', allConfigs.length, 'configs');
+      }
+      
+      // Sort by action label
+      const sorted = allConfigs.sort((a, b) => (a.action_label || '').localeCompare(b.action_label || ''));
+      console.log('[ConsentConfiguration] ✅ Final filtered configs:', sorted.length);
+      console.log('[ConsentConfiguration] ✅ Sample configs:', sorted.slice(0, 3).map(c => ({ label: c.action_label, is_tprm: c.is_tprm })));
+      
+      return sorted;
+    }
   },
   async mounted() {
     this.userId = localStorage.getItem('user_id');
     await this.checkUserRole();
     if (this.isGRCAdministrator) {
       await this.initializeFramework();
+      
+      // Always load configurations - TPRM doesn't need framework_id
+      // If showing 'all' or 'tprm', TPRM will load even without framework_id
+      // GRC will only load if framework_id is available
+      this.loadConfigurations();
+      
       if (this.frameworkId) {
-        this.loadConfigurations();
         this.loadConsentHistory();
-      } else {
+      }
+      
+      // If no framework_id and showing GRC, show framework selector
+      if (!this.frameworkId && this.consentType === 'grc') {
         await this.loadFrameworks();
         this.showFrameworkSelector = true;
-        this.loading = false;
       }
     } else {
       this.loading = false;
@@ -335,7 +394,11 @@ export default {
     },
 
     async loadConfigurations() {
-      if (!this.frameworkId) {
+      // TPRM configurations can load without framework_id, but GRC needs it
+      // Only require framework_id for GRC-only mode
+      const needsFramework = this.consentType === 'grc';
+      
+      if (needsFramework && !this.frameworkId) {
         this.showMessage('Please select a framework first', 'error');
         await this.loadFrameworks();
         this.showFrameworkSelector = true;
@@ -345,20 +408,112 @@ export default {
 
       try {
         this.loading = true;
-        const response = await axios.get(`${API_BASE_URL}/api/consent/configurations/`, {
-          params: { framework_id: this.frameworkId },
-          headers: this.getAuthHeaders()
-        });
+        
+        // Load TPRM configurations FIRST (they don't need framework_id)
+        // Always try to load TPRM if showing TPRM or All
+        if (this.consentType === 'tprm' || this.consentType === 'all') {
+          try {
+            console.log('[ConsentConfiguration] 🔵 Loading TPRM configurations...', {
+              url: `${API_BASE_URL}/api/tprm/consent/configurations/`,
+              framework_id: this.frameworkId || 1,
+              consentType: this.consentType
+            });
+            
+            const tprmResponse = await axios.get(`${API_BASE_URL}/api/tprm/consent/configurations/`, {
+              params: { framework_id: this.frameworkId || 1 },
+              headers: this.getAuthHeaders()
+            });
 
-        if (response.data.status === 'success') {
-          this.configurations = response.data.data;
-          // Sort configurations by action label
-          this.configurations.sort((a, b) => a.action_label.localeCompare(b.action_label));
+            console.log('[ConsentConfiguration] 🔵 TPRM response status:', tprmResponse.status);
+            console.log('[ConsentConfiguration] 🔵 TPRM response data:', tprmResponse.data);
+
+            if (tprmResponse.data && tprmResponse.data.status === 'success') {
+              const data = tprmResponse.data.data || [];
+              console.log('[ConsentConfiguration] 🔵 TPRM data received:', data.length, 'configurations');
+              console.log('[ConsentConfiguration] 🔵 TPRM raw data sample:', data.slice(0, 2));
+              
+              // Transform TPRM configs to match GRC format
+              this.tprmConfigurations = data.map(c => {
+                const config = {
+                  config_id: c.ConfigId || c.config_id,
+                  action_type: c.ActionType || c.action_type,
+                  action_label: c.ActionLabel || c.action_label,
+                  is_enabled: Boolean(c.IsEnabled !== undefined ? c.IsEnabled : (c.is_enabled !== undefined ? c.is_enabled : false)),
+                  consent_text: c.ConsentText || c.consent_text || '',
+                  framework_id: c.FrameworkId || c.framework_id || 1,
+                  updated_at: c.UpdatedAt || c.updated_at || null,
+                  updated_by_name: c.updated_by_name || null,
+                  is_tprm: true // Flag to identify TPRM configs
+                };
+                console.log('[ConsentConfiguration] 🔵 Mapped TPRM config:', config.action_label, 'ID:', config.config_id, 'Enabled:', config.is_enabled);
+                return config;
+              });
+              
+              this.tprmConfigurations.sort((a, b) => (a.action_label || '').localeCompare(b.action_label || ''));
+              console.log('[ConsentConfiguration] ✅ Loaded TPRM configurations:', this.tprmConfigurations.length);
+              console.log('[ConsentConfiguration] ✅ TPRM configs array:', this.tprmConfigurations);
+            } else {
+              console.warn('[ConsentConfiguration] ⚠️ TPRM response status is not success:', tprmResponse.data);
+              this.tprmConfigurations = [];
+            }
+          } catch (tprmError) {
+            console.error('[ConsentConfiguration] ❌ Error loading TPRM consent configurations:', tprmError);
+            console.error('[ConsentConfiguration] Error details:', {
+              message: tprmError.message,
+              response: tprmError.response?.data,
+              status: tprmError.response?.status,
+              url: tprmError.config?.url
+            });
+            this.tprmConfigurations = [];
+            // Show error message to user
+            this.showMessage(`Failed to load TPRM consent configurations: ${tprmError.response?.data?.message || tprmError.message}`, 'error');
+          }
         } else {
-          this.showMessage(response.data.message || 'Failed to load consent configurations', 'error');
+          // Clear TPRM configs if not needed
+          this.tprmConfigurations = [];
         }
+        
+        // Load GRC configurations (only if needed and framework_id is available)
+        if ((this.consentType === 'grc' || this.consentType === 'all') && this.frameworkId) {
+          try {
+            console.log('[ConsentConfiguration] 🔵 Loading GRC configurations...', {
+              url: `${API_BASE_URL}/api/consent/configurations/`,
+              framework_id: this.frameworkId
+            });
+            
+            const grcResponse = await axios.get(`${API_BASE_URL}/api/consent/configurations/`, {
+              params: { framework_id: this.frameworkId },
+              headers: this.getAuthHeaders()
+            });
+
+            if (grcResponse.data.status === 'success') {
+              this.configurations = grcResponse.data.data.filter(c => !c.action_type?.startsWith('tprm_'));
+              // Sort configurations by action label
+              this.configurations.sort((a, b) => (a.action_label || '').localeCompare(b.action_label || ''));
+              console.log('[ConsentConfiguration] ✅ Loaded GRC configurations:', this.configurations.length);
+            } else {
+              console.warn('[ConsentConfiguration] ⚠️ GRC response status is not success:', grcResponse.data);
+              this.configurations = [];
+            }
+          } catch (grcError) {
+            console.error('[ConsentConfiguration] ❌ Error loading GRC consent configurations:', grcError);
+            this.configurations = [];
+            // Don't show error for GRC if we're only showing TPRM
+            if (this.consentType !== 'tprm') {
+              this.showMessage(`Failed to load GRC consent configurations: ${grcError.response?.data?.message || grcError.message}`, 'error');
+            }
+          }
+        } else if (this.consentType === 'grc') {
+          // GRC mode but no framework_id - show selector
+          await this.loadFrameworks();
+          this.showFrameworkSelector = true;
+        } else {
+          // Clear GRC configs if not needed
+          this.configurations = [];
+        }
+        
       } catch (error) {
-        console.error('Error loading consent configurations:', error);
+        console.error('[ConsentConfiguration] ❌ General error loading consent configurations:', error);
         const errorMsg = error.response?.data?.message || 'Failed to load consent configurations';
         this.showMessage(errorMsg, 'error');
         
@@ -372,18 +527,77 @@ export default {
       }
     },
 
+    onConsentTypeChange() {
+      // Reload configurations when type changes
+      // TPRM can load without framework_id, but GRC needs it
+      if (this.consentType === 'tprm' || this.frameworkId) {
+        this.loadConfigurations();
+      } else if (this.consentType === 'grc' || this.consentType === 'all') {
+        // Need framework for GRC, so show selector if not set
+        if (!this.frameworkId) {
+          this.loadFrameworks();
+          this.showFrameworkSelector = true;
+        } else {
+          this.loadConfigurations();
+        }
+      }
+    },
+
     async loadConsentHistory() {
       try {
         this.loadingHistory = true;
-        const response = await axios.get(`${API_BASE_URL}/api/consent/acceptances/`, {
-          params: { framework_id: this.frameworkId },
-          headers: this.getAuthHeaders()
-        });
+        const allHistory = [];
+        
+        // Load GRC consent history
+        try {
+          const grcResponse = await axios.get(`${API_BASE_URL}/api/consent/acceptances/`, {
+            params: { framework_id: this.frameworkId },
+            headers: this.getAuthHeaders()
+          });
 
-        if (response.data.status === 'success') {
-          // Get last 20 acceptances
-          this.consentHistory = response.data.data.slice(0, 20);
+          if (grcResponse.data.status === 'success') {
+            const grcHistory = grcResponse.data.data.map(item => ({
+              ...item,
+              is_tprm: false
+            }));
+            allHistory.push(...grcHistory);
+          }
+        } catch (grcError) {
+          console.warn('Error loading GRC consent history:', grcError);
         }
+        
+        // Load TPRM consent history
+        try {
+          const tprmResponse = await axios.get(`${API_BASE_URL}/api/tprm/consent/acceptances/`, {
+            params: { framework_id: this.frameworkId || 1 },
+            headers: this.getAuthHeaders()
+          });
+
+          if (tprmResponse.data.status === 'success') {
+            const tprmHistory = tprmResponse.data.data.map(item => ({
+              acceptance_id: item.AcceptanceId || item.acceptance_id,
+              user_id: item.UserId || item.user_id,
+              user_name: item.user_name || `User ${item.UserId || item.user_id}`,
+              action_type: item.ActionType || item.action_type,
+              action_label: item.action_label || (item.ActionType || item.action_type).replace('tprm_', '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+              accepted_at: item.AcceptedAt || item.accepted_at,
+              ip_address: item.IpAddress || item.ip_address,
+              is_tprm: true
+            }));
+            allHistory.push(...tprmHistory);
+          }
+        } catch (tprmError) {
+          console.warn('Error loading TPRM consent history:', tprmError);
+        }
+        
+        // Sort by accepted_at (most recent first) and get last 20
+        allHistory.sort((a, b) => {
+          const dateA = new Date(a.accepted_at || 0);
+          const dateB = new Date(b.accepted_at || 0);
+          return dateB - dateA;
+        });
+        
+        this.consentHistory = allHistory.slice(0, 20);
       } catch (error) {
         console.error('Error loading consent history:', error);
       } finally {
@@ -404,31 +618,58 @@ export default {
       try {
         this.saving = true;
         
-        // Prepare modified configs
-        const configsToUpdate = this.configurations
-          .filter(c => this.modifiedConfigs.has(c.config_id))
+        // Separate GRC and TPRM configs
+        const grcConfigsToUpdate = this.configurations
+          .filter(c => this.modifiedConfigs.has(c.config_id) && !c.is_tprm)
+          .map(c => ({
+            config_id: c.config_id,
+            is_enabled: c.is_enabled,
+            consent_text: c.consent_text
+          }));
+        
+        const tprmConfigsToUpdate = this.tprmConfigurations
+          .filter(c => this.modifiedConfigs.has(c.config_id) && c.is_tprm)
           .map(c => ({
             config_id: c.config_id,
             is_enabled: c.is_enabled,
             consent_text: c.consent_text
           }));
 
-        const response = await axios.put(
-          `${API_BASE_URL}/api/consent/configurations/bulk-update/`,
-          {
-            configs: configsToUpdate,
-            updated_by: this.userId
-          },
-          { headers: this.getAuthHeaders() }
-        );
-
-        if (response.data.status === 'success') {
-          this.showMessage('Consent configurations saved successfully', 'success');
-          this.modifiedConfigs.clear();
-          this.loadConfigurations();
-        } else {
-          throw new Error(response.data.message || 'Failed to save configurations');
+        // Save GRC configs
+        if (grcConfigsToUpdate.length > 0) {
+          const grcResponse = await axios.put(
+            `${API_BASE_URL}/api/consent/configurations/bulk-update/`,
+            {
+              configs: grcConfigsToUpdate,
+              updated_by: this.userId
+            },
+            { headers: this.getAuthHeaders() }
+          );
+          
+          if (grcResponse.data.status !== 'success') {
+            throw new Error(grcResponse.data.message || 'Failed to save GRC configurations');
+          }
         }
+        
+        // Save TPRM configs
+        if (tprmConfigsToUpdate.length > 0) {
+          const tprmResponse = await axios.put(
+            `${API_BASE_URL}/api/tprm/consent/configurations/bulk-update/`,
+            {
+              configs: tprmConfigsToUpdate,
+              updated_by: this.userId
+            },
+            { headers: this.getAuthHeaders() }
+          );
+          
+          if (tprmResponse.data.status !== 'success') {
+            throw new Error(tprmResponse.data.message || 'Failed to save TPRM configurations');
+          }
+        }
+
+        this.showMessage('Consent configurations saved successfully', 'success');
+        this.modifiedConfigs.clear();
+        this.loadConfigurations();
       } catch (error) {
         console.error('Error saving consent configurations:', error);
         const errorMessage = error.response?.data?.message || 
@@ -756,6 +997,56 @@ export default {
   font-weight: 600;
   color: #111827;
   font-size: 14px;
+}
+
+.tprm-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.consent-type-selector {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  margin-bottom: 24px;
+  border: 1px solid #e5e7eb;
+}
+
+.consent-type-label {
+  font-weight: 600;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.consent-type-label i {
+  color: #3b82f6;
+}
+
+.consent-type-select {
+  padding: 8px 16px;
+  border: 2px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.consent-type-select:focus {
+  outline: none;
+  border-color: #3b82f6;
 }
 
 .text-center {
@@ -1104,10 +1395,72 @@ export default {
   gap: 0.5rem;
 }
 
-.btn-back:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-}
+  .btn-back:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  }
+
+  .consent-type-selector {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 24px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin-bottom: 24px;
+    border: 1px solid #e5e7eb;
+  }
+
+  .consent-type-label {
+    font-weight: 600;
+    color: #374151;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .consent-type-label i {
+    color: #3b82f6;
+  }
+
+  .consent-type-select {
+    padding: 8px 16px;
+    border: 2px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 14px;
+    background: white;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+
+  .consent-type-select:focus {
+    outline: none;
+    border-color: #3b82f6;
+  }
+
+  .tprm-badge {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 8px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .tprm-badge-small {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 6px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
 
 @media (max-width: 1024px) {
   .consent-configuration {
