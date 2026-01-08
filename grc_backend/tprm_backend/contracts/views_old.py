@@ -4253,7 +4253,11 @@ def upload_contract_ocr(request, contract_id):
     """Upload contract file for OCR extraction with real AI processing"""
     import tempfile
     import os
-    from ocr_app.services import DocumentProcessingService
+    # Import OCR service with support for both monorepo and legacy layouts
+    try:
+        from tprm_backend.ocr_app.services import DocumentProcessingService
+    except ImportError:  # Fallback for older setups
+        from ocr_app.services import DocumentProcessingService
     
     temp_file_path = None
     

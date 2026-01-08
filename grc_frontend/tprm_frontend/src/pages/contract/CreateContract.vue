@@ -2559,7 +2559,10 @@
       </div>
       <div class="flex items-center justify-end gap-3 p-6 border-t bg-gray-50">
         <Button variant="outline" @click="closeQuestionnairesModal">Close</Button>
-        <Button @click="editQuestionnaires(selectedTermTitle, selectedTermId, selectedQuestionnaires)">
+        <Button @click="() => {
+          console.log('🖱️ Edit button clicked with:', { title: selectedTermTitle, id: selectedTermId, questions: selectedQuestionnaires?.length })
+          editQuestionnaires(selectedTermTitle, selectedTermId, selectedQuestionnaires)
+        }">
           <Edit class="w-4 h-4 mr-2" />
           Edit Questionnaires
         </Button>
@@ -3925,29 +3928,24 @@ const handleSubmitForReview = async () => {
     // The preview page will handle the actual database save
     console.log('✅ Navigating to preview page for contract review')
     
-    // Load questionnaires in background (non-blocking) if terms exist
-    // Store current questionnaires in sessionStorage, ContractPreview will load if needed
+    // Load questionnaires BEFORE navigating if terms exist and questionnaires aren't loaded yet
+    // This ensures questionnaires are available in sessionStorage for the preview page
     if (contractTerms.value.length > 0 && allTermQuestionnaires.value.length === 0) {
-      console.log('📋 Loading questionnaires in background (non-blocking)...')
-      // Don't await - load in background and update sessionStorage when done
-      loadTermQuestionnaires().then(() => {
-        // Update sessionStorage with loaded questionnaires
-        const previewData = sessionStorage.getItem('contractPreviewData')
-        if (previewData) {
-          try {
-            const data = JSON.parse(previewData)
-            data.allTermQuestionnaires = allTermQuestionnaires.value
-            sessionStorage.setItem('contractPreviewData', JSON.stringify(data))
-            console.log(`📋 Updated sessionStorage with ${allTermQuestionnaires.value.length} questionnaires`)
-          } catch (e) {
-            console.error('Error updating sessionStorage with questionnaires:', e)
-          }
-        }
-      }).catch(err => {
-        console.error('Error loading questionnaires in background:', err)
-      })
+      console.log('📋 Loading questionnaires before navigation...')
+      try {
+        isLoading.value = true
+        // AWAIT the questionnaire loading so they're available before saving to sessionStorage
+        await loadTermQuestionnaires()
+        console.log(`📋 Loaded ${allTermQuestionnaires.value.length} questionnaires before navigation`)
+      } catch (err) {
+        console.error('Error loading questionnaires before navigation:', err)
+        // Continue navigation even if loading fails - preview page can try to load them
+      } finally {
+        isLoading.value = false
+      }
     }
     
+    // Now navigate with questionnaires loaded (if they exist)
     navigateToPreview()
   }
 }
@@ -5324,6 +5322,7 @@ async function loadTermQuestionnaires() {
     
     console.log('📋 Loading questionnaires for term categories:', uniqueTermCategories)
     console.log('📋 Also checking term IDs:', uniqueTermIds)
+    console.log('📋 Checking selected templates:', selectedTemplates.value)
     
     // Load all questionnaires in parallel for better performance
     const loadPromises = []
@@ -5371,23 +5370,56 @@ async function loadTermQuestionnaires() {
       }
     }
     
+    // IMPORTANT: Load questionnaires from selected templates
+    for (const [termIdStr, templateId] of Object.entries(selectedTemplates.value)) {
+      if (templateId) {
+        const term = contractTerms.value.find(t => String(t.term_id) === String(termIdStr))
+        if (term) {
+          console.log(`📋 Loading questions from template ${templateId} for term ${termIdStr}`)
+          loadPromises.push(
+            apiService.bcpdrpRequest(`/questionnaire-templates/${templateId}/`, { method: 'GET' })
+              .then(response => {
+                const template = response.data || response
+                const templateQuestions = template.template_questions_json || []
+                // Map template questions to questionnaire format and associate with term
+                return templateQuestions.map((q, index) => ({
+                  ...q,
+                  term_id: termIdStr,
+                  term_category: term.term_category || '',
+                  question_id: q.question_id || (index + 1),
+                  _from_template: true,
+                  _template_id: templateId
+                }))
+              })
+              .catch(error => {
+                console.error(`Error loading template ${templateId} for term ${termIdStr}:`, error)
+                return []
+              })
+          )
+        }
+      }
+    }
+    
     // Wait for all API calls to complete in parallel
     const results = await Promise.all(loadPromises)
     
     // Flatten and combine all results
     const allQuestionnaires = results.flat()
     
-    // Remove duplicates based on question_id
+    // Remove duplicates based on question_id (but keep template questions if they don't conflict)
     const seenIds = new Set()
     allTermQuestionnaires.value = allQuestionnaires.filter(q => {
-      if (seenIds.has(q.question_id)) {
+      const id = q.question_id || `${q.term_id}_${q.question_text}`
+      if (seenIds.has(id) && !q._from_template) {
+        // Skip duplicate non-template questions
         return false
       }
-      seenIds.add(q.question_id)
+      seenIds.add(id)
       return true
     })
     
     console.log('📋 Total unique questionnaires loaded:', allTermQuestionnaires.value.length)
+    console.log('📋 Questionnaires from templates:', allTermQuestionnaires.value.filter(q => q._from_template).length)
     
     // Force reactivity update
     allTermQuestionnaires.value = [...allTermQuestionnaires.value]
@@ -5656,10 +5688,26 @@ function clearTemplateSelection(termId) {
 async function viewTemplateQuestions(termId, templateId) {
   try {
     const termIdStr = String(termId || '')
-    const term = contractTerms.value.find(t => String(t.term_id) === String(termId))
-    const termCategory = term?.term_category || ''
     
-    console.log('📋 Loading questions for template:', { templateId, termId: termIdStr, termCategory })
+    // Try to find term with better logging
+    console.log('🔍 Looking for term:', termIdStr)
+    console.log('🔍 Available terms:', contractTerms.value.map(t => ({ id: t.term_id, title: t.term_title })))
+    
+    const term = contractTerms.value.find(t => String(t.term_id) === String(termId))
+    
+    if (!term) {
+      console.error('❌ Term not found in contractTerms:', { 
+        termId: termIdStr, 
+        availableTerms: contractTerms.value.length,
+        termIds: contractTerms.value.map(t => t.term_id)
+      })
+      PopupService.error(`Term not found. Please ensure the term exists before viewing questions.`, 'Error')
+      return
+    }
+    
+    const termCategory = term.term_category || ''
+    
+    console.log('📋 Loading questions for template:', { templateId, termId: termIdStr, termCategory, termTitle: term.term_title })
     
     const response = await apiService.getTemplateQuestions(templateId, termIdStr, termCategory)
     const questions = response.questions || []
@@ -5680,9 +5728,12 @@ async function viewTemplateQuestions(termId, templateId) {
       allow_document_upload: q.allow_document_upload || false
     }))
     
-    selectedTermTitle.value = term?.term_title || 'Unknown Term'
-    selectedTermId.value = termIdStr
+    // Set these values with the found term to ensure they're valid
+    selectedTermTitle.value = term.term_title
+    selectedTermId.value = term.term_id
     showQuestionnairesModal.value = true
+    
+    console.log('✅ Modal opened with term:', { title: selectedTermTitle.value, id: selectedTermId.value })
   } catch (error) {
     console.error('❌ Error loading template questions:', error)
     PopupService.error(`Failed to load template questions: ${error.message || 'Please try again.'}`, 'Error')
@@ -5803,6 +5854,9 @@ function closeQuestionnairesModal() {
 
 // Edit questionnaires for a term (with existing questions pre-populated)
 function editQuestionnaires(termTitle, termId, existingQuestionnaires = []) {
+  console.log('🔍 editQuestionnaires called with:', { termTitle, termId, questionsCount: existingQuestionnaires?.length })
+  console.log('🔍 Available contractTerms:', contractTerms.value.map(t => ({ id: t.term_id, title: t.term_title })))
+  
   // Get term_category and term_id from the term object
   const term = contractTerms.value.find(t => 
     (termTitle && t.term_title === termTitle) || 
@@ -5810,7 +5864,14 @@ function editQuestionnaires(termTitle, termId, existingQuestionnaires = []) {
   )
   
   if (!term) {
-    console.error('❌ Term not found for editing questionnaires:', { termTitle, termId })
+    console.error('❌ Term not found for editing questionnaires:', { 
+      termTitle, 
+      termId, 
+      availableTerms: contractTerms.value.length,
+      allTermIds: contractTerms.value.map(t => t.term_id),
+      allTermTitles: contractTerms.value.map(t => t.term_title)
+    })
+    PopupService.error(`Term not found. The contract term may have been deleted or the page needs to be refreshed.`, 'Error')
     return
   }
   
@@ -5872,8 +5933,8 @@ function editQuestionnaires(termTitle, termId, existingQuestionnaires = []) {
     console.log(`📋 Stored ${questionsForTemplate.length} questions for editing`)
   }
   
-  // Close the modal
-  closeQuestionnairesModal()
+  // Close the modal AFTER navigation is initiated to prevent race conditions
+  // Don't close the modal yet - let it close after navigation
   
   router.push({
     path: '/questionnaire-templates',

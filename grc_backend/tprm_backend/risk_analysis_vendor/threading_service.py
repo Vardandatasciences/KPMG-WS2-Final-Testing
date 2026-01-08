@@ -91,14 +91,31 @@ class VendorRiskThreadingService:
         start_time = timezone.now()
         
         try:
-            logger.info(f"Background thread starting vendor risk generation for approval: {approval_id}")
+            logger.info(f"🔵 [RISK GENERATION THREAD] Background thread starting vendor risk generation for approval: {approval_id}")
+            print(f"🔵 [RISK GENERATION THREAD] Background thread starting vendor risk generation for approval: {approval_id}")
             
             # Import the risk analysis service
-            from .services import RiskAnalysisService
+            try:
+                from .services import RiskAnalysisService
+                logger.info(f"✅ [RISK GENERATION THREAD] Successfully imported RiskAnalysisService")
+                print(f"✅ [RISK GENERATION THREAD] Successfully imported RiskAnalysisService")
+            except ImportError as import_error:
+                import traceback
+                logger.error(f"❌ [RISK GENERATION THREAD] Failed to import RiskAnalysisService: {str(import_error)}")
+                logger.error(f"❌ [RISK GENERATION THREAD] Import traceback: {traceback.format_exc()}")
+                print(f"❌ [RISK GENERATION THREAD] Failed to import RiskAnalysisService: {str(import_error)}")
+                raise
             
             # Create service instance and run risk generation
             risk_service = RiskAnalysisService()
+            logger.info(f"✅ [RISK GENERATION THREAD] Created RiskAnalysisService instance")
+            print(f"✅ [RISK GENERATION THREAD] Created RiskAnalysisService instance")
+            
+            logger.info(f"🔵 [RISK GENERATION THREAD] Calling generate_vendor_risks for approval: {approval_id}")
+            print(f"🔵 [RISK GENERATION THREAD] Calling generate_vendor_risks for approval: {approval_id}")
             result = risk_service.generate_vendor_risks(approval_id)
+            logger.info(f"✅ [RISK GENERATION THREAD] generate_vendor_risks completed, result: {result}")
+            print(f"✅ [RISK GENERATION THREAD] generate_vendor_risks completed, result: {result}")
             
             # Calculate processing time
             end_time = timezone.now()
@@ -114,19 +131,25 @@ class VendorRiskThreadingService:
             }
             
             if result.get('status') == 'success':
-                logger.info(f"Background vendor risk generation completed successfully for approval {approval_id} "
-                          f"in {processing_time:.2f} seconds. Created {result.get('risks_created', 0)} risks.")
+                risks_created = result.get('risks_created', 0)
+                logger.info(f"✅ [RISK GENERATION THREAD] Background vendor risk generation completed successfully for approval {approval_id} "
+                          f"in {processing_time:.2f} seconds. Created {risks_created} risks.")
+                print(f"✅ [RISK GENERATION THREAD] Background vendor risk generation completed successfully for approval {approval_id} "
+                      f"in {processing_time:.2f} seconds. Created {risks_created} risks.")
             else:
-                logger.warning(f"Background vendor risk generation completed with issues for approval {approval_id}: "
-                             f"{result.get('error', result.get('message', 'Unknown issue'))}")
+                error_msg = result.get('error', result.get('message', 'Unknown issue'))
+                logger.warning(f"⚠️ [RISK GENERATION THREAD] Background vendor risk generation completed with issues for approval {approval_id}: {error_msg}")
+                print(f"⚠️ [RISK GENERATION THREAD] Background vendor risk generation completed with issues for approval {approval_id}: {error_msg}")
             
         except Exception as e:
+            import traceback
             # Calculate processing time even for errors
             end_time = timezone.now()
             processing_time = (end_time - start_time).total_seconds()
             
             # Store error result
             error_message = str(e)
+            error_trace = traceback.format_exc()
             self.thread_results[approval_id] = {
                 'status': 'error',
                 'approval_id': approval_id,
@@ -135,8 +158,12 @@ class VendorRiskThreadingService:
                 'completed_at': end_time.isoformat()
             }
             
-            logger.error(f"Background vendor risk generation failed for approval {approval_id} "
+            logger.error(f"❌ [RISK GENERATION THREAD] Background vendor risk generation failed for approval {approval_id} "
                         f"after {processing_time:.2f} seconds: {error_message}")
+            logger.error(f"❌ [RISK GENERATION THREAD] Error traceback: {error_trace}")
+            print(f"❌ [RISK GENERATION THREAD] Background vendor risk generation failed for approval {approval_id} "
+                  f"after {processing_time:.2f} seconds: {error_message}")
+            print(f"❌ [RISK GENERATION THREAD] Error traceback: {error_trace}")
             
         finally:
             # Clean up thread reference

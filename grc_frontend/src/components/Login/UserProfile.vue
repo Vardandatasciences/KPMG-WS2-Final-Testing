@@ -1041,12 +1041,25 @@
             </div>
 
             <!-- Framework Info -->
-            <div v-if="consentFrameworks.length > 0" class="consent-framework-info">
+            <div v-if="consentFrameworks.length > 0 && (consentType === 'grc' || consentType === 'all')" class="consent-framework-info">
               <i class="fas fa-info-circle"></i>
               <span>Configuring consent for: <strong>{{ consentFrameworks.find(f => f.FrameworkId == consentFrameworkId)?.FrameworkName || 'Selected Framework' }}</strong></span>
               <button @click="showConsentFrameworkSelector = true" class="btn-change-framework" v-if="consentFrameworks.length > 1">
                 <i class="fas fa-exchange-alt"></i> Change Framework
               </button>
+            </div>
+
+            <!-- Consent Type Selector -->
+            <div class="consent-type-selector">
+              <label class="consent-type-label">
+                <i class="fas fa-filter"></i>
+                Show Consents:
+              </label>
+              <select v-model="consentType" @change="onConsentTypeChange" class="consent-type-select">
+                <option value="grc">GRC Only</option>
+                <option value="tprm">TPRM Only</option>
+                <option value="all">All (GRC + TPRM)</option>
+              </select>
             </div>
 
             <!-- Framework Selector -->
@@ -1076,7 +1089,7 @@
             </div>
 
             <!-- Consent Configurations Table -->
-            <div v-else-if="consentFrameworkId" class="consent-configurations-card">
+            <div v-else-if="consentFrameworkId || consentType === 'tprm' || consentType === 'all'" class="consent-configurations-card">
               <div class="consent-card-header">
                 <h3><i class="fas fa-cog"></i> Action Consent Settings</h3>
                 <button @click="saveAllConsentConfigurations" class="btn-save" :disabled="savingConsentConfigs || consentModifiedConfigs.size === 0">
@@ -1096,11 +1109,14 @@
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="config in consentConfigurations" :key="config.config_id" class="consent-config-row">
+                    <tr v-for="config in filteredConsentConfigurations" :key="`${config.is_tprm ? 'tprm' : 'grc'}-${config.config_id}`" class="consent-config-row">
                       <td>
                         <div class="consent-action-info">
                           <i :class="getConsentActionIcon(config.action_type)"></i>
-                          <span class="consent-action-label">{{ config.action_label }}</span>
+                          <span class="consent-action-label">
+                            {{ config.action_label }}
+                            <span v-if="config.is_tprm" class="tprm-badge">TPRM</span>
+                          </span>
                         </div>
                       </td>
                       <td class="text-center">
@@ -1939,6 +1955,8 @@ export default {
       selectedPermissions: {},
       // Consent Configuration properties
       consentConfigurations: [],
+      tprmConsentConfigurations: [],
+      consentType: 'all', // 'grc' or 'tprm' or 'all'
       consentFrameworkId: null,
       consentFrameworks: [],
       loadingConsentConfigs: false,
@@ -2104,6 +2122,31 @@ export default {
         return false;
       }
       return this.otpDigits.every(digit => digit !== '') && this.otpDigits.join('').length === 6;
+    },
+    filteredConsentConfigurations() {
+      // Combine GRC and TPRM configurations based on consentType
+      let allConfigs = [];
+      
+      console.log('[UserProfile] 🔍 filteredConsentConfigurations called');
+      console.log('[UserProfile]   - consentType:', this.consentType);
+      console.log('[UserProfile]   - GRC configs count:', this.consentConfigurations.length);
+      console.log('[UserProfile]   - TPRM configs count:', this.tprmConsentConfigurations.length);
+      
+      if (this.consentType === 'grc') {
+        allConfigs = [...this.consentConfigurations];
+        console.log('[UserProfile] ✅ Filter: GRC Only -', allConfigs.length, 'configs');
+      } else if (this.consentType === 'tprm') {
+        allConfigs = [...this.tprmConsentConfigurations];
+        console.log('[UserProfile] ✅ Filter: TPRM Only -', allConfigs.length, 'configs');
+      } else if (this.consentType === 'all') {
+        allConfigs = [...this.consentConfigurations, ...this.tprmConsentConfigurations];
+        console.log('[UserProfile] ✅ Filter: All (GRC + TPRM) -', allConfigs.length, 'configs');
+      }
+      
+      // Sort by action label
+      const sorted = allConfigs.sort((a, b) => (a.action_label || '').localeCompare(b.action_label || ''));
+      console.log('[UserProfile] ✅ Final filtered configs:', sorted.length);
+      return sorted;
     },
     filteredRequests() {
       // Combine GRC and TPRM requests
@@ -3566,9 +3609,13 @@ async updatePassword() {
           }
         }
         
-        if (this.consentFrameworkId) {
-          await this.loadConsentConfigurations();
-        } else {
+        // Always load configurations - TPRM doesn't need framework_id
+        // If showing 'all' or 'tprm', TPRM will load even without framework_id
+        // GRC will only load if framework_id is available
+        await this.loadConsentConfigurations();
+        
+        // If no framework_id and showing GRC, show framework selector
+        if (!this.consentFrameworkId && (this.consentType === 'grc' || this.consentType === 'all')) {
           await this.loadConsentFrameworks();
           if (this.consentFrameworks.length > 0) {
             this.consentFrameworkId = this.consentFrameworks[0].FrameworkId;
@@ -3610,9 +3657,13 @@ async updatePassword() {
       },
 
       async loadConsentConfigurations() {
-        if (!this.consentFrameworkId) {
+        // TPRM configurations can load without framework_id, but GRC needs it
+        const needsFramework = this.consentType === 'grc' || this.consentType === 'all';
+        
+        if (needsFramework && !this.consentFrameworkId) {
           await this.loadConsentFrameworks();
           this.showConsentFrameworkSelector = true;
+          this.loadingConsentConfigs = false;
           return;
         }
 
@@ -3620,26 +3671,91 @@ async updatePassword() {
           this.loadingConsentConfigs = true;
           const { API_BASE_URL } = await import('../../config/api.js');
           const axios = (await import('axios')).default;
+          const userId = this.getCurrentUserId();
           
-          const userId = this.getCurrentUserId(); // Get current user ID for created_by
-          
-          const response = await axios.get(`${API_BASE_URL}/api/consent/configurations/`, {
-            params: { 
-              framework_id: this.consentFrameworkId,
-              created_by: userId // Send user ID so backend can set created_by when creating defaults
-            },
-            headers: this.getConsentAuthHeaders()
-          });
+          // Load TPRM configurations FIRST (they don't need framework_id)
+          if (this.consentType === 'tprm' || this.consentType === 'all') {
+            try {
+              console.log('[UserProfile] 🔵 Loading TPRM consent configurations...');
+              
+              const tprmResponse = await axios.get(`${API_BASE_URL}/api/tprm/consent/configurations/`, {
+                params: { framework_id: this.consentFrameworkId || 1 },
+                headers: this.getConsentAuthHeaders()
+              });
 
-          if (response.data.status === 'success') {
-            this.consentConfigurations = response.data.data;
-            this.consentConfigurations.sort((a, b) => a.action_label.localeCompare(b.action_label));
-            this.consentModifiedConfigs.clear();
+              if (tprmResponse.data && tprmResponse.data.status === 'success') {
+                const data = tprmResponse.data.data || [];
+                console.log('[UserProfile] 🔵 TPRM data received:', data.length, 'configurations');
+                
+                // Transform TPRM configs to match GRC format
+                this.tprmConsentConfigurations = data.map(c => {
+                  return {
+                    config_id: c.ConfigId || c.config_id,
+                    action_type: c.ActionType || c.action_type,
+                    action_label: c.ActionLabel || c.action_label,
+                    is_enabled: Boolean(c.IsEnabled !== undefined ? c.IsEnabled : (c.is_enabled !== undefined ? c.is_enabled : false)),
+                    consent_text: c.ConsentText || c.consent_text || '',
+                    framework_id: c.FrameworkId || c.framework_id || 1,
+                    updated_at: c.UpdatedAt || c.updated_at || null,
+                    updated_by_name: c.updated_by_name || null,
+                    is_tprm: true // Flag to identify TPRM configs
+                  };
+                });
+                
+                this.tprmConsentConfigurations.sort((a, b) => (a.action_label || '').localeCompare(b.action_label || ''));
+                console.log('[UserProfile] ✅ Loaded TPRM configurations:', this.tprmConsentConfigurations.length);
+              } else {
+                console.warn('[UserProfile] ⚠️ TPRM response status is not success:', tprmResponse.data);
+                this.tprmConsentConfigurations = [];
+              }
+            } catch (tprmError) {
+              console.error('[UserProfile] ❌ Error loading TPRM consent configurations:', tprmError);
+              this.tprmConsentConfigurations = [];
+              if (this.consentType === 'tprm' || this.consentType === 'all') {
+                this.showConsentMessage(`Failed to load TPRM consent configurations: ${tprmError.response?.data?.message || tprmError.message}`, 'error');
+              }
+            }
           } else {
-            this.showConsentMessage(response.data.message || 'Failed to load consent configurations', 'error');
+            this.tprmConsentConfigurations = [];
+          }
+          
+          // Load GRC configurations (only if needed and framework_id is available)
+          if ((this.consentType === 'grc' || this.consentType === 'all') && this.consentFrameworkId) {
+            try {
+              console.log('[UserProfile] 🔵 Loading GRC consent configurations...');
+              
+              const response = await axios.get(`${API_BASE_URL}/api/consent/configurations/`, {
+                params: { 
+                  framework_id: this.consentFrameworkId,
+                  created_by: userId
+                },
+                headers: this.getConsentAuthHeaders()
+              });
+
+              if (response.data.status === 'success') {
+                this.consentConfigurations = response.data.data.filter(c => !c.action_type?.startsWith('tprm_'));
+                this.consentConfigurations.sort((a, b) => a.action_label.localeCompare(b.action_label));
+                console.log('[UserProfile] ✅ Loaded GRC configurations:', this.consentConfigurations.length);
+                this.consentModifiedConfigs.clear();
+              } else {
+                this.showConsentMessage(response.data.message || 'Failed to load consent configurations', 'error');
+              }
+            } catch (grcError) {
+              console.error('[UserProfile] ❌ Error loading GRC consent configurations:', grcError);
+              this.consentConfigurations = [];
+              if (this.consentType !== 'tprm') {
+                this.showConsentMessage(`Failed to load GRC consent configurations: ${grcError.response?.data?.message || grcError.message}`, 'error');
+              }
+            }
+          } else if (this.consentType === 'grc') {
+            // GRC mode but no framework_id - show selector
+            await this.loadConsentFrameworks();
+            this.showConsentFrameworkSelector = true;
+          } else {
+            this.consentConfigurations = [];
           }
         } catch (error) {
-          console.error('Error loading consent configurations:', error);
+          console.error('[UserProfile] ❌ General error loading consent configurations:', error);
           const errorMsg = error.response?.data?.message || 'Failed to load consent configurations';
           this.showConsentMessage(errorMsg, 'error');
           
@@ -3649,6 +3765,22 @@ async updatePassword() {
           }
         } finally {
           this.loadingConsentConfigs = false;
+        }
+      },
+
+      onConsentTypeChange() {
+        // Reload configurations when type changes
+        // TPRM can load without framework_id, but GRC needs it
+        if (this.consentType === 'tprm' || this.consentFrameworkId) {
+          this.loadConsentConfigurations();
+        } else if (this.consentType === 'grc' || this.consentType === 'all') {
+          // Need framework for GRC, so show selector if not set
+          if (!this.consentFrameworkId) {
+            this.loadConsentFrameworks();
+            this.showConsentFrameworkSelector = true;
+          } else {
+            this.loadConsentConfigurations();
+          }
         }
       },
 
@@ -3668,30 +3800,58 @@ async updatePassword() {
           const axios = (await import('axios')).default;
           const userId = this.getCurrentUserId();
           
-          const configsToUpdate = this.consentConfigurations
-            .filter(c => this.consentModifiedConfigs.has(c.config_id))
+          // Separate GRC and TPRM configs
+          const grcConfigsToUpdate = this.consentConfigurations
+            .filter(c => this.consentModifiedConfigs.has(c.config_id) && !c.is_tprm)
+            .map(c => ({
+              config_id: c.config_id,
+              is_enabled: c.is_enabled,
+              consent_text: c.consent_text
+            }));
+          
+          const tprmConfigsToUpdate = this.tprmConsentConfigurations
+            .filter(c => this.consentModifiedConfigs.has(c.config_id) && c.is_tprm)
             .map(c => ({
               config_id: c.config_id,
               is_enabled: c.is_enabled,
               consent_text: c.consent_text
             }));
 
-          const response = await axios.put(
-            `${API_BASE_URL}/api/consent/configurations/bulk-update/`,
-            {
-              configs: configsToUpdate,
-              updated_by: userId
-            },
-            { headers: this.getConsentAuthHeaders() }
-          );
-
-          if (response.data.status === 'success') {
-            this.showConsentMessage('Consent configurations saved successfully', 'success');
-            this.consentModifiedConfigs.clear();
-            await this.loadConsentConfigurations();
-          } else {
-            throw new Error(response.data.message || 'Failed to save configurations');
+          // Save GRC configs
+          if (grcConfigsToUpdate.length > 0) {
+            const grcResponse = await axios.put(
+              `${API_BASE_URL}/api/consent/configurations/bulk-update/`,
+              {
+                configs: grcConfigsToUpdate,
+                updated_by: userId
+              },
+              { headers: this.getConsentAuthHeaders() }
+            );
+            
+            if (grcResponse.data.status !== 'success') {
+              throw new Error(grcResponse.data.message || 'Failed to save GRC configurations');
+            }
           }
+          
+          // Save TPRM configs
+          if (tprmConfigsToUpdate.length > 0) {
+            const tprmResponse = await axios.put(
+              `${API_BASE_URL}/api/tprm/consent/configurations/bulk-update/`,
+              {
+                configs: tprmConfigsToUpdate,
+                updated_by: userId
+              },
+              { headers: this.getConsentAuthHeaders() }
+            );
+            
+            if (tprmResponse.data.status !== 'success') {
+              throw new Error(tprmResponse.data.message || 'Failed to save TPRM configurations');
+            }
+          }
+
+          this.showConsentMessage('Consent configurations saved successfully', 'success');
+          this.consentModifiedConfigs.clear();
+          await this.loadConsentConfigurations();
         } catch (error) {
           console.error('Error saving consent configurations:', error);
           const errorMessage = error.response?.data?.message || 
@@ -3716,7 +3876,19 @@ async updatePassword() {
           'upload_audit': 'fas fa-upload',
           'upload_incident': 'fas fa-upload',
           'upload_risk': 'fas fa-upload',
-          'upload_event': 'fas fa-upload'
+          'upload_event': 'fas fa-upload',
+          // TPRM action types
+          'tprm_create_sla': 'fas fa-file-contract',
+          'tprm_update_sla': 'fas fa-edit',
+          'tprm_delete_sla': 'fas fa-trash',
+          'tprm_create_vendor': 'fas fa-user-tie',
+          'tprm_update_vendor': 'fas fa-user-edit',
+          'tprm_create_contract': 'fas fa-handshake',
+          'tprm_update_contract': 'fas fa-file-signature',
+          'tprm_create_rfp': 'fas fa-file-alt',
+          'tprm_submit_rfp': 'fas fa-paper-plane',
+          'tprm_create_risk': 'fas fa-exclamation-triangle',
+          'tprm_create_compliance': 'fas fa-clipboard-check'
         };
         return iconMap[actionType] || 'fas fa-cog';
       },
@@ -5050,6 +5222,58 @@ async updatePassword() {
   gap: 1rem;
   margin-top: 1.5rem;
   flex-wrap: wrap;
+}
+
+/* Consent Type Selector Styles */
+.consent-type-selector {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  margin-bottom: 24px;
+  border: 1px solid #e5e7eb;
+}
+
+.consent-type-label {
+  font-weight: 600;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.consent-type-label i {
+  color: #3b82f6;
+}
+
+.consent-type-select {
+  padding: 8px 16px;
+  border: 2px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.consent-type-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+/* TPRM Badge Styles */
+.tprm-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
 }
 
 </style>

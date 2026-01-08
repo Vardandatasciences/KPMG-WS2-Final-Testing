@@ -18,11 +18,12 @@ from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.http import JsonResponse, QueryDict
 from django.shortcuts import get_object_or_404
-from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.decorators import api_view, authentication_classes, permission_classes, parser_classes
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.permissions import IsAuthenticated, BasePermission
 from rest_framework.response import Response
 from rest_framework import status, permissions
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.pagination import PageNumberPagination
 from django.views.decorators.cache import cache_page
 from django.views.decorators.vary import vary_on_headers
@@ -6899,15 +6900,21 @@ def create_subcontract(request, contract_id):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@csrf_exempt
 @api_view(['POST'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('TriggerOCR')
+@parser_classes([MultiPartParser, FormParser])
 def upload_contract_ocr(request, contract_id):
     """Upload contract file for OCR extraction with real AI processing"""
     import tempfile
     import os
-    from ocr_app.services import DocumentProcessingService
+    # Import OCR service with support for both monorepo and legacy layouts
+    try:
+        from tprm_backend.ocr_app.services import DocumentProcessingService
+    except ImportError:  # Fallback for older setups
+        from ocr_app.services import DocumentProcessingService
     
     temp_file_path = None
     
@@ -6919,8 +6926,39 @@ def upload_contract_ocr(request, contract_id):
                 'message': 'Too many requests. Please try again later.'
             }, status=429)
         
-        # Get the contract
-        contract = VendorContract.objects.get(contract_id=contract_id)
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        logger.debug(f"[upload_contract_ocr] Tenant ID: {tenant_id}")
+        logger.debug(f"[upload_contract_ocr] Contract ID: {contract_id}")
+        
+        # Get the contract (with tenant filtering if available)
+        try:
+            contract_query = VendorContract.objects.filter(
+                contract_id=contract_id,
+                is_archived=False
+            )
+            # Filter by tenant if tenant_id is available
+            if tenant_id:
+                contract_query = contract_query.filter(tenant_id=tenant_id)
+            
+            contract = contract_query.get()
+            logger.debug(f"[upload_contract_ocr] Contract found: {contract.contract_title}")
+        except VendorContract.DoesNotExist:
+            logger.error(f"[upload_contract_ocr] Contract {contract_id} not found (tenant_id: {tenant_id})")
+            return Response({
+                'success': False,
+                'error': 'Contract not found',
+                'message': f'Contract {contract_id} not found or you do not have access to it'
+            }, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"[upload_contract_ocr] Error getting contract: {str(e)}")
+            import traceback
+            logger.error(f"[upload_contract_ocr] Traceback: {traceback.format_exc()}")
+            return Response({
+                'success': False,
+                'error': 'Error accessing contract',
+                'message': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # Get uploaded file
         file = request.FILES.get('file')
@@ -6952,11 +6990,45 @@ def upload_contract_ocr(request, contract_id):
         
         logger.info(f"[OCR] File saved to temporary location: {temp_file_path}")
         
+        # Get user ID safely
+        try:
+            if hasattr(request, 'user') and request.user and hasattr(request.user, 'userid'):
+                user_id = str(request.user.userid)
+            elif hasattr(request, 'user') and request.user and hasattr(request.user, 'id'):
+                user_id = str(request.user.id)
+            else:
+                user_id = 'system'
+            logger.debug(f"[upload_contract_ocr] User ID: {user_id}")
+        except Exception as e:
+            logger.warning(f"[upload_contract_ocr] Error getting user ID: {str(e)}, using 'system'")
+            user_id = 'system'
+        
         # Initialize OCR service and process document
-        ocr_service = DocumentProcessingService()
+        try:
+            ocr_service = DocumentProcessingService()
+            logger.debug(f"[upload_contract_ocr] OCR service initialized")
+        except Exception as e:
+            logger.error(f"[upload_contract_ocr] Error initializing OCR service: {str(e)}")
+            import traceback
+            logger.error(f"[upload_contract_ocr] Traceback: {traceback.format_exc()}")
+            return Response({
+                'success': False,
+                'error': 'Failed to initialize OCR service',
+                'message': f'OCR service initialization failed: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # Use contract-only processing (faster, no SLA extraction)
-        ocr_result = ocr_service.process_contract_only(temp_file_path, user_id=str(request.user.userid if hasattr(request.user, 'userid') else 'system'))
+        try:
+            ocr_result = ocr_service.process_contract_only(temp_file_path, user_id=user_id)
+        except Exception as e:
+            logger.error(f"[upload_contract_ocr] Error during OCR processing: {str(e)}")
+            import traceback
+            logger.error(f"[upload_contract_ocr] Traceback: {traceback.format_exc()}")
+            return Response({
+                'success': False,
+                'error': 'OCR processing failed',
+                'message': f'Failed to process document: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         logger.info(f"[OCR] Processing complete. Success: {ocr_result.get('success')}")
         
@@ -6994,12 +7066,6 @@ def upload_contract_ocr(request, contract_id):
             'document_type': document_type
         })
         
-    except VendorContract.DoesNotExist:
-        return Response({
-            'success': False,
-            'error': 'Contract not found',
-            'message': 'The requested contract does not exist'
-        }, status=status.HTTP_404_NOT_FOUND)
     except ValidationError as e:
         return Response({
             'success': False,
@@ -7202,10 +7268,13 @@ def contract_risk_status(request, contract_id):
         }, status=500)
 
 
+@csrf_exempt
 @api_view(['POST'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('CreateContract')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def trigger_contract_risk_analysis(request, contract_id):
     """Trigger risk analysis for a contract after creation (non-blocking)"""
     try:
@@ -7213,12 +7282,21 @@ def trigger_contract_risk_analysis(request, contract_id):
         print(f"=== RISK ANALYSIS TRIGGER DEBUG: Request method: {request.method} ===")
         print(f"=== RISK ANALYSIS TRIGGER DEBUG: Request headers: {dict(request.headers)} ===")
         
-        # Check if contract exists
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        logger.debug(f"[trigger_contract_risk_analysis] Tenant ID: {tenant_id}")
+        
+        # Check if contract exists (with tenant filtering if available)
         try:
-            contract = VendorContract.objects.get(
+            contract_query = VendorContract.objects.filter(
                 contract_id=contract_id,
                 is_archived=False
             )
+            # Filter by tenant if tenant_id is available
+            if tenant_id:
+                contract_query = contract_query.filter(tenant_id=tenant_id)
+            
+            contract = contract_query.get()
         except VendorContract.DoesNotExist:
             return Response({
                 'success': False,
@@ -7243,14 +7321,24 @@ def trigger_contract_risk_analysis(request, contract_id):
                 # Define the risk analysis function to run in thread
                 def run_risk_analysis():
                     try:
+                        import traceback
                         from contract_risk_analysis.tasks import analyze_contract_risk_task
                         # Run synchronously in the background thread
+                        # Note: @shared_task decorated functions can be called directly
                         result = analyze_contract_risk_task(contract_id)
                         print(f"=== RISK ANALYSIS TRIGGER DEBUG: Risk analysis completed in background thread ===")
-                        logger.info(f"Risk analysis completed in background thread for contract {contract_id}")
+                        logger.info(f"Risk analysis completed in background thread for contract {contract_id}: {result}")
+                    except ImportError as e:
+                        error_msg = f"Failed to import risk analysis task: {str(e)}"
+                        print(f"=== RISK ANALYSIS TRIGGER DEBUG: Import error: {error_msg} ===")
+                        logger.error(f"Import error in background risk analysis for contract {contract_id}: {error_msg}")
+                        logger.error(f"Import traceback: {traceback.format_exc()}")
                     except Exception as e:
-                        print(f"=== RISK ANALYSIS TRIGGER DEBUG: Error in background risk analysis: {str(e)} ===")
-                        logger.error(f"Error in background risk analysis for contract {contract_id}: {str(e)}")
+                        import traceback
+                        error_msg = str(e)
+                        print(f"=== RISK ANALYSIS TRIGGER DEBUG: Error in background risk analysis: {error_msg} ===")
+                        logger.error(f"Error in background risk analysis for contract {contract_id}: {error_msg}")
+                        logger.error(f"Error traceback: {traceback.format_exc()}")
                 
                 # Start the risk analysis in a background thread
                 thread = threading.Thread(target=run_risk_analysis, daemon=True)

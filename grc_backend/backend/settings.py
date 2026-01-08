@@ -102,6 +102,7 @@ INSTALLED_APPS = [
     "tprm_backend.mfa_auth",
     "tprm_backend.rbac",
     "tprm_backend.admin_access",
+    "tprm_backend.consent",
     "tprm_backend.contracts",
     "tprm_backend.audits_contract",
     "tprm_backend.rfp",
@@ -242,6 +243,7 @@ TPRM_APPS = [
     'tprm_backend.mfa_auth',
     'tprm_backend.rbac',
     'tprm_backend.admin_access',
+    'tprm_backend.consent',  # TPRM Consent Management
     'tprm_backend.contracts',
     'tprm_backend.audits_contract',
     'tprm_backend.rfp',
