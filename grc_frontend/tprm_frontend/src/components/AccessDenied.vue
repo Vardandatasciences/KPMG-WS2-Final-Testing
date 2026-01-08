@@ -84,7 +84,6 @@ import axios from 'axios'
 import { Button } from '@/components/ui/button'
 
 import { ShieldX, ArrowLeft, Home, Mail } from 'lucide-vue-next'
-import Button from './ui/button.vue'
 
 export default {
   name: 'AccessDenied',
