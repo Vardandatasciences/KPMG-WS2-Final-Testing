@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from django.shortcuts import get_object_or_404, render, redirect
-from django.http import JsonResponse, HttpResponse
+from django.http import JsonResponse, HttpResponse, HttpResponseRedirect
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_http_methods, require_GET
 from django.utils.decorators import method_decorator
@@ -73,6 +73,69 @@ from tprm_backend.core.tenant_utils import (
     require_tenant,
     tenant_filter
 )
+
+
+# ==============================================================================
+# PUBLIC VENDOR INVITATION REDIRECT ENDPOINT (NO AUTHENTICATION REQUIRED)
+# ==============================================================================
+@csrf_exempt
+@require_GET
+def vendor_invitation_redirect(request, rfp_id):
+    """
+    Public endpoint to redirect old invitation URLs to the frontend vendor portal.
+    This handles backward compatibility for invitation emails sent with old URL format.
+    NO DRF decorators - pure Django view for clean HTTP redirect.
+    
+    URL Format: /rfp/<rfp_id>/invitation?token=<token>
+    Redirects to: http://localhost:3000/submit?rfpId=<rfp_id>&org=<company>&vendorName=<name>&...
+    """
+    try:
+        # Get token from query parameters
+        token = request.GET.get('token', '')
+        
+        # Look up the vendor invitation by token
+        try:
+            invitation = VendorInvitation.objects.get(unique_token=token, rfp_id=rfp_id)
+        except VendorInvitation.DoesNotExist:
+            # If token not found, redirect to frontend with just rfpId
+            frontend_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
+            if 'ngrok' in frontend_url.lower():
+                frontend_url = 'http://localhost:3000'
+            redirect_url = f"{frontend_url}/submit?rfpId={rfp_id}"
+            return HttpResponseRedirect(redirect_url)
+        
+        # Build frontend URL with query parameters
+        from urllib.parse import urlencode
+        frontend_base = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
+        if 'ngrok' in frontend_base.lower():
+            frontend_base = 'http://localhost:3000'
+        
+        params = {
+            'rfpId': str(rfp_id),
+            'org': invitation.company_name,
+            'vendorName': invitation.vendor_name,
+            'contactEmail': invitation.vendor_email,
+        }
+        if invitation.vendor_phone:
+            params['contactPhone'] = invitation.vendor_phone
+        
+        # Remove empty parameters
+        params = {k: v for k, v in params.items() if v}
+        
+        redirect_url = f"{frontend_base}/submit?{urlencode(params)}"
+        
+        print(f"[INFO] Redirecting vendor invitation for RFP {rfp_id} to: {redirect_url}")
+        
+        return HttpResponseRedirect(redirect_url)
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to redirect vendor invitation: {str(e)}")
+        # Fallback: redirect to frontend with just rfpId
+        frontend_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
+        if 'ngrok' in frontend_url.lower():
+            frontend_url = 'http://localhost:3000'
+        redirect_url = f"{frontend_url}/submit?rfpId={rfp_id}"
+        return HttpResponseRedirect(redirect_url)
 
 
 class RFPViewSet(RFPAuthenticationMixin, viewsets.ModelViewSet):
@@ -4466,22 +4529,32 @@ def get_unmatched_vendors(request, rfp_id):
     
     # MULTI-TENANCY: Filter unmatched vendors by tenant
     unmatched_vendors = RFPUnmatchedVendor.objects.filter(
-        rfp_id=rfp_id,
         tenant_id=tenant_id,
         matching_status__in=['unmatched', 'pending_review']
     ).order_by('-created_at')
     
     vendor_data = []
     for vendor in unmatched_vendors:
+        # Get associated invitation if exists
+        invitation = None
+        if vendor.invitation_id:
+            try:
+                invitation = VendorInvitation.objects.get(invitation_id=vendor.invitation_id)
+            except VendorInvitation.DoesNotExist:
+                pass
+        
         vendor_data.append({
             'unmatched_id': vendor.unmatched_id,
+            'invitation_id': vendor.invitation_id,
             'vendor_name': vendor.vendor_name,
             'vendor_email': vendor.vendor_email,
             'vendor_phone': vendor.vendor_phone,
             'company_name': vendor.company_name,
             'matching_status': vendor.matching_status,
             'created_at': vendor.created_at.isoformat(),
-            'submission_data': vendor.submission_data if vendor.submission_data else {}
+            'submission_data': vendor.submission_data if vendor.submission_data else {},
+            'invitation_url': invitation.invitation_url if invitation else None,
+            'invitation_status': invitation.invitation_status if invitation else None
         })
     
     return JsonResponse(vendor_data, safe=False)
@@ -4522,30 +4595,129 @@ def create_unmatched_vendor(request, rfp_id):
                 'error': f'Missing required fields: {", ".join(missing_fields)}'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Create unmatched vendor
+        # Create vendor invitation and unmatched vendor entry
         # MULTI-TENANCY: Set tenant_id on creation
-        # Use exact same pattern as bulk upload function (line 4900)
         try:
-            print(f"[DEBUG] Creating unmatched vendor for RFP {rfp_id}, tenant {tenant_id}")
+            print(f"[DEBUG] Creating vendor invitation for RFP {rfp_id}, tenant {tenant_id}")
             print(f"[DEBUG] Vendor data: name={data.get('vendor_name')}, company={data.get('company_name')}, email={data.get('vendor_email')}")
             
-            # Use rfp_id directly (matches get_unmatched_vendors pattern and database schema)
-            unmatched_vendor = RFPUnmatchedVendor.objects.create(
-                rfp_id=rfp_id,
+            # Generate unique token for invitation
+            import secrets
+            from django.conf import settings
+            from urllib.parse import urlencode
+            import re
+            unique_token = secrets.token_urlsafe(32)
+            
+            # Generate invitation URLs pointing to FRONTEND, not backend
+            # Get external base URL (frontend URL)
+            external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
+            
+            # Replace any ngrok URLs with localhost:3000
+            if 'ngrok' in external_base_url.lower():
+                external_base_url = 'http://localhost:3000'
+            
+            # Ensure it's localhost (not 127.0.0.1 or other variations)
+            if not external_base_url.startswith('http://localhost') and not external_base_url.startswith('https://localhost'):
+                # Extract port if present, otherwise use 3000
+                port_match = re.search(r':(\d+)', external_base_url)
+                port = port_match.group(1) if port_match else '3000'
+                external_base_url = f'http://localhost:{port}'
+            
+            # Generate frontend URL with query parameters
+            params = {
+                'rfpId': str(rfp_id),
+                'org': data['company_name'],
+                'vendorName': data['vendor_name'],
+                'contactEmail': data['vendor_email'],
+                'contactPhone': data.get('vendor_phone', '')
+            }
+            # Remove empty parameters
+            params = {k: v for k, v in params.items() if v}
+            invitation_url = f"{external_base_url}/submit?{urlencode(params)}"
+            submission_url = invitation_url  # Same URL for submission
+            
+            # Step 1: Create vendor invitation (for email sending)
+            vendor_invitation = VendorInvitation.objects.create(
+                rfp=rfp,
+                vendor=None,  # No matched vendor yet
                 vendor_name=data['vendor_name'],
                 vendor_email=data['vendor_email'],
-                vendor_phone=data['vendor_phone'],
+                vendor_phone=data.get('vendor_phone', ''),
+                company_name=data['company_name'],
+                invitation_status='CREATED',
+                is_matched_vendor=False,  # Mark as unmatched
+                unique_token=unique_token,
+                invitation_url=invitation_url,
+                submission_url=submission_url,
+                tenant_id=tenant_id
+            )
+            
+            print(f"[SUCCESS] Created vendor invitation ID: {vendor_invitation.invitation_id}")
+            
+            # Step 2: Create unmatched vendor entry (linked to invitation)
+            unmatched_vendor = RFPUnmatchedVendor.objects.create(
+                invitation_id=vendor_invitation.invitation_id,
+                vendor_name=data['vendor_name'],
+                vendor_email=data['vendor_email'],
+                vendor_phone=data.get('vendor_phone', ''),
                 company_name=data['company_name'],
                 submission_data=data.get('submission_data', {}),
-                matching_status=data.get('matching_status', 'unmatched'),
+                matching_status='unmatched',
                 tenant_id=tenant_id
             )
             
             print(f"[SUCCESS] Created unmatched vendor ID: {unmatched_vendor.unmatched_id}")
             
+            # Step 3: Send invitation email using rich HTML template
+            try:
+                from django.core.mail import EmailMessage
+                from .email_templates import generate_rich_html_email
+                
+                # Prepare RFP data for email template
+                rfp_data = {
+                    'rfp_title': rfp.rfp_title,
+                    'rfp_number': rfp.rfp_number or 'N/A',
+                    'deadline': rfp.submission_deadline.strftime("%B %d, %Y") if rfp.submission_deadline else 'TBD',
+                    'estimated_value': str(rfp.estimated_value) if rfp.estimated_value else 'TBD'
+                }
+                
+                # Prepare invitation data for email template
+                invitation_data = {
+                    'vendor_name': vendor_invitation.vendor_name,
+                    'vendor_email': vendor_invitation.vendor_email,
+                    'company_name': vendor_invitation.company_name,
+                    'invitation_url': invitation_url,
+                    'acknowledgment_url': f"{request.build_absolute_uri('/').rstrip('/')}/api/v1/vendor-invitations/ack/{rfp_id}/{vendor_invitation.invitation_id}/",
+                    'decline_url': f"{request.build_absolute_uri('/').rstrip('/')}/api/v1/vendor-invitations/decline/{rfp_id}/{vendor_invitation.invitation_id}/",
+                    'custom_message': data.get('custom_message', '')
+                }
+                
+                # Generate rich HTML email body
+                email_body = generate_rich_html_email(invitation_data, rfp_data)
+                email_subject = f'🎯 RFP Invitation: {rfp.rfp_title}'
+                
+                # Send HTML email
+                email_message = EmailMessage(
+                    subject=email_subject,
+                    body=email_body,
+                    to=[vendor_invitation.vendor_email]
+                )
+                email_message.content_subtype = "html"  # Set content type to HTML
+                email_message.send(fail_silently=False)
+                
+                vendor_invitation.invitation_status = 'SENT'
+                vendor_invitation.save()
+                print(f"[SUCCESS] Sent rich HTML invitation email to {vendor_invitation.vendor_email}")
+            except Exception as email_error:
+                print(f"[WARNING] Failed to send email: {str(email_error)}")
+                import traceback
+                traceback.print_exc()
+                # Don't fail the request if email fails - invitation is still created
+            
             return Response({
                 'success': True,
-                'message': 'Unmatched vendor created successfully',
+                'message': 'Vendor created successfully and invitation sent',
+                'invitation_id': vendor_invitation.invitation_id,
                 'unmatched_id': unmatched_vendor.unmatched_id,
                 'vendor_name': unmatched_vendor.vendor_name,
                 'company_name': unmatched_vendor.company_name
@@ -4769,10 +4941,53 @@ def vendor_manual_entry(request, rfp_id):
             'certifications': certifications
         }
         
-        # MULTI-TENANCY: Set tenant_id on creation
-        unmatched_vendor = RFPUnmatchedVendor.objects.create(
+        # Generate unique token for invitation
+        import secrets
+        from django.conf import settings
+        from urllib.parse import urlencode
+        import re
+        unique_token = secrets.token_urlsafe(32)
+        
+        # Generate invitation URLs pointing to FRONTEND, not backend
+        external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
+        if 'ngrok' in external_base_url.lower():
+            external_base_url = 'http://localhost:3000'
+        if not external_base_url.startswith('http://localhost') and not external_base_url.startswith('https://localhost'):
+            port_match = re.search(r':(\d+)', external_base_url)
+            port = port_match.group(1) if port_match else '3000'
+            external_base_url = f'http://localhost:{port}'
+        
+        params = {
+            'rfpId': str(rfp_id),
+            'org': company_name,
+            'vendorName': company_name,
+            'contactEmail': email,
+            'contactPhone': phone
+        }
+        params = {k: v for k, v in params.items() if v}
+        invitation_url = f"{external_base_url}/submit?{urlencode(params)}"
+        submission_url = invitation_url
+        
+        # Step 1: Create vendor invitation
+        vendor_invitation = VendorInvitation.objects.create(
             rfp=rfp,
+            vendor=None,  # No matched vendor yet
             vendor_name=company_name,  # Use company_name as vendor_name
+            vendor_email=email,
+            vendor_phone=phone,
+            company_name=company_name,
+            invitation_status='CREATED',
+            is_matched_vendor=False,  # Mark as unmatched
+            unique_token=unique_token,
+            invitation_url=invitation_url,
+            submission_url=submission_url,
+            tenant_id=tenant_id
+        )
+        
+        # Step 2: Create unmatched vendor entry
+        unmatched_vendor = RFPUnmatchedVendor.objects.create(
+            invitation_id=vendor_invitation.invitation_id,
+            vendor_name=company_name,
             vendor_email=email,
             vendor_phone=phone,
             company_name=company_name,
@@ -4783,7 +4998,8 @@ def vendor_manual_entry(request, rfp_id):
         
         return JsonResponse({
             'success': True,
-            'message': 'Vendor created successfully and added to unmatched vendors',
+            'message': 'Vendor created successfully',
+            'invitation_id': vendor_invitation.invitation_id,
             'unmatched_id': unmatched_vendor.unmatched_id,
             'company_name': unmatched_vendor.company_name,
             'matching_status': unmatched_vendor.matching_status
@@ -4891,10 +5107,52 @@ def vendor_bulk_upload(request, rfp_id):
                     'certifications': certifications
                 }
                 
-                # Create unmatched vendor entry
-                # MULTI-TENANCY: Set tenant_id on creation
-                unmatched_vendor = RFPUnmatchedVendor.objects.create(
+                # Generate unique token for invitation
+                import secrets
+                from django.conf import settings
+                from urllib.parse import urlencode
+                import re
+                unique_token = secrets.token_urlsafe(32)
+                
+                # Generate invitation URLs pointing to FRONTEND
+                external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
+                if 'ngrok' in external_base_url.lower():
+                    external_base_url = 'http://localhost:3000'
+                if not external_base_url.startswith('http://localhost') and not external_base_url.startswith('https://localhost'):
+                    port_match = re.search(r':(\d+)', external_base_url)
+                    port = port_match.group(1) if port_match else '3000'
+                    external_base_url = f'http://localhost:{port}'
+                
+                params = {
+                    'rfpId': str(rfp_id),
+                    'org': company_name,
+                    'vendorName': company_name,
+                    'contactEmail': email,
+                    'contactPhone': phone
+                }
+                params = {k: v for k, v in params.items() if v}
+                invitation_url = f"{external_base_url}/submit?{urlencode(params)}"
+                submission_url = invitation_url
+                
+                # Step 1: Create vendor invitation entry
+                vendor_invitation = VendorInvitation.objects.create(
                     rfp=rfp,
+                    vendor=None,  # No matched vendor yet
+                    vendor_name=company_name,
+                    vendor_email=email,
+                    vendor_phone=phone,
+                    company_name=company_name,
+                    invitation_status='CREATED',
+                    is_matched_vendor=False,  # Mark as unmatched
+                    unique_token=unique_token,
+                    invitation_url=invitation_url,
+                    submission_url=submission_url,
+                    tenant_id=tenant_id
+                )
+                
+                # Step 2: Create unmatched vendor entry
+                unmatched_vendor = RFPUnmatchedVendor.objects.create(
+                    invitation_id=vendor_invitation.invitation_id,
                     vendor_name=company_name,
                     vendor_email=email,
                     vendor_phone=phone,
@@ -4992,11 +5250,52 @@ def unmatched_vendor_bulk_upload(request, rfp_id):
                     'description': description
                 }
                 
-                # Create unmatched vendor entry
-                # MULTI-TENANCY: Set tenant_id on creation
-                # Use rfp_id directly to match database schema
+                # Generate unique token for invitation
+                import secrets
+                unique_token = secrets.token_urlsafe(32)
+                
+                # Generate invitation URLs pointing to FRONTEND
+                from django.conf import settings
+                from urllib.parse import urlencode
+                import re
+                external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000').rstrip('/')
+                if 'ngrok' in external_base_url.lower():
+                    external_base_url = 'http://localhost:3000'
+                if not external_base_url.startswith('http://localhost') and not external_base_url.startswith('https://localhost'):
+                    port_match = re.search(r':(\d+)', external_base_url)
+                    port = port_match.group(1) if port_match else '3000'
+                    external_base_url = f'http://localhost:{port}'
+                
+                params = {
+                    'rfpId': str(rfp_id),
+                    'org': company_name,
+                    'vendorName': vendor_name,
+                    'contactEmail': vendor_email,
+                    'contactPhone': vendor_phone
+                }
+                params = {k: v for k, v in params.items() if v}
+                invitation_url = f"{external_base_url}/submit?{urlencode(params)}"
+                submission_url = invitation_url
+                
+                # Step 1: Create vendor invitation entry
+                vendor_invitation = VendorInvitation.objects.create(
+                    rfp=rfp,
+                    vendor=None,  # No matched vendor yet
+                    vendor_name=vendor_name,
+                    vendor_email=vendor_email,
+                    vendor_phone=vendor_phone,
+                    company_name=company_name,
+                    invitation_status='CREATED',
+                    is_matched_vendor=False,  # Mark as unmatched
+                    unique_token=unique_token,
+                    invitation_url=invitation_url,
+                    submission_url=submission_url,
+                    tenant_id=tenant_id
+                )
+                
+                # Step 2: Create unmatched vendor entry
                 unmatched_vendor = RFPUnmatchedVendor.objects.create(
-                    rfp_id=rfp_id,
+                    invitation_id=vendor_invitation.invitation_id,
                     vendor_name=vendor_name,
                     vendor_email=vendor_email,
                     vendor_phone=vendor_phone,

@@ -2,6 +2,7 @@ import jwt
 import logging
 import sys
 import time
+import re
 from datetime import datetime
 from django.conf import settings
 from django.http import JsonResponse
@@ -214,6 +215,12 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
         # Special handling for vendor portal endpoints - skip authentication
         # Check both with and without trailing slash, and handle query parameters
         path_without_query = path.split('?')[0]  # Remove query string if present
+        
+        # Check for vendor invitation redirect (old URL format)
+        if re.match(r'^/rfp/\d+/invitation/?$', path_without_query):
+            logger.info(f"[JWT Middleware] Skipping authentication for vendor invitation redirect: {path}")
+            return None
+        
         if (path_without_query.startswith('/api/tprm/rfp/rfp-details/') or \
             path_without_query.startswith('/api/tprm/rfp/rfp-responses/') or \
             path_without_query.startswith('/api/tprm/rfp/open-rfp/') or \

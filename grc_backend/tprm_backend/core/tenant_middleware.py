@@ -44,6 +44,14 @@ class TenantContextMiddleware(MiddlewareMixin):
         ]
         
         path = request.path_info
+        
+        # Check for vendor invitation redirect pattern (public endpoint)
+        import re
+        if re.match(r'^/rfp/\d+/invitation/?$', path):
+            request.tenant = None
+            request.tenant_id = None
+            return None
+        
         if any(path.startswith(skip_path) for skip_path in skip_paths):
             request.tenant = None
             request.tenant_id = None
@@ -263,6 +271,12 @@ class TenantIsolationMiddleware(MiddlewareMixin):
         ]
         
         path = request.path_info
+        
+        # Check for vendor invitation redirect pattern (public endpoint)
+        import re
+        if re.match(r'^/rfp/\d+/invitation/?$', path):
+            return None
+        
         if any(path.startswith(skip_path) for skip_path in skip_paths):
             return None
         
