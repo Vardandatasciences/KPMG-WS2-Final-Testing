@@ -389,11 +389,11 @@ def get_file_by_id(request, file_id):
 @api_view(['GET'])
 @authentication_classes([])  # Allow anonymous access for vendor portal
 @permission_classes([AllowAny])  # Allow anonymous access for vendor portal
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present (even for public endpoints)
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
+@csrf_exempt
 def get_s3_file_by_id(request, file_id):
     """
-    Get specific S3 file details by ID
+    Get specific S3 file details by ID - PUBLIC ENDPOINT
+    No authentication required for vendor portal access
     Allows anonymous access for vendor portal document validation
     MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
