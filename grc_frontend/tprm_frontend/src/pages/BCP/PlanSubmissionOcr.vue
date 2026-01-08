@@ -617,6 +617,10 @@
       </div>
     </div>
 
+    <!-- TPRM Consent Modal -->
+    <TPRMConsentModal
+      ref="consentModalRef"
+    />
   </div>
 </template>
 
@@ -630,6 +634,9 @@ import { PopupService } from '@/popup/popupService'
 import notificationService from '@/services/notificationService'
 import loggingService from '@/services/loggingService'
 import { useStore } from 'vuex'
+import TPRMConsentModal from '@/components/Consent/TPRMConsentModal.vue'
+import { executeWithTPRMConsent, TPRM_CONSENT_ACTIONS } from '@/utils/tprmConsentManager.js'
+import { nextTick } from 'vue'
 
 // Define interfaces for type safety
 interface ExtractedData {
@@ -714,6 +721,9 @@ const assignmentForm = ref({
 const isSubmittingAssignment = ref(false)
 const noApprovalNeeded = ref(false)
 const planTypes = ref<string[]>([])
+
+// TPRM Consent Modal ref
+const consentModalRef = ref(null)
 
 // UI state
 const currentStep = ref(1)
@@ -1424,6 +1434,93 @@ const resetAssignmentForm = () => {
   }
 }
 
+// Show TPRM Consent Modal
+async function showTPRMConsentModal(actionType, config) {
+  console.log('[TPRM Consent] Showing consent modal for action:', actionType, 'config:', config)
+  
+  if (!consentModalRef.value) {
+    console.error('[TPRM Consent] Consent modal ref not available - waiting for component to mount')
+    // Wait a bit for component to mount
+    await nextTick()
+    if (!consentModalRef.value) {
+      console.error('[TPRM Consent] Consent modal ref still not available after nextTick')
+      return false
+    }
+  }
+  
+  try {
+    // Show the modal and wait for user response
+    const accepted = await consentModalRef.value.show(actionType, config)
+    
+    console.log('[TPRM Consent] Consent modal result:', accepted)
+    
+    // Ensure boolean return value
+    return accepted === true || accepted === 'true'
+  } catch (error) {
+    console.error('[TPRM Consent] Error showing consent modal:', error)
+    // If modal was cancelled/rejected, return false
+    if (error.message && error.message.includes('cancelled')) {
+      return false
+    }
+    return false
+  }
+}
+
+// Helper function to actually create the assignment (called after consent is obtained)
+const createAssignmentAction = async (consentConfig) => {
+  console.log('[TPRM Consent] Creating assignment action, consentConfig:', consentConfig)
+  
+  // Prepare the assignment data with proper structure
+  // If no approval needed, set assignee to same as assigner
+  const assignerId = parseInt(assignmentForm.value.assigner_id)
+  const assigneeId = noApprovalNeeded.value 
+    ? assignerId  // Use assigner_id when no approval needed
+    : parseInt(assignmentForm.value.assignee_id || assignmentForm.value.assigner_id)
+  
+  const assigneeName = noApprovalNeeded.value
+    ? assignmentForm.value.assigner_name  // Use assigner_name when no approval needed
+    : assignmentForm.value.assignee_name || assignmentForm.value.assigner_name
+  
+  // Ensure assignee_name is set when no approval needed
+  const finalAssigneeName = noApprovalNeeded.value && !assigneeName
+    ? assignmentForm.value.assigner_name || 'Auto-assigned'
+    : assigneeName
+  
+  // Ensure assignee_id is set when no approval needed
+  const finalAssigneeId = noApprovalNeeded.value && !assigneeId
+    ? assignerId
+    : assigneeId
+  
+  const assignmentData = {
+    workflow_name: assignmentForm.value.workflow_name,
+    plan_type: selectedPlan.value.plan_type,
+    assigner_id: assignerId,
+    assigner_name: assignmentForm.value.assigner_name || '',
+    assignee_id: finalAssigneeId,
+    assignee_name: finalAssigneeName || '',
+    object_type: 'PLAN EVALUATION',
+    object_id: parseInt(selectedPlan.value.plan_id), // Ensure it's an integer
+    due_date: assignmentForm.value.due_date,
+    no_approval_needed: noApprovalNeeded.value
+  }
+  
+  // Add consent data to assignment data if consent was provided
+  if (consentConfig) {
+    assignmentData.consent_accepted = true
+    assignmentData.consent_config_id = consentConfig.config_id
+    assignmentData.framework_id = 1 // Default TPRM framework
+  }
+  
+  console.log('Sending assignment data:', assignmentData)
+  
+  // Call the API to create the approval assignment
+  const response = await api.approvals.createAssignment(assignmentData)
+  
+  console.log('Assignment created successfully:', response)
+  
+  return response
+}
+
 const createAssignment = async () => {
   if (!selectedPlan.value) {
     PopupService.warning('No plan selected. Please select a plan first.', 'No Plan Selected')
@@ -1433,49 +1530,54 @@ const createAssignment = async () => {
   isSubmittingAssignment.value = true
   
   try {
+    console.log('[TPRM Consent] ========== Starting consent flow for: tprm_create_plans')
     console.log('Creating assignment for plan:', selectedPlan.value.plan_id, assignmentForm.value)
     
     // Ensure all required fields are filled
     if (!assignmentForm.value.workflow_name || !assignmentForm.value.assigner_id || !assignmentForm.value.due_date) {
       PopupService.warning('Please fill in all required fields (Workflow Name, Assigner, Due Date)', 'Required Fields Missing')
+      isSubmittingAssignment.value = false
+      return
+    }
+    
+    // Validate assigner_name is set
+    if (!assignmentForm.value.assigner_name || assignmentForm.value.assigner_name.trim() === '') {
+      PopupService.warning('Assigner name is required. Please select an assigner from the dropdown.', 'Assigner Name Required')
+      isSubmittingAssignment.value = false
       return
     }
     
     if (!noApprovalNeeded.value && !assignmentForm.value.assignee_id) {
       PopupService.warning('Please select an assignee or check "No Approval Needed"', 'Assignee Required')
+      isSubmittingAssignment.value = false
       return
     }
     
-    // Prepare the assignment data with proper structure
-    // If no approval needed, set assignee to same as assigner
-    const assignerId = parseInt(assignmentForm.value.assigner_id)
-    const assigneeId = noApprovalNeeded.value 
-      ? assignerId  // Use assigner_id when no approval needed
-      : parseInt(assignmentForm.value.assignee_id || assignmentForm.value.assigner_id)
-    
-    const assigneeName = noApprovalNeeded.value
-      ? assignmentForm.value.assigner_name  // Use assigner_name when no approval needed
-      : assignmentForm.value.assignee_name || assignmentForm.value.assigner_name
-    
-    const assignmentData = {
-      workflow_name: assignmentForm.value.workflow_name,
-      plan_type: selectedPlan.value.plan_type,
-      assigner_id: assignerId,
-      assigner_name: assignmentForm.value.assigner_name,
-      assignee_id: assigneeId,
-      assignee_name: assigneeName,
-      object_type: 'PLAN EVALUATION',
-      object_id: selectedPlan.value.plan_id,
-      due_date: assignmentForm.value.due_date,
-      no_approval_needed: noApprovalNeeded.value
+    // If no approval needed, ensure assignee is set to assigner
+    if (noApprovalNeeded.value) {
+      if (!assignmentForm.value.assigner_id) {
+        PopupService.warning('Please select an assigner first', 'Assigner Required')
+        isSubmittingAssignment.value = false
+        return
+      }
     }
     
-    console.log('Sending assignment data:', assignmentData)
+    // Wrap assignment creation with consent check
+    // The consent modal will be shown by executeWithTPRMConsent if consent is required
+    const response = await executeWithTPRMConsent(
+      TPRM_CONSENT_ACTIONS.CREATE_PLANS,
+      createAssignmentAction,
+      showTPRMConsentModal
+    )
     
-    // Call the API to create the approval assignment
-    const response = await api.approvals.createAssignment(assignmentData)
-    
-    console.log('Assignment created successfully:', response)
+    // Check if assignment creation was cancelled due to consent rejection
+    if (response === null) {
+      // Consent was rejected - user cancelled the action
+      console.log('[Plan Assignment] Assignment creation cancelled - consent not accepted')
+      PopupService.info('Assignment creation cancelled. You must accept the consent to create the assignment.', 'Consent Required')
+      isSubmittingAssignment.value = false
+      return
+    }
     
     PopupService.success(`Assignment created successfully for ${assignmentForm.value.workflow_name}! Approval ID: ${(response as any).approval_id}`, 'Assignment Created')
     
@@ -1501,19 +1603,40 @@ const createAssignment = async () => {
   } catch (error) {
     console.error('Error creating assignment:', error)
     
+    // Check if error is due to consent rejection
+    if (error.message && (error.message.includes('consent') || error.message.includes('Consent') || error.message.includes('cancelled'))) {
+      PopupService.warning('Assignment creation cancelled. You must accept the consent to create the assignment.', 'Consent Required')
+      isSubmittingAssignment.value = false
+      return
+    }
+    
     let errorMessage = 'Error creating assignment. Please try again.'
-    if (error.response?.data?.message) {
-      errorMessage = error.response.data.message
-    } else if (error.response?.data?.error) {
-      errorMessage = error.response.data.error
-    } else if (error.response?.data?.detail) {
-      errorMessage = error.response.data.detail
+    
+    // Try to extract detailed error message from response
+    if (error.response?.data) {
+      const errorData = error.response.data
+      
+      // Check for validation errors
+      if (errorData.errors && Array.isArray(errorData.errors)) {
+        errorMessage = errorData.errors.join(', ')
+      } else if (errorData.errors && typeof errorData.errors === 'object') {
+        errorMessage = Object.values(errorData.errors).flat().join(', ')
+      } else if (errorData.message) {
+        errorMessage = errorData.message
+      } else if (errorData.error) {
+        errorMessage = errorData.error
+      } else if (errorData.detail) {
+        errorMessage = errorData.detail
+      } else if (typeof errorData === 'string') {
+        errorMessage = errorData
+      }
     } else if (error.message) {
       errorMessage = error.message
     }
     
     // Log the full error response for debugging
     console.error('Full error response:', error.response?.data)
+    console.error('Error status:', error.response?.status)
     
     PopupService.error(errorMessage, 'Assignment Failed')
   } finally {

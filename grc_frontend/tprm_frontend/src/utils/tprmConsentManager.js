@@ -31,6 +31,7 @@ export const TPRM_CONSENT_ACTIONS = {
   SUBMIT_RFP: 'tprm_submit_rfp',
   CREATE_RISK: 'tprm_create_risk',
   CREATE_COMPLIANCE: 'tprm_create_compliance',
+  CREATE_PLANS: 'tprm_create_plans',
 };
 
 // Action Labels for display
