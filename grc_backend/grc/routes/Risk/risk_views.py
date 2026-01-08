@@ -721,8 +721,46 @@ class RiskViewSet(viewsets.ModelViewSet):
                 columns = [col[0] for col in cursor.description]
                 risks_data = []
                 
+                # Import decryption utilities
+                from ...utils.data_encryption import decrypt_data, is_encrypted_data
+                from ...utils.encryption_config import get_encrypted_fields_for_model
+                
+                # Get encrypted fields for Risk model
+                encrypted_fields = get_encrypted_fields_for_model('Risk')
+                
                 for row in cursor.fetchall():
                     risk_dict = dict(zip(columns, row))
+                    
+                    # Decrypt encrypted fields
+                    for field_name in encrypted_fields:
+                        if field_name in risk_dict and risk_dict[field_name]:
+                            encrypted_value = risk_dict[field_name]
+                            if isinstance(encrypted_value, str) and is_encrypted_data(encrypted_value):
+                                try:
+                                    risk_dict[field_name] = decrypt_data(encrypted_value)
+                                except Exception as e:
+                                    # If decryption fails, keep original value
+                                    print(f"Warning: Failed to decrypt {field_name}: {e}")
+                    
+                    # Also decrypt UserName and CreatedByName if they're encrypted
+                    if 'CreatedBy' in risk_dict and risk_dict['CreatedBy']:
+                        encrypted_username = risk_dict['CreatedBy']
+                        if isinstance(encrypted_username, str) and is_encrypted_data(encrypted_username):
+                            try:
+                                risk_dict['CreatedBy'] = decrypt_data(encrypted_username)
+                            except Exception as e:
+                                print(f"Warning: Failed to decrypt CreatedBy: {e}")
+                    
+                    if 'CreatedByName' in risk_dict and risk_dict['CreatedByName']:
+                        # CreatedByName is CONCAT, so it might contain encrypted parts
+                        # We'll decrypt it if it looks encrypted
+                        created_by_name = risk_dict['CreatedByName']
+                        if isinstance(created_by_name, str) and is_encrypted_data(created_by_name):
+                            try:
+                                risk_dict['CreatedByName'] = decrypt_data(created_by_name)
+                            except Exception as e:
+                                print(f"Warning: Failed to decrypt CreatedByName: {e}")
+                    
                     risks_data.append(risk_dict)
             
             return Response({
@@ -1543,12 +1581,19 @@ def risk_workflow(request):
             
         data = []
         
+        # Import decryption utilities
+        from ...utils.data_encryption import decrypt_data, is_encrypted_data
+        from ...utils.encryption_config import get_encrypted_fields_for_model
+        
+        # Get encrypted fields for RiskInstance model
+        encrypted_fields = get_encrypted_fields_for_model('RiskInstance')
+        
         for risk in risk_instances:
-            # Create response data
+            # Create response data with decrypted fields
             risk_data = {
                 'RiskInstanceId': risk.RiskInstanceId,
                 'RiskId': risk.RiskId,
-                'RiskDescription': risk.RiskDescription,
+                'RiskDescription': getattr(risk, 'RiskDescription_plain', None) or getattr(risk, 'RiskDescription', None),
                 'Criticality': risk.Criticality,
                 'Category': risk.Category,
                 'RiskStatus': risk.RiskStatus,
@@ -1559,6 +1604,20 @@ def risk_workflow(request):
                 'ReviewerCount': risk.ReviewerCount or 0,
                 'assignedTo': None
             }
+            
+            # Decrypt other encrypted fields
+            for field_name in encrypted_fields:
+                if field_name in ['RiskDescription']:  # Already handled above
+                    continue
+                if hasattr(risk, field_name):
+                    encrypted_value = getattr(risk, field_name)
+                    if encrypted_value and isinstance(encrypted_value, str) and is_encrypted_data(encrypted_value):
+                        try:
+                            decrypted_value = getattr(risk, f"{field_name}_plain", None) or decrypt_data(encrypted_value)
+                            risk_data[field_name] = decrypted_value
+                        except Exception as e:
+                            print(f"Warning: Failed to decrypt {field_name}: {e}")
+                            risk_data[field_name] = encrypted_value
             
             # Try to find an assignment if possible
             try:
@@ -1867,9 +1926,43 @@ def risk_instances_view(request):
             columns = [col[0] for col in cursor.description]
             risk_instances_data = []
             
+            # Import decryption utilities
+            from ...utils.data_encryption import decrypt_data, is_encrypted_data
+            from ...utils.encryption_config import get_encrypted_fields_for_model
+            
+            # Get encrypted fields for RiskInstance model
+            encrypted_fields = get_encrypted_fields_for_model('RiskInstance')
+            
             for row in cursor.fetchall():
                 # Convert row to dictionary
                 instance_dict = dict(zip(columns, row))
+                
+                # Decrypt encrypted fields
+                for field_name in encrypted_fields:
+                    if field_name in instance_dict and instance_dict[field_name]:
+                        encrypted_value = instance_dict[field_name]
+                        if isinstance(encrypted_value, str) and is_encrypted_data(encrypted_value):
+                            try:
+                                instance_dict[field_name] = decrypt_data(encrypted_value)
+                            except Exception as e:
+                                print(f"Warning: Failed to decrypt {field_name}: {e}")
+                
+                # Also decrypt UserName and CreatedByName if they're encrypted
+                if 'CreatedBy' in instance_dict and instance_dict['CreatedBy']:
+                    encrypted_username = instance_dict['CreatedBy']
+                    if isinstance(encrypted_username, str) and is_encrypted_data(encrypted_username):
+                        try:
+                            instance_dict['CreatedBy'] = decrypt_data(encrypted_username)
+                        except Exception as e:
+                            print(f"Warning: Failed to decrypt CreatedBy: {e}")
+                
+                if 'CreatedByName' in instance_dict and instance_dict['CreatedByName']:
+                    created_by_name = instance_dict['CreatedByName']
+                    if isinstance(created_by_name, str) and is_encrypted_data(created_by_name):
+                        try:
+                            instance_dict['CreatedByName'] = decrypt_data(created_by_name)
+                        except Exception as e:
+                            print(f"Warning: Failed to decrypt CreatedByName: {e}")
                 
                 # Convert date objects to string to avoid utcoffset error
                 if 'MitigationDueDate' in instance_dict and instance_dict['MitigationDueDate']:
@@ -1973,8 +2066,42 @@ def get_user_risks(request, user_id):
             columns = [col[0] for col in cursor.description]
             data = []
             
+            # Import decryption utilities
+            from ...utils.data_encryption import decrypt_data, is_encrypted_data
+            from ...utils.encryption_config import get_encrypted_fields_for_model
+            
+            # Get encrypted fields for RiskInstance model
+            encrypted_fields = get_encrypted_fields_for_model('RiskInstance')
+            
             for row in cursor.fetchall():
                 risk_data = dict(zip(columns, row))
+                
+                # Decrypt encrypted fields
+                for field_name in encrypted_fields:
+                    if field_name in risk_data and risk_data[field_name]:
+                        encrypted_value = risk_data[field_name]
+                        if isinstance(encrypted_value, str) and is_encrypted_data(encrypted_value):
+                            try:
+                                risk_data[field_name] = decrypt_data(encrypted_value)
+                            except Exception as e:
+                                print(f"Warning: Failed to decrypt {field_name}: {e}")
+                
+                # Also decrypt UserName and CreatedByName if they're encrypted
+                if 'CreatedBy' in risk_data and risk_data['CreatedBy']:
+                    encrypted_username = risk_data['CreatedBy']
+                    if isinstance(encrypted_username, str) and is_encrypted_data(encrypted_username):
+                        try:
+                            risk_data['CreatedBy'] = decrypt_data(encrypted_username)
+                        except Exception as e:
+                            print(f"Warning: Failed to decrypt CreatedBy: {e}")
+                
+                if 'CreatedByName' in risk_data and risk_data['CreatedByName']:
+                    created_by_name = risk_data['CreatedByName']
+                    if isinstance(created_by_name, str) and is_encrypted_data(created_by_name):
+                        try:
+                            risk_data['CreatedByName'] = decrypt_data(created_by_name)
+                        except Exception as e:
+                            print(f"Warning: Failed to decrypt CreatedByName: {e}")
                 
                 # Skip risks with missing essential data (don't add to response)
                 # Check if essential fields have valid data
@@ -3897,8 +4024,46 @@ def get_all_risks_for_dropdown(request):
             columns = [col[0] for col in cursor.description]
             risks_data = []
             
+            # Import decryption utilities
+            from ...utils.data_encryption import decrypt_data, is_encrypted_data
+            from ...utils.encryption_config import get_encrypted_fields_for_model
+            
+            # Get encrypted fields for Risk model
+            encrypted_fields = get_encrypted_fields_for_model('Risk')
+            
             for row in cursor.fetchall():
                 risk_dict = dict(zip(columns, row))
+                
+                # Decrypt encrypted fields
+                for field_name in encrypted_fields:
+                    if field_name in risk_dict and risk_dict[field_name]:
+                        encrypted_value = risk_dict[field_name]
+                        if isinstance(encrypted_value, str) and is_encrypted_data(encrypted_value):
+                            try:
+                                risk_dict[field_name] = decrypt_data(encrypted_value)
+                            except Exception as e:
+                                # If decryption fails, keep original value
+                                print(f"Warning: Failed to decrypt {field_name}: {e}")
+                
+                # Also decrypt UserName and CreatedByName if they're encrypted
+                if 'CreatedBy' in risk_dict and risk_dict['CreatedBy']:
+                    encrypted_username = risk_dict['CreatedBy']
+                    if isinstance(encrypted_username, str) and is_encrypted_data(encrypted_username):
+                        try:
+                            risk_dict['CreatedBy'] = decrypt_data(encrypted_username)
+                        except Exception as e:
+                            print(f"Warning: Failed to decrypt CreatedBy: {e}")
+                
+                if 'CreatedByName' in risk_dict and risk_dict['CreatedByName']:
+                    # CreatedByName is CONCAT, so it might contain encrypted parts
+                    # We'll decrypt it if it looks encrypted
+                    created_by_name = risk_dict['CreatedByName']
+                    if isinstance(created_by_name, str) and is_encrypted_data(created_by_name):
+                        try:
+                            risk_dict['CreatedByName'] = decrypt_data(created_by_name)
+                        except Exception as e:
+                            print(f"Warning: Failed to decrypt CreatedByName: {e}")
+                
                 # Convert datetime objects to string for JSON serialization
                 if risk_dict.get('CreatedAt'):
                     if hasattr(risk_dict['CreatedAt'], 'strftime'):
@@ -4661,9 +4826,43 @@ def get_risks_by_category(request, category):
             columns = [col[0] for col in cursor.description]
             risk_instances_data = []
             
+            # Import decryption utilities
+            from ...utils.data_encryption import decrypt_data, is_encrypted_data
+            from ...utils.encryption_config import get_encrypted_fields_for_model
+            
+            # Get encrypted fields for RiskInstance model
+            encrypted_fields = get_encrypted_fields_for_model('RiskInstance')
+            
             for row in cursor.fetchall():
                 # Convert row to dictionary
                 instance_dict = dict(zip(columns, row))
+                
+                # Decrypt encrypted fields
+                for field_name in encrypted_fields:
+                    if field_name in instance_dict and instance_dict[field_name]:
+                        encrypted_value = instance_dict[field_name]
+                        if isinstance(encrypted_value, str) and is_encrypted_data(encrypted_value):
+                            try:
+                                instance_dict[field_name] = decrypt_data(encrypted_value)
+                            except Exception as e:
+                                print(f"Warning: Failed to decrypt {field_name}: {e}")
+                
+                # Also decrypt UserName and CreatedByName if they're encrypted
+                if 'CreatedBy' in instance_dict and instance_dict['CreatedBy']:
+                    encrypted_username = instance_dict['CreatedBy']
+                    if isinstance(encrypted_username, str) and is_encrypted_data(encrypted_username):
+                        try:
+                            instance_dict['CreatedBy'] = decrypt_data(encrypted_username)
+                        except Exception as e:
+                            print(f"Warning: Failed to decrypt CreatedBy: {e}")
+                
+                if 'CreatedByName' in instance_dict and instance_dict['CreatedByName']:
+                    created_by_name = instance_dict['CreatedByName']
+                    if isinstance(created_by_name, str) and is_encrypted_data(created_by_name):
+                        try:
+                            instance_dict['CreatedByName'] = decrypt_data(created_by_name)
+                        except Exception as e:
+                            print(f"Warning: Failed to decrypt CreatedByName: {e}")
                 
                 # Convert date objects to string to avoid utcoffset error
                 if 'MitigationDueDate' in instance_dict and instance_dict['MitigationDueDate']:

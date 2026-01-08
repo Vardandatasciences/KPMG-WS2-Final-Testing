@@ -539,13 +539,19 @@ def generate_jwt_tokens(user, login_time=None, session_token=None):
             tenant_id = user.tenant.tenant_id
             tenant_name = user.tenant.name
         
+        # Decrypt user fields before storing in token
+        username_plain = getattr(user, 'UserName_plain', None) or getattr(user, 'UserName', None)
+        email_plain = getattr(user, 'email_plain', None) or getattr(user, 'Email', None)
+        firstname_plain = getattr(user, 'FirstName_plain', None) or getattr(user, 'FirstName', None)
+        lastname_plain = getattr(user, 'LastName_plain', None) or getattr(user, 'LastName', None)
+        
         # Create refresh token
         refresh = RefreshToken()
         refresh['user_id'] = user.UserId
-        refresh['username'] = user.UserName
-        refresh['email'] = user.Email
-        refresh['first_name'] = user.FirstName
-        refresh['last_name'] = user.LastName
+        refresh['username'] = username_plain
+        refresh['email'] = email_plain
+        refresh['first_name'] = firstname_plain
+        refresh['last_name'] = lastname_plain
         # MULTI-TENANCY: Add tenant info to token
         refresh['tenant_id'] = tenant_id
         refresh['tenant_name'] = tenant_name
@@ -557,10 +563,11 @@ def generate_jwt_tokens(user, login_time=None, session_token=None):
         # Create access token
         access_token = refresh.access_token
         access_token['user_id'] = user.UserId
-        access_token['username'] = user.UserName
-        access_token['email'] = user.Email
-        access_token['first_name'] = user.FirstName
-        access_token['last_name'] = user.LastName
+        # Use decrypted values (already computed above)
+        access_token['username'] = username_plain
+        access_token['email'] = email_plain
+        access_token['first_name'] = firstname_plain
+        access_token['last_name'] = lastname_plain
         # MULTI-TENANCY: Add tenant info to token
         access_token['tenant_id'] = tenant_id
         access_token['tenant_name'] = tenant_name
@@ -1042,10 +1049,12 @@ def jwt_login(request):
         tokens = generate_jwt_tokens(user)
         
         # Store user info in session for compatibility with consistent naming
+        # Decrypt username before storing in session
+        username_plain = getattr(user, 'UserName_plain', None) or getattr(user, 'UserName', None)
         request.session['user_id'] = user.UserId
-        request.session['username'] = user.UserName
+        request.session['username'] = username_plain
         request.session['grc_user_id'] = user.UserId  # Backup key for RBAC
-        request.session['grc_username'] = user.UserName
+        request.session['grc_username'] = username_plain
         request.session['session_created_at'] = time.time()  # Store session creation time for timeout check
         
         # Initialize framework session keys if needed
@@ -1147,10 +1156,10 @@ def jwt_login(request):
             },
             'user': {
                 'UserId': user.UserId,
-                'UserName': user.UserName,
-                'Email': user.Email,
-                'FirstName': user.FirstName,
-                'LastName': user.LastName,
+                'UserName': getattr(user, 'UserName_plain', None) or getattr(user, 'UserName', None),
+                'Email': getattr(user, 'email_plain', None) or getattr(user, 'Email', None),
+                'FirstName': getattr(user, 'FirstName_plain', None) or getattr(user, 'FirstName', None),
+                'LastName': getattr(user, 'LastName_plain', None) or getattr(user, 'LastName', None),
                 'IsActive': user.IsActive,
                 'consent_accepted': consent_accepted_value,
                 'license_key': user.license_key  # Include the validated license 

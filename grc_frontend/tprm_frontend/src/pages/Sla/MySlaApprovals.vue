@@ -725,23 +725,58 @@ export default {
     })
     
     const getStoredUser = () => {
-      const stored = localStorage.getItem('current_user')
-      if (!stored) return null
-      try {
-        return JSON.parse(stored)
-      } catch (error) {
-        console.error('Error parsing current_user from storage:', error)
-        return null
+      // Try multiple possible localStorage keys
+      const keys = ['current_user', 'user', 'auth_user']
+      for (const key of keys) {
+        const stored = localStorage.getItem(key)
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored)
+            if (parsed && (parsed.userid || parsed.user_id || parsed.id || parsed.UserId)) {
+              console.log(`[MySlaApprovals] Found user in localStorage key: ${key}`, parsed)
+              return parsed
+            }
+          } catch (error) {
+            // Not JSON, might be encrypted - skip
+            continue
+          }
+        }
       }
+      return null
     }
 
     const getCurrentUser = () => {
-      return store.getters['auth/currentUser'] || getStoredUser()
+      const storeUser = store.getters['auth/currentUser']
+      const storedUser = getStoredUser()
+      const user = storeUser || storedUser
+      console.log('[MySlaApprovals] getCurrentUser:', { 
+        hasStoreUser: !!storeUser, 
+        hasStoredUser: !!storedUser,
+        user: user,
+        userKeys: user ? Object.keys(user) : []
+      })
+      return user
     }
 
     const getCurrentUserId = () => {
       const user = getCurrentUser()
-      return user?.userid || user?.user_id || user?.id || null
+      if (!user) {
+        console.log('[MySlaApprovals] No user found in getCurrentUserId')
+        return null
+      }
+      // Check multiple possible user ID field names (handle different formats)
+      const userId = user.userid || 
+                     user.user_id || 
+                     user.id || 
+                     user.UserId ||  // Capital U, capital I
+                     user.userId ||  // camelCase
+                     user.USER_ID
+      console.log('[MySlaApprovals] getCurrentUserId:', { 
+        userId, 
+        userKeys: Object.keys(user),
+        hasUserId: !!userId 
+      })
+      return userId || null
     }
 
     // Modal states
@@ -766,17 +801,15 @@ export default {
       isLoadingApprovals.value = true
       try {
         const currentUserId = getCurrentUserId()
-        if (!currentUserId) {
-          assignedApprovals.value = []
-          console.warn('No authenticated user id found for approvals')
-          return
-        }
+        console.log('[MySlaApprovals] Fetching approvals, currentUserId:', currentUserId)
 
-        // Fetch approvals assigned to the current user
+        // Fetch all approvals for the tenant (not just assigned to current user)
+        // Backend will filter by tenant_id automatically
+        // Don't pass assignee_id to show all approvals for the tenant
         const response = await withPermissionCheck(
           () => slaApprovalApi.getAllApprovals({
-            ...filters.value,
-            assignee_id: currentUserId
+            ...filters.value
+            // Don't include assignee_id to show all approvals for tenant
           })
         )
         
@@ -801,17 +834,16 @@ export default {
       isLoadingReviews.value = true
       try {
         const currentUserId = getCurrentUserId()
-        if (!currentUserId) {
-          reviewApprovals.value = []
-          console.warn('No authenticated user id found for reviews')
-          return
-        }
+        console.log('[MySlaApprovals] Fetching reviews, currentUserId:', currentUserId)
 
-        // Fetch approvals created by the current user
-        const response = await slaApprovalApi.getAllReviews({
-          ...filters.value,
-          assigner_id: currentUserId
-        })
+        // Fetch approvals created by the current user (if user ID is available)
+        // Backend will filter by tenant_id automatically
+        const reviewFilters = { ...filters.value }
+        if (currentUserId) {
+          reviewFilters.assigner_id = currentUserId
+        }
+        
+        const response = await slaApprovalApi.getAllReviews(reviewFilters)
         
         if (response.success && response.data) {
           reviewApprovals.value = response.data

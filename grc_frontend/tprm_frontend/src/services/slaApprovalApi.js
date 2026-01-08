@@ -8,8 +8,11 @@ class SLAApprovalApiService {
 
   async slaApprovalRequest(endpoint, options = {}) {
     try {
-      // Get JWT token from localStorage
-      const token = localStorage.getItem('session_token')
+      // Get JWT token from localStorage (try multiple possible keys)
+      const token = localStorage.getItem('session_token') || 
+                    localStorage.getItem('access_token') ||
+                    localStorage.getItem('jwt_token')
+      
       const headers = {
         'Content-Type': 'application/json',
         ...options.headers
@@ -20,19 +23,44 @@ class SLAApprovalApiService {
         headers['Authorization'] = `Bearer ${token}`
       }
       
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
+      // Construct full URL
+      const fullUrl = `${this.baseURL}${endpoint}`
+      console.log('[SLA Approval API] Request:', {
+        method: options.method || 'GET',
+        url: fullUrl,
+        hasToken: !!token,
+        endpoint,
+        baseURL: this.baseURL
+      })
+      
+      const response = await fetch(fullUrl, {
         headers: headers,
         ...options
       })
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
+        console.error('[SLA Approval API] Error response:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorData
+        })
         throw new Error(`HTTP error! status: ${response.status} - ${JSON.stringify(errorData)}`)
       }
 
-      return await response.json()
+      const data = await response.json()
+      console.log('[SLA Approval API] Success:', { url: fullUrl, dataKeys: Object.keys(data) })
+      return data
     } catch (error) {
-      console.error('SLA Approval API request failed:', error)
+      // Handle network errors (connection refused, etc.)
+      if (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_REFUSED')) {
+        console.error('[SLA Approval API] Connection error - Backend server may not be running:', {
+          url: `${this.baseURL}${endpoint}`,
+          error: error.message
+        })
+        throw new Error(`Cannot connect to backend server. Please ensure the backend is running at ${this.baseURL}`)
+      }
+      console.error('[SLA Approval API] Request failed:', error)
       throw error
     }
   }
@@ -55,6 +83,8 @@ class SLAApprovalApiService {
 
   // Get SLA approval by ID
   async getApproval(approvalId) {
+    // baseURL already includes 'slas/approvals', so endpoint should be just the ID
+    // Backend expects: /api/tprm/slas/approvals/approvals/<int:pk>/
     return this.slaApprovalRequest(`/approvals/${approvalId}/`)
   }
 
@@ -164,33 +194,36 @@ class SLAApprovalApiService {
 
   // Get all SLAs with optional filters
   async getSLAs(filters = {}) {
-    const queryParams = new URLSearchParams()
+    // Use the main API service which has the correct base URL
+    const apiService = (await import('./api')).default
+    const response = await apiService.getSLAs()
     
-    Object.keys(filters).forEach(key => {
-      if (filters[key] !== null && filters[key] !== undefined && filters[key] !== '') {
-        queryParams.append(key, filters[key])
-      }
-    })
+    // Apply filters client-side if needed (backend should handle this, but fallback)
+    let filtered = response.results || response || []
     
-    const queryString = queryParams.toString()
-    const endpoint = queryString ? `/api/slas/?${queryString}` : '/api/slas/'
-    
-    const token = localStorage.getItem('session_token')
-    const headers = {
-      'Content-Type': 'application/json'
+    if (Object.keys(filters).length > 0) {
+      filtered = filtered.filter(sla => {
+        return Object.keys(filters).every(key => {
+          const filterValue = filters[key]
+          if (filterValue === null || filterValue === undefined || filterValue === '') {
+            return true
+          }
+          const slaValue = sla[key]
+          return slaValue != null && String(slaValue).toLowerCase().includes(String(filterValue).toLowerCase())
+        })
+      })
     }
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`
-    }
     
-    return fetch(endpoint, {
-      headers: headers
-    }).then(response => {
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      return response.json()
-    })
+    return {
+      results: filtered,
+      count: filtered.length
+    }
+  }
+  
+  // Get a single SLA by ID
+  async getSLAById(slaId) {
+    const apiService = (await import('./api')).default
+    return apiService.getSLA(slaId)
   }
 
   // Get SLAs with PENDING approval status
@@ -229,69 +262,89 @@ class SLAApprovalApiService {
 
   // Get all SLAs (both pending and approved) for display
   async getAllSLAs(filters = {}) {
-    const queryParams = new URLSearchParams()
+    // Use the main API service which has the correct base URL
+    const apiService = (await import('./api')).default
+    const response = await apiService.getSLAs()
     
-    Object.keys(filters).forEach(key => {
-      if (filters[key] !== null && filters[key] !== undefined && filters[key] !== '') {
-        queryParams.append(key, filters[key])
-      }
-    })
+    // Apply filters client-side if needed (backend should handle this, but fallback)
+    let filtered = response.results || response || []
     
-    const queryString = queryParams.toString()
-    const endpoint = queryString ? `/api/slas/?${queryString}` : '/api/slas/'
-    
-    const token = localStorage.getItem('session_token')
-    const headers = {
-      'Content-Type': 'application/json'
+    if (Object.keys(filters).length > 0) {
+      filtered = filtered.filter(sla => {
+        return Object.keys(filters).every(key => {
+          const filterValue = filters[key]
+          if (filterValue === null || filterValue === undefined || filterValue === '') {
+            return true
+          }
+          const slaValue = sla[key]
+          return slaValue != null && String(slaValue).toLowerCase().includes(String(filterValue).toLowerCase())
+        })
+      })
     }
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`
-    }
     
-    return fetch(endpoint, {
-      headers: headers
-    }).then(response => {
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      return response.json()
-    })
+    return {
+      results: filtered,
+      count: filtered.length
+    }
   }
 
   // Get vendors
   async getVendors(filters = {}) {
-    const queryParams = new URLSearchParams()
+    // Use the main API service which has the correct base URL
+    const apiService = (await import('./api')).default
+    const response = await apiService.getVendors()
     
-    Object.keys(filters).forEach(key => {
-      if (filters[key] !== null && filters[key] !== undefined && filters[key] !== '') {
-        queryParams.append(key, filters[key])
-      }
-    })
+    // Apply filters client-side if needed
+    let filtered = response.results || response || []
     
-    const queryString = queryParams.toString()
-    const endpoint = queryString ? `/api/slas/vendors/?${queryString}` : '/api/slas/vendors/'
-    
-    const token = localStorage.getItem('session_token')
-    const headers = {
-      'Content-Type': 'application/json'
+    if (Object.keys(filters).length > 0) {
+      filtered = filtered.filter(vendor => {
+        return Object.keys(filters).every(key => {
+          const filterValue = filters[key]
+          if (filterValue === null || filterValue === undefined || filterValue === '') {
+            return true
+          }
+          const vendorValue = vendor[key]
+          return vendorValue != null && String(vendorValue).toLowerCase().includes(String(filterValue).toLowerCase())
+        })
+      })
     }
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`
-    }
     
-    return fetch(endpoint, {
-      headers: headers
-    }).then(response => {
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      return response.json()
-    })
+    return {
+      results: filtered,
+      count: filtered.length
+    }
   }
 
   // Get users for assignment (users with ApproveContract permission)
   async getUsers(filters = {}) {
-    return this.slaApprovalRequest('/available-users/')
+    try {
+      const response = await this.slaApprovalRequest('/available-users/')
+      // Ensure consistent response format
+      if (response && response.success !== undefined) {
+        return response
+      } else if (Array.isArray(response)) {
+        return {
+          success: true,
+          data: response,
+          count: response.length
+        }
+      } else {
+        return {
+          success: true,
+          data: response.data || response.results || [],
+          count: (response.data || response.results || []).length
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error)
+      return {
+        success: false,
+        error: error.response?.data?.error || 'Failed to fetch users',
+        message: error.response?.data?.message || error.message,
+        data: []
+      }
+    }
   }
 
   // Health check

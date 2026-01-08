@@ -403,6 +403,7 @@ class VendorModulesAPIView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
+    @rbac_vendor_required('ViewRiskProfile')
     def get(self, request):
         """Get available vendor modules"""
         try:
@@ -449,6 +450,7 @@ class VendorListAPIView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
+    @rbac_vendor_required('ViewRiskProfile')
     def get(self, request):
         """Get list of vendors prioritizing temp_vendor (for risk filtering) with fallback to main vendors table"""
         try:
@@ -492,6 +494,7 @@ class VendorListAPIView(APIView):
                     logger.warning(f"Could not fetch from temp_vendor table: {e}")
                 
                 # Also get vendors from main vendors table (if not already in temp_vendor)
+                # MULTI-TENANCY: Filter by tenant
                 try:
                     cursor.execute("""
                         SELECT 
@@ -499,8 +502,10 @@ class VendorListAPIView(APIView):
                             business_type, industry_sector, vendor_category_id,
                             risk_level, status, is_critical_vendor,
                             created_at, updated_at
+                        FROM vendors
+                        WHERE TenantId = %s
                         ORDER BY company_name ASC
-                    """)
+                    """, [tenant_id])
                     
                     columns = [col[0] for col in cursor.description]
                     for row in cursor.fetchall():

@@ -284,16 +284,37 @@ export default {
         // Try localStorage first (primary source)
         userId = localStorage.getItem('user_id')
         
-        // If not found, try other sources
+        // If not found, try other localStorage/sessionStorage keys
         if (!userId) {
           userId = localStorage.getItem('userId') ||
                    sessionStorage.getItem('user_id') ||
                    sessionStorage.getItem('userId')
         }
         
-        // Double-check localStorage one more time (in case it was just set)
+        // Also check current_user object in localStorage (may contain UserId field)
         if (!userId) {
-          userId = localStorage.getItem('user_id')
+          try {
+            const currentUserStr = localStorage.getItem('current_user')
+            if (currentUserStr) {
+              const currentUser = JSON.parse(currentUserStr)
+              userId = currentUser.UserId || currentUser.user_id || currentUser.userId || currentUser.id
+            }
+          } catch (e) {
+            console.warn('Error parsing current_user from localStorage:', e)
+          }
+        }
+        
+        // Also check user object in localStorage (may contain UserId field)
+        if (!userId) {
+          try {
+            const userStr = localStorage.getItem('user')
+            if (userStr) {
+              const user = JSON.parse(userStr)
+              userId = user.UserId || user.user_id || user.userId || user.id
+            }
+          } catch (e) {
+            console.warn('Error parsing user from localStorage:', e)
+          }
         }
         
         const sessionId = cookieService.getSessionId()

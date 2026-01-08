@@ -68,12 +68,18 @@ class SLAApproval(TPRMEncryptedFieldsMixin, models.Model):
         """Check if the approval is overdue"""
         return self.status in ['ASSIGNED', 'IN_PROGRESS'] and timezone.now() > self.due_date
     
-    def get_sla(self):
-        """Get the associated SLA object"""
+    def get_sla(self, tenant_id=None):
+        """Get the associated SLA object, optionally filtered by tenant_id"""
         try:
-            from slas.models import VendorSLA
-            return VendorSLA.objects.get(sla_id=self.sla_id)
-        except:
+            from tprm_backend.slas.models import VendorSLA
+            query = VendorSLA.objects.filter(sla_id=self.sla_id)
+            if tenant_id:
+                query = query.filter(tenant_id=tenant_id)
+            return query.first()
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error getting SLA {self.sla_id}: {str(e)}")
             return None
     
     def get_assigner_user(self):

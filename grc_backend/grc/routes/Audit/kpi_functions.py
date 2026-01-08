@@ -835,7 +835,7 @@ def get_non_compliance_issues(request):
             JOIN compliance c ON af.ComplianceId = c.ComplianceId
             JOIN audit a ON af.AuditId = a.AuditId
             WHERE c.IsRisk = 1
-                AND a.tenant_id = %s
+                AND a.TenantId = %s
                 AND af.AssignedDate BETWEEN %s AND %s
                 {severity_filter}
         """
@@ -983,7 +983,7 @@ def get_non_compliance_issues(request):
             JOIN compliance c ON af.ComplianceId = c.ComplianceId
             JOIN audit a ON af.AuditId = a.AuditId
             WHERE c.IsRisk = 1
-                AND a.tenant_id = %s
+                AND a.TenantId = %s
                 AND af.AssignedDate BETWEEN %s AND %s
                 {severity_filter}
         """

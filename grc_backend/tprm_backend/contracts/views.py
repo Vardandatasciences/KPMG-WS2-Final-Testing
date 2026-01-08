@@ -838,6 +838,12 @@ def contract_create(request):
                 from tprm_backend.contracts.contractapproval.serializers import ContractApprovalCreateAssignmentSerializer
                 from tprm_backend.contracts.models import ContractApproval
                 
+                # MULTI-TENANCY: Get tenant_id from request
+                tenant_id = get_tenant_id_from_request(request)
+                if not tenant_id:
+                    logger.warning("Tenant context not found when creating approval, using contract's tenant_id")
+                    tenant_id = contract.tenant_id
+                
                 # Create approval data
                 approval_data = {
                     'workflow_id': 1,  # Default workflow ID
@@ -851,7 +857,8 @@ def contract_create(request):
                     'assigned_date': timezone.now(),
                     'due_date': timezone.now() + timezone.timedelta(days=7),  # 7 days from now
                     'status': 'ASSIGNED',
-                    'comment_text': f'Contract {contract.contract_number} requires review and approval'
+                    'comment_text': f'Contract {contract.contract_number} requires review and approval',
+                    'tenant_id': tenant_id  # MULTI-TENANCY: Set tenant_id
                 }
                 
                 # Get assignee name
@@ -877,8 +884,9 @@ def contract_create(request):
                 # Create the approval
                 approval_serializer = ContractApprovalCreateAssignmentSerializer(data=approval_data)
                 if approval_serializer.is_valid():
-                    approval = approval_serializer.save()
-                    logger.info(f"Contract approval created: {approval.approval_id} for contract {contract.contract_id}")
+                    # MULTI-TENANCY: Ensure tenant_id is set when saving
+                    approval = approval_serializer.save(tenant_id=tenant_id)
+                    logger.info(f"Contract approval created: {approval.approval_id} for contract {contract.contract_id} with tenant_id {tenant_id}")
                 else:
                     logger.warning(f"Failed to create contract approval: {approval_serializer.errors}")
                     
@@ -3900,10 +3908,26 @@ def save_questionnaires_for_term(term_id, questionnaires_data, user, tenant_id=N
         # If template_id is provided, update that template with the new questions
         if provided_template_id:
             try:
-                existing_template = QuestionnaireTemplate.objects.get(
+                # MULTI-TENANCY: Filter by tenant_id when getting template
+                template_query = QuestionnaireTemplate.objects.filter(
                     template_id=provided_template_id,
                     module_type='CONTRACT'
                 )
+                if tenant_id:
+                    template_query = template_query.filter(tenant_id=tenant_id)
+                existing_template = template_query.first()
+                
+                if not existing_template:
+                    # Try without tenant filter as fallback
+                    existing_template = QuestionnaireTemplate.objects.get(
+                        template_id=provided_template_id,
+                        module_type='CONTRACT'
+                    )
+                    # Update tenant_id if it was missing
+                    if tenant_id and not existing_template.tenant_id:
+                        existing_template.tenant_id = tenant_id
+                        existing_template.save()
+                        logger.info(f"✅ Updated template {provided_template_id} with tenant_id: {tenant_id}")
                 template_id = existing_template.template_id
                 
                 # IMPORTANT: When a template is selected, REPLACE all questions in the template
@@ -3912,16 +3936,21 @@ def save_questionnaires_for_term(term_id, questionnaires_data, user, tenant_id=N
                 existing_template.template_questions_json = template_questions
                 existing_template.updated_by = user_id
                 existing_template.updated_at = timezone.now()
+                # MULTI-TENANCY: Set tenant_id if missing
+                if tenant_id and not existing_template.tenant_id:
+                    existing_template.tenant_id = tenant_id
                 existing_template.save()
                 
                 logger.info(f"✅ Updated provided template (ID: {template_id}) for term_id: {term_id_str}")
                 logger.info(f"📋 Template now has {len(template_questions)} questions (replaced all questions, removed ones are now excluded)")
                 
                 # Delete existing ContractStaticQuestionnaire entries for this term_id before creating new ones
-                deleted_count, _ = ContractStaticQuestionnaire.objects.filter(
-                    term_id=term_id_str
-                ).delete()
-                logger.info(f"✅ Deleted {deleted_count} existing contract_static_questionnaires for term_id: {term_id_str} before creating new ones")
+                # MULTI-TENANCY: Filter by tenant_id when deleting
+                delete_query = ContractStaticQuestionnaire.objects.filter(term_id=term_id_str)
+                if tenant_id:
+                    delete_query = delete_query.filter(tenant_id=tenant_id)
+                deleted_count, _ = delete_query.delete()
+                logger.info(f"✅ Deleted {deleted_count} existing contract_static_questionnaires for term_id: {term_id_str} (tenant_id: {tenant_id}) before creating new ones")
                 
             except QuestionnaireTemplate.DoesNotExist:
                 logger.warning(f"⚠️ Provided template_id {provided_template_id} not found, creating/updating template")
@@ -3930,7 +3959,11 @@ def save_questionnaires_for_term(term_id, questionnaires_data, user, tenant_id=N
         # If no template_id provided or template not found, check if a template already exists for this term
         if not template_id:
             existing_template = None
-            all_templates = QuestionnaireTemplate.objects.filter(module_type='CONTRACT')
+            # MULTI-TENANCY: Filter templates by tenant_id if available
+            template_query = QuestionnaireTemplate.objects.filter(module_type='CONTRACT')
+            if tenant_id:
+                template_query = template_query.filter(tenant_id=tenant_id)
+            all_templates = template_query
             for template in all_templates:
                 questions = template.template_questions_json or []
                 # Check if any question has this term_id
@@ -3948,18 +3981,33 @@ def save_questionnaires_for_term(term_id, questionnaires_data, user, tenant_id=N
                 existing_template.template_questions_json = existing_questions
                 existing_template.updated_by = user_id
                 existing_template.updated_at = timezone.now()
+                # MULTI-TENANCY: Set tenant_id if missing
+                if tenant_id and not existing_template.tenant_id:
+                    existing_template.tenant_id = tenant_id
                 existing_template.save()
                 template_id = existing_template.template_id
-                logger.info(f"✅ Updated existing questionnaire_template (ID: {template_id}) for term_id: {term_id_str}")
+                logger.info(f"✅ Updated existing questionnaire_template (ID: {template_id}) for term_id: {term_id_str} with tenant_id: {tenant_id}")
                 
                 # Delete existing ContractStaticQuestionnaire entries for this term_id before creating new ones
-                deleted_count, _ = ContractStaticQuestionnaire.objects.filter(
-                    term_id=term_id_str
-                ).delete()
-                logger.info(f"✅ Deleted {deleted_count} existing contract_static_questionnaires for term_id: {term_id_str} before creating new ones")
+                # MULTI-TENANCY: Filter by tenant_id when deleting
+                delete_query = ContractStaticQuestionnaire.objects.filter(term_id=term_id_str)
+                if tenant_id:
+                    delete_query = delete_query.filter(tenant_id=tenant_id)
+                deleted_count, _ = delete_query.delete()
+                logger.info(f"✅ Deleted {deleted_count} existing contract_static_questionnaires for term_id: {term_id_str} (tenant_id: {tenant_id}) before creating new ones")
             else:
                 # Create new template
                 template_name = f"Contract Questionnaire - Term {term_id_str}"
+                # MULTI-TENANCY: Get tenant_id for template
+                tenant_id_for_template = tenant_id
+                if not tenant_id_for_template:
+                    try:
+                        term_obj = ContractTerm.objects.filter(term_id=term_id_str).first()
+                        if term_obj and hasattr(term_obj, 'tenant_id'):
+                            tenant_id_for_template = term_obj.tenant_id
+                    except:
+                        pass
+                
                 template = QuestionnaireTemplate.objects.create(
                     template_name=template_name,
                     template_description=f"Questionnaire template for contract term {term_id_str}",
@@ -3973,75 +4021,87 @@ def save_questionnaires_for_term(term_id, questionnaires_data, user, tenant_id=N
                     is_active=True,
                     is_template=True,
                     created_by=user_id,
+                    tenant_id=tenant_id_for_template  # MULTI-TENANCY: Set tenant_id
                 )
                 template_id = template.template_id
-                logger.info(f"✅ Created new questionnaire_template (ID: {template_id}) for term_id: {term_id_str}")
+                logger.info(f"✅ Created new questionnaire_template (ID: {template_id}) for term_id: {term_id_str} with tenant_id: {tenant_id_for_template}")
     
     # Save to contract_static_questionnaire table with template_id
     questions_created = 0
     for idx, q_data in enumerate(questionnaires_data):
-        # Extract question data
-        question_text = q_data.get('question_text', '').strip()
-        if not question_text:
-            continue
-        
-        raw_question_type = (q_data.get('question_type') or 'text').lower()
-        question_type = question_type_map.get(raw_question_type, 'text')
-        if question_type != raw_question_type:
-            logger.debug(
-                "Normalised question_type (static) from '%s' to '%s' for term_id %s",
-                raw_question_type,
-                question_type,
-                term_id_str
-            )
-        is_required = bool(q_data.get('is_required', False))
-        scoring_weightings = float(q_data.get('scoring_weightings', 10.0))
-        
-        # Extract document_upload and multiple_choice fields
-        document_upload = bool(q_data.get('document_upload', False) or q_data.get('allow_document_upload', False))
-        
-        # multiple_choice should only be set when question_type is 'multiple_choice'
-        multiple_choice = None
-        if question_type == 'multiple_choice':
-            # Get options from the question data
-            options = q_data.get('options', [])
-            if isinstance(options, list) and len(options) > 0:
-                multiple_choice = options
-            elif isinstance(options, str):
-                # If options is a string, try to parse it or split by comma
+        try:
+            # Extract question data
+            question_text = q_data.get('question_text', '').strip()
+            if not question_text:
+                logger.warning(f"⚠️ Skipping questionnaire {idx + 1} - empty question_text")
+                continue
+            
+            raw_question_type = (q_data.get('question_type') or 'text').lower()
+            question_type = question_type_map.get(raw_question_type, 'text')
+            if question_type != raw_question_type:
+                logger.debug(
+                    "Normalised question_type (static) from '%s' to '%s' for term_id %s",
+                    raw_question_type,
+                    question_type,
+                    term_id_str
+                )
+            is_required = bool(q_data.get('is_required', False))
+            scoring_weightings = float(q_data.get('scoring_weightings', 10.0))
+            
+            # Extract document_upload and multiple_choice fields
+            document_upload = bool(q_data.get('document_upload', False) or q_data.get('allow_document_upload', False))
+            
+            # multiple_choice should only be set when question_type is 'multiple_choice'
+            multiple_choice = None
+            if question_type == 'multiple_choice':
+                # Get options from the question data
+                options = q_data.get('options', [])
+                if isinstance(options, list) and len(options) > 0:
+                    multiple_choice = options
+                elif isinstance(options, str):
+                    # If options is a string, try to parse it or split by comma
+                    try:
+                        import json
+                        multiple_choice = json.loads(options)
+                    except (json.JSONDecodeError, ValueError):
+                        # If not valid JSON, split by comma
+                        multiple_choice = [opt.strip() for opt in options.split(',') if opt.strip()]
+            
+            # Save to contract_static_questionnaire table with template_id
+            # MULTI-TENANCY: Use tenant_id parameter or get from term object
+            tenant_id_for_questionnaire = tenant_id
+            if not tenant_id_for_questionnaire:
                 try:
-                    import json
-                    multiple_choice = json.loads(options)
-                except (json.JSONDecodeError, ValueError):
-                    # If not valid JSON, split by comma
-                    multiple_choice = [opt.strip() for opt in options.split(',') if opt.strip()]
-        
-        # Save to contract_static_questionnaire table with template_id
-        # MULTI-TENANCY: Use tenant_id parameter or get from term object
-        tenant_id_for_questionnaire = tenant_id
-        if not tenant_id_for_questionnaire:
-            try:
-                term_obj = ContractTerm.objects.filter(term_id=term_id_str).first()
-                if term_obj and hasattr(term_obj, 'tenant_id'):
-                    tenant_id_for_questionnaire = term_obj.tenant_id
-            except:
-                pass
-        
-        ContractStaticQuestionnaire.objects.create(
-            term_id=term_id_str,
-            template_id=template_id,  # Link to questionnaire_template
-            question_text=question_text,
-            question_type=question_type,
-            is_required=is_required,
-            scoring_weightings=scoring_weightings,
-            document_upload=document_upload,
-            multiple_choice=multiple_choice,
-            tenant_id=tenant_id_for_questionnaire  # MULTI-TENANCY: Set tenant_id
-        )
-        questions_created += 1
-        logger.info(f"✅ Created question {idx + 1} in contract_static_questionnaires for term_id: {term_id_str} with template_id: {template_id}")
+                    term_obj = ContractTerm.objects.filter(term_id=term_id_str).first()
+                    if term_obj and hasattr(term_obj, 'tenant_id'):
+                        tenant_id_for_questionnaire = term_obj.tenant_id
+                except:
+                    pass
+            
+            ContractStaticQuestionnaire.objects.create(
+                term_id=term_id_str,
+                template_id=template_id,  # Link to questionnaire_template
+                question_text=question_text,
+                question_type=question_type,
+                is_required=is_required,
+                scoring_weightings=scoring_weightings,
+                document_upload=document_upload,
+                multiple_choice=multiple_choice,
+                tenant_id=tenant_id_for_questionnaire  # MULTI-TENANCY: Set tenant_id
+            )
+            questions_created += 1
+            logger.info(f"✅ Created question {idx + 1} in contract_static_questionnaires for term_id: {term_id_str} with template_id: {template_id} and tenant_id: {tenant_id_for_questionnaire}")
+        except Exception as q_error:
+            logger.error(f"❌ Error creating questionnaire {idx + 1} for term_id {term_id_str}: {str(q_error)}")
+            import traceback
+            logger.error(f"❌ Traceback: {traceback.format_exc()}")
+            # Continue with next question instead of failing completely
+            continue
     
-    logger.info(f"✅ Successfully saved {questions_created} questionnaires for term_id: {term_id_str} with template_id: {template_id}")
+    if questions_created == 0:
+        logger.warning(f"⚠️ No questionnaires were created for term_id: {term_id_str} (out of {len(questionnaires_data)} provided)")
+    else:
+        logger.info(f"✅ Successfully saved {questions_created} out of {len(questionnaires_data)} questionnaires for term_id: {term_id_str} with template_id: {template_id}")
 
 
 @api_view(['POST'])
@@ -4191,10 +4251,17 @@ def contract_terms_create(request, contract_id):
         
         # Save questionnaires for this term if provided in request
         if questionnaires_data and isinstance(questionnaires_data, list) and len(questionnaires_data) > 0:
-            logger.info(f"📋 Saving {len(questionnaires_data)} questionnaires for term_id: {saved_term_id}")
-            # MULTI-TENANCY: Pass tenant_id to save_questionnaires_for_term
-            save_questionnaires_for_term(saved_term_id, questionnaires_data, request.user, tenant_id)
-            logger.info(f"✅ Successfully saved questionnaires for term_id: {saved_term_id}")
+            logger.info(f"📋 Saving {len(questionnaires_data)} questionnaires for term_id: {saved_term_id} with tenant_id: {tenant_id}")
+            try:
+                # MULTI-TENANCY: Pass tenant_id to save_questionnaires_for_term
+                save_questionnaires_for_term(saved_term_id, questionnaires_data, request.user, tenant_id)
+                logger.info(f"✅ Successfully saved questionnaires for term_id: {saved_term_id}")
+            except Exception as questionnaire_error:
+                logger.error(f"❌ Error saving questionnaires for term_id {saved_term_id}: {str(questionnaire_error)}")
+                import traceback
+                logger.error(f"❌ Traceback: {traceback.format_exc()}")
+                # Don't fail the entire term creation if questionnaires fail, but log the error
+                # This allows the term to be created even if questionnaires have issues
         
         # Create backup after successful term creation (for speed)
         backup_file = DatabaseBackupManager.create_backup()
@@ -4504,8 +4571,12 @@ def contract_search(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ListContracts')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def users_list(request):
-    """Get all users for contract assignment"""
+    """Get all users for contract assignment
+    MULTI-TENANCY: Filters users by tenant to ensure tenant isolation
+    """
     try:
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
@@ -4514,15 +4585,36 @@ def users_list(request):
                 'message': 'Too many requests. Please try again later.'
             }, status=429)
         
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Get all users from custom User model
+        users_list = []
+        
+        # Try ORM approach first
         try:
             from mfa_auth.models import User
-            users = User.objects.all().order_by('userid')
+            logger.info("Successfully imported User model from mfa_auth.models")
             
-            logger.info(f"Found {users.count()} users in database")
+            # Try filtering by tenant_id first
+            try:
+                users = User.objects.filter(tenant_id=tenant_id).order_by('userid')
+                logger.info(f"Filtered users by tenant_id={tenant_id}")
+            except Exception as filter_error:
+                logger.warning(f"Filtering by tenant_id failed: {filter_error}, trying without tenant filter")
+                # Fallback: get all users if tenant_id filtering fails
+                users = User.objects.all().order_by('userid')
+                logger.info("Using all users (no tenant filter)")
+            
+            user_count = users.count()
+            logger.info(f"Found {user_count} users in database for tenant_id={tenant_id}")
             
             # Convert to list and add display name
-            users_list = []
             for user in users:
                 full_name = f"{user.first_name} {user.last_name}".strip()
                 display_name = full_name if full_name else user.username
@@ -4536,18 +4628,73 @@ def users_list(request):
                 users_list.append(user_data)
                 logger.info(f"User: {user_data}")
             
-            logger.info(f"Returning {len(users_list)} users to frontend")
-            
-            return Response({
-                'success': True,
-                'data': users_list
-            })
-        except ImportError:
-            logger.warning("User model not found, returning empty list")
-            return Response({
-                'success': True,
-                'data': []
-            })
+        except ImportError as import_err:
+            logger.warning(f"User model import failed: {import_err}, trying raw SQL")
+            # Fallback to raw SQL
+            try:
+                from django.db import connection
+                with connection.cursor() as cursor:
+                    # Try to query with tenant_id if column exists
+                    try:
+                        cursor.execute(
+                            "SELECT UserId, UserName, FirstName, LastName FROM users WHERE TenantId = %s ORDER BY UserId",
+                            [tenant_id]
+                        )
+                    except Exception:
+                        # If TenantId column doesn't exist, get all users
+                        cursor.execute(
+                            "SELECT UserId, UserName, FirstName, LastName FROM users ORDER BY UserId"
+                        )
+                    
+                    for row in cursor.fetchall():
+                        user_id, username, first_name, last_name = row
+                        full_name = f"{first_name or ''} {last_name or ''}".strip()
+                        display_name = full_name if full_name else (username or f"User {user_id}")
+                        
+                        user_data = {
+                            'user_id': user_id,
+                            'username': username or f"user_{user_id}",
+                            'display_name': display_name,
+                            'role': 'user'
+                        }
+                        users_list.append(user_data)
+                        logger.info(f"User (from raw SQL): {user_data}")
+            except Exception as sql_err:
+                logger.error(f"Raw SQL query also failed: {sql_err}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
+        except Exception as model_err:
+            logger.error(f"Error accessing User model: {model_err}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            # Try raw SQL as last resort
+            try:
+                from django.db import connection
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT UserId, UserName, FirstName, LastName FROM users ORDER BY UserId"
+                    )
+                    for row in cursor.fetchall():
+                        user_id, username, first_name, last_name = row
+                        full_name = f"{first_name or ''} {last_name or ''}".strip()
+                        display_name = full_name if full_name else (username or f"User {user_id}")
+                        
+                        user_data = {
+                            'user_id': user_id,
+                            'username': username or f"user_{user_id}",
+                            'display_name': display_name,
+                            'role': 'user'
+                        }
+                        users_list.append(user_data)
+            except Exception as sql_err:
+                logger.error(f"Raw SQL fallback also failed: {sql_err}")
+        
+        logger.info(f"Returning {len(users_list)} users to frontend")
+        
+        return Response({
+            'success': True,
+            'data': users_list
+        })
         
     except Exception as e:
         import traceback
@@ -4564,8 +4711,12 @@ def users_list(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ListContracts')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def legal_reviewers_list(request):
-    """Get users with legal review roles for contract assignment"""
+    """Get users with legal review roles for contract assignment
+    MULTI-TENANCY: Filters users by tenant to ensure tenant isolation
+    """
     try:
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
@@ -4574,15 +4725,36 @@ def legal_reviewers_list(request):
                 'message': 'Too many requests. Please try again later.'
             }, status=429)
         
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Get all users from custom User model (since RBAC is removed, all users can be legal reviewers)
+        users_list = []
+        
+        # Try ORM approach first
         try:
             from mfa_auth.models import User
-            users = User.objects.all().order_by('userid')
+            logger.info("Successfully imported User model from mfa_auth.models for legal reviewers")
             
-            logger.info(f"Found {users.count()} users for legal reviewers")
+            # Try filtering by tenant_id first
+            try:
+                users = User.objects.filter(tenant_id=tenant_id).order_by('userid')
+                logger.info(f"Filtered legal reviewers by tenant_id={tenant_id}")
+            except Exception as filter_error:
+                logger.warning(f"Filtering by tenant_id failed: {filter_error}, trying without tenant filter")
+                # Fallback: get all users if tenant_id filtering fails
+                users = User.objects.all().order_by('userid')
+                logger.info("Using all users for legal reviewers (no tenant filter)")
+            
+            user_count = users.count()
+            logger.info(f"Found {user_count} users for legal reviewers (tenant_id={tenant_id})")
             
             # Convert to list and add display name
-            users_list = []
             for user in users:
                 full_name = f"{user.first_name} {user.last_name}".strip()
                 display_name = full_name if full_name else user.username
@@ -4596,18 +4768,73 @@ def legal_reviewers_list(request):
                 users_list.append(user_data)
                 logger.info(f"Legal Reviewer: {user_data}")
             
-            logger.info(f"Returning {len(users_list)} legal reviewers to frontend")
-            
-            return Response({
-                'success': True,
-                'data': users_list
-            })
-        except ImportError:
-            logger.warning("User model not found, returning empty list")
-            return Response({
-                'success': True,
-                'data': []
-            })
+        except ImportError as import_err:
+            logger.warning(f"User model import failed: {import_err}, trying raw SQL")
+            # Fallback to raw SQL
+            try:
+                from django.db import connection
+                with connection.cursor() as cursor:
+                    # Try to query with tenant_id if column exists
+                    try:
+                        cursor.execute(
+                            "SELECT UserId, UserName, FirstName, LastName FROM users WHERE TenantId = %s ORDER BY UserId",
+                            [tenant_id]
+                        )
+                    except Exception:
+                        # If TenantId column doesn't exist, get all users
+                        cursor.execute(
+                            "SELECT UserId, UserName, FirstName, LastName FROM users ORDER BY UserId"
+                        )
+                    
+                    for row in cursor.fetchall():
+                        user_id, username, first_name, last_name = row
+                        full_name = f"{first_name or ''} {last_name or ''}".strip()
+                        display_name = full_name if full_name else (username or f"User {user_id}")
+                        
+                        user_data = {
+                            'user_id': user_id,
+                            'username': username or f"user_{user_id}",
+                            'display_name': display_name,
+                            'role': 'legal_reviewer'
+                        }
+                        users_list.append(user_data)
+                        logger.info(f"Legal Reviewer (from raw SQL): {user_data}")
+            except Exception as sql_err:
+                logger.error(f"Raw SQL query also failed: {sql_err}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
+        except Exception as model_err:
+            logger.error(f"Error accessing User model: {model_err}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            # Try raw SQL as last resort
+            try:
+                from django.db import connection
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT UserId, UserName, FirstName, LastName FROM users ORDER BY UserId"
+                    )
+                    for row in cursor.fetchall():
+                        user_id, username, first_name, last_name = row
+                        full_name = f"{first_name or ''} {last_name or ''}".strip()
+                        display_name = full_name if full_name else (username or f"User {user_id}")
+                        
+                        user_data = {
+                            'user_id': user_id,
+                            'username': username or f"user_{user_id}",
+                            'display_name': display_name,
+                            'role': 'legal_reviewer'
+                        }
+                        users_list.append(user_data)
+            except Exception as sql_err:
+                logger.error(f"Raw SQL fallback also failed: {sql_err}")
+        
+        logger.info(f"Returning {len(users_list)} legal reviewers to frontend")
+        
+        return Response({
+            'success': True,
+            'data': users_list
+        })
         
     except Exception as e:
         import traceback
@@ -4624,8 +4851,12 @@ def legal_reviewers_list(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('approve')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def approval_users_list(request):
-    """Get users with ApproveContract permission for contract approval assignment"""
+    """Get users with ApproveContract permission for contract approval assignment
+    MULTI-TENANCY: Filters users by tenant to ensure tenant isolation
+    """
     try:
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
@@ -4634,20 +4865,42 @@ def approval_users_list(request):
                 'message': 'Too many requests. Please try again later.'
             }, status=429)
         
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Import required models
+        users_with_permission = []
+        
         try:
             from mfa_auth.models import User
             from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
+            logger.info("Successfully imported User model and RBACTPRMUtils for approval users")
             
             # Get all active users (filter by is_active_raw which can be 'Y', 'YES', '1', 'TRUE')
-            all_users = User.objects.filter(
-                is_active_raw__in=['Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true']
-            ).order_by('userid')
+            # MULTI-TENANCY: Try filtering by tenant_id first
+            try:
+                all_users = User.objects.filter(
+                    is_active_raw__in=['Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true'],
+                    tenant_id=tenant_id
+                ).order_by('userid')
+                logger.info(f"Filtered approval users by tenant_id={tenant_id}")
+            except Exception as filter_error:
+                logger.warning(f"Filtering by tenant_id failed: {filter_error}, trying without tenant filter")
+                # Fallback: get all active users if tenant_id filtering fails
+                all_users = User.objects.filter(
+                    is_active_raw__in=['Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true']
+                ).order_by('userid')
+                logger.info("Using all active users for approval (no tenant filter)")
             
-            logger.info(f"Found {all_users.count()} active users in database")
+            user_count = all_users.count()
+            logger.info(f"Found {user_count} active users in database for approval (tenant_id={tenant_id})")
             
             # Filter users who have ApproveContract or ReviewContract permission
-            users_with_permission = []
             for user in all_users:
                 user_id = user.userid
                 
@@ -4673,20 +4926,88 @@ def approval_users_list(request):
                     users_with_permission.append(user_data)
                     logger.info(f"User with ApproveContract permission: {user_data}")
             
-            logger.info(f"Returning {len(users_with_permission)} users with ApproveContract permission to frontend")
-            
-            return Response({
-                'success': True,
-                'data': users_with_permission,
-                'count': len(users_with_permission)
-            })
-        except ImportError as e:
-            logger.warning(f"User model not found: {str(e)}, returning empty list")
-            return Response({
-                'success': True,
-                'data': [],
-                'count': 0
-            })
+        except ImportError as import_err:
+            logger.warning(f"User model import failed: {import_err}, trying raw SQL")
+            # Fallback to raw SQL
+            try:
+                from django.db import connection
+                from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
+                
+                with connection.cursor() as cursor:
+                    # Try to query with tenant_id if column exists
+                    try:
+                        cursor.execute(
+                            "SELECT UserId, UserName, FirstName, LastName, IsActive FROM users WHERE TenantId = %s AND IsActive IN ('Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true') ORDER BY UserId",
+                            [tenant_id]
+                        )
+                    except Exception:
+                        # If TenantId column doesn't exist, get all active users
+                        cursor.execute(
+                            "SELECT UserId, UserName, FirstName, LastName, IsActive FROM users WHERE IsActive IN ('Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true') ORDER BY UserId"
+                        )
+                    
+                    for row in cursor.fetchall():
+                        user_id, username, first_name, last_name, is_active = row
+                        full_name = f"{first_name or ''} {last_name or ''}".strip()
+                        display_name = full_name if full_name else (username or f"User {user_id}")
+                        
+                        # Check permissions using RBAC
+                        has_approve_permission = RBACTPRMUtils.check_contract_permission(user_id, 'ApproveContract')
+                        has_review_permission = RBACTPRMUtils.check_contract_permission(user_id, 'ReviewContract')
+                        
+                        if has_approve_permission or has_review_permission:
+                            user_data = {
+                                'user_id': user_id,
+                                'username': username or f"user_{user_id}",
+                                'display_name': display_name,
+                                'role': 'approver'
+                            }
+                            users_with_permission.append(user_data)
+                            logger.info(f"Approval User (from raw SQL): {user_data}")
+            except Exception as sql_err:
+                logger.error(f"Raw SQL query also failed: {sql_err}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
+        except Exception as model_err:
+            logger.error(f"Error accessing User model: {model_err}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            # Try raw SQL as last resort
+            try:
+                from django.db import connection
+                from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
+                
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT UserId, UserName, FirstName, LastName, IsActive FROM users WHERE IsActive IN ('Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true') ORDER BY UserId"
+                    )
+                    for row in cursor.fetchall():
+                        user_id, username, first_name, last_name, is_active = row
+                        full_name = f"{first_name or ''} {last_name or ''}".strip()
+                        display_name = full_name if full_name else (username or f"User {user_id}")
+                        
+                        # Check permissions using RBAC
+                        has_approve_permission = RBACTPRMUtils.check_contract_permission(user_id, 'ApproveContract')
+                        has_review_permission = RBACTPRMUtils.check_contract_permission(user_id, 'ReviewContract')
+                        
+                        if has_approve_permission or has_review_permission:
+                            user_data = {
+                                'user_id': user_id,
+                                'username': username or f"user_{user_id}",
+                                'display_name': display_name,
+                                'role': 'approver'
+                            }
+                            users_with_permission.append(user_data)
+            except Exception as sql_err:
+                logger.error(f"Raw SQL fallback also failed: {sql_err}")
+        
+        logger.info(f"Returning {len(users_with_permission)} users with ApproveContract permission to frontend")
+        
+        return Response({
+            'success': True,
+            'data': users_with_permission,
+            'count': len(users_with_permission)
+        })
         
     except Exception as e:
         import traceback

@@ -143,6 +143,8 @@ MIDDLEWARE = [
     "tprm_backend.core.tenant_middleware.TenantContextMiddleware",
     "tprm_backend.core.tenant_middleware.TenantIsolationMiddleware",
     "grc.middleware.AuditLoggingMiddleware",
+    # AUTO-DECRYPT: Automatically decrypt any encrypted data in API responses (safety net)
+    "grc.utils.auto_decrypt_middleware.AutoDecryptMiddleware",
     # Removed grc.rbac.middleware.GRCRBACMiddleware - using simplified decorator-based RBAC instead
 ]
 

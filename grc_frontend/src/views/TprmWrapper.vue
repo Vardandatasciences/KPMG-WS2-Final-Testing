@@ -14,7 +14,7 @@
         title="TPRM Module"
         frameborder="0"
         referrerpolicy="no-referrer"
-        sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
+        sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads allow-popups-to-escape-sandbox"
         @load="onIframeLoad"
         @error="onIframeError"
       />

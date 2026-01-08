@@ -24,35 +24,49 @@ class SLAApprovalAssignmentSerializer(AutoDecryptingModelSerializer):
         read_only_fields = ['approval_id', 'created_at', 'updated_at']
     
     def get_sla_details(self, obj):
-        """Get detailed SLA information"""
-        sla = obj.get_sla()
-        if sla:
-            return {
-                'sla_id': sla.sla_id,
-                'sla_name': sla.sla_name,
-                'sla_type': sla.sla_type,
-                'vendor_id': sla.vendor_id,
-                'contract_id': sla.contract_id,
-                'effective_date': sla.effective_date,
-                'expiry_date': sla.expiry_date,
-                'status': sla.status,
-                'priority': sla.priority,
-                'compliance_score': sla.compliance_score,
-                'business_service_impacted': sla.business_service_impacted,
-                'compliance_framework': sla.compliance_framework,
-                'penalty_threshold': sla.penalty_threshold,
-                'credit_threshold': sla.credit_threshold,
-                'reporting_frequency': sla.reporting_frequency,
-                'baseline_period': sla.baseline_period,
-                'measurement_methodology': sla.measurement_methodology,
-                'exclusions': sla.exclusions,
-                'force_majeure_clauses': sla.force_majeure_clauses,
-                'audit_requirements': sla.audit_requirements,
-                'document_versioning': sla.document_versioning,
-                'improvement_targets': sla.improvement_targets,
-                'approval_status': sla.approval_status
-            }
-        return None
+        """Get detailed SLA information with tenant filtering"""
+        try:
+            # Get tenant_id from request context if available
+            tenant_id = None
+            if self.context and 'request' in self.context:
+                from tprm_backend.core.tenant_utils import get_tenant_id_from_request
+                tenant_id = get_tenant_id_from_request(self.context['request'])
+            
+            # Get SLA with tenant filtering
+            sla = obj.get_sla(tenant_id=tenant_id)
+            
+            if sla:
+                return {
+                    'sla_id': sla.sla_id,
+                    'sla_name': sla.sla_name or 'N/A',
+                    'sla_type': sla.sla_type or 'N/A',
+                    'vendor_id': sla.vendor_id,
+                    'contract_id': sla.contract_id,
+                    'effective_date': sla.effective_date.isoformat() if sla.effective_date else None,
+                    'expiry_date': sla.expiry_date.isoformat() if sla.expiry_date else None,
+                    'status': sla.status or 'PENDING',
+                    'priority': sla.priority or 'MEDIUM',
+                    'compliance_score': sla.compliance_score if sla.compliance_score is not None else 0,
+                    'business_service_impacted': sla.business_service_impacted or 'N/A',
+                    'compliance_framework': sla.compliance_framework or 'N/A',
+                    'penalty_threshold': sla.penalty_threshold if sla.penalty_threshold is not None else 0,
+                    'credit_threshold': sla.credit_threshold if sla.credit_threshold is not None else 0,
+                    'reporting_frequency': sla.reporting_frequency or 'N/A',
+                    'baseline_period': sla.baseline_period or 'N/A',
+                    'measurement_methodology': sla.measurement_methodology or 'N/A',
+                    'exclusions': sla.exclusions or 'N/A',
+                    'force_majeure_clauses': sla.force_majeure_clauses or 'N/A',
+                    'audit_requirements': sla.audit_requirements or 'N/A',
+                    'document_versioning': sla.document_versioning or 'N/A',
+                    'improvement_targets': sla.improvement_targets or 'N/A',
+                    'approval_status': sla.approval_status or 'PENDING'
+                }
+            return None
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error getting SLA details for approval {obj.approval_id}: {str(e)}", exc_info=True)
+            return None
     
     def get_assigner_details(self, obj):
         """Get assigner user details"""
@@ -101,13 +115,37 @@ class SLAApprovalCreateAssignmentSerializer(AutoDecryptingModelSerializer):
         ]
     
     def validate_sla_id(self, value):
-        """Validate that the sla_id exists"""
+        """Validate that the sla_id exists and belongs to the current tenant"""
         if value:
             try:
-                from slas.models import VendorSLA
-                VendorSLA.objects.get(sla_id=value)
-            except:
-                raise serializers.ValidationError(f"SLA with ID {value} not found")
+                from tprm_backend.slas.models import VendorSLA
+                from tprm_backend.core.tenant_utils import get_tenant_id_from_request
+                
+                # Get tenant_id from request context if available
+                tenant_id = None
+                if self.context and 'request' in self.context:
+                    tenant_id = get_tenant_id_from_request(self.context['request'])
+                
+                # Try to get the SLA, filtering by tenant_id if available
+                sla_query = VendorSLA.objects.filter(sla_id=value)
+                if tenant_id:
+                    sla_query = sla_query.filter(tenant_id=tenant_id)
+                
+                sla = sla_query.first()
+                if not sla:
+                    if tenant_id:
+                        raise serializers.ValidationError(f"SLA with ID {value} not found for tenant {tenant_id}")
+                    else:
+                        raise serializers.ValidationError(f"SLA with ID {value} not found")
+            except serializers.ValidationError:
+                # Re-raise validation errors as-is
+                raise
+            except Exception as e:
+                # Log unexpected errors
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error validating sla_id {value}: {str(e)}", exc_info=True)
+                raise serializers.ValidationError(f"Error validating SLA ID {value}: {str(e)}")
         return value
     
     def validate_due_date(self, value):
@@ -145,17 +183,41 @@ class SLAApprovalBulkCreateSerializer(serializers.Serializer):
     comment_text = serializers.CharField(required=False, allow_blank=True)
     
     def validate_sla_ids(self, value):
-        """Validate that all SLA IDs exist"""
+        """Validate that all SLA IDs exist and belong to the current tenant"""
         if not value:
             raise serializers.ValidationError("At least one SLA ID is required")
+        
+        # Get tenant_id from request context if available
+        tenant_id = None
+        if self.context and 'request' in self.context:
+            from tprm_backend.core.tenant_utils import get_tenant_id_from_request
+            tenant_id = get_tenant_id_from_request(self.context['request'])
         
         # Check if all SLAs exist
         for sla_id in value:
             try:
-                from slas.models import VendorSLA
-                VendorSLA.objects.get(sla_id=sla_id)
-            except:
-                raise serializers.ValidationError(f"SLA with ID {sla_id} not found")
+                from tprm_backend.slas.models import VendorSLA
+                
+                # Try to get the SLA, filtering by tenant_id if available
+                sla_query = VendorSLA.objects.filter(sla_id=sla_id)
+                if tenant_id:
+                    sla_query = sla_query.filter(tenant_id=tenant_id)
+                
+                sla = sla_query.first()
+                if not sla:
+                    if tenant_id:
+                        raise serializers.ValidationError(f"SLA with ID {sla_id} not found for tenant {tenant_id}")
+                    else:
+                        raise serializers.ValidationError(f"SLA with ID {sla_id} not found")
+            except serializers.ValidationError:
+                # Re-raise validation errors as-is
+                raise
+            except Exception as e:
+                # Log unexpected errors
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error validating sla_id {sla_id}: {str(e)}", exc_info=True)
+                raise serializers.ValidationError(f"Error validating SLA ID {sla_id}: {str(e)}")
         
         return value
     

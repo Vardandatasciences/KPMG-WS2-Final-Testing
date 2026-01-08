@@ -4,6 +4,7 @@ from datetime import date
 from django.contrib.auth.models import User
 from datetime import date
 import json
+from .utils.base_serializer import AutoDecryptingModelSerializer
 
 # Import all models
 from .models import (
@@ -17,7 +18,7 @@ from .models import (
 # FRAMEWORK MODULE SERIALIZERS
 # =============================================================================
 
-class FrameworkSerializer(serializers.ModelSerializer):
+class FrameworkSerializer(AutoDecryptingModelSerializer):
     policies = serializers.SerializerMethodField()
     CreatedByName = serializers.CharField(required=False, allow_blank=True)
     Reviewer = serializers.CharField(required=False, allow_blank=True)
@@ -43,7 +44,7 @@ class FrameworkSerializer(serializers.ModelSerializer):
 
 
 
-class PolicySerializer(serializers.ModelSerializer):
+class PolicySerializer(AutoDecryptingModelSerializer):
     FrameworkCategory = serializers.CharField(source='FrameworkId.Category', read_only=True)
     FrameworkName = serializers.CharField(source='FrameworkId.FrameworkName', read_only=True)
     subpolicies = serializers.SerializerMethodField()
@@ -70,7 +71,7 @@ class PolicySerializer(serializers.ModelSerializer):
         ]
 
 
-class PolicyApprovalSerializer(serializers.ModelSerializer):
+class PolicyApprovalSerializer(AutoDecryptingModelSerializer):
     ApprovedDate = serializers.DateField(read_only=True)
     PolicyId = serializers.PrimaryKeyRelatedField(source='PolicyId.PolicyId', read_only=True)
     
@@ -82,7 +83,7 @@ class PolicyApprovalSerializer(serializers.ModelSerializer):
         ]
 
 
-class ComplianceApprovalSerializer(serializers.ModelSerializer):
+class ComplianceApprovalSerializer(AutoDecryptingModelSerializer):
     ApprovedDate = serializers.DateField(read_only=True)
     PolicyId = serializers.PrimaryKeyRelatedField(source='PolicyId.PolicyId', read_only=True, allow_null=True)
     FrameworkId = serializers.SerializerMethodField()
@@ -155,7 +156,7 @@ class PolicyAllocationSerializer(serializers.Serializer):
             raise serializers.ValidationError("Invalid audit type. Must be 'Internal' or 'External'.")
 
 
-class PolicyCategorySerializer(serializers.ModelSerializer):
+class PolicyCategorySerializer(AutoDecryptingModelSerializer):
     class Meta:
         model = PolicyCategory
         fields = '__all__'  # Includes: Id, PolicyType, PolicyCategory, PolicySubCategory
@@ -165,7 +166,7 @@ class PolicyCategorySerializer(serializers.ModelSerializer):
 # SUB-POLICY MODULE SERIALIZERS
 # =============================================================================
 
-class SubPolicySerializer(serializers.ModelSerializer):
+class SubPolicySerializer(AutoDecryptingModelSerializer):
     CreatedByName = serializers.CharField(required=False, allow_blank=True)
     Status = serializers.CharField(required=False, default='Under Review')
     PermanentTemporary = serializers.CharField(required=False, default='Permanent')
@@ -205,7 +206,7 @@ class SubPolicySerializer(serializers.ModelSerializer):
 # COMPLIANCE MODULE SERIALIZERS
 # =============================================================================
 
-class ComplianceSerializer(serializers.ModelSerializer):
+class ComplianceSerializer(AutoDecryptingModelSerializer):
     Impact = serializers.CharField(max_length=50, required=True)
     Probability = serializers.CharField(max_length=50, required=True)
     ComplianceTitle = serializers.CharField(max_length=145, required=True)
@@ -282,7 +283,7 @@ class ComplianceSerializer(serializers.ModelSerializer):
         return cleaned
 
 
-class ComplianceCreateSerializer(serializers.ModelSerializer):
+class ComplianceCreateSerializer(AutoDecryptingModelSerializer):
     SubPolicyId = serializers.PrimaryKeyRelatedField(queryset=SubPolicy.objects.all())
     Identifier = serializers.CharField(max_length=50)
     IsRisk = serializers.BooleanField()
@@ -325,7 +326,7 @@ class ComplianceCreateSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 
-class ComplianceListSerializer(serializers.ModelSerializer):
+class ComplianceListSerializer(AutoDecryptingModelSerializer):
     class Meta:
         model = Compliance
         fields = [
@@ -338,7 +339,7 @@ class ComplianceListSerializer(serializers.ModelSerializer):
             'ComplianceTitle', 'Scope', 'Objective', 'BusinessUnitsCovered', 'Applicability'
         ]
 
-class ComplianceBaselineSerializer(serializers.ModelSerializer):
+class ComplianceBaselineSerializer(AutoDecryptingModelSerializer):
     FrameworkName = serializers.CharField(source='FrameworkId.FrameworkName', read_only=True)
     ComplianceTitle = serializers.CharField(source='ComplianceId.ComplianceTitle', read_only=True)
     ComplianceIdentifier = serializers.CharField(source='ComplianceId.Identifier', read_only=True)
@@ -370,7 +371,7 @@ class ComplianceBaselineSerializer(serializers.ModelSerializer):
             'Version', 'IsActive'
         ]
  
-class LastChecklistItemVerifiedSerializer(serializers.ModelSerializer):
+class LastChecklistItemVerifiedSerializer(AutoDecryptingModelSerializer):
     framework_name = serializers.CharField(source='FrameworkId.FrameworkName', read_only=True)
     
     class Meta:
@@ -383,7 +384,7 @@ class LastChecklistItemVerifiedSerializer(serializers.ModelSerializer):
 # AUDIT MODULE SERIALIZERS
 # =============================================================================
 
-class AuditSerializer(serializers.ModelSerializer):
+class AuditSerializer(AutoDecryptingModelSerializer):
     # FrameworkId is a ForeignKey, so use PrimaryKeyRelatedField - OPTIONAL (can be None)
     FrameworkId = serializers.PrimaryKeyRelatedField(
         queryset=Framework.objects.all(),
@@ -397,7 +398,7 @@ class AuditSerializer(serializers.ModelSerializer):
         fields = ['AuditId', 'Assignee', 'Auditor', 'Reviewer', 'FrameworkId', 'PolicyId', 'DueDate', 'Frequency', 'AuditType', 'Status']
 
 
-class AuditFindingSerializer(serializers.ModelSerializer):
+class AuditFindingSerializer(AutoDecryptingModelSerializer):
     ComplianceDetails = serializers.SerializerMethodField()
     compliance_name = serializers.SerializerMethodField()
     compliance_mitigation = serializers.SerializerMethodField()
@@ -433,7 +434,7 @@ class AuditFindingSerializer(serializers.ModelSerializer):
 # INCIDENT MODULE SERIALIZERS
 # =============================================================================
 
-class IncidentSerializer(serializers.ModelSerializer):
+class IncidentSerializer(AutoDecryptingModelSerializer):
     has_risk_instance = serializers.SerializerMethodField()
     # Data inventory field - stores JSON mapping field labels to data types
     data_inventory = serializers.JSONField(required=False, allow_null=True)
@@ -487,7 +488,7 @@ class IncidentSerializer(serializers.ModelSerializer):
 # RISK MODULE SERIALIZERS
 # =============================================================================
 
-class RiskSerializer(serializers.ModelSerializer):
+class RiskSerializer(AutoDecryptingModelSerializer):
     # Handle multiplier fields - convert from 1-10 range to 0.1-1.0 range for storage
     RiskMultiplierX = serializers.FloatField(required=False, allow_null=True)
     RiskMultiplierY = serializers.FloatField(required=False, allow_null=True)
@@ -603,7 +604,7 @@ class RiskSerializer(serializers.ModelSerializer):
  
 
 
-class RiskInstanceSerializer(serializers.ModelSerializer):
+class RiskInstanceSerializer(AutoDecryptingModelSerializer):
     # Add this custom field to handle any format of RiskMitigation
     RiskMitigation = serializers.JSONField(required=False, allow_null=True)
     # Use SerializerMethodField for date fields to prevent utcoffset errors
@@ -922,13 +923,13 @@ class RiskInstanceSerializer(serializers.ModelSerializer):
         return representation
 
 
-class RiskAssignmentSerializer(serializers.ModelSerializer):
+class RiskAssignmentSerializer(AutoDecryptingModelSerializer):
     class Meta:
         model = RiskAssignment
         fields = '__all__'
 
 
-class RiskWorkflowSerializer(serializers.ModelSerializer):
+class RiskWorkflowSerializer(AutoDecryptingModelSerializer):
     assigned_to = serializers.SerializerMethodField()
     
     class Meta:
@@ -946,7 +947,7 @@ class RiskWorkflowSerializer(serializers.ModelSerializer):
 # USER & SYSTEM MODULE SERIALIZERS
 # =============================================================================
 
-class UserSerializer(serializers.ModelSerializer):
+class UserSerializer(AutoDecryptingModelSerializer):
     role = serializers.SerializerMethodField()
     Role = serializers.SerializerMethodField()  # Add Role field for frontend compatibility
     DepartmentName = serializers.SerializerMethodField()  # Add department name field
@@ -1014,31 +1015,31 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 
-class GRCLogSerializer(serializers.ModelSerializer):
+class GRCLogSerializer(AutoDecryptingModelSerializer):
     class Meta:
         model = GRCLog
         fields = '__all__'
 
 
-class ExportTaskSerializer(serializers.ModelSerializer):
+class ExportTaskSerializer(AutoDecryptingModelSerializer):
     class Meta:
         model = ExportTask
         fields = '__all__'
 
 
-class NotificationSerializer(serializers.ModelSerializer):
+class NotificationSerializer(AutoDecryptingModelSerializer):
     class Meta:
         model = Notification
         fields = '__all__'
 
 
-class S3FileSerializer(serializers.ModelSerializer):
+class S3FileSerializer(AutoDecryptingModelSerializer):
     class Meta:
         model = S3File
         fields = '__all__'
 
 
-class EntitySerializer(serializers.ModelSerializer):
+class EntitySerializer(AutoDecryptingModelSerializer):
     class Meta:
         model = Entity
         fields = '__all__'  # Includes: Id, EntityName, Location
@@ -1050,7 +1051,7 @@ class EntitySerializer(serializers.ModelSerializer):
 
 from .models import ConsentConfiguration, ConsentAcceptance, ConsentWithdrawal
 
-class ConsentConfigurationSerializer(serializers.ModelSerializer):
+class ConsentConfigurationSerializer(AutoDecryptingModelSerializer):
     created_by_name = serializers.CharField(source='created_by.UserName', read_only=True)
     updated_by_name = serializers.CharField(source='updated_by.UserName', read_only=True)
     framework_id = serializers.IntegerField(source='framework.FrameworkId', read_only=True)
@@ -1065,7 +1066,7 @@ class ConsentConfigurationSerializer(serializers.ModelSerializer):
         read_only_fields = ['config_id', 'created_at', 'updated_at', 'created_by_name', 'updated_by_name', 'framework_id']
 
 
-class ConsentAcceptanceSerializer(serializers.ModelSerializer):
+class ConsentAcceptanceSerializer(AutoDecryptingModelSerializer):
     user_name = serializers.CharField(source='user.UserName', read_only=True)
     action_label = serializers.CharField(source='config.action_label', read_only=True)
     
@@ -1078,7 +1079,7 @@ class ConsentAcceptanceSerializer(serializers.ModelSerializer):
         read_only_fields = ['acceptance_id', 'accepted_at', 'user_name', 'action_label']
 
 
-class ConsentWithdrawalSerializer(serializers.ModelSerializer):
+class ConsentWithdrawalSerializer(AutoDecryptingModelSerializer):
     user_name = serializers.CharField(source='user.UserName', read_only=True)
     action_label = serializers.CharField(source='config.action_label', read_only=True, allow_null=True)
     

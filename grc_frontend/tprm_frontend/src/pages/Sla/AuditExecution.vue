@@ -458,7 +458,42 @@
           </Button>
         </template>
         
-        <!-- View Only Actions (when status is under_review or completed) -->
+        <!-- Reviewer Actions (when status is under_review and user is reviewer) -->
+        <template v-else-if="canReview">
+          <div class="flex flex-col gap-3 w-full">
+            <div class="w-full">
+              <Label for="review-comments">Review Comments *</Label>
+              <Textarea
+                id="review-comments"
+                v-model="reviewComments"
+                placeholder="Provide your review comments and feedback..."
+                :rows="4"
+                class="mt-2 w-full"
+              />
+            </div>
+            <div class="flex flex-col sm:flex-row gap-3">
+              <Button 
+                @click="handleApprove"
+                :disabled="isLoading || !reviewComments.trim()"
+                class="bg-gradient-to-r from-green-600 to-green-700 hover:shadow-hover transition-all w-full sm:w-auto"
+              >
+                <CheckCircle class="mr-2 h-4 w-4" />
+                Approve Audit
+              </Button>
+              <Button 
+                variant="destructive"
+                @click="handleReject"
+                :disabled="isLoading || !reviewComments.trim()"
+                class="w-full sm:w-auto"
+              >
+                <X class="mr-2 h-4 w-4" />
+                Reject & Request Changes
+              </Button>
+            </div>
+          </div>
+        </template>
+        
+        <!-- View Only Actions (when status is completed or other statuses) -->
         <template v-else>
           <Button
             variant="outline"
@@ -508,7 +543,8 @@ import {
   Play,
   Paperclip,
   Download,
-  Loader2
+  Loader2,
+  Trash2
 } from 'lucide-vue-next'
 import apiService from '@/services/api.js'
 import Card from '@/components/ui/card.vue'
@@ -536,11 +572,109 @@ const { showSuccess, showError, showWarning, showInfo } = useNotifications()
 // Get current user from store
 const currentUser = computed(() => store.state.auth.currentUser)
 
-// Check if current user is the assigned auditor
+// Check if current user can perform audit actions
+// User can perform actions if they are:
+// 1. The assigned auditor (auditor_id)
+// 2. The assignee (assignee_id)
+// 3. The reviewer (reviewer_id)
+// 4. OR have PerformContractAudit permission (in availableUsers list)
 const isAssignedAuditor = computed(() => {
-  if (!currentUser.value || !audit.value) return false
-  const userId = currentUser.value.id || currentUser.value.user_id || currentUser.value.userid
-  return userId && userId === audit.value.auditor_id
+  if (!currentUser.value || !audit.value) {
+    console.log('[Access Check] No currentUser or audit:', { hasUser: !!currentUser.value, hasAudit: !!audit.value })
+    return false
+  }
+  
+  // Check multiple possible user ID field names (handle different formats)
+  const userId = currentUser.value.id || 
+                 currentUser.value.user_id || 
+                 currentUser.value.userid || 
+                 currentUser.value.UserId ||  // Capital U, capital I
+                 currentUser.value.userId ||  // camelCase
+                 currentUser.value.USER_ID
+  
+  if (!userId) {
+    console.log('[Access Check] No userId found in currentUser:', currentUser.value)
+    console.log('[Access Check] Available keys:', Object.keys(currentUser.value || {}))
+    return false
+  }
+  
+  // Convert to numbers for comparison to handle string/int mismatches
+  const currentUserId = Number(userId)
+  const auditAuditorId = audit.value.auditor_id ? Number(audit.value.auditor_id) : null
+  const auditAssigneeId = audit.value.assignee_id ? Number(audit.value.assignee_id) : null
+  const auditReviewerId = audit.value.reviewer_id ? Number(audit.value.reviewer_id) : null
+  
+  // Check if user is assigned as auditor, assignee, or reviewer
+  const isAuditor = auditAuditorId !== null && currentUserId === auditAuditorId
+  const isAssignee = auditAssigneeId !== null && currentUserId === auditAssigneeId
+  const isReviewer = auditReviewerId !== null && currentUserId === auditReviewerId
+  
+  // Check if user has PerformContractAudit permission (is in availableUsers list)
+  const hasPermission = availableUsers.value.some(u => {
+    const uId = u.user_id || u.userid || u.id
+    return uId && (Number(uId) === currentUserId)
+  })
+  
+  console.log('[Access Check]', {
+    currentUserId,
+    auditAuditorId,
+    auditAssigneeId,
+    auditReviewerId,
+    isAuditor,
+    isAssignee,
+    isReviewer,
+    hasPermission,
+    availableUsersCount: availableUsers.value.length,
+    result: isAuditor || isAssignee || isReviewer || hasPermission
+  })
+  
+  // Allow access if user is any of these roles OR has PerformContractAudit permission
+  return isAuditor || isAssignee || isReviewer || hasPermission
+})
+
+// Check if current user is the assigned reviewer
+const isAssignedReviewer = computed(() => {
+  if (!currentUser.value || !audit.value) {
+    return false
+  }
+  
+  // Check multiple possible user ID field names (handle different formats)
+  const userId = currentUser.value.id || 
+                 currentUser.value.user_id || 
+                 currentUser.value.userid || 
+                 currentUser.value.UserId ||  // Capital U, capital I
+                 currentUser.value.userId ||  // camelCase
+                 currentUser.value.USER_ID
+  
+  if (!userId) {
+    return false
+  }
+  
+  // Convert to numbers for comparison to handle string/int mismatches
+  const currentUserId = Number(userId)
+  const auditReviewerId = audit.value.reviewer_id ? Number(audit.value.reviewer_id) : null
+  
+  // Check if user is assigned as reviewer
+  const isReviewer = auditReviewerId !== null && currentUserId === auditReviewerId
+  
+  console.log('[Reviewer Check]', {
+    currentUserId,
+    auditReviewerId,
+    isReviewer
+  })
+  
+  return isReviewer
+})
+
+// Check if user can review (is reviewer AND audit is under review)
+const canReview = computed(() => {
+  const canReviewResult = isAssignedReviewer.value && audit.value?.status === 'under_review'
+  console.log('[Can Review Check]', {
+    isAssignedReviewer: isAssignedReviewer.value,
+    auditStatus: audit.value?.status,
+    canReview: canReviewResult
+  })
+  return canReviewResult
 })
 
 const evidenceStorageKey = 'auditEvidenceDocuments'
@@ -559,6 +693,7 @@ const maxEvidenceFileSize = 15 * 1024 * 1024 // 15 MB
 
 const isLoading = ref(false)
 const loading = ref(true)
+const availableUsers = ref([]) // Users with PerformContractAudit permission
 const activeTab = ref('')
 const workspaceData = ref([])
 const audit = ref(null)
@@ -568,6 +703,7 @@ const reviewer = ref(null)
 const metrics = ref([])
 const questionnaires = ref([])
 const rejectionFeedback = ref(null)
+const reviewComments = ref('') // Review comments for approve/reject actions
 
 const createEmptyExtendedInfo = () => ({
   responses: {},
@@ -750,10 +886,34 @@ const loadAuditData = async () => {
       }
     }
     
-    // Load users (auditor/reviewer)
-    const usersData = await apiService.getAvailableUsers()
-    auditor.value = usersData.find(u => u.user_id === auditData.auditor_id) || null
-    reviewer.value = usersData.find(u => u.user_id === auditData.reviewer_id) || null
+    // Load users (auditor/reviewer) - these are users with PerformContractAudit permission
+    const usersResponse = await apiService.getAvailableUsers()
+    
+    // Handle different response formats
+    let usersData = []
+    if (usersResponse && usersResponse.success && Array.isArray(usersResponse.data)) {
+      usersData = usersResponse.data
+    } else if (usersResponse && Array.isArray(usersResponse)) {
+      usersData = usersResponse
+    } else if (usersResponse && usersResponse.data && Array.isArray(usersResponse.data)) {
+      usersData = usersResponse.data
+    } else {
+      console.error('Error loading users:', usersResponse?.error || usersResponse?.message || 'Unknown error')
+      usersData = []
+    }
+    
+    // Store available users for permission checking (these users have PerformContractAudit permission)
+    availableUsers.value = usersData
+    
+    // Find auditor and reviewer by matching user IDs
+    auditor.value = usersData.find(u => {
+      const userId = u.user_id || u.userid || u.id
+      return userId == auditData.auditor_id || userId === auditData.auditor_id
+    }) || null
+    reviewer.value = usersData.find(u => {
+      const userId = u.user_id || u.userid || u.id
+      return userId == auditData.reviewer_id || userId === auditData.reviewer_id
+    }) || null
     console.log('Users loaded:', { auditor: auditor.value, reviewer: reviewer.value })
     
     // Load SLA metrics
@@ -1569,6 +1729,16 @@ const performStartAudit = async () => {
 
 // Reviewer functions
 const handleApprove = async () => {
+  if (!reviewComments.value.trim()) {
+    await showWarning('Missing Comments', 'Please provide review comments before approving.', {
+      audit_id: route.params.auditId,
+      audit_title: audit.value?.title,
+      action: 'missing_review_comments'
+    })
+    PopupService.warning('Please provide review comments before approving.', 'Missing Comments')
+    return
+  }
+  
   PopupService.confirm(
     'Are you sure you want to approve this audit?',
     'Approve Audit',
@@ -1632,10 +1802,10 @@ const performApprove = async () => {
       version_number: nextReviewVersion,
       extended_information: JSON.stringify({
         approved_version: currentVersion.version_number,
-        review_comments: 'Audit approved by admin',
+        review_comments: reviewComments.value,
         approval_date: new Date().toISOString()
       }),
-      user_id: 1, // Admin user ID
+      user_id: currentUser.value?.UserId || currentUser.value?.user_id || currentUser.value?.id || 1, // Current reviewer user ID
       approval_status: 'approved',
       date_created: new Date().toISOString().split('T')[0],
       is_active: 1
@@ -1663,11 +1833,11 @@ const performApprove = async () => {
               audit_id: parseInt(auditId),
               metrics_id: metric.metric_id,
               evidence: extendedInfo.evidence?.[metric.metric_name] || '',
-              user_id: 1, // Admin user ID
+              user_id: currentUser.value?.UserId || currentUser.value?.user_id || currentUser.value?.id || 1, // Current reviewer user ID
               how_to_verify: extendedInfo.verification_methods?.[metric.metric_name] || '',
               impact_recommendations: extendedInfo.recommendations?.[metric.metric_name] || '',
               details_of_finding: extendedInfo.comments?.[metric.metric_name] || '',
-              comment: 'Audit approved by admin', // Admin's approval comment
+              comment: reviewComments.value, // Reviewer's approval comment
               check_date: new Date().toISOString().split('T')[0],
               questionnaire_responses: JSON.stringify(responsesForFinding)
             }
@@ -1696,11 +1866,11 @@ const performApprove = async () => {
               audit_id: parseInt(auditId),
               metrics_id: workspace.metric_id,
               evidence: workspace.evidence || '',
-              user_id: 1, // Admin user ID
+              user_id: currentUser.value?.UserId || currentUser.value?.user_id || currentUser.value?.id || 1, // Current reviewer user ID
               how_to_verify: workspace.verification_method || '',
               impact_recommendations: workspace.recommendations || '',
               details_of_finding: workspace.comments || '',
-              comment: 'Audit approved by admin',
+              comment: reviewComments.value, // Reviewer's approval comment
               check_date: new Date().toISOString().split('T')[0],
               questionnaire_responses: JSON.stringify(responsesForFinding)
             }
@@ -1720,7 +1890,7 @@ const performApprove = async () => {
     await apiService.updateAudit(auditId, {
       status: 'completed',
       review_status: 'approved',
-      review_comments: 'Audit approved by admin',
+      review_comments: reviewComments.value,
       completion_date: new Date().toISOString().split('T')[0]
     })
     
@@ -1754,13 +1924,21 @@ const performApprove = async () => {
 }
 
 const handleReject = async () => {
-  PopupService.comment(
-    'Please provide rejection comments and feedback for the auditor.',
-    'Reject Audit',
-    async (comments) => {
-      if (comments && comments.trim()) {
-        await performReject(comments)
-      }
+  if (!reviewComments.value.trim()) {
+    await showWarning('Missing Comments', 'Please provide review comments before rejecting.', {
+      audit_id: route.params.auditId,
+      audit_title: audit.value?.title,
+      action: 'missing_review_comments'
+    })
+    PopupService.warning('Please provide review comments before rejecting.', 'Missing Comments')
+    return
+  }
+  
+  PopupService.confirm(
+    'Are you sure you want to reject this audit? The auditor will be notified and can resubmit after addressing your feedback.',
+    'Confirm Rejection',
+    async () => {
+      await performReject(reviewComments.value)
     }
   )
 }
@@ -1822,7 +2000,7 @@ const performReject = async (comments) => {
         review_comments: comments,
         rejection_date: new Date().toISOString()
       }),
-      user_id: 1, // Admin user ID
+      user_id: currentUser.value?.UserId || currentUser.value?.user_id || currentUser.value?.id || 1, // Current reviewer user ID
       approval_status: 'rejected',
       date_created: new Date().toISOString().split('T')[0],
       is_active: 1

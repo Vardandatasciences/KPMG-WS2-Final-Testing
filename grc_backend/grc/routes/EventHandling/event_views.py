@@ -1893,13 +1893,20 @@ def get_current_user(request):
             }, status=400)
         
         user = Users.objects.get(UserId=user_id, tenant_id=tenant_id)
+        
+        # Decrypt encrypted fields using _plain properties
+        firstname_plain = getattr(user, 'FirstName_plain', None) or getattr(user, 'FirstName', None)
+        lastname_plain = getattr(user, 'LastName_plain', None) or getattr(user, 'LastName', None)
+        email_plain = getattr(user, 'email_plain', None) or getattr(user, 'Email', None)
+        username_plain = getattr(user, 'UserName_plain', None) or getattr(user, 'UserName', None)
+        
         user_data = {
             'id': user.UserId,
-            'name': f"{user.FirstName} {user.LastName}".strip(),
-            'first_name': user.FirstName,
-            'last_name': user.LastName,
-            'email': user.Email,
-            'username': user.UserName
+            'name': f"{firstname_plain or ''} {lastname_plain or ''}".strip() or username_plain or 'User',
+            'first_name': firstname_plain,
+            'last_name': lastname_plain,
+            'email': email_plain,
+            'username': username_plain
         }
         
         return Response({

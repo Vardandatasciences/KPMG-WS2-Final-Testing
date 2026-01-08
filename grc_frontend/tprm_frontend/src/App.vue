@@ -206,6 +206,25 @@ onMounted(() => {
               // Ignore navigation errors (e.g., if already navigating to the same route)
               if (err.name !== 'NavigationDuplicated') {
                 console.error('[TPRM App] Navigation error:', err)
+                // Check for syntax errors in component
+                if (err.message && (err.message.includes('Unexpected token') || err.message.includes('SyntaxError'))) {
+                  console.error('[TPRM App] ⚠️ Syntax error detected in component:', {
+                    path: normalizedPath,
+                    error: err.message,
+                    stack: err.stack
+                  })
+                  // Show error via PopupService if available
+                  try {
+                    const { PopupService } = require('@/popup/popupService')
+                    PopupService.error(
+                      `Error loading page: ${normalizedPath}\n\nThis may be due to a syntax error in the component file. Please check the browser console for details.`,
+                      'Navigation Error'
+                    )
+                  } catch (e) {
+                    // PopupService not available, just log
+                    console.error('Could not show error popup:', e)
+                  }
+                }
               }
             })
           } else {

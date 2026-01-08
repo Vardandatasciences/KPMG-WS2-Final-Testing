@@ -107,7 +107,7 @@ def get_audit_task_details(request, audit_id):
                 LEFT JOIN
                     subpolicies sp ON a.SubPolicyId = sp.SubPolicyId
                 WHERE 
-                    a.AuditId = %s AND a.tenant_id = %s
+                    a.AuditId = %s AND a.TenantId = %s
             """, [validated_audit_id, tenant_id])
             
             audit_row = cursor.fetchone()
@@ -136,7 +136,7 @@ def get_audit_task_details(request, audit_id):
                 SELECT av.Version, av.ExtractedInfo, av.Date 
                 FROM audit_version av
                 JOIN audit a ON av.AuditId = a.AuditId
-                WHERE av.AuditId = %s AND a.tenant_id = %s
+                WHERE av.AuditId = %s AND a.TenantId = %s
                 ORDER BY av.Date DESC, av.Version DESC 
                 LIMIT 1
             """, [validated_audit_id, tenant_id])
@@ -193,7 +193,7 @@ def get_audit_task_details(request, audit_id):
                     cursor.execute("""
                         SELECT DISTINCT af.ComplianceId FROM audit_findings af
                         JOIN audit a ON af.AuditId = a.AuditId
-                        WHERE af.AuditId = %s AND a.tenant_id = %s
+                        WHERE af.AuditId = %s AND a.TenantId = %s
                     """, [validated_audit_id, tenant_id])
                     
                     for finding_row in cursor.fetchall():
@@ -243,7 +243,7 @@ def get_audit_task_details(request, audit_id):
                                     Recommendation, DetailsOfFinding, MajorMinor
                                 FROM audit_findings af
                                 JOIN audit a ON af.AuditId = a.AuditId
-                                WHERE af.AuditId = %s AND a.tenant_id = %s AND af.ComplianceId = %s
+                                WHERE af.AuditId = %s AND a.TenantId = %s AND af.ComplianceId = %s
                             """, [validated_audit_id, tenant_id, compliance_id])
                             
                             finding_row = cursor.fetchone()
@@ -504,7 +504,7 @@ def get_audit_task_details(request, audit_id):
                 initial_version_data['overall_review_comments'] = ''
                 
                 # Get FrameworkId from the audit
-                cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s AND tenant_id = %s", [validated_audit_id, tenant_id])
+                cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s AND TenantId = %s", [validated_audit_id, tenant_id])
                 framework_row = cursor.fetchone()
                 framework_id = framework_row[0] if framework_row else None
                 
@@ -612,7 +612,7 @@ def save_audit_version(request, audit_id):
             cursor.execute("""
                 SELECT av.Version, av.ExtractedInfo FROM audit_version av
                 JOIN audit a ON av.AuditId = a.AuditId
-                WHERE av.AuditId = %s AND a.tenant_id = %s AND av.Version LIKE 'R%%' 
+                WHERE av.AuditId = %s AND a.TenantId = %s AND av.Version LIKE 'R%%' 
                 ORDER BY CAST(SUBSTRING(av.Version, 2) AS UNSIGNED) DESC 
                 LIMIT 1
             """, [validated_audit_id, tenant_id])
@@ -643,7 +643,7 @@ def save_audit_version(request, audit_id):
             cursor.execute("""
                 SELECT av.Version, av.ExtractedInfo FROM audit_version av
                 JOIN audit a ON av.AuditId = a.AuditId
-                WHERE av.AuditId = %s AND a.tenant_id = %s AND av.Version LIKE 'A%%' 
+                WHERE av.AuditId = %s AND a.TenantId = %s AND av.Version LIKE 'A%%' 
                 ORDER BY CAST(SUBSTRING(av.Version, 2) AS UNSIGNED) DESC 
                 LIMIT 1
             """, [validated_audit_id, tenant_id])
@@ -773,7 +773,7 @@ def save_audit_version(request, audit_id):
             cursor.execute("""
                 UPDATE audit
                 SET Comments = %s
-                WHERE AuditId = %s AND tenant_id = %s
+                WHERE AuditId = %s AND TenantId = %s
             """, [validated_data.get('overall_comments', ''), validated_audit_id, tenant_id])
             
             # Get FrameworkId from the audit
@@ -883,7 +883,7 @@ def send_audit_for_review(request, audit_id):
             cursor.execute("""
                 UPDATE audit 
                 SET Status = 'Under review'
-                WHERE AuditId = %s AND tenant_id = %s
+                WHERE AuditId = %s AND TenantId = %s
             """, [validated_audit_id, tenant_id])
             
             # Check if the update was successful

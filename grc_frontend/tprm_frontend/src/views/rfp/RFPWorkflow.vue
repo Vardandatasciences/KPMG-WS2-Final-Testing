@@ -40,9 +40,12 @@
 
 <script setup lang="ts">
 import { ref, markRaw } from 'vue'
+import { useRouter } from 'vue-router'
 import Card from '@/components_rfp/Card.vue'
 import Button from '@/components_rfp/Button.vue'
 import RFPWorkflowProgress from '@/components_rfp/ui/RFPWorkflowProgress.vue'
+
+const router = useRouter()
 
 // RFP Workflow state - determine current phase from URL
 const getCurrentPhase = () => {
@@ -79,15 +82,15 @@ const quickActions = ref([
 ])
 
 const navigateToStep = (route: string) => {
-  window.location.href = route
+  router.push(route)
 }
 
 // RFP Workflow Navigation Handlers
 const handlePhaseClick = (phase: any) => {
-  // Navigate to the phase route using window.location for MPA
+  // Navigate to the phase route using Vue Router
   if (phase.route) {
     console.log('Navigating to:', phase.route)
-    window.location.href = phase.route
+    router.push(phase.route)
   }
 }
 
@@ -96,7 +99,7 @@ const handleViewClick = (phase: any) => {
   console.log('Viewing phase:', phase.id)
   // Navigate to view mode for the phase
   if (phase.route) {
-    window.location.href = phase.route
+    router.push(phase.route)
   }
 }
 
@@ -105,7 +108,7 @@ const handleStartClick = (phase: any) => {
   console.log('Starting phase:', phase.id)
   // Navigate to the phase to start working on it
   if (phase.route) {
-    window.location.href = phase.route
+    router.push(phase.route)
   }
 }
 </script>

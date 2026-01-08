@@ -3761,9 +3761,43 @@ def get_risk_instances_with_names(request):
             columns = [col[0] for col in cursor.description]
             risk_instances_data = []
             
+            # Import decryption utilities
+            from ...utils.data_encryption import decrypt_data, is_encrypted_data
+            from ...utils.encryption_config import get_encrypted_fields_for_model
+            
+            # Get encrypted fields for RiskInstance model
+            encrypted_fields = get_encrypted_fields_for_model('RiskInstance')
+            
             for row in cursor.fetchall():
                 # Convert row to dictionary
                 instance_dict = dict(zip(columns, row))
+                
+                # Decrypt encrypted fields
+                for field_name in encrypted_fields:
+                    if field_name in instance_dict and instance_dict[field_name]:
+                        encrypted_value = instance_dict[field_name]
+                        if isinstance(encrypted_value, str) and is_encrypted_data(encrypted_value):
+                            try:
+                                instance_dict[field_name] = decrypt_data(encrypted_value)
+                            except Exception as e:
+                                print(f"Warning: Failed to decrypt {field_name}: {e}")
+                
+                # Also decrypt UserName and CreatedByName if they're encrypted
+                if 'CreatedBy' in instance_dict and instance_dict['CreatedBy']:
+                    encrypted_username = instance_dict['CreatedBy']
+                    if isinstance(encrypted_username, str) and is_encrypted_data(encrypted_username):
+                        try:
+                            instance_dict['CreatedBy'] = decrypt_data(encrypted_username)
+                        except Exception as e:
+                            print(f"Warning: Failed to decrypt CreatedBy: {e}")
+                
+                if 'CreatedByName' in instance_dict and instance_dict['CreatedByName']:
+                    created_by_name = instance_dict['CreatedByName']
+                    if isinstance(created_by_name, str) and is_encrypted_data(created_by_name):
+                        try:
+                            instance_dict['CreatedByName'] = decrypt_data(created_by_name)
+                        except Exception as e:
+                            print(f"Warning: Failed to decrypt CreatedByName: {e}")
                 
                 # Convert date objects to string to avoid utcoffset error
                 if 'MitigationDueDate' in instance_dict and instance_dict['MitigationDueDate']:

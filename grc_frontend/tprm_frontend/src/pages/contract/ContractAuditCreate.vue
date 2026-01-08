@@ -342,28 +342,64 @@ const loadData = async () => {
     }
 
     // Load available users from contract audit API
+    console.log('Fetching available users for auditor and reviewer selection...')
     const usersResponse = await contractAuditApi.getAvailableUsers()
-    if (usersResponse.success) {
+    console.log('Users response:', {
+      success: usersResponse.success,
+      hasData: !!usersResponse.data,
+      dataType: Array.isArray(usersResponse.data) ? 'array' : typeof usersResponse.data,
+      dataLength: Array.isArray(usersResponse.data) ? usersResponse.data.length : 'N/A',
+      error: usersResponse.error
+    })
+    
+    if (usersResponse.success && usersResponse.data) {
+      // Ensure data is an array
+      const usersList = Array.isArray(usersResponse.data) 
+        ? usersResponse.data 
+        : (usersResponse.data.results || [])
+      
       // Show all users for both auditor and reviewer selection
-      auditors.value = usersResponse.data
-      reviewers.value = usersResponse.data
+      auditors.value = usersList
+      reviewers.value = usersList
+      
+      console.log('Loaded users for dropdowns:', {
+        auditorsCount: auditors.value.length,
+        reviewersCount: reviewers.value.length,
+        sampleUser: usersList[0]
+      })
       
       // Automatically select current user as auditor if available
       if (currentUser.value && !selectedAuditorId.value) {
-        const currentUserId = currentUser.value?.userid || currentUser.value?.user_id
+        // Check multiple possible field names for user ID
+        const currentUserId = currentUser.value?.userid || currentUser.value?.user_id || 
+                             currentUser.value?.UserId || currentUser.value?.id ||
+                             (currentUser.value?.user && (currentUser.value.user.userid || currentUser.value.user.user_id || currentUser.value.user.UserId || currentUser.value.user.id))
+        
         if (currentUserId) {
           // Check if current user exists in the auditors list
           const currentUserInAuditors = auditors.value.find(
-            auditor => auditor.user_id == currentUserId || auditor.userid == currentUserId
+            auditor => auditor.user_id == currentUserId || 
+                      auditor.userid == currentUserId ||
+                      String(auditor.user_id) === String(currentUserId) ||
+                      String(auditor.userid) === String(currentUserId)
           )
           if (currentUserInAuditors) {
             selectedAuditorId.value = currentUserInAuditors.user_id || currentUserInAuditors.userid
             console.log('Auto-selected current user as auditor:', selectedAuditorId.value)
+          } else {
+            console.log('Current user not found in auditors list:', {
+              currentUserId,
+              availableUserIds: auditors.value.map(a => a.user_id || a.userid)
+            })
           }
+        } else {
+          console.warn('Could not extract user ID from current user:', currentUser.value)
         }
       }
     } else {
-      console.error('Error loading users:', usersResponse.error)
+      const errorMsg = usersResponse.error || usersResponse.message || 'Unknown error'
+      console.error('Error loading users:', errorMsg)
+      PopupService.warning(`Failed to load users: ${errorMsg}. Please refresh the page.`, 'Loading Error')
       auditors.value = []
       reviewers.value = []
     }
@@ -382,11 +418,18 @@ loadData()
 watch([currentUser, auditors], ([newUser, newAuditors]) => {
   // Only auto-select if no auditor is currently selected and both user and auditors are available
   if (newUser && newAuditors && newAuditors.length > 0 && !selectedAuditorId.value) {
-    const currentUserId = newUser?.userid || newUser?.user_id
+    // Check multiple possible field names for user ID
+    const currentUserId = newUser?.userid || newUser?.user_id || 
+                         newUser?.UserId || newUser?.id ||
+                         (newUser?.user && (newUser.user.userid || newUser.user.user_id || newUser.user.UserId || newUser.user.id))
+    
     if (currentUserId) {
       // Check if current user exists in the auditors list
       const currentUserInAuditors = newAuditors.find(
-        auditor => auditor.user_id == currentUserId || auditor.userid == currentUserId
+        auditor => auditor.user_id == currentUserId || 
+                  auditor.userid == currentUserId ||
+                  String(auditor.user_id) === String(currentUserId) ||
+                  String(auditor.userid) === String(currentUserId)
       )
       if (currentUserInAuditors) {
         selectedAuditorId.value = currentUserInAuditors.user_id || currentUserInAuditors.userid
@@ -499,17 +542,83 @@ const handleSubmit = async () => {
     return
   }
 
-  if (selectedAuditor.value.user_id === selectedReviewer.value.user_id) {
+  // Check if auditor and reviewer are the same - handle multiple field names
+  const auditorId = selectedAuditor.value.user_id || selectedAuditor.value.userid || 
+                   selectedAuditor.value.UserId || selectedAuditor.value.id
+  const reviewerId = selectedReviewer.value.user_id || selectedReviewer.value.userid || 
+                    selectedReviewer.value.UserId || selectedReviewer.value.id
+  
+  if (auditorId && reviewerId && (String(auditorId) === String(reviewerId))) {
     PopupService.warning('Auditor and Reviewer cannot be the same person.', 'Invalid Selection')
     return
   }
 
   loading.value = true
   try {
-    // Get current user ID for assignee_id
-    const currentUserId = currentUser.value?.userid || currentUser.value?.user_id
+    // Get current user ID for assignee_id - check multiple possible field names
+    const currentUserId = currentUser.value?.userid || currentUser.value?.user_id || 
+                         currentUser.value?.UserId || currentUser.value?.id ||
+                         (currentUser.value?.user && (currentUser.value.user.userid || currentUser.value.user.user_id || currentUser.value.user.UserId || currentUser.value.user.id))
+    
+    // Get tenant_id from multiple sources: current user object, localStorage, or JWT token
+    let tenantId = null
+    if (currentUser.value?.tenant_id) {
+      tenantId = currentUser.value.tenant_id
+    } else if (localStorage.getItem('tenant_id')) {
+      tenantId = parseInt(localStorage.getItem('tenant_id')) || localStorage.getItem('tenant_id')
+    } else {
+      // Try to extract from JWT token if available
+      const token = localStorage.getItem('session_token')
+      if (token) {
+        try {
+          const base64Url = token.split('.')[1]
+          if (base64Url) {
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+              return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+            }).join(''))
+            const payload = JSON.parse(jsonPayload)
+            if (payload.tenant_id) {
+              tenantId = payload.tenant_id
+            }
+          }
+        } catch (e) {
+          console.warn('Could not extract tenant_id from JWT token:', e)
+        }
+      }
+    }
+    
+    console.log('Current user for submit:', {
+      currentUser: currentUser.value,
+      currentUserId,
+      tenantId,
+      availableFields: currentUser.value ? Object.keys(currentUser.value) : []
+    })
+    
     if (!currentUserId) {
+      console.error('Could not extract user ID from current user:', currentUser.value)
       PopupService.error('Unable to determine current user. Please refresh the page and try again.', 'User Error')
+      loading.value = false
+      return
+    }
+    
+    if (!tenantId) {
+      console.warn('⚠️ No tenant_id found. Audit will be created without tenant_id (backend will try to get it from contract)')
+    }
+
+    // Extract auditor and reviewer IDs - handle multiple possible field names
+    const auditorId = selectedAuditor.value.user_id || selectedAuditor.value.userid || 
+                     selectedAuditor.value.UserId || selectedAuditor.value.id
+    const reviewerId = selectedReviewer.value.user_id || selectedReviewer.value.userid || 
+                      selectedReviewer.value.UserId || selectedReviewer.value.id
+    
+    if (!auditorId || !reviewerId) {
+      console.error('Could not extract auditor or reviewer ID:', {
+        auditor: selectedAuditor.value,
+        reviewer: selectedReviewer.value
+      })
+      PopupService.error('Unable to determine auditor or reviewer. Please select them again.', 'Selection Error')
+      loading.value = false
       return
     }
 
@@ -519,14 +628,22 @@ const handleSubmit = async () => {
       scope: auditScope.value || '',
       contract: selectedContract.value.contract_id,
       assignee_id: currentUserId,
-      auditor_id: selectedAuditor.value.user_id,
-      reviewer_id: selectedReviewer.value.user_id,
+      auditor_id: auditorId,
+      reviewer_id: reviewerId,
       due_date: dueDate.value,
       frequency: frequency.value || 'monthly',
       audit_type: auditType.value || 'internal',
       business_unit: 'Default Business Unit',
       role: 'Auditor',
       responsibility: 'Conduct contract audit'
+    }
+    
+    // Add tenant_id if available
+    if (tenantId) {
+      auditData.tenant_id = tenantId
+      console.log('✅ Adding tenant_id to audit data:', tenantId)
+    } else {
+      console.warn('⚠️ No tenant_id available - backend will try to get it from contract')
     }
 
     console.log('Creating contract audit:', auditData)

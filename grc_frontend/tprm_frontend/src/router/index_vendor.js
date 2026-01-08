@@ -12,6 +12,12 @@ const vendor_router = createRouter({
       redirect: '/dashboard'
     },
     {
+      path: '/login',
+      name: 'Login',
+      component: () => import('@/pages/vendor/Login.vue'),
+      meta: { public: true }
+    },
+    {
       path: '/dashboard',
       name: 'VendorDashboard',
       component: VendorDashboard,
@@ -75,13 +81,13 @@ const vendor_router = createRouter({
       path: '/approval-workflow-creator',
       name: 'ApprovalWorkflowCreator',
       component: () => import('@/pages/vendor/ApprovalWorkflowCreator.vue'),
-      meta: { requiresPermission: 'create' }
+      meta: { requiresPermission: 'submit_for_approval' }
     },
     {
       path: '/vendor-approval-workflow-creator',
       name: 'VendorApprovalWorkflowCreator',
       component: () => import('@/pages/vendor/ApprovalWorkflowCreator.vue'),
-      meta: { requiresPermission: 'create' }
+      meta: { requiresPermission: 'submit_for_approval' }
     },
     {
       path: '/my-approvals',
@@ -129,12 +135,31 @@ vendor_router.beforeEach(async (to, from, next) => {
   const isPublicRoute = publicRoutes.includes(to.path)
   
   console.log('[Vendor Router] Authentication status:', isAuthenticated)
-  console.log('[Vendor Router] Navigating to:', to.path)
+  console.log('[Vendor Router] Navigating to:', to.path, 'from:', from.path)
   console.log('[Vendor Router] Is public route:', isPublicRoute)
   
+  // Prevent redirect loops - if already on target path, just proceed
+  if (to.path === from.path) {
+    console.log('[Vendor Router] Already on target path, proceeding')
+    next()
+    return
+  }
+  
+  // Allow access to public routes without checks
+  if (isPublicRoute) {
+    console.log('[Vendor Router] Public route, allowing access')
+    next()
+    return
+  }
+  
   // If trying to access protected route without authentication
-  if (!isPublicRoute && !isAuthenticated) {
+  if (!isAuthenticated) {
     console.log('[Vendor Router] Not authenticated, redirecting to login')
+    // Prevent redirect loop: don't redirect if already coming from login
+    if (from.path === '/login') {
+      next(false) // Abort navigation
+      return
+    }
     next('/login')
     return
   }
@@ -142,13 +167,22 @@ vendor_router.beforeEach(async (to, from, next) => {
   // If trying to access login while already authenticated
   if (to.path === '/login' && isAuthenticated) {
     console.log('[Vendor Router] Already authenticated, redirecting to dashboard')
-    next('/vendor-dashboard')
+    next('/dashboard')
     return
   }
   
   // Check RBAC permissions for routes with requiresPermission meta
-  if (to.meta && to.meta.requiresPermission && isAuthenticated) {
+  if (to.meta?.requiresPermission && isAuthenticated) {
     const requiredPermission = to.meta.requiresPermission
+    
+    // Check if session token exists before making API call
+    const sessionToken = localStorage.getItem('session_token')
+    if (!sessionToken) {
+      console.warn('[Vendor Router] No session token, redirecting to login')
+      next('/login')
+      return
+    }
+    
     console.log('[Vendor Router] Checking permission:', requiredPermission)
     
     try {
@@ -157,6 +191,13 @@ vendor_router.beforeEach(async (to, from, next) => {
       
       if (!hasPermission) {
         console.warn(`[Vendor Router] User does not have ${requiredPermission} permission for vendor module`)
+        
+        // Prevent infinite redirect loop to access-denied
+        if (from.path === '/access-denied') {
+          console.log('[Vendor Router] Already on access denied, aborting navigation')
+          next(false) // Abort navigation
+          return
+        }
         
         // Store error info in sessionStorage for AccessDenied component
         sessionStorage.setItem('access_denied_error', JSON.stringify({
@@ -174,6 +215,13 @@ vendor_router.beforeEach(async (to, from, next) => {
       console.log(`[Vendor Router] User has ${requiredPermission} permission, proceeding to route`)
     } catch (error) {
       console.error('[Vendor Router] Error checking permissions:', error)
+      
+      // Prevent infinite redirect loop to access-denied
+      if (from.path === '/access-denied') {
+        console.log('[Vendor Router] Already on access denied, aborting navigation')
+        next(false) // Abort navigation
+        return
+      }
       
       // On error, redirect to access denied for security
       sessionStorage.setItem('access_denied_error', JSON.stringify({

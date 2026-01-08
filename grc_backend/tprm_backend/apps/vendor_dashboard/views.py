@@ -30,6 +30,16 @@ from tprm_backend.core.tenant_utils import (
     tenant_filter
 )
 
+# Database connection helper - Use tprm_integration database for all vendor operations
+def get_db_connection():
+    """
+    Get the correct database connection for tprm_integration database.
+    Returns 'tprm' connection if available, otherwise falls back to 'default'.
+    """
+    if 'tprm' in connections.databases:
+        return connections['tprm']
+    return connections['default']
+
 # Try to import openpyxl, but don't fail if it's not available
 try:
     import openpyxl
@@ -76,7 +86,7 @@ class ScreeningMatchRateAPIView(APIView):
             if not tenant_id:
                 return Response({'error': 'Tenant context not found'}, status=status.HTTP_403_FORBIDDEN)
 
-            with connections['default'].cursor() as cursor:
+            with get_db_connection().cursor() as cursor:
                 # Step 1: Get total vendors count from temp_vendor table
                 # MULTI-TENANCY: Filter by tenant
                 cursor.execute("SELECT COUNT(*) AS total_vendors FROM temp_vendor WHERE TenantId = %s", [tenant_id])
@@ -198,7 +208,7 @@ class QuestionnaireOverdueRateAPIView(APIView):
             if not tenant_id:
                 return Response({'error': 'Tenant context not found'}, status=status.HTTP_403_FORBIDDEN)
 
-            with connections['default'].cursor() as cursor:
+            with get_db_connection().cursor() as cursor:
                 # Step 1: Get total questionnaires count from questionnaire_assignments table
                 # MULTI-TENANCY: Filter by tenant through temp_vendor
                 cursor.execute("""
@@ -313,7 +323,7 @@ class VendorsFlaggedOFACPEPAPIView(APIView):
             if not tenant_id:
                 return Response({'error': 'Tenant context not found'}, status=status.HTTP_403_FORBIDDEN)
 
-            with connections['default'].cursor() as cursor:
+            with get_db_connection().cursor() as cursor:
                 # Step 1: Get total vendors count from temp_vendor table
                 # MULTI-TENANCY: Filter by tenant
                 cursor.execute("SELECT COUNT(*) AS total_vendors FROM temp_vendor WHERE TenantId = %s", [tenant_id])
@@ -396,7 +406,7 @@ class VendorsFlaggedOFACPEPAPIView(APIView):
                 # MULTI-TENANCY: Filter by tenant
                 cursor.execute("""
                     SELECT 
-                        DATE_FORMAT(tv.created_at, '%Y-%m') AS month,
+                        DATE_FORMAT(tv.created_at, '%%Y-%%m') AS month,
                         COUNT(DISTINCT tv.id) AS flagged_vendors_count
                     FROM temp_vendor tv
                     JOIN external_screening_results esr ON tv.id = esr.vendor_id
@@ -406,7 +416,7 @@ class VendorsFlaggedOFACPEPAPIView(APIView):
                       AND sm.match_type IN ('OFAC - sdn', 'PEP')
                       AND tv.created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
                       AND tv.TenantId = %s
-                    GROUP BY DATE_FORMAT(tv.created_at, '%Y-%m')
+                    GROUP BY DATE_FORMAT(tv.created_at, '%%Y-%%m')
                     ORDER BY month ASC
                 """, [tenant_id])
                 historical_data = cursor.fetchall()
@@ -502,7 +512,7 @@ class VendorAcceptanceTimeAPIView(APIView):
         logger.info("VendorAcceptanceTimeAPIView.get called")
         
         try:
-            with connections['default'].cursor() as cursor:
+            with get_db_connection().cursor() as cursor:
                 # Step 1: Get overall average acceptance time
                 cursor.execute("""
                     SELECT AVG(DATEDIFF(v.created_at, tv.created_at)) AS avg_acceptance_time
@@ -521,7 +531,7 @@ class VendorAcceptanceTimeAPIView(APIView):
                         v.vendor_id,
                         v.company_name,
                         DATEDIFF(v.created_at, tv.created_at) AS acceptance_days,
-                        DATE_FORMAT(v.created_at, '%Y-%m') AS approval_month
+                        DATE_FORMAT(v.created_at, '%%Y-%%m') AS approval_month
                     FROM vendors v
                     JOIN temp_vendor tv ON v.vendor_code = tv.vendor_code
                     WHERE v.status = 'APPROVED'
@@ -567,13 +577,13 @@ class VendorAcceptanceTimeAPIView(APIView):
                 # Step 4: Get monthly trend data (last 12 months)
                 cursor.execute("""
                     SELECT 
-                        DATE_FORMAT(v.created_at, '%Y-%m') AS month,
+                        DATE_FORMAT(v.created_at, '%%Y-%%m') AS month,
                         AVG(DATEDIFF(v.created_at, tv.created_at)) AS avg_acceptance_time
                     FROM vendors v
                     JOIN temp_vendor tv ON v.vendor_code = tv.vendor_code
                     WHERE v.status = 'APPROVED'
                       AND v.created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
-                    GROUP BY DATE_FORMAT(v.created_at, '%Y-%m')
+                    GROUP BY DATE_FORMAT(v.created_at, '%%Y-%%m')
                     ORDER BY month ASC
                 """)
                 monthly_trend = cursor.fetchall()
@@ -786,7 +796,7 @@ class VendorAlertsAPIView(APIView):
             if not tenant_id:
                 return Response({'error': 'Tenant context not found'}, status=status.HTTP_403_FORBIDDEN)
 
-            with connections['default'].cursor() as cursor:
+            with get_db_connection().cursor() as cursor:
                 alerts = []
                 
                 # 1. Check for vendors flagged in OFAC list this week
@@ -907,7 +917,7 @@ class VendorRegistrationCompletionRateAPIView(APIView):
         logger.info("VendorRegistrationCompletionRateAPIView.get called")
         
         try:
-            with connections['default'].cursor() as cursor:
+            with get_db_connection().cursor() as cursor:
                 # Step 1: Get total award notifications
                 cursor.execute("SELECT COUNT(*) AS total_notifications FROM rfp_award_notifications")
                 total_notifications = cursor.fetchone()[0] or 0
@@ -1019,7 +1029,7 @@ class VendorRegistrationTimeAPIView(APIView):
         logger.info("VendorRegistrationTimeAPIView.get called")
         
         try:
-            with connections['default'].cursor() as cursor:
+            with get_db_connection().cursor() as cursor:
                 # Step 1: Get average registration time (response_date to created_at)
                 cursor.execute("""
                     SELECT AVG(DATEDIFF(tv.created_at, ran.response_date)) AS avg_registration_time

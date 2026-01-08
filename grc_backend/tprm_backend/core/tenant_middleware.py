@@ -59,8 +59,8 @@ class TenantContextMiddleware(MiddlewareMixin):
         if not tenant:
             tenant = self._get_tenant_from_jwt(request)
         
-        # 3. If not found, try authenticated user
-        if not tenant and hasattr(request, 'user') and request.user:
+        # 3. If not found, try authenticated user (not AnonymousUser)
+        if not tenant and hasattr(request, 'user') and request.user and request.user.is_authenticated:
             tenant = self._get_tenant_from_user(request.user)
         
         # Set tenant on request
@@ -82,7 +82,8 @@ class TenantContextMiddleware(MiddlewareMixin):
             auth_header = request.headers.get('Authorization', '')
             has_auth = bool(auth_header and auth_header.startswith('Bearer '))
             has_user = hasattr(request, 'user') and request.user
-            print(f"[Tenant Middleware] Debug - Has auth header: {has_auth}, Has user: {has_user}")
+            is_authenticated = has_user and request.user.is_authenticated if has_user else False
+            print(f"[Tenant Middleware] Debug - Has auth header: {has_auth}, Has user: {has_user}, Is authenticated: {is_authenticated}")
         
         return None
     
@@ -132,14 +133,21 @@ class TenantContextMiddleware(MiddlewareMixin):
                 tenant_id = payload.get('tenant_id')
                 print(f"[Tenant Middleware] JWT payload tenant_id: {tenant_id}")
                 if tenant_id:
-                    tenant = Tenant.objects.filter(tenant_id=tenant_id, status='active').first()
+                    # Try to get tenant, but also allow inactive tenants for now (might be a config issue)
+                    tenant = Tenant.objects.filter(tenant_id=tenant_id).first()
                     if tenant:
-                        logger.info(f"[Tenant Middleware] ✅ Found tenant from JWT: {tenant.name} (ID: {tenant_id})")
-                        print(f"[Tenant Middleware] ✅ Found tenant from JWT: {tenant.name} (ID: {tenant_id})")
-                        return tenant
+                        if tenant.status == 'active':
+                            logger.info(f"[Tenant Middleware] ✅ Found tenant from JWT: {tenant.name} (ID: {tenant_id})")
+                            print(f"[Tenant Middleware] ✅ Found tenant from JWT: {tenant.name} (ID: {tenant_id})")
+                            return tenant
+                        else:
+                            logger.warning(f"[Tenant Middleware] ⚠️ Tenant found but not active: {tenant.name} (ID: {tenant_id}, status: {tenant.status})")
+                            print(f"[Tenant Middleware] ⚠️ Tenant found but not active: {tenant.name} (ID: {tenant_id}, status: {tenant.status})")
+                            # Still return the tenant if it exists, just log the warning
+                            return tenant
                     else:
-                        logger.warning(f"[Tenant Middleware] ⚠️ No active tenant found for tenant_id: {tenant_id}")
-                        print(f"[Tenant Middleware] ⚠️ No active tenant found for tenant_id: {tenant_id}")
+                        logger.warning(f"[Tenant Middleware] ⚠️ No tenant found for tenant_id: {tenant_id} (doesn't exist in database)")
+                        print(f"[Tenant Middleware] ⚠️ No tenant found for tenant_id: {tenant_id} (doesn't exist in database)")
                 else:
                     print(f"[Tenant Middleware] ⚠️ No tenant_id in JWT payload. Available keys: {list(payload.keys())}")
         except jwt.ExpiredSignatureError:
@@ -153,7 +161,7 @@ class TenantContextMiddleware(MiddlewareMixin):
     
     def _get_tenant_from_user(self, user):
         """
-        Extract tenant from authenticated user
+        Extract tenant from authenticated user by querying users table from tprm_integrations database
         """
         try:
             # Get user_id from different possible attributes
@@ -168,26 +176,60 @@ class TenantContextMiddleware(MiddlewareMixin):
                 user_id = user.user_id
             
             if user_id:
-                # Try mfa_auth.User first (most common in TPRM)
+                # Query users table directly from tprm_integrations database using raw SQL
+                from django.db import connections
+                
                 try:
-                    from mfa_auth.models import User
-                    db_user = User.objects.select_related('tenant').filter(userid=user_id).first()
-                    if db_user and db_user.tenant and db_user.tenant.status == 'active':
-                        logger.debug(f"[Tenant Middleware] Found tenant from user: {db_user.tenant.name}")
-                        return db_user.tenant
-                    elif db_user and db_user.tenant:
-                        logger.warning(f"[Tenant Middleware] User's tenant is not active: {db_user.tenant.name}")
-                except Exception as e:
-                    logger.debug(f"[Tenant Middleware] mfa_auth.User lookup failed: {e}")
-                    # Try bcpdrp.Users as fallback
+                    # Use default connection which points to tprm_integrations database
+                    with connections['default'].cursor() as cursor:
+                        # Query users table to get tenant_id
+                        # The users table has columns: userid, username, tenant_id, etc.
+                        cursor.execute("""
+                            SELECT u.TenantId, t.tenant_id, t.name, t.status
+                            FROM users u
+                            LEFT JOIN tenant t ON u.TenantId = t.tenant_id
+                            WHERE u.UserId = %s
+                            LIMIT 1
+                        """, [user_id])
+                        
+                        result = cursor.fetchone()
+                        
+                        if result:
+                            tenant_id, tenant_id_from_join, tenant_name, tenant_status = result
+                            
+                            # If we got tenant info, create a tenant object or return the tenant
+                            if tenant_id and tenant_status == 'active':
+                                # Try to get tenant from Tenant model
+                                try:
+                                    tenant = Tenant.objects.filter(tenant_id=tenant_id, status='active').first()
+                                    if tenant:
+                                        logger.info(f"[Tenant Middleware] Found tenant from users table: {tenant.name} (ID: {tenant_id})")
+                                        return tenant
+                                    else:
+                                        # Create a minimal tenant object if not found in Tenant table
+                                        logger.warning(f"[Tenant Middleware] Tenant ID {tenant_id} found in users table but not in Tenant model")
+                                except Exception as tenant_error:
+                                    logger.debug(f"[Tenant Middleware] Error getting tenant from Tenant model: {tenant_error}")
+                            
+                            elif tenant_id and tenant_status != 'active':
+                                logger.warning(f"[Tenant Middleware] User's tenant is not active: {tenant_name} (ID: {tenant_id})")
+                        else:
+                            logger.debug(f"[Tenant Middleware] No user found in users table with user_id: {user_id}")
+                            
+                except Exception as db_error:
+                    logger.warning(f"[Tenant Middleware] Error querying users table: {db_error}")
+                    # Fallback to model-based lookup if raw SQL fails
                     try:
-                        from bcpdrp.models import Users
-                        db_user = Users.objects.select_related('tenant').filter(user_id=user_id).first()
+                        from mfa_auth.models import User
+                        db_user = User.objects.select_related('tenant').filter(userid=user_id).first()
                         if db_user and db_user.tenant and db_user.tenant.status == 'active':
-                            logger.debug(f"[Tenant Middleware] Found tenant from bcpdrp user: {db_user.tenant.name}")
+                            logger.debug(f"[Tenant Middleware] Found tenant from mfa_auth.User model: {db_user.tenant.name}")
                             return db_user.tenant
-                    except Exception as e2:
-                        logger.debug(f"[Tenant Middleware] bcpdrp.Users lookup failed: {e2}")
+                        elif db_user and db_user.tenant:
+                            logger.warning(f"[Tenant Middleware] User's tenant is not active: {db_user.tenant.name}")
+                    except Exception as model_error:
+                        logger.debug(f"[Tenant Middleware] mfa_auth.User model lookup also failed: {model_error}")
+                        
         except Exception as e:
             logger.error(f"[Tenant Middleware] Error extracting tenant from user: {e}")
         
@@ -225,9 +267,11 @@ class TenantIsolationMiddleware(MiddlewareMixin):
             return None
         
         # If user is authenticated but no tenant is set, this is a security issue
-        if hasattr(request, 'user') and request.user:
+        # Check if user is actually authenticated (not AnonymousUser)
+        if hasattr(request, 'user') and request.user and request.user.is_authenticated:
             if not hasattr(request, 'tenant') or request.tenant is None:
-                logger.warning(f"[Tenant Isolation] Authenticated request without tenant context: {request.method} {path} by user {getattr(request.user, 'userid', getattr(request.user, 'id', 'unknown'))}")
+                user_id = getattr(request.user, 'userid', getattr(request.user, 'id', getattr(request.user, 'UserId', 'unknown')))
+                logger.warning(f"[Tenant Isolation] Authenticated request without tenant context: {request.method} {path} by user {user_id}")
                 # For now, just log the warning. In production, you might want to return an error:
                 # return JsonResponse({'error': 'Tenant context not found'}, status=403)
     

@@ -3296,22 +3296,43 @@ onMounted(async () => {
   
   try {
     // Load vendors, users, and legal reviewers in parallel
-    const [vendorsResponse, usersResponse, legalReviewersResponse] = await Promise.all([
-      contractsApi.getVendors(),
-      contractsApi.getUsers(),
-      contractsApi.getLegalReviewers()
+    // Use Promise.allSettled to handle individual failures gracefully
+    const [vendorsResult, usersResult, legalReviewersResult] = await Promise.allSettled([
+      contractsApi.getVendors().catch(err => {
+        console.error('Error fetching vendors:', err)
+        return { success: false, error: err.message }
+      }),
+      contractsApi.getUsers().catch(err => {
+        console.error('Error fetching users:', err)
+        return { success: false, error: err.message }
+      }),
+      contractsApi.getLegalReviewers().catch(err => {
+        console.error('Error fetching legal reviewers:', err)
+        return { success: false, error: err.message }
+      })
     ])
     
-    if (vendorsResponse.success) {
-      vendors.value = vendorsResponse.data
+    // Handle vendors response
+    if (vendorsResult.status === 'fulfilled' && vendorsResult.value?.success) {
+      vendors.value = vendorsResult.value.data
+    } else {
+      console.warn('Failed to load vendors:', vendorsResult.reason || vendorsResult.value?.error)
     }
     
-    if (usersResponse.success) {
-      users.value = usersResponse.data
+    // Handle users response
+    if (usersResult.status === 'fulfilled' && usersResult.value?.success) {
+      users.value = usersResult.value.data
+      console.log('✅ Loaded users:', users.value.length)
+    } else {
+      console.warn('Failed to load users:', usersResult.reason || usersResult.value?.error)
     }
     
-    if (legalReviewersResponse.success) {
-      legalReviewers.value = legalReviewersResponse.data
+    // Handle legal reviewers response
+    if (legalReviewersResult.status === 'fulfilled' && legalReviewersResult.value?.success) {
+      legalReviewers.value = legalReviewersResult.value.data
+      console.log('✅ Loaded legal reviewers:', legalReviewers.value.length)
+    } else {
+      console.warn('Failed to load legal reviewers:', legalReviewersResult.reason || legalReviewersResult.value?.error)
     }
     
     // After loading all data, check if we're returning from preview page or OCR and restore form data

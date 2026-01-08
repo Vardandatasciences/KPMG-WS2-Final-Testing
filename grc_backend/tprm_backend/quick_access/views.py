@@ -44,36 +44,111 @@ class JWTAuthentication(BaseAuthentication):
             user_id = payload.get('user_id')
             
             if user_id:
+                # First try to use User model if available
                 try:
                     from mfa_auth.models import User
                     user = User.objects.get(userid=user_id)
                     # Add is_authenticated attribute for DRF compatibility
                     user.is_authenticated = True
+                    logger.info(f"[Quick Access JWT Auth] User authenticated via model: {user.username}")
                     return (user, token)
                 except ImportError:
-                    # If User model import fails, create a mock user
-                    logger.warning(f"User model import failed, creating mock user for user_id: {user_id}")
-                    class MockUser:
-                        def __init__(self, user_id):
-                            self.userid = user_id
-                            self.username = f"user_{user_id}"
-                            self.is_authenticated = True
-                    return (MockUser(user_id), token)
-                except Exception as db_error:
-                    # Handle database connection errors and DoesNotExist gracefully
-                    error_str = str(db_error).lower()
-                    if 'does not exist' in error_str or 'matching query does not exist' in error_str:
-                        # User not found in database, create a mock user
-                        logger.warning(f"User {user_id} not found in database, creating mock user")
-                        class MockUser:
-                            def __init__(self, user_id):
-                                self.userid = user_id
-                                self.username = f"user_{user_id}"
-                                self.is_authenticated = True
-                        return (MockUser(user_id), token)
-                    else:
-                        # Re-raise other database errors
-                        raise
+                    # If User model import fails, query users table directly
+                    logger.info(f"[Quick Access JWT Auth] User model import failed, querying users table directly for user_id: {user_id}")
+                    from django.db import connections
+                    
+                    try:
+                        with connections['default'].cursor() as cursor:
+                            # Query users table to get user information
+                            # Match the pattern from notifications/views.py
+                            cursor.execute("""
+                                SELECT UserId, UserName, Email, FirstName, LastName
+                                FROM users
+                                WHERE UserId = %s OR userid = %s OR id = %s OR user_id = %s
+                                LIMIT 1
+                            """, [user_id, user_id, user_id, user_id])
+                            
+                            result = cursor.fetchone()
+                            
+                            if result:
+                                # Create a user-like object from database result
+                                # Map capitalized column names to variables
+                                userid, username, email, first_name, last_name = result
+                                
+                                class DatabaseUser:
+                                    def __init__(self, userid, username, email, first_name, last_name):
+                                        self.userid = userid
+                                        self.id = userid  # For compatibility
+                                        self.username = username or f"user_{userid}"
+                                        self.email = email or ''
+                                        self.first_name = first_name or ''
+                                        self.last_name = last_name or ''
+                                        self.is_authenticated = True
+                                
+                                user = DatabaseUser(userid, username, email, first_name, last_name)
+                                logger.info(f"[Quick Access JWT Auth] Successfully loaded user from users table: {username} (ID: {userid})")
+                                return (user, token)
+                            else:
+                                # User not found in database
+                                logger.warning(f"[Quick Access JWT Auth] User {user_id} not found in users table")
+                                return None
+                                
+                    except Exception as db_error:
+                        # Handle database connection errors gracefully
+                        error_str = str(db_error).lower()
+                        if 'unknown server host' in error_str or '11001' in error_str or '2005' in error_str:
+                            logger.warning(f"[Quick Access JWT Auth] Database connection error: {db_error}")
+                            return None
+                        else:
+                            # Re-raise other database errors
+                            logger.error(f"[Quick Access JWT Auth] Error querying users table: {db_error}")
+                            raise
+                except Exception as model_error:
+                    # If User model lookup fails, try querying users table directly
+                    logger.info(f"[Quick Access JWT Auth] User model lookup failed: {model_error}, querying users table directly")
+                    from django.db import connections
+                    
+                    try:
+                        with connections['default'].cursor() as cursor:
+                            # Query users table to get user information
+                            # Match the pattern from notifications/views.py
+                            cursor.execute("""
+                                SELECT UserId, UserName, Email, FirstName, LastName
+                                FROM users
+                                WHERE UserId = %s OR userid = %s OR id = %s OR user_id = %s
+                                LIMIT 1
+                            """, [user_id, user_id, user_id, user_id])
+                            
+                            result = cursor.fetchone()
+                            
+                            if result:
+                                userid, username, email, first_name, last_name = result
+                                
+                                class DatabaseUser:
+                                    def __init__(self, userid, username, email, first_name, last_name):
+                                        self.userid = userid
+                                        self.id = userid
+                                        self.username = username or f"user_{userid}"
+                                        self.email = email or ''
+                                        self.first_name = first_name or ''
+                                        self.last_name = last_name or ''
+                                        self.is_authenticated = True
+                                
+                                user = DatabaseUser(userid, username, email, first_name, last_name)
+                                logger.info(f"[Quick Access JWT Auth] Successfully loaded user from users table: {username} (ID: {userid})")
+                                return (user, token)
+                            else:
+                                logger.warning(f"[Quick Access JWT Auth] User {user_id} not found in users table")
+                                return None
+                                
+                    except Exception as db_error:
+                        error_str = str(db_error).lower()
+                        if 'unknown server host' in error_str or '11001' in error_str or '2005' in error_str:
+                            logger.warning(f"[Quick Access JWT Auth] Database connection error: {db_error}")
+                            return None
+                        else:
+                            logger.error(f"[Quick Access JWT Auth] Error querying users table: {db_error}")
+                            raise
         except jwt.ExpiredSignatureError:
             logger.warning("JWT token expired")
             return None

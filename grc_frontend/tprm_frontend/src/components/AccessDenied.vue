@@ -52,32 +52,28 @@
           If you need access to this page, please contact your system administrator.
         </p>
       </div>
+      
+      <!-- Request Access Button -->
+      <div class="mt-6">
+        <Button 
+          @click="requestAccess"
+          :disabled="isRequesting || requestSubmitted"
+          variant="default"
+          class="w-full"
+        >
+          <span v-if="isRequesting">Submitting...</span>
+          <span v-else-if="requestSubmitted">Request Submitted</span>
+          <span v-else>Request Access</span>
+        </Button>
+      </div>
+      
+      <!-- Success/Error Message -->
+      <div v-if="message" class="mt-4">
+        <p :class="['text-sm p-3 rounded', messageType === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800']">
+          {{ message }}
+        </p>
+      </div>
     </div>
-    
-    <!-- Title -->
-    <h1 class="access-denied-title">Access Denied</h1>
-    
-    <!-- Description -->
-    <p class="error-message">
-      You do not have permission to view this page.<br>
-      Please check your credentials and try again.<br>
-      Error Code: 403
-    </p>
-    
-    <!-- Request Access Button -->
-    <button 
-      class="request-access-btn" 
-      @click="requestAccess"
-      :disabled="isRequesting || requestSubmitted"
-      @mousedown="console.log('🔵 [AccessDenied] Button mousedown event')"
-    >
-      <span v-if="isRequesting">Submitting...</span>
-      <span v-else-if="requestSubmitted">Request Submitted</span>
-      <span v-else>Request Access</span>
-    </button>
-    
-    <!-- Success/Error Message -->
-    <p v-if="message" :class="['message', messageType]">{{ message }}</p>
   </div>
 </template>
 
@@ -85,15 +81,45 @@
 import { API_ENDPOINTS, API_CONFIG, getAuthToken } from '../config/api.js'
 import { getCurrentUserId } from '../utils/session.js'
 import axios from 'axios'
+import { Button } from '@/components/ui/button'
+
+import { ShieldX, ArrowLeft, Home, Mail } from 'lucide-vue-next'
+import Button from './ui/button.vue'
 
 export default {
   name: 'AccessDenied',
+  components: {
+    ShieldX,
+    ArrowLeft,
+    Home,
+    Mail,
+    Button
+  },
   data() {
     return {
       isRequesting: false,
       requestSubmitted: false,
       message: '',
       messageType: 'success' // 'success' or 'error'
+    }
+  },
+  computed: {
+    errorInfo() {
+      try {
+        const accessDeniedInfo = sessionStorage.getItem('access_denied_error')
+        if (accessDeniedInfo) {
+          return JSON.parse(accessDeniedInfo)
+        }
+      } catch (e) {
+        console.error('Error parsing access denied info:', e)
+      }
+      return {
+        message: 'You do not have permission to access this page.',
+        code: '403',
+        permission: null,
+        permissionRequired: null,
+        path: null
+      }
     }
   },
   mounted() {

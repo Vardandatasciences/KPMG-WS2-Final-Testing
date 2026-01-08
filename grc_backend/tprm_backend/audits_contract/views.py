@@ -144,6 +144,110 @@ class PerformContractAuditPermission(BasePermission):
         return has_permission
 
 
+class ContractAuditListPermission(BasePermission):
+    """Permission class for contract audit list view.
+    Allows authenticated users to view audits (GET), but requires PerformContractAudit for create (POST).
+    """
+    def has_permission(self, request, view):
+        # First check if user is authenticated
+        if not (request.user and hasattr(request.user, 'userid') and getattr(request.user, 'is_authenticated', False)):
+            return False
+        
+        # Get user_id
+        user_id = getattr(request.user, 'userid', None)
+        if not user_id:
+            # Try to get from id attribute
+            user_id = getattr(request.user, 'id', None)
+        
+        if not user_id:
+            return False
+        
+        # For GET requests (list/view), allow any authenticated user
+        # The queryset filtering will ensure they only see audits they're assigned to
+        if request.method in ['GET', 'HEAD', 'OPTIONS']:
+            return True
+        
+        # For POST requests (create), require PerformContractAudit permission
+        if request.method == 'POST':
+            from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
+            has_permission = RBACTPRMUtils.check_contract_permission(user_id, 'PerformContractAudit')
+            
+            if not has_permission:
+                logger.warning(f"[RBAC TPRM] User {user_id} denied PerformContractAudit access for POST")
+            
+            return has_permission
+        
+        # For other methods, require permission
+        from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
+        return RBACTPRMUtils.check_contract_permission(user_id, 'PerformContractAudit')
+
+
+class ContractAuditDetailPermission(BasePermission):
+    """Permission class for contract audit detail view.
+    Allows authenticated users to view audits (GET) they're assigned to, but requires PerformContractAudit for update/delete.
+    """
+    def has_permission(self, request, view):
+        # First check if user is authenticated
+        if not (request.user and hasattr(request.user, 'userid') and getattr(request.user, 'is_authenticated', False)):
+            return False
+        
+        # Get user_id
+        user_id = getattr(request.user, 'userid', None)
+        if not user_id:
+            # Try to get from id attribute
+            user_id = getattr(request.user, 'id', None)
+        
+        if not user_id:
+            return False
+        
+        # For GET requests (view), check if user is assigned to the audit
+        if request.method in ['GET', 'HEAD', 'OPTIONS']:
+            # We'll check object-level permission in has_object_permission
+            return True
+        
+        # For PUT/PATCH/DELETE requests, require PerformContractAudit permission
+        if request.method in ['PUT', 'PATCH', 'DELETE']:
+            from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
+            has_permission = RBACTPRMUtils.check_contract_permission(user_id, 'PerformContractAudit')
+            
+            if not has_permission:
+                logger.warning(f"[RBAC TPRM] User {user_id} denied PerformContractAudit access for {request.method}")
+            
+            return has_permission
+        
+        # For other methods, require permission
+        from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
+        return RBACTPRMUtils.check_contract_permission(user_id, 'PerformContractAudit')
+    
+    def has_object_permission(self, request, view, obj):
+        """Check if user can access this specific audit object"""
+        # Get user_id
+        user_id = getattr(request.user, 'userid', None)
+        if not user_id:
+            user_id = getattr(request.user, 'id', None)
+        
+        if not user_id:
+            return False
+        
+        # For GET requests, allow if user is assignee, auditor, or reviewer
+        if request.method in ['GET', 'HEAD', 'OPTIONS']:
+            is_assigned = (
+                (obj.assignee_id and obj.assignee_id == user_id) or
+                (obj.auditor_id and obj.auditor_id == user_id) or
+                (obj.reviewer_id and obj.reviewer_id == user_id)
+            )
+            if is_assigned:
+                return True
+            
+            # Also allow if user has PerformContractAudit permission
+            from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
+            return RBACTPRMUtils.check_contract_permission(user_id, 'PerformContractAudit')
+        
+        # For update/delete, require PerformContractAudit permission
+        from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
+        return RBACTPRMUtils.check_contract_permission(user_id, 'PerformContractAudit')
+
+
 class JWTAuthentication(BaseAuthentication):
     """Custom JWT authentication class for DRF"""
     def authenticate(self, request):
@@ -202,7 +306,7 @@ class ContractAuditListView(generics.ListCreateAPIView):
     """
     queryset = ContractAudit.objects.select_related('contract').all()
     authentication_classes = [JWTAuthentication]
-    permission_classes = [PerformContractAuditPermission]
+    permission_classes = [ContractAuditListPermission]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['status', 'audit_type', 'frequency', 'auditor_id', 'reviewer_id', 'contract']
     search_fields = ['title', 'scope', 'contract__contract_title']
@@ -222,6 +326,10 @@ class ContractAuditListView(generics.ListCreateAPIView):
         if hasattr(self.request, 'user') and hasattr(self.request.user, 'userid'):
             current_user_id = self.request.user.userid
             
+            # Check if user has PerformContractAudit permission
+            from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
+            has_permission = RBACTPRMUtils.check_contract_permission(current_user_id, 'PerformContractAudit')
+            
             # Only apply user-based filtering if no explicit user filters are provided
             # This allows admins to see all audits when they explicitly filter
             has_explicit_user_filter = any([
@@ -230,14 +338,17 @@ class ContractAuditListView(generics.ListCreateAPIView):
                 self.request.query_params.get('assignee_id')
             ])
             
-            # If no explicit user filters, show audits where user is assignee, auditor, or reviewer
-            # This ensures reviewers can see audits assigned to them
-            if not has_explicit_user_filter:
+            # If user has PerformContractAudit permission, show all audits (no user filtering)
+            # Otherwise, show only audits where user is assignee, auditor, or reviewer
+            if not has_explicit_user_filter and not has_permission:
                 queryset = queryset.filter(
                     Q(assignee_id=current_user_id) |
                     Q(auditor_id=current_user_id) |
                     Q(reviewer_id=current_user_id)
                 )
+                logger.info(f"[Contract Audit List] Filtered queryset for user {current_user_id} (no permission) - showing only assigned audits")
+            elif has_permission:
+                logger.info(f"[Contract Audit List] User {current_user_id} has PerformContractAudit permission - showing all audits")
         
         return queryset
     
@@ -246,10 +357,90 @@ class ContractAuditListView(generics.ListCreateAPIView):
             return ContractAuditCreateSerializer
         return ContractAuditListSerializer
     
+    def list(self, request, *args, **kwargs):
+        """Override list method to provide better response format and logging."""
+        try:
+            # Get the filtered queryset
+            queryset = self.filter_queryset(self.get_queryset())
+            
+            # Log queryset count for debugging
+            queryset_count = queryset.count()
+            logger.info(f"[Contract Audit List] Queryset count: {queryset_count} for user {getattr(request.user, 'userid', 'unknown')}")
+            
+            # Get current user ID for logging
+            current_user_id = None
+            if hasattr(request, 'user') and hasattr(request.user, 'userid'):
+                current_user_id = request.user.userid
+            
+            # Log some sample audit IDs if any exist
+            if queryset_count > 0:
+                sample_audits = queryset[:5].values('audit_id', 'title', 'assignee_id', 'auditor_id', 'reviewer_id', 'status')
+                logger.info(f"[Contract Audit List] Sample audits: {list(sample_audits)}")
+            
+            # Paginate the queryset
+            page = self.paginate_queryset(queryset)
+            if page is not None:
+                serializer = self.get_serializer(page, many=True)
+                response_data = self.get_paginated_response(serializer.data)
+                logger.info(f"[Contract Audit List] Returning paginated response with {len(serializer.data)} audits")
+                return response_data
+            
+            # If no pagination, return all results
+            serializer = self.get_serializer(queryset, many=True)
+            logger.info(f"[Contract Audit List] Returning non-paginated response with {len(serializer.data)} audits")
+            
+            # Return in format expected by frontend
+            return Response({
+                'data': serializer.data,
+                'results': serializer.data,  # Also include 'results' for compatibility
+                'count': len(serializer.data)
+            })
+            
+        except Exception as e:
+            logger.error(f"[Contract Audit List] Error in list method: {e}")
+            import traceback
+            logger.error(f"[Contract Audit List] Traceback: {traceback.format_exc()}")
+            return super().list(request, *args, **kwargs)
+    
     def perform_create(self, serializer):
         """MULTI-TENANCY: Set tenant_id when creating audit"""
-        tenant_id = get_tenant_id_from_request(self.request)
-        serializer.save(tenant_id=tenant_id)
+        # Priority order for tenant_id:
+        # 1. From request data (explicitly sent from frontend)
+        # 2. From request context (JWT token, etc.)
+        # 3. From the contract
+        tenant_id = None
+        
+        # First, check if tenant_id is in the validated data (sent from frontend)
+        if 'tenant_id' in serializer.validated_data:
+            tenant_id = serializer.validated_data.get('tenant_id')
+            logger.info(f"Using tenant_id from request data: {tenant_id}")
+        
+        # If not in request data, try to get from request context
+        if not tenant_id:
+            tenant_id = get_tenant_id_from_request(self.request)
+            if tenant_id:
+                logger.info(f"Using tenant_id from request context: {tenant_id}")
+        
+        # If still not found, try to get tenant_id from the contract
+        if not tenant_id:
+            contract_id = serializer.validated_data.get('contract')
+            if contract_id:
+                try:
+                    contract = VendorContract.objects.get(contract_id=contract_id)
+                    tenant_id = contract.tenant_id
+                    logger.info(f"Using tenant_id from contract {contract_id}: {tenant_id}")
+                except VendorContract.DoesNotExist:
+                    logger.warning(f"Contract {contract_id} not found, cannot get tenant_id")
+                except Exception as e:
+                    logger.warning(f"Error getting tenant_id from contract: {e}")
+        
+        # Save with tenant_id if available
+        if tenant_id:
+            serializer.save(tenant_id=tenant_id)
+            logger.info(f"✅ Created audit with tenant_id: {tenant_id}")
+        else:
+            logger.warning("⚠️ No tenant_id available, creating audit without tenant_id (fallback)")
+            serializer.save()
     
     def create(self, request, *args, **kwargs):
         """Override create method to provide better error handling."""
@@ -270,7 +461,7 @@ class ContractAuditDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
     queryset = ContractAudit.objects.all()
     authentication_classes = [JWTAuthentication]
-    permission_classes = [PerformContractAuditPermission]
+    permission_classes = [ContractAuditDetailPermission]
     
     def get_queryset(self):
         """MULTI-TENANCY: Filter audits by tenant"""
@@ -1382,8 +1573,8 @@ def templates_by_term(request):
     matching the given term_category or term_id.
     """
     try:
-        from bcpdrp.models import QuestionnaireTemplate
-        from rbac.models import RBACTPRM
+        from tprm_backend.bcpdrp.models import QuestionnaireTemplate
+        from tprm_backend.rbac.models import RBACTPRM
         
         term_category = request.query_params.get('term_category', None)
         term_title = request.query_params.get('term_title', None)
@@ -1445,12 +1636,18 @@ def templates_by_term(request):
                 'count': 0
             })
         
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        
         # Find matching templates - show templates created by Admin users OR current user
+        # MULTI-TENANCY: Filter by tenant_id
         templates = QuestionnaireTemplate.objects.filter(
             module_type='CONTRACT',
             is_active=True,
             created_by__in=visible_user_ids
         )
+        if tenant_id:
+            templates = templates.filter(tenant_id=tenant_id)
         
         matching_templates = []
         term_id_str = str(term_id) if term_id else None
@@ -1459,9 +1656,11 @@ def templates_by_term(request):
         matching_term_ids_by_category = []
         if term_category:
             try:
-                matching_term_ids_by_category = list(ContractTerm.objects.filter(
-                    term_category__iexact=term_category
-                ).values_list('term_id', flat=True))
+                # MULTI-TENANCY: Filter by tenant_id
+                term_query = ContractTerm.objects.filter(term_category__iexact=term_category)
+                if tenant_id:
+                    term_query = term_query.filter(tenant_id=tenant_id)
+                matching_term_ids_by_category = list(term_query.values_list('term_id', flat=True))
                 logger.info(f"Found {len(matching_term_ids_by_category)} terms with category '{term_category}'")
             except Exception as e:
                 logger.debug(f"Error fetching terms by category: {e}")
@@ -1605,13 +1804,20 @@ def templates_by_term(request):
 def template_questions(request, template_id):
     """Get questions from a specific questionnaire template."""
     try:
-        from bcpdrp.models import QuestionnaireTemplate
+        from tprm_backend.bcpdrp.models import QuestionnaireTemplate
+        
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
         
         try:
-            template = QuestionnaireTemplate.objects.get(
+            # MULTI-TENANCY: Filter by tenant_id
+            template_query = QuestionnaireTemplate.objects.filter(
                 template_id=template_id,
                 module_type='CONTRACT'
             )
+            if tenant_id:
+                template_query = template_query.filter(tenant_id=tenant_id)
+            template = template_query.get()
         except QuestionnaireTemplate.DoesNotExist:
             return Response(
                 {'error': f'Template with ID {template_id} not found'},
@@ -1654,47 +1860,126 @@ def template_questions(request, template_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('PerformContractAudit')
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request (optional, won't fail if not found)
 def available_users(request):
-    """Get users with PerformContractAudit permission for auditor and reviewer assignment."""
+    """Get users with PerformContractAudit permission for auditor and reviewer assignment.
+    MULTI-TENANCY: Filters users by tenant when available, falls back to all users if tenant not found
+    """
     try:
-        # Import required models
-        from mfa_auth.models import User
-        from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
+        # MULTI-TENANCY: Get tenant_id from request (optional - function works without it)
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            logger.info("Tenant ID not found for available_users, proceeding without tenant filter (fallback mode)")
+            # Proceed without tenant filtering as fallback - this allows the function to work even if tenant is not set
         
-        # Get all active users (filter by is_active_raw which can be 'Y', 'YES', '1', 'TRUE')
-        all_users = User.objects.filter(
-            is_active_raw__in=['Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true']
-        ).order_by('userid')
-        
-        logger.info(f"Found {all_users.count()} active users in database")
-        
-        # Filter users who have PerformContractAudit permission
+        # Import required models with error handling
         users_with_permission = []
-        for user in all_users:
-            user_id = user.userid
+        try:
+            from tprm_backend.mfa_auth.models import User
+            from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
+            logger.info("Successfully imported User model and RBACTPRMUtils")
             
-            # Check if user has PerformContractAudit permission
-            has_permission = RBACTPRMUtils.check_contract_permission(user_id, 'PerformContractAudit')
+            # Get all active users (filter by is_active_raw which can be 'Y', 'YES', '1', 'TRUE')
+            # MULTI-TENANCY: Try filtering by tenant_id first
+            try:
+                if tenant_id:
+                    all_users = User.objects.filter(
+                        is_active_raw__in=['Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true'],
+                        tenant_id=tenant_id
+                    ).order_by('userid')
+                    logger.info(f"Filtered users by tenant_id={tenant_id}")
+                else:
+                    all_users = User.objects.filter(
+                        is_active_raw__in=['Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true']
+                    ).order_by('userid')
+                    logger.info("Using all active users (no tenant filter)")
+            except Exception as filter_error:
+                logger.warning(f"Filtering by tenant_id failed: {filter_error}, trying without tenant filter")
+                all_users = User.objects.filter(
+                    is_active_raw__in=['Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true']
+                ).order_by('userid')
+                logger.info("Using all active users (fallback)")
             
-            # Include user if they have PerformContractAudit permission
-            if has_permission:
-                full_name = f"{user.first_name} {user.last_name}".strip()
-                display_name = full_name if full_name else user.username
+            logger.info(f"Found {all_users.count()} active users in database")
+            
+            # Filter users who have PerformContractAudit permission
+            for user in all_users:
+                user_id = user.userid
                 
-                user_data = {
-                    'user_id': user_id,
-                    'username': user.username,
-                    'name': display_name,
-                    'email': user.email or f"user{user_id}@example.com",
-                    'role': 'auditor',  # Default role for audit users
-                    'department': getattr(user, 'department', 'Unknown'),
-                }
-                users_with_permission.append(user_data)
-                logger.info(f"User with PerformContractAudit permission: {user_data}")
-        
-        logger.info(f"Returning {len(users_with_permission)} users with PerformContractAudit permission to frontend")
+                # Check if user has PerformContractAudit permission
+                has_permission = RBACTPRMUtils.check_contract_permission(user_id, 'PerformContractAudit')
+                
+                # Include user if they have PerformContractAudit permission
+                if has_permission:
+                    full_name = f"{user.first_name} {user.last_name}".strip()
+                    display_name = full_name if full_name else user.username
+                    
+                    user_data = {
+                        'user_id': user_id,
+                        'username': user.username,
+                        'name': display_name,
+                        'email': user.email or f"user{user_id}@example.com",
+                        'role': 'auditor',  # Default role for audit users
+                        'department': getattr(user, 'department', 'Unknown'),
+                    }
+                    users_with_permission.append(user_data)
+                    logger.info(f"User with PerformContractAudit permission: {user_data}")
             
-        return Response(users_with_permission)
+            logger.info(f"Returning {len(users_with_permission)} users with PerformContractAudit permission to frontend")
+            
+        except ImportError as import_err:
+            logger.warning(f"User model import failed: {import_err}, trying raw SQL fallback")
+            # Fallback to raw SQL if import fails
+            from django.db import connection
+            from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
+            
+            with connection.cursor() as cursor:
+                try:
+                    if tenant_id:
+                        cursor.execute(
+                            "SELECT UserId, UserName, FirstName, LastName, Email, IsActive FROM users WHERE IsActive IN ('Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true') AND TenantId = %s ORDER BY UserId",
+                            [tenant_id]
+                        )
+                        logger.info(f"Executed raw SQL with TenantId filter for tenant_id={tenant_id}")
+                    else:
+                        cursor.execute(
+                            "SELECT UserId, UserName, FirstName, LastName, Email, IsActive FROM users WHERE IsActive IN ('Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true') ORDER BY UserId"
+                        )
+                        logger.info("Executed raw SQL without TenantId filter")
+                except Exception as sql_filter_error:
+                    logger.warning(f"Raw SQL filtering by TenantId failed: {sql_filter_error}, trying without TenantId")
+                    cursor.execute(
+                        "SELECT UserId, UserName, FirstName, LastName, Email, IsActive FROM users WHERE IsActive IN ('Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true') ORDER BY UserId"
+                    )
+                    logger.info("Executed raw SQL without TenantId filter (fallback)")
+                
+                for row in cursor.fetchall():
+                    user_id, username, first_name, last_name, email, is_active = row
+                    if is_active and is_active.upper() in ['Y', 'YES', '1', 'TRUE']:
+                        # Check if user has PerformContractAudit permission
+                        has_permission = RBACTPRMUtils.check_contract_permission(user_id, 'PerformContractAudit')
+                        
+                        if has_permission:
+                            full_name = f"{first_name or ''} {last_name or ''}".strip()
+                            display_name = full_name if full_name else (username or f"User {user_id}")
+                            
+                            user_data = {
+                                'user_id': user_id,
+                                'username': username or f"user_{user_id}",
+                                'name': display_name,
+                                'email': email or f"user{user_id}@example.com",
+                                'role': 'auditor',
+                                'department': 'Unknown',
+                            }
+                            users_with_permission.append(user_data)
+            
+            logger.info(f"Returning {len(users_with_permission)} users from raw SQL fallback")
+            
+        return Response({
+            'success': True,
+            'data': users_with_permission,
+            'count': len(users_with_permission)
+        })
             
     except Exception as e:
         # Log error and return empty list
@@ -1703,8 +1988,10 @@ def available_users(request):
         logger.error(f"Traceback: {traceback.format_exc()}")
         return Response(
             {
+                'success': False,
                 'error': 'Failed to fetch users',
-                'message': 'Unable to retrieve users with PerformContractAudit permission. Please try again later.'
+                'message': 'Unable to retrieve users with PerformContractAudit permission. Please try again later.',
+                'data': []
             },
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

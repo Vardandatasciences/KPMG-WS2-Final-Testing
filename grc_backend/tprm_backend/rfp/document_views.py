@@ -17,6 +17,7 @@ from tprm_backend.core.tenant_utils import (
 import json
 
 
+@api_view(['GET'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
@@ -96,6 +97,7 @@ def generate_rfp_word_document(request, rfp_id):
         )
 
 
+@api_view(['GET'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
@@ -106,13 +108,26 @@ def generate_rfp_pdf_document(request, rfp_id):
     Generate and download RFP as PDF document
     MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    print(f"[PDF_DOWNLOAD] Request received for RFP ID: {rfp_id}")
     tenant_id = get_tenant_id_from_request(request)
     if not tenant_id:
+        print(f"[PDF_DOWNLOAD] No tenant ID found")
         return HttpResponse('Tenant context not found', status=403)
+    
+    print(f"[PDF_DOWNLOAD] Tenant ID: {tenant_id}, RFP ID: {rfp_id}")
     
     try:
         # MULTI-TENANCY: Filter by tenant
-        rfp = get_object_or_404(RFP, rfp_id=rfp_id, tenant_id=tenant_id)
+        try:
+            rfp = RFP.objects.get(rfp_id=rfp_id, tenant_id=tenant_id)
+            print(f"[PDF_DOWNLOAD] RFP found: {rfp.rfp_number}")
+        except RFP.DoesNotExist:
+            print(f"[PDF_DOWNLOAD] RFP {rfp_id} not found for tenant {tenant_id}")
+            return HttpResponse(
+                f'RFP {rfp_id} not found for your tenant',
+                status=404,
+                content_type='text/plain'
+            )
         
         # Convert RFP model to dictionary
         rfp_data = {
@@ -168,6 +183,10 @@ def generate_rfp_pdf_document(request, rfp_id):
         return generate_rfp_document(rfp_data, 'pdf')
         
     except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"[PDF_DOWNLOAD] Error: {str(e)}")
+        print(f"[PDF_DOWNLOAD] Traceback: {error_trace}")
         return HttpResponse(
             f'Failed to generate PDF document: {str(e)}',
             status=500,

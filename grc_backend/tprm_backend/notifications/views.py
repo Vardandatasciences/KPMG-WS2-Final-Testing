@@ -41,23 +41,52 @@ class JWTAuthentication(BaseAuthentication):
             user_id = payload.get('user_id')
             
             if user_id:
+                # Query users table directly from tprm_integrations database
+                from django.db import connections
+                
                 try:
-                    from mfa_auth.models import User
-                    user = User.objects.get(userid=user_id)
-                    # Add is_authenticated attribute for DRF compatibility
-                    user.is_authenticated = True
-                    return (user, token)
-                except ImportError:
-                    # If User model import fails, create a mock user
-                    logger.warning(f"User model import failed, creating mock user for user_id: {user_id}")
-                    class MockUser:
-                        def __init__(self, user_id):
-                            self.userid = user_id
-                            self.username = f"user_{user_id}"
-                            self.is_authenticated = True
-                    return (MockUser(user_id), token)
+                    with connections['default'].cursor() as cursor:
+                        # Query users table to get user information
+                        cursor.execute("""
+                            SELECT UserId, UserName, Email, FirstName, LastName, TenantId
+                            FROM users
+                            WHERE UserId = %s
+                            LIMIT 1
+                        """, [user_id])
+                        
+                        result = cursor.fetchone()
+                        
+                        if result:
+                            # Create a user-like object from database result
+                            userid, username, email, first_name, last_name, tenant_id = result
+                            
+                            class DatabaseUser:
+                                def __init__(self, userid, username, email, first_name, last_name, tenant_id):
+                                    self.userid = userid
+                                    self.id = userid  # For compatibility
+                                    self.username = username or f"user_{userid}"
+                                    self.email = email
+                                    self.first_name = first_name or ''
+                                    self.last_name = last_name or ''
+                                    self.tenant_id = tenant_id
+                                    self.is_authenticated = True
+                            
+                            user = DatabaseUser(userid, username, email, first_name, last_name, tenant_id)
+                            logger.info(f"[Notifications] Successfully loaded user from users table: {username} (ID: {userid})")
+                            return (user, token)
+                        else:
+                            # User not found in database
+                            logger.warning(f"User {user_id} not found in users table, creating mock user")
+                            class MockUser:
+                                def __init__(self, user_id):
+                                    self.userid = user_id
+                                    self.id = user_id
+                                    self.username = f"user_{user_id}"
+                                    self.is_authenticated = True
+                            return (MockUser(user_id), token)
+                            
                 except Exception as db_error:
-                    # Handle database connection errors and DoesNotExist gracefully
+                    # Handle database connection errors gracefully
                     error_str = str(db_error).lower()
                     if 'unknown server host' in error_str or '11001' in error_str or '2005' in error_str:
                         logger.warning(f"Database connection error during JWT authentication: {db_error}. Using mock user.")
@@ -65,20 +94,13 @@ class JWTAuthentication(BaseAuthentication):
                         class MockUser:
                             def __init__(self, user_id):
                                 self.userid = user_id
-                                self.username = f"user_{user_id}"
-                                self.is_authenticated = True
-                        return (MockUser(user_id), token)
-                    elif 'does not exist' in error_str or 'matching query does not exist' in error_str:
-                        # User not found in database, create a mock user
-                        logger.warning(f"User {user_id} not found in database, creating mock user")
-                        class MockUser:
-                            def __init__(self, user_id):
-                                self.userid = user_id
+                                self.id = user_id
                                 self.username = f"user_{user_id}"
                                 self.is_authenticated = True
                         return (MockUser(user_id), token)
                     else:
                         # Re-raise other database errors
+                        logger.error(f"Error querying users table: {db_error}")
                         raise
         except jwt.ExpiredSignatureError:
             logger.warning("JWT token expired")
