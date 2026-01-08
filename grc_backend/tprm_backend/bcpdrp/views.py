@@ -3725,6 +3725,7 @@ def assignment_reject_view(request, assignment_id):
 # QUESTIONNAIRE TEMPLATE VIEWS
 # =============================================================================
  
+@csrf_exempt
 @api_view(['POST'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
@@ -3740,9 +3741,15 @@ def questionnaire_template_save_view(request):
     MULTI-TENANCY: Sets tenant_id on template and static questionnaire creation
     """
     try:
+        # DEBUG: Log request details
+        logger.info(f"[Questionnaire Template Save] Request received from user: {getattr(request.user, 'userid', 'unknown')}")
+        logger.info(f"[Questionnaire Template Save] Request tenant_id: {getattr(request, 'tenant_id', 'not set')}")
+        logger.info(f"[Questionnaire Template Save] Request data keys: {list(request.data.keys()) if request.data else 'no data'}")
+        
         # MULTI-TENANCY: Get tenant_id from request
         tenant_id = get_tenant_id_from_request(request)
         if not tenant_id:
+            logger.error(f"[Questionnaire Template Save] No tenant_id found for user {getattr(request.user, 'userid', 'unknown')}")
             return error_response("Tenant context not found", status.HTTP_403_FORBIDDEN)
         
         data = request.data or {}

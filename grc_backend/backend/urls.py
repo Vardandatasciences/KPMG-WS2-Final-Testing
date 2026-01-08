@@ -145,6 +145,9 @@ urlpatterns = [
     # TPRM RBAC
     path('api/tprm/rbac/', include('tprm_backend.rbac.tprm_urls')),
     
+    # TPRM Consent Management
+    path('api/tprm/consent/', include('tprm_backend.consent.urls')),
+    
     # TPRM Admin Access Control
     path('api/tprm/admin-access/', include('tprm_backend.admin_access.urls')),
     

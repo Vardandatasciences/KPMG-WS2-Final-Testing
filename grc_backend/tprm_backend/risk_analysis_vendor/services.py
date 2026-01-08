@@ -240,10 +240,21 @@ class RiskAnalysisService:
             Standardized risk response dictionary
         """
         try:
-            # Get vendor data from approval request
-            from django.db import connections
+            logger.info(f"🔵 [RISK GENERATION] Starting generate_vendor_risks for approval: {approval_id}")
+            print(f"🔵 [RISK GENERATION] Starting generate_vendor_risks for approval: {approval_id}")
             
-            with connections['default'].cursor() as cursor:
+            # Get vendor data from approval request
+            # Use tprm connection for consistency
+            from django.db import connections as db_connections
+            if 'tprm' in db_connections.databases:
+                db_connection = db_connections['tprm']
+            else:
+                db_connection = db_connections['default']
+            
+            logger.info(f"🔵 [RISK GENERATION] Using database connection: {db_connection.settings_dict.get('NAME', 'unknown')}")
+            print(f"🔵 [RISK GENERATION] Using database connection: {db_connection.settings_dict.get('NAME', 'unknown')}")
+            
+            with db_connection.cursor() as cursor:
                 cursor.execute("""
                     SELECT request_data FROM approval_requests 
                     WHERE approval_id = %s
@@ -251,9 +262,12 @@ class RiskAnalysisService:
                 
                 result = cursor.fetchone()
                 if not result:
+                    error_msg = f'Approval request {approval_id} not found'
+                    logger.error(f"❌ [RISK GENERATION] {error_msg}")
+                    print(f"❌ [RISK GENERATION] {error_msg}")
                     return {
                         'status': 'error',
-                        'error': f'Approval request {approval_id} not found'
+                        'error': error_msg
                     }
                 
                 request_data = result[0]
@@ -261,66 +275,113 @@ class RiskAnalysisService:
                     import json
                     request_data = json.loads(request_data)
                 
+                logger.info(f"🔵 [RISK GENERATION] Retrieved approval request data for {approval_id}")
+                print(f"🔵 [RISK GENERATION] Retrieved approval request data for {approval_id}")
+                
                 # Extract vendor information
                 rd = request_data.get('request_data', request_data)
                 vendor_id = rd.get('vendor_id')
                 approval_type = rd.get('approval_type', '').lower()
+                
+                logger.info(f"🔵 [RISK GENERATION] Extracted approval_type: {approval_type}, initial vendor_id: {vendor_id}")
+                print(f"🔵 [RISK GENERATION] Extracted approval_type: {approval_type}, initial vendor_id: {vendor_id}")
                 
                 # For response_approval, check vendor_information
                 if not vendor_id and approval_type == 'response_approval' and 'vendor_information' in rd:
                     vendor_info = rd['vendor_information']
                     if isinstance(vendor_info, dict):
                         vendor_id = vendor_info.get('vendor_id') or vendor_info.get('id')
+                        logger.info(f"🔵 [RISK GENERATION] Found vendor_id from vendor_information: {vendor_id}")
+                        print(f"🔵 [RISK GENERATION] Found vendor_id from vendor_information: {vendor_id}")
                 
                 # For response_approval, also check assignment_summary
                 if not vendor_id and approval_type == 'response_approval' and 'assignment_summary' in rd:
                     assignment_summary = rd['assignment_summary']
                     if isinstance(assignment_summary, dict):
                         vendor_id = assignment_summary.get('vendor_id') or assignment_summary.get('vendor_temp_id')
+                        logger.info(f"🔵 [RISK GENERATION] Found vendor_id from assignment_summary: {vendor_id}")
+                        print(f"🔵 [RISK GENERATION] Found vendor_id from assignment_summary: {vendor_id}")
+                
+                # Also check vendor_data for response approvals
+                if not vendor_id and approval_type == 'response_approval' and 'vendor_data' in rd:
+                    vendor_data = rd['vendor_data']
+                    if isinstance(vendor_data, dict):
+                        vendor_id = vendor_data.get('vendor_id') or vendor_data.get('id')
+                        logger.info(f"🔵 [RISK GENERATION] Found vendor_id from vendor_data: {vendor_id}")
+                        print(f"🔵 [RISK GENERATION] Found vendor_id from vendor_data: {vendor_id}")
                 
                 if not vendor_id:
+                    error_msg = f'No vendor_id found in approval request {approval_id} (approval_type: {approval_type})'
+                    logger.error(f"❌ [RISK GENERATION] {error_msg}")
+                    print(f"❌ [RISK GENERATION] {error_msg}")
+                    print(f"❌ [RISK GENERATION] Available keys in rd: {list(rd.keys())}")
                     return {
                         'status': 'error',
-                        'error': f'No vendor_id found in approval request {approval_id} (approval_type: {approval_type})'
+                        'error': error_msg
                     }
+                
+                logger.info(f"✅ [RISK GENERATION] Using vendor_id: {vendor_id} for risk generation")
+                print(f"✅ [RISK GENERATION] Using vendor_id: {vendor_id} for risk generation")
                 
                 # Try to generate risks using the existing risk analysis service
                 try:
+                    logger.info(f"🔵 [RISK GENERATION] Attempting to analyze entity data row for vendor {vendor_id}")
+                    print(f"🔵 [RISK GENERATION] Attempting to analyze entity data row for vendor {vendor_id}")
                     risk_result = self.analyze_entity_data_row(
                         entity='vendor_management',
                         table='temp_vendor',
                         row_id=str(vendor_id)
                     )
+                    logger.info(f"✅ [RISK GENERATION] Successfully analyzed entity data row, got {len(risk_result.get('risks', []))} risks")
+                    print(f"✅ [RISK GENERATION] Successfully analyzed entity data row, got {len(risk_result.get('risks', []))} risks")
                 except Exception as e:
-                    logger.warning(f"LLaMA API failed for vendor {vendor_id}, creating basic risks: {str(e)}")
+                    import traceback
+                    error_trace = traceback.format_exc()
+                    logger.warning(f"⚠️ [RISK GENERATION] LLaMA API failed for vendor {vendor_id}, creating basic risks: {str(e)}")
+                    logger.warning(f"⚠️ [RISK GENERATION] LLaMA error traceback: {error_trace}")
+                    print(f"⚠️ [RISK GENERATION] LLaMA API failed for vendor {vendor_id}, creating basic risks: {str(e)}")
+                    print(f"⚠️ [RISK GENERATION] LLaMA error traceback: {error_trace}")
                     # Create basic risks when LLaMA API is not available
                     risk_result = self._create_basic_vendor_risks(vendor_id, approval_id)
+                    logger.info(f"✅ [RISK GENERATION] Created basic risks, got {len(risk_result.get('risks', []))} risks")
+                    print(f"✅ [RISK GENERATION] Created basic risks, got {len(risk_result.get('risks', []))} risks")
                 
                 # Process and save the risks
                 risks_created = 0
                 if risk_result.get('risks'):
-                    for risk_data in risk_result['risks']:
-                        # Create risk record in database
-                        risk = Risk.objects.create(
-                            title=risk_data.get('title', 'Vendor Risk'),
-                            description=risk_data.get('description', ''),
-                            likelihood=risk_data.get('likelihood', 1),
-                            impact=risk_data.get('impact', 1),
-                            exposure_rating=risk_data.get('exposure_rating', 1),
-                            score=risk_data.get('score', 0),
-                            priority=risk_data.get('priority', 'Low'),
-                            ai_explanation=risk_data.get('ai_explanation', ''),
-                            suggested_mitigations=json.dumps(risk_data.get('suggested_mitigations', [])),
-                            entity='vendor_management',
-                            data='temp_vendor',
-                            row=str(vendor_id),
-                            status='Open',  # Default status for new risks
-                            created_at=timezone.now(),
-                            updated_at=timezone.now()
-                        )
-                        risks_created += 1
+                    logger.info(f"🔵 [RISK GENERATION] Processing {len(risk_result['risks'])} risks for saving")
+                    print(f"🔵 [RISK GENERATION] Processing {len(risk_result['risks'])} risks for saving")
+                    
+                    for idx, risk_data in enumerate(risk_result['risks']):
+                        try:
+                            # Create risk record in database
+                            risk = Risk.objects.create(
+                                title=risk_data.get('title', 'Vendor Risk'),
+                                description=risk_data.get('description', ''),
+                                likelihood=risk_data.get('likelihood', 1),
+                                impact=risk_data.get('impact', 1),
+                                exposure_rating=risk_data.get('exposure_rating', 1),
+                                score=risk_data.get('score', 0),
+                                priority=risk_data.get('priority', 'Low'),
+                                ai_explanation=risk_data.get('ai_explanation', ''),
+                                suggested_mitigations=json.dumps(risk_data.get('suggested_mitigations', [])),
+                                entity='vendor_management',
+                                data='temp_vendor',
+                                row=str(vendor_id),
+                                status='Open',  # Default status for new risks
+                                created_at=timezone.now(),
+                                updated_at=timezone.now()
+                            )
+                            risks_created += 1
+                            logger.debug(f"✅ [RISK GENERATION] Created risk {idx + 1}/{len(risk_result['risks'])}: {risk.title}")
+                        except Exception as risk_error:
+                            import traceback
+                            logger.error(f"❌ [RISK GENERATION] Failed to create risk {idx + 1}: {str(risk_error)}")
+                            logger.error(f"❌ [RISK GENERATION] Risk creation traceback: {traceback.format_exc()}")
+                            print(f"❌ [RISK GENERATION] Failed to create risk {idx + 1}: {str(risk_error)}")
                 
-                logger.info(f"Generated {risks_created} vendor risks for approval {approval_id}")
+                logger.info(f"✅ [RISK GENERATION] Generated {risks_created} vendor risks for approval {approval_id}")
+                print(f"✅ [RISK GENERATION] Generated {risks_created} vendor risks for approval {approval_id}")
                 return {
                     'status': 'success',
                     'approval_id': approval_id,
@@ -330,7 +391,12 @@ class RiskAnalysisService:
                 }
                 
         except Exception as e:
-            logger.error(f"Error generating vendor risks for approval {approval_id}: {str(e)}")
+            import traceback
+            error_trace = traceback.format_exc()
+            logger.error(f"❌ [RISK GENERATION] Error generating vendor risks for approval {approval_id}: {str(e)}")
+            logger.error(f"❌ [RISK GENERATION] Error traceback: {error_trace}")
+            print(f"❌ [RISK GENERATION] Error generating vendor risks for approval {approval_id}: {str(e)}")
+            print(f"❌ [RISK GENERATION] Error traceback: {error_trace}")
             return {
                 'status': 'error',
                 'approval_id': approval_id,
@@ -342,10 +408,18 @@ class RiskAnalysisService:
         Create basic vendor risks when LLaMA API is not available
         """
         try:
-            # Get vendor data for context
-            from django.db import connections
+            logger.info(f"🔵 [RISK GENERATION] Creating basic vendor risks for vendor {vendor_id}")
+            print(f"🔵 [RISK GENERATION] Creating basic vendor risks for vendor {vendor_id}")
             
-            with connections['default'].cursor() as cursor:
+            # Get vendor data for context
+            # Use tprm connection for consistency
+            from django.db import connections as db_connections
+            if 'tprm' in db_connections.databases:
+                db_connection = db_connections['tprm']
+            else:
+                db_connection = db_connections['default']
+            
+            with db_connection.cursor() as cursor:
                 cursor.execute("""
                     SELECT company_name, business_type, industry_sector, risk_level, 
                            is_critical_vendor, has_data_access, has_system_access
@@ -471,14 +545,38 @@ class RiskAnalysisService:
             Immediate response dictionary with thread status
         """
         try:
+            logger.info(f"🔵 [RISK GENERATION] Starting async vendor risk generation for approval: {approval_id}")
+            print(f"🔵 [RISK GENERATION] Starting async vendor risk generation for approval: {approval_id}")
+            
             from .threading_service import trigger_vendor_risk_generation_async
+            logger.info(f"✅ [RISK GENERATION] Successfully imported trigger_vendor_risk_generation_async")
+            print(f"✅ [RISK GENERATION] Successfully imported trigger_vendor_risk_generation_async")
             
             result = trigger_vendor_risk_generation_async(approval_id)
-            logger.info(f"Started async vendor risk generation for approval {approval_id}: {result}")
+            logger.info(f"✅ [RISK GENERATION] Started async vendor risk generation for approval {approval_id}: {result}")
+            print(f"✅ [RISK GENERATION] Started async vendor risk generation for approval {approval_id}: {result}")
             return result
             
+        except ImportError as import_error:
+            import traceback
+            error_trace = traceback.format_exc()
+            logger.error(f"❌ [RISK GENERATION] Import error starting async vendor risk generation for approval {approval_id}: {str(import_error)}")
+            logger.error(f"❌ [RISK GENERATION] Import traceback: {error_trace}")
+            print(f"❌ [RISK GENERATION] Import error starting async vendor risk generation for approval {approval_id}: {str(import_error)}")
+            print(f"❌ [RISK GENERATION] Import traceback: {error_trace}")
+            return {
+                'status': 'error',
+                'approval_id': approval_id,
+                'error': f"Import error: {str(import_error)}",
+                'message': 'Failed to import threading service'
+            }
         except Exception as e:
-            logger.error(f"Error starting async vendor risk generation for approval {approval_id}: {str(e)}")
+            import traceback
+            error_trace = traceback.format_exc()
+            logger.error(f"❌ [RISK GENERATION] Error starting async vendor risk generation for approval {approval_id}: {str(e)}")
+            logger.error(f"❌ [RISK GENERATION] Error traceback: {error_trace}")
+            print(f"❌ [RISK GENERATION] Error starting async vendor risk generation for approval {approval_id}: {str(e)}")
+            print(f"❌ [RISK GENERATION] Error traceback: {error_trace}")
             return {
                 'status': 'error',
                 'approval_id': approval_id,
