@@ -7,6 +7,9 @@ from . import views
 
 urlpatterns = [
     # Workflow management
+    # More specific patterns first (with workflow_id)
+    path('workflows/<str:workflow_id>/changes/', views.get_workflow_changes, name='get-workflow-changes'),
+    path('workflows/<str:workflow_id>/', views.workflow_detail, name='workflow-detail'),
     path('workflows/', views.workflows, name='approval-workflows'),
     
     # User management
@@ -24,6 +27,7 @@ urlpatterns = [
     # User-specific approvals
     path('user-approvals/', views.user_approvals, name='user-approvals'),
     path('get-proposal-id/<str:approval_id>/', views.get_proposal_id_from_approval, name='get_proposal_id_from_approval'),
+    path('get-rfp-id-from-approval/<str:approval_id>/', views.get_rfp_id_from_approval, name='get-rfp-id-from-approval'),
     
     # RFP details
     path('rfp-details/<int:rfp_id>/', views.get_rfp_details, name='get-rfp-details'),

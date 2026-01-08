@@ -174,6 +174,46 @@ class RFPSerializer(AutoDecryptingModelSerializer):
                 return None
         return None
     
+    def to_representation(self, instance):
+        """
+        Override to add response counts to the serialized data
+        """
+        data = super().to_representation(instance)
+        
+        # Get tenant_id from the RFP instance
+        tenant_id = getattr(instance, 'tenant_id', None)
+        
+        # Count responses for this RFP
+        try:
+            from .models import RFPResponse
+            # MULTI-TENANCY: Filter by tenant if available
+            if tenant_id:
+                all_responses = RFPResponse.objects.filter(rfp_id=instance.rfp_id, tenant_id=tenant_id)
+            else:
+                all_responses = RFPResponse.objects.filter(rfp_id=instance.rfp_id)
+            
+            total_responses_found = all_responses.count()
+            submitted_responses = all_responses.filter(evaluation_status='SUBMITTED').count()
+            
+            # Add debug info similar to get_rfp_responses endpoint
+            data['debug_info'] = {
+                'total_responses_found': total_responses_found,
+                'submitted_responses': submitted_responses,
+                'responses_returned': total_responses_found,  # For detail view, we return all
+                'note': 'ALL responses included for award phase'
+            }
+        except Exception as e:
+            # If there's an error, still return the data but with zero counts
+            print(f"[RFPSerializer] Error counting responses for RFP {instance.rfp_id}: {str(e)}")
+            data['debug_info'] = {
+                'total_responses_found': 0,
+                'submitted_responses': 0,
+                'responses_returned': 0,
+                'note': 'Error counting responses'
+            }
+        
+        return data
+    
     def validate(self, data):
         """
         Validate the RFP data using the validators and convert decimal fields

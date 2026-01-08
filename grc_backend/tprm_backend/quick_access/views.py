@@ -60,13 +60,13 @@ class JWTAuthentication(BaseAuthentication):
                     try:
                         with connections['default'].cursor() as cursor:
                             # Query users table to get user information
-                            # Match the pattern from notifications/views.py
+                            # Use UserId column (capital U, capital I) - the actual column name in the database
                             cursor.execute("""
                                 SELECT UserId, UserName, Email, FirstName, LastName
                                 FROM users
-                                WHERE UserId = %s OR userid = %s OR id = %s OR user_id = %s
+                                WHERE UserId = %s
                                 LIMIT 1
-                            """, [user_id, user_id, user_id, user_id])
+                            """, [user_id])
                             
                             result = cursor.fetchone()
                             
@@ -111,13 +111,13 @@ class JWTAuthentication(BaseAuthentication):
                     try:
                         with connections['default'].cursor() as cursor:
                             # Query users table to get user information
-                            # Match the pattern from notifications/views.py
+                            # Use UserId column (capital U, capital I) - the actual column name in the database
                             cursor.execute("""
                                 SELECT UserId, UserName, Email, FirstName, LastName
                                 FROM users
-                                WHERE UserId = %s OR userid = %s OR id = %s OR user_id = %s
+                                WHERE UserId = %s
                                 LIMIT 1
-                            """, [user_id, user_id, user_id, user_id])
+                            """, [user_id])
                             
                             result = cursor.fetchone()
                             

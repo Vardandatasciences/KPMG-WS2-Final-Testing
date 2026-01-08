@@ -35,6 +35,16 @@ from tprm_backend.core.tenant_utils import (
 
 logger = logging.getLogger(__name__)
 
+# Database connection helper - Use tprm_integration database for all vendor operations
+def get_db_connection():
+    """
+    Get the correct database connection for tprm_integration database.
+    Returns 'tprm' connection if available, otherwise falls back to 'default'.
+    """
+    if 'tprm' in connections.databases:
+        return connections['tprm']
+    return connections['default']
+
 
 class VendorRiskAssessmentViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
     """ViewSet for Vendor Risk Assessments with RBAC protection"""
@@ -307,7 +317,11 @@ class VendorRisksAPIView(APIView):
             logger.info(f"WHERE clause: {where_clause}")
             logger.info(f"SQL parameters: {params}")
             
-            with connections['default'].cursor() as cursor:
+            # Initialize variables for error handling
+            data_query = None
+            
+            # Use tprm_integration database connection (not grc2)
+            with get_db_connection().cursor() as cursor:
                 # First, log what data we have in the database
                 cursor.execute("SELECT DISTINCT `data`, COUNT(*) as cnt FROM risk_tprm GROUP BY `data`")
                 db_data_types = cursor.fetchall()
@@ -390,8 +404,10 @@ class VendorRisksAPIView(APIView):
         except Exception as e:
             logger.error(f"Error fetching vendor risks: {str(e)}", exc_info=True)
             logger.error("Query parameters: %s", request.query_params)
-            logger.error("SQL Query: %s", data_query)
-            logger.error("SQL Parameters: %s", params)
+            if data_query:
+                logger.error("SQL Query: %s", data_query)
+            if 'params' in locals():
+                logger.error("SQL Parameters: %s", params)
             return Response(
                 {'error': 'Failed to fetch risks'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -459,7 +475,8 @@ class VendorListAPIView(APIView):
             if not tenant_id:
                 return Response({'error': 'Tenant context not found'}, status=status.HTTP_403_FORBIDDEN)
 
-            with connections['default'].cursor() as cursor:
+            # Use tprm_integration database connection (not grc2)
+            with get_db_connection().cursor() as cursor:
                 vendors = []
                 vendor_ids_seen = set()
                 
@@ -592,7 +609,8 @@ class VendorRiskDebugAPIView(APIView):
 
             vendor_id = request.query_params.get('vendor_id', '10')
             
-            with connections['default'].cursor() as cursor:
+            # Use tprm_integration database connection (not grc2)
+            with get_db_connection().cursor() as cursor:
                 # Check temp_vendor table
                 # MULTI-TENANCY: Filter by tenant
                 cursor.execute("SELECT id, company_name FROM temp_vendor WHERE id = %s AND TenantId = %s", [vendor_id, tenant_id])
