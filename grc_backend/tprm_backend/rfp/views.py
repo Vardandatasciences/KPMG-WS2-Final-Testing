@@ -3,6 +3,7 @@ from rest_framework.decorators import action, api_view, authentication_classes, 
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db.models import Q, Count, Avg
 from django.utils import timezone
 from django.core.files.storage import default_storage
@@ -11,6 +12,7 @@ from django.shortcuts import get_object_or_404, render, redirect
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_http_methods, require_GET
+from django.utils.decorators import method_decorator
 from django.db import transaction, connection
 from django.core.mail import send_mail, EmailMessage
 from django.template.loader import render_to_string
@@ -1115,6 +1117,7 @@ class DocumentUploadView(APIView):
     """
     authentication_classes = [JWTAuthentication]
     permission_classes = [SimpleAuthenticatedPermission]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]  # Support multipart/form-data, form-encoded, and JSON
     
     def post(self, request):
         """
@@ -1650,6 +1653,7 @@ def convert_to_pdf(file_path, file_extension):
         return None
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class MergeDocumentsView(APIView):
     """
     Standalone API endpoint for merging documents without requiring RFP ID
@@ -1657,8 +1661,9 @@ class MergeDocumentsView(APIView):
     Supports: PDF, Word (.doc, .docx), Images (.jpg, .jpeg, .png), and text files
     Allows anonymous access for vendor portal
     """
-    authentication_classes = []  # Allow anonymous access for vendor portal
+    authentication_classes = [JWTAuthentication]  # Support JWT but don't require it
     permission_classes = [AllowAny]  # Allow anonymous access for vendor portal
+    parser_classes = [MultiPartParser, FormParser, JSONParser]  # Support multipart/form-data, form-encoded, and JSON
    
     def post(self, request):
         """
@@ -1674,9 +1679,13 @@ class MergeDocumentsView(APIView):
             user_id = request.data.get('user_id', '1')
            
             print(f"[MERGE] Standalone merge request received")
+            print(f"   Request.data keys: {list(request.data.keys())}")
+            print(f"   Request.FILES keys: {list(request.FILES.keys())}")
             print(f"   Document IDs: {document_ids}")
             print(f"   Files: {len(files) if files else 0}")
+            print(f"   Files list: {files}")
             print(f"   RFP ID: {rfp_id or 'None (standalone merge)'}")
+            print(f"   Content-Type: {request.content_type}")
            
             # Determine merge method
             use_file_merge = len(files) > 0 and len(document_ids) == 0
@@ -4489,47 +4498,79 @@ def create_unmatched_vendor(request, rfp_id):
     API endpoint to create a new unmatched vendor
     MULTI-TENANCY: Only allows creating unmatched vendors for tenant's RFP
     """
-    # MULTI-TENANCY: Get tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-    if not tenant_id:
-        return JsonResponse({'error': 'Tenant context not found'}, status=403)
-    
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'success': False, 'error': 'Tenant context not found'}, status=status.HTTP_403_FORBIDDEN)
+        
         # MULTI-TENANCY: Filter RFP by tenant
-        rfp = get_object_or_404(RFP, rfp_id=rfp_id, tenant_id=tenant_id)
-        data = json.loads(request.body)
+        try:
+            rfp = RFP.objects.get(rfp_id=rfp_id, tenant_id=tenant_id)
+        except RFP.DoesNotExist:
+            return Response({'success': False, 'error': f'RFP {rfp_id} not found or does not belong to your tenant'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Use DRF's request.data instead of json.loads(request.body)
+        data = request.data
         
         # Validate required fields
         required_fields = ['vendor_name', 'vendor_email', 'vendor_phone', 'company_name']
-        for field in required_fields:
-            if not data.get(field):
-                return JsonResponse({'error': f'{field} is required'}, status=400)
+        missing_fields = [field for field in required_fields if not data.get(field)]
+        if missing_fields:
+            return Response({
+                'success': False,
+                'error': f'Missing required fields: {", ".join(missing_fields)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
         
         # Create unmatched vendor
         # MULTI-TENANCY: Set tenant_id on creation
-        unmatched_vendor = RFPUnmatchedVendor.objects.create(
-            rfp_id=rfp_id,
-            vendor_name=data['vendor_name'],
-            vendor_email=data['vendor_email'],
-            vendor_phone=data['vendor_phone'],
-            company_name=data['company_name'],
-            submission_data=data.get('submission_data', {}),
-            matching_status=data.get('matching_status', 'unmatched'),
-            tenant_id=tenant_id
-        )
+        # Use exact same pattern as bulk upload function (line 4900)
+        try:
+            print(f"[DEBUG] Creating unmatched vendor for RFP {rfp_id}, tenant {tenant_id}")
+            print(f"[DEBUG] Vendor data: name={data.get('vendor_name')}, company={data.get('company_name')}, email={data.get('vendor_email')}")
+            
+            # Use rfp_id directly (matches get_unmatched_vendors pattern and database schema)
+            unmatched_vendor = RFPUnmatchedVendor.objects.create(
+                rfp_id=rfp_id,
+                vendor_name=data['vendor_name'],
+                vendor_email=data['vendor_email'],
+                vendor_phone=data['vendor_phone'],
+                company_name=data['company_name'],
+                submission_data=data.get('submission_data', {}),
+                matching_status=data.get('matching_status', 'unmatched'),
+                tenant_id=tenant_id
+            )
+            
+            print(f"[SUCCESS] Created unmatched vendor ID: {unmatched_vendor.unmatched_id}")
+            
+            return Response({
+                'success': True,
+                'message': 'Unmatched vendor created successfully',
+                'unmatched_id': unmatched_vendor.unmatched_id,
+                'vendor_name': unmatched_vendor.vendor_name,
+                'company_name': unmatched_vendor.company_name
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as create_error:
+            error_msg = str(create_error)
+            error_type = type(create_error).__name__
+            print(f"[ERROR] Failed to create unmatched vendor: {error_type}: {error_msg}")
+            import traceback
+            traceback.print_exc()
+            return Response({
+                'success': False,
+                'error': f'Failed to create unmatched vendor: {error_msg}',
+                'error_type': error_type
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-        return JsonResponse({
-            'success': True,
-            'message': 'Unmatched vendor created successfully',
-            'unmatched_id': unmatched_vendor.unmatched_id,
-            'vendor_name': unmatched_vendor.vendor_name,
-            'company_name': unmatched_vendor.company_name
-        })
-        
-    except json.JSONDecodeError:
-        return JsonResponse({'error': 'Invalid JSON data'}, status=400)
     except Exception as e:
-        return JsonResponse({'error': f'Failed to create unmatched vendor: {str(e)}'}, status=500)
+        print(f"[ERROR] Unexpected error in create_unmatched_vendor: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return Response({
+            'success': False,
+            'error': f'Failed to create unmatched vendor: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['GET'])
@@ -4953,8 +4994,9 @@ def unmatched_vendor_bulk_upload(request, rfp_id):
                 
                 # Create unmatched vendor entry
                 # MULTI-TENANCY: Set tenant_id on creation
+                # Use rfp_id directly to match database schema
                 unmatched_vendor = RFPUnmatchedVendor.objects.create(
-                    rfp=rfp,
+                    rfp_id=rfp_id,
                     vendor_name=vendor_name,
                     vendor_email=vendor_email,
                     vendor_phone=vendor_phone,
