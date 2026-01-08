@@ -2105,8 +2105,35 @@ def get_risk_mitigations(request, risk_id):
         # Get the risk instance
         risk_instance = RiskInstance.objects.get(RiskInstanceId=risk_id)
         
+        # Get decrypted RiskMitigation value
+        # Try to get decrypted value using _plain property
+        risk_mitigation_data = None
+        try:
+            if hasattr(risk_instance, 'RiskMitigation_plain'):
+                risk_mitigation_data = risk_instance.RiskMitigation_plain
+            elif hasattr(risk_instance, 'get_plain_fields_dict'):
+                plain_fields = risk_instance.get_plain_fields_dict()
+                risk_mitigation_data = plain_fields.get('RiskMitigation')
+            else:
+                # Fallback to regular field access
+                risk_mitigation_data = risk_instance.RiskMitigation
+        except Exception as e:
+            # If decryption fails, use the raw value
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Error decrypting RiskMitigation for risk {risk_id}: {e}")
+            risk_mitigation_data = risk_instance.RiskMitigation
+        
+        # If decrypted value is a string, try to parse it as JSON
+        if isinstance(risk_mitigation_data, str):
+            try:
+                risk_mitigation_data = json.loads(risk_mitigation_data)
+            except (json.JSONDecodeError, TypeError):
+                # If it's not valid JSON, keep it as a string
+                pass
+        
         # Check if there are mitigations in the RiskMitigation field
-        if not risk_instance.RiskMitigation:
+        if not risk_mitigation_data:
             # If no specific mitigation steps, create a generic one
             mitigations = [{
                 "title": "Step 1",
@@ -2116,68 +2143,51 @@ def get_risk_mitigations(request, risk_id):
         else:
             # Try to parse the RiskMitigation field as JSON
             try:
-                # Handle string format (most common case)
-                if isinstance(risk_instance.RiskMitigation, str):
-                    # Parse the JSON string
-                    parsed_data = json.loads(risk_instance.RiskMitigation)
+                parsed_data = risk_mitigation_data
+                
+                # Handle string format (if decryption returned a string that wasn't parsed yet)
+                if isinstance(parsed_data, str):
+                    try:
+                        parsed_data = json.loads(parsed_data)
+                    except json.JSONDecodeError:
+                        # If it's not valid JSON, create a single step with the text
+                        mitigations = [{
+                            "title": "Step 1",
+                            "description": parsed_data,
+                            "status": "Not Started"
+                        }]
+                        return Response(mitigations)
+                
+                # Handle numbered object format: {"1": "Step 1", "2": "Step 2", ...}
+                if isinstance(parsed_data, dict) and all(k.isdigit() or (isinstance(k, int)) for k in parsed_data.keys()):
+                    mitigations = []
+                    # Sort keys numerically
+                    ordered_keys = sorted(parsed_data.keys(), key=lambda k: int(k) if isinstance(k, str) else k)
                     
-                    # Handle numbered object format: {"1": "Step 1", "2": "Step 2", ...}
-                    if isinstance(parsed_data, dict) and all(k.isdigit() or (isinstance(k, int)) for k in parsed_data.keys()):
-                        mitigations = []
-                        # Sort keys numerically
-                        ordered_keys = sorted(parsed_data.keys(), key=lambda k: int(k) if isinstance(k, str) else k)
-                        
-                        for key in ordered_keys:
-                            mitigations.append({
-                                "title": f"Step {key}",
-                                "description": parsed_data[key],
-                                "status": "Not Started"
-                            })
-                    # Handle array format
-                    elif isinstance(parsed_data, list):
-                        mitigations = parsed_data
-                    # Handle other object formats
-                    else:
-                        mitigations = [parsed_data]
-                        
-                # Handle direct object format (already parsed)
-                elif isinstance(risk_instance.RiskMitigation, dict):
-                    parsed_data = risk_instance.RiskMitigation
-                    # Handle numbered object
-                    if all(k.isdigit() or (isinstance(k, int)) for k in parsed_data.keys()):
-                        mitigations = []
-                        ordered_keys = sorted(parsed_data.keys(), key=lambda k: int(k) if isinstance(k, str) else k)
-                        
-                        for key in ordered_keys:
-                            mitigations.append({
-                                "title": f"Step {key}",
-                                "description": parsed_data[key],
-                                "status": "Not Started"
-                            })
-                    else:
-                        mitigations = [parsed_data]
-                        
-                # Handle direct array format
-                elif isinstance(risk_instance.RiskMitigation, list):
-                    mitigations = risk_instance.RiskMitigation
-                    
+                    for key in ordered_keys:
+                        mitigations.append({
+                            "title": f"Step {key}",
+                            "description": parsed_data[key],
+                            "status": "Not Started"
+                        })
+                # Handle array format
+                elif isinstance(parsed_data, list):
+                    mitigations = parsed_data
+                # Handle other object formats
+                elif isinstance(parsed_data, dict):
+                    mitigations = [parsed_data]
                 # Handle unexpected format
                 else:
                     mitigations = [{
                         "title": "Step 1",
-                        "description": str(risk_instance.RiskMitigation),
+                        "description": str(parsed_data),
                         "status": "Not Started"
                     }]
                     
-            except json.JSONDecodeError:
-                # If it's not valid JSON, create a single step with the text
-                mitigations = [{
-                    "title": "Step 1",
-                    "description": risk_instance.RiskMitigation,
-                    "status": "Not Started"
-                }]
             except Exception as e:
-                print(f"Error parsing mitigations: {e}")
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error parsing mitigations: {e}")
                 mitigations = [{
                     "title": "Step 1",
                     "description": f"Error parsing mitigation data: {str(e)}",
@@ -3791,10 +3801,17 @@ def get_all_risks_for_dropdown(request):
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
     
-    print(f"Request method: {request.method}")
-    print(f"Request user: {request.user}")
-    print(f"Request authenticated: {request.user.is_authenticated}")
-    print(f"Request headers: {dict(request.headers)}")
+    if not tenant_id:
+        logger.error('get_all_risks_for_dropdown: No tenant_id found in request')
+        return Response({
+            "error": "Tenant ID is required",
+            "success": False
+        }, status=400)
+    
+    print(f"[RISK DROPDOWN] Request method: {request.method}")
+    print(f"[RISK DROPDOWN] Tenant ID: {tenant_id}")
+    print(f"[RISK DROPDOWN] Request user: {request.user}")
+    print(f"[RISK DROPDOWN] Request authenticated: {request.user.is_authenticated}")
     
     # Handle both GET and POST requests
     if request.method not in ['GET', 'POST']:
@@ -3827,9 +3844,24 @@ def get_all_risks_for_dropdown(request):
         print(f"Available Departments: {available_departments}")
         print(f"Available Business Units: {available_business_units}")
         
+        # Get framework filter if needed
+        framework_where, framework_params = get_framework_sql_filter(request)
+        
         # Use a more comprehensive query to get department and business unit information
+        # MULTI-TENANCY: Filter by tenant_id
         with connection.cursor() as cursor:
-            cursor.execute("""
+            # Build WHERE clause with tenant filter
+            where_clause = "WHERE r.TenantId = %s"
+            query_params = [tenant_id]
+            
+            # Add framework filter if present
+            if framework_where:
+                # Replace "r.FrameworkId" with "risk.FrameworkId" for this query
+                framework_where_clause = framework_where.replace("r.FrameworkId", "r.FrameworkId")
+                where_clause += f" AND {framework_where_clause}"
+                query_params.extend(framework_params if framework_params else [])
+            
+            query = f"""
                 SELECT 
                     r.RiskId,
                     r.ComplianceId,
@@ -3857,8 +3889,10 @@ def get_all_risks_for_dropdown(request):
                 LEFT JOIN users u ON ri.UserId = u.UserId
                 LEFT JOIN department d ON u.DepartmentId = d.DepartmentId
                 LEFT JOIN businessunits bu ON d.BusinessUnitId = bu.BusinessUnitId
+                {where_clause}
                 ORDER BY r.CreatedAt DESC
-            """)
+            """
+            cursor.execute(query, query_params)
             
             columns = [col[0] for col in cursor.description]
             risks_data = []
@@ -3889,6 +3923,7 @@ def get_all_risks_for_dropdown(request):
         
         # Get framework filter info
         filter_info = get_framework_filter_info(request)
+        logger.info(f"[RISK DROPDOWN] Successfully fetched {len(risks_data)} risks for tenant {tenant_id} (filtered: {filter_info['is_filtered']})")
         print(f"[RISK DROPDOWN] Successfully fetched {len(risks_data)} risks with department and business unit data (filtered: {filter_info['is_filtered']})")
         
         return Response({
@@ -3897,10 +3932,15 @@ def get_all_risks_for_dropdown(request):
             'filter_info': filter_info
         })
     except Exception as e:
-        print(f"Error fetching risks for dropdown: {e}")
+        logger.error(f"[RISK DROPDOWN] Error fetching risks for dropdown (tenant_id: {tenant_id}): {e}")
         import traceback
-        print(f"Full traceback: {traceback.format_exc()}")
-        return Response({"error": str(e)}, status=500)
+        error_traceback = traceback.format_exc()
+        print(f"Error fetching risks for dropdown: {e}")
+        print(f"Full traceback: {error_traceback}")
+        return Response({
+            "error": str(e),
+            "success": False
+        }, status=500)
 
 @api_view(['GET'])
 @permission_classes([RiskViewPermission])  # RBAC: Require RiskViewPermission for viewing compliances dropdown
@@ -4110,21 +4150,34 @@ def get_risk_business_units(request):
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_risk_categories(request):
     """
-    Get all risk category values from CategoryBusinessUnit
+    Get all risk category values from CategoryBusinessUnit filtered by tenant
     """
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
     
+    if not tenant_id:
+        return Response({
+            'status': 'error',
+            'message': 'Tenant ID is required'
+        }, status=400)
+    
     try:
-        categories = CategoryBusinessUnit.objects.filter(source='RiskCategory', tenant_id=tenant_id)
+        from ...models import CategoryBusinessUnit
+        # Filter by source='RiskCategory' and tenant_id
+        categories = CategoryBusinessUnit.objects.filter(
+            source='RiskCategory', 
+            tenant_id=tenant_id
+        ).order_by('value')
+        
         return Response({
             'status': 'success',
             'data': [{'id': category.id, 'value': category.value} for category in categories]
         })
     except Exception as e:
+        logger.error(f'Error fetching risk categories for tenant {tenant_id}: {str(e)}')
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': f'Failed to fetch risk categories: {str(e)}'
         }, status=500)
 
 @csrf_exempt

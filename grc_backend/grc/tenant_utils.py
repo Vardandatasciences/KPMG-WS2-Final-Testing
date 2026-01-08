@@ -75,10 +75,18 @@ def require_tenant(view_func):
     def wrapper(request, *args, **kwargs):
         if not hasattr(request, 'tenant') or request.tenant is None:
             logger.warning(f"[Tenant Utils] Tenant required but not found for {request.method} {request.path}")
-            return JsonResponse({
-                'error': 'Tenant context not found',
-                'detail': 'This endpoint requires tenant authentication'
-            }, status=403)
+            # Check if we're using DRF (has .data attribute means DRF Request)
+            if hasattr(request, 'data'):
+                from rest_framework.response import Response
+                return Response({
+                    'error': 'Tenant context not found',
+                    'detail': 'This endpoint requires tenant authentication'
+                }, status=403)
+            else:
+                return JsonResponse({
+                    'error': 'Tenant context not found',
+                    'detail': 'This endpoint requires tenant authentication'
+                }, status=403)
         
         return view_func(request, *args, **kwargs)
     

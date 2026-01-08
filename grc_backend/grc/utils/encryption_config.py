@@ -32,7 +32,7 @@ ENCRYPTED_FIELDS_CONFIG = {
         'UserName',  # Optional: encrypt username if sensitive
         'FirstName',  # Optional: encrypt names
         'LastName',  # Optional: encrypt names
-        'Password',  # WARNING: Passwords should be hashed, not encrypted!
+        # NOTE: Password field is EXCLUDED - passwords must be HASHED (using make_password), not encrypted!
         'session_token',
         'license_key',
     ],

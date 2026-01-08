@@ -1304,37 +1304,94 @@ const onAssigneeChange = () => {
 
 const handleNoApprovalChange = () => {
   if (noApprovalNeeded.value) {
-    // Try to get current logged in user from Vuex store first
-    let currentUser = store.getters['auth/currentUser']
+    let userId = null
+    let userName = null
     
-    // If not in store, try to get from localStorage as fallback
-    if (!currentUser) {
+    // Method 1: Try to get user_id directly from localStorage (stored separately, not encrypted)
+    userId = localStorage.getItem('user_id') || 
+             localStorage.getItem('userId') || 
+             localStorage.getItem('UserId')
+    
+    // Method 2: Try to get from JWT token (not encrypted)
+    if (!userId) {
       try {
-        const userStr = localStorage.getItem('current_user')
-        if (userStr) {
-          currentUser = JSON.parse(userStr)
-          console.log('Retrieved user from localStorage:', currentUser)
+        const token = localStorage.getItem('access_token') || localStorage.getItem('session_token')
+        if (token) {
+          // Decode JWT token to get user_id
+          const base64Url = token.split('.')[1]
+          if (base64Url) {
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+              return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+            }).join(''))
+            const payload = JSON.parse(jsonPayload)
+            userId = payload.user_id || payload.userId || payload.UserId || payload.sub || payload.userid
+            console.log('✅ Extracted user_id from JWT token:', userId)
+          }
         }
-      } catch (error) {
-        console.error('Error parsing user from localStorage:', error)
+      } catch (e) {
+        console.warn('⚠️ Error extracting user_id from token:', e)
       }
     }
     
-    // Handle both user_id and userid property names (backend returns userid)
-    const userId = currentUser?.user_id || currentUser?.userid
-    const userName = currentUser?.username || `${currentUser?.first_name || ''} ${currentUser?.last_name || ''}`.trim() || currentUser?.email
+    // Method 3: Try to get from Vuex store
+    if (!userId) {
+      const currentUser = store.getters['auth/currentUser']
+      if (currentUser) {
+        userId = currentUser.user_id || currentUser.userid || currentUser.id
+        userName = currentUser.username || `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim() || currentUser.email
+      }
+    }
     
-    if (currentUser && userId) {
+    // Method 4: Try to get from users list (if already loaded)
+    if (userId && !userName && users.value && users.value.length > 0) {
+      const user = users.value.find(u => u.user_id == userId || u.userid == userId)
+      if (user) {
+        userName = user.username || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email
+      }
+    }
+    
+    // Method 5: Try to parse encrypted current_user (last resort - may have encrypted values)
+    if (!userId || !userName) {
+      try {
+        const userStr = localStorage.getItem('current_user')
+        if (userStr) {
+          const parsedUser = JSON.parse(userStr)
+          // Even if encrypted, we might be able to get user_id if it's stored separately
+          if (!userId) {
+            userId = parsedUser.user_id || parsedUser.userid || parsedUser.id || parsedUser.UserId
+          }
+          // Try to get username, but it might be encrypted
+          if (!userName) {
+            userName = parsedUser.username || `${parsedUser.first_name || ''} ${parsedUser.last_name || ''}`.trim() || parsedUser.email
+            // If username looks encrypted (starts with gAAAAA), try to get from users list
+            if (userName && userName.startsWith('gAAAAA') && users.value && users.value.length > 0) {
+              const user = users.value.find(u => u.user_id == userId)
+              if (user) {
+                userName = user.username || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️ Error parsing user from localStorage (may be encrypted):', error)
+      }
+    }
+    
+    if (userId) {
       // Auto-fill assigner
       assignmentForm.value.assigner_id = userId.toString()
-      assignmentForm.value.assigner_name = userName
+      assignmentForm.value.assigner_name = userName || `User ${userId}`
       
       // Set assignee to same as assigner
       assignmentForm.value.assignee_id = userId.toString()
-      assignmentForm.value.assignee_name = userName
+      assignmentForm.value.assignee_name = userName || `User ${userId}`
+      
+      console.log('✅ Auto-filled assigner/assignee:', { userId, userName })
     } else {
-      console.error('No current user found in store or localStorage')
+      console.error('❌ No current user found in any storage location')
       console.log('Store state:', store.getters['auth/currentUser'])
+      console.log('localStorage user_id:', localStorage.getItem('user_id'))
       console.log('localStorage current_user:', localStorage.getItem('current_user'))
       PopupService.warning('Unable to get current user information. Please log in again or select assignee manually.', 'User Not Found')
       noApprovalNeeded.value = false
@@ -1390,13 +1447,23 @@ const createAssignment = async () => {
     }
     
     // Prepare the assignment data with proper structure
+    // If no approval needed, set assignee to same as assigner
+    const assignerId = parseInt(assignmentForm.value.assigner_id)
+    const assigneeId = noApprovalNeeded.value 
+      ? assignerId  // Use assigner_id when no approval needed
+      : parseInt(assignmentForm.value.assignee_id || assignmentForm.value.assigner_id)
+    
+    const assigneeName = noApprovalNeeded.value
+      ? assignmentForm.value.assigner_name  // Use assigner_name when no approval needed
+      : assignmentForm.value.assignee_name || assignmentForm.value.assigner_name
+    
     const assignmentData = {
       workflow_name: assignmentForm.value.workflow_name,
       plan_type: selectedPlan.value.plan_type,
-      assigner_id: parseInt(assignmentForm.value.assigner_id),
+      assigner_id: assignerId,
       assigner_name: assignmentForm.value.assigner_name,
-      assignee_id: parseInt(assignmentForm.value.assignee_id),
-      assignee_name: assignmentForm.value.assignee_name,
+      assignee_id: assigneeId,
+      assignee_name: assigneeName,
       object_type: 'PLAN EVALUATION',
       object_id: selectedPlan.value.plan_id,
       due_date: assignmentForm.value.due_date,
@@ -1531,8 +1598,9 @@ const saveExtractedData = async () => {
     console.log('Data to save (filtered, only fields in fieldDefinitions):', dataToSave)
     console.log(`Saving ${Object.keys(dataToSave).length - 1} fields (excluding plan_id)`)
     
-    // Use the OCR microservice extraction endpoint
-    const endpoint = `/api/ocr/plans/${selectedPlan.value.plan_id}/extract/`
+    // Use the OCR microservice extraction endpoint - OCR endpoints are at /api/tprm/ocr/
+    // Use the http instance since it already has the correct baseURL (/api/tprm)
+    const endpoint = `ocr/plans/${selectedPlan.value.plan_id}/extract/`
     
     // Send unified payload with all fields (including custom fields)
     const response = await http.post(endpoint, {
@@ -1640,8 +1708,9 @@ const runOCR = async () => {
   try {
     console.log('Running OCR for plan:', selectedPlan.value.plan_id)
     
-    // Use OCR microservice endpoint
-    const endpoint = `/api/ocr/plans/${selectedPlan.value.plan_id}/run/`
+    // Use OCR microservice endpoint - OCR endpoints are at /api/tprm/ocr/
+    // Use the http instance since it already has the correct baseURL (/api/tprm)
+    const endpoint = `ocr/plans/${selectedPlan.value.plan_id}/run/`
     
     showInfo('OCR processing started. This may take 1-2 minutes for AI extraction...')
     PopupService.success('OCR processing started. This may take 1-2 minutes for AI extraction...', 'Processing')

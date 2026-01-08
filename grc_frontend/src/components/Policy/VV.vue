@@ -3777,6 +3777,15 @@ name: 'VV',
         // Get current username from localStorage
         const currentUsername = this.currentUser.UserName || this.loggedInUsername || ''
         
+        // Check if reviewer matches creator, and clear it if so
+        const reviewerUserId = this.getUserIdByName(frameworkReviewer);
+        const creatorUser = this.users.find(u => u.name === currentUsername);
+        const finalReviewerId = (creatorUser && reviewerUserId === creatorUser.id) ? '' : reviewerUserId;
+        
+        if (finalReviewerId === '') {
+          console.log('DEBUG: Framework reviewer matches creator, clearing reviewer field');
+        }
+        
         this.frameworkForm = {
           name: framework.FrameworkName,
           description: framework.FrameworkDescription,
@@ -3787,7 +3796,7 @@ name: 'VV',
           startDate: framework.StartDate,
           endDate: framework.EndDate,
           createdByName: currentUsername, // Use current username instead of framework.CreatedByName
-          reviewer: this.getUserIdByName(frameworkReviewer) // Convert user name to user ID for dropdown
+          reviewer: finalReviewerId // Convert user name to user ID for dropdown, or empty if matches creator
         }
         
         // Log frameworkForm after assignment
@@ -3846,7 +3855,17 @@ name: 'VV',
               endDate: p.EndDate,
               file: null,
               createdByName: p.CreatedByName || framework.CreatedByName,
-              reviewer: this.getUserIdByName(policyReviewer), // Convert user name to user ID for dropdown
+              reviewer: (() => {
+                // Convert reviewer name to user ID
+                const reviewerId = this.getUserIdByName(policyReviewer);
+                // If reviewer matches creator, clear it to allow user to select a different reviewer
+                const creatorUser = this.users.find(u => u.name === (p.CreatedByName || framework.CreatedByName));
+                if (creatorUser && reviewerId === creatorUser.id) {
+                  console.log('DEBUG: Reviewer matches creator, clearing reviewer field for policy:', p.PolicyName);
+                  return ''; // Clear reviewer if it matches creator
+                }
+                return reviewerId;
+              })(), // Convert user name to user ID for dropdown
               exclude: false, // Initialize exclude as false
               activeSubPolicyTab: 0,
               subPolicies: subpoliciesResponse.data.map(sp => ({
@@ -3884,7 +3903,17 @@ name: 'VV',
               endDate: p.EndDate,
               file: null,
               createdByName: p.CreatedByName || framework.CreatedByName,
-              reviewer: this.getUserIdByName(frameworkReviewer),
+              reviewer: (() => {
+                // Convert reviewer name to user ID
+                const reviewerId = this.getUserIdByName(frameworkReviewer);
+                // If reviewer matches creator, clear it to allow user to select a different reviewer
+                const creatorUser = this.users.find(u => u.name === (p.CreatedByName || framework.CreatedByName));
+                if (creatorUser && reviewerId === creatorUser.id) {
+                  console.log('DEBUG: Reviewer matches creator, clearing reviewer field for policy:', p.PolicyName);
+                  return ''; // Clear reviewer if it matches creator
+                }
+                return reviewerId;
+              })(),
               exclude: false,
               activeSubPolicyTab: 0,
               subPolicies: [] // Empty array if subpolicies failed to load

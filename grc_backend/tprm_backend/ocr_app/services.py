@@ -266,6 +266,50 @@ class DocumentProcessingService:
                 'error': str(e)
             }
     
+    def extract_text_from_word(self, file_path: str) -> Dict:
+        """Extract text from Word document (.docx)"""
+        try:
+            try:
+                from docx import Document
+            except ImportError:
+                logger.error("[ERROR] python-docx not installed. Install it with: pip install python-docx")
+                return {
+                    'success': False,
+                    'error': 'python-docx library not installed. Please install it to process Word documents.'
+                }
+            
+            doc = Document(file_path)
+            text_parts = []
+            
+            # Extract text from paragraphs
+            for paragraph in doc.paragraphs:
+                if paragraph.text.strip():
+                    text_parts.append(paragraph.text.strip())
+            
+            # Extract text from tables
+            for table in doc.tables:
+                for row in table.rows:
+                    cells = [cell.text.strip() for cell in row.cells]
+                    if any(cells):
+                        text_parts.append(" | ".join(cells))
+            
+            text_content = "\n".join(text_parts)
+            
+            return {
+                'success': True,
+                'text': text_content,
+                'confidence': 95.0,  # Word documents have high confidence (native text)
+                'engine': 'python-docx',
+                'page_count': len([p for p in doc.paragraphs if p.text.strip()])  # Approximate page count
+            }
+            
+        except Exception as e:
+            logger.error(f"[ERROR] Word document text extraction error: {e}")
+            return {
+                'success': False,
+                'error': f'Word document extraction failed: {str(e)}'
+            }
+    
     def perform_ocr(self, file_path: str) -> Dict:
         """Perform OCR on document based on file type"""
         file_ext = os.path.splitext(file_path)[1].lower()
@@ -276,6 +320,15 @@ class DocumentProcessingService:
             return self.extract_text_from_image(file_path)
         elif file_ext in ['.xlsx', '.xls']:
             return self.extract_text_from_excel(file_path)
+        elif file_ext in ['.docx']:
+            return self.extract_text_from_word(file_path)
+        elif file_ext in ['.doc']:
+            # Old .doc format - try to convert or inform user
+            logger.warning(f"[WARNING] Old .doc format detected. Please convert to .docx format for better support.")
+            return {
+                'success': False,
+                'error': 'Old .doc format is not supported. Please convert the document to .docx format.'
+            }
         else:
             return {
                 'success': False,
@@ -1402,12 +1455,34 @@ class DocumentProcessingService:
             logger.info("[INFO] Step 2: Running OCR on document")
             
             try:
-                # Save content to temporary file for OCR processing
+                # Detect file type from file_uri to use correct suffix
                 import tempfile
-                with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+                file_ext = os.path.splitext(file_uri)[1].lower()
+                
+                # Map file extensions to appropriate suffixes
+                # Default to .pdf if extension not recognized
+                suffix_map = {
+                    '.pdf': '.pdf',
+                    '.docx': '.docx',
+                    '.doc': '.doc',
+                    '.xlsx': '.xlsx',
+                    '.xls': '.xls',
+                    '.png': '.png',
+                    '.jpg': '.jpg',
+                    '.jpeg': '.jpeg',
+                    '.tiff': '.tiff',
+                    '.bmp': '.bmp'
+                }
+                
+                suffix = suffix_map.get(file_ext, '.pdf')
+                logger.info(f"[INFO] Detected file extension: {file_ext}, using suffix: {suffix}")
+                
+                # Save content to temporary file for OCR processing
+                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
                     tmp_file.write(document_content)
                     tmp_file_path = tmp_file.name
                 
+                logger.info(f"[INFO] Created temporary file: {tmp_file_path}")
                 ocr_result = self.perform_ocr(tmp_file_path)
                 
                 # Clean up temporary file
