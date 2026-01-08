@@ -1,5 +1,5 @@
 import logging
-from django.db import connections
+from django.db import connections as db_connections
 from django.conf import settings
 from typing import Dict, List
 # Removed TPRMModule dependency - using direct entity-data-row approach
@@ -262,7 +262,19 @@ class EntityDataService:
     def _get_temp_vendor_data(self, limit: int = 100) -> List[Dict]:
         """Get temp vendor data for risk analysis"""
         try:
-            with connections['default'].cursor() as cursor:
+            # Use tprm database connection for temp_vendor table (in tprm_integration database)
+            if 'tprm' in db_connections.databases:
+                db_connection = db_connections['tprm']
+                db_name = db_connection.settings_dict.get('NAME', 'tprm_integration')
+                logger.info(f"[Entity Service] ✅ Using tprm database connection: {db_name} for temp_vendor")
+                print(f"[Entity Service] ✅ Using tprm database connection: {db_name} for temp_vendor")
+            else:
+                db_connection = db_connections['default']
+                db_name = db_connection.settings_dict.get('NAME', '')
+                logger.warning(f"[Entity Service] ⚠️ tprm connection not found, using default: {db_name}")
+                print(f"[Entity Service] ⚠️ tprm connection not found, using default: {db_name}")
+            
+            with db_connection.cursor() as cursor:
                 cursor.execute("""
                     SELECT id, vendor_code, company_name, legal_name, business_type, 
                            industry_sector, website, annual_revenue, employee_count,
@@ -283,10 +295,13 @@ class EntityDataService:
                     row_dict['display_name'] = f"{row_dict.get('company_name', 'Unknown')} ({row_dict.get('vendor_code', 'No Code')})"
                     rows.append(row_dict)
                 
+                logger.info(f"[Entity Service] Retrieved {len(rows)} temp_vendor records from {db_name}")
                 return rows
                 
         except Exception as e:
             logger.error(f"Error getting temp vendor data: {e}")
+            import traceback
+            logger.error(f"Error traceback: {traceback.format_exc()}")
             return []
 
     def _format_table_display_name(self, table_name: str) -> str:

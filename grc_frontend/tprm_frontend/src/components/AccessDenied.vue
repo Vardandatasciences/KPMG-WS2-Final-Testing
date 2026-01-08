@@ -81,10 +81,8 @@
 import { API_ENDPOINTS, API_CONFIG, getAuthToken } from '../config/api.js'
 import { getCurrentUserId } from '../utils/session.js'
 import axios from 'axios'
-import { Button } from '@/components/ui/button'
-
 import { ShieldX, ArrowLeft, Home, Mail } from 'lucide-vue-next'
-import Button from './ui/button.vue'
+import Button from '@/components/ui/button.vue'
 
 export default {
   name: 'AccessDenied',
