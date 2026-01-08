@@ -5,15 +5,28 @@ Test views for debugging authentication issues
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from .models import ExternalScreeningResult
+from .models import ExternalScreeningResult, TempVendor
+
+# MULTI-TENANCY: Import tenant utilities
+from tprm_backend.core.tenant_utils import get_tenant_id_from_request
 
 @csrf_exempt
 @require_http_methods(["GET"])
 def test_screening_data(request):
-    """Simple test endpoint that returns screening data without authentication"""
+    """Simple test endpoint that returns screening data without authentication
+    MULTI-TENANCY: Filters by tenant when tenant context is available
+    """
     try:
-        # Get the latest screening result
-        latest_result = ExternalScreeningResult.objects.order_by('-screening_id').first()
+        # MULTI-TENANCY: Get tenant ID for filtering
+        tenant_id = get_tenant_id_from_request(request)
+        
+        # Get the latest screening result (filtered by tenant if available)
+        if tenant_id:
+            # Filter by vendor's tenant
+            vendor_ids = TempVendor.objects.filter(tenant_id=tenant_id).values_list('id', flat=True)
+            latest_result = ExternalScreeningResult.objects.filter(vendor_id__in=vendor_ids).order_by('-screening_id').first()
+        else:
+            latest_result = ExternalScreeningResult.objects.order_by('-screening_id').first()
         
         if not latest_result:
             return JsonResponse({

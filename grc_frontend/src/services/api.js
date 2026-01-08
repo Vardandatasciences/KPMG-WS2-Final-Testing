@@ -59,7 +59,7 @@ api.interceptors.response.use(
 );
 // Add request interceptor to include JWT token
 api.interceptors.request.use((config) => {
-  // Skip JWT token for cookie preferences endpoints (they work without authentication)
+  // Check if this is a cookie preferences endpoint
   const isCookiePreferencesEndpoint = config.url && (
     config.url.includes('/api/cookie/preferences/') ||
     config.url.includes('/cookie/preferences/')
@@ -67,13 +67,23 @@ api.interceptors.request.use((config) => {
   
   // Get JWT token from localStorage (authService stores it as 'access_token')
   const token = localStorage.getItem('access_token') || localStorage.getItem('token');
-  if (token && !isCookiePreferencesEndpoint) {
+  
+  // ALWAYS send JWT token if available, even for cookie preferences endpoints
+  // This allows the backend to extract user_id from the token for logged-in users
+  // The endpoint still allows anonymous access, but can link preferences to users when token is present
+  if (token) {
     config.headers.Authorization = `Bearer ${token}`;
-    console.log(`🔐 [API] Adding JWT token to request: ${config.method?.toUpperCase()} ${config.url}`);
-  } else if (!token && !isCookiePreferencesEndpoint) {
-    console.log(`⚠️ [API] No JWT token found for request: ${config.method?.toUpperCase()} ${config.url}`);
-  } else if (isCookiePreferencesEndpoint) {
-    console.log(`🍪 [API] Cookie preferences endpoint - skipping JWT token: ${config.method?.toUpperCase()} ${config.url}`);
+    if (isCookiePreferencesEndpoint) {
+      console.log(`🍪 [API] Cookie preferences endpoint - including JWT token to enable user_id extraction: ${config.method?.toUpperCase()} ${config.url}`);
+    } else {
+      console.log(`🔐 [API] Adding JWT token to request: ${config.method?.toUpperCase()} ${config.url}`);
+    }
+  } else {
+    if (isCookiePreferencesEndpoint) {
+      console.log(`🍪 [API] Cookie preferences endpoint - no JWT token (anonymous request): ${config.method?.toUpperCase()} ${config.url}`);
+    } else {
+      console.log(`⚠️ [API] No JWT token found for request: ${config.method?.toUpperCase()} ${config.url}`);
+    }
   }
  
   // Add user_id to request if available (for backward compatibility)

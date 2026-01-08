@@ -2,13 +2,14 @@
 Serializers for the core app.
 """
 from rest_framework import serializers
+from tprm_backend.utils.base_serializer import AutoDecryptingModelSerializer
 from .models import (
     AuditLog, SystemConfiguration, NotificationTemplate,
     FileUpload, Dashboard, Widget, Report, ReportExecution, Integration
 )
 
 
-class AuditLogSerializer(serializers.ModelSerializer):
+class AuditLogSerializer(AutoDecryptingModelSerializer):
     """Serializer for AuditLog model."""
     
     class Meta:
@@ -21,7 +22,7 @@ class AuditLogSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at']
 
 
-class SystemConfigurationSerializer(serializers.ModelSerializer):
+class SystemConfigurationSerializer(AutoDecryptingModelSerializer):
     """Serializer for SystemConfiguration model."""
     
     class Meta:
@@ -33,7 +34,7 @@ class SystemConfigurationSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
-class NotificationTemplateSerializer(serializers.ModelSerializer):
+class NotificationTemplateSerializer(AutoDecryptingModelSerializer):
     """Serializer for NotificationTemplate model."""
     
     class Meta:
@@ -45,7 +46,7 @@ class NotificationTemplateSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
-class FileUploadSerializer(serializers.ModelSerializer):
+class FileUploadSerializer(AutoDecryptingModelSerializer):
     """Serializer for FileUpload model."""
     
     class Meta:
@@ -58,7 +59,7 @@ class FileUploadSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at']
 
 
-class DashboardSerializer(serializers.ModelSerializer):
+class DashboardSerializer(AutoDecryptingModelSerializer):
     """Serializer for Dashboard model."""
     
     class Meta:
@@ -70,7 +71,7 @@ class DashboardSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
-class WidgetSerializer(serializers.ModelSerializer):
+class WidgetSerializer(AutoDecryptingModelSerializer):
     """Serializer for Widget model."""
     
     class Meta:
@@ -83,7 +84,7 @@ class WidgetSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
-class ReportSerializer(serializers.ModelSerializer):
+class ReportSerializer(AutoDecryptingModelSerializer):
     """Serializer for Report model."""
     
     class Meta:
@@ -96,7 +97,7 @@ class ReportSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
-class ReportExecutionSerializer(serializers.ModelSerializer):
+class ReportExecutionSerializer(AutoDecryptingModelSerializer):
     """Serializer for ReportExecution model."""
     report = ReportSerializer(read_only=True)
     
@@ -109,7 +110,7 @@ class ReportExecutionSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at']
 
 
-class IntegrationSerializer(serializers.ModelSerializer):
+class IntegrationSerializer(AutoDecryptingModelSerializer):
     """Serializer for Integration model."""
     
     class Meta:

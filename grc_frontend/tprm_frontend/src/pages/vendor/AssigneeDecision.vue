@@ -223,48 +223,48 @@
               </div>
 
               <!-- Team Approval Response Scoring Section (shown once per request) -->
-              <div v-if="isParallelResponseApproval(request)" class="parallel-scoring-section">
-                <div v-if="parallelScoringData && parallelScoringData.assignment" class="scoring-overview">
+              <div v-if="isParallelResponseApproval(request) || (request.workflow_type === 'MULTI_PERSON' && getParallelScoringData(request))" class="parallel-scoring-section">
+                <div v-if="getParallelScoringData(request) && getParallelScoringData(request).assignment" class="scoring-overview">
                   <h5>Team Approval Response Scoring - Comprehensive Review</h5>
                   
                   <!-- Assignment Summary -->
                   <div class="assignment-summary">
                     <el-row :gutter="20">
                       <el-col :span="12">
-                        <p><strong>Vendor:</strong> {{ parallelScoringData.assignment.vendor_company_name }} ({{ parallelScoringData.assignment.vendor_code }})</p>
-                        <p><strong>Questionnaire:</strong> {{ parallelScoringData.assignment.questionnaire_name }}</p>
+                        <p><strong>Vendor:</strong> {{ getParallelScoringData(request).assignment.vendor_company_name }} ({{ getParallelScoringData(request).assignment.vendor_code }})</p>
+                        <p><strong>Questionnaire:</strong> {{ getParallelScoringData(request).assignment.questionnaire_name }}</p>
                       </el-col>
                       <el-col :span="12">
-                        <p><strong>Type:</strong> {{ parallelScoringData.assignment.questionnaire_type }}</p>
-                        <p><strong>Current Overall Score:</strong> {{ parallelScoringData.assignment.overall_score || 'Not set' }}</p>
+                        <p><strong>Type:</strong> {{ getParallelScoringData(request).assignment.questionnaire_type }}</p>
+                        <p><strong>Current Overall Score:</strong> {{ getParallelScoringData(request).assignment.overall_score || 'Not set' }}</p>
                       </el-col>
                     </el-row>
                   </div>
 
                   <!-- Review Statistics -->
-                  <div v-if="parallelScoringData && parallelScoringData.statistics" class="review-statistics">
+                  <div v-if="getParallelScoringData(request) && getParallelScoringData(request).statistics" class="review-statistics">
                     <div class="row">
                       <div class="col-6">
                         <div class="stat-card">
-                          <div class="stat-number">{{ parallelScoringData.statistics.total_reviewers || 0 }}</div>
+                          <div class="stat-number">{{ getParallelScoringData(request).statistics.total_reviewers || 0 }}</div>
                           <div class="stat-label">Total Reviewers</div>
                         </div>
                       </div>
                       <div class="col-6">
                         <div class="stat-card">
-                          <div class="stat-number">{{ parallelScoringData.statistics.completed_reviews || 0 }}</div>
+                          <div class="stat-number">{{ getParallelScoringData(request).statistics.completed_reviews || 0 }}</div>
                           <div class="stat-label">Completed Reviews</div>
                         </div>
                       </div>
                       <div class="col-6">
                         <div class="stat-card">
-                          <div class="stat-number">{{ parallelScoringData.statistics.total_questions || 0 }}</div>
+                          <div class="stat-number">{{ getParallelScoringData(request).statistics.total_questions || 0 }}</div>
                           <div class="stat-label">Total Questions</div>
                         </div>
                       </div>
                       <div class="col-6">
                         <div class="stat-card">
-                          <div class="stat-number">{{ parallelScoringData.statistics.questions_with_scores || 0 }}</div>
+                          <div class="stat-number">{{ getParallelScoringData(request).statistics.questions_with_scores || 0 }}</div>
                           <div class="stat-label">Questions Scored</div>
                         </div>
                       </div>
@@ -272,25 +272,25 @@
                   </div>
 
                   <!-- Overall Score Display -->
-                  <div v-if="parallelScoringData && parallelScoringData.assignment" class="overall-score-section">
+                  <div v-if="getParallelScoringData(request) && getParallelScoringData(request).assignment" class="overall-score-section">
                     <h6>Overall Score Summary</h6>
                     <div class="overall-score-card">
                       <div class="score-display">
                         <div class="current-score">
                           <span class="score-label">Current Overall Score:</span>
-                          <span class="score-value" :class="getScoreClass(parallelScoringData.assignment.overall_score || 0)">
-                            {{ (parallelScoringData.assignment.overall_score || 0).toFixed(1) }}
+                          <span class="score-value" :class="getScoreClass(getParallelScoringData(request).assignment.overall_score || 0)">
+                            {{ (getParallelScoringData(request).assignment.overall_score || 0).toFixed(1) }}
                           </span>
                         </div>
                         <div class="score-breakdown">
                           <span class="breakdown-text">
-                            Based on {{ Object.keys(finalScores).filter(id => finalScores[id] !== null && finalScores[id] !== undefined).length }} 
-                            of {{ parallelScoringData.questions_and_responses ? parallelScoringData.questions_and_responses.length : 0 }} questions scored
+                            Based on {{ Object.keys(finalScores).filter(id => id.startsWith(request.approval_id + '_') && finalScores[id] !== null && finalScores[id] !== undefined).length }} 
+                            of {{ getParallelScoringData(request).questions_and_responses ? getParallelScoringData(request).questions_and_responses.length : 0 }} questions scored
                           </span>
                         </div>
                       </div>
                       <div class="score-actions">
-                        <button @click="refreshOverallScoreFromBackend" class="btn btn-info btn-small">
+                        <button @click="refreshOverallScoreFromBackend(request)" class="btn btn-info btn-small">
                           Refresh Score
                         </button>
                       </div>
@@ -298,9 +298,9 @@
                   </div>
 
                   <!-- Questions and Consolidated Scores -->
-                  <div v-if="parallelScoringData && parallelScoringData.questions_and_responses" class="questions-scoring-section">
+                  <div v-if="getParallelScoringData(request) && getParallelScoringData(request).questions_and_responses" class="questions-scoring-section">
                     <h6>Question-by-Question Review & Final Scoring</h6>
-                    <div v-for="qr in parallelScoringData.questions_and_responses" :key="qr.question_id" class="question-scoring-card">
+                    <div v-for="qr in getParallelScoringData(request).questions_and_responses" :key="qr.question_id" class="question-scoring-card">
                       <div class="question-header">
                         <div class="question-info">
                           <div class="question-number-badge">
@@ -435,14 +435,14 @@
                               <label>Final Score</label>
                               <div class="final-score-input-container">
                                 <input
-                                  v-model="finalScores[qr.question_id]"
+                                  v-model="finalScores[`${request.approval_id}_${qr.question_id}`]"
                                   type="number"
                                   :min="0"
                                   :max="getMaxScore(qr.scoring_weight)"
                                   step="0.1"
                                   placeholder="Enter final score"
                                   class="form-input"
-                                  @change="saveIndividualScore(qr.question_id)"
+                                  @change="saveIndividualScore(request.approval_id, qr.question_id)"
                                 />
                                 <span class="max-score-label">/ {{ getMaxScore(qr.scoring_weight) }}</span>
                               </div>
@@ -456,11 +456,11 @@
                             <div class="form-item">
                               <label>Final Comment</label>
                               <textarea
-                                v-model="finalComments[qr.question_id]"
+                                v-model="finalComments[`${request.approval_id}_${qr.question_id}`]"
                                 :rows="2"
                                 placeholder="Your final assessment comment..."
                                 class="form-textarea"
-                                @blur="saveIndividualScore(qr.question_id)"
+                                @blur="saveIndividualScore(request.approval_id, qr.question_id)"
                               />
                             </div>
                           </div>
@@ -468,16 +468,29 @@
                         <div class="score-actions">
                           <button 
                             class="btn btn-primary btn-small"
-                            @click="saveIndividualScore(qr.question_id)"
-                            :disabled="savingScores[qr.question_id]"
+                            @click="saveIndividualScore(request.approval_id, qr.question_id)"
+                            :disabled="savingScores[`${request.approval_id}_${qr.question_id}`]"
                           >
-                            {{ savingScores[qr.question_id] ? 'Saving...' : 'Save Score' }}
+                            {{ savingScores[`${request.approval_id}_${qr.question_id}`] ? 'Saving...' : 'Save Score' }}
                           </button>
                         </div>
                       </div>
                     </div>
                   </div>
 
+                </div>
+                <div v-else-if="getParallelScoringData(request) === null || getParallelScoringData(request) === undefined" class="loading-scoring">
+                  <div class="skeleton">
+                    <div class="skeleton-line"></div>
+                    <div class="skeleton-line"></div>
+                    <div class="skeleton-line"></div>
+                    <div class="skeleton-line"></div>
+                    <div class="skeleton-line"></div>
+                  </div>
+                  <p>Loading parallel scoring data...</p>
+                  <p style="margin-top: 10px; color: #666; font-size: 14px;">
+                    If this takes too long, the request may not be a response approval workflow.
+                  </p>
                 </div>
                 <div v-else class="loading-scoring">
                   <div class="skeleton">
@@ -487,7 +500,7 @@
                     <div class="skeleton-line"></div>
                     <div class="skeleton-line"></div>
                   </div>
-                  <p>Loading parallel scoring data...</p>
+                  <p>Loading parallel scoring data... Please wait.</p>
                 </div>
               </div>
 
@@ -882,23 +895,24 @@
                      </div>
 
                     <!-- Overall Score Override Section -->
-                    <div v-if="parallelScoringData && parallelScoringData.assignment" class="form-item">
+                    <div v-if="getParallelScoringData(request) && getParallelScoringData(request).assignment" class="form-item">
                       <label>Overall Score</label>
                       <div class="overall-score-input-section">
                         <div class="current-score-info">
                           <span class="score-label">Calculated Score:</span>
-                          <span class="current-score" :class="getScoreClass(parallelScoringData.assignment.overall_score || 0)">
-                            {{ (parallelScoringData.assignment.overall_score || 0).toFixed(1) }}
+                          <span class="current-score" :class="getScoreClass(getParallelScoringData(request).assignment.overall_score || 0)">
+                            {{ (getParallelScoringData(request).assignment.overall_score || 0).toFixed(1) }}
                           </span>
                         </div>
                         <div class="score-override-section">
                           <label class="checkbox-item">
-                            <input type="checkbox" v-model="finalDecisionForm.override_score" @change="handleScoreOverrideChange" />
+                            <input type="checkbox" v-model="finalDecisionForm.override_score" @change="handleScoreOverrideChange($event.target.checked, request)" />
                             <span>Override calculated score</span>
                           </label>
                           <div v-if="finalDecisionForm.override_score" class="override-input">
                             <input
-                              v-model="finalDecisionForm.custom_overall_score"
+                              :key="`score-input-${request.approval_id}-${finalDecisionForm.custom_overall_score}`"
+                              v-model.number="finalDecisionForm.custom_overall_score"
                               type="number"
                               :min="0"
                               :max="100"
@@ -909,8 +923,9 @@
                             />
                             <span class="score-unit">%</span>
                             <button 
+                              type="button"
                               class="btn btn-info btn-small"
-                              @click="resetToCalculatedScore"
+                              @click.prevent="resetToCalculatedScore(request)"
                               style="margin-left: 10px;"
                             >
                               Reset to Calculated
@@ -1019,7 +1034,7 @@
 </template>
 
 <script>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, nextTick } from 'vue'
 import api from '@/utils/api'
 import { getCurrentUserId } from '@/utils/session'
 import PopupModal from '@/popup/PopupModal.vue'
@@ -1043,7 +1058,7 @@ export default {
     const versionHistory = ref({}) // approval_id -> versions[]
     const submitting = ref(false)
     const statusChanging = ref(false)
-    const parallelScoringData = ref(null)
+    const parallelScoringData = ref({}) // Changed to object keyed by approval_id to support multiple requests
     const finalScores = ref({})
     const finalComments = ref({})
     const submittingFinalDecision = ref(false)
@@ -1158,8 +1173,18 @@ export default {
         }
         
         // Check if this should load parallel scoring data
-        if (isParallelResponseApproval(request)) {
+        // Try to load for all requests, let the API determine if it's valid
+        const isResponseApproval = isParallelResponseApproval(request)
+        console.log('Is parallel response approval?', isResponseApproval, 'for approval:', approvalId)
+        
+        if (isResponseApproval) {
           await loadParallelScoringData(approvalId)
+        } else {
+          // Also try loading if workflow type is MULTI_PERSON (might be response approval)
+          if (request.workflow_type === 'MULTI_PERSON') {
+            console.log('Workflow type is MULTI_PERSON, attempting to load parallel scoring data...')
+            await loadParallelScoringData(approvalId)
+          }
         }
       } catch (error) {
         console.error('Error fetching single request:', error)
@@ -1188,7 +1213,7 @@ export default {
         // But for the list view, this simplified data is sufficient
         requesterRequests.value = requests
         
-        // Fetch version history for multi-level workflows and final vendor approval
+        // Fetch version history and parallel scoring data for applicable requests
         for (const request of requests) {
           // Fetch version history for MULTI_LEVEL workflows or Final Vendor Approval
           const shouldFetchVersionHistory = 
@@ -1205,6 +1230,16 @@ export default {
               console.error(`Failed to load version history for approval ${request.approval_id}:`, e)
               versionHistory.value[request.approval_id] = []
             }
+          }
+          
+          // Try to load parallel scoring data for response approvals
+          // First check if it's a response approval, then attempt to load
+          if (isParallelResponseApproval(request) || request.workflow_type === 'MULTI_PERSON') {
+            console.log('Attempting to load parallel scoring data for approval:', request.approval_id)
+            // Load in background, don't await to avoid blocking
+            loadParallelScoringData(request.approval_id).catch(err => {
+              console.log('Parallel scoring data not available for approval:', request.approval_id, err.message)
+            })
           }
         }
       } catch (error) {
@@ -1323,17 +1358,48 @@ export default {
       }
     }
 
-    const handleScoreOverrideChange = (override) => {
-      if (override && parallelScoringData.value && parallelScoringData.value.assignment) {
+    const handleScoreOverrideChange = (override, request) => {
+      const scoringData = getParallelScoringData(request)
+      if (override && scoringData && scoringData.assignment) {
         // Initialize custom score with current calculated score
-        finalDecisionForm.custom_overall_score = parallelScoringData.value.assignment.overall_score || 0
+        finalDecisionForm.custom_overall_score = scoringData.assignment.overall_score || 0
       }
     }
 
-    const resetToCalculatedScore = () => {
-      if (parallelScoringData.value && parallelScoringData.value.assignment) {
-        finalDecisionForm.custom_overall_score = parallelScoringData.value.assignment.overall_score || 0
-        console.log('Score reset to calculated value')
+    const resetToCalculatedScore = (request) => {
+      if (!request || !request.approval_id) {
+        console.error('Reset to calculated: Invalid request object')
+        showWarning('Unable to reset score: Invalid request data')
+        return
+      }
+      
+      const scoringData = getParallelScoringData(request)
+      console.log('Reset to calculated - Scoring data:', scoringData)
+      console.log('Reset to calculated - Current form value:', finalDecisionForm.custom_overall_score)
+      
+      if (scoringData && scoringData.assignment) {
+        const calculatedScore = parseFloat(scoringData.assignment.overall_score) || 0
+        
+        // Directly update the reactive form value
+        // Using Object.assign to ensure Vue detects the change
+        Object.assign(finalDecisionForm, {
+          custom_overall_score: calculatedScore
+        })
+        
+        // Use nextTick to ensure Vue reactivity updates the DOM
+        nextTick(() => {
+          console.log('Score reset to calculated value:', calculatedScore)
+          console.log('Form value after reset:', finalDecisionForm.custom_overall_score)
+          showSuccess(`Score reset to calculated value: ${calculatedScore.toFixed(1)}%`)
+        })
+      } else {
+        console.error('Reset to calculated: Scoring data not available', {
+          hasScoringData: !!scoringData,
+          hasAssignment: scoringData?.assignment ? true : false,
+          approvalId: request.approval_id,
+          parallelScoringData: parallelScoringData.value
+        })
+        showWarning('Unable to reset score: Scoring data not loaded. Please wait for data to load.')
       }
     }
 
@@ -1482,11 +1548,12 @@ export default {
         console.log('Prepared request data:', requestData)
 
         // Include overall score override if enabled
-        if (finalDecisionForm.override_score && parallelScoringData.value && parallelScoringData.value.assignment) {
+        const scoringData = getParallelScoringData(request)
+        if (finalDecisionForm.override_score && scoringData && scoringData.assignment) {
           requestData.overall_score_override = {
             enabled: true,
             custom_score: finalDecisionForm.custom_overall_score,
-            original_score: parallelScoringData.value.assignment.overall_score || 0,
+            original_score: scoringData.assignment.overall_score || 0,
             override_reason: finalDecisionForm.decision_reason
           }
           console.log('Added score override:', requestData.overall_score_override)
@@ -1845,64 +1912,107 @@ export default {
     const isParallelResponseApproval = (request) => {
       if (!request) return false
       try {
-        // Check if this is a team approval workflow and response approval
-        const url = new URL(window.location.href)
-        const flowType = url.searchParams.get('flow_type')
-        
-        if (flowType !== 'Parallel') return false
-        
         // Check if request data indicates response approval
         const requestData = request.request_data || {}
         const rd = requestData.request_data || requestData
-        return String(rd.approval_type || '').toLowerCase() === 'response_approval'
-      } catch {
+        const approvalType = String(rd.approval_type || '').toLowerCase()
+        
+        // Check if it's a response approval
+        if (approvalType !== 'response_approval') return false
+        
+        // Check if it's a MULTI_PERSON workflow (parallel workflow)
+        // Also check URL parameter as fallback, but don't require it
+        const workflowType = String(request.workflow_type || '').toUpperCase()
+        if (workflowType === 'MULTI_PERSON') return true
+        
+        // Fallback: Check URL parameter if workflow type is not clear
+        try {
+          const url = new URL(window.location.href)
+          const flowType = url.searchParams.get('flow_type')
+          if (flowType && flowType.toLowerCase() === 'parallel') return true
+        } catch {
+          // URL parsing failed, continue with other checks
+        }
+        
+        // If we have questionnaire_assignment_id, it's likely a response approval
+        if (rd.questionnaire_assignment_id) return true
+        
+        return false
+      } catch (error) {
+        console.error('Error checking if parallel response approval:', error)
         return false
       }
     }
 
     const loadParallelScoringData = async (approvalId) => {
+      if (!approvalId) {
+        console.error('No approval ID provided for loading parallel scoring data')
+        return
+      }
+      
       try {
+        console.log('Loading parallel scoring data for approval:', approvalId)
         const response = await api.get(`/api/v1/vendor-approval/parallel-scoring/${approvalId}/`)
-        if (response.data.success) {
-          parallelScoringData.value = response.data
+        
+        if (response.data && response.data.success) {
+          // Store data keyed by approval_id to support multiple requests
+          parallelScoringData.value[approvalId] = response.data
           
           // Debug: Log the data structure to understand what we're getting
-          console.log('Parallel scoring data loaded:', response.data)
-          console.log('Questions and responses:', response.data.questions_and_responses)
-          console.log('Stages data:', response.data.stages)
+          console.log('✓ Parallel scoring data loaded successfully for approval:', approvalId, response.data)
+          console.log('Assignment:', response.data.assignment)
+          console.log('Questions and responses:', response.data.questions_and_responses?.length || 0, 'questions')
+          console.log('Statistics:', response.data.statistics)
           
           // Initialize final scores with average scores (overall assessment)
-          response.data.questions_and_responses.forEach(qr => {
-            // Convert average score percentage (0-100) back to actual score range (0 to max_score)
-            if (qr.average_score !== null && qr.average_score !== undefined) {
-              const maxScore = getMaxScore(qr.scoring_weight)
-              // Convert percentage back to actual score: (percentage / 100) * max_score
-              const actualScore = (parseFloat(qr.average_score) / 100) * maxScore
-              finalScores.value[qr.question_id] = actualScore
-            } else {
-              finalScores.value[qr.question_id] = 0
-            }
+          // Use approval_id as prefix to avoid conflicts between multiple requests
+          if (response.data.questions_and_responses && Array.isArray(response.data.questions_and_responses)) {
+            response.data.questions_and_responses.forEach(qr => {
+              const scoreKey = `${approvalId}_${qr.question_id}`
+              // Convert average score percentage (0-100) back to actual score range (0 to max_score)
+              if (qr.average_score !== null && qr.average_score !== undefined) {
+                const maxScore = getMaxScore(qr.scoring_weight)
+                // Convert percentage back to actual score: (percentage / 100) * max_score
+                const actualScore = (parseFloat(qr.average_score) / 100) * maxScore
+                finalScores.value[scoreKey] = actualScore
+              } else {
+                finalScores.value[scoreKey] = null // Set to null so user knows it needs to be filled
+              }
+              
+              const commentKey = `${approvalId}_${qr.question_id}`
+              if (qr.final_reviewer_comment) {
+                finalComments.value[commentKey] = qr.final_reviewer_comment
+              }
+            })
             
-            if (qr.final_reviewer_comment) {
-              finalComments.value[qr.question_id] = qr.final_reviewer_comment
-            }
+            // Calculate initial overall score
+            calculateOverallScore(approvalId)
             
-            // Debug: Log reviewer scores for each question
-            console.log(`Question ${qr.question_id} reviewer scores:`, qr.reviewer_scores)
-            console.log(`Question ${qr.question_id} average score:`, qr.average_score)
-            console.log(`Question ${qr.question_id} final score initialized:`, finalScores.value[qr.question_id])
-          })
-          
-          // Calculate initial overall score
-          calculateOverallScore()
-          
-          // Debug: Log the initialized final scores
-          console.log('Initialized final scores:', finalScores.value)
-          console.log('Initialized final comments:', finalComments.value)
+            console.log('✓ Initialized final scores for', response.data.questions_and_responses.length, 'questions')
+          } else {
+            console.warn('No questions_and_responses found in parallel scoring data')
+            parallelScoringData.value[approvalId] = null
+          }
+        } else {
+          console.error('Parallel scoring API returned unsuccessful response:', response.data)
+          parallelScoringData.value[approvalId] = null
+          showWarning('Scoring data not available for this request')
         }
       } catch (error) {
         console.error('Error loading parallel scoring data:', error)
-        ElMessage.error('Failed to load scoring data')
+        console.error('Error details:', {
+          message: error.message,
+          response: error.response?.data,
+          status: error.response?.status
+        })
+        parallelScoringData.value[approvalId] = null
+        
+        // Only show error if it's not a 404 (which might be expected for non-response approvals)
+        if (error.response?.status !== 404) {
+          showError(`Failed to load scoring data: ${error.response?.data?.error || error.message}`)
+        } else {
+          console.log('Parallel scoring endpoint returned 404 - this may not be a response approval request')
+        }
       }
     }
 
@@ -1910,14 +2020,22 @@ export default {
       return parseFloat(scoringWeight) * 10 || 10
     }
 
-    const calculatePreviewScore = () => {
-      if (!parallelScoringData.value) return
+    // Helper function to get parallel scoring data for a specific request
+    const getParallelScoringData = (request) => {
+      if (!request || !request.approval_id) return null
+      return parallelScoringData.value[request.approval_id] || null
+    }
+
+    const calculatePreviewScore = (request) => {
+      const scoringData = getParallelScoringData(request)
+      if (!scoringData) return
       
       let totalWeightedScore = 0
       let totalWeightedMax = 0
       
-      parallelScoringData.value.questions_and_responses.forEach(qr => {
-        const finalScore = finalScores.value[qr.question_id] || 0
+      scoringData.questions_and_responses.forEach(qr => {
+        const scoreKey = `${request.approval_id}_${qr.question_id}`
+        const finalScore = finalScores.value[scoreKey] || 0
         const weight = qr.scoring_weight || 1
         const maxScore = getMaxScore(weight)
         
@@ -1931,61 +2049,136 @@ export default {
         previewOverallScore.value = 0
       }
       
-      ElMessage.success(`Predicted overall score: ${previewOverallScore.value.toFixed(1)}%`)
+      showSuccess(`Predicted overall score: ${previewOverallScore.value.toFixed(1)}%`)
     }
 
-    const saveIndividualScore = async (questionId) => {
-      if (!parallelScoringData.value) return
+    // Helper function to get user ID safely
+    const getUserIdSafely = () => {
+      try {
+        // Try to get from localStorage first (primary source for JWT authentication)
+        let userId = localStorage.getItem('user_id')
+        if (userId) {
+          return userId
+        }
+        
+        // Try sessionStorage
+        userId = sessionStorage.getItem('userId')
+        if (userId) {
+          return userId
+        }
+        
+        // Try from session user object
+        const sessionUser = sessionStorage.getItem('user')
+        if (sessionUser) {
+          try {
+            const parsedUser = JSON.parse(sessionUser)
+            userId = parsedUser.UserId || parsedUser.userId
+            if (userId) {
+              return userId
+            }
+          } catch (e) {
+            console.error('Error parsing session user:', e)
+          }
+        }
+        
+        // Try localStorage user object
+        const localUser = localStorage.getItem('user')
+        if (localUser) {
+          try {
+            const parsedUser = JSON.parse(localUser)
+            userId = parsedUser.UserId || parsedUser.userId
+            if (userId) {
+              return userId
+            }
+          } catch (e) {
+            console.error('Error parsing local user:', e)
+          }
+        }
+        
+        // Fallback: try getCurrentUserId if available
+        try {
+          return getCurrentUserId()
+        } catch (e) {
+          console.warn('getCurrentUserId failed, using fallback:', e)
+        }
+        
+        // Last resort: return null and let backend handle it
+        console.warn('Could not determine user ID, backend may use authenticated user')
+        return null
+      } catch (error) {
+        console.error('Error getting user ID:', error)
+        return null
+      }
+    }
+
+    const saveIndividualScore = async (approvalId, questionId) => {
+      const scoringData = parallelScoringData.value[approvalId]
+      if (!scoringData) {
+        showWarning('Scoring data not available. Please wait for data to load.')
+        return
+      }
       
-      const score = finalScores.value[questionId]
-      const comment = finalComments.value[questionId] || ''
+      const scoreKey = `${approvalId}_${questionId}`
+      const commentKey = `${approvalId}_${questionId}`
+      const score = finalScores.value[scoreKey]
+      const comment = finalComments.value[commentKey] || ''
       
       if (score === null || score === undefined) {
-        ElMessage.warning('Please enter a score before saving')
+        showWarning('Please enter a score before saving')
         return
       }
       
       try {
-        savingScores.value[questionId] = true
+        savingScores.value[scoreKey] = true
+        
+        // Get user ID safely
+        const userId = getUserIdSafely()
         
         // Prepare score data for this specific question
         const scoreData = {
-          assignment_id: parallelScoringData.value.assignment.assignment_id,
+          assignment_id: scoringData.assignment.assignment_id,
           final_scores: [{
             question_id: questionId,
-            final_score: score,
+            final_score: parseFloat(score),
             final_comment: comment
           }],
           assignee_decision: 'DRAFT', // Mark as draft while individual scores are being saved
           assignee_comments: 'Individual score saved',
-          assignee_id: getCurrentUserId()
+          assignee_id: userId
         }
+        
+        console.log('Saving individual score:', scoreData)
         
         const response = await api.post('/api/v1/vendor-approval/final-assignee-scores/save/', scoreData)
         
         if (response.data.success) {
-          ElMessage.success(`Score saved for question ${questionId}`)
+          showSuccess(`Score saved for question ${questionId}`)
           
           // Refresh overall score from backend to get the accurate calculation
-          await refreshOverallScoreFromBackend()
+          await refreshOverallScoreFromBackend(approvalId)
+        } else {
+          showError(response.data.error || 'Failed to save score')
         }
         
       } catch (error) {
         console.error('Error saving individual score:', error)
-        ElMessage.error('Failed to save score')
+        const errorMessage = error.response?.data?.error || error.message || 'Failed to save score'
+        showError(`Failed to save score: ${errorMessage}`)
       } finally {
-        savingScores.value[questionId] = false
+        savingScores.value[scoreKey] = false
       }
     }
 
-    const calculateOverallScore = () => {
-      if (!parallelScoringData.value) return
+    const calculateOverallScore = (approvalId) => {
+      const scoringData = parallelScoringData.value[approvalId]
+      if (!scoringData) return
       
       let totalWeightedScore = 0
       let totalWeightedMax = 0
       
-      parallelScoringData.value.questions_and_responses.forEach(qr => {
-        const finalScore = finalScores.value[qr.question_id]
+      scoringData.questions_and_responses.forEach(qr => {
+        const scoreKey = `${approvalId}_${qr.question_id}`
+        const finalScore = finalScores.value[scoreKey]
         if (finalScore !== null && finalScore !== undefined) {
           const weight = qr.scoring_weight || 1
           const maxScore = getMaxScore(weight)
@@ -2002,14 +2195,28 @@ export default {
       }
     }
 
-    const refreshOverallScoreFromBackend = async () => {
-      if (!parallelScoringData.value) return
+    const refreshOverallScoreFromBackend = async (requestOrApprovalId) => {
+      // Support both request object and approval_id string
+      const approvalId = typeof requestOrApprovalId === 'string' 
+        ? requestOrApprovalId 
+        : requestOrApprovalId?.approval_id
+      
+      if (!approvalId) {
+        console.error('No approval ID provided for refreshing overall score')
+        return
+      }
+      
+      const scoringData = parallelScoringData.value[approvalId]
+      if (!scoringData) {
+        console.warn('No scoring data found for approval:', approvalId)
+        return
+      }
       
       try {
-        const response = await api.get(`/api/v1/vendor-approval/parallel-scoring/${parallelScoringData.value.approval_id}/`)
+        const response = await api.get(`/api/v1/vendor-approval/parallel-scoring/${approvalId}/`)
         if (response.data.success) {
           // Update the assignment overall score from backend
-          parallelScoringData.value.assignment.overall_score = response.data.assignment.overall_score
+          parallelScoringData.value[approvalId].assignment.overall_score = response.data.assignment.overall_score
           calculatedOverallScore.value = response.data.assignment.overall_score || 0
         }
       } catch (error) {
@@ -2090,24 +2297,26 @@ export default {
       return 'Low consensus - Below average scores'
     }
 
-    const saveFinalAssigneeDecision = async () => {
-      if (!parallelScoringData.value) {
-        ElMessage.error('No scoring data available')
+    const saveFinalAssigneeDecision = async (request) => {
+      const scoringData = getParallelScoringData(request)
+      if (!scoringData) {
+        showError('No scoring data available')
         return
       }
       
       if (!assigneeDecisionForm.decision) {
-        ElMessage.warning('Please select a decision (Approve/Reject)')
+        showWarning('Please select a decision (Approve/Reject)')
         return
       }
       
       // Validate that scores are provided
-      const missingScores = parallelScoringData.value.questions_and_responses.filter(qr => 
-        finalScores.value[qr.question_id] === undefined || finalScores.value[qr.question_id] === null
-      )
+      const missingScores = scoringData.questions_and_responses.filter(qr => {
+        const scoreKey = `${request.approval_id}_${qr.question_id}`
+        return finalScores.value[scoreKey] === undefined || finalScores.value[scoreKey] === null
+      })
       
       if (missingScores.length > 0) {
-        ElMessage.warning(`Please provide final scores for all ${missingScores.length} remaining questions`)
+        showWarning(`Please provide final scores for all ${missingScores.length} remaining questions`)
         return
       }
       
@@ -2115,34 +2324,37 @@ export default {
         submittingFinalDecision.value = true
         
         // Prepare final scores data
-        const finalScoresData = parallelScoringData.value.questions_and_responses.map(qr => ({
-          question_id: qr.question_id,
-          final_score: finalScores.value[qr.question_id],
-          final_comment: finalComments.value[qr.question_id] || ''
-        }))
+        const finalScoresData = scoringData.questions_and_responses.map(qr => {
+          const scoreKey = `${request.approval_id}_${qr.question_id}`
+          const commentKey = `${request.approval_id}_${qr.question_id}`
+          return {
+            question_id: qr.question_id,
+            final_score: finalScores.value[scoreKey],
+            final_comment: finalComments.value[commentKey] || ''
+          }
+        })
         
         const payload = {
-          assignment_id: parallelScoringData.value.assignment.assignment_id,
+          assignment_id: scoringData.assignment.assignment_id,
           final_scores: finalScoresData,
           assignee_decision: assigneeDecisionForm.decision,
           assignee_comments: assigneeDecisionForm.comments,
-          assignee_id: getCurrentUserId()
+          assignee_id: getUserIdSafely()
         }
         
         const response = await api.post('/api/v1/vendor-approval/final-assignee-scores/save/', payload)
         
         if (response.data.success) {
-          ElMessage.success('Final decision and scores saved successfully!')
+          showSuccess('Final decision and scores saved successfully!')
           
           // Refresh the data to show updated status
-          await loadParallelScoringData(parallelScoringData.value.approval_id)
+          await loadParallelScoringData(request.approval_id)
           
           // Refresh version history to show the new version created by assignee decision
           try {
-            const approvalId = parallelScoringData.value.approval_id
-            const vRes = await api.get(`/api/v1/vendor-approval/requests/${approvalId}/versions/`)
-            versionHistory.value[approvalId] = vRes.data || []
-            console.log(`✓ Version history refreshed for approval ${approvalId}`)
+            const vRes = await api.get(`/api/v1/vendor-approval/requests/${request.approval_id}/versions/`)
+            versionHistory.value[request.approval_id] = vRes.data || []
+            console.log(`✓ Version history refreshed for approval ${request.approval_id}`)
           } catch (vError) {
             console.error('Failed to refresh version history:', vError)
           }
@@ -2159,7 +2371,7 @@ export default {
         
       } catch (error) {
         console.error('Error saving final decision:', error)
-        ElMessage.error('Failed to save final decision')
+        showError('Failed to save final decision')
       } finally {
         submittingFinalDecision.value = false
       }
@@ -2215,6 +2427,7 @@ export default {
       previewOverallScore,
       loadParallelScoringData,
       getMaxScore,
+      getParallelScoringData,
       calculatePreviewScore,
       saveFinalAssigneeDecision,
       saveIndividualScore,

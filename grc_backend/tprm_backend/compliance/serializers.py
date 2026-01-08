@@ -1,12 +1,13 @@
 from rest_framework import serializers
+from tprm_backend.utils.base_serializer import AutoDecryptingModelSerializer
 from .models import Framework, ComplianceMapping
 
-class FrameworkSerializer(serializers.ModelSerializer):
+class FrameworkSerializer(AutoDecryptingModelSerializer):
     class Meta:
         model = Framework
         fields = '__all__'
 
-class ComplianceMappingSerializer(serializers.ModelSerializer):
+class ComplianceMappingSerializer(AutoDecryptingModelSerializer):
     framework_name = serializers.CharField(source='framework.FrameworkName', read_only=True)
     framework_category = serializers.CharField(source='framework.Category', read_only=True)
     framework_version = serializers.FloatField(source='framework.CurrentVersion', read_only=True)
@@ -33,7 +34,7 @@ class ComplianceMappingSerializer(serializers.ModelSerializer):
         # For now, return a placeholder
         return "Unknown Vendor"
 
-class ComplianceMappingDetailSerializer(serializers.ModelSerializer):
+class ComplianceMappingDetailSerializer(AutoDecryptingModelSerializer):
     framework = FrameworkSerializer(read_only=True)
     sla_name = serializers.SerializerMethodField()
     vendor_name = serializers.SerializerMethodField()

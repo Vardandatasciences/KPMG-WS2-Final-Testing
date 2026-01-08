@@ -2,12 +2,13 @@
 Serializers for the Audits app.
 """
 from rest_framework import serializers
+from tprm_backend.utils.base_serializer import AutoDecryptingModelSerializer
 from .models import Audit, StaticQuestionnaire, AuditVersion, AuditFinding, AuditReport
 from tprm_backend.slas.models import VendorSLA
 from tprm_backend.slas.serializers import VendorSLASerializer, SLAMetricSerializer
 
 
-class StaticQuestionnaireSerializer(serializers.ModelSerializer):
+class StaticQuestionnaireSerializer(AutoDecryptingModelSerializer):
     """Serializer for StaticQuestionnaire model."""
     
     class Meta:
@@ -19,7 +20,7 @@ class StaticQuestionnaireSerializer(serializers.ModelSerializer):
         read_only_fields = ['question_id', 'created_at']
 
 
-class AuditVersionSerializer(serializers.ModelSerializer):
+class AuditVersionSerializer(AutoDecryptingModelSerializer):
     """Serializer for AuditVersion model."""
     
     class Meta:
@@ -32,7 +33,7 @@ class AuditVersionSerializer(serializers.ModelSerializer):
         read_only_fields = ['version_id', 'date_created', 'created_at']
 
 
-class AuditFindingSerializer(serializers.ModelSerializer):
+class AuditFindingSerializer(AutoDecryptingModelSerializer):
     """Serializer for AuditFinding model."""
     
     class Meta:
@@ -45,7 +46,7 @@ class AuditFindingSerializer(serializers.ModelSerializer):
         read_only_fields = ['audit_finding_id', 'created_at', 'updated_at']
 
 
-class AuditReportSerializer(serializers.ModelSerializer):
+class AuditReportSerializer(AutoDecryptingModelSerializer):
     """Serializer for AuditReport model."""
     
     class Meta:
@@ -56,7 +57,7 @@ class AuditReportSerializer(serializers.ModelSerializer):
         read_only_fields = ['report_id', 'generated_at']
 
 
-class AuditSerializer(serializers.ModelSerializer):
+class AuditSerializer(AutoDecryptingModelSerializer):
     """Serializer for Audit model."""
     sla_id = serializers.IntegerField(read_only=True)
     sla_name = serializers.SerializerMethodField()
@@ -77,15 +78,16 @@ class AuditSerializer(serializers.ModelSerializer):
         """Get SLA name from sla_id using cross-database lookup."""
         if obj.sla_id:
             try:
-                from slas.models import VendorSLA
                 sla = VendorSLA.objects.get(sla_id=obj.sla_id)
                 return sla.sla_name
-            except:
+            except VendorSLA.DoesNotExist:
+                return "Unknown SLA"
+            except Exception:
                 return "Unknown SLA"
         return None
 
 
-class AuditCreateSerializer(serializers.ModelSerializer):
+class AuditCreateSerializer(AutoDecryptingModelSerializer):
     """Serializer for creating audits."""
     sla_id = serializers.IntegerField(write_only=True)
     
@@ -114,25 +116,59 @@ class AuditCreateSerializer(serializers.ModelSerializer):
             validated_data['review_status'] = 'pending'
         
         # Validate that the SLA exists (but don't create ForeignKey relationship)
+        # MULTI-TENANCY: Filter by tenant_id when validating SLA
+        sla_obj = None
         try:
-            from slas.models import VendorSLA
-            VendorSLA.objects.get(sla_id=sla_id)
-        except VendorSLA.DoesNotExist:
-            raise serializers.ValidationError(f"SLA with ID {sla_id} does not exist")
+            from tprm_backend.core.tenant_utils import get_tenant_id_from_request
+            
+            # Get tenant_id from request context if available
+            tenant_id = None
+            if self.context and 'request' in self.context:
+                tenant_id = get_tenant_id_from_request(self.context['request'])
+            
+            # Try to get the SLA, filtering by tenant_id if available
+            sla_query = VendorSLA.objects.filter(sla_id=sla_id)
+            if tenant_id:
+                sla_query = sla_query.filter(tenant_id=tenant_id)
+            
+            sla_obj = sla_query.first()
+            if not sla_obj:
+                if tenant_id:
+                    raise serializers.ValidationError(f"SLA with ID {sla_id} not found for tenant {tenant_id}")
+                else:
+                    raise serializers.ValidationError(f"SLA with ID {sla_id} does not exist")
+        except serializers.ValidationError:
+            # Re-raise validation errors as-is
+            raise
+        except Exception as e:
+            # Log unexpected errors
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error validating sla_id {sla_id}: {str(e)}", exc_info=True)
+            raise serializers.ValidationError(f"Error validating SLA ID {sla_id}: {str(e)}")
         
-        # Store sla_id as integer in the database (bypassing ForeignKey due to cross-database routing)
-        # We'll use raw SQL to insert the sla_id directly
-        from django.db import connections
-        
-        # Create the audit object without the sla field using the correct database
+        # Create the audit object
+        # Note: sla is a ForeignKey field, but we'll set it directly using the sla_id
+        # Since it's a ForeignKey with db_column='sla_id', we can set it after creation
         audit = Audit.objects.create(**validated_data)
         
-        # Update the sla_id directly using raw SQL to bypass the ForeignKey constraint
-        with connections['default'].cursor() as cursor:
-            cursor.execute(
-                "UPDATE audits SET sla_id = %s WHERE audit_id = %s",
-                [sla_id, audit.audit_id]
-            )
+        # Set the sla_id directly on the model instance
+        # Since sla is a ForeignKey with db_column='sla_id', we can set it directly
+        # Use pk instead of audit_id to avoid column name issues
+        # Try setting the ForeignKey object first, then fallback to direct update
+        try:
+            if sla_obj:
+                audit.sla = sla_obj
+                audit.save(update_fields=['sla'])
+            else:
+                # Fallback: use update() method
+                Audit.objects.filter(pk=audit.pk).update(sla_id=sla_id)
+        except Exception as e:
+            # If setting ForeignKey fails, try direct update
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Error setting sla ForeignKey, trying direct update: {str(e)}")
+            Audit.objects.filter(pk=audit.pk).update(sla_id=sla_id)
         
         # Refresh the audit object to get the updated sla_id
         audit.refresh_from_db()
@@ -140,7 +176,7 @@ class AuditCreateSerializer(serializers.ModelSerializer):
         return audit
 
 
-class AuditListSerializer(serializers.ModelSerializer):
+class AuditListSerializer(AutoDecryptingModelSerializer):
     """Simplified serializer for audit lists."""
     sla_name = serializers.SerializerMethodField()
     sla_type = serializers.SerializerMethodField()
@@ -159,10 +195,11 @@ class AuditListSerializer(serializers.ModelSerializer):
         """Get SLA name from sla_id using cross-database lookup."""
         if obj.sla_id:
             try:
-                from slas.models import VendorSLA
                 sla = VendorSLA.objects.get(sla_id=obj.sla_id)
                 return sla.sla_name
-            except:
+            except VendorSLA.DoesNotExist:
+                return "Unknown SLA"
+            except Exception:
                 return "Unknown SLA"
         return None
     
@@ -170,10 +207,11 @@ class AuditListSerializer(serializers.ModelSerializer):
         """Get SLA type from sla_id using cross-database lookup."""
         if obj.sla_id:
             try:
-                from slas.models import VendorSLA
                 sla = VendorSLA.objects.get(sla_id=obj.sla_id)
                 return sla.sla_type
-            except:
+            except VendorSLA.DoesNotExist:
+                return "Unknown Type"
+            except Exception:
                 return "Unknown Type"
         return None
     

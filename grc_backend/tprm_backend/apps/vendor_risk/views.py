@@ -24,6 +24,15 @@ from .serializers import (
 from tprm_backend.apps.vendor_core.vendor_authentication import VendorAuthenticationMixin, JWTAuthentication, SimpleAuthenticatedPermission, VendorPermission
 from tprm_backend.rbac.tprm_decorators import rbac_vendor_required
 
+# MULTI-TENANCY: Import tenant utilities for filtering
+from tprm_backend.core.tenant_utils import (
+    get_tenant_id_from_request,
+    filter_queryset_by_tenant,
+    get_tenant_aware_queryset,
+    require_tenant,
+    tenant_filter
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -79,7 +88,9 @@ class VendorLifecycleStageViewSet(VendorAuthenticationMixin, viewsets.ModelViewS
 
 
 class VendorRiskDashboardAPIView(APIView):
-    """API view for vendor risk dashboard data with RBAC protection"""
+    """API view for vendor risk dashboard data with RBAC protection
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
     authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
@@ -87,13 +98,23 @@ class VendorRiskDashboardAPIView(APIView):
     def get(self, request):
         """Get dashboard statistics and recent risks"""
         try:
+            # MULTI-TENANCY: Get tenant ID from request
+            tenant_id = get_tenant_id_from_request(request)
+            if not tenant_id:
+                return Response({'error': 'Tenant context not found'}, status=status.HTTP_403_FORBIDDEN)
+
             from django.db.models import Count, Case, When, IntegerField, Avg, F, Q
             from .models import RiskTPRM  # Make sure to import your model
+            from tprm_backend.apps.vendor_core.models import TempVendor
             
-            # Base queryset for vendor risks - filter by data='temp_vendor'
+            # MULTI-TENANCY: Get vendor IDs for this tenant
+            tenant_vendor_ids = list(TempVendor.objects.filter(tenant_id=tenant_id).values_list('id', flat=True))
+            
+            # Base queryset for vendor risks - filter by data='temp_vendor' and tenant's vendors
             base_queryset = RiskTPRM.objects.filter(
                 entity__in=['vendor', 'vendor_management'],
-                data='temp_vendor'
+                data='temp_vendor',
+                row__in=[str(vid) for vid in tenant_vendor_ids]  # Filter by tenant's vendor IDs
             )
             
             # Get risk statistics using aggregation
@@ -188,7 +209,9 @@ class VendorRiskDashboardAPIView(APIView):
 
 
 class VendorRisksAPIView(APIView):
-    """API view for vendor risks with filtering and pagination with RBAC protection"""
+    """API view for vendor risks with filtering and pagination with RBAC protection
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
     authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
@@ -196,6 +219,11 @@ class VendorRisksAPIView(APIView):
     def get(self, request):
         """Get vendor risks with filtering"""
         try:
+            # MULTI-TENANCY: Get tenant ID from request
+            tenant_id = get_tenant_id_from_request(request)
+            if not tenant_id:
+                return Response({'error': 'Tenant context not found'}, status=status.HTTP_403_FORBIDDEN)
+
             # Get query parameters
             page = int(request.query_params.get('page', 1))
             page_size = int(request.query_params.get('page_size', 20))
@@ -206,11 +234,33 @@ class VendorRisksAPIView(APIView):
             # Log incoming parameters
             logger.info(f"=== VENDOR RISKS API GET REQUEST ===")
             logger.info(f"Raw vendor_id parameter: {vendor_id}")
-            logger.info(f"Priority: {priority}, Search: {search}")
+            logger.info(f"Priority: {priority}, Search: {search}, Tenant ID: {tenant_id}")
             
-            # Build WHERE clause - always filter by data='temp_vendor'
+            # MULTI-TENANCY: Get vendor IDs for this tenant
+            from tprm_backend.apps.vendor_core.models import TempVendor
+            tenant_vendor_ids = list(TempVendor.objects.filter(tenant_id=tenant_id).values_list('id', flat=True))
+            tenant_vendor_ids_str = [str(vid) for vid in tenant_vendor_ids]
+            
+            # Build WHERE clause - always filter by data='temp_vendor' and tenant's vendors
             where_conditions = ["entity IN ('vendor', 'vendor_management')", "`data` = 'temp_vendor'"]
             params = []
+            
+            # MULTI-TENANCY: Add tenant filter through vendor IDs
+            if tenant_vendor_ids_str:
+                placeholders = ', '.join(['%s'] * len(tenant_vendor_ids_str))
+                where_conditions.append(f"`row` IN ({placeholders})")
+                params.extend(tenant_vendor_ids_str)
+            else:
+                # No vendors for this tenant, return empty result
+                return Response({
+                    'results': [],
+                    'count': 0,
+                    'page': page,
+                    'page_size': page_size,
+                    'total_pages': 0,
+                    'has_next': False,
+                    'has_previous': False
+                }, status=status.HTTP_200_OK)
             
             # Add filters
             if priority and priority != 'All':
@@ -353,6 +403,7 @@ class VendorModulesAPIView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
+    @rbac_vendor_required('ViewRiskProfile')
     def get(self, request):
         """Get available vendor modules"""
         try:
@@ -393,19 +444,28 @@ class VendorModulesAPIView(APIView):
 
 
 class VendorListAPIView(APIView):
-    """API view for getting list of vendors with RBAC protection"""
+    """API view for getting list of vendors with RBAC protection
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
     authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
+    @rbac_vendor_required('ViewRiskProfile')
     def get(self, request):
         """Get list of vendors prioritizing temp_vendor (for risk filtering) with fallback to main vendors table"""
         try:
+            # MULTI-TENANCY: Get tenant ID from request
+            tenant_id = get_tenant_id_from_request(request)
+            if not tenant_id:
+                return Response({'error': 'Tenant context not found'}, status=status.HTTP_403_FORBIDDEN)
+
             with connections['default'].cursor() as cursor:
                 vendors = []
                 vendor_ids_seen = set()
                 
                 # First, get vendors from temp_vendor table (prioritized for risk filtering)
                 # Since risk_tprm.row stores temp_vendor.id, we need these IDs for filtering
+                # MULTI-TENANCY: Filter by tenant
                 try:
                     cursor.execute("""
                         SELECT 
@@ -414,8 +474,9 @@ class VendorListAPIView(APIView):
                             risk_level, status, is_critical_vendor,
                             created_at, updated_at
                         FROM temp_vendor 
+                        WHERE TenantId = %s
                         ORDER BY company_name ASC
-                    """)
+                    """, [tenant_id])
                     
                     columns = [col[0] for col in cursor.description]
                     for row in cursor.fetchall():
@@ -433,6 +494,7 @@ class VendorListAPIView(APIView):
                     logger.warning(f"Could not fetch from temp_vendor table: {e}")
                 
                 # Also get vendors from main vendors table (if not already in temp_vendor)
+                # MULTI-TENANCY: Filter by tenant
                 try:
                     cursor.execute("""
                         SELECT 
@@ -440,8 +502,10 @@ class VendorListAPIView(APIView):
                             business_type, industry_sector, vendor_category_id,
                             risk_level, status, is_critical_vendor,
                             created_at, updated_at
+                        FROM vendors
+                        WHERE TenantId = %s
                         ORDER BY company_name ASC
-                    """)
+                    """, [tenant_id])
                     
                     columns = [col[0] for col in cursor.description]
                     for row in cursor.fetchall():
@@ -512,18 +576,26 @@ class VendorRiskGenerationAPIView(APIView):
 
 
 class VendorRiskDebugAPIView(APIView):
-    """API view for debugging vendor risk data matching"""
+    """API view for debugging vendor risk data matching
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
     authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
     def get(self, request):
         """Debug endpoint to check data matching between temp_vendor and risk_tprm"""
         try:
+            # MULTI-TENANCY: Get tenant ID from request
+            tenant_id = get_tenant_id_from_request(request)
+            if not tenant_id:
+                return Response({'error': 'Tenant context not found'}, status=status.HTTP_403_FORBIDDEN)
+
             vendor_id = request.query_params.get('vendor_id', '10')
             
             with connections['default'].cursor() as cursor:
                 # Check temp_vendor table
-                cursor.execute("SELECT id, company_name FROM temp_vendor WHERE id = %s", [vendor_id])
+                # MULTI-TENANCY: Filter by tenant
+                cursor.execute("SELECT id, company_name FROM temp_vendor WHERE id = %s AND TenantId = %s", [vendor_id, tenant_id])
                 vendor_data = cursor.fetchone()
                 
                 # Check all risk_tprm data='temp_vendor'

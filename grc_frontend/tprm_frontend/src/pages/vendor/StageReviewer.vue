@@ -676,8 +676,8 @@ export default {
           request_data_display: stage.request_data ? JSON.stringify(stage.request_data, null, 2) : 'No data'
         }))
 
-        // Find the specific stage
-        const stage = stages.find(s => s.stage_id === stageId)
+        // Find the specific stage (stage_id may be number in API but stageId is always a string from URL)
+        const stage = stages.find(s => String(s.stage_id) === String(stageId))
         if (!stage) {
           console.warn('Stage not found or not assigned to this user')
           return

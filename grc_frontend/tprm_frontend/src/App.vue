@@ -19,6 +19,7 @@ import AppLayout from './components/layout/AppLayout.vue'
 import PopupModal from './popup/PopupModal.vue'
 import { computed, onMounted } from 'vue'
 import { useStore } from 'vuex'
+import { useRFPStore } from '@/store/index_rfp'
 
 const route = useRoute()
 const router = useRouter()
@@ -91,9 +92,84 @@ onMounted(() => {
         
         if (event.data.user) {
           localStorage.setItem('current_user', JSON.stringify(event.data.user))
+          localStorage.setItem('user_id', event.data.user.UserId || event.data.user.user_id || event.data.user.id)
           console.log('[TPRM App] ✅ User stored in localStorage:', event.data.user.UserName || event.data.user.username)
+          
+          // MULTI-TENANCY: Store tenant_id from user object
+          if (event.data.user.tenant_id) {
+            localStorage.setItem('tenant_id', event.data.user.tenant_id)
+            console.log('[TPRM App] ✅ Tenant ID stored from user:', event.data.user.tenant_id)
+          }
+          if (event.data.user.tenant_name) {
+            localStorage.setItem('tenant_name', event.data.user.tenant_name)
+            console.log('[TPRM App] ✅ Tenant name stored:', event.data.user.tenant_name)
+          }
         } else {
           console.warn('[TPRM App] ⚠️ No user in auth sync message')
+        }
+        
+        // MULTI-TENANCY: Also check for tenant_id in the message itself
+        if (event.data.tenant_id) {
+          localStorage.setItem('tenant_id', event.data.tenant_id)
+          console.log('[TPRM App] ✅ Tenant ID stored from message:', event.data.tenant_id)
+        }
+        if (event.data.tenant_name) {
+          localStorage.setItem('tenant_name', event.data.tenant_name)
+          console.log('[TPRM App] ✅ Tenant name stored from message:', event.data.tenant_name)
+        }
+        
+        // MULTI-TENANCY: Extract tenant_id from JWT token if not already set
+        if (!localStorage.getItem('tenant_id') && event.data.token) {
+          try {
+            const token = event.data.token
+            const base64Url = token.split('.')[1]
+            if (base64Url) {
+              const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+              const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+              }).join(''))
+              const payload = JSON.parse(jsonPayload)
+              if (payload.tenant_id) {
+                localStorage.setItem('tenant_id', payload.tenant_id)
+                console.log('[TPRM App] ✅ Tenant ID extracted from JWT token:', payload.tenant_id)
+              }
+              if (payload.tenant_name) {
+                localStorage.setItem('tenant_name', payload.tenant_name)
+                console.log('[TPRM App] ✅ Tenant name extracted from JWT token:', payload.tenant_name)
+              }
+            }
+          } catch (e) {
+            console.warn('[TPRM App] ⚠️ Error extracting tenant_id from JWT:', e)
+          }
+        }
+        
+        // MULTI-TENANCY: Clear RFP store when tenant changes
+        const previousTenantId = sessionStorage.getItem('rfp_store_tenant_id')
+        const newTenantId = event.data.user?.tenant_id || event.data.tenant_id || 
+                           (event.data.token ? (() => {
+                             try {
+                               const base64Url = event.data.token.split('.')[1]
+                               if (base64Url) {
+                                 const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+                                 const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                                   return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+                                 }).join(''))
+                                 const payload = JSON.parse(jsonPayload)
+                                 return payload.tenant_id
+                               }
+                             } catch (e) {
+                               return null
+                             }
+                           })() : null)
+        
+        if (previousTenantId && newTenantId && previousTenantId !== newTenantId) {
+          console.log(`[TPRM App] 🔄 Tenant changed from ${previousTenantId} to ${newTenantId}, clearing RFP store`)
+          try {
+            const rfpStore = useRFPStore()
+            rfpStore.clearStore()
+          } catch (e) {
+            console.warn('[TPRM App] ⚠️ Could not clear RFP store:', e)
+          }
         }
         
         // Update Vuex store
@@ -130,6 +206,25 @@ onMounted(() => {
               // Ignore navigation errors (e.g., if already navigating to the same route)
               if (err.name !== 'NavigationDuplicated') {
                 console.error('[TPRM App] Navigation error:', err)
+                // Check for syntax errors in component
+                if (err.message && (err.message.includes('Unexpected token') || err.message.includes('SyntaxError'))) {
+                  console.error('[TPRM App] ⚠️ Syntax error detected in component:', {
+                    path: normalizedPath,
+                    error: err.message,
+                    stack: err.stack
+                  })
+                  // Show error via PopupService if available
+                  try {
+                    const { PopupService } = require('@/popup/popupService')
+                    PopupService.error(
+                      `Error loading page: ${normalizedPath}\n\nThis may be due to a syntax error in the component file. Please check the browser console for details.`,
+                      'Navigation Error'
+                    )
+                  } catch (e) {
+                    // PopupService not available, just log
+                    console.error('Could not show error popup:', e)
+                  }
+                }
               }
             })
           } else {

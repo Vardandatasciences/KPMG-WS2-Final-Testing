@@ -52,32 +52,28 @@
           If you need access to this page, please contact your system administrator.
         </p>
       </div>
+      
+      <!-- Request Access Button -->
+      <div class="mt-6">
+        <Button 
+          @click="requestAccess"
+          :disabled="isRequesting || requestSubmitted"
+          variant="default"
+          class="w-full"
+        >
+          <span v-if="isRequesting">Submitting...</span>
+          <span v-else-if="requestSubmitted">Request Submitted</span>
+          <span v-else>Request Access</span>
+        </Button>
+      </div>
+      
+      <!-- Success/Error Message -->
+      <div v-if="message" class="mt-4">
+        <p :class="['text-sm p-3 rounded', messageType === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800']">
+          {{ message }}
+        </p>
+      </div>
     </div>
-    
-    <!-- Title -->
-    <h1 class="access-denied-title">Access Denied</h1>
-    
-    <!-- Description -->
-    <p class="error-message">
-      You do not have permission to view this page.<br>
-      Please check your credentials and try again.<br>
-      Error Code: 403
-    </p>
-    
-    <!-- Request Access Button -->
-    <button 
-      class="request-access-btn" 
-      @click="requestAccess"
-      :disabled="isRequesting || requestSubmitted"
-      @mousedown="console.log('🔵 [AccessDenied] Button mousedown event')"
-    >
-      <span v-if="isRequesting">Submitting...</span>
-      <span v-else-if="requestSubmitted">Request Submitted</span>
-      <span v-else>Request Access</span>
-    </button>
-    
-    <!-- Success/Error Message -->
-    <p v-if="message" :class="['message', messageType]">{{ message }}</p>
   </div>
 </template>
 
@@ -85,15 +81,42 @@
 import { API_ENDPOINTS, API_CONFIG, getAuthToken } from '../config/api.js'
 import { getCurrentUserId } from '../utils/session.js'
 import axios from 'axios'
+import { ShieldX, ArrowLeft, Home, Mail } from 'lucide-vue-next'
+import Button from '@/components/ui/button.vue'
 
 export default {
-  name: 'AccessDenied',
+  components: {
+    ShieldX,
+    ArrowLeft,
+    Home,
+    Mail,
+    Button
+  },
   data() {
     return {
       isRequesting: false,
       requestSubmitted: false,
       message: '',
       messageType: 'success' // 'success' or 'error'
+    }
+  },
+  computed: {
+    errorInfo() {
+      try {
+        const accessDeniedInfo = sessionStorage.getItem('access_denied_error')
+        if (accessDeniedInfo) {
+          return JSON.parse(accessDeniedInfo)
+        }
+      } catch (e) {
+        console.error('Error parsing access denied info:', e)
+      }
+      return {
+        message: 'You do not have permission to access this page.',
+        code: '403',
+        permission: null,
+        permissionRequired: null,
+        path: null
+      }
     }
   },
   mounted() {
@@ -317,6 +340,50 @@ export default {
       } finally {
         this.isRequesting = false
       }
+    },
+
+    // Navigate back to previous page or a sensible module dashboard
+    goBack() {
+      if (window.history.length > 1) {
+        this.$router.go(-1)
+      } else {
+        // Go to appropriate module's home page
+        const storedPath = this.errorInfo?.path || ''
+
+        if (storedPath.includes('/bcp') || storedPath.includes('/vendor-upload') || storedPath.includes('/library')) {
+          this.$router.push('/vendor-upload')
+        } else if (storedPath.includes('/contract')) {
+          this.$router.push('/contracts')
+        } else if (storedPath.includes('/rfp')) {
+          this.$router.push('/rfp/dashboard')
+        } else {
+          this.$router.push('/dashboard')
+        }
+      }
+    },
+
+    // Navigate directly to the correct dashboard based on denied path
+    goHome() {
+      const storedPath = this.errorInfo?.path || ''
+
+      if (storedPath.includes('/bcp') || storedPath.includes('/vendor-upload') || storedPath.includes('/library')) {
+        // BCP module
+        this.$router.push('/dashboard')
+      } else if (storedPath.includes('/contract')) {
+        // Contract module
+        this.$router.push('/contractdashboard')
+      } else if (storedPath.includes('/rfp')) {
+        // RFP module
+        this.$router.push('/rfp/dashboard')
+      } else {
+        // Default dashboard
+        this.$router.push('/dashboard')
+      }
+    },
+
+    // Simple support contact handler
+    contactSupport() {
+      alert('Please contact your system administrator for access to this page.')
     }
   }
 }
@@ -417,105 +484,3 @@ export default {
   border: 1px solid #f5c6cb;
 }
 </style>
-  </div>
-</template>
-
-<script setup>
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { Button } from '@/components/ui'
-import { ShieldX, ArrowLeft, Home, Mail } from 'lucide-vue-next'
-
-const router = useRouter()
-
-// Props
-const props = defineProps({
-  message: {
-    type: String,
-    default: ''
-  },
-  errorCode: {
-    type: String,
-    default: ''
-  },
-  permission: {
-    type: String,
-    default: ''
-  }
-})
-
-// Reactive state for error info
-const errorInfo = ref({
-  message: props.message || 'You do not have permission to access this page. Please contact your administrator if you believe this is an error.',
-  code: props.errorCode || '403',
-  path: '',
-  permission: props.permission || '',
-  permissionRequired: ''
-})
-
-// Load error info from sessionStorage on mount
-onMounted(() => {
-  try {
-    const storedError = sessionStorage.getItem('access_denied_error')
-    if (storedError) {
-      const parsedError = JSON.parse(storedError)
-      errorInfo.value = {
-        message: parsedError.message || errorInfo.value.message,
-        code: parsedError.code || errorInfo.value.code,
-        path: parsedError.path || '',
-        permission: parsedError.permission || '',
-        permissionRequired: parsedError.permissionRequired || ''
-      }
-      // Clear the error from sessionStorage after reading
-      sessionStorage.removeItem('access_denied_error')
-    }
-  } catch (e) {
-    console.error('Error reading access denied info:', e)
-  }
-})
-
-// Methods
-const goBack = () => {
-  if (window.history.length > 1) {
-    router.go(-1)
-  } else {
-    // Go to appropriate module's home page
-    const storedPath = errorInfo.value.path || ''
-    
-    if (storedPath.includes('/bcp') || storedPath.includes('/vendor-upload') || storedPath.includes('/library')) {
-      router.push('/vendor-upload')
-    } else if (storedPath.includes('/contract')) {
-      router.push('/contracts')
-    } else if (storedPath.includes('/rfp')) {
-      router.push('/rfp/dashboard')
-    } else {
-      router.push('/dashboard')
-    }
-  }
-}
-
-const goHome = () => {
-  // Detect which module we're in based on the stored path
-  const storedPath = errorInfo.value.path || ''
-  
-  if (storedPath.includes('/bcp') || storedPath.includes('/vendor-upload') || storedPath.includes('/library')) {
-    // BCP module
-    router.push('/dashboard')
-  } else if (storedPath.includes('/contract')) {
-    // Contract module
-    router.push('/contractdashboard')
-  } else if (storedPath.includes('/rfp')) {
-    // RFP module
-    router.push('/rfp/dashboard')
-  } else {
-    // Default dashboard
-    router.push('/dashboard')
-  }
-}
-
-const contactSupport = () => {
-  // You can implement contact support functionality here
-  // For now, we'll just show an alert
-  alert('Please contact your system administrator for access to this page.')
-}
-</script>

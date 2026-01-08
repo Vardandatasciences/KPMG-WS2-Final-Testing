@@ -82,7 +82,7 @@ def analyze_document_relevance(request, audit_id):
                     SELECT ad.document_id, ad.document_name, ad.document_path, ad.document_type, ad.mime_type, ad.file_size
                     FROM audit_document ad
                     JOIN audit a ON ad.audit_id = a.AuditId
-                    WHERE ad.document_id = %s AND ad.audit_id = %s AND a.tenant_id = %s
+                    WHERE ad.document_id = %s AND ad.audit_id = %s AND a.TenantId = %s
                 """, [int(document_id), int(audit_id) if str(audit_id).isdigit() else audit_id, tenant_id])
                 
                 row = cursor.fetchone()

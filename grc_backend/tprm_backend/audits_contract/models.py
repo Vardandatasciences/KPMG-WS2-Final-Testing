@@ -5,11 +5,18 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.contrib.auth.models import User
 from tprm_backend.contracts.models import VendorContract, ContractTerm
+from tprm_backend.utils.encrypted_fields_mixin import TPRMEncryptedFieldsMixin
 
 
-class ContractAudit(models.Model):
+class ContractAudit(TPRMEncryptedFieldsMixin, models.Model):
     """Audit model matching MySQL schema."""
     audit_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link contract audit to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='contract_audits', null=True, blank=True,
+                               help_text="Tenant this contract audit belongs to")
+    
     title = models.CharField(max_length=255)
     scope = models.TextField(blank=True, null=True)
     assignee_id = models.IntegerField(blank=True, null=True)
@@ -92,9 +99,15 @@ class ContractAudit(models.Model):
         return f"{self.title} - {self.status}"
 
 
-class ContractStaticQuestionnaire(models.Model):
+class ContractStaticQuestionnaire(TPRMEncryptedFieldsMixin, models.Model):
     """Static questionnaires matching existing database schema."""
     question_id = models.AutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link contract static questionnaire to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='contract_static_questionnaires', null=True, blank=True,
+                               help_text="Tenant this contract static questionnaire belongs to")
+    
     term_id = models.CharField(max_length=255)  # Direct reference to term_id from existing database
     template_id = models.IntegerField(blank=True, null=True, db_index=True)  # Foreign key to questionnaire_templates.template_id
     question_text = models.TextField()
@@ -127,9 +140,15 @@ class ContractStaticQuestionnaire(models.Model):
         return f"{self.question_text[:50]}..."
 
 
-class ContractAuditVersion(models.Model):
+class ContractAuditVersion(TPRMEncryptedFieldsMixin, models.Model):
     """Audit versions matching tprm_db schema."""
     version_id = models.AutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link contract audit version to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='contract_audit_versions', null=True, blank=True,
+                               help_text="Tenant this contract audit version belongs to")
+    
     audit_id = models.IntegerField()
     version_type = models.CharField(
         max_length=1,
@@ -163,9 +182,15 @@ class ContractAuditVersion(models.Model):
         return f"Version {self.version_number} - {self.audit_id}"
 
 
-class ContractAuditFinding(models.Model):
+class ContractAuditFinding(TPRMEncryptedFieldsMixin, models.Model):
     """Audit findings matching tprm_db schema."""
     audit_finding_id = models.AutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link contract audit finding to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='contract_audit_findings', null=True, blank=True,
+                               help_text="Tenant this contract audit finding belongs to")
+    
     audit_id = models.IntegerField()
     term_id = models.CharField(max_length=255)  # Changed to CharField to match database varchar
     evidence = models.TextField()
@@ -189,9 +214,15 @@ class ContractAuditFinding(models.Model):
         return f"Finding for Audit {self.audit_id}"
 
 
-class ContractAuditReport(models.Model):
+class ContractAuditReport(TPRMEncryptedFieldsMixin, models.Model):
     """Audit reports matching tprm_db schema."""
     report_id = models.AutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link contract audit report to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='contract_audit_reports', null=True, blank=True,
+                               help_text="Tenant this contract audit report belongs to")
+    
     audit_id = models.IntegerField()
     report_link = models.CharField(max_length=500)  # S3 bucket link
     contract_id = models.IntegerField()

@@ -631,27 +631,37 @@ def run_control_mapping_audit(request):
         audit_all = data.get('audit_all', False)
         
         # Determine which controls to audit
+        # Note: OrganizationalControl doesn't have tenant_id, so filter through related models that have tenant
         if compliance_id:
-            # Single compliance audit
-            org_controls = OrganizationalControl.objects.filter(tenant_id=tenant_id, ComplianceId_id=compliance_id)
+            # Single compliance audit - filter through Compliance.tenant
+            org_controls = OrganizationalControl.objects.filter(
+                ComplianceId_id=compliance_id,
+                ComplianceId__tenant_id=tenant_id
+            )
         elif policy_id:
-            # Audit all compliances under this policy
-            org_controls = OrganizationalControl.objects.filter(tenant_id=tenant_id, 
-                PolicyId_id=policy_id
+            # Audit all compliances under this policy - filter through Policy.tenant or Compliance.tenant
+            org_controls = OrganizationalControl.objects.filter(
+                PolicyId_id=policy_id,
+                PolicyId__tenant_id=tenant_id
             )
         elif subpolicy_id:
-            # Audit all compliances under this subpolicy
-            org_controls = OrganizationalControl.objects.filter(tenant_id=tenant_id, 
-                SubPolicyId_id=subpolicy_id
+            # Audit all compliances under this subpolicy - filter through SubPolicy.tenant or Compliance.tenant
+            org_controls = OrganizationalControl.objects.filter(
+                SubPolicyId_id=subpolicy_id,
+                SubPolicyId__tenant_id=tenant_id
             )
         elif audit_all and framework_id:
-            # Audit all controls in framework
-            org_controls = OrganizationalControl.objects.filter(tenant_id=tenant_id, 
-                FrameworkId_id=framework_id
+            # Audit all controls in framework - filter through Framework.tenant
+            org_controls = OrganizationalControl.objects.filter(
+                FrameworkId_id=framework_id,
+                FrameworkId__tenant_id=tenant_id
             )
         elif org_control_ids:
-            # Audit specific org control IDs
-            org_controls = OrganizationalControl.objects.filter(tenant_id=tenant_id, OrgControlId__in=org_control_ids)
+            # Audit specific org control IDs - filter through Framework.tenant (most reliable since FrameworkId is always present)
+            org_controls = OrganizationalControl.objects.filter(
+                OrgControlId__in=org_control_ids,
+                FrameworkId__tenant_id=tenant_id
+            )
         else:
             return Response({
                 'success': False,

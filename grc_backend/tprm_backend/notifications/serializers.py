@@ -1,7 +1,8 @@
 from rest_framework import serializers
+from tprm_backend.utils.base_serializer import AutoDecryptingModelSerializer
 from .models import Notification
 
-class NotificationSerializer(serializers.ModelSerializer):
+class NotificationSerializer(AutoDecryptingModelSerializer):
     class Meta:
         model = Notification
         fields = [

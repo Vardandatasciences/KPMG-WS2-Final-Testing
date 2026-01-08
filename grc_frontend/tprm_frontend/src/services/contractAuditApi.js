@@ -62,10 +62,34 @@ const contractAuditApi = {
   async getContractAudits(params = {}) {
     try {
       const response = await api.get('/audits-contract/', { params })
+      console.log('[Contract Audit API] Raw response:', response.data)
+      
+      // Handle different response formats:
+      // 1. Custom format: {data: [...], results: [...], count: N}
+      // 2. DRF paginated: {results: [...], count: N, next: ..., previous: ...}
+      // 3. DRF non-paginated: [...]
+      let auditData = []
+      if (response.data) {
+        if (Array.isArray(response.data)) {
+          auditData = response.data
+        } else if (response.data.data && Array.isArray(response.data.data)) {
+          auditData = response.data.data
+        } else if (response.data.results && Array.isArray(response.data.results)) {
+          auditData = response.data.results
+        }
+      }
+      
+      console.log('[Contract Audit API] Parsed audit data:', auditData.length, 'audits')
+      
       return {
         success: true,
-        data: response.data.data || response.data,
-        pagination: response.data.pagination
+        data: auditData,
+        results: auditData, // Also include 'results' for compatibility
+        pagination: response.data.pagination || {
+          count: response.data.count || auditData.length,
+          next: response.data.next,
+          previous: response.data.previous
+        }
       }
     } catch (error) {
       console.error('Error fetching contract audits:', error)

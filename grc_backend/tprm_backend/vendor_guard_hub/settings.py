@@ -72,13 +72,13 @@ LOCAL_APPS = [
 ]
 
 VENDOR_APPS = [
-    'apps.vendor_core',
-    'apps.vendor_auth',
-    'apps.vendor_risk',
-    'apps.vendor_questionnaire',
-    'apps.vendor_dashboard',
-    'apps.vendor_lifecycle',
-    'apps.vendor_approval',
+    'tprm_backend.apps.vendor_core',
+    'tprm_backend.apps.vendor_auth',
+    'tprm_backend.apps.vendor_risk',
+    'tprm_backend.apps.vendor_questionnaire',
+    'tprm_backend.apps.vendor_dashboard',
+    'tprm_backend.apps.vendor_lifecycle',
+    'tprm_backend.apps.vendor_approval',
     'risk_analysis_vendor',
 ]
 

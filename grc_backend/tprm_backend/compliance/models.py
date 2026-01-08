@@ -1,8 +1,15 @@
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
+from tprm_backend.utils.encrypted_fields_mixin import TPRMEncryptedFieldsMixin
 
-class Framework(models.Model):
+class Framework(TPRMEncryptedFieldsMixin, models.Model):
     FrameworkId = models.AutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link framework to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='frameworks', null=True, blank=True,
+                               help_text="Tenant this framework belongs to")
+    
     FrameworkName = models.CharField(max_length=255)
     CurrentVersion = models.FloatField()
     FrameworkDescription = models.TextField()
@@ -25,7 +32,7 @@ class Framework(models.Model):
     def __str__(self):
         return f"{self.FrameworkName} (v{self.CurrentVersion})"
 
-class ComplianceMapping(models.Model):
+class ComplianceMapping(TPRMEncryptedFieldsMixin, models.Model):
     AUDIT_FREQUENCY_CHOICES = [
         ('DAILY', 'Daily'),
         ('WEEKLY', 'Weekly'),
@@ -34,6 +41,12 @@ class ComplianceMapping(models.Model):
     ]
 
     mapping_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link compliance mapping to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='compliance_mappings', null=True, blank=True,
+                               help_text="Tenant this compliance mapping belongs to")
+    
     sla_id = models.BigIntegerField()
     framework_id = models.IntegerField()
     compliance_status = models.CharField(max_length=50, default='Compliant')

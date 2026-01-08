@@ -216,7 +216,7 @@ export default {
     PopupModal
   },
   setup() {
-    const viewMode = ref('table')
+    const viewMode = ref('calendar')
     const selectedEvent = ref(null)
     const showPopup = ref(false)
     const currentDate = ref(new Date())
@@ -468,40 +468,46 @@ export default {
         loading.value = true
         error.value = null
         
-        console.log('[EventsCalendar] Checking for cached event data...')
+        console.log('[EventsCalendar] Fetching event data...')
         
-        // ==========================================
-        // NEW: Check if data is already cached from HomeView prefetch
-        // ==========================================
-        if (eventDataService.hasValidCache()) {
-          console.log('[EventsCalendar] ✅ Using cached event data from HomeView prefetch')
-          events.value = eventDataService.getData('events') || []
-          loading.value = false
-          return
-        }
+        // Always fetch from API to ensure data is up-to-date
+        // Cache is only used if available while API call is in progress
+        console.log('[EventsCalendar] 🔄 Fetching event data from API...')
         
-        // ==========================================
-        // Fallback: If cache is empty, wait for prefetch or fetch directly
-        // ==========================================
-        console.log('[EventsCalendar] No cache found, checking for ongoing prefetch...')
-        
+        // If there's cached data and a prefetch in progress, wait for prefetch first
         if (window.eventDataFetchPromise) {
           console.log('[EventsCalendar] ⏳ Waiting for ongoing prefetch to complete...')
-          await window.eventDataFetchPromise
-          events.value = eventDataService.getData('events') || []
-          loading.value = false
-          return
+          try {
+            await window.eventDataFetchPromise
+            const cachedEvents = eventDataService.getData('events') || []
+            if (cachedEvents.length > 0) {
+              events.value = cachedEvents
+              // Still fetch in background to update cache, but don't block UI
+              eventService.getEventsForCalendar().then(response => {
+                if (response.data && response.data.success) {
+                  eventDataService.setData('events', response.data.events || [])
+                }
+              }).catch(err => {
+                console.warn('[EventsCalendar] Background fetch failed:', err)
+              })
+              loading.value = false
+              return
+            }
+          } catch (prefetchError) {
+            console.warn('[EventsCalendar] Prefetch failed, fetching directly:', prefetchError)
+            // Continue to fetch directly if prefetch fails
+          }
         }
         
-        // Last resort: Fetch from API
-        console.log('[EventsCalendar] 🔄 Fetching event data from API (cache miss)...')
+        // Fetch from API
         const response = await eventService.getEventsForCalendar()
-        if (response.data.success) {
-          events.value = response.data.events
+        if (response.data && response.data.success) {
+          events.value = response.data.events || []
           // Cache the fetched data for future use
           eventDataService.setData('events', events.value)
+          console.log(`[EventsCalendar] ✅ Loaded ${events.value.length} events`)
         } else {
-          error.value = response.data.message || 'Failed to fetch calendar events'
+          error.value = response.data?.message || 'Failed to fetch calendar events'
         }
       } catch (err) {
         console.error('Error fetching calendar events:', err)

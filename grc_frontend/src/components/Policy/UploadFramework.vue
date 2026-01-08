@@ -1084,6 +1084,7 @@ import { useRouter } from 'vue-router'
 import axios from 'axios'
 import eventBus, { LOGOUT_EVENT } from '../../utils/eventBus.js'
 import { API_ENDPOINTS, API_BASE_URL } from '@/config/api.js'
+import { compressFile, shouldCompressFile } from '@/utils/fileCompression.js'
 
 export default {
   name: 'UploadFramework',
@@ -1597,8 +1598,34 @@ export default {
       isUploading.value = true
       uploadStatus.value = null
 
+      let fileToUpload = selectedFile.value
+      let compressionMetadata = null
+
+      // Compress file if beneficial
+      if (shouldCompressFile(selectedFile.value)) {
+        try {
+          uploadStatus.value = 'Compressing document...'
+          const result = await compressFile(selectedFile.value)
+          fileToUpload = result.compressedFile
+          compressionMetadata = {
+            original_size: result.originalSize,
+            compressed_size: result.compressedSize,
+            ratio: result.compressionRatio
+          }
+          console.log(`✅ Compression complete: ${result.compressionRatio}% reduction`)
+        } catch (error) {
+          console.warn('⚠️ Compression failed, uploading original file:', error)
+          // Continue with original file if compression fails
+        }
+      }
+
       const formData = new FormData()
-      formData.append('file', selectedFile.value)
+      formData.append('file', fileToUpload)
+      
+      // Include compression metadata if available
+      if (compressionMetadata) {
+        formData.append('compression_metadata', JSON.stringify(compressionMetadata))
+      }
       
       // Add user ID to the request
       const userId = localStorage.getItem('user_id') || 'default'

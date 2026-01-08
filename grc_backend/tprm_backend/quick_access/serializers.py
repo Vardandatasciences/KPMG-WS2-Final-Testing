@@ -1,8 +1,9 @@
 from rest_framework import serializers
+from tprm_backend.utils.base_serializer import AutoDecryptingModelSerializer
 from .models import GRCLog, QuickAccessFavorite
 
 
-class GRCLogSerializer(serializers.ModelSerializer):
+class GRCLogSerializer(AutoDecryptingModelSerializer):
     time_since = serializers.SerializerMethodField()
     
     class Meta:
@@ -32,7 +33,7 @@ class GRCLogSerializer(serializers.ModelSerializer):
             return "Just now"
 
 
-class QuickAccessFavoriteSerializer(serializers.ModelSerializer):
+class QuickAccessFavoriteSerializer(AutoDecryptingModelSerializer):
     class Meta:
         model = QuickAccessFavorite
         fields = [

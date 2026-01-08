@@ -711,27 +711,50 @@ export default {
         }
 
         // Add current user's ID to filters to get only their assigned approvals
-        const userId = currentUser.userid || currentUser.user_id
+        // Check multiple possible field names for user ID
+        const userId = currentUser.userid || currentUser.user_id || currentUser.UserId || currentUser.id || 
+                      (currentUser.user && (currentUser.user.userid || currentUser.user.user_id || currentUser.user.UserId || currentUser.user.id))
         if (!userId) {
           console.error('No user ID found in current user data:', currentUser)
+          console.error('Available user fields:', Object.keys(currentUser))
           assignedApprovals.value = []
           return
         }
+        
+        console.log('Using user ID for approvals:', userId)
 
         const filtersWithUser = {
           ...filters.value,
           assignee_id: userId
         }
         
+        console.log('Fetching approvals with filters:', filtersWithUser)
         const response = await contractApprovalApi.getApprovals(filtersWithUser)
         
         console.log('API Response for user', userId, ':', response)
+        console.log('Response structure:', {
+          success: response.success,
+          hasData: !!response.data,
+          dataType: Array.isArray(response.data) ? 'array' : typeof response.data,
+          dataLength: Array.isArray(response.data) ? response.data.length : 'N/A',
+          pagination: response.pagination
+        })
         
-        if (response.success && response.data) {
-          assignedApprovals.value = response.data
-          console.log('Assigned approvals set to:', assignedApprovals.value)
+        if (response.success) {
+          // Handle both array and paginated response formats
+          if (Array.isArray(response.data)) {
+            assignedApprovals.value = response.data
+          } else if (response.data && Array.isArray(response.data.results)) {
+            // Paginated response
+            assignedApprovals.value = response.data.results
+          } else if (response.data) {
+            assignedApprovals.value = response.data
+          } else {
+            assignedApprovals.value = []
+          }
+          console.log('Assigned approvals set to:', assignedApprovals.value.length, 'items')
         } else {
-          console.error('Failed to fetch approvals:', response.message || 'Unknown error')
+          console.error('Failed to fetch approvals:', response.message || response.error || 'Unknown error')
           assignedApprovals.value = []
         }
       } catch (error) {
@@ -754,24 +777,50 @@ export default {
         }
 
         // Add current user's ID to filters to get only their assigned reviews
-        const userId = currentUser.userid || currentUser.user_id
+        // Check multiple possible field names for user ID
+        const userId = currentUser.userid || currentUser.user_id || currentUser.UserId || currentUser.id || 
+                      (currentUser.user && (currentUser.user.userid || currentUser.user.user_id || currentUser.user.UserId || currentUser.user.id))
         if (!userId) {
           console.error('No user ID found in current user data:', currentUser)
+          console.error('Available user fields:', Object.keys(currentUser))
           reviewApprovals.value = []
           return
         }
+        
+        console.log('Using user ID for reviews:', userId)
 
         const filtersWithUser = {
           ...filters.value,
           assigner_id: userId
         }
         
+        console.log('Fetching reviews with filters:', filtersWithUser)
         const response = await contractApprovalApi.getAssignerApprovals(filtersWithUser)
         
-        if (response.success && response.data) {
-          reviewApprovals.value = response.data
+        console.log('API Response for reviews:', response)
+        console.log('Response structure:', {
+          success: response.success,
+          hasData: !!response.data,
+          dataType: Array.isArray(response.data) ? 'array' : typeof response.data,
+          dataLength: Array.isArray(response.data) ? response.data.length : 'N/A',
+          pagination: response.pagination
+        })
+        
+        if (response.success) {
+          // Handle both array and paginated response formats
+          if (Array.isArray(response.data)) {
+            reviewApprovals.value = response.data
+          } else if (response.data && Array.isArray(response.data.results)) {
+            // Paginated response
+            reviewApprovals.value = response.data.results
+          } else if (response.data) {
+            reviewApprovals.value = response.data
+          } else {
+            reviewApprovals.value = []
+          }
+          console.log('Review approvals set to:', reviewApprovals.value.length, 'items')
         } else {
-          console.error('Failed to fetch reviews:', response.message || 'Unknown error')
+          console.error('Failed to fetch reviews:', response.message || response.error || 'Unknown error')
           reviewApprovals.value = []
         }
       } catch (error) {
@@ -906,9 +955,11 @@ export default {
 
     const approveContract = async (approval) => {
       try {
-        console.log(`Approving contract for approval ${approval.approval_id}`)
+        console.log(`Approving contract for approval ${approval.approval_id}`, approval)
         
         const response = await contractApprovalApi.approveContract(approval.approval_id)
+        
+        console.log('Approve contract response:', response)
         
         if (response.success) {
           // Update locally
@@ -918,60 +969,51 @@ export default {
           }
           console.log('Contract approved successfully')
           
+          // Refresh the approvals list
+          await fetchMyReviews()
+          
           // Show success notification
-          await showSuccess('Contract Approved', `Contract "${approval.contract_name}" has been approved successfully.`, {
-            action: 'contract_approved',
-            approval_id: approval.approval_id,
-            contract_name: approval.contract_name
-          })
+          PopupService.success('Contract approved successfully!', 'Approval Successful')
           
           // Create notification service notification
-          await notificationService.createContractApprovalNotification('approval_approved', {
-            contract_id: approval.contract_id,
-            approval_id: approval.approval_id
-          })
+          try {
+            await notificationService.createContractApprovalNotification('approval_approved', {
+              contract_id: approval.object_id || approval.contract_id,
+              approval_id: approval.approval_id
+            })
+          } catch (notifError) {
+            console.warn('Failed to create notification:', notifError)
+          }
         } else {
-          console.error('Failed to approve contract:', response.message)
+          const errorMsg = response.error || response.message || 'Unknown error'
+          console.error('Failed to approve contract:', errorMsg)
           
-          // Show error notification
-          await showError('Approval Failed', 'Failed to approve contract. Please try again.', {
-            action: 'contract_approval_failed',
-            approval_id: approval.approval_id,
-            error_message: response.message
-          })
-          
-          // Create error notification
-          await notificationService.createContractErrorNotification('approve_contract', response.message, {
-            title: 'Approval Failed',
-            contract_id: approval.contract_id
-          })
+          // Show error notification with specific message
+          PopupService.error(`Failed to approve contract: ${errorMsg}`, 'Approval Failed')
         }
       } catch (error) {
         console.error('Error approving contract:', error)
+        const errorMsg = error.response?.data?.error || error.message || 'Unknown error'
         
         // Show error notification
-        await showError('Approval Failed', 'Error approving contract. Please try again.', {
-          action: 'contract_approval_error',
-          approval_id: approval.approval_id,
-          error_message: error.message
-        })
-        
-        // Create error notification
-        await notificationService.createContractErrorNotification('approve_contract', error.message, {
-          title: 'Approval Error',
-          contract_id: approval.contract_id
-        })
+        PopupService.error(`Error approving contract: ${errorMsg}`, 'Approval Error')
       }
     }
 
     const rejectContract = async (approval) => {
       const rejectionReason = prompt('Please provide a reason for rejection:')
       if (rejectionReason === null) return // User cancelled
+      if (!rejectionReason.trim()) {
+        PopupService.warning('Please provide a reason for rejection.', 'Rejection Reason Required')
+        return
+      }
       
       try {
-        console.log(`Rejecting contract for approval ${approval.approval_id}`)
+        console.log(`Rejecting contract for approval ${approval.approval_id}`, approval)
         
         const response = await contractApprovalApi.rejectContract(approval.approval_id, rejectionReason)
+        
+        console.log('Reject contract response:', response)
         
         if (response.success) {
           // Update locally
@@ -981,33 +1023,31 @@ export default {
             reviewApprovals.value[index].comment_text = `REJECTED: ${rejectionReason}`
           }
           console.log('Contract rejected successfully')
+          
+          // Refresh the approvals list
+          await fetchMyReviews()
+          
           PopupService.success('Contract rejected successfully!', 'Contract Rejected')
           
           // Create notification
-          await notificationService.createContractApprovalNotification('approval_rejected', {
-            contract_id: approval.contract_id,
-            approval_id: approval.approval_id,
-            reason: rejectionReason
-          })
+          try {
+            await notificationService.createContractApprovalNotification('approval_rejected', {
+              contract_id: approval.object_id || approval.contract_id,
+              approval_id: approval.approval_id,
+              reason: rejectionReason
+            })
+          } catch (notifError) {
+            console.warn('Failed to create notification:', notifError)
+          }
         } else {
-          console.error('Failed to reject contract:', response.message)
-          PopupService.error('Failed to reject contract: ' + response.message, 'Rejection Failed')
-          
-          // Create error notification
-          await notificationService.createContractErrorNotification('reject_contract', response.message, {
-            title: 'Rejection Failed',
-            contract_id: approval.contract_id
-          })
+          const errorMsg = response.error || response.message || 'Unknown error'
+          console.error('Failed to reject contract:', errorMsg)
+          PopupService.error(`Failed to reject contract: ${errorMsg}`, 'Rejection Failed')
         }
       } catch (error) {
         console.error('Error rejecting contract:', error)
-        PopupService.error('Error rejecting contract: ' + error.message, 'Rejection Error')
-        
-        // Create error notification
-        await notificationService.createContractErrorNotification('reject_contract', error.message, {
-          title: 'Rejection Error',
-          contract_id: approval.contract_id
-        })
+        const errorMsg = error.response?.data?.error || error.message || 'Unknown error'
+        PopupService.error(`Error rejecting contract: ${errorMsg}`, 'Rejection Error')
       }
     }
 
@@ -1031,10 +1071,14 @@ export default {
           console.log('User found and authenticated, setting up component:', currentUser)
           
           // Set user info from store
+          // Get user ID from multiple possible field names
+          const userId = currentUser.userid || currentUser.user_id || currentUser.UserId || currentUser.id || 
+                        (currentUser.user && (currentUser.user.userid || currentUser.user.user_id || currentUser.user.UserId || currentUser.user.id))
+          
           userInfo.value = {
-            full_name: currentUser.full_name || `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim() || currentUser.username,
-            user_id: currentUser.userid || currentUser.user_id,
-            username: currentUser.username,
+            full_name: currentUser.full_name || `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim() || currentUser.username || currentUser.UserName,
+            user_id: userId,
+            username: currentUser.username || currentUser.UserName,
             role: currentUser.role || 'User'
           }
           console.log('Current user info:', userInfo.value)
@@ -1077,10 +1121,14 @@ export default {
       if (newUser && !oldUser) {
         // User just logged in
         console.log('User logged in, setting up component')
+        // Get user ID from multiple possible field names
+        const userId = newUser.userid || newUser.user_id || newUser.UserId || newUser.id || 
+                      (newUser.user && (newUser.user.userid || newUser.user.user_id || newUser.user.UserId || newUser.user.id))
+        
         userInfo.value = {
-          full_name: newUser.full_name || `${newUser.first_name || ''} ${newUser.last_name || ''}`.trim() || newUser.username,
-          user_id: newUser.userid || newUser.user_id,
-          username: newUser.username,
+          full_name: newUser.full_name || `${newUser.first_name || ''} ${newUser.last_name || ''}`.trim() || newUser.username || newUser.UserName,
+          user_id: userId,
+          username: newUser.username || newUser.UserName,
           role: newUser.role || 'User'
         }
         Promise.all([

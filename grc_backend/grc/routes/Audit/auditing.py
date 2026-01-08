@@ -36,6 +36,7 @@ from ...routes.Global.validation import (
 from django.utils.decorators import method_decorator
 from ...routes.Global.logging_service import send_log
 from ...routes.Global.s3_fucntions import create_direct_mysql_client
+from ...utils.file_compression import decompress_if_needed
 import os
 import tempfile
 from ...rbac.permissions import (
@@ -106,7 +107,7 @@ def get_audit_task_details(request, audit_id):
                 LEFT JOIN
                     subpolicies sp ON a.SubPolicyId = sp.SubPolicyId
                 WHERE 
-                    a.AuditId = %s AND a.tenant_id = %s
+                    a.AuditId = %s AND a.TenantId = %s
             """, [validated_audit_id, tenant_id])
             
             audit_row = cursor.fetchone()
@@ -135,7 +136,7 @@ def get_audit_task_details(request, audit_id):
                 SELECT av.Version, av.ExtractedInfo, av.Date 
                 FROM audit_version av
                 JOIN audit a ON av.AuditId = a.AuditId
-                WHERE av.AuditId = %s AND a.tenant_id = %s
+                WHERE av.AuditId = %s AND a.TenantId = %s
                 ORDER BY av.Date DESC, av.Version DESC 
                 LIMIT 1
             """, [validated_audit_id, tenant_id])
@@ -192,7 +193,7 @@ def get_audit_task_details(request, audit_id):
                     cursor.execute("""
                         SELECT DISTINCT af.ComplianceId FROM audit_findings af
                         JOIN audit a ON af.AuditId = a.AuditId
-                        WHERE af.AuditId = %s AND a.tenant_id = %s
+                        WHERE af.AuditId = %s AND a.TenantId = %s
                     """, [validated_audit_id, tenant_id])
                     
                     for finding_row in cursor.fetchall():
@@ -242,7 +243,7 @@ def get_audit_task_details(request, audit_id):
                                     Recommendation, DetailsOfFinding, MajorMinor
                                 FROM audit_findings af
                                 JOIN audit a ON af.AuditId = a.AuditId
-                                WHERE af.AuditId = %s AND a.tenant_id = %s AND af.ComplianceId = %s
+                                WHERE af.AuditId = %s AND a.TenantId = %s AND af.ComplianceId = %s
                             """, [validated_audit_id, tenant_id, compliance_id])
                             
                             finding_row = cursor.fetchone()
@@ -503,7 +504,7 @@ def get_audit_task_details(request, audit_id):
                 initial_version_data['overall_review_comments'] = ''
                 
                 # Get FrameworkId from the audit
-                cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s AND tenant_id = %s", [validated_audit_id, tenant_id])
+                cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s AND TenantId = %s", [validated_audit_id, tenant_id])
                 framework_row = cursor.fetchone()
                 framework_id = framework_row[0] if framework_row else None
                 
@@ -611,7 +612,7 @@ def save_audit_version(request, audit_id):
             cursor.execute("""
                 SELECT av.Version, av.ExtractedInfo FROM audit_version av
                 JOIN audit a ON av.AuditId = a.AuditId
-                WHERE av.AuditId = %s AND a.tenant_id = %s AND av.Version LIKE 'R%%' 
+                WHERE av.AuditId = %s AND a.TenantId = %s AND av.Version LIKE 'R%%' 
                 ORDER BY CAST(SUBSTRING(av.Version, 2) AS UNSIGNED) DESC 
                 LIMIT 1
             """, [validated_audit_id, tenant_id])
@@ -642,7 +643,7 @@ def save_audit_version(request, audit_id):
             cursor.execute("""
                 SELECT av.Version, av.ExtractedInfo FROM audit_version av
                 JOIN audit a ON av.AuditId = a.AuditId
-                WHERE av.AuditId = %s AND a.tenant_id = %s AND av.Version LIKE 'A%%' 
+                WHERE av.AuditId = %s AND a.TenantId = %s AND av.Version LIKE 'A%%' 
                 ORDER BY CAST(SUBSTRING(av.Version, 2) AS UNSIGNED) DESC 
                 LIMIT 1
             """, [validated_audit_id, tenant_id])
@@ -772,7 +773,7 @@ def save_audit_version(request, audit_id):
             cursor.execute("""
                 UPDATE audit
                 SET Comments = %s
-                WHERE AuditId = %s AND tenant_id = %s
+                WHERE AuditId = %s AND TenantId = %s
             """, [validated_data.get('overall_comments', ''), validated_audit_id, tenant_id])
             
             # Get FrameworkId from the audit
@@ -882,7 +883,7 @@ def send_audit_for_review(request, audit_id):
             cursor.execute("""
                 UPDATE audit 
                 SET Status = 'Under review'
-                WHERE AuditId = %s AND tenant_id = %s
+                WHERE AuditId = %s AND TenantId = %s
             """, [validated_audit_id, tenant_id])
             
             # Check if the update was successful
@@ -1017,6 +1018,15 @@ def upload_evidence_to_s3(request):
             for chunk in uploaded_file.chunks():
                 temp_file.write(chunk)
             temp_file_path = temp_file.name
+        
+        # Decompress if needed (client-side compression)
+        compression_metadata = None
+        temp_file_path, was_compressed, compression_stats = decompress_if_needed(temp_file_path)
+        if was_compressed:
+            compression_metadata = compression_stats
+            # Update file extension after decompression (remove .gz)
+            file_extension = os.path.splitext(temp_file_path)[1].lower()
+            print(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
         
         try:
             # Create S3 client

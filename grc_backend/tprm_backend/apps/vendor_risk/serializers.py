@@ -2,10 +2,11 @@
 Vendor Risk Assessment Serializers
 """
 from rest_framework import serializers
+from tprm_backend.utils.base_serializer import AutoDecryptingModelSerializer
 from .models import VendorRiskAssessments, VendorRiskFactors, VendorRiskThresholds, VendorLifecycleStages
 
 
-class VendorRiskAssessmentSerializer(serializers.ModelSerializer):
+class VendorRiskAssessmentSerializer(AutoDecryptingModelSerializer):
     """Serializer for Vendor Risk Assessments"""
     
     class Meta:
@@ -14,7 +15,7 @@ class VendorRiskAssessmentSerializer(serializers.ModelSerializer):
         read_only_fields = ('assessment_id', 'created_at')
 
 
-class VendorRiskFactorSerializer(serializers.ModelSerializer):
+class VendorRiskFactorSerializer(AutoDecryptingModelSerializer):
     """Serializer for Vendor Risk Factors"""
     
     class Meta:
@@ -23,7 +24,7 @@ class VendorRiskFactorSerializer(serializers.ModelSerializer):
         read_only_fields = ('factor_id',)
 
 
-class VendorRiskThresholdSerializer(serializers.ModelSerializer):
+class VendorRiskThresholdSerializer(AutoDecryptingModelSerializer):
     """Serializer for Vendor Risk Thresholds"""
     
     class Meta:
@@ -32,7 +33,7 @@ class VendorRiskThresholdSerializer(serializers.ModelSerializer):
         read_only_fields = ('threshold_id', 'created_at', 'updated_at')
 
 
-class VendorLifecycleStageSerializer(serializers.ModelSerializer):
+class VendorLifecycleStageSerializer(AutoDecryptingModelSerializer):
     """Serializer for Vendor Lifecycle Stages"""
     
     class Meta:

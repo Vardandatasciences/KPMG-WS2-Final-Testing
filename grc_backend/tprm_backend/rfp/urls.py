@@ -18,6 +18,13 @@ router.register(r'users', views.CustomUserViewSet)
 router.register(r'rfp-types', views.RFPTypeCustomFieldsViewSet)
 
 urlpatterns = [
+    # Document generation endpoints - MOVED BEFORE ROUTER to ensure they match first
+    path('rfps/<int:rfp_id>/download/word/', document_views.generate_rfp_word_document, name='rfp-download-word'),
+    path('rfps/<int:rfp_id>/download/pdf/', document_views.generate_rfp_pdf_document, name='rfp-download-pdf'),
+    path('rfps/<int:rfp_id>/preview/', document_views.preview_rfp_document, name='rfp-preview'),
+    path('generate-document/', document_views.generate_document_from_data, name='generate-document-from-data'),
+    
+    # Router URLs - included after specific paths to avoid conflicts
     path('', include(router.urls)),
     
     # RFP Response endpoints for vendor portal (moved to top to avoid conflicts)
@@ -74,12 +81,6 @@ urlpatterns = [
     
     # Vendor matching endpoint
     path('rfps/<int:rfp_id>/calculate-match-scores/', views.calculate_vendor_match_scores, name='calculate_vendor_match_scores'),
-
-    # Document generation endpoints
-    path('rfps/<int:rfp_id>/download/word/', document_views.generate_rfp_word_document, name='rfp-download-word'),
-    path('rfps/<int:rfp_id>/download/pdf/', document_views.generate_rfp_pdf_document, name='rfp-download-pdf'),
-    path('rfps/<int:rfp_id>/preview/', document_views.preview_rfp_document, name='rfp-preview'),
-    path('generate-document/', document_views.generate_document_from_data, name='generate-document-from-data'),
     
     # Vendor selection endpoints
     path('rfps/<int:rfp_id>/vendors/', views.vendor_selection, name='vendor_selection'),
@@ -141,6 +142,8 @@ urlpatterns = [
     path('kpi/summary/', views_kpi.get_rfp_kpi_summary, name='get_rfp_kpi_summary'),
     path('kpi/creation-rate/', views_kpi.get_rfp_creation_rate, name='get_rfp_creation_rate'),
     path('kpi/approval-time/', views_kpi.get_rfp_approval_time, name='get_rfp_approval_time'),
+    path('kpi/approval-timeline/', views_kpi.get_rfp_approval_time, name='get_rfp_approval_timeline'),  # Alias for approval-time
+    path('kpi/approval-stage-performance/', views_kpi.get_approval_stage_performance, name='get_approval_stage_performance'),
     path('kpi/first-time-approval-rate/', views_kpi.get_first_time_approval_rate, name='get_first_time_approval_rate'),
     path('kpi/lifecycle-time/', views_kpi.get_rfp_lifecycle_time, name='get_rfp_lifecycle_time'),
     path('kpi/vendor-response-rate/', views_kpi.get_vendor_response_rate, name='get_vendor_response_rate'),
@@ -165,3 +168,4 @@ urlpatterns = [
     path('rfp-rollback/', rfp_versioning_views.rollback_rfp_version, name='rollback_rfp_version'),
     path('rfp-change-requests/<int:rfp_id>/', rfp_versioning_views.get_rfp_change_requests, name='get_rfp_change_requests'),
 ]
+

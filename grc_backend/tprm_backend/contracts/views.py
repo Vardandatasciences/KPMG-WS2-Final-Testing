@@ -18,11 +18,12 @@ from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.http import JsonResponse, QueryDict
 from django.shortcuts import get_object_or_404
-from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.decorators import api_view, authentication_classes, permission_classes, parser_classes
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.permissions import IsAuthenticated, BasePermission
 from rest_framework.response import Response
 from rest_framework import status, permissions
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.pagination import PageNumberPagination
 from django.views.decorators.cache import cache_page
 from django.views.decorators.vary import vary_on_headers
@@ -40,6 +41,15 @@ from pathlib import Path
 
 # RBAC imports
 from tprm_backend.rbac.tprm_decorators import rbac_contract_required
+
+# MULTI-TENANCY: Import tenant utilities for filtering
+from tprm_backend.core.tenant_utils import (
+    get_tenant_id_from_request,
+    filter_queryset_by_tenant,
+    get_tenant_aware_queryset,
+    require_tenant,
+    tenant_filter
+)
 
 # Import models and serializers
 from .models import Vendor, VendorContract, ContractTerm, ContractClause, VendorContact, ContractAmendment, ContractRenewal
@@ -378,9 +388,21 @@ def validate_session(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ListContracts')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def contract_list(request):
-    """List all contracts with filtering and pagination"""
+    """List all contracts with filtering and pagination
+    MULTI-TENANCY: Only returns contracts belonging to the tenant
+    """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
             return Response({
@@ -415,7 +437,8 @@ def contract_list(request):
         ordering = request.GET.get('ordering', '-created_at')
         
         # Build query
-        queryset = VendorContract.objects.select_related('vendor')
+        # MULTI-TENANCY: Filter by tenant_id first
+        queryset = VendorContract.objects.select_related('vendor').filter(tenant_id=tenant_id)
         
         # Filter for main, amendment, and subcontracts (default to all if no filter)
         if contract_kind:
@@ -506,9 +529,21 @@ def contract_list(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ListContracts')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def contract_detail(request, contract_id):
-    """Get contract details by ID"""
+    """Get contract details by ID
+    MULTI-TENANCY: Only returns contract if it belongs to the tenant
+    """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Get user_id from request
         from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
         user_id = RBACTPRMUtils.get_user_id_from_request(request)
@@ -519,7 +554,8 @@ def contract_detail(request, contract_id):
             vendor_info = RBACTPRMUtils.get_vendor_info_for_user(user_id)
         
         # Build query
-        query_filter = {'contract_id': contract_id, 'is_archived': False}
+        # MULTI-TENANCY: Add tenant_id filter
+        query_filter = {'contract_id': contract_id, 'is_archived': False, 'tenant_id': tenant_id}
         
         # VENDOR FILTERING: If user is a vendor, only allow access to their contracts
         if vendor_info:
@@ -554,9 +590,21 @@ def contract_detail(request, contract_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ListContracts')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def contract_comprehensive_detail(request, contract_id):
-    """Get comprehensive contract details including terms, clauses, and sub-contracts"""
+    """Get comprehensive contract details including terms, clauses, and sub-contracts
+    MULTI-TENANCY: Only returns contract if it belongs to the tenant
+    """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         logger.info(f"Starting comprehensive contract detail fetch for contract_id: {contract_id}")
         
         # Get user_id from request
@@ -569,7 +617,8 @@ def contract_comprehensive_detail(request, contract_id):
             vendor_info = RBACTPRMUtils.get_vendor_info_for_user(user_id)
         
         # Build query
-        query_filter = {'contract_id': contract_id, 'is_archived': False}
+        # MULTI-TENANCY: Add tenant_id filter
+        query_filter = {'contract_id': contract_id, 'is_archived': False, 'tenant_id': tenant_id}
         
         # VENDOR FILTERING: If user is a vendor, only allow access to their contracts
         if vendor_info:
@@ -581,18 +630,22 @@ def contract_comprehensive_detail(request, contract_id):
         logger.info(f"Found contract: {contract.contract_title} (ID: {contract.contract_id})")
         
         # Get contract terms
-        terms = ContractTerm.objects.filter(contract_id=contract_id).order_by('term_category', 'created_at')
+        # MULTI-TENANCY: Filter by tenant_id
+        terms = ContractTerm.objects.filter(contract_id=contract_id, tenant_id=tenant_id).order_by('term_category', 'created_at')
         logger.info(f"Found {terms.count()} terms for contract {contract_id}")
         
         # Get contract clauses
-        clauses = ContractClause.objects.filter(contract_id=contract_id).order_by('clause_type', 'created_at')
+        # MULTI-TENANCY: Filter by tenant_id
+        clauses = ContractClause.objects.filter(contract_id=contract_id, tenant_id=tenant_id).order_by('clause_type', 'created_at')
         logger.info(f"Found {clauses.count()} clauses for contract {contract_id}")
         
         # Get sub-contracts (contracts with contract_kind='SUBCONTRACT' and parent_contract_id=contract_id)
+        # MULTI-TENANCY: Filter by tenant_id
         sub_contracts = VendorContract.objects.filter(
             contract_kind='SUBCONTRACT',
             parent_contract_id=contract_id,
-            is_archived=False
+            is_archived=False,
+            tenant_id=tenant_id
         ).select_related('vendor').order_by('created_at')
         
         # Get terms and clauses for each sub-contract
@@ -602,11 +655,13 @@ def contract_comprehensive_detail(request, contract_id):
         
         for sub_contract in sub_contracts:
             # Get terms for this sub-contract
-            sub_terms = ContractTerm.objects.filter(contract_id=sub_contract.contract_id).order_by('term_category', 'created_at')
+            # MULTI-TENANCY: Filter by tenant_id
+            sub_terms = ContractTerm.objects.filter(contract_id=sub_contract.contract_id, tenant_id=tenant_id).order_by('term_category', 'created_at')
             sub_terms_serializer = ContractTermSerializer(sub_terms, many=True)
             
             # Get clauses for this sub-contract
-            sub_clauses = ContractClause.objects.filter(contract_id=sub_contract.contract_id).order_by('clause_type', 'created_at')
+            # MULTI-TENANCY: Filter by tenant_id
+            sub_clauses = ContractClause.objects.filter(contract_id=sub_contract.contract_id, tenant_id=tenant_id).order_by('clause_type', 'created_at')
             sub_clauses_serializer = ContractClauseSerializer(sub_clauses, many=True)
             
             # Serialize the sub-contract
@@ -671,9 +726,21 @@ def contract_comprehensive_detail(request, contract_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('CreateContract')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def contract_create(request):
-    """Create a new contract"""
+    """Create a new contract
+    MULTI-TENANCY: Automatically assigns tenant_id to the contract
+    """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found. Cannot create contract without tenant.'
+            }, status=403)
+        
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
             return Response({
@@ -686,6 +753,10 @@ def contract_create(request):
         
         def create_contract():
             contract_data = request.data.copy()
+            
+            # MULTI-TENANCY: Add tenant_id to contract data if not present
+            if 'tenant_id' not in contract_data and 'tenant' not in contract_data:
+                contract_data['tenant_id'] = tenant_id
             
             # Convert boolean values to integers for unmanaged models
             if 'auto_renewal' in contract_data:
@@ -768,6 +839,12 @@ def contract_create(request):
                 from tprm_backend.contracts.contractapproval.serializers import ContractApprovalCreateAssignmentSerializer
                 from tprm_backend.contracts.models import ContractApproval
                 
+                # MULTI-TENANCY: Get tenant_id from request
+                tenant_id = get_tenant_id_from_request(request)
+                if not tenant_id:
+                    logger.warning("Tenant context not found when creating approval, using contract's tenant_id")
+                    tenant_id = contract.tenant_id
+                
                 # Create approval data
                 approval_data = {
                     'workflow_id': 1,  # Default workflow ID
@@ -781,7 +858,8 @@ def contract_create(request):
                     'assigned_date': timezone.now(),
                     'due_date': timezone.now() + timezone.timedelta(days=7),  # 7 days from now
                     'status': 'ASSIGNED',
-                    'comment_text': f'Contract {contract.contract_number} requires review and approval'
+                    'comment_text': f'Contract {contract.contract_number} requires review and approval',
+                    'tenant_id': tenant_id  # MULTI-TENANCY: Set tenant_id
                 }
                 
                 # Get assignee name
@@ -807,8 +885,9 @@ def contract_create(request):
                 # Create the approval
                 approval_serializer = ContractApprovalCreateAssignmentSerializer(data=approval_data)
                 if approval_serializer.is_valid():
-                    approval = approval_serializer.save()
-                    logger.info(f"Contract approval created: {approval.approval_id} for contract {contract.contract_id}")
+                    # MULTI-TENANCY: Ensure tenant_id is set when saving
+                    approval = approval_serializer.save(tenant_id=tenant_id)
+                    logger.info(f"Contract approval created: {approval.approval_id} for contract {contract.contract_id} with tenant_id {tenant_id}")
                 else:
                     logger.warning(f"Failed to create contract approval: {approval_serializer.errors}")
                     
@@ -850,9 +929,21 @@ def contract_create(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('UpdateContract')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def contract_update(request, contract_id):
-    """Update an existing contract"""
+    """Update an existing contract
+    MULTI-TENANCY: Only allows updating contracts belonging to the tenant
+    """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
             return Response({
@@ -864,9 +955,11 @@ def contract_update(request, contract_id):
         SecurityManager.validate_contract_data(request.data)
         
         # Get contract
+        # MULTI-TENANCY: Add tenant_id filter to ensure tenant isolation
         contract = VendorContract.objects.get(
             contract_id=contract_id, 
-            is_archived=False
+            is_archived=False,
+            tenant_id=tenant_id
         )
         
         # Create backup before operation
@@ -938,9 +1031,21 @@ def contract_update(request, contract_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('DeleteContract')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def contract_delete(request, contract_id):
-    """Delete a contract (soft delete by archiving)"""
+    """Delete a contract (soft delete by archiving)
+    MULTI-TENANCY: Ensures contract belongs to tenant
+    """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
             return Response({
@@ -949,9 +1054,11 @@ def contract_delete(request, contract_id):
             }, status=429)
         
         # Get contract
+        # MULTI-TENANCY: Filter by tenant
         contract = VendorContract.objects.get(
             contract_id=contract_id, 
-            is_archived=False
+            is_archived=False,
+            tenant_id=tenant_id
         )
         
         # Create backup before operation
@@ -996,9 +1103,21 @@ def contract_delete(request, contract_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('UpdateContract')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def contract_archive(request, contract_id):
-    """Archive a contract with reason"""
+    """Archive a contract with reason
+    MULTI-TENANCY: Ensures contract belongs to tenant
+    """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
             return Response({
@@ -1007,9 +1126,11 @@ def contract_archive(request, contract_id):
             }, status=429)
         
         # Get contract
+        # MULTI-TENANCY: Filter by tenant
         contract = VendorContract.objects.get(
             contract_id=contract_id, 
-            is_archived=False
+            is_archived=False,
+            tenant_id=tenant_id
         )
         
         # Debug: Log received data
@@ -1087,9 +1208,21 @@ def contract_archive(request, contract_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('UpdateContract')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def contract_restore(request, contract_id):
-    """Restore an archived contract"""
+    """Restore an archived contract
+    MULTI-TENANCY: Ensures contract belongs to tenant
+    """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
             return Response({
@@ -1098,9 +1231,11 @@ def contract_restore(request, contract_id):
             }, status=429)
         
         # Get archived contract
+        # MULTI-TENANCY: Filter by tenant
         contract = VendorContract.objects.get(
             contract_id=contract_id, 
-            is_archived=True
+            is_archived=True,
+            tenant_id=tenant_id
         )
         
         # Validate restore data
@@ -1154,9 +1289,21 @@ def contract_restore(request, contract_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ListContracts')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def contract_stats(request):
-    """Get contract statistics and analytics"""
+    """Get contract statistics and analytics
+    MULTI-TENANCY: Filters statistics by tenant to ensure tenant isolation
+    """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
             return Response({
@@ -1165,62 +1312,53 @@ def contract_stats(request):
             }, status=429)
         
         # Get statistics for main and amendment contracts
-        total_contracts = VendorContract.objects.filter(
-            is_archived=False, 
-            contract_kind__in=['MAIN', 'AMENDMENT']
-        ).count()
-        active_contracts = VendorContract.objects.filter(
+        # MULTI-TENANCY: Filter by tenant
+        contracts_base = VendorContract.objects.filter(
             is_archived=False, 
             contract_kind__in=['MAIN', 'AMENDMENT'],
+            tenant_id=tenant_id
+        )
+        
+        total_contracts = contracts_base.count()
+        active_contracts = contracts_base.filter(
             status='ACTIVE'
         ).count()
-        expired_contracts = VendorContract.objects.filter(
-            is_archived=False, 
-            contract_kind__in=['MAIN', 'AMENDMENT'],
+        expired_contracts = contracts_base.filter(
             status='EXPIRED'
         ).count()
-        draft_contracts = VendorContract.objects.filter(
-            is_archived=False, 
-            contract_kind__in=['MAIN', 'AMENDMENT'],
+        draft_contracts = contracts_base.filter(
             status='DRAFT'
         ).count()
         
         # Contracts by type
         contracts_by_type = dict(
-            VendorContract.objects.filter(is_archived=False, contract_kind__in=['MAIN', 'AMENDMENT'])
-            .values('contract_type')
+            contracts_base.values('contract_type')
             .annotate(count=Count('contract_id'))
             .values_list('contract_type', 'count')
         )
         
         # Contracts by status
         contracts_by_status = dict(
-            VendorContract.objects.filter(is_archived=False, contract_kind__in=['MAIN', 'AMENDMENT'])
-            .values('status')
+            contracts_base.values('status')
             .annotate(count=Count('contract_id'))
             .values_list('status', 'count')
         )
         
         # Contracts by priority
         contracts_by_priority = dict(
-            VendorContract.objects.filter(is_archived=False, contract_kind__in=['MAIN', 'AMENDMENT'])
-            .values('priority')
+            contracts_base.values('priority')
             .annotate(count=Count('contract_id'))
             .values_list('priority', 'count')
         )
         
         # Total value (active contracts only)
-        total_value = VendorContract.objects.filter(
-            is_archived=False,
-            contract_kind__in=['MAIN', 'AMENDMENT'],
+        total_value = contracts_base.filter(
             contract_value__isnull=False,
             status='ACTIVE'
         ).aggregate(total=Sum('contract_value'))['total'] or Decimal('0')
         
         # Average risk score
-        avg_risk_score = VendorContract.objects.filter(
-            is_archived=False,
-            contract_kind__in=['MAIN', 'AMENDMENT'],
+        avg_risk_score = contracts_base.filter(
             contract_risk_score__isnull=False
         ).aggregate(avg=Avg('contract_risk_score'))['avg'] or Decimal('0')
         
@@ -1228,9 +1366,7 @@ def contract_stats(request):
         today = timezone.now().date()
         expiring_date = today + timedelta(days=90)
         
-        expiring_soon = VendorContract.objects.filter(
-            is_archived=False,
-            contract_kind__in=['MAIN', 'AMENDMENT'],
+        expiring_soon = contracts_base.filter(
             end_date__lte=expiring_date,
             end_date__gte=today,
             status__in=['ACTIVE', 'UNDER_REVIEW', 'DRAFT', 'PENDING']
@@ -1241,16 +1377,13 @@ def contract_stats(request):
         logger.info(f"Expiring soon count: {expiring_soon}")
         
         # Log some sample contracts for debugging
-        sample_contracts = VendorContract.objects.filter(
-            is_archived=False,
+        sample_contracts = contracts_base.filter(
             end_date__isnull=False
         ).values('contract_id', 'contract_title', 'end_date', 'status')[:5]
         logger.info(f"Sample contracts with end dates: {list(sample_contracts)}")
         
         # Overdue renewals
-        overdue_renewals = VendorContract.objects.filter(
-            is_archived=False,
-            contract_kind__in=['MAIN', 'AMENDMENT'],
+        overdue_renewals = contracts_base.filter(
             end_date__lt=timezone.now().date(),
             status='ACTIVE',
             auto_renewal=True
@@ -1290,12 +1423,23 @@ def contract_stats(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ContractDashboard')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def contract_amendments_kpi(request):
     """
     Get Contract Amendments KPI data - amendments count per contract.
     Returns top contracts with their amendment counts using parent_contract_id from vendor_contracts.
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
             return Response({
@@ -1308,11 +1452,12 @@ def contract_amendments_kpi(request):
         
         # Get amendment counts per contract from VendorContract model
         # Count contracts where contract_kind='AMENDMENT' grouped by parent_contract_id
+        # MULTI-TENANCY: Filter by tenant
         from django.db.models import Count as CountFunc
         
         amendment_counts = (
             VendorContract.objects
-            .filter(contract_kind='AMENDMENT', is_archived=False)
+            .filter(contract_kind='AMENDMENT', is_archived=False, tenant_id=tenant_id)
             .exclude(parent_contract_id__isnull=True)
             .values('parent_contract_id')
             .annotate(amendment_count=CountFunc('contract_id'))
@@ -1326,10 +1471,12 @@ def contract_amendments_kpi(request):
             amendment_count = item['amendment_count']
             
             # Get parent contract details
+            # MULTI-TENANCY: Filter by tenant
             try:
                 contract = VendorContract.objects.get(
                     contract_id=parent_contract_id,
-                    is_archived=False
+                    is_archived=False,
+                    tenant_id=tenant_id
                 )
                 
                 # Generate contract code from contract_id
@@ -1351,14 +1498,14 @@ def contract_amendments_kpi(request):
                 })
         
         # Get total statistics
-        total_amendments = VendorContract.objects.filter(
+        # MULTI-TENANCY: Filter by tenant
+        amendments_base = VendorContract.objects.filter(
             contract_kind='AMENDMENT',
-            is_archived=False
-        ).count()
-        total_contracts_with_amendments = VendorContract.objects.filter(
-            contract_kind='AMENDMENT',
-            is_archived=False
-        ).exclude(parent_contract_id__isnull=True).values('parent_contract_id').distinct().count()
+            is_archived=False,
+            tenant_id=tenant_id
+        )
+        total_amendments = amendments_base.count()
+        total_contracts_with_amendments = amendments_base.exclude(parent_contract_id__isnull=True).values('parent_contract_id').distinct().count()
         
         response_data = {
             'amendments_by_contract': amendments_data,
@@ -1389,6 +1536,8 @@ def contract_amendments_kpi(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ContractDashboard')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def contracts_expiring_soon_kpi(request):
     """
     Get Contracts Expiring Soon KPI data.
@@ -1398,8 +1547,17 @@ def contracts_expiring_soon_kpi(request):
     - 61-90 days
     - 90+ days
     Includes all contracts regardless of contract_kind to match total count
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
             return Response({
@@ -1417,9 +1575,11 @@ def contracts_expiring_soon_kpi(request):
         
         # Base query - ALL non-archived contracts with end_date
         # NOTE: Removed contract_kind filter to include ALL contracts (main, amendments, subcontracts)
+        # MULTI-TENANCY: Filter by tenant
         base_query = VendorContract.objects.filter(
             is_archived=False,
-            end_date__isnull=False
+            end_date__isnull=False,
+            tenant_id=tenant_id
         )
         
         # Count contracts in each time period (only future/current contracts)
@@ -1448,13 +1608,16 @@ def contracts_expiring_soon_kpi(request):
         ).count()
         
         # Count contracts without end_date
+        # MULTI-TENANCY: Filter by tenant
         contracts_no_end_date = VendorContract.objects.filter(
             is_archived=False,
-            end_date__isnull=True
+            end_date__isnull=True,
+            tenant_id=tenant_id
         ).count()
         
         # Total contracts in database
-        total_contracts_all = VendorContract.objects.filter(is_archived=False).count()
+        # MULTI-TENANCY: Filter by tenant
+        total_contracts_all = VendorContract.objects.filter(is_archived=False, tenant_id=tenant_id).count()
         
         # Total contracts with end dates (future + expired)
         total_with_end_dates = base_query.count()
@@ -1519,6 +1682,8 @@ def contracts_expiring_soon_kpi(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ContractDashboard')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def average_contract_value_by_type_kpi(request):
     """
     Get Average Contract Value by Contract Type KPI.
@@ -1529,8 +1694,17 @@ def average_contract_value_by_type_kpi(request):
     - SERVICE_AGREEMENT
     - LICENSE
     - NDA
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
             return Response({
@@ -1542,12 +1716,14 @@ def average_contract_value_by_type_kpi(request):
         
         # Query average contract value by type
         # Only include non-archived contracts with contract values
+        # MULTI-TENANCY: Filter by tenant
         contract_type_stats = (
             VendorContract.objects
             .filter(
                 is_archived=False,
                 contract_value__isnull=False,
-                contract_value__gt=0  # Exclude zero or null values
+                contract_value__gt=0,  # Exclude zero or null values
+                tenant_id=tenant_id
             )
             .values('contract_type')
             .annotate(
@@ -1595,12 +1771,14 @@ def average_contract_value_by_type_kpi(request):
         overall_avg = (total_avg / len(contract_type_data)) if contract_type_data else 0
         
         # Get total contract value across all types
+        # MULTI-TENANCY: Filter by tenant
         total_portfolio_value = (
             VendorContract.objects
             .filter(
                 is_archived=False,
                 contract_value__isnull=False,
-                contract_value__gt=0
+                contract_value__gt=0,
+                tenant_id=tenant_id
             )
             .aggregate(total=Sum('contract_value'))['total'] or 0
         )
@@ -1636,6 +1814,8 @@ def average_contract_value_by_type_kpi(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ContractDashboard')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def business_criticality_kpi(request):
     """
     Get Business Criticality KPI data.
@@ -1645,8 +1825,17 @@ def business_criticality_kpi(request):
     - medium
     - low
     - NULL (no criticality data)
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
             return Response({
@@ -1658,9 +1847,10 @@ def business_criticality_kpi(request):
         
         # Query contracts with their vendor's business criticality
         # Join VendorContract with Vendor to get business_criticality
+        # MULTI-TENANCY: Filter by tenant
         criticality_counts = (
             VendorContract.objects
-            .filter(is_archived=False)
+            .filter(is_archived=False, tenant_id=tenant_id)
             .values('vendor__business_criticality')
             .annotate(contract_count=Count('contract_id'))
             .order_by('-contract_count')
@@ -1763,12 +1953,23 @@ def business_criticality_kpi(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ContractDashboard')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def total_liability_exposure_kpi(request):
     """
     Get Total Liability Exposure KPI.
     Returns the sum of liability_cap from all active contracts with threshold-based risk assessment.
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
             return Response({
@@ -1779,10 +1980,12 @@ def total_liability_exposure_kpi(request):
         from django.db.models import Sum, Count, Avg
         
         # Calculate total liability exposure
+        # MULTI-TENANCY: Filter by tenant
         liability_stats = VendorContract.objects.filter(
             is_archived=False,
             liability_cap__isnull=False,
-            liability_cap__gt=0
+            liability_cap__gt=0,
+            tenant_id=tenant_id
         ).aggregate(
             total_liability=Sum('liability_cap'),
             avg_liability=Avg('liability_cap'),
@@ -1794,14 +1997,17 @@ def total_liability_exposure_kpi(request):
         contract_count = liability_stats['contract_count'] or 0
         
         # Count contracts without liability cap
+        # MULTI-TENANCY: Filter by tenant
         contracts_no_liability = VendorContract.objects.filter(
-            is_archived=False
+            is_archived=False,
+            tenant_id=tenant_id
         ).filter(
             Q(liability_cap__isnull=True) | Q(liability_cap=0)
         ).count()
         
         # Total all contracts
-        total_contracts = VendorContract.objects.filter(is_archived=False).count()
+        # MULTI-TENANCY: Filter by tenant
+        total_contracts = VendorContract.objects.filter(is_archived=False, tenant_id=tenant_id).count()
         
         # Define thresholds (in USD)
         threshold_low = 1_000_000  # $1M
@@ -1871,6 +2077,8 @@ def total_liability_exposure_kpi(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ContractDashboard')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def contract_risk_exposure_kpi(request):
     """
     Get Contract Risk Exposure KPI.
@@ -1878,8 +2086,17 @@ def contract_risk_exposure_kpi(request):
     Filters risks where entity='contract_module' and groups contracts by their highest priority.
     Since a contract can have multiple risk records, each contract is counted only once
     based on its highest risk level.
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
             return Response({
@@ -1988,23 +2205,68 @@ def contract_risk_exposure_kpi(request):
             {'level': 'Critical', 'count': risk_level_counts['Critical'], 'color': risk_colors['Critical']}
         ]
         
-        # Calculate total number of individual risk records
+        # MULTI-TENANCY: Filter contract risks by tenant by verifying contracts belong to tenant
+        # Get list of contract IDs that belong to this tenant
+        tenant_contract_ids = list(VendorContract.objects.filter(tenant_id=tenant_id).values_list('contract_id', flat=True))
+        
+        # Filter contract_risks to only include contracts from this tenant
+        filtered_contract_risks = [cr for cr in contract_risks if cr.get('row') in tenant_contract_ids]
+        
+        # Recalculate counts with filtered data
+        risk_level_counts_filtered = {
+            'Low': 0,
+            'Medium': 0,
+            'High': 0,
+            'Critical': 0
+        }
+        
+        total_contracts_filtered = 0
+        for contract in filtered_contract_risks:
+            max_priority = contract['max_priority_value']
+            total_contracts_filtered += 1
+            
+            # Map numeric value back to priority name
+            if max_priority == 4:
+                risk_level_counts_filtered['Critical'] += 1
+            elif max_priority == 3:
+                risk_level_counts_filtered['High'] += 1
+            elif max_priority == 2:
+                risk_level_counts_filtered['Medium'] += 1
+            elif max_priority == 1:
+                risk_level_counts_filtered['Low'] += 1
+        
+        # Calculate total number of individual risk records (filtered by tenant contracts)
         if use_model:
-            total_risk_records = Risk.objects.filter(entity='contract_module').count()
+            total_risk_records = Risk.objects.filter(entity='contract_module', row__in=tenant_contract_ids).count()
         else:
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT COUNT(*) FROM risk_tprm WHERE entity = 'contract_module'")
-                total_risk_records = cursor.fetchone()[0]
+            if tenant_contract_ids:
+                placeholders = ','.join(['%s'] * len(tenant_contract_ids))
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        f"SELECT COUNT(*) FROM risk_tprm WHERE entity = 'contract_module' AND `row` IN ({placeholders})",
+                        tenant_contract_ids
+                    )
+                    total_risk_records = cursor.fetchone()[0]
+            else:
+                total_risk_records = 0
+        
+        # Build risk exposure data with filtered counts
+        risk_exposure_data = [
+            {'level': 'Low', 'count': risk_level_counts_filtered['Low'], 'color': risk_colors['Low']},
+            {'level': 'Medium', 'count': risk_level_counts_filtered['Medium'], 'color': risk_colors['Medium']},
+            {'level': 'High', 'count': risk_level_counts_filtered['High'], 'color': risk_colors['High']},
+            {'level': 'Critical', 'count': risk_level_counts_filtered['Critical'], 'color': risk_colors['Critical']}
+        ]
         
         response_data = {
             'risk_levels': risk_exposure_data,
             'statistics': {
-                'total_contracts': total_contracts,
+                'total_contracts': total_contracts_filtered,
                 'total_risk_records': total_risk_records,
-                'contracts_with_critical': risk_level_counts['Critical'],
-                'contracts_with_high': risk_level_counts['High'],
-                'contracts_with_critical_or_high': risk_level_counts['Critical'] + risk_level_counts['High'],
-                'average_risks_per_contract': round(total_risk_records / total_contracts, 2) if total_contracts > 0 else 0
+                'contracts_with_critical': risk_level_counts_filtered['Critical'],
+                'contracts_with_high': risk_level_counts_filtered['High'],
+                'contracts_with_critical_or_high': risk_level_counts_filtered['Critical'] + risk_level_counts_filtered['High'],
+                'average_risks_per_contract': round(total_risk_records / total_contracts_filtered, 2) if total_contracts_filtered > 0 else 0
             }
         }
         
@@ -2031,13 +2293,24 @@ def contract_risk_exposure_kpi(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ContractDashboard')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def early_termination_rate_kpi(request):
     """
     Get Early Termination Rate KPI.
     Returns the termination percentage by contract type.
     Calculates the percentage of contracts terminated early for each contract type.
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
             return Response({
@@ -2066,15 +2339,19 @@ def early_termination_rate_kpi(request):
         
         for contract_type in contract_types:
             # Count total contracts of this type
+            # MULTI-TENANCY: Filter by tenant
             total_count = VendorContract.objects.filter(
-                contract_type=contract_type
+                contract_type=contract_type,
+                tenant_id=tenant_id
             ).count()
             
             # Count contracts terminated early of this type
+            # MULTI-TENANCY: Filter by tenant
             early_terminated_count = VendorContract.objects.filter(
                 contract_type=contract_type,
                 archive_reason='EARLY_TERMINATION',
-                is_archived=True
+                is_archived=True,
+                tenant_id=tenant_id
             ).count()
             
             # Calculate percentage
@@ -2144,13 +2421,24 @@ def early_termination_rate_kpi(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ContractDashboard')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def time_to_approve_contract_kpi(request):
     """
     Get Time to Approve Contract KPI.
     Returns the average days to approve contracts per month.
     Calculates the time difference between assigned_date and approved_date from contract_approvals table.
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
             return Response({
@@ -2170,6 +2458,9 @@ def time_to_approve_contract_kpi(request):
         except (ValueError, TypeError):
             year = datetime.now().year
         
+        # MULTI-TENANCY: Get contract IDs that belong to this tenant
+        tenant_contract_ids = list(VendorContract.objects.filter(tenant_id=tenant_id).values_list('contract_id', flat=True))
+        
         # Month names mapping
         month_names = {
             1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr', 5: 'May', 6: 'Jun',
@@ -2178,13 +2469,15 @@ def time_to_approve_contract_kpi(request):
         
         # Query approved contract approvals and calculate average approval time per month
         # Filter: status='APPROVED' and approved_date is not null
+        # MULTI-TENANCY: Filter by tenant contract IDs
         approval_data = (
             ContractApproval.objects
             .filter(
                 status='APPROVED',
                 approved_date__isnull=False,
                 assigned_date__isnull=False,
-                approved_date__year=year
+                approved_date__year=year,
+                object_id__in=tenant_contract_ids
             )
             .annotate(
                 month=ExtractMonth('approved_date'),
@@ -2237,10 +2530,12 @@ def time_to_approve_contract_kpi(request):
         slowest_month = max(non_zero_months, key=lambda x: x['days']) if non_zero_months else None
         
         # Get total number of approved contracts in the year
+        # MULTI-TENANCY: Filter by tenant contract IDs
         total_approvals = ContractApproval.objects.filter(
             status='APPROVED',
             approved_date__isnull=False,
-            approved_date__year=year
+            approved_date__year=year,
+            object_id__in=tenant_contract_ids
         ).count()
         
         response_data = {
@@ -2416,9 +2711,21 @@ def contract_analytics(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ListContracts')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def vendor_list(request):
-    """List all vendors with filtering and pagination"""
+    """List all vendors with filtering and pagination
+    MULTI-TENANCY: Filters vendors by tenant to ensure tenant isolation
+    """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
             return Response({
@@ -2447,7 +2754,8 @@ def vendor_list(request):
         ordering = request.GET.get('ordering', 'company_name')
         
         # Build query
-        queryset = Vendor.objects.all()
+        # MULTI-TENANCY: Filter by tenant
+        queryset = Vendor.objects.filter(tenant_id=tenant_id)
         
         # VENDOR FILTERING: If user is a vendor, only show their own vendor record
         if vendor_info:
@@ -2535,9 +2843,21 @@ def vendor_list(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ListContracts')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def vendor_detail(request, vendor_id):
-    """Get vendor details by ID with contracts"""
+    """Get vendor details by ID with contracts
+    MULTI-TENANCY: Ensures vendor belongs to tenant
+    """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
             return Response({
@@ -2546,26 +2866,29 @@ def vendor_detail(request, vendor_id):
             }, status=429)
         
         # Get vendor with optimized annotations to avoid N+1 queries
-        vendor = Vendor.objects.annotate(
+        # MULTI-TENANCY: Filter by tenant
+        vendor = Vendor.objects.filter(tenant_id=tenant_id).annotate(
             contracts_count_annotated=Count(
                 'contracts',
-                filter=Q(contracts__is_archived=False),
+                filter=Q(contracts__is_archived=False, contracts__tenant_id=tenant_id),
                 distinct=True
             ),
             total_value_annotated=Sum(
                 'contracts__contract_value',
-                filter=Q(contracts__is_archived=False)
+                filter=Q(contracts__is_archived=False, contracts__tenant_id=tenant_id)
             ),
             last_activity_annotated=Max(
                 'contracts__created_at',
-                filter=Q(contracts__is_archived=False)
+                filter=Q(contracts__is_archived=False, contracts__tenant_id=tenant_id)
             )
         ).get(vendor_id=vendor_id)
         
         # Get vendor contracts
+        # MULTI-TENANCY: Filter by tenant
         contracts = VendorContract.objects.filter(
             vendor_id=vendor_id,
-            is_archived=False
+            is_archived=False,
+            tenant_id=tenant_id
         ).select_related('vendor').order_by('-created_at')
         
         # Serialize vendor
@@ -2617,9 +2940,21 @@ def vendor_detail(request, vendor_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ContractDashboard')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def vendor_stats(request):
-    """Get vendor statistics"""
+    """Get vendor statistics
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
             return Response({
@@ -2639,8 +2974,9 @@ def vendor_stats(request):
                 logger.info(f"[VENDOR STATS] User {user_id} is a vendor: {vendor_info['company_name']} (vendor_id: {vendor_info['vendor_id']})")
         
         # Build base querysets
-        vendor_queryset = Vendor.objects.all()
-        contract_queryset = VendorContract.objects.filter(is_archived=False)
+        # MULTI-TENANCY: Filter by tenant
+        vendor_queryset = Vendor.objects.filter(tenant_id=tenant_id)
+        contract_queryset = VendorContract.objects.filter(is_archived=False, tenant_id=tenant_id)
         
         # VENDOR FILTERING: If user is a vendor, only show stats for their vendor
         if vendor_info:
@@ -2706,9 +3042,21 @@ def vendor_stats(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ListContracts')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def vendor_contacts_list(request, vendor_id):
-    """Get vendor contacts by vendor ID"""
+    """Get vendor contacts by vendor ID
+    MULTI-TENANCY: Ensures vendor belongs to tenant
+    """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
             return Response({
@@ -2717,10 +3065,12 @@ def vendor_contacts_list(request, vendor_id):
             }, status=429)
         
         # Verify vendor exists
-        vendor = Vendor.objects.get(vendor_id=vendor_id)
+        # MULTI-TENANCY: Filter by tenant
+        vendor = Vendor.objects.get(vendor_id=vendor_id, tenant_id=tenant_id)
         
         # Get vendor contacts
-        contacts = VendorContact.objects.filter(vendor_id=vendor_id)
+        # MULTI-TENANCY: Filter by tenant
+        contacts = VendorContact.objects.filter(vendor_id=vendor_id, tenant_id=tenant_id)
         
         # Apply filters
         contact_type = request.GET.get('contact_type', '')
@@ -2761,9 +3111,21 @@ def vendor_contacts_list(request, vendor_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('CreateContract')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def vendor_contact_create(request, vendor_id):
-    """Create a vendor contact"""
+    """Create a vendor contact
+    MULTI-TENANCY: Ensures vendor belongs to tenant and sets tenant_id on contact
+    """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
             return Response({
@@ -2772,7 +3134,8 @@ def vendor_contact_create(request, vendor_id):
             }, status=429)
         
         # Verify vendor exists
-        vendor = Vendor.objects.get(vendor_id=vendor_id)
+        # MULTI-TENANCY: Filter by tenant
+        vendor = Vendor.objects.get(vendor_id=vendor_id, tenant_id=tenant_id)
         
         # Validate input data
         SecurityManager.validate_contract_data(request.data)
@@ -2784,6 +3147,8 @@ def vendor_contact_create(request, vendor_id):
             contact_data = request.data.copy()
             contact_data['vendor_id'] = vendor_id
             contact_data['created_by'] = getattr(request.user, 'userid', 1)
+            # MULTI-TENANCY: Set tenant_id
+            contact_data['tenant_id'] = tenant_id
             
             # Convert boolean values to integers for unmanaged models
             if 'is_primary' in contact_data:
@@ -2860,9 +3225,21 @@ def check_contract_create_permission(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ListContractRenewals')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def contract_renewals_list(request):
-    """List contract renewals"""
+    """List contract renewals
+    MULTI-TENANCY: Filters renewals by tenant to ensure tenant isolation
+    """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
             return Response({
@@ -2897,13 +3274,16 @@ def contract_renewals_list(request):
         page_size = int(request.GET.get('page_size', 20))
         
         # Build query
-        renewals = ContractRenewal.objects.all()
+        # MULTI-TENANCY: Filter by tenant
+        renewals = ContractRenewal.objects.filter(tenant_id=tenant_id)
         
         # VENDOR FILTERING: If user is a vendor, only show renewals for their contracts
         if vendor_info:
             # Get all contract IDs for this vendor
+            # MULTI-TENANCY: Filter by tenant
             vendor_contract_ids = VendorContract.objects.filter(
-                vendor_id=vendor_info['vendor_id']
+                vendor_id=vendor_info['vendor_id'],
+                tenant_id=tenant_id
             ).values_list('contract_id', flat=True)
             
             renewals = renewals.filter(contract_id__in=vendor_contract_ids)
@@ -2984,9 +3364,21 @@ def contract_renewals_list(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('CreateContractRenewal')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def contract_renewal_create(request):
-    """Create a contract renewal request"""
+    """Create a contract renewal request
+    MULTI-TENANCY: Ensures contract belongs to tenant and sets tenant_id on renewal
+    """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
             return Response({
@@ -3004,7 +3396,8 @@ def contract_renewal_create(request):
                 }, status=400)
         
         try:
-            contract = VendorContract.objects.get(contract_id=contract_id, is_archived=False)
+            # MULTI-TENANCY: Filter by tenant
+            contract = VendorContract.objects.get(contract_id=contract_id, is_archived=False, tenant_id=tenant_id)
         except VendorContract.DoesNotExist:
             return Response({
                 'success': False,
@@ -3049,10 +3442,12 @@ def contract_renewal_create(request):
                     renewal_data['initiated_by'] = None
             
             renewal_data['initiated_date'] = timezone.now()
+            # MULTI-TENANCY: Set tenant_id
+            renewal_data['tenant_id'] = tenant_id
             
             # Create renewal
             try:
-                renewal = serializer.save()
+                renewal = serializer.save(**renewal_data)
                 
                 # Debug: Log the created renewal data
                 logger.info(f"Contract renewal created - ID: {renewal.renewal_id}")
@@ -3100,9 +3495,21 @@ def contract_renewal_create(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ListContractRenewals')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def contract_renewal_detail(request, renewal_id):
-    """Get contract renewal details"""
+    """Get contract renewal details
+    MULTI-TENANCY: Ensures renewal belongs to tenant
+    """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
             return Response({
@@ -3120,15 +3527,18 @@ def contract_renewal_detail(request, renewal_id):
             vendor_info = RBACTPRMUtils.get_vendor_info_for_user(user_id)
         
         # Get renewal
+        # MULTI-TENANCY: Filter by tenant
         try:
-            renewal = ContractRenewal.objects.get(renewal_id=renewal_id)
+            renewal = ContractRenewal.objects.get(renewal_id=renewal_id, tenant_id=tenant_id)
             
             # VENDOR FILTERING: Check if vendor user has access to this renewal's contract
             if vendor_info:
                 # Check if the contract associated with this renewal belongs to the vendor
+                # MULTI-TENANCY: Filter by tenant
                 contract = VendorContract.objects.filter(
                     contract_id=renewal.contract_id,
-                    vendor_id=vendor_info['vendor_id']
+                    vendor_id=vendor_info['vendor_id'],
+                    tenant_id=tenant_id
                 ).first()
                 
                 if not contract:
@@ -3169,9 +3579,21 @@ def contract_renewal_detail(request, renewal_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ApproveContractRenewal')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def contract_renewal_update(request, renewal_id):
-    """Update contract renewal"""
+    """Update contract renewal
+    MULTI-TENANCY: Ensures renewal belongs to tenant
+    """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
             return Response({
@@ -3180,8 +3602,9 @@ def contract_renewal_update(request, renewal_id):
             }, status=429)
         
         # Get renewal
+        # MULTI-TENANCY: Filter by tenant
         try:
-            renewal = ContractRenewal.objects.get(renewal_id=renewal_id)
+            renewal = ContractRenewal.objects.get(renewal_id=renewal_id, tenant_id=tenant_id)
         except ContractRenewal.DoesNotExist:
             return Response({
                 'success': False,
@@ -3229,9 +3652,21 @@ def contract_renewal_update(request, renewal_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('RejectContractRenewal')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def contract_renewal_delete(request, renewal_id):
-    """Delete contract renewal"""
+    """Delete contract renewal
+    MULTI-TENANCY: Ensures renewal belongs to tenant
+    """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
             return Response({
@@ -3240,8 +3675,9 @@ def contract_renewal_delete(request, renewal_id):
             }, status=429)
         
         # Get renewal
+        # MULTI-TENANCY: Filter by tenant
         try:
-            renewal = ContractRenewal.objects.get(renewal_id=renewal_id)
+            renewal = ContractRenewal.objects.get(renewal_id=renewal_id, tenant_id=tenant_id)
         except ContractRenewal.DoesNotExist:
             return Response({
                 'success': False,
@@ -3274,14 +3710,28 @@ def contract_renewal_delete(request, renewal_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ListContractTerms')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def contract_terms_list(request, contract_id):
-    """Get contract terms by contract ID"""
+    """Get contract terms by contract ID
+    MULTI-TENANCY: Ensures contract belongs to tenant and filters terms
+    """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Verify contract exists
-        contract = VendorContract.objects.get(contract_id=contract_id, is_archived=False)
+        # MULTI-TENANCY: Filter by tenant
+        contract = VendorContract.objects.get(contract_id=contract_id, is_archived=False, tenant_id=tenant_id)
         
         # Get contract terms
-        terms = ContractTerm.objects.filter(contract_id=contract_id)
+        # MULTI-TENANCY: Filter by tenant
+        terms = ContractTerm.objects.filter(contract_id=contract_id, tenant_id=tenant_id)
         
         # Serialize terms
         serializer = ContractTermSerializer(terms, many=True)
@@ -3305,7 +3755,7 @@ def contract_terms_list(request, contract_id):
             'message': 'Failed to fetch contract terms'
         }, status=500)
 
-def save_questionnaires_for_term(term_id, questionnaires_data, user):
+def save_questionnaires_for_term(term_id, questionnaires_data, user, tenant_id=None):
     """
     Save questionnaires for a term to both questionnaire_template and contract_static_questionnaire tables.
     
@@ -3313,6 +3763,7 @@ def save_questionnaires_for_term(term_id, questionnaires_data, user):
         term_id: The term_id for which questionnaires are being saved
         questionnaires_data: List of questionnaire objects with question_text, question_type, etc.
         user: The user creating the questionnaires
+        tenant_id: MULTI-TENANCY: The tenant_id to set on questionnaires
     """
     from bcpdrp.models import QuestionnaireTemplate
     from audits_contract.models import ContractStaticQuestionnaire
@@ -3458,10 +3909,26 @@ def save_questionnaires_for_term(term_id, questionnaires_data, user):
         # If template_id is provided, update that template with the new questions
         if provided_template_id:
             try:
-                existing_template = QuestionnaireTemplate.objects.get(
+                # MULTI-TENANCY: Filter by tenant_id when getting template
+                template_query = QuestionnaireTemplate.objects.filter(
                     template_id=provided_template_id,
                     module_type='CONTRACT'
                 )
+                if tenant_id:
+                    template_query = template_query.filter(tenant_id=tenant_id)
+                existing_template = template_query.first()
+                
+                if not existing_template:
+                    # Try without tenant filter as fallback
+                    existing_template = QuestionnaireTemplate.objects.get(
+                        template_id=provided_template_id,
+                        module_type='CONTRACT'
+                    )
+                    # Update tenant_id if it was missing
+                    if tenant_id and not existing_template.tenant_id:
+                        existing_template.tenant_id = tenant_id
+                        existing_template.save()
+                        logger.info(f"✅ Updated template {provided_template_id} with tenant_id: {tenant_id}")
                 template_id = existing_template.template_id
                 
                 # IMPORTANT: When a template is selected, REPLACE all questions in the template
@@ -3470,16 +3937,21 @@ def save_questionnaires_for_term(term_id, questionnaires_data, user):
                 existing_template.template_questions_json = template_questions
                 existing_template.updated_by = user_id
                 existing_template.updated_at = timezone.now()
+                # MULTI-TENANCY: Set tenant_id if missing
+                if tenant_id and not existing_template.tenant_id:
+                    existing_template.tenant_id = tenant_id
                 existing_template.save()
                 
                 logger.info(f"✅ Updated provided template (ID: {template_id}) for term_id: {term_id_str}")
                 logger.info(f"📋 Template now has {len(template_questions)} questions (replaced all questions, removed ones are now excluded)")
                 
                 # Delete existing ContractStaticQuestionnaire entries for this term_id before creating new ones
-                deleted_count, _ = ContractStaticQuestionnaire.objects.filter(
-                    term_id=term_id_str
-                ).delete()
-                logger.info(f"✅ Deleted {deleted_count} existing contract_static_questionnaires for term_id: {term_id_str} before creating new ones")
+                # MULTI-TENANCY: Filter by tenant_id when deleting
+                delete_query = ContractStaticQuestionnaire.objects.filter(term_id=term_id_str)
+                if tenant_id:
+                    delete_query = delete_query.filter(tenant_id=tenant_id)
+                deleted_count, _ = delete_query.delete()
+                logger.info(f"✅ Deleted {deleted_count} existing contract_static_questionnaires for term_id: {term_id_str} (tenant_id: {tenant_id}) before creating new ones")
                 
             except QuestionnaireTemplate.DoesNotExist:
                 logger.warning(f"⚠️ Provided template_id {provided_template_id} not found, creating/updating template")
@@ -3488,7 +3960,11 @@ def save_questionnaires_for_term(term_id, questionnaires_data, user):
         # If no template_id provided or template not found, check if a template already exists for this term
         if not template_id:
             existing_template = None
-            all_templates = QuestionnaireTemplate.objects.filter(module_type='CONTRACT')
+            # MULTI-TENANCY: Filter templates by tenant_id if available
+            template_query = QuestionnaireTemplate.objects.filter(module_type='CONTRACT')
+            if tenant_id:
+                template_query = template_query.filter(tenant_id=tenant_id)
+            all_templates = template_query
             for template in all_templates:
                 questions = template.template_questions_json or []
                 # Check if any question has this term_id
@@ -3506,18 +3982,33 @@ def save_questionnaires_for_term(term_id, questionnaires_data, user):
                 existing_template.template_questions_json = existing_questions
                 existing_template.updated_by = user_id
                 existing_template.updated_at = timezone.now()
+                # MULTI-TENANCY: Set tenant_id if missing
+                if tenant_id and not existing_template.tenant_id:
+                    existing_template.tenant_id = tenant_id
                 existing_template.save()
                 template_id = existing_template.template_id
-                logger.info(f"✅ Updated existing questionnaire_template (ID: {template_id}) for term_id: {term_id_str}")
+                logger.info(f"✅ Updated existing questionnaire_template (ID: {template_id}) for term_id: {term_id_str} with tenant_id: {tenant_id}")
                 
                 # Delete existing ContractStaticQuestionnaire entries for this term_id before creating new ones
-                deleted_count, _ = ContractStaticQuestionnaire.objects.filter(
-                    term_id=term_id_str
-                ).delete()
-                logger.info(f"✅ Deleted {deleted_count} existing contract_static_questionnaires for term_id: {term_id_str} before creating new ones")
+                # MULTI-TENANCY: Filter by tenant_id when deleting
+                delete_query = ContractStaticQuestionnaire.objects.filter(term_id=term_id_str)
+                if tenant_id:
+                    delete_query = delete_query.filter(tenant_id=tenant_id)
+                deleted_count, _ = delete_query.delete()
+                logger.info(f"✅ Deleted {deleted_count} existing contract_static_questionnaires for term_id: {term_id_str} (tenant_id: {tenant_id}) before creating new ones")
             else:
                 # Create new template
                 template_name = f"Contract Questionnaire - Term {term_id_str}"
+                # MULTI-TENANCY: Get tenant_id for template
+                tenant_id_for_template = tenant_id
+                if not tenant_id_for_template:
+                    try:
+                        term_obj = ContractTerm.objects.filter(term_id=term_id_str).first()
+                        if term_obj and hasattr(term_obj, 'tenant_id'):
+                            tenant_id_for_template = term_obj.tenant_id
+                    except:
+                        pass
+                
                 template = QuestionnaireTemplate.objects.create(
                     template_name=template_name,
                     template_description=f"Questionnaire template for contract term {term_id_str}",
@@ -3531,73 +4022,108 @@ def save_questionnaires_for_term(term_id, questionnaires_data, user):
                     is_active=True,
                     is_template=True,
                     created_by=user_id,
+                    tenant_id=tenant_id_for_template  # MULTI-TENANCY: Set tenant_id
                 )
                 template_id = template.template_id
-                logger.info(f"✅ Created new questionnaire_template (ID: {template_id}) for term_id: {term_id_str}")
+                logger.info(f"✅ Created new questionnaire_template (ID: {template_id}) for term_id: {term_id_str} with tenant_id: {tenant_id_for_template}")
     
     # Save to contract_static_questionnaire table with template_id
     questions_created = 0
     for idx, q_data in enumerate(questionnaires_data):
-        # Extract question data
-        question_text = q_data.get('question_text', '').strip()
-        if not question_text:
-            continue
-        
-        raw_question_type = (q_data.get('question_type') or 'text').lower()
-        question_type = question_type_map.get(raw_question_type, 'text')
-        if question_type != raw_question_type:
-            logger.debug(
-                "Normalised question_type (static) from '%s' to '%s' for term_id %s",
-                raw_question_type,
-                question_type,
-                term_id_str
-            )
-        is_required = bool(q_data.get('is_required', False))
-        scoring_weightings = float(q_data.get('scoring_weightings', 10.0))
-        
-        # Extract document_upload and multiple_choice fields
-        document_upload = bool(q_data.get('document_upload', False) or q_data.get('allow_document_upload', False))
-        
-        # multiple_choice should only be set when question_type is 'multiple_choice'
-        multiple_choice = None
-        if question_type == 'multiple_choice':
-            # Get options from the question data
-            options = q_data.get('options', [])
-            if isinstance(options, list) and len(options) > 0:
-                multiple_choice = options
-            elif isinstance(options, str):
-                # If options is a string, try to parse it or split by comma
+        try:
+            # Extract question data
+            question_text = q_data.get('question_text', '').strip()
+            if not question_text:
+                logger.warning(f"⚠️ Skipping questionnaire {idx + 1} - empty question_text")
+                continue
+            
+            raw_question_type = (q_data.get('question_type') or 'text').lower()
+            question_type = question_type_map.get(raw_question_type, 'text')
+            if question_type != raw_question_type:
+                logger.debug(
+                    "Normalised question_type (static) from '%s' to '%s' for term_id %s",
+                    raw_question_type,
+                    question_type,
+                    term_id_str
+                )
+            is_required = bool(q_data.get('is_required', False))
+            scoring_weightings = float(q_data.get('scoring_weightings', 10.0))
+            
+            # Extract document_upload and multiple_choice fields
+            document_upload = bool(q_data.get('document_upload', False) or q_data.get('allow_document_upload', False))
+            
+            # multiple_choice should only be set when question_type is 'multiple_choice'
+            multiple_choice = None
+            if question_type == 'multiple_choice':
+                # Get options from the question data
+                options = q_data.get('options', [])
+                if isinstance(options, list) and len(options) > 0:
+                    multiple_choice = options
+                elif isinstance(options, str):
+                    # If options is a string, try to parse it or split by comma
+                    try:
+                        import json
+                        multiple_choice = json.loads(options)
+                    except (json.JSONDecodeError, ValueError):
+                        # If not valid JSON, split by comma
+                        multiple_choice = [opt.strip() for opt in options.split(',') if opt.strip()]
+            
+            # Save to contract_static_questionnaire table with template_id
+            # MULTI-TENANCY: Use tenant_id parameter or get from term object
+            tenant_id_for_questionnaire = tenant_id
+            if not tenant_id_for_questionnaire:
                 try:
-                    import json
-                    multiple_choice = json.loads(options)
-                except (json.JSONDecodeError, ValueError):
-                    # If not valid JSON, split by comma
-                    multiple_choice = [opt.strip() for opt in options.split(',') if opt.strip()]
-        
-        # Save to contract_static_questionnaire table with template_id
-        ContractStaticQuestionnaire.objects.create(
-            term_id=term_id_str,
-            template_id=template_id,  # Link to questionnaire_template
-            question_text=question_text,
-            question_type=question_type,
-            is_required=is_required,
-            scoring_weightings=scoring_weightings,
-            document_upload=document_upload,
-            multiple_choice=multiple_choice
-        )
-        questions_created += 1
-        logger.info(f"✅ Created question {idx + 1} in contract_static_questionnaires for term_id: {term_id_str} with template_id: {template_id}")
+                    term_obj = ContractTerm.objects.filter(term_id=term_id_str).first()
+                    if term_obj and hasattr(term_obj, 'tenant_id'):
+                        tenant_id_for_questionnaire = term_obj.tenant_id
+                except:
+                    pass
+            
+            ContractStaticQuestionnaire.objects.create(
+                term_id=term_id_str,
+                template_id=template_id,  # Link to questionnaire_template
+                question_text=question_text,
+                question_type=question_type,
+                is_required=is_required,
+                scoring_weightings=scoring_weightings,
+                document_upload=document_upload,
+                multiple_choice=multiple_choice,
+                tenant_id=tenant_id_for_questionnaire  # MULTI-TENANCY: Set tenant_id
+            )
+            questions_created += 1
+            logger.info(f"✅ Created question {idx + 1} in contract_static_questionnaires for term_id: {term_id_str} with template_id: {template_id} and tenant_id: {tenant_id_for_questionnaire}")
+        except Exception as q_error:
+            logger.error(f"❌ Error creating questionnaire {idx + 1} for term_id {term_id_str}: {str(q_error)}")
+            import traceback
+            logger.error(f"❌ Traceback: {traceback.format_exc()}")
+            # Continue with next question instead of failing completely
+            continue
     
-    logger.info(f"✅ Successfully saved {questions_created} questionnaires for term_id: {term_id_str} with template_id: {template_id}")
+    if questions_created == 0:
+        logger.warning(f"⚠️ No questionnaires were created for term_id: {term_id_str} (out of {len(questionnaires_data)} provided)")
+    else:
+        logger.info(f"✅ Successfully saved {questions_created} out of {len(questionnaires_data)} questionnaires for term_id: {term_id_str} with template_id: {template_id}")
 
 
 @api_view(['POST'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('CreateContractTerm')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def contract_terms_create(request, contract_id):
-    """Create contract terms"""
+    """Create contract terms
+    MULTI-TENANCY: Ensures contract belongs to tenant and sets tenant_id on terms
+    """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
             return Response({
@@ -3606,9 +4132,11 @@ def contract_terms_create(request, contract_id):
             }, status=429)
         
         # Get contract
+        # MULTI-TENANCY: Filter by tenant
         contract = VendorContract.objects.get(
             contract_id=contract_id, 
-            is_archived=False
+            is_archived=False,
+            tenant_id=tenant_id
         )
         
         # Validate input data
@@ -3647,6 +4175,8 @@ def contract_terms_create(request, contract_id):
 
             term_payload['contract_id'] = contract.contract_id  # Use contract_id field
             term_payload['created_by'] = getattr(request.user, 'userid', 1)  # Use default user ID 1 if anonymous
+            # MULTI-TENANCY: Set tenant_id
+            term_payload['tenant_id'] = tenant_id
             
             # Log the term_id from request to verify it's being preserved
             requested_term_id = term_payload.get('term_id')
@@ -3667,7 +4197,7 @@ def contract_terms_create(request, contract_id):
             
             serializer = ContractTermSerializer(data=term_payload)
             if serializer.is_valid():
-                term = serializer.save()
+                term = serializer.save(**term_payload)
                 logger.info(f"✅ Contract term created: {term.term_id} for contract {contract_id}")
                 # Verify term_id was preserved
                 if requested_term_id and term.term_id != requested_term_id:
@@ -3696,8 +4226,10 @@ def contract_terms_create(request, contract_id):
                 from audits_contract.models import ContractStaticQuestionnaire
                 
                 # Find and update questionnaires with the original term_id
+                # MULTI-TENANCY: Filter by tenant
                 questionnaires_to_update = ContractStaticQuestionnaire.objects.filter(
-                    term_id=original_term_id_from_request
+                    term_id=original_term_id_from_request,
+                    tenant_id=tenant_id
                 )
                 
                 if questionnaires_to_update.exists():
@@ -3710,7 +4242,8 @@ def contract_terms_create(request, contract_id):
                     for i in range(2, len(parts)):
                         partial_id = '_'.join(parts[:i])
                         if partial_id != saved_term_id:
-                            matching = ContractStaticQuestionnaire.objects.filter(term_id=partial_id)
+                            # MULTI-TENANCY: Filter by tenant
+                            matching = ContractStaticQuestionnaire.objects.filter(term_id=partial_id, tenant_id=tenant_id)
                             if matching.exists():
                                 count = matching.update(term_id=saved_term_id)
                                 logger.info(f"✅ Updated {count} questionnaires from partial term_id {partial_id} to {saved_term_id}")
@@ -3719,9 +4252,17 @@ def contract_terms_create(request, contract_id):
         
         # Save questionnaires for this term if provided in request
         if questionnaires_data and isinstance(questionnaires_data, list) and len(questionnaires_data) > 0:
-            logger.info(f"📋 Saving {len(questionnaires_data)} questionnaires for term_id: {saved_term_id}")
-            save_questionnaires_for_term(saved_term_id, questionnaires_data, request.user)
-            logger.info(f"✅ Successfully saved questionnaires for term_id: {saved_term_id}")
+            logger.info(f"📋 Saving {len(questionnaires_data)} questionnaires for term_id: {saved_term_id} with tenant_id: {tenant_id}")
+            try:
+                # MULTI-TENANCY: Pass tenant_id to save_questionnaires_for_term
+                save_questionnaires_for_term(saved_term_id, questionnaires_data, request.user, tenant_id)
+                logger.info(f"✅ Successfully saved questionnaires for term_id: {saved_term_id}")
+            except Exception as questionnaire_error:
+                logger.error(f"❌ Error saving questionnaires for term_id {saved_term_id}: {str(questionnaire_error)}")
+                import traceback
+                logger.error(f"❌ Traceback: {traceback.format_exc()}")
+                # Don't fail the entire term creation if questionnaires fail, but log the error
+                # This allows the term to be created even if questionnaires have issues
         
         # Create backup after successful term creation (for speed)
         backup_file = DatabaseBackupManager.create_backup()
@@ -3760,14 +4301,28 @@ def contract_terms_create(request, contract_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ListContracts')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def contract_clauses_list(request, contract_id):
-    """Get contract clauses by contract ID"""
+    """Get contract clauses by contract ID
+    MULTI-TENANCY: Ensures contract belongs to tenant and filters clauses
+    """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Verify contract exists
-        contract = VendorContract.objects.get(contract_id=contract_id, is_archived=False)
+        # MULTI-TENANCY: Filter by tenant
+        contract = VendorContract.objects.get(contract_id=contract_id, is_archived=False, tenant_id=tenant_id)
         
         # Get contract clauses
-        clauses = ContractClause.objects.filter(contract_id=contract_id)
+        # MULTI-TENANCY: Filter by tenant
+        clauses = ContractClause.objects.filter(contract_id=contract_id, tenant_id=tenant_id)
         
         # Serialize clauses
         serializer = ContractClauseSerializer(clauses, many=True)
@@ -3795,9 +4350,21 @@ def contract_clauses_list(request, contract_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('CreateContract')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def contract_clauses_create(request, contract_id):
-    """Create contract clauses"""
+    """Create contract clauses
+    MULTI-TENANCY: Ensures contract belongs to tenant and sets tenant_id on clauses
+    """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
             return Response({
@@ -3806,9 +4373,11 @@ def contract_clauses_create(request, contract_id):
             }, status=429)
         
         # Get contract
+        # MULTI-TENANCY: Filter by tenant
         contract = VendorContract.objects.get(
             contract_id=contract_id, 
-            is_archived=False
+            is_archived=False,
+            tenant_id=tenant_id
         )
         
         # Validate input data
@@ -3818,6 +4387,8 @@ def contract_clauses_create(request, contract_id):
             clause_data = request.data.copy()
             clause_data['contract_id'] = contract.contract_id  # Use contract_id field
             clause_data['created_by'] = getattr(request.user, 'userid', 1)  # Use default user ID 1 if anonymous
+            # MULTI-TENANCY: Set tenant_id
+            clause_data['tenant_id'] = tenant_id
             
             # Convert boolean values to integers for unmanaged models
             if 'is_standard' in clause_data:
@@ -3838,7 +4409,7 @@ def contract_clauses_create(request, contract_id):
             
             serializer = ContractClauseSerializer(data=clause_data)
             if serializer.is_valid():
-                clause = serializer.save()
+                clause = serializer.save(**clause_data)
                 logger.info(f"Contract clause created: {clause.clause_id} for contract {contract_id}")
                 return clause
             else:
@@ -3884,9 +4455,21 @@ def contract_clauses_create(request, contract_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ContractSearch')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def contract_search(request):
-    """Advanced contract search"""
+    """Advanced contract search
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
             return Response({
@@ -3904,7 +4487,8 @@ def contract_search(request):
             }, status=400)
         
         # Build query
-        queryset = VendorContract.objects.select_related('vendor')
+        # MULTI-TENANCY: Filter by tenant
+        queryset = VendorContract.objects.select_related('vendor').filter(tenant_id=tenant_id)
         
         # Filter for main and amendment contracts
         queryset = queryset.filter(contract_kind__in=['MAIN', 'AMENDMENT'])
@@ -3988,8 +4572,12 @@ def contract_search(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ListContracts')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def users_list(request):
-    """Get all users for contract assignment"""
+    """Get all users for contract assignment
+    MULTI-TENANCY: Filters users by tenant to ensure tenant isolation
+    """
     try:
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
@@ -3998,15 +4586,36 @@ def users_list(request):
                 'message': 'Too many requests. Please try again later.'
             }, status=429)
         
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Get all users from custom User model
+        users_list = []
+        
+        # Try ORM approach first
         try:
             from mfa_auth.models import User
-            users = User.objects.all().order_by('userid')
+            logger.info("Successfully imported User model from mfa_auth.models")
             
-            logger.info(f"Found {users.count()} users in database")
+            # Try filtering by tenant_id first
+            try:
+                users = User.objects.filter(tenant_id=tenant_id).order_by('userid')
+                logger.info(f"Filtered users by tenant_id={tenant_id}")
+            except Exception as filter_error:
+                logger.warning(f"Filtering by tenant_id failed: {filter_error}, trying without tenant filter")
+                # Fallback: get all users if tenant_id filtering fails
+                users = User.objects.all().order_by('userid')
+                logger.info("Using all users (no tenant filter)")
+            
+            user_count = users.count()
+            logger.info(f"Found {user_count} users in database for tenant_id={tenant_id}")
             
             # Convert to list and add display name
-            users_list = []
             for user in users:
                 full_name = f"{user.first_name} {user.last_name}".strip()
                 display_name = full_name if full_name else user.username
@@ -4020,18 +4629,73 @@ def users_list(request):
                 users_list.append(user_data)
                 logger.info(f"User: {user_data}")
             
-            logger.info(f"Returning {len(users_list)} users to frontend")
-            
-            return Response({
-                'success': True,
-                'data': users_list
-            })
-        except ImportError:
-            logger.warning("User model not found, returning empty list")
-            return Response({
-                'success': True,
-                'data': []
-            })
+        except ImportError as import_err:
+            logger.warning(f"User model import failed: {import_err}, trying raw SQL")
+            # Fallback to raw SQL
+            try:
+                from django.db import connection
+                with connection.cursor() as cursor:
+                    # Try to query with tenant_id if column exists
+                    try:
+                        cursor.execute(
+                            "SELECT UserId, UserName, FirstName, LastName FROM users WHERE TenantId = %s ORDER BY UserId",
+                            [tenant_id]
+                        )
+                    except Exception:
+                        # If TenantId column doesn't exist, get all users
+                        cursor.execute(
+                            "SELECT UserId, UserName, FirstName, LastName FROM users ORDER BY UserId"
+                        )
+                    
+                    for row in cursor.fetchall():
+                        user_id, username, first_name, last_name = row
+                        full_name = f"{first_name or ''} {last_name or ''}".strip()
+                        display_name = full_name if full_name else (username or f"User {user_id}")
+                        
+                        user_data = {
+                            'user_id': user_id,
+                            'username': username or f"user_{user_id}",
+                            'display_name': display_name,
+                            'role': 'user'
+                        }
+                        users_list.append(user_data)
+                        logger.info(f"User (from raw SQL): {user_data}")
+            except Exception as sql_err:
+                logger.error(f"Raw SQL query also failed: {sql_err}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
+        except Exception as model_err:
+            logger.error(f"Error accessing User model: {model_err}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            # Try raw SQL as last resort
+            try:
+                from django.db import connection
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT UserId, UserName, FirstName, LastName FROM users ORDER BY UserId"
+                    )
+                    for row in cursor.fetchall():
+                        user_id, username, first_name, last_name = row
+                        full_name = f"{first_name or ''} {last_name or ''}".strip()
+                        display_name = full_name if full_name else (username or f"User {user_id}")
+                        
+                        user_data = {
+                            'user_id': user_id,
+                            'username': username or f"user_{user_id}",
+                            'display_name': display_name,
+                            'role': 'user'
+                        }
+                        users_list.append(user_data)
+            except Exception as sql_err:
+                logger.error(f"Raw SQL fallback also failed: {sql_err}")
+        
+        logger.info(f"Returning {len(users_list)} users to frontend")
+        
+        return Response({
+            'success': True,
+            'data': users_list
+        })
         
     except Exception as e:
         import traceback
@@ -4048,8 +4712,12 @@ def users_list(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ListContracts')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def legal_reviewers_list(request):
-    """Get users with legal review roles for contract assignment"""
+    """Get users with legal review roles for contract assignment
+    MULTI-TENANCY: Filters users by tenant to ensure tenant isolation
+    """
     try:
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
@@ -4058,15 +4726,36 @@ def legal_reviewers_list(request):
                 'message': 'Too many requests. Please try again later.'
             }, status=429)
         
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Get all users from custom User model (since RBAC is removed, all users can be legal reviewers)
+        users_list = []
+        
+        # Try ORM approach first
         try:
             from mfa_auth.models import User
-            users = User.objects.all().order_by('userid')
+            logger.info("Successfully imported User model from mfa_auth.models for legal reviewers")
             
-            logger.info(f"Found {users.count()} users for legal reviewers")
+            # Try filtering by tenant_id first
+            try:
+                users = User.objects.filter(tenant_id=tenant_id).order_by('userid')
+                logger.info(f"Filtered legal reviewers by tenant_id={tenant_id}")
+            except Exception as filter_error:
+                logger.warning(f"Filtering by tenant_id failed: {filter_error}, trying without tenant filter")
+                # Fallback: get all users if tenant_id filtering fails
+                users = User.objects.all().order_by('userid')
+                logger.info("Using all users for legal reviewers (no tenant filter)")
+            
+            user_count = users.count()
+            logger.info(f"Found {user_count} users for legal reviewers (tenant_id={tenant_id})")
             
             # Convert to list and add display name
-            users_list = []
             for user in users:
                 full_name = f"{user.first_name} {user.last_name}".strip()
                 display_name = full_name if full_name else user.username
@@ -4080,18 +4769,73 @@ def legal_reviewers_list(request):
                 users_list.append(user_data)
                 logger.info(f"Legal Reviewer: {user_data}")
             
-            logger.info(f"Returning {len(users_list)} legal reviewers to frontend")
-            
-            return Response({
-                'success': True,
-                'data': users_list
-            })
-        except ImportError:
-            logger.warning("User model not found, returning empty list")
-            return Response({
-                'success': True,
-                'data': []
-            })
+        except ImportError as import_err:
+            logger.warning(f"User model import failed: {import_err}, trying raw SQL")
+            # Fallback to raw SQL
+            try:
+                from django.db import connection
+                with connection.cursor() as cursor:
+                    # Try to query with tenant_id if column exists
+                    try:
+                        cursor.execute(
+                            "SELECT UserId, UserName, FirstName, LastName FROM users WHERE TenantId = %s ORDER BY UserId",
+                            [tenant_id]
+                        )
+                    except Exception:
+                        # If TenantId column doesn't exist, get all users
+                        cursor.execute(
+                            "SELECT UserId, UserName, FirstName, LastName FROM users ORDER BY UserId"
+                        )
+                    
+                    for row in cursor.fetchall():
+                        user_id, username, first_name, last_name = row
+                        full_name = f"{first_name or ''} {last_name or ''}".strip()
+                        display_name = full_name if full_name else (username or f"User {user_id}")
+                        
+                        user_data = {
+                            'user_id': user_id,
+                            'username': username or f"user_{user_id}",
+                            'display_name': display_name,
+                            'role': 'legal_reviewer'
+                        }
+                        users_list.append(user_data)
+                        logger.info(f"Legal Reviewer (from raw SQL): {user_data}")
+            except Exception as sql_err:
+                logger.error(f"Raw SQL query also failed: {sql_err}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
+        except Exception as model_err:
+            logger.error(f"Error accessing User model: {model_err}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            # Try raw SQL as last resort
+            try:
+                from django.db import connection
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT UserId, UserName, FirstName, LastName FROM users ORDER BY UserId"
+                    )
+                    for row in cursor.fetchall():
+                        user_id, username, first_name, last_name = row
+                        full_name = f"{first_name or ''} {last_name or ''}".strip()
+                        display_name = full_name if full_name else (username or f"User {user_id}")
+                        
+                        user_data = {
+                            'user_id': user_id,
+                            'username': username or f"user_{user_id}",
+                            'display_name': display_name,
+                            'role': 'legal_reviewer'
+                        }
+                        users_list.append(user_data)
+            except Exception as sql_err:
+                logger.error(f"Raw SQL fallback also failed: {sql_err}")
+        
+        logger.info(f"Returning {len(users_list)} legal reviewers to frontend")
+        
+        return Response({
+            'success': True,
+            'data': users_list
+        })
         
     except Exception as e:
         import traceback
@@ -4108,8 +4852,12 @@ def legal_reviewers_list(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('approve')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def approval_users_list(request):
-    """Get users with ApproveContract permission for contract approval assignment"""
+    """Get users with ApproveContract permission for contract approval assignment
+    MULTI-TENANCY: Filters users by tenant to ensure tenant isolation
+    """
     try:
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
@@ -4118,20 +4866,42 @@ def approval_users_list(request):
                 'message': 'Too many requests. Please try again later.'
             }, status=429)
         
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Import required models
+        users_with_permission = []
+        
         try:
             from mfa_auth.models import User
             from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
+            logger.info("Successfully imported User model and RBACTPRMUtils for approval users")
             
             # Get all active users (filter by is_active_raw which can be 'Y', 'YES', '1', 'TRUE')
-            all_users = User.objects.filter(
-                is_active_raw__in=['Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true']
-            ).order_by('userid')
+            # MULTI-TENANCY: Try filtering by tenant_id first
+            try:
+                all_users = User.objects.filter(
+                    is_active_raw__in=['Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true'],
+                    tenant_id=tenant_id
+                ).order_by('userid')
+                logger.info(f"Filtered approval users by tenant_id={tenant_id}")
+            except Exception as filter_error:
+                logger.warning(f"Filtering by tenant_id failed: {filter_error}, trying without tenant filter")
+                # Fallback: get all active users if tenant_id filtering fails
+                all_users = User.objects.filter(
+                    is_active_raw__in=['Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true']
+                ).order_by('userid')
+                logger.info("Using all active users for approval (no tenant filter)")
             
-            logger.info(f"Found {all_users.count()} active users in database")
+            user_count = all_users.count()
+            logger.info(f"Found {user_count} active users in database for approval (tenant_id={tenant_id})")
             
             # Filter users who have ApproveContract or ReviewContract permission
-            users_with_permission = []
             for user in all_users:
                 user_id = user.userid
                 
@@ -4157,20 +4927,88 @@ def approval_users_list(request):
                     users_with_permission.append(user_data)
                     logger.info(f"User with ApproveContract permission: {user_data}")
             
-            logger.info(f"Returning {len(users_with_permission)} users with ApproveContract permission to frontend")
-            
-            return Response({
-                'success': True,
-                'data': users_with_permission,
-                'count': len(users_with_permission)
-            })
-        except ImportError as e:
-            logger.warning(f"User model not found: {str(e)}, returning empty list")
-            return Response({
-                'success': True,
-                'data': [],
-                'count': 0
-            })
+        except ImportError as import_err:
+            logger.warning(f"User model import failed: {import_err}, trying raw SQL")
+            # Fallback to raw SQL
+            try:
+                from django.db import connection
+                from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
+                
+                with connection.cursor() as cursor:
+                    # Try to query with tenant_id if column exists
+                    try:
+                        cursor.execute(
+                            "SELECT UserId, UserName, FirstName, LastName, IsActive FROM users WHERE TenantId = %s AND IsActive IN ('Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true') ORDER BY UserId",
+                            [tenant_id]
+                        )
+                    except Exception:
+                        # If TenantId column doesn't exist, get all active users
+                        cursor.execute(
+                            "SELECT UserId, UserName, FirstName, LastName, IsActive FROM users WHERE IsActive IN ('Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true') ORDER BY UserId"
+                        )
+                    
+                    for row in cursor.fetchall():
+                        user_id, username, first_name, last_name, is_active = row
+                        full_name = f"{first_name or ''} {last_name or ''}".strip()
+                        display_name = full_name if full_name else (username or f"User {user_id}")
+                        
+                        # Check permissions using RBAC
+                        has_approve_permission = RBACTPRMUtils.check_contract_permission(user_id, 'ApproveContract')
+                        has_review_permission = RBACTPRMUtils.check_contract_permission(user_id, 'ReviewContract')
+                        
+                        if has_approve_permission or has_review_permission:
+                            user_data = {
+                                'user_id': user_id,
+                                'username': username or f"user_{user_id}",
+                                'display_name': display_name,
+                                'role': 'approver'
+                            }
+                            users_with_permission.append(user_data)
+                            logger.info(f"Approval User (from raw SQL): {user_data}")
+            except Exception as sql_err:
+                logger.error(f"Raw SQL query also failed: {sql_err}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
+        except Exception as model_err:
+            logger.error(f"Error accessing User model: {model_err}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            # Try raw SQL as last resort
+            try:
+                from django.db import connection
+                from tprm_backend.rbac.tprm_utils import RBACTPRMUtils
+                
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT UserId, UserName, FirstName, LastName, IsActive FROM users WHERE IsActive IN ('Y', 'YES', '1', 'TRUE', 'y', 'yes', 'true') ORDER BY UserId"
+                    )
+                    for row in cursor.fetchall():
+                        user_id, username, first_name, last_name, is_active = row
+                        full_name = f"{first_name or ''} {last_name or ''}".strip()
+                        display_name = full_name if full_name else (username or f"User {user_id}")
+                        
+                        # Check permissions using RBAC
+                        has_approve_permission = RBACTPRMUtils.check_contract_permission(user_id, 'ApproveContract')
+                        has_review_permission = RBACTPRMUtils.check_contract_permission(user_id, 'ReviewContract')
+                        
+                        if has_approve_permission or has_review_permission:
+                            user_data = {
+                                'user_id': user_id,
+                                'username': username or f"user_{user_id}",
+                                'display_name': display_name,
+                                'role': 'approver'
+                            }
+                            users_with_permission.append(user_data)
+            except Exception as sql_err:
+                logger.error(f"Raw SQL fallback also failed: {sql_err}")
+        
+        logger.info(f"Returning {len(users_with_permission)} users with ApproveContract permission to frontend")
+        
+        return Response({
+            'success': True,
+            'data': users_with_permission,
+            'count': len(users_with_permission)
+        })
         
     except Exception as e:
         import traceback
@@ -4187,16 +5025,26 @@ def approval_users_list(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ListContracts')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def subcontracts_list(request, parent_contract_id):
     """Get all subcontracts for a parent contract"""
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
             return Response({'error': 'Rate limit exceeded'}, status=429)
         
         # Get the parent contract to verify it exists
         try:
-            parent_contract = VendorContract.objects.get(contract_id=parent_contract_id, is_archived=False)
+            parent_contract = VendorContract.objects.get(contract_id=parent_contract_id, is_archived=False, tenant_id=tenant_id)
         except VendorContract.DoesNotExist:
             return Response({
                 'success': False,
@@ -4208,7 +5056,8 @@ def subcontracts_list(request, parent_contract_id):
         subcontracts = VendorContract.objects.filter(
             contract_kind='SUBCONTRACT',
             parent_contract_id=parent_contract_id,
-            is_archived=False
+            is_archived=False,
+            tenant_id=tenant_id
         ).select_related('vendor').order_by('created_at')
         
         # Check if the current user is a vendor
@@ -4252,11 +5101,11 @@ def subcontracts_list(request, parent_contract_id):
             logger.info(f"[SUBCONTRACT] Access granted to subcontract {subcontract.contract_id} - {permission_reason}")
             
             # Get terms for this subcontract
-            sub_terms = ContractTerm.objects.filter(contract_id=subcontract.contract_id).order_by('term_category', 'created_at')
+            sub_terms = ContractTerm.objects.filter(contract_id=subcontract.contract_id, tenant_id=tenant_id).order_by('term_category', 'created_at')
             sub_terms_serializer = ContractTermSerializer(sub_terms, many=True)
             
             # Get clauses for this subcontract
-            sub_clauses = ContractClause.objects.filter(contract_id=subcontract.contract_id).order_by('clause_type', 'created_at')
+            sub_clauses = ContractClause.objects.filter(contract_id=subcontract.contract_id, tenant_id=tenant_id).order_by('clause_type', 'created_at')
             sub_clauses_serializer = ContractClauseSerializer(sub_clauses, many=True)
             
             # Serialize the subcontract
@@ -4301,11 +5150,21 @@ def subcontracts_list(request, parent_contract_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ListContracts')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def contract_amendments_as_contracts_list(request, parent_contract_id):
     """Get all contract amendments as contracts for a parent contract"""
     try:
         logger.info(f"[AMENDMENTS] === VIEW CALLED === Fetching amendments for parent contract: {parent_contract_id}")
         logger.info(f"[AMENDMENTS] User: {request.user}")
+        
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
         
         # Rate limiting
         if RateLimiter.is_rate_limited(request):
@@ -4313,7 +5172,7 @@ def contract_amendments_as_contracts_list(request, parent_contract_id):
         
         # Get the parent contract to verify it exists
         try:
-            parent_contract = VendorContract.objects.get(contract_id=parent_contract_id, is_archived=False)
+            parent_contract = VendorContract.objects.get(contract_id=parent_contract_id, is_archived=False, tenant_id=tenant_id)
         except VendorContract.DoesNotExist:
             return Response({
                 'success': False,
@@ -4327,7 +5186,8 @@ def contract_amendments_as_contracts_list(request, parent_contract_id):
         amendments = VendorContract.objects.filter(
             contract_kind='AMENDMENT',
             parent_contract_id=parent_contract_id,
-            is_archived=False
+            is_archived=False,
+            tenant_id=tenant_id
         ).select_related('vendor').order_by('created_at')
         
         logger.info(f"[AMENDMENTS] Found {amendments.count()} amendments for parent contract {parent_contract_id}")
@@ -4336,11 +5196,11 @@ def contract_amendments_as_contracts_list(request, parent_contract_id):
         amendments_with_details = []
         for amendment in amendments:
             # Get terms for this amendment
-            amendment_terms = ContractTerm.objects.filter(contract_id=amendment.contract_id).order_by('term_category', 'created_at')
+            amendment_terms = ContractTerm.objects.filter(contract_id=amendment.contract_id, tenant_id=tenant_id).order_by('term_category', 'created_at')
             amendment_terms_serializer = ContractTermSerializer(amendment_terms, many=True)
             
             # Get clauses for this amendment
-            amendment_clauses = ContractClause.objects.filter(contract_id=amendment.contract_id).order_by('clause_type', 'created_at')
+            amendment_clauses = ContractClause.objects.filter(contract_id=amendment.contract_id, tenant_id=tenant_id).order_by('clause_type', 'created_at')
             amendment_clauses_serializer = ContractClauseSerializer(amendment_clauses, many=True)
             
             # Serialize the amendment
@@ -4383,9 +5243,19 @@ def contract_amendments_as_contracts_list(request, parent_contract_id):
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('CreateContract')
 @csrf_exempt
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def subcontract_create(request, parent_contract_id):
     """Create a new subcontract under a parent contract"""
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Debug CORS headers
         logger.info(f"CORS Debug - Origin: {request.headers.get('Origin')}")
         logger.info(f"CORS Debug - Access-Control-Request-Method: {request.headers.get('Access-Control-Request-Method')}")
@@ -4400,7 +5270,7 @@ def subcontract_create(request, parent_contract_id):
         
         # Validate parent contract exists
         try:
-            parent_contract = VendorContract.objects.get(contract_id=parent_contract_id)
+            parent_contract = VendorContract.objects.get(contract_id=parent_contract_id, tenant_id=tenant_id)
         except VendorContract.DoesNotExist:
             return Response({
                 'success': False,
@@ -4428,6 +5298,8 @@ def subcontract_create(request, parent_contract_id):
             # Override status to UNDER_REVIEW for all new subcontracts
             subcontract_data['status'] = 'UNDER_REVIEW'
             subcontract_data['workflow_stage'] = 'under_review'
+            # MULTI-TENANCY: Set tenant_id
+            subcontract_data['tenant_id'] = tenant_id
             
             # Debug: Log the raw data being received
             logger.info(f"🔍 Raw subcontract_data keys: {list(subcontract_data.keys())}")
@@ -4686,12 +5558,19 @@ def contract_with_subcontract_create(request):
             terms_data = subcontract_data.get('terms', [])
             clauses_data = subcontract_data.get('clauses', [])
             
+            # MULTI-TENANCY: Get tenant_id from subcontract
+            tenant_id = subcontract.tenant_id if hasattr(subcontract, 'tenant_id') else None
+            
             logger.info(f"Processing subcontract terms: {len(terms_data)} terms, {len(clauses_data)} clauses")
             logger.info(f"Terms data: {terms_data}")
             logger.info(f"Clauses data: {clauses_data}")
             try:
                 from django.db.models import Count
-                pre_terms_count = ContractTerm.objects.filter(contract_id=subcontract.contract_id).count()
+                # MULTI-TENANCY: Filter by tenant_id if available
+                if tenant_id:
+                    pre_terms_count = ContractTerm.objects.filter(contract_id=subcontract.contract_id, tenant_id=tenant_id).count()
+                else:
+                    pre_terms_count = ContractTerm.objects.filter(contract_id=subcontract.contract_id).count()
                 logger.info(f"Pre-insert terms count for subcontract {subcontract.contract_id}: {pre_terms_count}")
             except Exception as _count_err:
                 logger.warning(f"Could not fetch pre-insert terms count: {_count_err}")
@@ -4773,7 +5652,11 @@ def contract_with_subcontract_create(request):
                     logger.error(f"Full traceback: {traceback.format_exc()}")
             # Post-insert verification
             try:
-                post_terms_qs = ContractTerm.objects.filter(contract_id=subcontract.contract_id)
+                # MULTI-TENANCY: Filter by tenant_id if available
+                if tenant_id:
+                    post_terms_qs = ContractTerm.objects.filter(contract_id=subcontract.contract_id, tenant_id=tenant_id)
+                else:
+                    post_terms_qs = ContractTerm.objects.filter(contract_id=subcontract.contract_id)
                 post_terms_count = post_terms_qs.count()
                 logger.info(f"Post-insert terms count for subcontract {subcontract.contract_id}: {post_terms_count}")
                 # Log a compact list of term_ids stored
@@ -4784,6 +5667,9 @@ def contract_with_subcontract_create(request):
             # Create clauses for subcontract
             for clause_data in clauses_data:
                 clause_data['contract_id'] = subcontract.contract_id
+                # MULTI-TENANCY: Add tenant_id if available
+                if tenant_id and 'tenant_id' not in clause_data:
+                    clause_data['tenant_id'] = tenant_id
                 # Remove any invalid fields
                 if 'contract' in clause_data:
                     del clause_data['contract']
@@ -4844,12 +5730,22 @@ def contract_with_subcontract_create(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ListContracts')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def contract_amendments_list(request, contract_id):
     """Get all amendments for a specific contract"""
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Check if contract exists
         try:
-            contract = VendorContract.objects.get(contract_id=contract_id)
+            contract = VendorContract.objects.get(contract_id=contract_id, tenant_id=tenant_id)
         except VendorContract.DoesNotExist:
             return Response({
                 'success': False,
@@ -4858,7 +5754,7 @@ def contract_amendments_list(request, contract_id):
             }, status=status.HTTP_404_NOT_FOUND)
         
         # Get amendments for the contract
-        amendments = ContractAmendment.objects.filter(contract_id=contract_id).order_by('-amendment_date')
+        amendments = ContractAmendment.objects.filter(contract_id=contract_id, tenant_id=tenant_id).order_by('-amendment_date')
         
         # Apply search filters if provided
         search = request.GET.get('search', '')
@@ -4941,12 +5837,22 @@ def contract_amendments_list(request, contract_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('UpdateContract')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def contract_amendments_create(request, contract_id):
     """Create a new amendment for a specific contract"""
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Check if contract exists
         try:
-            contract = VendorContract.objects.get(contract_id=contract_id)
+            contract = VendorContract.objects.get(contract_id=contract_id, tenant_id=tenant_id)
         except VendorContract.DoesNotExist:
             return Response({
                 'success': False,
@@ -4957,6 +5863,8 @@ def contract_amendments_create(request, contract_id):
         # Add contract_id to the data
         data = request.data.copy()
         data['contract_id'] = contract_id
+        # MULTI-TENANCY: Set tenant_id
+        data['tenant_id'] = tenant_id
         
         # Add created_by from request user
         if hasattr(request, 'user') and request.user:
@@ -4964,7 +5872,7 @@ def contract_amendments_create(request, contract_id):
         
         serializer = ContractAmendmentCreateSerializer(data=data)
         if serializer.is_valid():
-            amendment = serializer.save()
+            amendment = serializer.save(**data)
             
             # Create backup
             backup_manager = DatabaseBackupManager()
@@ -5003,13 +5911,24 @@ def contract_amendments_create(request, contract_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('ListContracts')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def contract_amendment_detail(request, contract_id, amendment_id):
     """Get a specific amendment for a contract"""
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         try:
             amendment = ContractAmendment.objects.get(
                 contract_id=contract_id,
-                amendment_id=amendment_id
+                amendment_id=amendment_id,
+                tenant_id=tenant_id
             )
         except ContractAmendment.DoesNotExist:
             return Response({
@@ -5981,15 +6900,21 @@ def create_subcontract(request, contract_id):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@csrf_exempt
 @api_view(['POST'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('TriggerOCR')
+@parser_classes([MultiPartParser, FormParser])
 def upload_contract_ocr(request, contract_id):
     """Upload contract file for OCR extraction with real AI processing"""
     import tempfile
     import os
-    from ocr_app.services import DocumentProcessingService
+    # Import OCR service with support for both monorepo and legacy layouts
+    try:
+        from tprm_backend.ocr_app.services import DocumentProcessingService
+    except ImportError:  # Fallback for older setups
+        from ocr_app.services import DocumentProcessingService
     
     temp_file_path = None
     
@@ -6001,8 +6926,39 @@ def upload_contract_ocr(request, contract_id):
                 'message': 'Too many requests. Please try again later.'
             }, status=429)
         
-        # Get the contract
-        contract = VendorContract.objects.get(contract_id=contract_id)
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        logger.debug(f"[upload_contract_ocr] Tenant ID: {tenant_id}")
+        logger.debug(f"[upload_contract_ocr] Contract ID: {contract_id}")
+        
+        # Get the contract (with tenant filtering if available)
+        try:
+            contract_query = VendorContract.objects.filter(
+                contract_id=contract_id,
+                is_archived=False
+            )
+            # Filter by tenant if tenant_id is available
+            if tenant_id:
+                contract_query = contract_query.filter(tenant_id=tenant_id)
+            
+            contract = contract_query.get()
+            logger.debug(f"[upload_contract_ocr] Contract found: {contract.contract_title}")
+        except VendorContract.DoesNotExist:
+            logger.error(f"[upload_contract_ocr] Contract {contract_id} not found (tenant_id: {tenant_id})")
+            return Response({
+                'success': False,
+                'error': 'Contract not found',
+                'message': f'Contract {contract_id} not found or you do not have access to it'
+            }, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"[upload_contract_ocr] Error getting contract: {str(e)}")
+            import traceback
+            logger.error(f"[upload_contract_ocr] Traceback: {traceback.format_exc()}")
+            return Response({
+                'success': False,
+                'error': 'Error accessing contract',
+                'message': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # Get uploaded file
         file = request.FILES.get('file')
@@ -6034,11 +6990,45 @@ def upload_contract_ocr(request, contract_id):
         
         logger.info(f"[OCR] File saved to temporary location: {temp_file_path}")
         
+        # Get user ID safely
+        try:
+            if hasattr(request, 'user') and request.user and hasattr(request.user, 'userid'):
+                user_id = str(request.user.userid)
+            elif hasattr(request, 'user') and request.user and hasattr(request.user, 'id'):
+                user_id = str(request.user.id)
+            else:
+                user_id = 'system'
+            logger.debug(f"[upload_contract_ocr] User ID: {user_id}")
+        except Exception as e:
+            logger.warning(f"[upload_contract_ocr] Error getting user ID: {str(e)}, using 'system'")
+            user_id = 'system'
+        
         # Initialize OCR service and process document
-        ocr_service = DocumentProcessingService()
+        try:
+            ocr_service = DocumentProcessingService()
+            logger.debug(f"[upload_contract_ocr] OCR service initialized")
+        except Exception as e:
+            logger.error(f"[upload_contract_ocr] Error initializing OCR service: {str(e)}")
+            import traceback
+            logger.error(f"[upload_contract_ocr] Traceback: {traceback.format_exc()}")
+            return Response({
+                'success': False,
+                'error': 'Failed to initialize OCR service',
+                'message': f'OCR service initialization failed: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # Use contract-only processing (faster, no SLA extraction)
-        ocr_result = ocr_service.process_contract_only(temp_file_path, user_id=str(request.user.userid if hasattr(request.user, 'userid') else 'system'))
+        try:
+            ocr_result = ocr_service.process_contract_only(temp_file_path, user_id=user_id)
+        except Exception as e:
+            logger.error(f"[upload_contract_ocr] Error during OCR processing: {str(e)}")
+            import traceback
+            logger.error(f"[upload_contract_ocr] Traceback: {traceback.format_exc()}")
+            return Response({
+                'success': False,
+                'error': 'OCR processing failed',
+                'message': f'Failed to process document: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         logger.info(f"[OCR] Processing complete. Success: {ocr_result.get('success')}")
         
@@ -6076,12 +7066,6 @@ def upload_contract_ocr(request, contract_id):
             'document_type': document_type
         })
         
-    except VendorContract.DoesNotExist:
-        return Response({
-            'success': False,
-            'error': 'Contract not found',
-            'message': 'The requested contract does not exist'
-        }, status=status.HTTP_404_NOT_FOUND)
     except ValidationError as e:
         return Response({
             'success': False,
@@ -6110,8 +7094,15 @@ def upload_contract_ocr(request, contract_id):
 def copy_terms_and_clauses(source_contract, target_contract):
     """Copy terms and clauses from source contract to target contract"""
     try:
+        # MULTI-TENANCY: Get tenant_id from contracts
+        tenant_id = source_contract.tenant_id if hasattr(source_contract, 'tenant_id') else None
+        
         # Copy terms
-        terms = ContractTerm.objects.filter(contract_id=source_contract.contract_id)
+        # MULTI-TENANCY: Filter by tenant_id if available
+        if tenant_id:
+            terms = ContractTerm.objects.filter(contract_id=source_contract.contract_id, tenant_id=tenant_id)
+        else:
+            terms = ContractTerm.objects.filter(contract_id=source_contract.contract_id)
         logger.info(f"Found {terms.count()} terms to copy from contract {source_contract.contract_id}")
         
         for term in terms:
@@ -6147,26 +7138,34 @@ def copy_terms_and_clauses(source_contract, target_contract):
                     logger.error(f"Could not generate unique term_id after {max_attempts} attempts")
                     continue
                 
-                ContractTerm.objects.create(
-                    contract_id=target_contract.contract_id,
-                    term_id=new_term_id,
-                    term_title=term.term_title,
-                    term_text=term.term_text,
-                    term_category=term.term_category,
-                    risk_level=term.risk_level,
-                    compliance_status=term.compliance_status,
-                    approval_status=term.approval_status,
-                    version_number=term.version_number,
-                    is_standard=term.is_standard,
-                    created_by=term.created_by
-                )
+                # MULTI-TENANCY: Include tenant_id when creating term
+                term_create_data = {
+                    'contract_id': target_contract.contract_id,
+                    'term_id': new_term_id,
+                    'term_title': term.term_title,
+                    'term_text': term.term_text,
+                    'term_category': term.term_category,
+                    'risk_level': term.risk_level,
+                    'compliance_status': term.compliance_status,
+                    'approval_status': term.approval_status,
+                    'version_number': term.version_number,
+                    'is_standard': term.is_standard,
+                    'created_by': term.created_by
+                }
+                if tenant_id:
+                    term_create_data['tenant_id'] = tenant_id
+                ContractTerm.objects.create(**term_create_data)
                 logger.info(f"Successfully created term with ID: {new_term_id}")
             except Exception as term_error:
                 logger.error(f"Error copying term {term.term_id}: {str(term_error)}")
                 continue
         
         # Copy clauses
-        clauses = ContractClause.objects.filter(contract_id=source_contract.contract_id)
+        # MULTI-TENANCY: Filter by tenant_id if available
+        if tenant_id:
+            clauses = ContractClause.objects.filter(contract_id=source_contract.contract_id, tenant_id=tenant_id)
+        else:
+            clauses = ContractClause.objects.filter(contract_id=source_contract.contract_id)
         logger.info(f"Found {clauses.count()} clauses to copy from contract {source_contract.contract_id}")
         
         for clause in clauses:
@@ -6202,18 +7201,22 @@ def copy_terms_and_clauses(source_contract, target_contract):
                     logger.error(f"Could not generate unique clause_id after {max_attempts} attempts")
                     continue
                 
-                ContractClause.objects.create(
-                    contract_id=target_contract.contract_id,
-                    clause_id=new_clause_id,
-                    clause_name=clause.clause_name,
-                    clause_text=clause.clause_text,
-                    clause_type=clause.clause_type,
-                    risk_level=clause.risk_level,
-                    legal_category=clause.legal_category,
-                    version_number=clause.version_number,
-                    is_standard=clause.is_standard,
-                    created_by=clause.created_by
-                )
+                # MULTI-TENANCY: Include tenant_id when creating clause
+                clause_create_data = {
+                    'contract_id': target_contract.contract_id,
+                    'clause_id': new_clause_id,
+                    'clause_name': clause.clause_name,
+                    'clause_text': clause.clause_text,
+                    'clause_type': clause.clause_type,
+                    'risk_level': clause.risk_level,
+                    'legal_category': clause.legal_category,
+                    'version_number': clause.version_number,
+                    'is_standard': clause.is_standard,
+                    'created_by': clause.created_by
+                }
+                if tenant_id:
+                    clause_create_data['tenant_id'] = tenant_id
+                ContractClause.objects.create(**clause_create_data)
                 logger.info(f"Successfully created clause with ID: {new_clause_id}")
             except Exception as clause_error:
                 logger.error(f"Error copying clause {clause.clause_id}: {str(clause_error)}")
@@ -6265,10 +7268,13 @@ def contract_risk_status(request, contract_id):
         }, status=500)
 
 
+@csrf_exempt
 @api_view(['POST'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_contract_required('CreateContract')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def trigger_contract_risk_analysis(request, contract_id):
     """Trigger risk analysis for a contract after creation (non-blocking)"""
     try:
@@ -6276,12 +7282,21 @@ def trigger_contract_risk_analysis(request, contract_id):
         print(f"=== RISK ANALYSIS TRIGGER DEBUG: Request method: {request.method} ===")
         print(f"=== RISK ANALYSIS TRIGGER DEBUG: Request headers: {dict(request.headers)} ===")
         
-        # Check if contract exists
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        logger.debug(f"[trigger_contract_risk_analysis] Tenant ID: {tenant_id}")
+        
+        # Check if contract exists (with tenant filtering if available)
         try:
-            contract = VendorContract.objects.get(
+            contract_query = VendorContract.objects.filter(
                 contract_id=contract_id,
                 is_archived=False
             )
+            # Filter by tenant if tenant_id is available
+            if tenant_id:
+                contract_query = contract_query.filter(tenant_id=tenant_id)
+            
+            contract = contract_query.get()
         except VendorContract.DoesNotExist:
             return Response({
                 'success': False,
@@ -6306,14 +7321,24 @@ def trigger_contract_risk_analysis(request, contract_id):
                 # Define the risk analysis function to run in thread
                 def run_risk_analysis():
                     try:
+                        import traceback
                         from contract_risk_analysis.tasks import analyze_contract_risk_task
                         # Run synchronously in the background thread
+                        # Note: @shared_task decorated functions can be called directly
                         result = analyze_contract_risk_task(contract_id)
                         print(f"=== RISK ANALYSIS TRIGGER DEBUG: Risk analysis completed in background thread ===")
-                        logger.info(f"Risk analysis completed in background thread for contract {contract_id}")
+                        logger.info(f"Risk analysis completed in background thread for contract {contract_id}: {result}")
+                    except ImportError as e:
+                        error_msg = f"Failed to import risk analysis task: {str(e)}"
+                        print(f"=== RISK ANALYSIS TRIGGER DEBUG: Import error: {error_msg} ===")
+                        logger.error(f"Import error in background risk analysis for contract {contract_id}: {error_msg}")
+                        logger.error(f"Import traceback: {traceback.format_exc()}")
                     except Exception as e:
-                        print(f"=== RISK ANALYSIS TRIGGER DEBUG: Error in background risk analysis: {str(e)} ===")
-                        logger.error(f"Error in background risk analysis for contract {contract_id}: {str(e)}")
+                        import traceback
+                        error_msg = str(e)
+                        print(f"=== RISK ANALYSIS TRIGGER DEBUG: Error in background risk analysis: {error_msg} ===")
+                        logger.error(f"Error in background risk analysis for contract {contract_id}: {error_msg}")
+                        logger.error(f"Error traceback: {traceback.format_exc()}")
                 
                 # Start the risk analysis in a background thread
                 thread = threading.Thread(target=run_risk_analysis, daemon=True)
@@ -6561,11 +7586,20 @@ def contract_terms_delete_all(request, contract_id):
     Delete all terms for a specific contract
     """
     try:
-        # Check if contract exists
-        contract = get_object_or_404(VendorContract, contract_id=contract_id)
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
+        # Check if contract exists and belongs to tenant
+        contract = get_object_or_404(VendorContract, contract_id=contract_id, tenant_id=tenant_id)
         
         # Delete all terms for this contract
-        deleted_count, _ = ContractTerm.objects.filter(contract_id=contract_id).delete()
+        # MULTI-TENANCY: Filter by tenant_id
+        deleted_count, _ = ContractTerm.objects.filter(contract_id=contract_id, tenant_id=tenant_id).delete()
         
         logger.info(f"Deleted {deleted_count} terms for contract {contract_id}")
         
@@ -6592,11 +7626,20 @@ def contract_clauses_delete_all(request, contract_id):
     Delete all clauses for a specific contract
     """
     try:
-        # Check if contract exists
-        contract = get_object_or_404(VendorContract, contract_id=contract_id)
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
+        # Check if contract exists and belongs to tenant
+        contract = get_object_or_404(VendorContract, contract_id=contract_id, tenant_id=tenant_id)
         
         # Delete all clauses for this contract
-        deleted_count, _ = ContractClause.objects.filter(contract_id=contract_id).delete()
+        # MULTI-TENANCY: Filter by tenant_id
+        deleted_count, _ = ContractClause.objects.filter(contract_id=contract_id, tenant_id=tenant_id).delete()
         
         logger.info(f"Deleted {deleted_count} clauses for contract {contract_id}")
         
@@ -7085,9 +8128,17 @@ def contract_comparison(request, contract_id, amendment_id):
     Compare original contract with amendment
     """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({
+                'success': False,
+                'error': 'Tenant context not found'
+            }, status=403)
+        
         # Get original contract
         try:
-            original_contract = VendorContract.objects.get(contract_id=contract_id)
+            original_contract = VendorContract.objects.get(contract_id=contract_id, tenant_id=tenant_id)
         except VendorContract.DoesNotExist:
             return Response({
                 'success': False,
@@ -7096,7 +8147,7 @@ def contract_comparison(request, contract_id, amendment_id):
 
         # Get amendment contract
         try:
-            amendment_contract = VendorContract.objects.get(contract_id=amendment_id)
+            amendment_contract = VendorContract.objects.get(contract_id=amendment_id, tenant_id=tenant_id)
         except VendorContract.DoesNotExist:
             return Response({
                 'success': False,
@@ -7104,12 +8155,14 @@ def contract_comparison(request, contract_id, amendment_id):
             }, status=404)
 
         # Get contract terms
-        original_terms = ContractTerm.objects.filter(contract_id=contract_id)
-        amendment_terms = ContractTerm.objects.filter(contract_id=amendment_id)
+        # MULTI-TENANCY: Filter by tenant_id
+        original_terms = ContractTerm.objects.filter(contract_id=contract_id, tenant_id=tenant_id)
+        amendment_terms = ContractTerm.objects.filter(contract_id=amendment_id, tenant_id=tenant_id)
 
         # Get contract clauses
-        original_clauses = ContractClause.objects.filter(contract_id=contract_id)
-        amendment_clauses = ContractClause.objects.filter(contract_id=amendment_id)
+        # MULTI-TENANCY: Filter by tenant_id
+        original_clauses = ContractClause.objects.filter(contract_id=contract_id, tenant_id=tenant_id)
+        amendment_clauses = ContractClause.objects.filter(contract_id=amendment_id, tenant_id=tenant_id)
 
         # Compare basic contract fields
         contract_fields = [

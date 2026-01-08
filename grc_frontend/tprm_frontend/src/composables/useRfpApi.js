@@ -3,11 +3,24 @@
  * Provides authenticated API calls for RFP operations
  */
 
-import { getApiV1BaseUrl, getApiV1Url } from '@/utils/backendEnv.js'
+import { getApiV1BaseUrl, getApiV1Url, getTprmApiUrl } from '@/utils/backendEnv.js'
 
 const API_BASE_URL = getApiV1BaseUrl()
 
-const buildApiUrl = (path = '') => getApiV1Url(path)
+// MULTI-TENANCY: Use TPRM API URL for RFP endpoints
+// Backend router is at /api/tprm/rfp/, and router.register('rfps') creates /api/tprm/rfp/rfps/
+const buildApiUrl = (path = '') => {
+  // Remove leading slash if present
+  let cleanPath = path.startsWith('/') ? path.slice(1) : path
+  // Ensure path doesn't already start with 'rfp/'
+  if (cleanPath.startsWith('rfp/')) {
+    cleanPath = cleanPath.slice(4) // Remove 'rfp/' prefix if present
+  }
+  // Build TPRM URL: /api/tprm/rfp/{path}
+  const fullUrl = getTprmApiUrl(`rfp/${cleanPath}`)
+  console.log('[buildApiUrl] Built URL:', { input: path, cleanPath, fullUrl })
+  return fullUrl
+}
 
 export function useRfpApi() {
   /**
@@ -86,14 +99,27 @@ export function useRfpApi() {
    */
   const fetchRFPs = async (filters = {}) => {
     const queryParams = new URLSearchParams(filters).toString()
-    const url = buildApiUrl(`/rfps/${queryParams ? `?${queryParams}` : ''}`)
+    // Backend router is at /api/tprm/rfp/, and router.register('rfps') creates /api/tprm/rfp/rfps/
+    const url = buildApiUrl(`rfps/${queryParams ? `?${queryParams}` : ''}`)
+    
+    console.log('[useRfpApi] Fetching RFPs from URL:', url)
     
     const response = await fetch(url, {
       method: 'GET',
       headers: getAuthHeaders(),
     })
     
-    return handleResponse(response)
+    const data = await handleResponse(response)
+    console.log('[useRfpApi] Response received:', {
+      type: typeof data,
+      isArray: Array.isArray(data),
+      hasResults: !!data?.results,
+      keys: data && typeof data === 'object' ? Object.keys(data) : null,
+      count: data?.count,
+      resultsLength: data?.results?.length
+    })
+    
+    return data
   }
 
   /**

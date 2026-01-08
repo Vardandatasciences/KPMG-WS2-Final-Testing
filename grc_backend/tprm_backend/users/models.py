@@ -4,9 +4,10 @@ User models for Vendor Guard Hub.
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from tprm_backend.utils.encrypted_fields_mixin import TPRMEncryptedFieldsMixin
 
 
-class User(AbstractUser):
+class User(TPRMEncryptedFieldsMixin, AbstractUser):
     """
     Custom User model extending Django's AbstractUser.
     """
@@ -15,6 +16,17 @@ class User(AbstractUser):
         ('vendor', 'Vendor User'),
         ('admin', 'Administrator'),
     ]
+    
+    # MULTI-TENANCY: Link user to tenant
+    tenant = models.ForeignKey(
+        'core.Tenant',
+        on_delete=models.CASCADE,
+        db_column='TenantId',
+        related_name='users',
+        null=True,
+        blank=True,
+        help_text="Tenant this user belongs to"
+    )
     
     user_type = models.CharField(
         max_length=20,
@@ -103,9 +115,21 @@ class User(AbstractUser):
     def full_name(self):
         """Return the user's full name."""
         return self.get_full_name() or self.username
+    
+    @property
+    def email_plain(self):
+        """Get decrypted email address"""
+        from tprm_backend.utils.data_encryption import decrypt_data
+        return decrypt_data(self.email) if self.email else None
+    
+    @property
+    def phone_plain(self):
+        """Get decrypted phone number"""
+        from tprm_backend.utils.data_encryption import decrypt_data
+        return decrypt_data(self.phone) if self.phone else None
 
 
-class UserProfile(models.Model):
+class UserProfile(TPRMEncryptedFieldsMixin, models.Model):
     """
     Extended user profile information.
     """
@@ -149,7 +173,7 @@ class UserProfile(models.Model):
         return f"Profile for {self.user.username}"
 
 
-class UserSession(models.Model):
+class UserSession(TPRMEncryptedFieldsMixin, models.Model):
     """
     Track user sessions for audit purposes.
     """

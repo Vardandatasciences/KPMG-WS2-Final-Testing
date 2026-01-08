@@ -227,6 +227,13 @@ def log_password_action(user, action_type, old_password_hash=None, new_password_
     
     try:
         client_ip = request.META.get('REMOTE_ADDR', '') if request else ''
+        # Truncate IP address to max 45 characters (IPv6 max length) to prevent database error
+        # Handle cases where proxy forwards multiple IPs or other unexpected data
+        if client_ip:
+            # Take first IP if multiple are comma-separated (proxy scenario)
+            client_ip = client_ip.split(',')[0].strip()
+            # Truncate to max 45 characters to fit database column
+            client_ip = client_ip[:45]
         user_agent = request.META.get('HTTP_USER_AGENT', '') if request else ''
         
         PasswordLog.objects.create(

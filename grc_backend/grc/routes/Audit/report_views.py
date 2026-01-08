@@ -78,7 +78,7 @@ def generate_audit_report(request, audit_id):
                     SELECT av.ApprovedRejected
                     FROM audit_version av
                     JOIN audit a ON av.AuditId = a.AuditId
-                    WHERE av.AuditId = %s AND av.Version = %s AND a.tenant_id = %s
+                    WHERE av.AuditId = %s AND av.Version = %s AND a.TenantId = %s
                 """, [audit_id, version, tenant_id])
                 
                 version_row = cursor.fetchone()
@@ -128,9 +128,9 @@ def generate_audit_report(request, audit_id):
                             auditor.UserName as auditor_name
                         FROM 
                             audit a
-                        JOIN users auditor ON a.auditor = auditor.UserId AND auditor.tenant_id = %s
-                        LEFT JOIN users reviewer ON a.reviewer = reviewer.UserId AND reviewer.tenant_id = %s
-                        WHERE a.AuditId = %s AND a.tenant_id = %s
+                        JOIN users auditor ON a.auditor = auditor.UserId AND auditor.TenantId = %s
+                        LEFT JOIN users reviewer ON a.reviewer = reviewer.UserId AND reviewer.TenantId = %s
+                        WHERE a.AuditId = %s AND a.TenantId = %s
                     """, [tenant_id, tenant_id, audit_id, tenant_id])
                     
                     user_row = cursor.fetchone()
@@ -184,10 +184,10 @@ def get_audit_data(audit_id: int, tenant_id: int) -> Optional[Dict[str, Any]]:
                     f.FrameworkName as Framework,
                     a.CompletionDate, a.ReviewDate
                 FROM audit a
-                LEFT JOIN policies p ON a.PolicyId = p.PolicyId AND p.tenant_id = %s
-                LEFT JOIN subpolicies sp ON a.SubPolicyId = sp.SubPolicyId AND sp.tenant_id = %s
-                LEFT JOIN frameworks f ON a.FrameworkId = f.FrameworkId AND f.tenant_id = %s
-                WHERE a.AuditId = %s AND a.tenant_id = %s
+                LEFT JOIN policies p ON a.PolicyId = p.PolicyId AND p.TenantId = %s
+                LEFT JOIN subpolicies sp ON a.SubPolicyId = sp.SubPolicyId AND sp.TenantId = %s
+                LEFT JOIN frameworks f ON a.FrameworkId = f.FrameworkId AND f.TenantId = %s
+                WHERE a.AuditId = %s AND a.TenantId = %s
             """, [tenant_id, tenant_id, tenant_id, audit_id, tenant_id])
             audit_data = cursor.fetchone()
             
@@ -222,8 +222,8 @@ def get_audit_data(audit_id: int, tenant_id: int) -> Optional[Dict[str, Any]]:
                     c.ComplianceTitle,
                     c.ComplianceItemDescription
                 FROM audit_findings af
-                LEFT JOIN compliance c ON af.ComplianceId = c.ComplianceId AND c.tenant_id = %s
-                WHERE af.AuditId = %s AND af.tenant_id = %s
+                LEFT JOIN compliance c ON af.ComplianceId = c.ComplianceId AND c.TenantId = %s
+                WHERE af.AuditId = %s AND af.TenantId = %s
             """, [tenant_id, audit_id, tenant_id])
             findings = cursor.fetchall()
             
@@ -550,9 +550,9 @@ def create_incidents_for_findings(audit_id: int, tenant_id: int) -> None:
                     c.PossibleDamage,
                     c.Mitigation
                 FROM audit_findings af
-                JOIN compliance c ON af.ComplianceId = c.ComplianceId AND c.tenant_id = %s
+                JOIN compliance c ON af.ComplianceId = c.ComplianceId AND c.TenantId = %s
                 WHERE af.AuditId = %s 
-                AND af.tenant_id = %s
+                AND af.TenantId = %s
                 AND (
                     (af.Check = '0') OR  -- Not Compliant
                     (af.Check = '1')     -- Partially Compliant
@@ -581,7 +581,7 @@ def create_incidents_for_findings(audit_id: int, tenant_id: int) -> None:
                     SELECT COUNT(*) 
                     FROM incidents i
                     JOIN audit a ON i.AuditId = a.AuditId
-                    WHERE i.AuditId = %s AND i.ComplianceId = %s AND a.tenant_id = %s
+                    WHERE i.AuditId = %s AND i.ComplianceId = %s AND a.TenantId = %s
                 """, [audit_id, compliance_id, tenant_id])
                 
                 if cursor.fetchone()[0] > 0:
@@ -589,7 +589,7 @@ def create_incidents_for_findings(audit_id: int, tenant_id: int) -> None:
                     continue
                 
                 # Get FrameworkId from the audit, filtered by tenant
-                cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s AND tenant_id = %s", [audit_id, tenant_id])
+                cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s AND TenantId = %s", [audit_id, tenant_id])
                 framework_row = cursor.fetchone()
                 framework_id = framework_row[0] if framework_row else None
                 
@@ -664,14 +664,14 @@ def approve_audit_and_create_incidents(request, audit_id):
                 UPDATE audit 
                 SET Status = 'Approved',
                     CompletionDate = %s
-                WHERE AuditId = %s AND tenant_id = %s
+                WHERE AuditId = %s AND TenantId = %s
             """, [datetime.now(), audit_id, tenant_id])
             
             # Update LastChecklistItemVerified in audit_findings, filtered by tenant
             cursor.execute("""
                 UPDATE audit_findings
                 SET LastChecklistItemVerified = %s
-                WHERE AuditId = %s AND tenant_id = %s
+                WHERE AuditId = %s AND TenantId = %s
             """, [datetime.now(), audit_id, tenant_id])
             
             # Create incidents for non-compliant and partially compliant findings, filtered by tenant

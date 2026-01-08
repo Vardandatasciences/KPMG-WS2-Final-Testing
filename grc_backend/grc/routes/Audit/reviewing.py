@@ -94,7 +94,7 @@ def save_report_to_db(audit_id: int, report_url: str, version: str = None) -> bo
                 ) SELECT 
                     %s, %s, PolicyId, SubPolicyId, FrameworkId 
                 FROM audit 
-                WHERE AuditId = %s AND tenant_id = %s
+                WHERE AuditId = %s AND TenantId = %s
             """, [audit_id, report_url, audit_id, tenant_id])
             return True
     except Exception as e:
@@ -137,7 +137,7 @@ def save_review_version(
         print(datetime.datetime.now(),"------------------------------------------------------------------------------")
         with connection.cursor() as cursor:
             # Get FrameworkId from the audit
-            cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s AND tenant_id = %s", [audit_id, tenant_id])
+            cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s AND TenantId = %s", [audit_id, tenant_id])
             framework_row = cursor.fetchone()
             framework_id = framework_row[0] if framework_row else None
             
@@ -223,7 +223,7 @@ def get_latest_version(audit_id: int) -> Optional[Dict[str, Any]]:
                 SELECT Version, ExtractedInfo, Date, UserId, ApprovedRejected
                 FROM audit_version av
                 JOIN audit a ON av.AuditId = a.AuditId
-                WHERE av.AuditId = %s AND a.tenant_id = %s
+                WHERE av.AuditId = %s AND a.TenantId = %s
                 ORDER BY av.Date DESC, av.Version DESC
                 LIMIT 1
             """, [audit_id, tenant_id])
@@ -528,7 +528,7 @@ def create_incidents_for_findings(audit_id: int) -> None:
             cursor.execute("""
                 SELECT Title, Scope, Objective, BusinessUnit, FrameworkId, AuditType
                 FROM audit
-                WHERE AuditId = %s AND tenant_id = %s
+                WHERE AuditId = %s AND TenantId = %s
             """, [audit_id, tenant_id])
             audit_row = cursor.fetchone()
             is_ai_audit = audit_row and audit_row[5] == 'A' if audit_row else False
@@ -570,7 +570,7 @@ def create_incidents_for_findings(audit_id: int) -> None:
                 FROM audit_findings af
                 JOIN compliance c ON af.ComplianceId = c.ComplianceId
                 JOIN audit a ON af.AuditId = a.AuditId
-                WHERE af.AuditId = %s AND a.tenant_id = %s
+                WHERE af.AuditId = %s AND a.TenantId = %s
                 AND (
                     (af.Check = '0') OR  -- Not Compliant
                     (af.Check = '1')     -- Partially Compliant
@@ -905,13 +905,13 @@ def update_audit_review_status(request, audit_id):
                 if compliance_reviews:
                     for review in compliance_reviews:
                         cursor.execute("""
-                            UPDATE audit_findings
-                            SET ReviewStatus = %s,
-                                ReviewComments = %s,
-                                ReviewRejected = 1,
-                                ReviewDate = %s
-                            JOIN audit a ON audit_findings.AuditId = a.AuditId
-                            WHERE audit_findings.AuditId = %s AND a.tenant_id = %s AND audit_findings.ComplianceId = %s
+                            UPDATE audit_findings af
+                            JOIN audit a ON af.AuditId = a.AuditId
+                            SET af.ReviewStatus = %s,
+                                af.ReviewComments = %s,
+                                af.ReviewRejected = 1,
+                                af.ReviewDate = %s
+                            WHERE af.AuditId = %s AND a.TenantId = %s AND af.ComplianceId = %s
                         """, [
                             review.get('review_status'),
                             review.get('review_comments', ''),
@@ -923,13 +923,13 @@ def update_audit_review_status(request, audit_id):
                 else:
                     # If no compliance reviews, update all findings for this audit
                     cursor.execute("""
-                        UPDATE audit_findings
-                        SET ReviewStatus = 'Reject',
-                            ReviewComments = %s,
-                            ReviewRejected = 1,
-                            ReviewDate = %s
-                        JOIN audit a ON audit_findings.AuditId = a.AuditId
-                        WHERE audit_findings.AuditId = %s AND a.tenant_id = %s
+                        UPDATE audit_findings af
+                        JOIN audit a ON af.AuditId = a.AuditId
+                        SET af.ReviewStatus = 'Reject',
+                            af.ReviewComments = %s,
+                            af.ReviewRejected = 1,
+                            af.ReviewDate = %s
+                        WHERE af.AuditId = %s AND a.TenantId = %s
                     """, [
                         review_comments or 'Audit rejected',
                         current_time,

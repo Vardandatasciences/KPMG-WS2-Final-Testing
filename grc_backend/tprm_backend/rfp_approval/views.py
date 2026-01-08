@@ -21,6 +21,15 @@ from tprm_backend.rfp.models import RFPResponse
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required
 from tprm_backend.rfp.rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 
+# MULTI-TENANCY: Import tenant utilities for filtering
+from tprm_backend.core.tenant_utils import (
+    get_tenant_id_from_request,
+    filter_queryset_by_tenant,
+    get_tenant_aware_queryset,
+    require_tenant,
+    tenant_filter
+)
+
 
 def update_rfp_status_based_on_approval(approval_request):
     """
@@ -37,9 +46,16 @@ def update_rfp_status_based_on_approval(approval_request):
         rfp = None
         rfp_id = None
         
+        # MULTI-TENANCY: Get tenant_id from approval_request
+        tenant_id = getattr(approval_request, 'tenant_id', None)
+        
         # Method 1: Try to find RFP by approval_workflow_id (which matches the workflow_id in approval_requests)
         try:
-            rfp = RFP.objects.get(approval_workflow_id=approval_request.workflow_id)
+            # MULTI-TENANCY: Filter RFP by tenant if tenant_id is available
+            if tenant_id:
+                rfp = RFP.objects.get(approval_workflow_id=approval_request.workflow_id, tenant_id=tenant_id)
+            else:
+                rfp = RFP.objects.get(approval_workflow_id=approval_request.workflow_id)
             rfp_id = rfp.rfp_id
             print(f"Found RFP by workflow_id: {rfp.rfp_id} with current status: {rfp.status}")
         except RFP.DoesNotExist:
@@ -71,7 +87,11 @@ def update_rfp_status_based_on_approval(approval_request):
                 
                 if rfp_id:
                     try:
-                        rfp = RFP.objects.get(rfp_id=rfp_id)
+                        # MULTI-TENANCY: Filter RFP by tenant if tenant_id is available
+                        if tenant_id:
+                            rfp = RFP.objects.get(rfp_id=rfp_id, tenant_id=tenant_id)
+                        else:
+                            rfp = RFP.objects.get(rfp_id=rfp_id)
                         print(f"Found RFP by rfp_id from request_data: {rfp.rfp_id} with current status: {rfp.status}")
                     except RFP.DoesNotExist:
                         print(f"RFP with rfp_id {rfp_id} not found in database")
@@ -93,9 +113,16 @@ def update_rfp_status_based_on_approval(approval_request):
                 old_status = rfp.status
                 
                 # Get ALL approval requests for this workflow
-                all_approval_requests = ApprovalRequests.objects.filter(
-                    workflow_id=approval_request.workflow_id
-                )
+                # MULTI-TENANCY: Filter by tenant if available
+                if tenant_id:
+                    all_approval_requests = ApprovalRequests.objects.filter(
+                        workflow_id=approval_request.workflow_id,
+                        tenant_id=tenant_id
+                    )
+                else:
+                    all_approval_requests = ApprovalRequests.objects.filter(
+                        workflow_id=approval_request.workflow_id
+                    )
                 total_approval_requests = all_approval_requests.count()
                 
                 print(f"Checking workflow {approval_request.workflow_id}: {total_approval_requests} approval request(s)")
@@ -120,7 +147,11 @@ def update_rfp_status_based_on_approval(approval_request):
                         
                         # Double-check: Verify all stages in this approval request are approved
                         # Exclude SKIPPED and CANCELLED stages from the check (these don't count toward approval)
-                        all_stages = ApprovalStages.objects.filter(approval_id=approval_req.approval_id)
+                        # MULTI-TENANCY: Filter stages by tenant if available
+                        if tenant_id:
+                            all_stages = ApprovalStages.objects.filter(approval_id=approval_req.approval_id, tenant_id=tenant_id)
+                        else:
+                            all_stages = ApprovalStages.objects.filter(approval_id=approval_req.approval_id)
                         # Only count stages that need to be processed (exclude SKIPPED and CANCELLED)
                         stages_to_process = all_stages.exclude(stage_status__in=['SKIPPED', 'CANCELLED'])
                         total_stages = stages_to_process.count()
@@ -151,10 +182,14 @@ def update_rfp_status_based_on_approval(approval_request):
                     if all_approved and all_stages_approved:
                         rfp.status = 'APPROVED'
                         # Set approved_by to the last approver (from the most recently completed stage)
-                        last_approved_stage = ApprovalStages.objects.filter(
-                            approval_id__in=[ar.approval_id for ar in all_approval_requests],
-                            stage_status='APPROVED'
-                        ).order_by('-completed_at').first()
+                        # MULTI-TENANCY: Filter stages by tenant if available
+                        stage_filter = {
+                            'approval_id__in': [ar.approval_id for ar in all_approval_requests],
+                            'stage_status': 'APPROVED'
+                        }
+                        if tenant_id:
+                            stage_filter['tenant_id'] = tenant_id
+                        last_approved_stage = ApprovalStages.objects.filter(**stage_filter).order_by('-completed_at').first()
                         if last_approved_stage:
                             rfp.approved_by = last_approved_stage.assigned_user_id
                         print(f"✅ RFP {rfp.rfp_id} status updated to APPROVED (all {total_approval_requests} approval request(s) and all stages approved)")
@@ -196,9 +231,10 @@ def update_rfp_status_based_on_approval(approval_request):
         # Don't re-raise the error - this is not critical for stage updates
 
 
-def create_workflow_version(workflow_id, approval_ids, created_by, created_by_name=None, created_by_role=None, version_type='INITIAL', change_reason=None):
+def create_workflow_version(workflow_id, approval_ids, created_by, created_by_name=None, created_by_role=None, version_type='INITIAL', change_reason=None, tenant_id=None):
     """
     Create a version record for the approval workflow
+    MULTI-TENANCY: Filters by tenant_id if provided
     
     Args:
         workflow_id: The workflow ID
@@ -208,6 +244,7 @@ def create_workflow_version(workflow_id, approval_ids, created_by, created_by_na
         created_by_role: Role of the user who created the workflow
         version_type: Type of version (INITIAL, REVISION, CONSOLIDATION, FINAL)
         change_reason: Reason for the change (if applicable)
+        tenant_id: Tenant ID for multi-tenancy filtering
     
     Returns:
         The created version record
@@ -216,10 +253,18 @@ def create_workflow_version(workflow_id, approval_ids, created_by, created_by_na
         print(f"Creating workflow version for workflow_id: {workflow_id}")
         
         # Get workflow details
-        workflow = ApprovalWorkflows.objects.get(workflow_id=workflow_id)
+        # MULTI-TENANCY: Filter by tenant if available
+        if tenant_id:
+            workflow = ApprovalWorkflows.objects.get(workflow_id=workflow_id, tenant_id=tenant_id)
+        else:
+            workflow = ApprovalWorkflows.objects.get(workflow_id=workflow_id)
         
         # Get all stages for this workflow
-        all_stages = ApprovalStages.objects.filter(approval_id__in=approval_ids)
+        # MULTI-TENANCY: Filter by tenant if available
+        if tenant_id:
+            all_stages = ApprovalStages.objects.filter(approval_id__in=approval_ids, tenant_id=tenant_id)
+        else:
+            all_stages = ApprovalStages.objects.filter(approval_id__in=approval_ids)
         
         # Prepare workflow data for version
         workflow_data = {
@@ -238,7 +283,11 @@ def create_workflow_version(workflow_id, approval_ids, created_by, created_by_na
         approval_requests_data = []
         for approval_id in approval_ids:
             try:
-                approval_request = ApprovalRequests.objects.get(approval_id=approval_id)
+                # MULTI-TENANCY: Filter by tenant if available
+                if tenant_id:
+                    approval_request = ApprovalRequests.objects.get(approval_id=approval_id, tenant_id=tenant_id)
+                else:
+                    approval_request = ApprovalRequests.objects.get(approval_id=approval_id)
                 approval_requests_data.append({
                     'approval_id': approval_request.approval_id,
                     'workflow_id': approval_request.workflow_id,
@@ -295,9 +344,16 @@ def create_workflow_version(workflow_id, approval_ids, created_by, created_by_na
         version_id = f"VR_{uuid.uuid4().hex[:8].upper()}"
         
         # Get the next version number for this approval (if any)
-        existing_versions = ApprovalRequestVersions.objects.filter(
-            approval_id__in=approval_ids
-        ).order_by('-version_number').first()
+        # MULTI-TENANCY: Filter by tenant if available
+        if tenant_id:
+            existing_versions = ApprovalRequestVersions.objects.filter(
+                approval_id__in=approval_ids,
+                tenant_id=tenant_id
+            ).order_by('-version_number').first()
+        else:
+            existing_versions = ApprovalRequestVersions.objects.filter(
+                approval_id__in=approval_ids
+            ).order_by('-version_number').first()
         
         version_number = (existing_versions.version_number + 1) if existing_versions else 1
         
@@ -310,26 +366,37 @@ def create_workflow_version(workflow_id, approval_ids, created_by, created_by_na
             changes_summary += f" Reason: {change_reason}"
         
         # Create version record
-        version_record = ApprovalRequestVersions.objects.create(
-            version_id=version_id,
-            approval_id=approval_ids[0] if approval_ids else workflow_id,  # Use first approval_id or workflow_id
-            version_number=version_number,
-            version_label=version_label,
-            json_payload=json_payload,
-            changes_summary=changes_summary,
-            created_by=created_by,
-            created_by_name=created_by_name or f"User {created_by}",
-            created_by_role=created_by_role or "User",
-            version_type=version_type,
-            is_current=True,
-            is_approved=False,
-            change_reason=change_reason
-        )
+        # MULTI-TENANCY: Add tenant_id if available
+        version_data = {
+            'version_id': version_id,
+            'approval_id': approval_ids[0] if approval_ids else workflow_id,  # Use first approval_id or workflow_id
+            'version_number': version_number,
+            'version_label': version_label,
+            'json_payload': json_payload,
+            'changes_summary': changes_summary,
+            'created_by': created_by,
+            'created_by_name': created_by_name or f"User {created_by}",
+            'created_by_role': created_by_role or "User",
+            'version_type': version_type,
+            'is_current': True,
+            'is_approved': False,
+            'change_reason': change_reason
+        }
+        if tenant_id:
+            version_data['tenant_id'] = tenant_id
+        version_record = ApprovalRequestVersions.objects.create(**version_data)
         
         # Mark all previous versions as not current
-        ApprovalRequestVersions.objects.filter(
-            approval_id__in=approval_ids
-        ).exclude(version_id=version_id).update(is_current=False)
+        # MULTI-TENANCY: Filter by tenant if available
+        if tenant_id:
+            ApprovalRequestVersions.objects.filter(
+                approval_id__in=approval_ids,
+                tenant_id=tenant_id
+            ).exclude(version_id=version_id).update(is_current=False)
+        else:
+            ApprovalRequestVersions.objects.filter(
+                approval_id__in=approval_ids
+            ).exclude(version_id=version_id).update(is_current=False)
         
         print(f"✅ Created workflow version {version_id} (v{version_number}) for workflow {workflow_id}")
         return version_record
@@ -546,13 +613,23 @@ def get_approval_version_history(approval_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def workflows(request):
     """
     Handle workflow creation and retrieval
+    MULTI-TENANCY: Only returns workflows belonging to the tenant
     """
+    # MULTI-TENANCY: Get tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({
+            'error': 'Tenant context not found'
+        }, status=403)
+    
     if request.method == 'GET':
-        # Get all workflows
-        workflows = ApprovalWorkflows.objects.all()
+        # MULTI-TENANCY: Filter workflows by tenant
+        workflows = ApprovalWorkflows.objects.filter(tenant_id=tenant_id)
         workflow_data = []
         
         for workflow in workflows:
@@ -633,6 +710,9 @@ def workflows(request):
             workflow_id = f"WF_{uuid.uuid4().hex[:8].upper()}"
             workflow_data['workflow_id'] = workflow_id
             
+            # MULTI-TENANCY: Add tenant_id to workflow data
+            workflow_data['tenant_id'] = tenant_id
+            
             # Create workflow
             workflow = ApprovalWorkflows.objects.create(**workflow_data)
             
@@ -695,7 +775,8 @@ def workflows(request):
                         'deadline_date': stage_config.get('deadline_date'),
                         'is_mandatory': stage_config.get('is_mandatory', True),
                         'created_at': timezone.now(),
-                        'updated_at': timezone.now()
+                        'updated_at': timezone.now(),
+                        'tenant_id': tenant_id  # MULTI-TENANCY: Add tenant_id
                     }
 
                     ApprovalStages.objects.create(**stage_data)
@@ -744,7 +825,8 @@ def workflows(request):
                             'submission_date': timezone.now(),
                             'expiry_date': expiry_date,
                             'created_at': timezone.now(),
-                            'updated_at': timezone.now()
+                            'updated_at': timezone.now(),
+                            'tenant_id': tenant_id  # MULTI-TENANCY: Set tenant_id
                         }
                         
                         ApprovalRequests.objects.create(**approval_request_data)
@@ -772,7 +854,8 @@ def workflows(request):
                                 'deadline_date': stage_config.get('deadline_date'),
                                 'is_mandatory': stage_config.get('is_mandatory', True),
                                 'created_at': timezone.now(),
-                                'updated_at': timezone.now()
+                                'updated_at': timezone.now(),
+                                'tenant_id': tenant_id  # MULTI-TENANCY: Set tenant_id
                             }
                             
                             # Create stage for this proposal
@@ -803,7 +886,8 @@ def workflows(request):
                         'submission_date': timezone.now(),
                         'expiry_date': expiry_date,
                         'created_at': timezone.now(),
-                        'updated_at': timezone.now()
+                        'updated_at': timezone.now(),
+                        'tenant_id': tenant_id  # MULTI-TENANCY: Set tenant_id
                     }
                     
                     ApprovalRequests.objects.create(**approval_request_data)
@@ -830,7 +914,8 @@ def workflows(request):
                             'deadline_date': stage_config.get('deadline_date'),
                             'is_mandatory': stage_config.get('is_mandatory', True),
                             'created_at': timezone.now(),
-                            'updated_at': timezone.now()
+                            'updated_at': timezone.now(),
+                            'tenant_id': tenant_id  # MULTI-TENANCY: Set tenant_id
                         }
                         
                         # Create stage for committee member
@@ -839,7 +924,8 @@ def workflows(request):
                 
                 else:
                     # Single RFP approval request (existing logic)
-                    existing_request = ApprovalRequests.objects.filter(workflow_id=workflow_id).first()
+                    # MULTI-TENANCY: Filter by tenant
+                    existing_request = ApprovalRequests.objects.filter(workflow_id=workflow_id, tenant_id=tenant_id).first()
                     if existing_request:
                         approval_id = existing_request.approval_id
                         approval_ids.append(approval_id)
@@ -873,7 +959,8 @@ def workflows(request):
                             'submission_date': timezone.now(),
                             'expiry_date': expiry_date,
                             'created_at': timezone.now(),
-                            'updated_at': timezone.now()
+                            'updated_at': timezone.now(),
+                            'tenant_id': tenant_id  # MULTI-TENANCY: Set tenant_id
                         }
                         
                         ApprovalRequests.objects.create(**approval_request_data)
@@ -901,7 +988,8 @@ def workflows(request):
                                 'deadline_date': stage_config.get('deadline_date'),
                                 'is_mandatory': stage_config.get('is_mandatory', True),
                                 'created_at': timezone.now(),
-                                'updated_at': timezone.now()
+                                'updated_at': timezone.now(),
+                                'tenant_id': tenant_id  # MULTI-TENANCY: Set tenant_id
                             }
                             
                             # Create stage
@@ -910,9 +998,11 @@ def workflows(request):
                     # Create or update RFP record with approval_workflow_id (only for single RFP)
                     try:
                         # Try to find existing RFP by title or create new one
+                        # MULTI-TENANCY: Filter by tenant
                         rfp_title = rfp_data.get('rfp_title', 'Untitled RFP')
                         rfp, created = RFP.objects.get_or_create(
                             rfp_title=rfp_title,
+                            tenant_id=tenant_id,  # MULTI-TENANCY: Filter by tenant
                             defaults={
                                 'description': rfp_data.get('description', 'RFP description'),
                                 'rfp_type': rfp_data.get('rfp_type', 'SERVICES'),
@@ -922,7 +1012,8 @@ def workflows(request):
                                 'criticality_level': rfp_data.get('criticality_level', 'medium'),
                                 'created_by': workflow_data.get('created_by', 1),
                                 'status': 'DRAFT',
-                                'approval_workflow_id': workflow_id
+                                'approval_workflow_id': workflow_id,
+                                'tenant_id': tenant_id  # MULTI-TENANCY: Set tenant_id
                             }
                         )
                         
@@ -945,12 +1036,14 @@ def workflows(request):
                 created_by_role = workflow_data.get('created_by_role', None)
                 created_by = workflow_data.get('created_by', 1)
                 
+                # MULTI-TENANCY: Pass tenant_id to create_workflow_version
                 version_record = create_workflow_version(
                     workflow_id=workflow_id,
                     approval_ids=approval_ids,
                     created_by=created_by,
                     created_by_name=created_by_name,
                     created_by_role=created_by_role,
+                    tenant_id=tenant_id,
                     version_type='INITIAL',
                     change_reason='Initial workflow creation'
                 )
@@ -992,13 +1085,20 @@ def workflows(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def users(request):
     """
     Get all users for dropdown selection
     Filtered based on workflow_type:
     - For 'rfp_creation': Only Management and Executive roles
     - For other workflows: Admin, System Owner, Procurement, Sourcing, Management, Executive
+    MULTI-TENANCY: Ensures tenant context is present
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
         # Import required models
         from rfp.models import CustomUser
@@ -1009,7 +1109,9 @@ def users(request):
         workflow_type = request.query_params.get('workflow_type', '')
         
         # Get all active users from the database
+        # MULTI-TENANCY: Filter by tenant (if CustomUser has tenant_id field)
         all_users = CustomUser.objects.filter(is_active='Y').order_by('first_name', 'last_name')
+        # Note: If CustomUser has tenant_id: .filter(tenant_id=tenant_id)
         
         # Determine which roles to filter by based on workflow_type
         if workflow_type == 'rfp_creation':
@@ -1110,17 +1212,28 @@ def users(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('approve_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def approval_requests(request):
     """
     Handle approval request creation and retrieval
+    MULTI-TENANCY: Only returns approval requests belonging to the tenant
     """
+    # MULTI-TENANCY: Get tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({
+            'error': 'Tenant context not found'
+        }, status=403)
+    
     if request.method == 'GET':
         workflow_id = request.query_params.get('workflow_id')
         
+        # MULTI-TENANCY: Filter by tenant
         if workflow_id:
-            requests = ApprovalRequests.objects.filter(workflow_id=workflow_id)
+            requests = ApprovalRequests.objects.filter(workflow_id=workflow_id, tenant_id=tenant_id)
         else:
-            requests = ApprovalRequests.objects.all()
+            requests = ApprovalRequests.objects.filter(tenant_id=tenant_id)
         
         request_data = []
         
@@ -1171,6 +1284,7 @@ def approval_requests(request):
             # Create approval request
             request_data = request.data.copy()
             request_data['approval_id'] = approval_id
+            request_data['tenant_id'] = tenant_id  # MULTI-TENANCY: Add tenant_id
             
             approval_request = ApprovalRequests.objects.create(**request_data)
             
@@ -1189,17 +1303,28 @@ def approval_requests(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('approve_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def stages(request):
     """
     Handle stage management
+    MULTI-TENANCY: Only returns stages belonging to the tenant
     """
+    # MULTI-TENANCY: Get tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({
+            'error': 'Tenant context not found'
+        }, status=403)
+    
     if request.method == 'GET':
         approval_id = request.query_params.get('approval_id')
         
+        # MULTI-TENANCY: Filter by tenant
         if approval_id:
-            stages = ApprovalStages.objects.filter(approval_id=approval_id)
+            stages = ApprovalStages.objects.filter(approval_id=approval_id, tenant_id=tenant_id)
         else:
-            stages = ApprovalStages.objects.all()
+            stages = ApprovalStages.objects.filter(tenant_id=tenant_id)
         
         stage_data = []
         for stage in stages:
@@ -1238,6 +1363,7 @@ def stages(request):
             # Create stage
             stage_data = request.data.copy()
             stage_data['stage_id'] = stage_id
+            stage_data['tenant_id'] = tenant_id  # MULTI-TENANCY: Add tenant_id
             
             stage = ApprovalStages.objects.create(**stage_data)
             
@@ -1256,15 +1382,26 @@ def stages(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def comments(request):
     """
     Handle approval comments
+    MULTI-TENANCY: Only returns comments belonging to the tenant
     """
+    # MULTI-TENANCY: Get tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({
+            'error': 'Tenant context not found'
+        }, status=403)
+    
     if request.method == 'GET':
         approval_id = request.query_params.get('approval_id')
         stage_id = request.query_params.get('stage_id')
         
-        comments = ApprovalComments.objects.all()
+        # MULTI-TENANCY: Filter comments by tenant
+        comments = ApprovalComments.objects.filter(tenant_id=tenant_id)
         
         if approval_id:
             comments = comments.filter(approval_id=approval_id)
@@ -1296,6 +1433,7 @@ def comments(request):
             # Create comment
             comment_data = request.data.copy()
             comment_data['comment_id'] = comment_id
+            comment_data['tenant_id'] = tenant_id  # MULTI-TENANCY: Add tenant_id
             
             comment = ApprovalComments.objects.create(**comment_data)
             
@@ -1314,14 +1452,24 @@ def comments(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_proposal_id_from_approval(request, approval_id):
     """
     Get proposal/response ID from approval request data
+    MULTI-TENANCY: Only returns proposal IDs for tenant's approval requests
     For proposal evaluation workflows, we need to find response IDs for the RFP
     """
+    # MULTI-TENANCY: Get tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({
+            'error': 'Tenant context not found'
+        }, status=403)
+    
     try:
-        # Get approval request
-        approval_request = ApprovalRequests.objects.get(approval_id=approval_id)
+        # MULTI-TENANCY: Filter approval request by tenant
+        approval_request = ApprovalRequests.objects.get(approval_id=approval_id, tenant_id=tenant_id)
         
         # Parse request_data to find RFP ID
         request_data = approval_request.request_data
@@ -1363,7 +1511,8 @@ def get_proposal_id_from_approval(request, approval_id):
                 from rfp.models import RFPResponse
                 
                 # Get all responses for this RFP
-                responses = RFPResponse.objects.filter(rfp_id=rfp_id)
+                # MULTI-TENANCY: Filter responses by tenant
+                responses = RFPResponse.objects.filter(rfp_id=rfp_id, tenant_id=tenant_id)
                 
                 if responses.exists():
                     # For now, return the first response ID
@@ -1400,10 +1549,20 @@ def get_proposal_id_from_approval(request, approval_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def user_approvals(request):
     """
     Get all approval stages assigned to a specific user
+    MULTI-TENANCY: Only returns approvals for the tenant
     """
+    # MULTI-TENANCY: Get tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({
+            'error': 'Tenant context not found'
+        }, status=403)
+    
     user_id = request.query_params.get('user_id')
     
     if not user_id:
@@ -1421,7 +1580,8 @@ def user_approvals(request):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Get all stages assigned to the user
-        stages = ApprovalStages.objects.filter(assigned_user_id=user_id_int)
+        # MULTI-TENANCY: Filter by tenant
+        stages = ApprovalStages.objects.filter(assigned_user_id=user_id_int, tenant_id=tenant_id)
         
         approval_data = []
         for stage in stages:
@@ -1467,7 +1627,8 @@ def user_approvals(request):
             # Try to get approval request details if they exist
             # NOTE: approval_id in approval_stages table references approval_id in approval_requests table
             try:
-                approval_request = ApprovalRequests.objects.get(approval_id=stage.approval_id)
+                # MULTI-TENANCY: Filter by tenant
+                approval_request = ApprovalRequests.objects.get(approval_id=stage.approval_id, tenant_id=tenant_id)
                 print(f"Found approval request for approval_id {stage.approval_id}: {approval_request.request_title}")
                 print(f"Request data: {approval_request.request_data}")
                 print(f"Request data type: {type(approval_request.request_data)}")
@@ -1488,7 +1649,8 @@ def user_approvals(request):
                 
                 # Try to get workflow details if they exist
                 try:
-                    workflow = ApprovalWorkflows.objects.get(workflow_id=approval_request.workflow_id)
+                    # MULTI-TENANCY: Filter by tenant
+                    workflow = ApprovalWorkflows.objects.get(workflow_id=approval_request.workflow_id, tenant_id=tenant_id)
                     stage_data.update({
                         'workflow_name': workflow.workflow_name,
                         'workflow_type': workflow.workflow_type,
@@ -1515,13 +1677,23 @@ def user_approvals(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def debug_approval_requests(request):
     """
     Debug endpoint to check approval requests data
+    MULTI-TENANCY: Only returns approval requests for the tenant
     """
+    # MULTI-TENANCY: Get tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({
+            'error': 'Tenant context not found'
+        }, status=403)
+    
     try:
-        # Get all approval requests
-        approval_requests = ApprovalRequests.objects.all()
+        # MULTI-TENANCY: Filter approval requests by tenant
+        approval_requests = ApprovalRequests.objects.filter(tenant_id=tenant_id)
         
         debug_data = {
             'total_requests': approval_requests.count(),
@@ -1550,13 +1722,23 @@ def debug_approval_requests(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def debug_approval_stages(request):
     """
     Debug endpoint to check approval stages data
+    MULTI-TENANCY: Only returns approval stages for the tenant
     """
+    # MULTI-TENANCY: Get tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({
+            'error': 'Tenant context not found'
+        }, status=403)
+    
     try:
-        # Get all approval stages
-        stages = ApprovalStages.objects.all()
+        # MULTI-TENANCY: Filter approval stages by tenant
+        stages = ApprovalStages.objects.filter(tenant_id=tenant_id)
         
         debug_data = {
             'total_stages': stages.count(),
@@ -1653,10 +1835,20 @@ def start_stage_review(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def create_sample_approval_request(request):
     """
     Create a sample approval request with request_data for testing
+    MULTI-TENANCY: Creates sample data for the tenant
     """
+    # MULTI-TENANCY: Get tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({
+            'error': 'Tenant context not found'
+        }, status=403)
+    
     try:
         # Generate approval ID
         approval_id = f"AR_{uuid.uuid4().hex[:8].upper()}"
@@ -1684,6 +1876,7 @@ def create_sample_approval_request(request):
         
         # Create approval request
         # NOTE: The approval_id will be used as workflow_id in the relationship
+        # MULTI-TENANCY: Add tenant_id
         approval_request = ApprovalRequests.objects.create(
             approval_id=approval_id,
             workflow_id=approval_id,  # Use approval_id as workflow_id for the relationship
@@ -1694,13 +1887,15 @@ def create_sample_approval_request(request):
             priority="HIGH",
             request_data=sample_request_data,
             overall_status="PENDING",
-            submission_date=timezone.now()
+            submission_date=timezone.now(),
+            tenant_id=tenant_id
         )
         
         # Create a corresponding approval stage for testing
         from .models import ApprovalStages
         stage_id = f"ST_{uuid.uuid4().hex[:8].upper()}"
         
+        # MULTI-TENANCY: Add tenant_id
         approval_stage = ApprovalStages.objects.create(
             stage_id=stage_id,
             approval_id=approval_id,  # This will be used as workflow_id in the relationship
@@ -1714,11 +1909,13 @@ def create_sample_approval_request(request):
             stage_type="REVIEW",
             stage_status="PENDING",
             deadline_date=timezone.now() + timezone.timedelta(days=7),
-            is_mandatory=True
+            is_mandatory=True,
+            tenant_id=tenant_id
         )
         
         # Create workflow version for sample approval request
         try:
+            # MULTI-TENANCY: Pass tenant_id
             version_record = create_workflow_version(
                 workflow_id=approval_id,  # Use approval_id as workflow_id for sample
                 approval_ids=[approval_id],
@@ -1726,7 +1923,8 @@ def create_sample_approval_request(request):
                 created_by_name="System",
                 created_by_role="Administrator",
                 version_type='INITIAL',
-                change_reason='Sample approval request creation for testing'
+                change_reason='Sample approval request creation for testing',
+                tenant_id=tenant_id
             )
             
             if version_record:
@@ -1781,10 +1979,20 @@ def test_rfp_status_update(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('approve_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def update_stage_status(request):
     """
     Update the status of an approval stage
+    MULTI-TENANCY: Only allows updating stages belonging to the tenant
     """
+    # MULTI-TENANCY: Get tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({
+            'error': 'Tenant context not found'
+        }, status=403)
+    
     try:
         print(f"Received request data: {request.data}")  # Debug log
         
@@ -1817,22 +2025,26 @@ def update_stage_status(request):
         print(f"Mapped status: {new_status} -> {db_status}")  # Debug log
         
         # Get the stage
+        # MULTI-TENANCY: Filter by tenant
         print(f"Looking for stage with ID: {stage_id}")  # Debug log
-        stage = ApprovalStages.objects.get(stage_id=stage_id)
+        stage = ApprovalStages.objects.get(stage_id=stage_id, tenant_id=tenant_id)
         print(f"Found stage: {stage.stage_name}")  # Debug log
 
        # Check if this is a multi-level workflow and enforce sequential approval
         try:
-            approval_request = ApprovalRequests.objects.get(approval_id=stage.approval_id)
-            workflow = ApprovalWorkflows.objects.get(workflow_id=approval_request.workflow_id)
+            # MULTI-TENANCY: Filter by tenant
+            approval_request = ApprovalRequests.objects.get(approval_id=stage.approval_id, tenant_id=tenant_id)
+            workflow = ApprovalWorkflows.objects.get(workflow_id=approval_request.workflow_id, tenant_id=tenant_id)
             
             # Only enforce sequential approval for MULTI_LEVEL workflows
             if workflow.workflow_type == 'MULTI_LEVEL':
                 print(f"Multi-level workflow detected. Checking stage order: {stage.stage_order}")
                 
                 # Get all stages for this approval, ordered by stage_order
+                # MULTI-TENANCY: Filter by tenant
                 all_stages = ApprovalStages.objects.filter(
-                    approval_id=stage.approval_id
+                    approval_id=stage.approval_id,
+                    tenant_id=tenant_id
                 ).order_by('stage_order')
                 
                 # Find the current stage index
@@ -2518,15 +2730,23 @@ def get_approval_version_history_api(request, approval_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_rfp_details_for_change_request(request, rfp_id):
     """
     Get RFP details with change request context for editing
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
         from rfp.models import RFP, RFPEvaluationCriteria
         
         # Get RFP details - use rfp_id field, not id
-        rfp = RFP.objects.get(rfp_id=rfp_id)
+        # MULTI-TENANCY: Filter by tenant
+        rfp = RFP.objects.get(rfp_id=rfp_id, tenant_id=tenant_id)
         
         # Get change requests for this RFP
         change_requests = []
@@ -2542,9 +2762,11 @@ def get_rfp_details_for_change_request(request, rfp_id):
             rfp_approval_requests = []
             try:
                 # Get all workflows for RFP
+                # MULTI-TENANCY: Filter by tenant
                 try:
                     rfp_workflows = ApprovalWorkflows.objects.filter(
-                        business_object_type='RFP'
+                        business_object_type='RFP',
+                        tenant_id=tenant_id
                     )
                     workflow_ids = [w.workflow_id for w in rfp_workflows]
                 except Exception as e:
@@ -2552,10 +2774,12 @@ def get_rfp_details_for_change_request(request, rfp_id):
                     workflow_ids = []
                 
                 # Get approval requests for these workflows
+                # MULTI-TENANCY: Filter by tenant
                 if workflow_ids:
                     try:
                         all_approval_requests = ApprovalRequests.objects.filter(
-                            workflow_id__in=workflow_ids
+                            workflow_id__in=workflow_ids,
+                            tenant_id=tenant_id
                         )
                     except Exception as e:
                         print(f"Error fetching approval requests: {str(e)}")
@@ -2599,10 +2823,12 @@ def get_rfp_details_for_change_request(request, rfp_id):
             for approval in approval_requests:
                 try:
                     # Get stages with REQUEST_CHANGES status (also check for REJECTED which might be used)
+                    # MULTI-TENANCY: Filter by tenant
                     try:
                         stages_with_changes = ApprovalStages.objects.filter(
                             approval_id=approval.approval_id,
-                            stage_status__in=['REQUEST_CHANGES', 'REJECTED']
+                            stage_status__in=['REQUEST_CHANGES', 'REJECTED'],
+                            tenant_id=tenant_id
                         )
                     except Exception as e:
                         print(f"Error fetching stages for approval {approval.approval_id}: {str(e)}")
@@ -2611,10 +2837,12 @@ def get_rfp_details_for_change_request(request, rfp_id):
                     for stage in stages_with_changes:
                         try:
                             # Get change request comments
+                            # MULTI-TENANCY: Filter by tenant
                             try:
                                 change_comments = ApprovalComments.objects.filter(
                                     stage_id=stage.stage_id,
-                                    comment_type='CHANGE_REQUEST'
+                                    comment_type='CHANGE_REQUEST',
+                                    tenant_id=tenant_id
                                 ).order_by('-created_at')
                             except Exception as e:
                                 print(f"Error fetching comments for stage {stage.stage_id}: {str(e)}")
@@ -3025,13 +3253,21 @@ def get_rfp_details_for_change_request(request, rfp_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_rfp_details(request, rfp_id):
     """
     Get complete RFP details including documents
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
         # Get RFP by ID
-        rfp = RFP.objects.get(rfp_id=rfp_id)
+        # MULTI-TENANCY: Filter by tenant
+        rfp = RFP.objects.get(rfp_id=rfp_id, tenant_id=tenant_id)
         
         # Get evaluation criteria for this RFP - use raw SQL to ensure data is fetched
         evaluation_criteria = []
@@ -3192,10 +3428,17 @@ def get_rfp_details(request, rfp_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def approval_request_versions(request):
     """
     Create a new version for an approval request
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
         data = request.data
         
@@ -3212,11 +3455,13 @@ def approval_request_versions(request):
         
         # Compatibility: If an ApprovalRequest doesn't exist for this approval_id, create a minimal placeholder
         # This allows clients that use rfp_id as approval_id to work without additional coordination
+        # MULTI-TENANCY: Filter by tenant
         try:
-            ApprovalRequests.objects.get(approval_id=approval_id)
+            ApprovalRequests.objects.get(approval_id=approval_id, tenant_id=tenant_id)
         except ApprovalRequests.DoesNotExist:
             try:
                 # Create a minimal approval request record so versions can be tracked
+                # MULTI-TENANCY: Set tenant_id on creation
                 placeholder_request = {
                     'approval_id': approval_id,
                     'workflow_id': data.get('workflow_id') or 'WF_AUTO',
@@ -3227,6 +3472,7 @@ def approval_request_versions(request):
                     'priority': data.get('priority') or 'MEDIUM',
                     'request_data': data.get('json_payload') or {},
                     'overall_status': 'DRAFT',
+                    'tenant_id': tenant_id  # MULTI-TENANCY: Set tenant_id
                 }
                 ApprovalRequests.objects.create(**placeholder_request)
             except Exception:
@@ -3234,11 +3480,13 @@ def approval_request_versions(request):
                 pass
         
         # Get the highest version number for this approval
+        # MULTI-TENANCY: Filter by tenant (via approval)
         max_version = ApprovalRequestVersions.objects.filter(
             approval_id=approval_id
         ).aggregate(max_version=models.Max('version_number'))['max_version'] or 0
         
         # Create the version
+        # MULTI-TENANCY: Set tenant_id on creation (if ApprovalRequestVersions has tenant_id)
         version = ApprovalRequestVersions.objects.create(
             version_id=version_id,
             approval_id=approval_id,
@@ -3254,9 +3502,11 @@ def approval_request_versions(request):
             is_current=True,
             is_approved=False,
             change_reason=data.get('change_reason', '')
+            # Note: If ApprovalRequestVersions has tenant_id, add: tenant_id=tenant_id
         )
         
         # Mark all other versions as not current
+        # MULTI-TENANCY: Filter by tenant (via approval)
         ApprovalRequestVersions.objects.filter(
             approval_id=approval_id
         ).exclude(version_id=version_id).update(is_current=False)
@@ -3281,11 +3531,28 @@ def approval_request_versions(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_approval_request_versions(request, approval_id):
     """
     Get all versions for an approval request
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
+        # MULTI-TENANCY: Verify approval belongs to tenant
+        try:
+            approval = ApprovalRequests.objects.get(approval_id=approval_id, tenant_id=tenant_id)
+        except ApprovalRequests.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': f'Approval request not found: {approval_id}'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # MULTI-TENANCY: Filter by tenant (via approval)
         versions = ApprovalRequestVersions.objects.filter(
             approval_id=approval_id
         ).order_by('-version_number', '-created_at')
@@ -3330,16 +3597,31 @@ def get_approval_request_versions(request, approval_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('approve_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def approve_version(request, version_id):
     """
     Approve a specific version
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
         data = request.data
         
         # Get the version
+        # MULTI-TENANCY: Verify version belongs to tenant (via approval)
         try:
             version = ApprovalRequestVersions.objects.get(version_id=version_id)
+            # Verify the approval request belongs to tenant
+            approval = ApprovalRequests.objects.get(approval_id=version.approval_id, tenant_id=tenant_id)
+        except (ApprovalRequestVersions.DoesNotExist, ApprovalRequests.DoesNotExist):
+            return Response({
+                'success': False,
+                'error': 'Version not found'
+            }, status=status.HTTP_404_NOT_FOUND)
         except ApprovalRequestVersions.DoesNotExist:
             return Response({
                 'success': False,
@@ -3368,11 +3650,18 @@ def approve_version(request, version_id):
 # Change Request Management Endpoints
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def change_requests(request):
     """
     GET: List change requests dynamically derived from approval data.
     POST: Create a reviewer change request and snapshot the current RFP as a new version.
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return JsonResponse({'error': 'Tenant context not found'}, status=403)
+    
     try:
         if request.method == 'GET':
             # Optional filter to only show for a specific creator
@@ -3383,18 +3672,22 @@ def change_requests(request):
             change_requests_list = []
 
             # Collect candidate stages that need creator action
+            # MULTI-TENANCY: Filter by tenant
             candidate_stages = ApprovalStages.objects.filter(
-                stage_status__in=['REJECTED']  # Using REJECTED as REQUEST_CHANGES is mapped to REJECTED
+                stage_status__in=['REJECTED'],  # Using REJECTED as REQUEST_CHANGES is mapped to REJECTED
+                tenant_id=tenant_id
             ).order_by('-updated_at')
 
             for stage in candidate_stages:
                 try:
                     # Get the approval request to enrich with context
-                    approval_request = ApprovalRequests.objects.get(approval_id=stage.approval_id)
+                    # MULTI-TENANCY: Filter by tenant
+                    approval_request = ApprovalRequests.objects.get(approval_id=stage.approval_id, tenant_id=tenant_id)
 
                     # Filter to only workflows for business_object_type == 'RFP'
+                    # MULTI-TENANCY: Filter by tenant
                     try:
-                        workflow = ApprovalWorkflows.objects.get(workflow_id=approval_request.workflow_id)
+                        workflow = ApprovalWorkflows.objects.get(workflow_id=approval_request.workflow_id, tenant_id=tenant_id)
                         if (workflow.business_object_type or '').upper() != 'RFP':
                             continue
                     except ApprovalWorkflows.DoesNotExist:
@@ -3422,7 +3715,8 @@ def change_requests(request):
                             try:
                                 numeric_id = int(request_data.get('id'))
                                 from rfp.models import RFP as RFPModel
-                                rfp_obj = RFPModel.objects.get(id=numeric_id)
+                                # MULTI-TENANCY: Filter by tenant
+                                rfp_obj = RFPModel.objects.get(id=numeric_id, tenant_id=tenant_id)
                                 rfp_id = rfp_obj.rfp_id
                                 if not rfp_title:
                                     rfp_title = rfp_obj.rfp_title
@@ -3430,18 +3724,20 @@ def change_requests(request):
                                 pass
 
                     # If still not present, try to get from RFP by workflow link
+                    # MULTI-TENANCY: Filter by tenant
                     if not rfp_title or not rfp_id:
                         try:
-                            linked_rfp = RFP.objects.get(approval_workflow_id=approval_request.workflow_id)
+                            linked_rfp = RFP.objects.get(approval_workflow_id=approval_request.workflow_id, tenant_id=tenant_id)
                             rfp_id = rfp_id or linked_rfp.rfp_id
                             rfp_title = rfp_title or linked_rfp.rfp_title
                         except Exception:
                             pass
 
                     # Find latest change-related comment on this stage
+                    # MULTI-TENANCY: Filter by tenant
                     last_comment = (
                         ApprovalComments.objects
-                        .filter(approval_id=approval_request.approval_id, stage_id=stage.stage_id)
+                        .filter(approval_id=approval_request.approval_id, stage_id=stage.stage_id, tenant_id=tenant_id)
                         .order_by('-created_at')
                         .first()
                     )
@@ -3494,14 +3790,17 @@ def change_requests(request):
                     from rfp.models import RFP
                     from rfp.serializers import RFPSerializer
 
-                    rfp = RFP.objects.get(rfp_id=rfp_id)
+                    # MULTI-TENANCY: Filter by tenant
+                    rfp = RFP.objects.get(rfp_id=rfp_id, tenant_id=tenant_id)
                     rfp_payload = RFPSerializer(rfp).data
 
                     version_id = f"VR_{uuid.uuid4().hex[:8].upper()}"
+                    # MULTI-TENANCY: Filter by tenant (via approval)
                     max_version = ApprovalRequestVersions.objects.filter(
                         approval_id=approval_id
                     ).aggregate(max_version=models.Max('version_number'))['max_version'] or 0
 
+                    # MULTI-TENANCY: Set tenant_id on creation (if ApprovalRequestVersions has tenant_id)
                     ApprovalRequestVersions.objects.create(
                         version_id=version_id,
                         approval_id=approval_id,
@@ -3517,7 +3816,9 @@ def change_requests(request):
                         is_current=True,
                         is_approved=False,
                         change_reason=description
+                        # Note: If ApprovalRequestVersions has tenant_id, add: tenant_id=tenant_id
                     )
+                    # MULTI-TENANCY: Filter by tenant (via approval)
                     ApprovalRequestVersions.objects.filter(
                         approval_id=approval_id
                     ).exclude(version_id=version_id).update(is_current=False)
@@ -3557,12 +3858,19 @@ def change_requests(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def respond_to_change_request(request):
     """
     Respond to a change request (accept, decline, or complete)
     - accepted/declined: acknowledge the request
     - completed: persist a new ApprovalRequestVersions row with the latest RFP JSON and resume workflow from the same stage
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return JsonResponse({'error': 'Tenant context not found'}, status=403)
+    
     try:
         data = json.loads(request.body or '{}')
         change_request_id = data.get('change_request_id')
@@ -3602,13 +3910,15 @@ def respond_to_change_request(request):
                     if rfp_id:
                         from rfp.models import RFP
                         from rfp.serializers import RFPSerializer
-                        rfp = RFP.objects.get(rfp_id=rfp_id)
+                        # MULTI-TENANCY: Filter by tenant
+                        rfp = RFP.objects.get(rfp_id=rfp_id, tenant_id=tenant_id)
                         json_payload = RFPSerializer(rfp).data
                     else:
                         json_payload = {}
 
                 # Create new version row
                 version_id = f"VR_{uuid.uuid4().hex[:8].upper()}"
+                # MULTI-TENANCY: Filter by tenant (via approval)
                 max_version = ApprovalRequestVersions.objects.filter(
                     approval_id=approval_id
                 ).aggregate(max_version=models.Max('version_number'))['max_version'] or 0

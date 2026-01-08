@@ -281,7 +281,7 @@ import PopupModal from '@/popup/PopupModal.vue'
 import { PopupService } from '@/popup/popupService'
 import { useNotifications } from '@/composables/useNotifications'
 import notificationService from '@/services/notificationService'
-import { getTprmApiV1BaseUrl } from '@/utils/backendEnv'
+import { getApiV1Url } from '@/utils/backendEnv'
 const { showSuccess, showError, showWarning, showInfo } = useNotifications()
 
 // Component state
@@ -297,23 +297,6 @@ const selectedVendor = ref(null)
 const vendorTimeline = ref([])
 const analyticsData = ref(null)
 
-// API configuration
-const API_BASE_URL = getTprmApiV1BaseUrl()
-
-// Get headers with auth token
-const getHeaders = () => {
-  const token = localStorage.getItem('access_token') || localStorage.getItem('token')
-  const headers = {
-    'Content-Type': 'application/json'
-  }
-  
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`
-  }
-  
-  return headers
-}
-
 // Load initial data (vendors list and analytics)
 const loadInitialData = async () => {
   loading.value = true
@@ -321,9 +304,10 @@ const loadInitialData = async () => {
   
   try {
     // Load vendors list and analytics in parallel
+    // Use getApiV1Url since backend is at /api/v1/vendor-lifecycle/ not /api/tprm/v1/vendor-lifecycle/
     const [vendorsResponse, analyticsResponse] = await Promise.all([
-      apiClient.get(`${API_BASE_URL}/vendor-lifecycle/vendors-list/`),
-      apiClient.get(`${API_BASE_URL}/vendor-lifecycle/analytics/`)
+      apiClient.get(getApiV1Url('vendor-lifecycle/vendors-list/')),
+      apiClient.get(getApiV1Url('vendor-lifecycle/analytics/'))
     ])
     
     vendorsList.value = vendorsResponse.data.vendors || []
@@ -352,7 +336,7 @@ const loadVendorTimeline = async (vendorId) => {
   error.value = null
   
   try {
-    const response = await apiClient.get(`${API_BASE_URL}/vendor-lifecycle/vendor-timeline/${vendorId}/`)
+    const response = await apiClient.get(getApiV1Url(`vendor-lifecycle/vendor-timeline/${vendorId}/`))
     
     selectedVendor.value = response.data.vendor
     vendorTimeline.value = response.data.timeline || []

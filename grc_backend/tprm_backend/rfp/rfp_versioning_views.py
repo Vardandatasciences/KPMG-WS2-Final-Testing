@@ -21,15 +21,29 @@ from .serializers import RFPSerializer
 from tprm_backend.rfp.rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required
 
+# MULTI-TENANCY: Import tenant utilities for filtering
+from tprm_backend.core.tenant_utils import (
+    get_tenant_id_from_request,
+    require_tenant,
+    tenant_filter
+)
+
 
 @api_view(['POST'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def edit_rfp_with_versioning(request):
     """
     Edit RFP with automatic versioning and change tracking
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
         rfp_id = request.data.get('rfp_id')
         rfp_data = request.data.get('rfp_data')
@@ -44,8 +58,9 @@ def edit_rfp_with_versioning(request):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Get the current RFP
+        # MULTI-TENANCY: Filter by tenant
         try:
-            rfp = RFP.objects.get(rfp_id=rfp_id)
+            rfp = RFP.objects.get(rfp_id=rfp_id, tenant_id=tenant_id)
         except RFP.DoesNotExist:
             return Response({
                 'success': False,
@@ -57,7 +72,8 @@ def edit_rfp_with_versioning(request):
             version_id = f"VR_{uuid.uuid4().hex[:8].upper()}"
             
             # Get the next version number
-            latest_version = RFPVersions.objects.filter(rfp_id=rfp_id).order_by('-version_number').first()
+            # MULTI-TENANCY: Filter by tenant
+            latest_version = RFPVersions.objects.filter(rfp_id=rfp_id, tenant_id=tenant_id).order_by('-version_number').first()
             version_number = (latest_version.version_number + 1) if latest_version else 1
             
             # Create comprehensive JSON payload of current state
@@ -99,6 +115,7 @@ def edit_rfp_with_versioning(request):
             }
             
             # Create version record
+            # MULTI-TENANCY: Set tenant_id on creation
             version_record = RFPVersions.objects.create(
                 version_id=version_id,
                 rfp_id=rfp_id,
@@ -112,7 +129,8 @@ def edit_rfp_with_versioning(request):
                 version_type='REVISION',
                 parent_version_id=latest_version.version_id if latest_version else None,
                 is_current=True,
-                change_reason=change_reason
+                change_reason=change_reason,
+                tenant_id=tenant_id  # MULTI-TENANCY: Set tenant_id
             )
             
             # Update the RFP with new data
@@ -141,7 +159,8 @@ def edit_rfp_with_versioning(request):
             rfp.save()
             
             # Mark previous versions as not current
-            RFPVersions.objects.filter(rfp_id=rfp_id, is_current=True).exclude(version_id=version_id).update(is_current=False)
+            # MULTI-TENANCY: Filter by tenant
+            RFPVersions.objects.filter(rfp_id=rfp_id, tenant_id=tenant_id, is_current=True).exclude(version_id=version_id).update(is_current=False)
             
             # Update change request status if provided
             if change_request_id:
@@ -181,12 +200,29 @@ def edit_rfp_with_versioning(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_rfp_version_history(request, rfp_id):
     """
     Get version history for an RFP
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
-        versions = RFPVersions.objects.filter(rfp_id=rfp_id).order_by('-version_number')
+        # MULTI-TENANCY: Verify RFP belongs to tenant
+        try:
+            rfp = RFP.objects.get(rfp_id=rfp_id, tenant_id=tenant_id)
+        except RFP.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': f'RFP not found: {rfp_id}'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # MULTI-TENANCY: Filter by tenant
+        versions = RFPVersions.objects.filter(rfp_id=rfp_id, tenant_id=tenant_id).order_by('-version_number')
         
         version_list = []
         for version in versions:
@@ -221,12 +257,20 @@ def get_rfp_version_history(request, rfp_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_rfp_version(request, version_id):
     """
     Get specific version of an RFP
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
-        version = RFPVersions.objects.get(version_id=version_id)
+        # MULTI-TENANCY: Filter by tenant
+        version = RFPVersions.objects.get(version_id=version_id, tenant_id=tenant_id)
         
         return Response({
             'success': True,
@@ -262,10 +306,17 @@ def get_rfp_version(request, version_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def rollback_rfp_version(request):
     """
     Rollback RFP to a specific version
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
         rfp_id = request.data.get('rfp_id')
         version_id = request.data.get('version_id')
@@ -279,8 +330,9 @@ def rollback_rfp_version(request):
         
         with transaction.atomic():
             # Get the version to rollback to
+            # MULTI-TENANCY: Filter by tenant
             try:
-                version = RFPVersions.objects.get(version_id=version_id, rfp_id=rfp_id)
+                version = RFPVersions.objects.get(version_id=version_id, rfp_id=rfp_id, tenant_id=tenant_id)
             except RFPVersions.DoesNotExist:
                 return Response({
                     'success': False,
@@ -288,11 +340,13 @@ def rollback_rfp_version(request):
                 }, status=status.HTTP_404_NOT_FOUND)
             
             # Get current RFP
-            rfp = RFP.objects.get(rfp_id=rfp_id)
+            # MULTI-TENANCY: Filter by tenant
+            rfp = RFP.objects.get(rfp_id=rfp_id, tenant_id=tenant_id)
             
             # Create a new version record for the rollback
             rollback_version_id = f"VR_{uuid.uuid4().hex[:8].upper()}"
-            latest_version = RFPVersions.objects.filter(rfp_id=rfp_id).order_by('-version_number').first()
+            # MULTI-TENANCY: Filter by tenant
+            latest_version = RFPVersions.objects.filter(rfp_id=rfp_id, tenant_id=tenant_id).order_by('-version_number').first()
             version_number = (latest_version.version_number + 1) if latest_version else 1
             
             # Create version record for current state before rollback
@@ -334,6 +388,7 @@ def rollback_rfp_version(request):
             }
             
             # Create rollback version record
+            # MULTI-TENANCY: Set tenant_id on creation
             rollback_version = RFPVersions.objects.create(
                 version_id=rollback_version_id,
                 rfp_id=rfp_id,
@@ -347,7 +402,8 @@ def rollback_rfp_version(request):
                 version_type='REVISION',
                 parent_version_id=latest_version.version_id if latest_version else None,
                 is_current=False,
-                change_reason=rollback_reason
+                change_reason=rollback_reason,
+                tenant_id=tenant_id  # MULTI-TENANCY: Set tenant_id
             )
             
             # Restore RFP from the target version
@@ -377,7 +433,8 @@ def rollback_rfp_version(request):
             rfp.save()
             
             # Mark the target version as current
-            RFPVersions.objects.filter(rfp_id=rfp_id).update(is_current=False)
+            # MULTI-TENANCY: Filter by tenant
+            RFPVersions.objects.filter(rfp_id=rfp_id, tenant_id=tenant_id).update(is_current=False)
             version.is_current = True
             version.save()
             
@@ -409,11 +466,26 @@ def rollback_rfp_version(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_rfp_change_requests(request, rfp_id):
     """
     Get change requests for an RFP
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
+        # MULTI-TENANCY: Verify RFP belongs to tenant
+        try:
+            rfp = RFP.objects.get(rfp_id=rfp_id, tenant_id=tenant_id)
+        except RFP.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': f'RFP not found: {rfp_id}'
+            }, status=status.HTTP_404_NOT_FOUND)
         # This would typically come from the approval workflow system
         # For now, we'll return a mock response
         change_requests = [

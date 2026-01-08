@@ -186,6 +186,7 @@ urlpatterns = [
     
     # TPRM RFP Management APIs
     path('api/tprm/rfp/', include('tprm_backend.rfp.urls')),
+    path('api/tprm/v1/', include('tprm_backend.rfp.urls')),  # Frontend compatibility for /api/tprm/v1/
     path('api/tprm/rfp-approval/', include('tprm_backend.rfp_approval.urls')),
     path('api/tprm/rfp-risk-analysis/', include('tprm_backend.rfp_risk_analysis.urls')),
     
@@ -203,11 +204,45 @@ urlpatterns = [
     path('api/tprm/vendor-approval/', include('tprm_backend.apps.vendor_approval.urls')),
     path('api/tprm/risk-analysis-vendor/', include('tprm_backend.risk_analysis_vendor.urls')),
     
+    # TPRM v1 API routes (for frontend compatibility - /api/tprm/v1/*)
+    # Core TPRM modules
+    path('api/tprm/v1/core/', include('tprm_backend.core.urls')),
+    path('api/tprm/v1/slas/', include('tprm_backend.slas.urls')),
+    path('api/tprm/v1/audits/', include('tprm_backend.audits.urls')),
+    path('api/tprm/v1/notifications/', include('tprm_backend.notifications.urls')),
+    path('api/tprm/v1/quick-access/', include('tprm_backend.quick_access.urls')),
+    path('api/tprm/v1/compliance/', include('tprm_backend.compliance.urls')),
+    path('api/tprm/v1/bcpdrp/', include('tprm_backend.bcpdrp.urls')),
+    path('api/tprm/v1/risk-analysis/', include('tprm_backend.risk_analysis.urls')),
+    path('api/tprm/v1/contracts/', include('tprm_backend.contracts.urls')),
+    path('api/tprm/v1/audits-contract/', include('tprm_backend.audits_contract.urls')),
+    path('api/tprm/v1/contract-risk-analysis/', include('tprm_backend.contract_risk_analysis.urls')),
+    path('api/tprm/v1/rfp/', include('tprm_backend.rfp.urls')),
+    path('api/tprm/v1/rfp-approval/', include('tprm_backend.rfp_approval.urls')),
+    path('api/tprm/v1/rfp-risk-analysis/', include('tprm_backend.rfp_risk_analysis.urls')),
+    path('api/tprm/v1/global-search/', include('tprm_backend.global_search.urls')),
+    path('api/tprm/v1/ocr/', include('tprm_backend.ocr_app.urls')),
+    path('api/tprm/v1/rbac/', include('tprm_backend.rbac.tprm_urls')),
+    path('api/tprm/v1/admin-access/', include('tprm_backend.admin_access.urls')),
+    path('api/tprm/v1/auth/', include('tprm_backend.mfa_auth.urls')),
+    
+    # Vendor modules
+    path('api/tprm/v1/vendor-core/', include('tprm_backend.apps.vendor_core.urls')),
+    path('api/tprm/v1/vendor-auth/', include('tprm_backend.apps.vendor_auth.urls')),
+    path('api/tprm/v1/vendor-risk/', include('tprm_backend.apps.vendor_risk.urls')),
+    path('api/tprm/v1/vendor-questionnaire/', include('tprm_backend.apps.vendor_questionnaire.urls')),
+    path('api/tprm/v1/vendor-dashboard/', include('tprm_backend.apps.vendor_dashboard.urls')),
+    path('api/tprm/v1/vendor-lifecycle/', include('tprm_backend.apps.vendor_lifecycle.urls')),
+    path('api/tprm/v1/vendor-approval/', include('tprm_backend.apps.vendor_approval.urls')),
+    path('api/tprm/v1/risk-analysis-vendor/', include('tprm_backend.risk_analysis_vendor.urls')),
+    
     # Frontend v1 compatibility routes
+    path('api/v1/', include('tprm_backend.rfp.urls')),  # Frontend compatibility for /api/v1/ (includes KPI endpoints)
     path('api/v1/rfps/', include('tprm_backend.rfp.urls')),  # Frontend compatibility for /api/v1/rfps/
     path('api/v1/vendor-approval/', include('tprm_backend.apps.vendor_approval.urls')),  # Frontend compatibility for /api/v1/vendor-approval/
     path('api/v1/vendor-core/', include('tprm_backend.apps.vendor_core.urls')),  # Frontend compatibility for /api/v1/vendor-core/
     path('api/v1/vendor-questionnaire/', include('tprm_backend.apps.vendor_questionnaire.urls')),  # Frontend compatibility for /api/v1/vendor-questionnaire/
+    path('api/v1/vendor-lifecycle/', include('tprm_backend.apps.vendor_lifecycle.urls')),  # Frontend compatibility for /api/v1/vendor-lifecycle/
     # RFP responses endpoints for /api/v1/ compatibility
     path('api/v1/rfp-responses-detail/<int:response_id>/', rfp_response_views.get_rfp_response_by_id, name='get_rfp_response_by_id_v1'),
     path('api/v1/rfp-responses-list/', rfp_response_views.get_rfp_responses, name='get_rfp_responses_v1'),

@@ -569,30 +569,75 @@ export default {
         
         // Find the approval for this contract where user is the ASSIGNER (to approve/reject)
         const currentUser = store.getters['auth/currentUser']
-        const userId = currentUser?.userid || currentUser?.user_id || 1 // Fallback to 1 since we hardcoded it
+        // Check multiple possible field names for user ID
+        const userId = currentUser?.userid || currentUser?.user_id || currentUser?.UserId || currentUser?.id || 
+                      (currentUser?.user && (currentUser.user.userid || currentUser.user.user_id || currentUser.user.UserId || currentUser.user.id))
+        
+        console.log('Current user for approval:', {
+          currentUser,
+          userId,
+          contractId: contract.value?.contract_id
+        })
         
         if (userId) {
           // Get approvals where user is the ASSIGNER (they can approve/reject)
+          console.log('Fetching assigner approvals for userId:', userId)
           const reviewsResponse = await contractApprovalApi.getAssignerApprovals({ assigner_id: userId })
-          const contractApproval = reviewsResponse.data?.find(a => a.object_id == contract.value.contract_id)
+          
+          console.log('Assigner approvals response:', {
+            success: reviewsResponse.success,
+            dataLength: reviewsResponse.data?.length,
+            data: reviewsResponse.data,
+            pagination: reviewsResponse.pagination
+          })
+          
+          // Handle both array and paginated response formats
+          const approvalsList = Array.isArray(reviewsResponse.data) 
+            ? reviewsResponse.data 
+            : (reviewsResponse.data?.results || reviewsResponse.data || [])
+          
+          const contractApproval = approvalsList.find(a => 
+            a.object_id == contract.value.contract_id || 
+            a.object_id === contract.value.contract_id ||
+            String(a.object_id) === String(contract.value.contract_id)
+          )
           
           console.log('Looking for approval as ASSIGNER:', {
             userId,
             contractId: contract.value.contract_id,
-            approvals: reviewsResponse.data,
+            approvalsCount: approvalsList.length,
+            approvals: approvalsList,
             foundApproval: contractApproval
           })
           
           if (contractApproval) {
-            await contractApprovalApi.approveContract(contractApproval.approval_id)
-            PopupService.success('Contract approved successfully!', 'Approval Successful')
-            PopupService.onAction('ok', () => {
-              router.push('/my-contract-approvals')
-            })
+            console.log('Found approval, attempting to approve:', contractApproval.approval_id)
+            const approveResponse = await contractApprovalApi.approveContract(contractApproval.approval_id)
+            console.log('Approve response:', approveResponse)
+            
+            if (approveResponse.success) {
+              PopupService.success('Contract approved successfully!', 'Approval Successful')
+              PopupService.onAction('ok', () => {
+                router.push('/my-contract-approvals')
+              })
+            } else {
+              const errorMsg = approveResponse.error || approveResponse.message || 'Unknown error'
+              PopupService.error(`Failed to approve contract: ${errorMsg}`, 'Approval Failed')
+            }
           } else {
+            console.warn('No approval found for contract:', {
+              contractId: contract.value.contract_id,
+              userId,
+              availableApprovals: approvalsList.map(a => ({ 
+                approval_id: a.approval_id, 
+                object_id: a.object_id, 
+                assigner_id: a.assigner_id 
+              }))
+            })
             PopupService.warning('No approval found for this contract. You must be the assigner to approve/reject contracts.', 'Approval Not Found')
           }
         } else {
+          console.error('User ID not found in current user:', currentUser)
           PopupService.error('User ID not found. Please log in again.', 'Authentication Required')
         }
       } catch (err) {

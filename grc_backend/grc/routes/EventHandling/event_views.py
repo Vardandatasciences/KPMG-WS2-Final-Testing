@@ -32,6 +32,7 @@ from ...models import (
     SubPolicy, Users, EventType, Module, FileOperations
 )
 from ...routes.Global.s3_fucntions import create_direct_mysql_client
+from ...utils.file_compression import decompress_if_needed
 
 # MULTI-TENANCY: Import tenant utilities for data isolation
 from ...tenant_utils import (
@@ -796,6 +797,9 @@ def create_event(request):
     print(f"DEBUG: Request META: {request.META.get('HTTP_AUTHORIZATION', 'No auth header')}")
     
     try:
+        # MULTI-TENANCY: Extract tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        
         data = request.data
         
         # Get user ID from request (should be available from JWT middleware)
@@ -833,16 +837,25 @@ def create_event(request):
         owner_obj = None
         reviewer_obj = None
         
-        if data.get('owner_id'):
+        # If owner_id is provided, use it; otherwise default to the logged-in user
+        owner_id = data.get('owner_id')
+        if owner_id:
             try:
-                owner_obj = Users.objects.get(UserId=data.get('owner_id', tenant_id=tenant_id))
+                owner_obj = Users.objects.get(UserId=owner_id, tenant_id=tenant_id)
                 print(f"DEBUG: Found owner: {owner_obj.FirstName} {owner_obj.LastName}")
             except Users.DoesNotExist:
-                print(f"DEBUG: Owner with ID {data.get('owner_id')} not found")
+                print(f"DEBUG: Owner with ID {owner_id} not found")
+        else:
+            # Default to logged-in user if no owner is specified
+            try:
+                owner_obj = Users.objects.get(UserId=user_id, tenant_id=tenant_id)
+                print(f"DEBUG: Defaulting owner to logged-in user: {owner_obj.FirstName} {owner_obj.LastName}")
+            except Users.DoesNotExist:
+                print(f"DEBUG: Logged-in user with ID {user_id} not found")
         
         if data.get('reviewer_id'):
             try:
-                reviewer_obj = Users.objects.get(UserId=data.get('reviewer_id', tenant_id=tenant_id))
+                reviewer_obj = Users.objects.get(UserId=data.get('reviewer_id'), tenant_id=tenant_id)
                 print(f"DEBUG: Found reviewer: {reviewer_obj.FirstName} {reviewer_obj.LastName}")
             except Users.DoesNotExist:
                 print(f"DEBUG: Reviewer with ID {data.get('reviewer_id')} not found")
@@ -1868,6 +1881,9 @@ def get_current_user(request):
     Get current logged-in user information
     """
     try:
+        # MULTI-TENANCY: Extract tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        
         # Get user from JWT token (assuming it's available in request)
         user_id = request.GET.get('user_id')
         if not user_id:
@@ -1877,13 +1893,20 @@ def get_current_user(request):
             }, status=400)
         
         user = Users.objects.get(UserId=user_id, tenant_id=tenant_id)
+        
+        # Decrypt encrypted fields using _plain properties
+        firstname_plain = getattr(user, 'FirstName_plain', None) or getattr(user, 'FirstName', None)
+        lastname_plain = getattr(user, 'LastName_plain', None) or getattr(user, 'LastName', None)
+        email_plain = getattr(user, 'email_plain', None) or getattr(user, 'Email', None)
+        username_plain = getattr(user, 'UserName_plain', None) or getattr(user, 'UserName', None)
+        
         user_data = {
             'id': user.UserId,
-            'name': f"{user.FirstName} {user.LastName}".strip(),
-            'first_name': user.FirstName,
-            'last_name': user.LastName,
-            'email': user.Email,
-            'username': user.UserName
+            'name': f"{firstname_plain or ''} {lastname_plain or ''}".strip() or username_plain or 'User',
+            'first_name': firstname_plain,
+            'last_name': lastname_plain,
+            'email': email_plain,
+            'username': username_plain
         }
         
         return Response({
@@ -2179,6 +2202,9 @@ def get_users_for_reviewer(request):
     Get all users except the current user for reviewer selection
     """
     try:
+        # MULTI-TENANCY: Extract tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        
         current_user_id = request.GET.get('user_id')
         if not current_user_id:
             return Response({
@@ -2186,8 +2212,8 @@ def get_users_for_reviewer(request):
                 'message': 'User ID is required'
             }, status=400)
         
-        # Get all users except the current user
-        users = Users.objects.exclude(UserId=current_user_id).values(
+        # Get all users except the current user, filtered by tenant
+        users = Users.objects.filter(tenant_id=tenant_id).exclude(UserId=current_user_id).values(
             'UserId', 'FirstName', 'LastName', 'Email', 'UserName'
         )
         
@@ -2674,6 +2700,9 @@ def approve_event(request, event_id):
     Approve an event (reviewer action)
     """
     try:
+        # MULTI-TENANCY: Extract tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        
         data = request.data
         user_id = data.get('user_id') or request.GET.get('user_id')
         comments = data.get('comments', '')
@@ -2813,6 +2842,9 @@ def reject_event(request, event_id):
     Reject an event (reviewer action)
     """
     try:
+        # MULTI-TENANCY: Extract tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        
         data = request.data
         user_id = data.get('user_id') or request.GET.get('user_id')
         comments = data.get('comments', '')
@@ -3214,6 +3246,9 @@ def update_event(request, event_id):
 def archive_event(request, event_id):
     """Archive an event"""
     try:
+        # MULTI-TENANCY: Extract tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        
         data = request.data
         user_id = data.get('user_id')
         
@@ -3272,6 +3307,9 @@ def archive_event(request, event_id):
 def get_archived_events(request):
     """Get all archived events (excluding integration and Riskavaire events)"""
     try:
+        # MULTI-TENANCY: Extract tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        
         # Get archived events that are NOT from integrations or Riskavaire
         archived_events_query = Event.objects.filter(tenant_id=tenant_id, 
             Status='Archived'
@@ -3356,6 +3394,9 @@ def get_archived_events(request):
 def get_archived_queue_items(request):
     """Get archived queue items (integration and Riskavaire events)"""
     try:
+        # MULTI-TENANCY: Extract tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        
         # Get archived events that are from integrations or Riskavaire
         archived_queue_items = Event.objects.filter(tenant_id=tenant_id, 
             Status='Archived'
@@ -4295,11 +4336,21 @@ def s3_upload_file(request):
         import os
         
         try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.name)[1]) as temp_file:
+            file_ext = os.path.splitext(file.name)[1]
+            with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as temp_file:
                 for chunk in file.chunks():
                     temp_file.write(chunk)
                 temp_file_path = temp_file.name
             print(f"DEBUG: Temporary file created: {temp_file_path}")
+            
+            # Decompress if needed (client-side compression)
+            compression_metadata = None
+            temp_file_path, was_compressed, compression_stats = decompress_if_needed(temp_file_path)
+            if was_compressed:
+                compression_metadata = compression_stats
+                # Update file extension after decompression (remove .gz)
+                file_ext = os.path.splitext(temp_file_path)[1]
+                print(f"📦 Decompressed file: {compression_stats['ratio']}% reduction, saved {compression_stats['bandwidth_saved_kb']} KB")
         except Exception as e:
             print(f"DEBUG: Error creating temporary file: {str(e)}")
             return JsonResponse({

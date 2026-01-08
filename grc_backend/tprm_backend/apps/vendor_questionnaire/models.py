@@ -11,6 +11,12 @@ class Questionnaires(VendorBaseModel):
     
     # Use actual database column names (they match the user's schema!)
     questionnaire_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link questionnaire to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.DO_NOTHING, db_column='TenantId', 
+                               related_name='vendor_questionnaires', null=True, blank=True,
+                               help_text="Tenant this questionnaire belongs to")
+    
     questionnaire_name = models.CharField(max_length=255)
     questionnaire_type = models.CharField(
         max_length=11,
@@ -55,6 +61,12 @@ class QuestionnaireQuestions(VendorBaseModel):
     
     # Use actual database column names (they match the user's schema!)
     question_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link questionnaire question to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.DO_NOTHING, db_column='TenantId', 
+                               related_name='questionnaire_questions', null=True, blank=True,
+                               help_text="Tenant this questionnaire question belongs to")
+    
     questionnaire = models.ForeignKey(Questionnaires, models.CASCADE, related_name='questions')
     question_text = models.TextField()
     question_type = models.CharField(
@@ -92,6 +104,12 @@ class QuestionnaireResponses(VendorBaseModel):
     """Questionnaire responses mapping to existing questionnaire_responses table"""
     
     responseid = models.IntegerField(db_column='ResponseId', primary_key=True)
+    
+    # MULTI-TENANCY: Link questionnaire response to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.DO_NOTHING, db_column='TenantId', 
+                               related_name='questionnaire_responses', null=True, blank=True,
+                               help_text="Tenant this questionnaire response belongs to")
+    
     questionnaireid = models.ForeignKey(Questionnaires, models.DO_NOTHING, db_column='QuestionnaireId', blank=True, null=True)
     vendorid = models.IntegerField(db_column='VendorId', blank=True, null=True)  # Reference to vendor
     responses = models.JSONField(db_column='Responses', blank=True, null=True)
@@ -113,6 +131,12 @@ class QuestionnaireAssignments(VendorBaseModel):
     """Questionnaire assignments table for tracking vendor assignments"""
     
     assignment_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link questionnaire assignment to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='questionnaire_assignments', null=True, blank=True,
+                               help_text="Tenant this questionnaire assignment belongs to")
+    
     temp_vendor = models.ForeignKey(TempVendor, models.CASCADE, related_name='questionnaire_assignments')
     questionnaire = models.ForeignKey(Questionnaires, models.CASCADE, related_name='assignments')
     assigned_date = models.DateTimeField(auto_now_add=True)
@@ -180,6 +204,12 @@ class RFPResponses(VendorBaseModel):
     """RFP responses mapping to existing rfp_responses table"""
     
     response_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link RFP response to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.DO_NOTHING, db_column='TenantId', 
+                               related_name='vendor_rfp_responses', null=True, blank=True,
+                               help_text="Tenant this RFP response belongs to")
+    
     rfp_id = models.BigIntegerField()
     vendor_id = models.BigIntegerField()
     invitation_id = models.BigIntegerField(blank=True, null=True)

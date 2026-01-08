@@ -21,6 +21,25 @@ import csv
 # RBAC imports
 from tprm_backend.apps.vendor_core.vendor_authentication import JWTAuthentication, SimpleAuthenticatedPermission, VendorPermission
 
+# MULTI-TENANCY: Import tenant utilities for filtering
+from tprm_backend.core.tenant_utils import (
+    get_tenant_id_from_request,
+    filter_queryset_by_tenant,
+    get_tenant_aware_queryset,
+    require_tenant,
+    tenant_filter
+)
+
+# Database connection helper - Use tprm_integration database for all vendor operations
+def get_db_connection():
+    """
+    Get the correct database connection for tprm_integration database.
+    Returns 'tprm' connection if available, otherwise falls back to 'default'.
+    """
+    if 'tprm' in connections.databases:
+        return connections['tprm']
+    return connections['default']
+
 # Try to import openpyxl, but don't fail if it's not available
 try:
     import openpyxl
@@ -51,7 +70,9 @@ logger = logging.getLogger(__name__)
 
 
 class ScreeningMatchRateAPIView(APIView):
-    """API view for calculating vendor screening match rate with RBAC protection"""
+    """API view for calculating vendor screening match rate with RBAC protection
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
     authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
@@ -60,13 +81,20 @@ class ScreeningMatchRateAPIView(APIView):
         logger.info("ScreeningMatchRateAPIView.get called")
         
         try:
-            with connections['default'].cursor() as cursor:
+            # MULTI-TENANCY: Get tenant ID from request
+            tenant_id = get_tenant_id_from_request(request)
+            if not tenant_id:
+                return Response({'error': 'Tenant context not found'}, status=status.HTTP_403_FORBIDDEN)
+
+            with get_db_connection().cursor() as cursor:
                 # Step 1: Get total vendors count from temp_vendor table
-                cursor.execute("SELECT COUNT(*) AS total_vendors FROM temp_vendor")
+                # MULTI-TENANCY: Filter by tenant
+                cursor.execute("SELECT COUNT(*) AS total_vendors FROM temp_vendor WHERE TenantId = %s", [tenant_id])
                 total_vendors = cursor.fetchone()[0] or 0
                 logger.info(f"Total vendors: {total_vendors}")
                 
                 # Step 2: Get vendors with valid matches (excluding false positives and resolved matches)
+                # MULTI-TENANCY: Filter by tenant
                 cursor.execute("""
                     SELECT COUNT(DISTINCT v.id) AS matched_vendors
                     FROM temp_vendor v
@@ -74,7 +102,8 @@ class ScreeningMatchRateAPIView(APIView):
                     JOIN screening_matches sm ON esr.screening_id = sm.screening_id
                     WHERE sm.is_false_positive = 0
                       AND sm.resolution_status IN ('PENDING', 'ESCALATED', 'BLOCKED')
-                """)
+                      AND v.TenantId = %s
+                """, [tenant_id])
                 matched_vendors = cursor.fetchone()[0] or 0
                 logger.info(f"Matched vendors: {matched_vendors}")
                 
@@ -84,6 +113,7 @@ class ScreeningMatchRateAPIView(APIView):
                 logger.info(f"Match rate: {match_rate}%")
                 
                 # Step 4: Get breakdown by match type (since screening_type doesn't exist in screening_matches)
+                # MULTI-TENANCY: Filter by tenant
                 cursor.execute("""
                     SELECT 
                         sm.match_type,
@@ -94,9 +124,10 @@ class ScreeningMatchRateAPIView(APIView):
                     JOIN screening_matches sm ON esr.screening_id = sm.screening_id
                     WHERE sm.is_false_positive = 0
                       AND sm.resolution_status IN ('PENDING', 'ESCALATED', 'BLOCKED')
+                      AND v.TenantId = %s
                     GROUP BY sm.match_type
                     ORDER BY sm.match_type
-                """, [total_vendors])
+                """, [total_vendors, tenant_id])
                 
                 screening_breakdown = cursor.fetchall()
                 logger.info(f"Screening breakdown: {screening_breakdown}")
@@ -161,7 +192,9 @@ class ScreeningMatchRateAPIView(APIView):
 
 
 class QuestionnaireOverdueRateAPIView(APIView):
-    """API view for calculating questionnaire overdue rate with RBAC protection"""
+    """API view for calculating questionnaire overdue rate with RBAC protection
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
     authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
@@ -170,19 +203,33 @@ class QuestionnaireOverdueRateAPIView(APIView):
         logger.info("QuestionnaireOverdueRateAPIView.get called")
         
         try:
-            with connections['default'].cursor() as cursor:
+            # MULTI-TENANCY: Get tenant ID from request
+            tenant_id = get_tenant_id_from_request(request)
+            if not tenant_id:
+                return Response({'error': 'Tenant context not found'}, status=status.HTTP_403_FORBIDDEN)
+
+            with get_db_connection().cursor() as cursor:
                 # Step 1: Get total questionnaires count from questionnaire_assignments table
-                cursor.execute("SELECT COUNT(*) AS total_questionnaires FROM questionnaire_assignments")
+                # MULTI-TENANCY: Filter by tenant through temp_vendor
+                cursor.execute("""
+                    SELECT COUNT(*) AS total_questionnaires 
+                    FROM questionnaire_assignments qa
+                    JOIN temp_vendor tv ON qa.temp_vendor_id = tv.id
+                    WHERE tv.TenantId = %s
+                """, [tenant_id])
                 total_questionnaires = cursor.fetchone()[0] or 0
                 logger.info(f"Total questionnaires: {total_questionnaires}")
                 
                 # Step 2: Get overdue questionnaires count
+                # MULTI-TENANCY: Filter by tenant through temp_vendor
                 cursor.execute("""
                     SELECT COUNT(*) AS overdue_questionnaires
-                    FROM questionnaire_assignments
+                    FROM questionnaire_assignments qa
+                    JOIN temp_vendor tv ON qa.temp_vendor_id = tv.id
                     WHERE due_date < NOW()
                       AND (submission_date IS NULL OR submission_date > due_date)
-                """)
+                      AND tv.TenantId = %s
+                """, [tenant_id])
                 overdue_questionnaires = cursor.fetchone()[0] or 0
                 logger.info(f"Overdue questionnaires: {overdue_questionnaires}")
                 
@@ -193,11 +240,14 @@ class QuestionnaireOverdueRateAPIView(APIView):
                 
                 # Step 4: Get breakdown by overdue vs on-time questionnaires
                 # Get on-time questionnaires count
+                # MULTI-TENANCY: Filter by tenant through temp_vendor
                 cursor.execute("""
                     SELECT COUNT(*) AS ontime_questionnaires
-                    FROM questionnaire_assignments
+                    FROM questionnaire_assignments qa
+                    JOIN temp_vendor tv ON qa.temp_vendor_id = tv.id
                     WHERE NOT (due_date < NOW() AND (submission_date IS NULL OR submission_date > due_date))
-                """)
+                      AND tv.TenantId = %s
+                """, [tenant_id])
                 ontime_questionnaires = cursor.fetchone()[0] or 0
                 logger.info(f"On-time questionnaires: {ontime_questionnaires}")
                 
@@ -257,7 +307,9 @@ class QuestionnaireOverdueRateAPIView(APIView):
 
 
 class VendorsFlaggedOFACPEPAPIView(APIView):
-    """API view for calculating vendors flagged in OFAC/PEP lists with RBAC protection"""
+    """API view for calculating vendors flagged in OFAC/PEP lists with RBAC protection
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
     authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
@@ -266,14 +318,21 @@ class VendorsFlaggedOFACPEPAPIView(APIView):
         logger.info("VendorsFlaggedOFACPEPAPIView.get called")
         
         try:
-            with connections['default'].cursor() as cursor:
+            # MULTI-TENANCY: Get tenant ID from request
+            tenant_id = get_tenant_id_from_request(request)
+            if not tenant_id:
+                return Response({'error': 'Tenant context not found'}, status=status.HTTP_403_FORBIDDEN)
+
+            with get_db_connection().cursor() as cursor:
                 # Step 1: Get total vendors count from temp_vendor table
-                cursor.execute("SELECT COUNT(*) AS total_vendors FROM temp_vendor")
+                # MULTI-TENANCY: Filter by tenant
+                cursor.execute("SELECT COUNT(*) AS total_vendors FROM temp_vendor WHERE TenantId = %s", [tenant_id])
                 total_vendors = cursor.fetchone()[0] or 0
                 logger.info(f"Total vendors: {total_vendors}")
                 
                 # Step 2: Get vendors flagged in OFAC/PEP lists
                 # Join temp_vendor with external_screening_results and screening_matches
+                # MULTI-TENANCY: Filter by tenant
                 cursor.execute("""
                     SELECT COUNT(DISTINCT v.id) AS flagged_vendors
                     FROM temp_vendor v
@@ -282,11 +341,13 @@ class VendorsFlaggedOFACPEPAPIView(APIView):
                     WHERE sm.is_false_positive = 0
                       AND sm.resolution_status IN ('PENDING', 'ESCALATED', 'BLOCKED')
                       AND sm.match_type IN ('OFAC - sdn', 'PEP')
-                """)
+                      AND v.TenantId = %s
+                """, [tenant_id])
                 flagged_vendors = cursor.fetchone()[0] or 0
                 logger.info(f"Flagged vendors: {flagged_vendors}")
                 
                 # Step 3: Get breakdown by match type (OFAC vs PEP)
+                # MULTI-TENANCY: Filter by tenant
                 cursor.execute("""
                     SELECT 
                         sm.match_type,
@@ -297,14 +358,16 @@ class VendorsFlaggedOFACPEPAPIView(APIView):
                     WHERE sm.is_false_positive = 0
                       AND sm.resolution_status IN ('PENDING', 'ESCALATED', 'BLOCKED')
                       AND sm.match_type IN ('OFAC - sdn', 'PEP')
+                      AND v.TenantId = %s
                     GROUP BY sm.match_type
                     ORDER BY sm.match_type
-                """)
+                """, [tenant_id])
                 
                 match_breakdown = cursor.fetchall()
                 logger.info(f"Match breakdown: {match_breakdown}")
                 
                 # Step 4: Get detailed flagged vendors list for debugging
+                # MULTI-TENANCY: Filter by tenant
                 cursor.execute("""
                     SELECT 
                         v.id,
@@ -318,9 +381,10 @@ class VendorsFlaggedOFACPEPAPIView(APIView):
                     WHERE sm.is_false_positive = 0
                       AND sm.resolution_status IN ('PENDING', 'ESCALATED', 'BLOCKED')
                       AND sm.match_type IN ('OFAC - sdn', 'PEP')
+                      AND v.TenantId = %s
                     ORDER BY sm.match_score DESC
                     LIMIT 10
-                """)
+                """, [tenant_id])
                 
                 flagged_details = cursor.fetchall()
                 logger.info(f"Flagged details: {flagged_details}")
@@ -339,9 +403,10 @@ class VendorsFlaggedOFACPEPAPIView(APIView):
                     alert_message = f"{flagged_vendors} vendors flagged"
                 
                 # Step 7: Get historical data for line chart (last 12 months)
+                # MULTI-TENANCY: Filter by tenant
                 cursor.execute("""
                     SELECT 
-                        DATE_FORMAT(tv.created_at, '%Y-%m') AS month,
+                        DATE_FORMAT(tv.created_at, '%%Y-%%m') AS month,
                         COUNT(DISTINCT tv.id) AS flagged_vendors_count
                     FROM temp_vendor tv
                     JOIN external_screening_results esr ON tv.id = esr.vendor_id
@@ -350,9 +415,10 @@ class VendorsFlaggedOFACPEPAPIView(APIView):
                       AND sm.resolution_status IN ('PENDING', 'ESCALATED', 'BLOCKED')
                       AND sm.match_type IN ('OFAC - sdn', 'PEP')
                       AND tv.created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
-                    GROUP BY DATE_FORMAT(tv.created_at, '%Y-%m')
+                      AND tv.TenantId = %s
+                    GROUP BY DATE_FORMAT(tv.created_at, '%%Y-%%m')
                     ORDER BY month ASC
-                """)
+                """, [tenant_id])
                 historical_data = cursor.fetchall()
                 logger.info(f"Historical data: {len(historical_data)} months")
                 
@@ -446,7 +512,7 @@ class VendorAcceptanceTimeAPIView(APIView):
         logger.info("VendorAcceptanceTimeAPIView.get called")
         
         try:
-            with connections['default'].cursor() as cursor:
+            with get_db_connection().cursor() as cursor:
                 # Step 1: Get overall average acceptance time
                 cursor.execute("""
                     SELECT AVG(DATEDIFF(v.created_at, tv.created_at)) AS avg_acceptance_time
@@ -465,7 +531,7 @@ class VendorAcceptanceTimeAPIView(APIView):
                         v.vendor_id,
                         v.company_name,
                         DATEDIFF(v.created_at, tv.created_at) AS acceptance_days,
-                        DATE_FORMAT(v.created_at, '%Y-%m') AS approval_month
+                        DATE_FORMAT(v.created_at, '%%Y-%%m') AS approval_month
                     FROM vendors v
                     JOIN temp_vendor tv ON v.vendor_code = tv.vendor_code
                     WHERE v.status = 'APPROVED'
@@ -511,13 +577,13 @@ class VendorAcceptanceTimeAPIView(APIView):
                 # Step 4: Get monthly trend data (last 12 months)
                 cursor.execute("""
                     SELECT 
-                        DATE_FORMAT(v.created_at, '%Y-%m') AS month,
+                        DATE_FORMAT(v.created_at, '%%Y-%%m') AS month,
                         AVG(DATEDIFF(v.created_at, tv.created_at)) AS avg_acceptance_time
                     FROM vendors v
                     JOIN temp_vendor tv ON v.vendor_code = tv.vendor_code
                     WHERE v.status = 'APPROVED'
                       AND v.created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
-                    GROUP BY DATE_FORMAT(v.created_at, '%Y-%m')
+                    GROUP BY DATE_FORMAT(v.created_at, '%%Y-%%m')
                     ORDER BY month ASC
                 """)
                 monthly_trend = cursor.fetchall()
@@ -599,7 +665,9 @@ class VendorAcceptanceTimeAPIView(APIView):
 
 
 class DashboardMetricsAPIView(APIView):
-    """API view for dashboard metrics using temp_vendor table with RBAC protection"""
+    """API view for dashboard metrics using temp_vendor table with RBAC protection
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
     authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
@@ -608,15 +676,22 @@ class DashboardMetricsAPIView(APIView):
         logger.info("DashboardMetricsAPIView.get called")
         
         try:
+            # MULTI-TENANCY: Get tenant ID from request
+            tenant_id = get_tenant_id_from_request(request)
+            if not tenant_id:
+                return Response({'error': 'Tenant context not found'}, status=status.HTTP_403_FORBIDDEN)
+
             # Get metrics from temp_vendor table
-            total_vendors = TempVendor.objects.count()
-            high_risk_vendors = TempVendor.objects.filter(risk_level__icontains='HIGH').count()
-            critical_vendors = TempVendor.objects.filter(is_critical_vendor=True).count()
-            in_review = TempVendor.objects.filter(status__icontains='REVIEW').count()
-            approved = TempVendor.objects.filter(status__icontains='APPROVED').count()
+            # MULTI-TENANCY: Filter by tenant
+            total_vendors = TempVendor.objects.filter(tenant_id=tenant_id).count()
+            high_risk_vendors = TempVendor.objects.filter(tenant_id=tenant_id, risk_level__icontains='HIGH').count()
+            critical_vendors = TempVendor.objects.filter(tenant_id=tenant_id, is_critical_vendor=True).count()
+            in_review = TempVendor.objects.filter(tenant_id=tenant_id, status__icontains='REVIEW').count()
+            approved = TempVendor.objects.filter(tenant_id=tenant_id, status__icontains='APPROVED').count()
             
             # Get recent activity (5 most recently updated vendors)
-            recent_vendors = TempVendor.objects.order_by('-updated_at')[:5]
+            # MULTI-TENANCY: Filter by tenant
+            recent_vendors = TempVendor.objects.filter(tenant_id=tenant_id).order_by('-updated_at')[:5]
             recent_activity = []
             
             for vendor in recent_vendors:
@@ -639,8 +714,9 @@ class DashboardMetricsAPIView(APIView):
                 })
             
             # Calculate questionnaire completion rate
-            total_assignments = QuestionnaireAssignments.objects.count()
-            completed_assignments = QuestionnaireAssignments.objects.filter(status='RESPONDED').count()
+            # MULTI-TENANCY: Filter by tenant through temp_vendor
+            total_assignments = QuestionnaireAssignments.objects.filter(temp_vendor__tenant_id=tenant_id).count()
+            completed_assignments = QuestionnaireAssignments.objects.filter(temp_vendor__tenant_id=tenant_id, status='RESPONDED').count()
             questionnaire_completion = round((completed_assignments / total_assignments * 100), 2) if total_assignments > 0 else 0
             
             # Calculate average risk score (mock calculation)
@@ -653,7 +729,8 @@ class DashboardMetricsAPIView(APIView):
             
             total_risk_score = 0
             risk_count = 0
-            for vendor in TempVendor.objects.exclude(risk_level__isnull=True).exclude(risk_level=''):
+            # MULTI-TENANCY: Filter by tenant
+            for vendor in TempVendor.objects.filter(tenant_id=tenant_id).exclude(risk_level__isnull=True).exclude(risk_level=''):
                 risk_level = vendor.risk_level.upper()
                 if risk_level in risk_scores:
                     total_risk_score += risk_scores[risk_level]
@@ -703,7 +780,9 @@ class DashboardMetricsAPIView(APIView):
 
 
 class VendorAlertsAPIView(APIView):
-    """API view for vendor alerts and exceptions with RBAC protection"""
+    """API view for vendor alerts and exceptions with RBAC protection
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
     authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
@@ -712,10 +791,16 @@ class VendorAlertsAPIView(APIView):
         logger.info("VendorAlertsAPIView.get called")
         
         try:
-            with connections['default'].cursor() as cursor:
+            # MULTI-TENANCY: Get tenant ID from request
+            tenant_id = get_tenant_id_from_request(request)
+            if not tenant_id:
+                return Response({'error': 'Tenant context not found'}, status=status.HTTP_403_FORBIDDEN)
+
+            with get_db_connection().cursor() as cursor:
                 alerts = []
                 
                 # 1. Check for vendors flagged in OFAC list this week
+                # MULTI-TENANCY: Filter by tenant
                 cursor.execute("""
                     SELECT COUNT(DISTINCT v.id) AS flagged_count
                     FROM temp_vendor v
@@ -725,7 +810,8 @@ class VendorAlertsAPIView(APIView):
                       AND sm.resolution_status IN ('PENDING', 'ESCALATED', 'BLOCKED')
                       AND sm.match_type IN ('OFAC - sdn', 'PEP')
                       AND v.updated_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-                """)
+                      AND v.TenantId = %s
+                """, [tenant_id])
                 ofac_flagged = cursor.fetchone()[0] or 0
                 
                 if ofac_flagged > 0:
@@ -737,10 +823,12 @@ class VendorAlertsAPIView(APIView):
                     })
                 
                 # 2. Check high-risk vendor percentage
-                cursor.execute("SELECT COUNT(*) FROM temp_vendor")
+                # MULTI-TENANCY: Filter by tenant
+                cursor.execute("SELECT COUNT(*) FROM temp_vendor WHERE TenantId = %s", [tenant_id])
                 total_vendors = cursor.fetchone()[0] or 0
                 
-                cursor.execute("SELECT COUNT(*) FROM temp_vendor WHERE risk_level LIKE '%HIGH%'")
+                # MULTI-TENANCY: Filter by tenant
+                cursor.execute("SELECT COUNT(*) FROM temp_vendor WHERE risk_level LIKE '%%HIGH%%' AND TenantId = %s", [tenant_id])
                 high_risk_vendors = cursor.fetchone()[0] or 0
                 
                 if total_vendors > 0:
@@ -754,10 +842,20 @@ class VendorAlertsAPIView(APIView):
                         })
                 
                 # 3. Check questionnaire completion rate
-                cursor.execute("SELECT COUNT(*) FROM questionnaire_assignments")
+                # MULTI-TENANCY: Filter by tenant through temp_vendor
+                cursor.execute("""
+                    SELECT COUNT(*) FROM questionnaire_assignments qa
+                    JOIN temp_vendor tv ON qa.temp_vendor_id = tv.id
+                    WHERE tv.TenantId = %s
+                """, [tenant_id])
                 total_assignments = cursor.fetchone()[0] or 0
                 
-                cursor.execute("SELECT COUNT(*) FROM questionnaire_assignments WHERE status = 'RESPONDED'")
+                # MULTI-TENANCY: Filter by tenant through temp_vendor
+                cursor.execute("""
+                    SELECT COUNT(*) FROM questionnaire_assignments qa
+                    JOIN temp_vendor tv ON qa.temp_vendor_id = tv.id
+                    WHERE qa.status = 'RESPONDED' AND tv.TenantId = %s
+                """, [tenant_id])
                 completed_assignments = cursor.fetchone()[0] or 0
                 
                 if total_assignments > 0:
@@ -771,10 +869,13 @@ class VendorAlertsAPIView(APIView):
                         })
                 
                 # 4. Check for overdue questionnaires
+                # MULTI-TENANCY: Filter by tenant through temp_vendor
                 cursor.execute("""
-                    SELECT COUNT(*) FROM questionnaire_assignments
-                    WHERE due_date < NOW() AND (submission_date IS NULL OR submission_date > due_date)
-                """)
+                    SELECT COUNT(*) FROM questionnaire_assignments qa
+                    JOIN temp_vendor tv ON qa.temp_vendor_id = tv.id
+                    WHERE qa.due_date < NOW() AND (qa.submission_date IS NULL OR qa.submission_date > qa.due_date)
+                      AND tv.TenantId = %s
+                """, [tenant_id])
                 overdue_questionnaires = cursor.fetchone()[0] or 0
                 
                 if overdue_questionnaires > 0:
@@ -816,7 +917,7 @@ class VendorRegistrationCompletionRateAPIView(APIView):
         logger.info("VendorRegistrationCompletionRateAPIView.get called")
         
         try:
-            with connections['default'].cursor() as cursor:
+            with get_db_connection().cursor() as cursor:
                 # Step 1: Get total award notifications
                 cursor.execute("SELECT COUNT(*) AS total_notifications FROM rfp_award_notifications")
                 total_notifications = cursor.fetchone()[0] or 0
@@ -928,7 +1029,7 @@ class VendorRegistrationTimeAPIView(APIView):
         logger.info("VendorRegistrationTimeAPIView.get called")
         
         try:
-            with connections['default'].cursor() as cursor:
+            with get_db_connection().cursor() as cursor:
                 # Step 1: Get average registration time (response_date to created_at)
                 cursor.execute("""
                     SELECT AVG(DATEDIFF(tv.created_at, ran.response_date)) AS avg_registration_time
@@ -1131,7 +1232,9 @@ class VendorRegistrationTimeAPIView(APIView):
 
 
 class VendorKPICategoriesAPIView(APIView):
-    """API view for KPI categories overview with RBAC protection"""
+    """API view for KPI categories overview with RBAC protection
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
     authentication_classes = [JWTAuthentication]
     permission_classes = [VendorPermission]
     
@@ -1140,11 +1243,17 @@ class VendorKPICategoriesAPIView(APIView):
         logger.info("VendorKPICategoriesAPIView.get called")
         
         try:
+            # MULTI-TENANCY: Get tenant ID from request
+            tenant_id = get_tenant_id_from_request(request)
+            if not tenant_id:
+                return Response({'error': 'Tenant context not found'}, status=status.HTTP_403_FORBIDDEN)
+
             categories = []
             
             # 1. Initial Validation KPIs - Use Django ORM with TempVendor model
-            total_validated = TempVendor.objects.filter(status__in=['APPROVED', 'PENDING_REVIEW']).count()
-            approved_vendors = TempVendor.objects.filter(status='APPROVED').count()
+            # MULTI-TENANCY: Filter by tenant
+            total_validated = TempVendor.objects.filter(tenant_id=tenant_id, status__in=['APPROVED', 'PENDING_REVIEW']).count()
+            approved_vendors = TempVendor.objects.filter(tenant_id=tenant_id, status='APPROVED').count()
             
             validation_score = round((approved_vendors / total_validated * 100), 1) if total_validated > 0 else 0
             
@@ -1159,8 +1268,9 @@ class VendorKPICategoriesAPIView(APIView):
             })
             
             # 2. Due Diligence KPIs - Use Django ORM with QuestionnaireAssignments model
-            total_questionnaires = QuestionnaireAssignments.objects.count()
-            completed_questionnaires = QuestionnaireAssignments.objects.filter(status='RESPONDED').count()
+            # MULTI-TENANCY: Filter by tenant through temp_vendor
+            total_questionnaires = QuestionnaireAssignments.objects.filter(temp_vendor__tenant_id=tenant_id).count()
+            completed_questionnaires = QuestionnaireAssignments.objects.filter(temp_vendor__tenant_id=tenant_id, status='RESPONDED').count()
             
             due_diligence_score = round((completed_questionnaires / total_questionnaires * 100), 1) if total_questionnaires > 0 else 0
             
@@ -1175,8 +1285,9 @@ class VendorKPICategoriesAPIView(APIView):
             })
             
             # 3. Risk Scoring KPIs - Use Django ORM with TempVendor model
-            total_risk_assessed = TempVendor.objects.exclude(risk_level__isnull=True).exclude(risk_level='').count()
-            low_medium_risk = TempVendor.objects.filter(risk_level__in=['LOW', 'MEDIUM']).count()
+            # MULTI-TENANCY: Filter by tenant
+            total_risk_assessed = TempVendor.objects.filter(tenant_id=tenant_id).exclude(risk_level__isnull=True).exclude(risk_level='').count()
+            low_medium_risk = TempVendor.objects.filter(tenant_id=tenant_id, risk_level__in=['LOW', 'MEDIUM']).count()
             
             risk_scoring_score = round((low_medium_risk / total_risk_assessed * 100), 1) if total_risk_assessed > 0 else 0
             
@@ -1191,7 +1302,9 @@ class VendorKPICategoriesAPIView(APIView):
             })
             
             # 4. External Verification KPIs - Use Django ORM (vendor_id is not a ForeignKey, so use filter)
-            vendor_ids_with_screening = ExternalScreeningResult.objects.values_list('vendor_id', flat=True).distinct()
+            # MULTI-TENANCY: Filter by tenant through temp_vendor
+            tenant_vendor_ids = TempVendor.objects.filter(tenant_id=tenant_id).values_list('id', flat=True)
+            vendor_ids_with_screening = ExternalScreeningResult.objects.filter(vendor_id__in=tenant_vendor_ids).values_list('vendor_id', flat=True).distinct()
             total_screened = len(vendor_ids_with_screening)
             
             # Get flagged vendors: those with screening matches that are not false positives and have pending/escalated/blocked status
@@ -1200,8 +1313,10 @@ class VendorKPICategoriesAPIView(APIView):
                 resolution_status__in=['PENDING', 'ESCALATED', 'BLOCKED']
             ).values_list('screening_id', flat=True).distinct()
             
+            # MULTI-TENANCY: Filter by tenant through temp_vendor
             flagged_vendor_ids = ExternalScreeningResult.objects.filter(
-                screening_id__in=flagged_screening_ids
+                screening_id__in=flagged_screening_ids,
+                vendor_id__in=tenant_vendor_ids
             ).values_list('vendor_id', flat=True).distinct()
             
             flagged_vendors = len(flagged_vendor_ids)

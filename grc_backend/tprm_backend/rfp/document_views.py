@@ -7,18 +7,34 @@ from .models import RFP
 from .document_generator import generate_rfp_document
 from .rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required
+
+# MULTI-TENANCY: Import tenant utilities for filtering
+from tprm_backend.core.tenant_utils import (
+    get_tenant_id_from_request,
+    require_tenant,
+    tenant_filter
+)
 import json
 
 
+@api_view(['GET'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def generate_rfp_word_document(request, rfp_id):
     """
     Generate and download RFP as Word document
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return HttpResponse('Tenant context not found', status=403)
+    
     try:
-        rfp = get_object_or_404(RFP, rfp_id=rfp_id)
+        # MULTI-TENANCY: Filter by tenant
+        rfp = get_object_or_404(RFP, rfp_id=rfp_id, tenant_id=tenant_id)
         
         # Convert RFP model to dictionary
         rfp_data = {
@@ -81,15 +97,37 @@ def generate_rfp_word_document(request, rfp_id):
         )
 
 
+@api_view(['GET'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def generate_rfp_pdf_document(request, rfp_id):
     """
     Generate and download RFP as PDF document
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    print(f"[PDF_DOWNLOAD] Request received for RFP ID: {rfp_id}")
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        print(f"[PDF_DOWNLOAD] No tenant ID found")
+        return HttpResponse('Tenant context not found', status=403)
+    
+    print(f"[PDF_DOWNLOAD] Tenant ID: {tenant_id}, RFP ID: {rfp_id}")
+    
     try:
-        rfp = get_object_or_404(RFP, rfp_id=rfp_id)
+        # MULTI-TENANCY: Filter by tenant
+        try:
+            rfp = RFP.objects.get(rfp_id=rfp_id, tenant_id=tenant_id)
+            print(f"[PDF_DOWNLOAD] RFP found: {rfp.rfp_number}")
+        except RFP.DoesNotExist:
+            print(f"[PDF_DOWNLOAD] RFP {rfp_id} not found for tenant {tenant_id}")
+            return HttpResponse(
+                f'RFP {rfp_id} not found for your tenant',
+                status=404,
+                content_type='text/plain'
+            )
         
         # Convert RFP model to dictionary
         rfp_data = {
@@ -145,6 +183,10 @@ def generate_rfp_pdf_document(request, rfp_id):
         return generate_rfp_document(rfp_data, 'pdf')
         
     except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"[PDF_DOWNLOAD] Error: {str(e)}")
+        print(f"[PDF_DOWNLOAD] Traceback: {error_trace}")
         return HttpResponse(
             f'Failed to generate PDF document: {str(e)}',
             status=500,
@@ -156,10 +198,17 @@ def generate_rfp_pdf_document(request, rfp_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('create_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def generate_document_from_data(request):
     """
     Generate document from provided RFP data (for preview before saving)
+    MULTI-TENANCY: Ensures tenant context is present
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
         print(f"Document generation request received: {request.method}")
         print(f"Request data keys: {list(request.data.keys())}")
@@ -195,12 +244,20 @@ def generate_document_from_data(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def preview_rfp_document(request, rfp_id):
     """
     Preview RFP document in browser (PDF only)
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
+    tenant_id = get_tenant_id_from_request(request)
+    if not tenant_id:
+        return Response({'error': 'Tenant context not found'}, status=403)
+    
     try:
-        rfp = get_object_or_404(RFP, rfp_id=rfp_id)
+        # MULTI-TENANCY: Filter by tenant
+        rfp = get_object_or_404(RFP, rfp_id=rfp_id, tenant_id=tenant_id)
         
         # Convert RFP model to dictionary
         rfp_data = {

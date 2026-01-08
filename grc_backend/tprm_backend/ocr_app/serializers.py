@@ -1,8 +1,9 @@
 from rest_framework import serializers
+from tprm_backend.utils.base_serializer import AutoDecryptingModelSerializer
 from .models import Document, OcrResult, ExtractedData
 
 
-class DocumentSerializer(serializers.ModelSerializer):
+class DocumentSerializer(AutoDecryptingModelSerializer):
     """Serializer for Document model"""
     
     class Meta:
@@ -16,7 +17,7 @@ class DocumentSerializer(serializers.ModelSerializer):
         read_only_fields = ['DocumentId', 'CreatedAt', 'UpdatedAt']
 
 
-class OcrResultSerializer(serializers.ModelSerializer):
+class OcrResultSerializer(AutoDecryptingModelSerializer):
     """Serializer for OcrResult model"""
     
     class Meta:
@@ -28,7 +29,7 @@ class OcrResultSerializer(serializers.ModelSerializer):
         read_only_fields = ['OcrResultId', 'CreatedAt']
 
 
-class ExtractedDataSerializer(serializers.ModelSerializer):
+class ExtractedDataSerializer(AutoDecryptingModelSerializer):
     """Serializer for ExtractedData model"""
     
     class Meta:

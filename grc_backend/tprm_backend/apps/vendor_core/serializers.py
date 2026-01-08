@@ -3,6 +3,7 @@ Vendor Core Serializers - DRF serializers for vendor models
 """
 
 from rest_framework import serializers
+from tprm_backend.utils.base_serializer import AutoDecryptingModelSerializer
 from .models import (
     VendorCategories, Vendors, VendorContacts, 
     VendorDocuments, VendorLifecycleStages, Users, TempVendor,
@@ -10,7 +11,7 @@ from .models import (
 )
 
 
-class VendorCategoriesSerializer(serializers.ModelSerializer):
+class VendorCategoriesSerializer(AutoDecryptingModelSerializer):
     """Serializer for vendor categories with vendor_ prefix"""
     
     class Meta:
@@ -35,7 +36,7 @@ class VendorCategoriesSerializer(serializers.ModelSerializer):
         return value
 
 
-class VendorLifecycleStagesSerializer(serializers.ModelSerializer):
+class VendorLifecycleStagesSerializer(AutoDecryptingModelSerializer):
     """Serializer for vendor lifecycle stages with vendor_ prefix"""
     
     class Meta:
@@ -48,7 +49,7 @@ class VendorLifecycleStagesSerializer(serializers.ModelSerializer):
         read_only_fields = ['stage_id', 'created_at']
 
 
-class VendorsSerializer(serializers.ModelSerializer):
+class VendorsSerializer(AutoDecryptingModelSerializer):
     """Serializer for vendors with vendor_ prefix"""
     
     vendor_category_name = serializers.CharField(
@@ -103,7 +104,7 @@ class VendorsSerializer(serializers.ModelSerializer):
         return value
 
 
-class VendorContactsSerializer(serializers.ModelSerializer):
+class VendorContactsSerializer(AutoDecryptingModelSerializer):
     """Serializer for vendor contacts with vendor_ prefix"""
     
     vendor_company_name = serializers.CharField(
@@ -152,7 +153,7 @@ class VendorContactsSerializer(serializers.ModelSerializer):
         return value.strip()
 
 
-class VendorDocumentsSerializer(serializers.ModelSerializer):
+class VendorDocumentsSerializer(AutoDecryptingModelSerializer):
     """Serializer for vendor documents with vendor_ prefix"""
     
     vendor_company_name = serializers.CharField(
@@ -201,7 +202,7 @@ class VendorDocumentsSerializer(serializers.ModelSerializer):
         return value
 
 
-class UsersSerializer(serializers.ModelSerializer):
+class UsersSerializer(AutoDecryptingModelSerializer):
     """Serializer for users with vendor_ prefix"""
     
     class Meta:
@@ -227,10 +228,8 @@ class UsersSerializer(serializers.ModelSerializer):
         return value
 
 
-class TempVendorSerializer(serializers.ModelSerializer):
+class TempVendorSerializer(AutoDecryptingModelSerializer):
     """Serializer for temporary vendor registration with vendor_ prefix"""
-    
-    data_inventory = serializers.JSONField(required=False, allow_null=True)
     
     class Meta:
         model = TempVendor
@@ -240,16 +239,10 @@ class TempVendorSerializer(serializers.ModelSerializer):
             'industry_sector', 'website', 'annual_revenue', 'employee_count', 
             'headquarters_address', 'vendor_category', 'risk_level', 'status', 
             'is_critical_vendor', 'has_data_access', 'has_system_access', 
-            'description', 'contacts', 'documents', 'data_inventory', 'created_at', 'updated_at', 
+            'description', 'contacts', 'documents', 'created_at', 'updated_at', 
             'response_id'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
-    
-    def validate_data_inventory(self, value):
-        """Ensure data_inventory is always a dictionary"""
-        if not isinstance(value, dict):
-            return {}
-        return value
     
     def vendor_validate_company_name(self, value):
         """Validate company name with vendor_ prefix"""
@@ -340,7 +333,7 @@ class TempVendorSerializer(serializers.ModelSerializer):
     
 
 
-class ScreeningMatchSerializer(serializers.ModelSerializer):
+class ScreeningMatchSerializer(AutoDecryptingModelSerializer):
     """Serializer for screening matches"""
     
     class Meta:
@@ -353,7 +346,7 @@ class ScreeningMatchSerializer(serializers.ModelSerializer):
         read_only_fields = ['match_id']
 
 
-class ExternalScreeningResultSerializer(serializers.ModelSerializer):
+class ExternalScreeningResultSerializer(AutoDecryptingModelSerializer):
     """Serializer for external screening results"""
     
     vendor = TempVendorSerializer(read_only=True)
@@ -394,7 +387,7 @@ class MatchUpdateSerializer(serializers.Serializer):
     notes = serializers.CharField(required=False, allow_blank=True)
 
 
-class S3FilesSerializer(serializers.ModelSerializer):
+class S3FilesSerializer(AutoDecryptingModelSerializer):
     """Serializer for S3 files with vendor_ prefix"""
     
     class Meta:
@@ -424,7 +417,7 @@ class S3FilesSerializer(serializers.ModelSerializer):
         return value.strip()
 
 
-class DocumentUploadSerializer(serializers.Serializer):
+class DocumentUploadSerializer(AutoDecryptingModelSerializer):
     """Serializer for document upload requests"""
     
     file = serializers.FileField()

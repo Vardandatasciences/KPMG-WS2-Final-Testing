@@ -2,11 +2,12 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
 import uuid
+from tprm_backend.utils.encrypted_fields_mixin import TPRMEncryptedFieldsMixin
 
 # Removed TPRMModule and ModuleData models - using entity-data-row approach
 
 
-class Risk(models.Model):
+class Risk(TPRMEncryptedFieldsMixin, models.Model):
     """Risk prediction model"""
     PRIORITY_CHOICES = [
         ('Critical', 'Critical'),
@@ -32,6 +33,12 @@ class Risk(models.Model):
     ]
     
     id = models.CharField(max_length=20, primary_key=True, help_text="Risk ID format: R-XXXX")
+    
+    # MULTI-TENANCY: Link risk to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='risks', null=True, blank=True,
+                               help_text="Tenant this risk belongs to")
+    
     title = models.CharField(max_length=255)
     description = models.TextField()
     # Removed module_id - using entity-data-row approach

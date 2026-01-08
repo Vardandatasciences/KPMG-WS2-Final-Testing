@@ -44,6 +44,15 @@ from django.db import transaction
 from tprm_backend.rbac.tprm_decorators import rbac_vendor_required
 from tprm_backend.apps.vendor_core.vendor_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 
+# MULTI-TENANCY: Import tenant utilities for filtering
+from tprm_backend.core.tenant_utils import (
+    get_tenant_id_from_request,
+    filter_queryset_by_tenant,
+    get_tenant_aware_queryset,
+    require_tenant,
+    tenant_filter
+)
+
 
 
 def compute_exponent_normalized_weights(raw_values, target_sum=10.0, max_iterations=40):
@@ -591,13 +600,25 @@ def standardize_response_data(response_data, stage_status, decision='', comments
 
 def create_approval_version(approval_id, version_type, version_label, json_payload, changes_summary, 
 
-                          created_by, created_by_name, created_by_role, change_reason=''):
+                          created_by, created_by_name, created_by_role, change_reason='', db_connection='tprm'):
 
-    """Helper function to create a new version with proper version numbering"""
+    """Helper function to create a new version with proper version numbering
+    
+    Args:
+        db_connection: Database connection to use ('tprm' or 'default'). Defaults to 'tprm'.
+    """
 
     try:
+        # Use tprm database connection by default, fallback to default if tprm doesn't exist
+        try:
+            if db_connection not in connections.databases:
+                print(f"Warning: '{db_connection}' database connection not found, falling back to 'default'")
+                db_connection = 'default'
+        except Exception as db_check_error:
+            print(f"Warning: Error checking database connections: {db_check_error}, using 'default'")
+            db_connection = 'default'
 
-        with connections['default'].cursor() as cursor:
+        with connections[db_connection].cursor() as cursor:
 
             # Get the maximum version number to ensure proper incrementation
 
@@ -703,7 +724,7 @@ def create_approval_version(approval_id, version_type, version_label, json_paylo
 
             
             # CRITICAL: Commit the transaction to persist the version changes
-            connections['default'].commit()
+            connections[db_connection].commit()
             
             print(f"✓ Version created and committed: {version_id} (v{next_version_number})")
             print(f"  - Approval ID: {approval_id}")
@@ -745,8 +766,12 @@ def check_sequential_approval_ready(approval_id, stage_order):
     """Check if the current stage can be processed based on sequential approval logic"""
 
     try:
+        # Use tprm database connection for vendor approval queries
+        db_connection = 'tprm'
+        if 'tprm' not in connections.databases:
+            db_connection = 'default'
 
-        with connections['default'].cursor() as cursor:
+        with connections[db_connection].cursor() as cursor:
 
             # Get workflow type
 
@@ -804,11 +829,12 @@ def check_sequential_approval_ready(approval_id, stage_order):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_my_approvals(request):
 
     """Return approvals assigned to a given user, grouped by stage_type.
-
-
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
 
     Query params:
 
@@ -819,6 +845,9 @@ def get_my_approvals(request):
     """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         user_id = request.query_params.get('user_id')
 
@@ -840,139 +869,181 @@ def get_my_approvals(request):
 
             include_statuses = [s.strip().upper() for s in include_status_param.split(',') if s.strip()]
 
+        # Use tprm database connection for vendor approval queries
+        import logging
+        from django.db import connections as db_connections
+        logger = logging.getLogger(__name__)
+        
+        # Use tprm connection if available, otherwise fall back to default
+        if 'tprm' in db_connections.databases:
+            db_connection = db_connections['tprm']
+            db_name = db_connection.settings_dict.get('NAME', 'tprm_integration')
+            logger.info(f"[My Approvals] Using tprm database connection: {db_name} for user_id: {user_id}")
+        else:
+            db_connection = db_connections['default']
+            db_name = db_connection.settings_dict.get('NAME', '')
+            logger.warning(f"[My Approvals] tprm connection not found, using default: {db_name}")
 
+        # Initialize rows variable before try block
+        rows = []
+        
+        try:
+            with db_connection.cursor() as cursor:
 
-        with connections['default'].cursor() as cursor:
+                if include_statuses:
 
-            if include_statuses:
+                    cursor.execute(
 
-                cursor.execute(
+                        """
 
-                    """
+                        SELECT 
 
-                    SELECT 
+                            ar.approval_id,
 
-                        ar.approval_id,
+                            ar.workflow_id,
 
-                        ar.workflow_id,
+                            ar.request_title,
 
-                        ar.request_title,
+                            ar.request_description,
 
-                        ar.request_description,
+                            ar.requester_id,
 
-                        ar.requester_id,
+                            ar.requester_department,
 
-                        ar.requester_department,
+                            ar.priority,
 
-                        ar.priority,
+                            ar.overall_status,
 
-                        ar.overall_status,
+                            ar.submission_date,
 
-                        ar.submission_date,
+                            ar.created_at,
 
-                        ar.created_at,
+                            ar.updated_at,
 
-                        ar.updated_at,
+                            ast.stage_id,
 
-                        ast.stage_id,
+                            ast.stage_order,
 
-                        ast.stage_order,
+                            ast.stage_name,
 
-                        ast.stage_name,
+                            ast.stage_type,
 
-                        ast.stage_type,
+                            ast.stage_status,
 
-                        ast.stage_status,
+                            ast.deadline_date
 
-                        ast.deadline_date
+                        FROM approval_stages ast
 
-                    FROM approval_stages ast
+                        JOIN approval_requests ar ON ar.approval_id = ast.approval_id
+                        
+                        JOIN approval_workflows aw ON ar.workflow_id = aw.workflow_id
+                        
+                        LEFT JOIN temp_vendor tv ON JSON_EXTRACT(ar.request_data, '$.vendor_id') = tv.id
 
-                    JOIN approval_requests ar ON ar.approval_id = ast.approval_id
-                    
-                    JOIN approval_workflows aw ON ar.workflow_id = aw.workflow_id
+                        WHERE ast.assigned_user_id = %s
 
-                    WHERE ast.assigned_user_id = %s
+                          AND UPPER(ast.stage_status) IN ({statuses})
 
-                      AND UPPER(ast.stage_status) IN ({statuses})
+                          AND aw.business_object_type = 'Vendor'
+                          
+                          AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
-                      AND aw.business_object_type = 'Vendor'
+                        ORDER BY ast.stage_type, ast.stage_order, ar.created_at DESC
 
-                    ORDER BY ast.stage_type, ast.stage_order, ar.created_at DESC
+                        """.format(statuses=','.join(['%s'] * len(include_statuses))),
 
-                    """.format(statuses=','.join(['%s'] * len(include_statuses))),
+                        [int(user_id), *include_statuses, tenant_id]
 
-                    [int(user_id), *include_statuses]
+                    )
 
-                )
+                else:
 
-            else:
+                    cursor.execute(
 
-                cursor.execute(
+                        """
 
-                    """
+                        SELECT 
 
-                    SELECT 
+                            ar.approval_id,
 
-                        ar.approval_id,
+                            ar.workflow_id,
 
-                        ar.workflow_id,
+                            ar.request_title,
 
-                        ar.request_title,
+                            ar.request_description,
 
-                        ar.request_description,
+                            ar.requester_id,
 
-                        ar.requester_id,
+                            ar.requester_department,
 
-                        ar.requester_department,
+                            ar.priority,
 
-                        ar.priority,
+                            ar.overall_status,
 
-                        ar.overall_status,
+                            ar.submission_date,
 
-                        ar.submission_date,
+                            ar.created_at,
 
-                        ar.created_at,
+                            ar.updated_at,
 
-                        ar.updated_at,
+                            ast.stage_id,
 
-                        ast.stage_id,
+                            ast.stage_order,
 
-                        ast.stage_order,
+                            ast.stage_name,
 
-                        ast.stage_name,
+                            ast.stage_type,
 
-                        ast.stage_type,
+                            ast.stage_status,
 
-                        ast.stage_status,
+                            ast.deadline_date
 
-                        ast.deadline_date
+                        FROM approval_stages ast
 
-                    FROM approval_stages ast
+                        JOIN approval_requests ar ON ar.approval_id = ast.approval_id
 
-                    JOIN approval_requests ar ON ar.approval_id = ast.approval_id
+                        JOIN approval_workflows aw ON ar.workflow_id = aw.workflow_id
+                        
+                        LEFT JOIN temp_vendor tv ON JSON_EXTRACT(ar.request_data, '$.vendor_id') = tv.id
 
-                    JOIN approval_workflows aw ON ar.workflow_id = aw.workflow_id
+                        WHERE ast.assigned_user_id = %s
 
-                    WHERE ast.assigned_user_id = %s
+                        AND aw.business_object_type = 'Vendor'
+                        
+                        AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
-                    AND aw.business_object_type = 'Vendor'
+                        ORDER BY ast.stage_type, ast.stage_order, ar.created_at DESC
 
-                    ORDER BY ast.stage_type, ast.stage_order, ar.created_at DESC
+                        """,
 
-                    """,
+                        [int(user_id), tenant_id]
 
-                    [int(user_id)]
+                    )
 
-                )
 
 
+                columns = [col[0] for col in cursor.description]
 
-            columns = [col[0] for col in cursor.description]
-
-            rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
-
-
+                rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+        except Exception as db_error:
+            error_msg = str(db_error)
+            logger.error(f"[My Approvals] Database error: {error_msg}")
+            
+            # Check if it's a table not found error for temp_vendor
+            if "temp_vendor" in error_msg.lower() and ("doesn't exist" in error_msg.lower() or "does not exist" in error_msg.lower()):
+                logger.error(f"[My Approvals] ERROR: temp_vendor table not found in database '{db_name}'. "
+                           f"Expected database: 'tprm_integration'. "
+                           f"Please ensure the DATABASES['default']['NAME'] is set to 'tprm_integration'.")
+                return Response({
+                    'error': f'temp_vendor table not found in database. Expected database: tprm_integration, but using: {db_name}',
+                    'message': 'Database configuration error. Please check that DB_NAME environment variable is set to tprm_integration.',
+                    'database_used': db_name,
+                    'database_expected': 'tprm_integration'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            # Re-raise other database errors
+            raise
 
         parallel = []
 
@@ -1062,19 +1133,31 @@ def get_my_approvals(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_stage_reviewers(request):
 
     """Return distinct reviewers present in approval_stages for dropdowns.
-
-
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
 
     Returns id (assigned_user_id) and name (assigned_user_name). Filters out NULL/empty.
 
     """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
-        with connections['default'].cursor() as cursor:
+        # Use tprm database connection where temp_vendor table exists
+        db_connection = 'tprm'
+        try:
+            if 'tprm' not in connections.databases:
+                db_connection = 'default'
+        except Exception as db_check_error:
+            print(f"Warning: Error checking database connections: {db_check_error}, using 'tprm' connection")
+
+        with connections[db_connection].cursor() as cursor:
 
             cursor.execute(
 
@@ -1087,16 +1170,22 @@ def get_stage_reviewers(request):
                 JOIN approval_requests a ON s.approval_id = a.approval_id
 
                 JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+                
+                LEFT JOIN temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
 
                 WHERE s.assigned_user_id IS NOT NULL
 
                   AND CAST(s.assigned_user_id AS CHAR) <> ''
 
                   AND w.business_object_type = 'Vendor'
+                  
+                  AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
                 ORDER BY name
 
-                """
+                """,
+                
+                [tenant_id]
 
             )
 
@@ -1126,88 +1215,134 @@ def get_stage_reviewers(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_user_assigned_stages(request, user_id):
 
-    """Return all stages assigned to the given user with request/workflow info."""
+    """Return all stages assigned to the given user with request/workflow info.
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
-        with connections['default'].cursor() as cursor:
+        # Use tprm database connection for vendor approval queries
+        import logging
+        from django.db import connections as db_connections
+        logger = logging.getLogger(__name__)
+        
+        # Use tprm connection if available, otherwise fall back to default
+        if 'tprm' in db_connections.databases:
+            db_connection = db_connections['tprm']
+            db_name = db_connection.settings_dict.get('NAME', 'tprm_integration')
+            logger.info(f"[Assigned Stages] Using tprm database connection: {db_name} for user_id: {user_id}")
+        else:
+            db_connection = db_connections['default']
+            db_name = db_connection.settings_dict.get('NAME', '')
+            logger.warning(f"[Assigned Stages] tprm connection not found, using default: {db_name}")
 
-            cursor.execute(
+        # Initialize stages list
+        stages = []
+        
+        try:
+            with db_connection.cursor() as cursor:
 
-                """
+                cursor.execute(
 
-                SELECT 
+                    """
 
-                    s.stage_id, s.approval_id, s.stage_order, s.stage_name, s.stage_description,
+                    SELECT 
 
-                    s.assigned_user_id, s.assigned_user_name, s.assigned_user_role, s.department,
+                        s.stage_id, s.approval_id, s.stage_order, s.stage_name, s.stage_description,
 
-                    s.stage_type, s.stage_status, s.deadline_date, s.extended_deadline,
+                        s.assigned_user_id, s.assigned_user_name, s.assigned_user_role, s.department,
 
-                    s.started_at, s.completed_at, s.response_data, s.rejection_reason,
+                        s.stage_type, s.stage_status, s.deadline_date, s.extended_deadline,
 
-                    s.escalation_level, s.is_mandatory, s.created_at, s.updated_at,
+                        s.started_at, s.completed_at, s.response_data, s.rejection_reason,
 
-                    a.request_title, a.request_description, a.requester_id, a.requester_department,
+                        s.escalation_level, s.is_mandatory, s.created_at, s.updated_at,
 
-                    a.priority, a.request_data, a.overall_status, a.submission_date,
+                        a.request_title, a.request_description, a.requester_id, a.requester_department,
 
-                    a.created_at AS request_created_at, a.updated_at AS request_updated_at,
+                        a.priority, a.request_data, a.overall_status, a.submission_date,
 
-                    w.workflow_type
+                        a.created_at AS request_created_at, a.updated_at AS request_updated_at,
 
-                FROM approval_stages s
+                        w.workflow_type
 
-                JOIN approval_requests a ON s.approval_id = a.approval_id
+                    FROM approval_stages s
 
-                JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+                    JOIN approval_requests a ON s.approval_id = a.approval_id
 
-                WHERE s.assigned_user_id = %s
+                    JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+                    
+                    -- Ensure temp_vendor is read from the current database (should be tprm_integration after connection switch)
+                    LEFT JOIN temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
 
-                AND w.business_object_type = 'Vendor'
+                    WHERE s.assigned_user_id = %s
 
-                ORDER BY s.created_at DESC
+                    AND w.business_object_type = 'Vendor'
+                    
+                    AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
-                """,
+                    ORDER BY s.created_at DESC
 
-                [user_id]
+                    """,
 
-            )
+                    [user_id, tenant_id]
 
+                )
 
+                columns = [col[0] for col in cursor.description]
 
-            columns = [col[0] for col in cursor.description]
+                for row in cursor.fetchall():
 
-            stages = []
+                    item = dict(zip(columns, row))
 
-            for row in cursor.fetchall():
+                    # Parse JSON fields if strings
 
-                item = dict(zip(columns, row))
+                    for json_key in ('response_data', 'request_data'):
 
-                # Parse JSON fields if strings
+                        if item.get(json_key) and isinstance(item.get(json_key), str):
 
-                for json_key in ('response_data', 'request_data'):
+                            try:
 
-                    if item.get(json_key) and isinstance(item.get(json_key), str):
+                                item[json_key] = json.loads(item[json_key])
 
-                        try:
+                            except Exception:
 
-                            item[json_key] = json.loads(item[json_key])
+                                pass
 
-                        except Exception:
+                    stages.append(item)
 
-                            pass
-
-                stages.append(item)
-
-
+        except Exception as db_error:
+            error_msg = str(db_error)
+            logger.error(f"[Assigned Stages] Database error: {error_msg}")
+            
+            # Check if it's a table not found error for temp_vendor
+            if "temp_vendor" in error_msg.lower() and ("doesn't exist" in error_msg.lower() or "does not exist" in error_msg.lower()):
+                logger.error(f"[Assigned Stages] ERROR: temp_vendor table not found in database '{db_name}'. "
+                           f"Expected database: 'tprm_integration'. "
+                           f"Please ensure the DATABASES['default']['NAME'] is set to 'tprm_integration'.")
+                return Response({
+                    'error': f'temp_vendor table not found in database. Expected database: tprm_integration, but using: {db_name}',
+                    'message': 'Database configuration error. Please check that DB_NAME environment variable is set to tprm_integration.',
+                    'database_used': db_name,
+                    'database_expected': 'tprm_integration'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            # Re-raise other database errors
+            raise
 
         return Response(stages, status=status.HTTP_200_OK)
 
     except Exception as e:
-
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error fetching assigned stages: {str(e)}")
         print(f"Error fetching assigned stages: {str(e)}")
 
         return Response({
@@ -1226,17 +1361,21 @@ def get_user_assigned_stages(request, user_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('approve_reject_vendor')
+@require_tenant
+@tenant_filter
 def post_stage_action(request, stage_id):
 
     """Approve/Reject/Request Changes for a stage by id.
-
-
+    MULTI-TENANCY: Ensures stage belongs to tenant's vendor
 
     Expected payload: { action: APPROVE|REJECT|REQUEST_CHANGES, user_id, user_name, response_data?, rejection_reason?, comments? }
 
     """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         payload = request.data or {}
 
@@ -1246,11 +1385,23 @@ def post_stage_action(request, stage_id):
 
             return Response({'error': 'Invalid action'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Use tprm database connection for vendor approval queries
+        # This ensures data is written to the same database where it's read from
+        db_connection = 'tprm'
+        try:
+            # Check if 'tprm' connection exists
+            if 'tprm' not in connections.databases:
+                print("Warning: 'tprm' database connection not found, falling back to 'default'")
+                db_connection = 'default'
+            else:
+                print(f"Using 'tprm' database connection for stage action (tprm_integration)")
+        except Exception as db_check_error:
+            print(f"Warning: Error checking database connections: {db_check_error}, using 'tprm' connection")
 
-
-        with connections['default'].cursor() as cursor:
+        with connections[db_connection].cursor() as cursor:
 
             # Get current stage + related info + workflow type
+            # MULTI-TENANCY: Filter by tenant
 
             cursor.execute("""
 
@@ -1263,10 +1414,14 @@ def post_stage_action(request, stage_id):
                 JOIN approval_requests ar ON as_table.approval_id = ar.approval_id
 
                 JOIN approval_workflows aw ON ar.workflow_id = aw.workflow_id
+                
+                LEFT JOIN temp_vendor tv ON JSON_EXTRACT(ar.request_data, '$.vendor_id') = tv.id
 
                 WHERE as_table.stage_id = %s
 
-            """, [stage_id])
+                AND (tv.TenantId = %s OR tv.TenantId IS NULL)
+
+            """, [stage_id, tenant_id])
 
             
 
@@ -1424,7 +1579,7 @@ def post_stage_action(request, stage_id):
                                         questionnaire_assignment_id = rd.get('questionnaire_assignment_id')
                                         if questionnaire_assignment_id:
                                             try:
-                                                from apps.vendor_questionnaire.models import QuestionnaireAssignments
+                                                from tprm_backend.apps.vendor_questionnaire.models import QuestionnaireAssignments
                                                 assignment = QuestionnaireAssignments.objects.get(assignment_id=questionnaire_assignment_id)
                                                 if assignment.temp_vendor:
                                                     vendor_id = assignment.temp_vendor.id
@@ -1443,8 +1598,8 @@ def post_stage_action(request, stage_id):
                                         # End Questionnaire Approval and start Questionnaire Response
                                         print(f"Initiating Questionnaire Approval completion for vendor {vendor_id} (multi-level workflow)")
                                         try:
-                                            from apps.vendor_core.models import LifecycleTracker, TempVendor
-                                            from apps.vendor_core.views import get_lifecycle_stage_id_by_code
+                                            from tprm_backend.apps.vendor_core.models import LifecycleTracker, TempVendor
+                                            from tprm_backend.apps.vendor_core.views import get_lifecycle_stage_id_by_code
                                             
                                             current_time = timezone.now()
                                             ques_approval_stage_id = get_lifecycle_stage_id_by_code('QUES_APP')
@@ -1754,9 +1909,8 @@ def post_stage_action(request, stage_id):
 
                     """, [now_ts, approval_id])
 
-
-
-        connection.commit()
+        # Commit using the same connection that was used for the cursor
+        connections[db_connection].commit()
 
         return Response({'message': 'Action processed successfully'}, status=status.HTTP_200_OK)
 
@@ -1780,17 +1934,21 @@ def post_stage_action(request, stage_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_questionnaire_questions(request, questionnaire_id: int):
 
     """Return questions for a given questionnaire_id from questionnaire_questions table.
-
-
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
 
     Response is ordered by display_order.
 
     """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         with connections['default'].cursor() as cursor:
 
@@ -1864,11 +2022,12 @@ def get_questionnaire_questions(request, questionnaire_id: int):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_approvals_by_requester(request):
 
     """Return all approval requests created by a requester.
-
-
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
 
     Query params:
 
@@ -1885,6 +2044,14 @@ def get_approvals_by_requester(request):
     """
 
     try:
+        # Use tprm database connection for vendor approval queries
+        import logging
+        from django.db import connections as db_connections
+        logger = logging.getLogger(__name__)
+        
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         requester_id = request.query_params.get('requester_id')
 
@@ -1892,7 +2059,13 @@ def get_approvals_by_requester(request):
 
             return Response({'error': 'requester_id query parameter is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-
+        # Convert requester_id to integer for proper comparison
+        try:
+            requester_id_int = int(requester_id)
+            logger.info(f"[Get Approvals By Requester] Processing request for requester_id: {requester_id_int} (original: {requester_id})")
+        except (ValueError, TypeError):
+            logger.error(f"[Get Approvals By Requester] Invalid requester_id: {requester_id}")
+            return Response({'error': 'requester_id must be a valid integer'}, status=status.HTTP_400_BAD_REQUEST)
 
         stage_type = str(request.query_params.get('stage_type', 'ALL')).upper()
 
@@ -1905,82 +2078,172 @@ def get_approvals_by_requester(request):
         elif stage_type == 'SEQUENTIAL':
 
             flow_filter = 'MULTI_LEVEL'
-
-
-
-        with connections['default'].cursor() as cursor:
-
-            sql = (
-
-                """
-
-                SELECT 
-
-                    ar.approval_id,
-
-                    ar.request_title,
-
-                    ar.priority,
-
-                    ar.overall_status,
-
-                    ar.submission_date,
-
-                    ar.created_at,
-
-                    ar.updated_at,
-
-                    w.workflow_type,
-
-                    COUNT(s.stage_id) AS stage_count
-
-                FROM approval_requests ar
-
-                JOIN approval_workflows w ON w.workflow_id = ar.workflow_id
-
-                LEFT JOIN approval_stages s ON s.approval_id = ar.approval_id
-
-                WHERE ar.requester_id = %s
-
-                AND w.business_object_type = 'Vendor'
-
-                {flow_clause}
-
-                GROUP BY 
-
-                    ar.approval_id, ar.request_title, ar.priority, ar.overall_status,
-
-                    ar.submission_date, ar.created_at, ar.updated_at, w.workflow_type
-
-                ORDER BY ar.created_at DESC
-
-                """
-
-            )
-
-
-
-            params = [str(requester_id)]
+        
+        # Use tprm connection if available, otherwise fall back to default
+        if 'tprm' in db_connections.databases:
+            db_connection = db_connections['tprm']
+            db_name = db_connection.settings_dict.get('NAME', 'tprm_integration')
+            logger.info(f"[Get Approvals By Requester] Using tprm database connection: {db_name} for requester_id: {requester_id}")
+        else:
+            db_connection = db_connections['default']
+            db_name = db_connection.settings_dict.get('NAME', '')
+            logger.warning(f"[Get Approvals By Requester] tprm connection not found, using default: {db_name}")
+        
+        with db_connection.cursor() as cursor:
+            # Check if TenantId column exists in approval_requests table
+            cursor.execute("""
+                SELECT COUNT(*) 
+                FROM information_schema.COLUMNS 
+                WHERE TABLE_SCHEMA = DATABASE() 
+                AND TABLE_NAME = 'approval_requests' 
+                AND COLUMN_NAME = 'TenantId'
+            """)
+            has_tenant_id_column = cursor.fetchone()[0] > 0
+            logger.info(f"[Get Approvals By Requester] approval_requests.TenantId column exists: {has_tenant_id_column}")
+            
+            # Build SQL query - prefer filtering by TenantId column if it exists
+            if has_tenant_id_column:
+                # Check if TenantId also exists in approval_workflows
+                cursor.execute("""
+                    SELECT COUNT(*) 
+                    FROM information_schema.COLUMNS 
+                    WHERE TABLE_SCHEMA = DATABASE() 
+                    AND TABLE_NAME = 'approval_workflows' 
+                    AND COLUMN_NAME = 'TenantId'
+                """)
+                workflow_has_tenant_id = cursor.fetchone()[0] > 0
+                logger.info(f"[Get Approvals By Requester] approval_workflows.TenantId column exists: {workflow_has_tenant_id}")
+                
+                # Filter directly by TenantId - check both approval_requests and approval_workflows
+                if workflow_has_tenant_id:
+                    # Both tables have TenantId - check either one matches
+                    sql = (
+                        """
+                        SELECT 
+                            ar.approval_id,
+                            ar.request_title,
+                            ar.priority,
+                            ar.overall_status,
+                            ar.submission_date,
+                            ar.created_at,
+                            ar.updated_at,
+                            w.workflow_type,
+                            COUNT(s.stage_id) AS stage_count
+                        FROM approval_requests ar
+                        JOIN approval_workflows w ON w.workflow_id = ar.workflow_id
+                        LEFT JOIN approval_stages s ON s.approval_id = ar.approval_id
+                        WHERE ar.requester_id = %s
+                        AND w.business_object_type = 'Vendor'
+                        AND (ar.TenantId = %s OR w.TenantId = %s OR (ar.TenantId IS NULL AND w.TenantId IS NULL))
+                        {flow_clause}
+                        GROUP BY 
+                            ar.approval_id, ar.request_title, ar.priority, ar.overall_status,
+                            ar.submission_date, ar.created_at, ar.updated_at, w.workflow_type
+                        ORDER BY ar.created_at DESC
+                        """
+                    )
+                    params = [requester_id_int, tenant_id, tenant_id]
+                else:
+                    # Only approval_requests has TenantId
+                    sql = (
+                        """
+                        SELECT 
+                            ar.approval_id,
+                            ar.request_title,
+                            ar.priority,
+                            ar.overall_status,
+                            ar.submission_date,
+                            ar.created_at,
+                            ar.updated_at,
+                            w.workflow_type,
+                            COUNT(s.stage_id) AS stage_count
+                        FROM approval_requests ar
+                        JOIN approval_workflows w ON w.workflow_id = ar.workflow_id
+                        LEFT JOIN approval_stages s ON s.approval_id = ar.approval_id
+                        WHERE ar.requester_id = %s
+                        AND w.business_object_type = 'Vendor'
+                        AND (ar.TenantId = %s OR ar.TenantId IS NULL)
+                        {flow_clause}
+                        GROUP BY 
+                            ar.approval_id, ar.request_title, ar.priority, ar.overall_status,
+                            ar.submission_date, ar.created_at, ar.updated_at, w.workflow_type
+                        ORDER BY ar.created_at DESC
+                        """
+                    )
+                    params = [requester_id_int, tenant_id]
+            else:
+                # Fallback: Check if temp_vendor table exists for tenant filtering
+                cursor.execute("SHOW TABLES LIKE 'temp_vendor'")
+                temp_vendor_exists = cursor.fetchone() is not None
+                logger.info(f"[Get Approvals By Requester] temp_vendor table exists: {temp_vendor_exists}")
+                
+                if temp_vendor_exists:
+                    # Use temp_vendor for tenant filtering (legacy approach)
+                    sql = (
+                        """
+                        SELECT 
+                            ar.approval_id,
+                            ar.request_title,
+                            ar.priority,
+                            ar.overall_status,
+                            ar.submission_date,
+                            ar.created_at,
+                            ar.updated_at,
+                            w.workflow_type,
+                            COUNT(s.stage_id) AS stage_count
+                        FROM approval_requests ar
+                        JOIN approval_workflows w ON w.workflow_id = ar.workflow_id
+                        LEFT JOIN approval_stages s ON s.approval_id = ar.approval_id
+                        LEFT JOIN temp_vendor tv ON JSON_EXTRACT(ar.request_data, '$.vendor_id') = tv.id
+                        WHERE ar.requester_id = %s
+                        AND w.business_object_type = 'Vendor'
+                        AND (tv.TenantId = %s OR tv.TenantId IS NULL OR tv.id IS NULL)
+                        {flow_clause}
+                        GROUP BY 
+                            ar.approval_id, ar.request_title, ar.priority, ar.overall_status,
+                            ar.submission_date, ar.created_at, ar.updated_at, w.workflow_type
+                        ORDER BY ar.created_at DESC
+                        """
+                    )
+                    params = [requester_id_int, tenant_id]
+                else:
+                    # No tenant filtering available - return all requests for requester
+                    sql = (
+                        """
+                        SELECT 
+                            ar.approval_id,
+                            ar.request_title,
+                            ar.priority,
+                            ar.overall_status,
+                            ar.submission_date,
+                            ar.created_at,
+                            ar.updated_at,
+                            w.workflow_type,
+                            COUNT(s.stage_id) AS stage_count
+                        FROM approval_requests ar
+                        JOIN approval_workflows w ON w.workflow_id = ar.workflow_id
+                        LEFT JOIN approval_stages s ON s.approval_id = ar.approval_id
+                        WHERE ar.requester_id = %s
+                        AND w.business_object_type = 'Vendor'
+                        {flow_clause}
+                        GROUP BY 
+                            ar.approval_id, ar.request_title, ar.priority, ar.overall_status,
+                            ar.submission_date, ar.created_at, ar.updated_at, w.workflow_type
+                        ORDER BY ar.created_at DESC
+                        """
+                    )
+                    params = [requester_id_int]
 
             flow_clause = ''
-
             if flow_filter:
-
                 flow_clause = 'AND w.workflow_type = %s'
-
                 params.append(flow_filter)
 
-
-
-            # Match requester regardless of stored type by casting to CHAR
-
-            sql = sql.replace('WHERE ar.requester_id = %s', 'WHERE CAST(ar.requester_id AS CHAR) = %s')
-
+            logger.info(f"[Get Approvals By Requester] Executing query with params: {params}, flow_filter: {flow_filter}")
             cursor.execute(sql.format(flow_clause=flow_clause), params)
-
             columns = [col[0] for col in cursor.description]
-
             rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
+            logger.info(f"[Get Approvals By Requester] Found {len(rows)} approval requests for requester_id: {requester_id_int}")
 
 
 
@@ -2013,15 +2276,21 @@ def get_approvals_by_requester(request):
         return Response(data, status=status.HTTP_200_OK)
 
     except Exception as e:
-
-        print(f"Error fetching approvals by requester: {str(e)}")
-
+        import logging
+        logger = logging.getLogger(__name__)
+        error_msg = str(e)
+        logger.error(f"[Get Approvals By Requester] Error: {error_msg}")
+        
+        # Check if it's a table not found error
+        if "temp_vendor" in error_msg.lower() and ("doesn't exist" in error_msg.lower() or "does not exist" in error_msg.lower()):
+            logger.warning(f"[Get Approvals By Requester] temp_vendor table not found, but should have been handled. Error: {error_msg}")
+            # Return empty result instead of error if temp_vendor doesn't exist
+            return Response([], status=status.HTTP_200_OK)
+        
+        print(f"Error fetching approvals by requester: {error_msg}")
         return Response({
-
             'error': 'Failed to fetch approvals by requester',
-
-            'details': str(e)
-
+            'details': error_msg
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -2030,11 +2299,57 @@ def get_approvals_by_requester(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
+def get_current_user(request):
+    """Get current authenticated user information from JWT token.
+    MULTI-TENANCY: Returns user info with tenant context
+    """
+    try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
+
+        # Get user from JWT authentication
+        user = request.user
+        
+        # Return user information
+        user_data = {
+            'id': user.id if hasattr(user, 'id') else None,
+            'username': user.username if hasattr(user, 'username') else '',
+            'email': user.email if hasattr(user, 'email') else '',
+            'first_name': user.first_name if hasattr(user, 'first_name') else '',
+            'last_name': user.last_name if hasattr(user, 'last_name') else '',
+            'department': getattr(user, 'department', ''),
+            'role': getattr(user, 'role', ''),
+        }
+        
+        return Response(user_data, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        print(f"Error fetching current user: {str(e)}")
+        return Response({
+            'error': 'Failed to fetch user information',
+            'details': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([SimpleAuthenticatedPermission])
+@rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_users(request):
 
-    """Get all users for dropdown selection"""
+    """Get all users for dropdown selection
+    MULTI-TENANCY: Note - Users may be shared across tenants, but filtering is applied where relevant
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         with connections['default'].cursor() as cursor:
 
@@ -2154,43 +2469,73 @@ def get_users(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_request_with_stages(request, approval_id: str):
 
-    """Return a single approval request with its stages, parsed request_data, and questionnaire questions if applicable."""
+    """Return a single approval request with its stages, parsed request_data, and questionnaire questions if applicable.
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
-        with connections['default'].cursor() as cursor:
+        # Use tprm database connection for vendor approval queries
+        import logging
+        from django.db import connections as db_connections
+        logger = logging.getLogger(__name__)
+        
+        # Use tprm connection if available, otherwise fall back to default
+        if 'tprm' in db_connections.databases:
+            db_connection = db_connections['tprm']
+            db_name = db_connection.settings_dict.get('NAME', 'tprm_integration')
+            logger.info(f"[Get Request With Stages] Using tprm database connection: {db_name} for approval_id: {approval_id}")
+        else:
+            db_connection = db_connections['default']
+            db_name = db_connection.settings_dict.get('NAME', '')
+            logger.warning(f"[Get Request With Stages] tprm connection not found, using default: {db_name}")
 
-            # Get the approval request with workflow info
-
-            cursor.execute(
-
-                """
-
-                SELECT 
-
-                    a.approval_id, a.workflow_id, a.request_title, a.request_description,
-
-                    a.requester_id, a.requester_department, a.priority, a.request_data,
-
-                    a.overall_status, a.submission_date, a.completion_date, a.created_at,
-
-                    w.workflow_type, w.workflow_name
-
-                FROM approval_requests a
-
-                JOIN approval_workflows w ON a.workflow_id = w.workflow_id
-
-                WHERE a.approval_id = %s
-
-                AND w.business_object_type = 'Vendor'
-
-                """,
-
-                [approval_id]
-
-            )
+        with db_connection.cursor() as cursor:
+            # Check if temp_vendor table exists
+            cursor.execute("SHOW TABLES LIKE 'temp_vendor'")
+            temp_vendor_exists = cursor.fetchone() is not None
+            
+            # Build SQL query based on whether temp_vendor table exists
+            if temp_vendor_exists:
+                cursor.execute(
+                    """
+                    SELECT 
+                        a.approval_id, a.workflow_id, a.request_title, a.request_description,
+                        a.requester_id, a.requester_department, a.priority, a.request_data,
+                        a.overall_status, a.submission_date, a.completion_date, a.created_at,
+                        w.workflow_type, w.workflow_name
+                    FROM approval_requests a
+                    JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+                    LEFT JOIN temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
+                    WHERE a.approval_id = %s
+                    AND w.business_object_type = 'Vendor'
+                    AND (tv.TenantId = %s OR tv.TenantId IS NULL)
+                    """,
+                    [approval_id, tenant_id]
+                )
+            else:
+                # If temp_vendor doesn't exist, query without tenant filtering via temp_vendor
+                cursor.execute(
+                    """
+                    SELECT 
+                        a.approval_id, a.workflow_id, a.request_title, a.request_description,
+                        a.requester_id, a.requester_department, a.priority, a.request_data,
+                        a.overall_status, a.submission_date, a.completion_date, a.created_at,
+                        w.workflow_type, w.workflow_name
+                    FROM approval_requests a
+                    JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+                    WHERE a.approval_id = %s
+                    AND w.business_object_type = 'Vendor'
+                    """,
+                    [approval_id]
+                )
 
             row = cursor.fetchone()
 
@@ -2370,17 +2715,21 @@ def get_request_with_stages(request, approval_id: str):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('approve_reject_vendor')
+@require_tenant
+@tenant_filter
 def requester_final_decision(request, approval_id: str):
 
     """Allow requester to take final decision on MULTI_PERSON workflows.
-
-
+    MULTI-TENANCY: Ensures approval belongs to tenant's vendor
 
     Payload: { decision: APPROVE|REJECT, reason?: str, overall_score_override?: object }
 
     """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         data = request.data or {}
 
@@ -2404,9 +2753,39 @@ def requester_final_decision(request, approval_id: str):
 
 
 
-        with connections['default'].cursor() as cursor:
+        # Use tprm database connection for vendor approval queries
+        # This ensures data is written to the same database where it's read from
+        db_connection = 'tprm'
+        try:
+            # Check if 'tprm' connection exists
+            if 'tprm' not in connections.databases:
+                print("Warning: 'tprm' database connection not found, falling back to 'default'")
+                db_connection = 'default'
+            else:
+                print(f"Using 'tprm' database connection for requester final decision (tprm_integration)")
+        except Exception as db_check_error:
+            print(f"Warning: Error checking database connections: {db_check_error}, using 'tprm' connection")
 
-            cursor.execute("SELECT workflow_id, overall_status, request_data FROM approval_requests WHERE approval_id=%s", [approval_id])
+        with connections[db_connection].cursor() as cursor:
+            # MULTI-TENANCY: Filter by tenant
+            # Try to use TenantId column directly if it exists, otherwise fall back to temp_vendor join
+            try:
+                cursor.execute("""
+                    SELECT ar.workflow_id, ar.overall_status, ar.request_data 
+                    FROM approval_requests ar
+                    WHERE ar.approval_id=%s
+                    AND (ar.TenantId = %s OR ar.TenantId IS NULL)
+                """, [approval_id, tenant_id])
+            except Exception as e:
+                # Fallback to temp_vendor join if TenantId column doesn't exist
+                print(f"TenantId column not found, using temp_vendor join: {str(e)}")
+                cursor.execute("""
+                    SELECT ar.workflow_id, ar.overall_status, ar.request_data 
+                    FROM approval_requests ar
+                    LEFT JOIN temp_vendor tv ON JSON_EXTRACT(ar.request_data, '$.vendor_id') = tv.id
+                    WHERE ar.approval_id=%s
+                    AND (tv.TenantId = %s OR tv.TenantId IS NULL OR tv.id IS NULL)
+                """, [approval_id, tenant_id])
 
             r = cursor.fetchone()
 
@@ -2460,7 +2839,7 @@ def requester_final_decision(request, approval_id: str):
 
                         # Update the assignment with the custom overall score
 
-                        from apps.vendor_questionnaire.models import QuestionnaireAssignments
+                        from tprm_backend.apps.vendor_questionnaire.models import QuestionnaireAssignments
 
                         assignment = QuestionnaireAssignments.objects.get(assignment_id=assignment_id)
 
@@ -2526,7 +2905,7 @@ def requester_final_decision(request, approval_id: str):
 
                     if assignment_id:
 
-                        from apps.vendor_questionnaire.models import QuestionnaireAssignments
+                        from tprm_backend.apps.vendor_questionnaire.models import QuestionnaireAssignments
 
                         assignment = QuestionnaireAssignments.objects.get(assignment_id=assignment_id)
 
@@ -2614,13 +2993,15 @@ def requester_final_decision(request, approval_id: str):
 
                 created_by_role='Requester',
 
-                change_reason=reason
+                change_reason=reason,
+
+                db_connection=db_connection
 
             )
 
             
 
-            cursor.connection.commit()
+            connections[db_connection].commit()
 
 
 
@@ -2650,7 +3031,7 @@ def requester_final_decision(request, approval_id: str):
 
                             try:
 
-                                from apps.vendor_questionnaire.models import QuestionnaireAssignments
+                                from tprm_backend.apps.vendor_questionnaire.models import QuestionnaireAssignments
 
                                 assignment = QuestionnaireAssignments.objects.get(assignment_id=questionnaire_assignment_id)
 
@@ -2658,7 +3039,7 @@ def requester_final_decision(request, approval_id: str):
 
                                 # Get all stages and calculate average scores
 
-                                with connections['default'].cursor() as score_cursor:
+                                with connections[db_connection].cursor() as score_cursor:
 
                                     score_cursor.execute("""
 
@@ -2922,7 +3303,7 @@ def requester_final_decision(request, approval_id: str):
                             questionnaire_id = rd.get('questionnaire_id')
                             if questionnaire_id:
                                 try:
-                                    from apps.vendor_questionnaire.models import Questionnaires
+                                    from tprm_backend.apps.vendor_questionnaire.models import Questionnaires
                                     questionnaire = Questionnaires.objects.filter(questionnaire_id=questionnaire_id).first()
                                     if questionnaire and questionnaire.vendor_id:
                                         vendor_id = questionnaire.vendor_id
@@ -2935,7 +3316,7 @@ def requester_final_decision(request, approval_id: str):
                             questionnaire_assignment_id = rd.get('questionnaire_assignment_id')
                             if questionnaire_assignment_id:
                                 try:
-                                    from apps.vendor_questionnaire.models import QuestionnaireAssignments
+                                    from tprm_backend.apps.vendor_questionnaire.models import QuestionnaireAssignments
                                     assignment = QuestionnaireAssignments.objects.get(assignment_id=questionnaire_assignment_id)
                                     if assignment.temp_vendor:
                                         vendor_id = assignment.temp_vendor.id
@@ -3013,18 +3394,44 @@ def requester_final_decision(request, approval_id: str):
                         
 
                         # Import and trigger the threading-based async risk generation
-
-                        from risk_analysis_vendor.services import RiskAnalysisService
+                        import logging
+                        import traceback
+                        logger = logging.getLogger(__name__)
+                        
+                        try:
+                            from tprm_backend.risk_analysis_vendor.services import RiskAnalysisService
+                            logger.info(f"✅ [RISK GENERATION] Successfully imported RiskAnalysisService")
+                            print(f"✅ [RISK GENERATION] Successfully imported RiskAnalysisService")
+                        except ImportError as import_error:
+                            logger.error(f"❌ [RISK GENERATION] Failed to import RiskAnalysisService: {str(import_error)}")
+                            print(f"❌ [RISK GENERATION] Failed to import RiskAnalysisService: {str(import_error)}")
+                            print(f"❌ [RISK GENERATION] Import traceback: {traceback.format_exc()}")
+                            raise
 
                         
 
-                        risk_service = RiskAnalysisService()
-
-                        result = risk_service.generate_vendor_risks_async(approval_id)
-
-                        
-
-                        print(f"Vendor risk generation started in background thread: {result}")
+                        try:
+                            risk_service = RiskAnalysisService()
+                            logger.info(f"✅ [RISK GENERATION] Created RiskAnalysisService instance")
+                            print(f"✅ [RISK GENERATION] Created RiskAnalysisService instance")
+                            
+                            result = risk_service.generate_vendor_risks_async(approval_id)
+                            logger.info(f"✅ [RISK GENERATION] Called generate_vendor_risks_async, result: {result}")
+                            print(f"✅ [RISK GENERATION] Vendor risk generation started in background thread: {result}")
+                            
+                            if result.get('status') == 'error':
+                                logger.error(f"❌ [RISK GENERATION] Error in risk generation result: {result.get('error')}")
+                                print(f"❌ [RISK GENERATION] Error in risk generation result: {result.get('error')}")
+                            else:
+                                logger.info(f"✅ [RISK GENERATION] Risk generation successfully initiated")
+                                print(f"✅ [RISK GENERATION] Risk generation successfully initiated")
+                                
+                        except Exception as service_error:
+                            logger.error(f"❌ [RISK GENERATION] Error calling RiskAnalysisService: {str(service_error)}")
+                            logger.error(f"❌ [RISK GENERATION] Service error traceback: {traceback.format_exc()}")
+                            print(f"❌ [RISK GENERATION] Error calling RiskAnalysisService: {str(service_error)}")
+                            print(f"❌ [RISK GENERATION] Service error traceback: {traceback.format_exc()}")
+                            raise
 
                         
                         # Initialize migration_info if it doesn't exist
@@ -3033,9 +3440,11 @@ def requester_final_decision(request, approval_id: str):
                         
                         # Store the risk generation task info for status checking
                         migration_info['risk_generation'] = {
-                            'status': 'started',
+                            'status': result.get('status', 'started'),
                             'approval_id': approval_id,
-                            'thread_name': result.get('thread_name', 'unknown')
+                            'thread_name': result.get('thread_name', 'unknown'),
+                            'message': result.get('message', 'Risk generation started'),
+                            'error': result.get('error') if result.get('status') == 'error' else None
                         }
 
                     
@@ -3043,8 +3452,15 @@ def requester_final_decision(request, approval_id: str):
                 except Exception as e:
 
                     # Log error but don't fail the approval process
-
-                    print(f"Error triggering vendor risk generation for approval {approval_id}: {str(e)}")
+                    import logging
+                    import traceback
+                    logger = logging.getLogger(__name__)
+                    
+                    error_trace = traceback.format_exc()
+                    logger.error(f"❌ [RISK GENERATION] Error triggering vendor risk generation for approval {approval_id}: {str(e)}")
+                    logger.error(f"❌ [RISK GENERATION] Full traceback: {error_trace}")
+                    print(f"❌ [RISK GENERATION] Error triggering vendor risk generation for approval {approval_id}: {str(e)}")
+                    print(f"❌ [RISK GENERATION] Full traceback: {error_trace}")
 
 
 
@@ -3094,11 +3510,12 @@ def requester_final_decision(request, approval_id: str):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('approve_reject_vendor')
+@require_tenant
+@tenant_filter
 def admin_handle_rejection(request, approval_id):
 
     """Admin endpoint to handle rejected workflows in MULTI_LEVEL workflows.
-
-    
+    MULTI-TENANCY: Ensures approval belongs to tenant's vendor
 
     Payload: { 
 
@@ -3117,6 +3534,9 @@ def admin_handle_rejection(request, approval_id):
     """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         data = request.data or {}
 
@@ -3511,29 +3931,50 @@ def admin_handle_rejection(request, approval_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_request_versions(request, approval_id):
 
-    """Get version history for an approval request"""
+    """Get version history for an approval request
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
-        with connections['default'].cursor() as cursor:
+        # Use tprm database connection where temp_vendor table exists
+        db_connection = 'tprm'
+        try:
+            if 'tprm' not in connections.databases:
+                db_connection = 'default'
+        except Exception as db_check_error:
+            print(f"Warning: Error checking database connections: {db_check_error}, using 'tprm' connection")
 
+        with connections[db_connection].cursor() as cursor:
+            # MULTI-TENANCY: Filter by tenant through approval request
             cursor.execute("""
 
-                SELECT version_id, version_number, version_label, changes_summary, 
+                SELECT arv.version_id, arv.version_number, arv.version_label, arv.changes_summary, 
 
-                       created_by, created_by_name, created_by_role, version_type, 
+                       arv.created_by, arv.created_by_name, arv.created_by_role, arv.version_type, 
 
-                       parent_version_id, is_current, is_approved, change_reason, created_at
+                       arv.parent_version_id, arv.is_current, arv.is_approved, arv.change_reason, arv.created_at
 
-                FROM approval_request_versions 
+                FROM approval_request_versions arv
 
-                WHERE approval_id = %s 
+                JOIN approval_requests ar ON arv.approval_id = ar.approval_id
+                
+                LEFT JOIN temp_vendor tv ON JSON_EXTRACT(ar.request_data, '$.vendor_id') = tv.id
 
-                ORDER BY version_number DESC
+                WHERE arv.approval_id = %s 
+                
+                AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
-            """, [approval_id])
+                ORDER BY arv.version_number DESC
+
+            """, [approval_id, tenant_id])
 
             
 
@@ -3711,11 +4152,18 @@ def debug_version_data(request, approval_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('create_vendor')
+@require_tenant
+@tenant_filter
 def create_workflow(request):
 
-    """Create a new approval workflow with stages"""
+    """Create a new approval workflow with stages
+    MULTI-TENANCY: Workflows are created in tenant context
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         data = request.data
 
@@ -3752,41 +4200,61 @@ def create_workflow(request):
                 cursor.execute("SET FOREIGN_KEY_CHECKS = 0")
 
                 
+                # Get logged-in user information for assignee data
+                logged_in_user_id = int(data.get('created_by')) if str(data.get('created_by')).isdigit() else request.session.get('user_id', 1)
+                
+                # Query users table to get user name and role
+                # Users table is typically in default database
+                user_row = None
+                try:
+                    cursor.execute("""
+                        SELECT UserId, UserName, Email 
+                        FROM users 
+                        WHERE UserId = %s
+                        LIMIT 1
+                    """, [logged_in_user_id])
+                    user_row = cursor.fetchone()
+                except Exception as e:
+                    # If users table doesn't exist in current connection, try default
+                    try:
+                        with connections['default'].cursor() as default_cursor:
+                            default_cursor.execute("""
+                                SELECT UserId, UserName, Email 
+                                FROM users 
+                                WHERE UserId = %s
+                                LIMIT 1
+                            """, [logged_in_user_id])
+                            user_row = default_cursor.fetchone()
+                    except:
+                        pass
+                
+                if user_row:
+                    logged_in_user_name = user_row[1] if user_row[1] else f'User {logged_in_user_id}'
+                    logged_in_user_role = 'Manager'  # Default role, can be enhanced later
+                else:
+                    logged_in_user_name = f'User {logged_in_user_id}'
+                    logged_in_user_role = 'Manager'
 
                 # 1. Create workflow
 
                 workflow_id = str(uuid.uuid4()).replace('-', '').upper()[:16]
 
                 cursor.execute("""
-
                     INSERT INTO approval_workflows 
-
                     (workflow_id, workflow_name, workflow_type, description, business_object_type, 
-
-                     is_active, created_by, created_at, updated_at) 
-
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-
+                     TenantId, is_active, created_by, created_at, updated_at) 
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, [
-
                     workflow_id,
-
                     data.get('workflow_name', ''),
-
                     data.get('workflow_type', 'MULTI_LEVEL'),
-
                     data.get('description', ''),
-
                     data.get('business_object_type', ''),
-
+                    tenant_id,
                     True,
-
-                    int(data.get('created_by')) if str(data.get('created_by')).isdigit() else request.session.get('user_id', 1),
-
+                    logged_in_user_id,
                     timezone.now(),
-
                     timezone.now()
-
                 ])
 
                 
@@ -3851,9 +4319,9 @@ def create_workflow(request):
 
                          assigned_user_id, assigned_user_name, assigned_user_role, department, 
 
-                         stage_type, stage_status, deadline_date, response_data, is_mandatory, created_at, updated_at) 
+                         stage_type, stage_status, deadline_date, response_data, is_mandatory, TenantId, created_at, updated_at) 
 
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 
                     """, [
 
@@ -3867,11 +4335,11 @@ def create_workflow(request):
 
                         stage_config.get('stage_description', ''),
 
-                        stage_config.get('assigned_user_id', ''),
+                        stage_config.get('assigned_user_id'),  # Use selected user from dropdown
 
-                        stage_config.get('assigned_user_name', ''),
+                        stage_config.get('assigned_user_name', ''),  # Use selected user name from dropdown
 
-                        stage_config.get('assigned_user_role', ''),
+                        stage_config.get('assigned_user_role', ''),  # Use selected user role from dropdown
 
                         stage_config.get('department', ''),
 
@@ -3884,6 +4352,8 @@ def create_workflow(request):
                         json.dumps(initial_response_data),
 
                         stage_config.get('is_mandatory', True),
+
+                        tenant_id,
 
                         timezone.now(),
 
@@ -3951,11 +4421,18 @@ def create_workflow(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_workflows(request):
 
-    """Get all approval workflows"""
+    """Get all approval workflows
+    MULTI-TENANCY: Workflows may be shared across tenants for Vendor business_object_type
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         with connections['default'].cursor() as cursor:
 
@@ -4001,11 +4478,18 @@ def get_workflows(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_workflow_stages(request, workflow_id):
 
-    """Get stages for a specific workflow"""
+    """Get stages for a specific workflow
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         with connections['default'].cursor() as cursor:
 
@@ -4055,11 +4539,18 @@ def get_workflow_stages(request, workflow_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('SubmitVendorForApproval')
+@require_tenant
+@tenant_filter
 def create_workflow_request(request):
 
-    """Create an approval request using an existing workflow"""
+    """Create an approval request using an existing workflow
+    MULTI-TENANCY: Ensures vendor belongs to tenant
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         data = request.data
 
@@ -4096,6 +4587,40 @@ def create_workflow_request(request):
                 cursor.execute("SET FOREIGN_KEY_CHECKS = 0")
 
                 
+                # Get logged-in user information for assignee data
+                logged_in_user_id = int(data.get('requester_id')) if str(data.get('requester_id')).isdigit() else request.session.get('user_id', 1)
+                
+                # Query users table to get user name and role
+                # Users table is typically in default database
+                user_row = None
+                try:
+                    cursor.execute("""
+                        SELECT UserId, UserName, Email 
+                        FROM users 
+                        WHERE UserId = %s
+                        LIMIT 1
+                    """, [logged_in_user_id])
+                    user_row = cursor.fetchone()
+                except Exception as e:
+                    # If users table doesn't exist in current connection, try default
+                    try:
+                        with connections['default'].cursor() as default_cursor:
+                            default_cursor.execute("""
+                                SELECT UserId, UserName, Email 
+                                FROM users 
+                                WHERE UserId = %s
+                                LIMIT 1
+                            """, [logged_in_user_id])
+                            user_row = default_cursor.fetchone()
+                    except:
+                        pass
+                
+                if user_row:
+                    logged_in_user_name = user_row[1] if user_row[1] else f'User {logged_in_user_id}'
+                    logged_in_user_role = 'Manager'  # Default role, can be enhanced later
+                else:
+                    logged_in_user_name = f'User {logged_in_user_id}'
+                    logged_in_user_role = 'Manager'
 
                 # 1. Create approval request
 
@@ -4104,14 +4629,10 @@ def create_workflow_request(request):
                 cursor.execute("""
 
                     INSERT INTO approval_requests 
-
                     (approval_id, workflow_id, request_title, request_description, requester_id, 
-
                      requester_department, priority, request_data, overall_status, 
-
-                     submission_date, created_at, updated_at) 
-
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     submission_date, created_at, updated_at, TenantId) 
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 
                 """, [
 
@@ -4130,14 +4651,11 @@ def create_workflow_request(request):
                     data.get('priority', 'MEDIUM'),
 
                     json.dumps(data.get('request_data', {})),
-
                     'PENDING',
-
                     timezone.now(),
-
                     timezone.now(),
-
-                    timezone.now()
+                    timezone.now(),
+                    tenant_id
 
                 ])
 
@@ -4199,9 +4717,9 @@ def create_workflow_request(request):
 
                          assigned_user_id, assigned_user_name, assigned_user_role, department, 
 
-                         stage_type, stage_status, deadline_date, response_data, is_mandatory, created_at, updated_at) 
+                         stage_type, stage_status, deadline_date, response_data, is_mandatory, TenantId, created_at, updated_at) 
 
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 
                     """, [
 
@@ -4215,11 +4733,11 @@ def create_workflow_request(request):
 
                         stage_data[2],  # stage_description
 
-                        stage_data[3],  # assigned_user_id
+                        stage_data[3],  # assigned_user_id (from workflow stage)
 
-                        stage_data[4],  # assigned_user_name
+                        stage_data[4],  # assigned_user_name (from workflow stage)
 
-                        stage_data[5],  # assigned_user_role
+                        stage_data[5],  # assigned_user_role (from workflow stage)
 
                         stage_data[6],  # department
 
@@ -4232,6 +4750,8 @@ def create_workflow_request(request):
                         json.dumps(initial_response_data),
 
                         stage_data[9],  # is_mandatory
+
+                        tenant_id,
 
                         timezone.now(),
 
@@ -4297,11 +4817,18 @@ def create_workflow_request(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('SubmitVendorForApproval')
+@require_tenant
+@tenant_filter
 def create_comprehensive_workflow(request):
 
-    """Create a comprehensive workflow with request and stages in one operation"""
+    """Create a comprehensive workflow with request and stages in one operation
+    MULTI-TENANCY: Ensures vendor belongs to tenant
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         data = request.data
 
@@ -4350,49 +4877,81 @@ def create_comprehensive_workflow(request):
         
 
         try:
+            # Use tprm database connection for vendor approval queries
+            # This ensures data is written to the same database where it's read from
+            db_connection = 'tprm'
+            try:
+                # Check if 'tprm' connection exists
+                if 'tprm' not in connections.databases:
+                    print("Warning: 'tprm' database connection not found, falling back to 'default'")
+                    db_connection = 'default'
+                else:
+                    print(f"Using 'tprm' database connection for workflow creation (tprm_integration)")
+            except Exception as db_check_error:
+                print(f"Warning: Error checking database connections: {db_check_error}, using 'tprm' connection")
 
-            with connections['default'].cursor() as cursor:
+            with connections[db_connection].cursor() as cursor:
 
                 # Temporarily disable foreign key checks
 
                 cursor.execute("SET FOREIGN_KEY_CHECKS = 0")
 
                 
+                # Get logged-in user information for assignee data
+                logged_in_user_id = int(request_data.get('requester_id')) if str(request_data.get('requester_id')).isdigit() else request.session.get('user_id', 1)
+                
+                # Query users table to get user name and role
+                # Try current connection first, then fall back to default if users table doesn't exist
+                user_row = None
+                try:
+                    cursor.execute("""
+                        SELECT UserId, UserName, Email 
+                        FROM users 
+                        WHERE UserId = %s
+                        LIMIT 1
+                    """, [logged_in_user_id])
+                    user_row = cursor.fetchone()
+                except Exception as e:
+                    # If users table doesn't exist in current connection, try default
+                    try:
+                        with connections['default'].cursor() as default_cursor:
+                            default_cursor.execute("""
+                                SELECT UserId, UserName, Email 
+                                FROM users 
+                                WHERE UserId = %s
+                                LIMIT 1
+                            """, [logged_in_user_id])
+                            user_row = default_cursor.fetchone()
+                    except:
+                        pass
+                
+                if user_row:
+                    logged_in_user_name = user_row[1] if user_row[1] else f'User {logged_in_user_id}'
+                    logged_in_user_role = 'Manager'  # Default role, can be enhanced later
+                else:
+                    logged_in_user_name = f'User {logged_in_user_id}'
+                    logged_in_user_role = 'Manager'
 
                 # 1. Create workflow
 
                 workflow_id = str(uuid.uuid4()).replace('-', '').upper()[:16]
 
                 cursor.execute("""
-
                     INSERT INTO approval_workflows 
-
                     (workflow_id, workflow_name, workflow_type, description, business_object_type, 
-
-                     is_active, created_by, created_at, updated_at) 
-
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-
+                     TenantId, is_active, created_by, created_at, updated_at) 
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, [
-
                     workflow_id,
-
                     workflow_data.get('workflow_name', ''),
-
                     workflow_data.get('workflow_type', 'MULTI_LEVEL'),
-
                     workflow_data.get('description', ''),
-
                     workflow_data.get('business_object_type', 'Vendor'),
-
+                    tenant_id,
                     True,
-
-                    60,  # GRC Administrator (default created_by)
-
+                    logged_in_user_id,
                     timezone.now(),
-
                     timezone.now()
-
                 ])
 
                 
@@ -4404,43 +4963,25 @@ def create_comprehensive_workflow(request):
                 # Note: approval_requests table does not have business_object_type/business_object_id
 
                 cursor.execute("""
-
                     INSERT INTO approval_requests 
-
                     (approval_id, workflow_id, request_title, request_description, requester_id, 
-
                      requester_department, priority, request_data, overall_status, 
-
-                     submission_date, created_at, updated_at) 
-
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-
+                     submission_date, created_at, updated_at, TenantId) 
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, [
-
                     approval_id,
-
                     workflow_id,
-
                     request_data.get('request_title', ''),
-
                     request_data.get('request_description', ''),
-
                     int(request_data.get('requester_id')) if str(request_data.get('requester_id')).isdigit() else request.session.get('user_id', 1),
-
                     request_data.get('requester_department', ''),
-
                     request_data.get('priority', 'MEDIUM'),
-
                     json.dumps(request_data),  # store entire request payload
-
                     'PENDING',
-
                     timezone.now(),
-
                     timezone.now(),
-
-                    timezone.now()
-
+                    timezone.now(),
+                    tenant_id
                 ])
 
                 
@@ -4635,7 +5176,7 @@ def create_comprehensive_workflow(request):
                                     print(f"Debug - No vendor_id in request data, trying to get from questionnaire_id: {questionnaire_id}")
                                     try:
                                         # Fetch vendor_id directly from Questionnaires table
-                                        from apps.vendor_questionnaire.models import Questionnaires
+                                        from tprm_backend.apps.vendor_questionnaire.models import Questionnaires
                                         questionnaire = Questionnaires.objects.filter(questionnaire_id=questionnaire_id).first()
                                         if questionnaire and questionnaire.vendor_id:
                                             vendor_id = questionnaire.vendor_id
@@ -4663,7 +5204,7 @@ def create_comprehensive_workflow(request):
                                 if questionnaire_assignment_id:
                                     print(f"Debug - No vendor_id in request data, trying to get from questionnaire_assignment_id: {questionnaire_assignment_id}")
                                     try:
-                                        from apps.vendor_questionnaire.models import QuestionnaireAssignments
+                                        from tprm_backend.apps.vendor_questionnaire.models import QuestionnaireAssignments
                                         assignment = QuestionnaireAssignments.objects.get(assignment_id=questionnaire_assignment_id)
                                         if assignment.temp_vendor:
                                             vendor_id = assignment.temp_vendor.id
@@ -4755,7 +5296,7 @@ def create_comprehensive_workflow(request):
                                         
                                         # Use the helper function to ensure lifecycle stage exists
                                         # First commit the current transaction to avoid conflicts
-                                        connection.commit()
+                                        connections[db_connection].commit()
                                         
                                         # Ensure lifecycle stage exists (for tracking only, not for approval_stages)
                                         from django.db import transaction
@@ -4805,17 +5346,19 @@ def create_comprehensive_workflow(request):
 
                     
 
+                    # Note: weightage column doesn't exist in approval_stages table
+                    # escalation_level is required but doesn't have a default value
                     cursor.execute("""
 
                         INSERT INTO approval_stages 
 
-                        (stage_id, approval_id, stage_order, weightage, stage_name, stage_description, 
+                        (stage_id, approval_id, stage_order, stage_name, stage_description, 
 
                          assigned_user_id, assigned_user_name, assigned_user_role, department, 
 
-                         stage_type, stage_status, deadline_date, started_at, response_data, is_mandatory, created_at, updated_at) 
+                         stage_type, stage_status, deadline_date, started_at, response_data, escalation_level, is_mandatory, TenantId, created_at, updated_at) 
 
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 
                     """, [
 
@@ -4825,17 +5368,15 @@ def create_comprehensive_workflow(request):
 
                         stage_config.get('stage_order', 1),
 
-                        stage_config.get('weightage'),
-
                         stage_config.get('stage_name', ''),
 
                         stage_config.get('stage_description', ''),
 
-                        stage_config.get('assigned_user_id', ''),
+                        stage_config.get('assigned_user_id'),  # Use selected user from dropdown
 
-                        stage_config.get('assigned_user_name', ''),
+                        stage_config.get('assigned_user_name', ''),  # Use selected user name from dropdown
 
-                        stage_config.get('assigned_user_role', ''),
+                        stage_config.get('assigned_user_role', ''),  # Use selected user role from dropdown
 
                         stage_config.get('department', ''),
 
@@ -4849,7 +5390,11 @@ def create_comprehensive_workflow(request):
 
                         json.dumps(initial_response_data),
 
+                        stage_config.get('escalation_level', 0),  # Default escalation level is 0
+
                         stage_config.get('is_mandatory', True),
+
+                        tenant_id,
 
                         timezone.now(),
 
@@ -4911,7 +5456,8 @@ def create_comprehensive_workflow(request):
 
                 cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
 
-                connection.commit()
+                # Commit using the same connection that was used for the cursor
+                connections[db_connection].commit()
 
                 
 
@@ -4958,7 +5504,7 @@ def create_comprehensive_workflow(request):
                                 questionnaire_id = rd.get('questionnaire_id')
                                 if questionnaire_id:
                                     try:
-                                        from apps.vendor_questionnaire.models import Questionnaires
+                                        from tprm_backend.apps.vendor_questionnaire.models import Questionnaires
                                         questionnaire = Questionnaires.objects.filter(questionnaire_id=questionnaire_id).first()
                                         if questionnaire and questionnaire.vendor_id:
                                             vendor_id = questionnaire.vendor_id
@@ -5084,13 +5630,34 @@ def create_comprehensive_workflow(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_active_questionnaires(request):
 
-    """Get all active questionnaires for selection"""
+    """Get all active questionnaires for selection
+    MULTI-TENANCY: Questionnaires may be shared across tenants
+    NOTE: Questionnaires table is in tprm_integration database, not default database
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
-        with connections['default'].cursor() as cursor:
+        # Use 'tprm' connection to access questionnaires table in tprm_integration database
+        # Fall back to 'default' if 'tprm' connection is not available
+        db_connection = 'tprm'
+        try:
+            # Check if 'tprm' connection exists
+            if 'tprm' not in connections.databases:
+                print("Warning: 'tprm' database connection not found, falling back to 'default'")
+                db_connection = 'default'
+            else:
+                print(f"Using 'tprm' database connection for questionnaires table (tprm_integration)")
+        except Exception as db_check_error:
+            print(f"Warning: Error checking database connections: {db_check_error}, using 'tprm' connection")
+
+        with connections[db_connection].cursor() as cursor:
 
             # First check if questionnaires table exists and has data
 
@@ -5188,11 +5755,18 @@ def get_active_questionnaires(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('create_vendor')
+@require_tenant
+@tenant_filter
 def add_dummy_users(request):
 
-    """Add dummy users to the users table for testing"""
+    """Add dummy users to the users table for testing
+    MULTI-TENANCY: Admin function for testing
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         with connections['default'].cursor() as cursor:
 
@@ -5288,13 +5862,13 @@ def add_dummy_users(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_vendors(request):
 
     """
-
     Get all vendors from temp_vendor table for selection in final vendor approval
-
-    
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
 
     Returns:
 
@@ -5303,69 +5877,65 @@ def get_vendors(request):
     """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
-        # Get vendors from temp_vendor table
+        # Use tprm database connection for vendor queries
+        db_connection = 'tprm'
+        try:
+            if 'tprm' not in connections.databases:
+                print("Warning: 'tprm' database connection not found, falling back to 'default'")
+                db_connection = 'default'
+        except Exception as db_check_error:
+            print(f"Warning: Error checking database connections: {db_check_error}, using 'tprm' connection")
 
-        vendors = TempVendor.objects.all().order_by('company_name')
+        with connections[db_connection].cursor() as cursor:
+            # MULTI-TENANCY: Get vendors from temp_vendor table filtered by TenantId
+            cursor.execute("""
+                SELECT 
+                    id, vendor_code, company_name, legal_name, business_type,
+                    industry_sector, risk_level, status, vendor_category,
+                    is_critical_vendor, has_data_access, has_system_access,
+                    website, annual_revenue, employee_count, headquarters_address,
+                    description, created_at, updated_at
+                FROM temp_vendor
+                WHERE TenantId = %s
+                ORDER BY company_name
+            """, [tenant_id])
 
-        
+            columns = [col[0] for col in cursor.description]
+            rows = cursor.fetchall()
 
-        vendor_list = []
-
-        for vendor in vendors:
-
-            vendor_data = {
-
-                'id': vendor.id,
-
-                'vendor_code': vendor.vendor_code,
-
-                'company_name': vendor.company_name,
-
-                'legal_name': vendor.legal_name,
-
-                'business_type': vendor.business_type,
-
-                'industry_sector': vendor.industry_sector,
-
-                'risk_level': vendor.risk_level,
-
-                'status': vendor.status,
-
-                'vendor_category': vendor.vendor_category,
-
-                'is_critical_vendor': vendor.is_critical_vendor,
-
-                'has_data_access': vendor.has_data_access,
-
-                'has_system_access': vendor.has_system_access,
-
-                'website': vendor.website,
-
-                'annual_revenue': str(vendor.annual_revenue) if vendor.annual_revenue else None,
-
-                'employee_count': vendor.employee_count,
-
-                'headquarters_address': vendor.headquarters_address,
-
-                'description': vendor.description,
-
-                'created_at': vendor.created_at.isoformat() if vendor.created_at else None,
-
-                'updated_at': vendor.updated_at.isoformat() if vendor.updated_at else None
-
-            }
-
-            vendor_list.append(vendor_data)
-
-        
+            vendor_list = []
+            for row in rows:
+                vendor_dict = dict(zip(columns, row))
+                vendor_data = {
+                    'id': vendor_dict.get('id'),
+                    'vendor_code': vendor_dict.get('vendor_code', ''),
+                    'company_name': vendor_dict.get('company_name', ''),
+                    'legal_name': vendor_dict.get('legal_name', ''),
+                    'business_type': vendor_dict.get('business_type', ''),
+                    'industry_sector': vendor_dict.get('industry_sector', ''),
+                    'risk_level': vendor_dict.get('risk_level', ''),
+                    'status': vendor_dict.get('status', ''),
+                    'vendor_category': vendor_dict.get('vendor_category', ''),
+                    'is_critical_vendor': vendor_dict.get('is_critical_vendor', False),
+                    'has_data_access': vendor_dict.get('has_data_access', False),
+                    'has_system_access': vendor_dict.get('has_system_access', False),
+                    'website': vendor_dict.get('website', ''),
+                    'annual_revenue': str(vendor_dict.get('annual_revenue', '')) if vendor_dict.get('annual_revenue') else None,
+                    'employee_count': vendor_dict.get('employee_count'),
+                    'headquarters_address': vendor_dict.get('headquarters_address', ''),
+                    'description': vendor_dict.get('description', ''),
+                    'created_at': vendor_dict.get('created_at').isoformat() if vendor_dict.get('created_at') else None,
+                    'updated_at': vendor_dict.get('updated_at').isoformat() if vendor_dict.get('updated_at') else None
+                }
+                vendor_list.append(vendor_data)
 
         return Response({
-
             'vendors': vendor_list,
-
             'count': len(vendor_list)
-
         }, status=status.HTTP_200_OK)
 
         
@@ -5390,13 +5960,13 @@ def get_vendors(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_vendor_detail(request, vendor_id):
 
     """
-
     Get detailed information for a specific vendor by ID
-
-    
+    MULTI-TENANCY: Ensures vendor belongs to tenant
 
     Args:
 
@@ -5411,91 +5981,88 @@ def get_vendor_detail(request, vendor_id):
     """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
-        vendor = TempVendor.objects.get(id=vendor_id)
+        # Use tprm database connection for vendor queries
+        db_connection = 'tprm'
+        try:
+            if 'tprm' not in connections.databases:
+                print("Warning: 'tprm' database connection not found, falling back to 'default'")
+                db_connection = 'default'
+        except Exception as db_check_error:
+            print(f"Warning: Error checking database connections: {db_check_error}, using 'tprm' connection")
 
-        
+        with connections[db_connection].cursor() as cursor:
+            # MULTI-TENANCY: Get vendor by ID and TenantId
+            cursor.execute("""
+                SELECT 
+                    id, vendor_code, company_name, legal_name, business_type,
+                    tax_id, duns_number, incorporation_date, industry_sector,
+                    website, annual_revenue, employee_count, headquarters_address,
+                    vendor_category, risk_level, status, is_critical_vendor,
+                    has_data_access, has_system_access, description,
+                    contacts, documents, created_at, updated_at
+                FROM temp_vendor
+                WHERE id = %s AND TenantId = %s
+            """, [vendor_id, tenant_id])
 
-        vendor_data = {
+            row = cursor.fetchone()
+            
+            if not row:
+                return Response({
+                    'error': 'Vendor not found',
+                    'details': f'No vendor found with ID {vendor_id} for tenant {tenant_id}'
+                }, status=status.HTTP_404_NOT_FOUND)
 
-            'id': vendor.id,
+            columns = [col[0] for col in cursor.description]
+            vendor_dict = dict(zip(columns, row))
 
-            'vendor_code': vendor.vendor_code,
-
-            'company_name': vendor.company_name,
-
-            'legal_name': vendor.legal_name,
-
-            'business_type': vendor.business_type,
-
-            'tax_id': vendor.tax_id,
-
-            'duns_number': vendor.duns_number,
-
-            'incorporation_date': vendor.incorporation_date.isoformat() if vendor.incorporation_date else None,
-
-            'industry_sector': vendor.industry_sector,
-
-            'website': vendor.website,
-
-            'annual_revenue': str(vendor.annual_revenue) if vendor.annual_revenue else None,
-
-            'employee_count': vendor.employee_count,
-
-            'headquarters_address': vendor.headquarters_address,
-
-            'vendor_category': vendor.vendor_category,
-
-            'risk_level': vendor.risk_level,
-
-            'status': vendor.status,
-
-            'is_critical_vendor': vendor.is_critical_vendor,
-
-            'has_data_access': vendor.has_data_access,
-
-            'has_system_access': vendor.has_system_access,
-
-            'description': vendor.description,
-
-            'contacts': vendor.contacts,
-
-            'documents': vendor.documents,
-
-            'created_at': vendor.created_at.isoformat() if vendor.created_at else None,
-
-            'updated_at': vendor.updated_at.isoformat() if vendor.updated_at else None
-
-        }
-
-        
+            vendor_data = {
+                'id': vendor_dict.get('id'),
+                'vendor_code': vendor_dict.get('vendor_code', ''),
+                'company_name': vendor_dict.get('company_name', ''),
+                'legal_name': vendor_dict.get('legal_name', ''),
+                'business_type': vendor_dict.get('business_type', ''),
+                'tax_id': vendor_dict.get('tax_id', ''),
+                'duns_number': vendor_dict.get('duns_number', ''),
+                'incorporation_date': vendor_dict.get('incorporation_date').isoformat() if vendor_dict.get('incorporation_date') else None,
+                'industry_sector': vendor_dict.get('industry_sector', ''),
+                'website': vendor_dict.get('website', ''),
+                'annual_revenue': str(vendor_dict.get('annual_revenue', '')) if vendor_dict.get('annual_revenue') else None,
+                'employee_count': vendor_dict.get('employee_count'),
+                'headquarters_address': vendor_dict.get('headquarters_address', ''),
+                'vendor_category': vendor_dict.get('vendor_category', ''),
+                'risk_level': vendor_dict.get('risk_level', ''),
+                'status': vendor_dict.get('status', ''),
+                'is_critical_vendor': vendor_dict.get('is_critical_vendor', False),
+                'has_data_access': vendor_dict.get('has_data_access', False),
+                'has_system_access': vendor_dict.get('has_system_access', False),
+                'description': vendor_dict.get('description', ''),
+                'contacts': vendor_dict.get('contacts'),
+                'documents': vendor_dict.get('documents'),
+                'created_at': vendor_dict.get('created_at').isoformat() if vendor_dict.get('created_at') else None,
+                'updated_at': vendor_dict.get('updated_at').isoformat() if vendor_dict.get('updated_at') else None
+            }
 
         return Response(vendor_data, status=status.HTTP_200_OK)
 
-        
-
-    except TempVendor.DoesNotExist:
-
-        return Response({
-
-            'error': 'Vendor not found',
-
-            'details': f'No vendor found with ID {vendor_id}'
-
-        }, status=status.HTTP_404_NOT_FOUND)
-
-        
-
     except Exception as e:
-
         print(f"Error fetching vendor detail: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        # Check if it's a "not found" type error
+        if 'not found' in str(e).lower() or 'does not exist' in str(e).lower():
+            return Response({
+                'error': 'Vendor not found',
+                'details': f'No vendor found with ID {vendor_id}'
+            }, status=status.HTTP_404_NOT_FOUND)
 
         return Response({
-
             'error': 'Failed to fetch vendor details',
-
             'details': str(e)
-
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -5508,20 +6075,25 @@ def get_vendor_detail(request, vendor_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def dashboard_stats(request):
 
-    """Get dashboard statistics for approval system"""
+    """Get dashboard statistics for approval system
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
-        from django.db import connections
+        # Use tprm database connection for vendor approval queries
+        cursor = connections['tprm'].cursor()
 
-        cursor = connections['default'].cursor()
-
-        
-
-        # Get basic counts filtered by business_object_type = 'Vendor'
-
+        # Get basic counts filtered by business_object_type = 'Vendor' and tenant
+        # MULTI-TENANCY: Filter by tenant
+        # Use temp_vendor from tprm database (no database prefix needed since we're using tprm connection)
         cursor.execute("""
 
             SELECT 
@@ -5539,12 +6111,14 @@ def dashboard_stats(request):
             FROM approval_requests a
 
             JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+            
+            LEFT JOIN temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
 
             WHERE w.business_object_type = 'Vendor'
 
-        """)
+            AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
-        
+        """, [tenant_id])
 
         result = cursor.fetchone()
 
@@ -5560,8 +6134,9 @@ def dashboard_stats(request):
 
         
 
-        # Get workflow type breakdown filtered by business_object_type = 'Vendor'
-
+        # Get workflow type breakdown filtered by business_object_type = 'Vendor' and tenant
+        # MULTI-TENANCY: Filter by tenant
+        # Use temp_vendor since the table exists in that database
         cursor.execute("""
 
             SELECT 
@@ -5573,14 +6148,16 @@ def dashboard_stats(request):
             FROM approval_requests a
 
             JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+            
+            LEFT JOIN temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
 
             WHERE w.business_object_type = 'Vendor'
+            
+            AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
             GROUP BY w.workflow_type
 
-        """)
-
-        
+        """, [tenant_id])
 
         workflow_breakdown = {}
 
@@ -5590,8 +6167,9 @@ def dashboard_stats(request):
 
         
 
-        # Get priority breakdown filtered by business_object_type = 'Vendor'
-
+        # Get priority breakdown filtered by business_object_type = 'Vendor' and tenant
+        # MULTI-TENANCY: Filter by tenant
+        # Use temp_vendor since the table exists in that database
         cursor.execute("""
 
             SELECT 
@@ -5603,14 +6181,16 @@ def dashboard_stats(request):
             FROM approval_requests a
 
             JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+            
+            LEFT JOIN temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
 
             WHERE w.business_object_type = 'Vendor'
+            
+            AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
             GROUP BY a.priority
 
-        """)
-
-        
+        """, [tenant_id])
 
         priority_breakdown = {}
 
@@ -5629,7 +6209,8 @@ def dashboard_stats(request):
         
 
         week_ago = timezone.now() - timedelta(days=7)
-
+        
+        # Use temp_vendor since the table exists in that database
         cursor.execute("""
 
             SELECT COUNT(*) as recent_activity
@@ -5637,14 +6218,16 @@ def dashboard_stats(request):
             FROM approval_requests a
 
             JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+            
+            LEFT JOIN temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
 
             WHERE w.business_object_type = 'Vendor'
+            
+            AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
             AND a.created_at >= %s
 
-        """, [week_ago])
-
-        
+        """, [tenant_id, week_ago])
 
         result = cursor.fetchone()
 
@@ -5677,48 +6260,60 @@ def dashboard_stats(request):
     except Exception as e:
 
         print(f"Error in dashboard stats: {str(e)}")
+        import traceback
+        traceback.print_exc()
 
         # Fallback to basic counts filtered by business_object_type = 'Vendor'
+        try:
+            # Use tprm database connection for vendor approval queries
+            cursor = connections['tprm'].cursor()
+            
+            # Use temp_vendor from tprm database (no database prefix needed since we're using tprm connection)
+            cursor.execute("""
 
-        cursor = connections['default'].cursor()
+                SELECT 
 
-        cursor.execute("""
+                    COUNT(*) as total_requests,
 
-            SELECT 
+                    SUM(CASE WHEN a.overall_status = 'PENDING' THEN 1 ELSE 0 END) as pending_requests,
 
-                COUNT(*) as total_requests,
+                    SUM(CASE WHEN a.overall_status = 'IN_PROGRESS' THEN 1 ELSE 0 END) as in_progress_requests,
 
-                SUM(CASE WHEN a.overall_status = 'PENDING' THEN 1 ELSE 0 END) as pending_requests,
+                    SUM(CASE WHEN a.overall_status = 'APPROVED' THEN 1 ELSE 0 END) as approved_requests,
 
-                SUM(CASE WHEN a.overall_status = 'IN_PROGRESS' THEN 1 ELSE 0 END) as in_progress_requests,
+                    SUM(CASE WHEN a.overall_status = 'REJECTED' THEN 1 ELSE 0 END) as rejected_requests
 
-                SUM(CASE WHEN a.overall_status = 'APPROVED' THEN 1 ELSE 0 END) as approved_requests,
+                FROM approval_requests a
 
-                SUM(CASE WHEN a.overall_status = 'REJECTED' THEN 1 ELSE 0 END) as rejected_requests
+                JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+                
+                LEFT JOIN temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
 
-            FROM approval_requests a
+                WHERE w.business_object_type = 'Vendor'
+                
+                AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
-            JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+            """, [tenant_id])
 
-            WHERE w.business_object_type = 'Vendor'
+            result = cursor.fetchone()
 
-        """)
+            total_requests = result[0] or 0 if result else 0
 
-        
+            pending_requests = result[1] or 0 if result and len(result) > 1 else 0
 
-        result = cursor.fetchone()
+            in_progress_requests = result[2] or 0 if result and len(result) > 2 else 0
 
-        total_requests = result[0] or 0
+            approved_requests = result[3] or 0 if result and len(result) > 3 else 0
 
-        pending_requests = result[1] or 0
+            rejected_requests = result[4] or 0 if result and len(result) > 4 else 0
 
-        in_progress_requests = result[2] or 0
-
-        approved_requests = result[3] or 0
-
-        rejected_requests = result[4] or 0
-
-        
+        except Exception as fallback_error:
+            print(f"Error in fallback query: {str(fallback_error)}")
+            total_requests = 0
+            pending_requests = 0
+            in_progress_requests = 0
+            approved_requests = 0
+            rejected_requests = 0
 
         return Response({
 
@@ -5748,13 +6343,21 @@ def dashboard_stats(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def recent_requests(request):
 
-    """Get recent approval requests for dashboard"""
+    """Get recent approval requests for dashboard
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
-        cursor = connections['default'].cursor()
+        # Use tprm database connection for vendor approval queries
+        cursor = connections['tprm'].cursor()
 
         
 
@@ -5779,9 +6382,9 @@ def recent_requests(request):
             return Response([])
 
         
-
         # Fetch recent requests with workflow details
-
+        # MULTI-TENANCY: Filter by tenant
+        # Use temp_vendor from tprm database (no database prefix needed since we're using tprm connection)
         cursor.execute("""
 
             SELECT 
@@ -5797,14 +6400,18 @@ def recent_requests(request):
             FROM approval_requests a
 
             JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+            
+            LEFT JOIN temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
 
             WHERE w.business_object_type = 'Vendor'
+            
+            AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
             ORDER BY a.created_at DESC
 
             LIMIT 10
 
-        """)
+        """, [tenant_id])
 
         
 
@@ -5858,13 +6465,21 @@ def recent_requests(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def user_tasks(request, user_id):
 
-    """Get tasks assigned to a specific user for dashboard"""
+    """Get tasks assigned to a specific user for dashboard
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
-        cursor = connections['default'].cursor()
+        # Use tprm database connection for vendor approval queries
+        cursor = connections['tprm'].cursor()
 
         
 
@@ -5899,9 +6514,9 @@ def user_tasks(request, user_id):
             return Response([])
 
         
-
         # Fetch user's assigned stages that are pending or in progress
-
+        # MULTI-TENANCY: Filter by tenant
+        # Use temp_vendor from tprm database (no database prefix needed since we're using tprm connection)
         cursor.execute("""
 
             SELECT 
@@ -5929,18 +6544,22 @@ def user_tasks(request, user_id):
             JOIN approval_requests a ON s.approval_id = a.approval_id
 
             JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+            
+            LEFT JOIN temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
 
             WHERE s.assigned_user_id = %s 
 
             AND s.stage_status IN ('PENDING', 'IN_PROGRESS')
 
             AND w.business_object_type = 'Vendor'
+            
+            AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
             ORDER BY s.deadline_date ASC, s.created_at DESC
 
             LIMIT 10
 
-        """, [user_id])
+        """, [user_id, tenant_id])
 
         
 
@@ -6006,13 +6625,21 @@ def user_tasks(request, user_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def user_requests(request, user_id):
 
-    """Get requests created by a specific user for dashboard"""
+    """Get requests created by a specific user for dashboard
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
-        cursor = connections['default'].cursor()
+        # Use tprm database connection for vendor approval queries
+        cursor = connections['tprm'].cursor()
 
         
 
@@ -6037,9 +6664,9 @@ def user_requests(request, user_id):
             return Response([])
 
         
-
         # Fetch requests created by the user with workflow details
-
+        # MULTI-TENANCY: Filter by tenant
+        # Use temp_vendor from tprm database (no database prefix needed since we're using tprm connection)
         cursor.execute("""
 
             SELECT 
@@ -6055,16 +6682,20 @@ def user_requests(request, user_id):
             FROM approval_requests a
 
             JOIN approval_workflows w ON a.workflow_id = w.workflow_id
+            
+            LEFT JOIN temp_vendor tv ON JSON_EXTRACT(a.request_data, '$.vendor_id') = tv.id
 
             WHERE a.requester_id = %s
 
             AND w.business_object_type = 'Vendor'
+            
+            AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
             ORDER BY a.created_at DESC
 
             LIMIT 10
 
-        """, [user_id])
+        """, [user_id, tenant_id])
 
         
 
@@ -6118,13 +6749,13 @@ def user_requests(request, user_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_vendor_risks(request, vendor_id):
 
     """
-
     Get all risks associated with a specific vendor - both internal and external
-
-    
+    MULTI-TENANCY: Ensures vendor belongs to tenant
 
     Args:
 
@@ -6139,151 +6770,136 @@ def get_vendor_risks(request, vendor_id):
     """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
+
+        # MULTI-TENANCY: Verify vendor belongs to tenant using tprm database
+        db_connection = 'tprm'
+        try:
+            if 'tprm' not in connections.databases:
+                print("Warning: 'tprm' database connection not found, falling back to 'default'")
+                db_connection = 'default'
+        except Exception as db_check_error:
+            print(f"Warning: Error checking database connections: {db_check_error}, using 'tprm' connection")
+
+        with connections[db_connection].cursor() as cursor:
+            cursor.execute("""
+                SELECT id FROM temp_vendor
+                WHERE id = %s AND TenantId = %s
+            """, [vendor_id, tenant_id])
+            
+            vendor_row = cursor.fetchone()
+            if not vendor_row:
+                return Response({
+                    'error': 'Vendor not found or does not belong to your tenant'
+                }, status=status.HTTP_404_NOT_FOUND)
 
         # Get internal risks from risk_tprm table where entity=vendor_management and row matches vendor_id
+        # MULTI-TENANCY: Filter by tenant by joining with temp_vendor
+        # Note: 'row' is a reserved keyword in MySQL, so we need to escape it with backticks
+        with connections[db_connection].cursor() as cursor:
+            cursor.execute("""
+                SELECT 
+                    r.id, r.title, r.description, r.likelihood, r.impact, r.score,
+                    r.priority, r.ai_explanation, r.suggested_mitigations, r.status,
+                    r.assigned_to, r.created_by, r.created_at, r.updated_at,
+                    r.acknowledged_at, r.mitigated_at, r.exposure_rating, r.risk_type,
+                    r.entity, r.data, r.`row`
+                FROM risk_tprm r
+                LEFT JOIN temp_vendor tv ON r.`row` = CAST(tv.id AS CHAR)
+                WHERE r.entity = 'vendor_management'
+                AND r.`row` = %s
+                AND tv.TenantId = %s
+                ORDER BY r.created_at DESC
+            """, [str(vendor_id), tenant_id])
 
-        internal_risks = Risk.objects.filter(
+            columns = [col[0] for col in cursor.description]
+            risk_rows = cursor.fetchall()
 
-            entity='vendor_management',
+            print(f"Debug - Querying risks for vendor {vendor_id} with entity='vendor_management' and row='{vendor_id}'")
+            print(f"Debug - Found {len(risk_rows)} internal risks")
 
-            row=str(vendor_id)
-
-        ).order_by('-created_at')
-
-        
-
-        print(f"Debug - Querying risks for vendor {vendor_id} with entity='vendor_management' and row='{vendor_id}'")
-
-        print(f"Debug - Found {internal_risks.count()} internal risks")
-
-        
-
-        internal_risk_list = []
-
-        for risk in internal_risks:
-
-            risk_data = {
-
-                'id': risk.id,
-
-                'vendor_id': risk.row,  # Using row field as vendor_id
-
-                'title': risk.title,
-
-                'description': risk.description,
-
-                'likelihood': risk.likelihood,
-
-                'impact': risk.impact,
-
-                'score': risk.score,
-
-                'priority': risk.priority,
-
-                'ai_explanation': risk.ai_explanation,
-
-                'suggested_mitigations': risk.suggested_mitigations,
-
-                'status': risk.status,
-
-                'assigned_to': risk.assigned_to,
-
-                'created_by': risk.created_by,
-
-                'created_at': risk.created_at.isoformat() if risk.created_at else None,
-
-                'updated_at': risk.updated_at.isoformat() if risk.updated_at else None,
-
-                'acknowledged_at': risk.acknowledged_at.isoformat() if risk.acknowledged_at else None,
-
-                'mitigated_at': risk.mitigated_at.isoformat() if risk.mitigated_at else None,
-
-                'exposure_rating': risk.exposure_rating,
-
-                'risk_type': risk.risk_type,
-
-                'entity': risk.entity,
-
-                'data': risk.data
-
-            }
-
-            internal_risk_list.append(risk_data)
+            internal_risk_list = []
+            for row in risk_rows:
+                risk_dict = dict(zip(columns, row))
+                risk_data = {
+                    'id': risk_dict.get('id'),
+                    'vendor_id': risk_dict.get('row'),  # Using row field as vendor_id
+                    'title': risk_dict.get('title', ''),
+                    'description': risk_dict.get('description', ''),
+                    'likelihood': risk_dict.get('likelihood'),
+                    'impact': risk_dict.get('impact'),
+                    'score': risk_dict.get('score'),
+                    'priority': risk_dict.get('priority', ''),
+                    'ai_explanation': risk_dict.get('ai_explanation', ''),
+                    'suggested_mitigations': risk_dict.get('suggested_mitigations'),
+                    'status': risk_dict.get('status', ''),
+                    'assigned_to': risk_dict.get('assigned_to'),
+                    'created_by': risk_dict.get('created_by'),
+                    'created_at': risk_dict.get('created_at').isoformat() if risk_dict.get('created_at') else None,
+                    'updated_at': risk_dict.get('updated_at').isoformat() if risk_dict.get('updated_at') else None,
+                    'acknowledged_at': risk_dict.get('acknowledged_at').isoformat() if risk_dict.get('acknowledged_at') else None,
+                    'mitigated_at': risk_dict.get('mitigated_at').isoformat() if risk_dict.get('mitigated_at') else None,
+                    'exposure_rating': risk_dict.get('exposure_rating'),
+                    'risk_type': risk_dict.get('risk_type', ''),
+                    'entity': risk_dict.get('entity', ''),
+                    'data': risk_dict.get('data', '')
+                }
+                internal_risk_list.append(risk_data)
 
         
 
         # Get external risks from screening results with ESCALATED status
-
+        # MULTI-TENANCY: Filter by tenant through vendor
         external_risk_list = []
-
         
-
-        # First get all screening results for this vendor
-
-        screening_results = ExternalScreeningResults.objects.filter(vendor_id=vendor_id)
-
-        
-
-        # For each screening result, get matches with ESCALATED resolution status
-
-        for screening in screening_results:
-
-            escalated_matches = ScreeningMatches.objects.filter(
-
-                screening_id=screening.screening_id,
-
-                resolution_status='ESCALATED'
-
-            )
-
+        with connections[db_connection].cursor() as cursor:
+            # Get screening results and matches with ESCALATED status, filtered by tenant
+            cursor.execute("""
+                SELECT 
+                    sm.match_id, esr.screening_id, esr.vendor_id, esr.screening_type,
+                    esr.screening_date, sm.match_type, sm.match_score, sm.match_details,
+                    sm.resolution_status, sm.resolution_notes, esr.search_terms,
+                    esr.total_matches, esr.high_risk_matches, sm.is_false_positive,
+                    sm.resolved_by, sm.resolved_date, esr.last_updated, esr.reviewed_by,
+                    esr.review_date, esr.review_comments
+                FROM external_screening_results esr
+                INNER JOIN screening_matches sm ON esr.screening_id = sm.screening_id
+                INNER JOIN temp_vendor tv ON esr.vendor_id = tv.id
+                WHERE esr.vendor_id = %s
+                AND sm.resolution_status = 'ESCALATED'
+                AND tv.TenantId = %s
+                ORDER BY esr.screening_date DESC
+            """, [vendor_id, tenant_id])
             
-
-            for match in escalated_matches:
-
+            columns = [col[0] for col in cursor.description]
+            match_rows = cursor.fetchall()
+            
+            for row in match_rows:
+                match_dict = dict(zip(columns, row))
                 external_risk = {
-
-                    'match_id': match.match_id,
-
-                    'screening_id': screening.screening_id,
-
-            'vendor_id': vendor_id,
-
-                    'screening_type': screening.screening_type,
-
-                    'screening_date': screening.screening_date.isoformat() if screening.screening_date else None,
-
-                    'match_type': match.match_type,
-
-                    'match_score': float(match.match_score) if match.match_score else None,
-
-                    'match_details': match.match_details,
-
-                    'resolution_status': match.resolution_status,
-
-                    'resolution_notes': match.resolution_notes,
-
-                    'search_terms': screening.search_terms,
-
-                    'total_matches': screening.total_matches,
-
-                    'high_risk_matches': screening.high_risk_matches,
-
-                    'is_false_positive': match.is_false_positive,
-
-                    'resolved_by': match.resolved_by,
-
-                    'resolved_date': match.resolved_date.isoformat() if match.resolved_date else None,
-
-                    'last_updated': screening.last_updated.isoformat() if screening.last_updated else None,
-
-                    'reviewed_by': screening.reviewed_by,
-
-                    'review_date': screening.review_date.isoformat() if screening.review_date else None,
-
-                    'review_comments': screening.review_comments
-
+                    'match_id': match_dict.get('match_id'),
+                    'screening_id': match_dict.get('screening_id'),
+                    'vendor_id': match_dict.get('vendor_id'),
+                    'screening_type': match_dict.get('screening_type', ''),
+                    'screening_date': match_dict.get('screening_date').isoformat() if match_dict.get('screening_date') else None,
+                    'match_type': match_dict.get('match_type', ''),
+                    'match_score': float(match_dict.get('match_score')) if match_dict.get('match_score') else None,
+                    'match_details': match_dict.get('match_details'),
+                    'resolution_status': match_dict.get('resolution_status', ''),
+                    'resolution_notes': match_dict.get('resolution_notes', ''),
+                    'search_terms': match_dict.get('search_terms'),
+                    'total_matches': match_dict.get('total_matches', 0),
+                    'high_risk_matches': match_dict.get('high_risk_matches', 0),
+                    'is_false_positive': match_dict.get('is_false_positive', False),
+                    'resolved_by': match_dict.get('resolved_by'),
+                    'resolved_date': match_dict.get('resolved_date').isoformat() if match_dict.get('resolved_date') else None,
+                    'last_updated': match_dict.get('last_updated').isoformat() if match_dict.get('last_updated') else None,
+                    'reviewed_by': match_dict.get('reviewed_by'),
+                    'review_date': match_dict.get('review_date').isoformat() if match_dict.get('review_date') else None,
+                    'review_comments': match_dict.get('review_comments', '')
                 }
-
                 external_risk_list.append(external_risk)
 
         
@@ -6325,28 +6941,34 @@ def get_vendor_risks(request, vendor_id):
         
 
         # Additional debug info for internal risks
-
-        if internal_risks.exists():
-
+        if len(internal_risk_list) > 0:
             print(f"Debug - Internal risks found:")
-
-            for risk in internal_risks:
-
-                print(f"  - Risk ID: {risk.id}, Title: {risk.title}, Priority: {risk.priority}, Status: {risk.status}")
-
+            for risk in internal_risk_list:
+                print(f"  - Risk ID: {risk.get('id')}, Title: {risk.get('title')}, Priority: {risk.get('priority')}, Status: {risk.get('status')}")
         else:
-
             print(f"Debug - No internal risks found for vendor {vendor_id}")
-
-            # Check if there are any risks with different entity values
-
-            all_risks_for_vendor = Risk.objects.filter(row=str(vendor_id))
-
-            print(f"Debug - Total risks for vendor {vendor_id} (any entity): {all_risks_for_vendor.count()}")
-
-            for risk in all_risks_for_vendor:
-
-                print(f"  - Risk ID: {risk.id}, Entity: {risk.entity}, Title: {risk.title}")
+            
+            # Check if there are any risks with different entity values using raw SQL
+            # Note: 'row' is a reserved keyword in MySQL, so we need to escape it with backticks
+            with connections[db_connection].cursor() as debug_cursor:
+                debug_cursor.execute("""
+                    SELECT COUNT(*) as total
+                    FROM risk_tprm
+                    WHERE `row` = %s
+                """, [str(vendor_id)])
+                count_row = debug_cursor.fetchone()
+                total_count = count_row[0] if count_row else 0
+                print(f"Debug - Total risks for vendor {vendor_id} (any entity): {total_count}")
+                
+                debug_cursor.execute("""
+                    SELECT id, entity, title
+                    FROM risk_tprm
+                    WHERE `row` = %s
+                    LIMIT 10
+                """, [str(vendor_id)])
+                debug_risks = debug_cursor.fetchall()
+                for risk_row in debug_risks:
+                    print(f"  - Risk ID: {risk_row[0]}, Entity: {risk_row[1]}, Title: {risk_row[2]}")
 
         
 
@@ -6432,15 +7054,25 @@ def get_vendor_risks(request, vendor_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_submitted_questionnaire_assignments(request):
 
-    """Get all questionnaire assignments with RESPONDED status for response approval"""
+    """Get all questionnaire assignments with RESPONDED status for response approval
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
+        # MULTI-TENANCY: Filter assignments by tenant through temp_vendor
         assignments = QuestionnaireAssignments.objects.filter(
 
-            status='RESPONDED'
+            status='RESPONDED',
+            
+            temp_vendor__tenant_id=tenant_id
 
         ).select_related(
 
@@ -6628,11 +7260,18 @@ def get_submitted_questionnaire_assignments(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('ReviewApproveResponses')
+@require_tenant
+@tenant_filter
 def save_reviewer_scores(request):
 
-    """Save reviewer scores for questionnaire responses"""
+    """Save reviewer scores for questionnaire responses
+    MULTI-TENANCY: Ensures assignment belongs to tenant's vendor
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         data = request.data
 
@@ -6655,10 +7294,11 @@ def save_reviewer_scores(request):
         
 
         # Get the assignment
+        # MULTI-TENANCY: Filter by tenant
 
         try:
 
-            assignment = QuestionnaireAssignments.objects.get(assignment_id=assignment_id)
+            assignment = QuestionnaireAssignments.objects.get(assignment_id=assignment_id, temp_vendor__tenant_id=tenant_id)
 
         except QuestionnaireAssignments.DoesNotExist:
 
@@ -7242,9 +7882,13 @@ def save_reviewer_scores(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('update_vendor')
+@require_tenant
+@tenant_filter
 def save_stage_draft(request):
 
-    """Save draft decision for an approval stage"""
+    """Save draft decision for an approval stage
+    MULTI-TENANCY: Ensures stage belongs to tenant's vendor
+    """
 
     try:
 
@@ -7412,11 +8056,18 @@ def save_stage_draft(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def load_stage_draft(request, stage_id):
 
-    """Load saved draft decision for an approval stage"""
+    """Load saved draft decision for an approval stage
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         user_id = request.query_params.get('user_id')
 
@@ -7425,16 +8076,23 @@ def load_stage_draft(request, stage_id):
         with connections['default'].cursor() as cursor:
 
             # Get the stage with draft data
+            # MULTI-TENANCY: Filter by tenant
 
             cursor.execute("""
 
-                SELECT approval_id, stage_name, stage_status, assigned_user_id, response_data
+                SELECT ast.approval_id, ast.stage_name, ast.stage_status, ast.assigned_user_id, ast.response_data
 
-                FROM approval_stages 
+                FROM approval_stages ast
 
-                WHERE stage_id = %s
+                JOIN approval_requests ar ON ast.approval_id = ar.approval_id
+                
+                LEFT JOIN temp_vendor tv ON JSON_EXTRACT(ar.request_data, '$.vendor_id') = tv.id
 
-            """, [stage_id])
+                WHERE ast.stage_id = %s
+                
+                AND (tv.TenantId = %s OR tv.TenantId IS NULL)
+
+            """, [stage_id, tenant_id])
 
             
 
@@ -7512,15 +8170,40 @@ def load_stage_draft(request, stage_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_parallel_approval_scoring_data(request, approval_id):
 
-    """Get aggregated scoring data for parallel response approval workflows"""
+    """Get aggregated scoring data for parallel response approval workflows
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
-        with connections['default'].cursor() as cursor:
+        # Use tprm database connection for queries involving temp_vendor
+        # temp_vendor table is in tprm_integration database, not grc2
+        from django.db import connections as db_connections
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Use tprm connection if available, otherwise fall back to default
+        if 'tprm' in db_connections.databases:
+            db_connection = db_connections['tprm']
+            db_name = db_connection.settings_dict.get('NAME', 'tprm_integration')
+            logger.info(f"[Parallel Scoring] Using tprm database connection: {db_name} for approval_id: {approval_id}")
+        else:
+            db_connection = db_connections['default']
+            db_name = db_connection.settings_dict.get('NAME', '')
+            logger.warning(f"[Parallel Scoring] tprm connection not found, using default: {db_name}")
+
+        with db_connection.cursor() as cursor:
 
             # Get the approval request and verify it's a parallel response approval
+            # MULTI-TENANCY: Filter by tenant
+            # Note: temp_vendor is in tprm_integration database, so we use tprm connection
 
             cursor.execute("""
 
@@ -7529,10 +8212,14 @@ def get_parallel_approval_scoring_data(request, approval_id):
                 FROM approval_requests ar
 
                 JOIN approval_workflows aw ON ar.workflow_id = aw.workflow_id
+                
+                LEFT JOIN temp_vendor tv ON JSON_EXTRACT(ar.request_data, '$.vendor_id') = tv.id
 
                 WHERE ar.approval_id = %s
 
-            """, [approval_id])
+                AND (tv.TenantId = %s OR tv.TenantId IS NULL)
+
+            """, [approval_id, tenant_id])
 
             
 
@@ -7606,7 +8293,8 @@ def get_parallel_approval_scoring_data(request, approval_id):
 
             
 
-            # Get all stages for this approval (including raw influence weightage per reviewer)
+            # Get all stages for this approval
+            # Note: weightage column doesn't exist in approval_stages table, so it's not selected
             # Join with users table to get proper user names in case assigned_user_name is NULL
 
             cursor.execute("""
@@ -7625,8 +8313,7 @@ def get_parallel_approval_scoring_data(request, approval_id):
                     ) as assigned_user_name, 
                     ast.stage_status, 
                     ast.response_data, 
-                    ast.completed_at, 
-                    ast.weightage
+                    ast.completed_at
                 
                 FROM approval_stages ast
                 LEFT JOIN users u ON ast.assigned_user_id = u.UserId
@@ -7649,11 +8336,14 @@ def get_parallel_approval_scoring_data(request, approval_id):
 
             for stage_row in cursor.fetchall():
 
-                stage_id, stage_name, user_id, user_name, stage_status, response_data, completed_at, weightage = stage_row
+                stage_id, stage_name, user_id, user_name, stage_status, response_data, completed_at = stage_row
+                
+                # weightage column doesn't exist in approval_stages table, so set to None
+                weightage = None
 
                 
                 # Debug logging
-                print(f"Debug - Stage: {stage_id}, UserID: {user_id}, UserName: '{user_name}', Status: {stage_status}, Weightage: {weightage}")
+                print(f"Debug - Stage: {stage_id}, UserID: {user_id}, UserName: '{user_name}', Status: {stage_status}")
 
                 stage_data = {
 
@@ -8222,11 +8912,18 @@ def get_parallel_approval_scoring_data(request, approval_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('update_vendor')
+@require_tenant
+@tenant_filter
 def save_final_assignee_scores(request):
 
-    """Save final scores made by assignee for parallel response approval"""
+    """Save final scores made by assignee for parallel response approval
+    MULTI-TENANCY: Ensures assignment belongs to tenant's vendor
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         data = request.data
 
@@ -8263,10 +8960,11 @@ def save_final_assignee_scores(request):
         
 
         # Get the assignment
+        # MULTI-TENANCY: Filter by tenant
 
         try:
 
-            assignment = QuestionnaireAssignments.objects.get(assignment_id=assignment_id)
+            assignment = QuestionnaireAssignments.objects.get(assignment_id=assignment_id, temp_vendor__tenant_id=tenant_id)
 
         except QuestionnaireAssignments.DoesNotExist:
 
@@ -9145,11 +9843,18 @@ def save_final_assignee_scores(request):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('update_vendor')
+@require_tenant
+@tenant_filter
 def update_question_scores_in_json(request):
 
-    """Update individual question scores in the request_data JSON"""
+    """Update individual question scores in the request_data JSON
+    MULTI-TENANCY: Ensures assignment belongs to tenant's vendor
+    """
 
     try:
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
 
         data = request.data
 
@@ -9728,8 +10433,12 @@ def _end_questionnaire_approval_start_questionnaire_response(vendor_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def test_lifecycle_stage_3(request, vendor_id):
-    """Test function to ensure lifecycle stage 3 is correctly recorded for a vendor"""
+    """Test function to ensure lifecycle stage 3 is correctly recorded for a vendor
+    MULTI-TENANCY: Ensures vendor belongs to tenant
+    """
     try:
         # Convert vendor_id to integer
         vendor_id = int(vendor_id)
@@ -9777,58 +10486,98 @@ def test_lifecycle_stage_3(request, vendor_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def check_risk_generation_status(request, approval_id):
-    """Check the status of risk generation for a given approval ID"""
+    """Check the status of risk generation for a given approval ID
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    """
     try:
-        from risk_analysis_vendor.models import Risk
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
         
-        # Check if risks have been generated for this approval
-        risks = Risk.objects.filter(
-            source_type='vendor_management',
-            source_approval_id=approval_id
-        )
-        
-        risk_count = risks.count()
-        
-        if risk_count > 0:
-            return Response({
-                'status': 'completed',
-                'risk_count': risk_count,
-                'message': f'Risk generation completed. {risk_count} risks identified.'
-            }, status=status.HTTP_200_OK)
+        # Use tprm database connection for queries
+        from django.db import connections as db_connections
+        if 'tprm' in db_connections.databases:
+            db_connection = db_connections['tprm']
         else:
-            # Check if the approval exists and is approved
-            with connections['default'].cursor() as cursor:
+            db_connection = db_connections['default']
+        
+        # First, check if the approval exists and get vendor_id from request_data
+        with db_connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT overall_status, request_data 
+                FROM approval_requests 
+                WHERE approval_id = %s
+            """, [approval_id])
+            
+            result = cursor.fetchone()
+            
+            if not result:
+                return Response({
+                    'status': 'not_found',
+                    'message': 'Approval request not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            overall_status, request_data = result
+            
+            # Parse request_data to get vendor_id
+            vendor_id = None
+            if request_data:
+                try:
+                    if isinstance(request_data, str):
+                        request_data_obj = json.loads(request_data)
+                    else:
+                        request_data_obj = request_data
+                    
+                    rd = request_data_obj.get('request_data', request_data_obj)
+                    vendor_data = rd.get('vendor_data', {})
+                    vendor_id = vendor_data.get('vendor_id') or vendor_data.get('id')
+                except:
+                    pass
+            
+            # Check if risks have been generated for this vendor
+            # Risks are stored with entity='vendor_management' and row=vendor_id
+            # MULTI-TENANCY: Filter by tenant by joining with temp_vendor
+            if vendor_id:
                 cursor.execute("""
-                    SELECT overall_status, request_data 
-                    FROM approval_requests 
-                    WHERE approval_id = %s
-                """, [approval_id])
+                    SELECT COUNT(*) as risk_count
+                    FROM risk_tprm r
+                    LEFT JOIN temp_vendor tv ON r.`row` = CAST(tv.id AS CHAR)
+                    WHERE r.entity = 'vendor_management'
+                    AND r.`row` = %s
+                    AND (tv.TenantId = %s OR tv.TenantId IS NULL)
+                """, [str(vendor_id), tenant_id])
                 
-                result = cursor.fetchone()
+                risk_result = cursor.fetchone()
+                risk_count = risk_result[0] if risk_result else 0
                 
-                if not result:
+                if risk_count > 0:
                     return Response({
-                        'status': 'not_found',
-                        'message': 'Approval request not found'
-                    }, status=status.HTTP_404_NOT_FOUND)
-                
-                overall_status, request_data = result
-                
-                if overall_status == 'APPROVED':
-                    return Response({
-                        'status': 'in_progress',
-                        'risk_count': 0,
-                        'message': 'Risk generation is in progress...'
+                        'status': 'completed',
+                        'risk_count': risk_count,
+                        'message': f'Risk generation completed. {risk_count} risks identified.'
                     }, status=status.HTTP_200_OK)
-                else:
-                    return Response({
-                        'status': 'pending',
-                        'message': 'Approval not yet completed'
-                    }, status=status.HTTP_200_OK)
+            
+            # If no risks found but approval is approved, risk generation might be in progress
+            if overall_status == 'APPROVED':
+                return Response({
+                    'status': 'in_progress',
+                    'risk_count': 0,
+                    'message': 'Risk generation is in progress...'
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    'status': 'pending',
+                    'message': 'Approval not yet completed'
+                }, status=status.HTTP_200_OK)
     
     except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
         print(f"Error checking risk generation status: {str(e)}")
+        print(f"Traceback: {error_trace}")
         return Response({
             'error': 'Failed to check risk generation status',
             'details': str(e)
@@ -9839,9 +10588,12 @@ def check_risk_generation_status(request, approval_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_vendor_required('view_vendors')
+@require_tenant
+@tenant_filter
 def get_approval_version_history(request, approval_id):
     """
     Get complete version history for an approval request with properly incremented version numbers.
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     
     Returns all versions ordered by version_number, showing every decision made in the approval workflow.
     Each approval, rejection, and decision is recorded with an incremented version number.

@@ -1555,7 +1555,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui'
 import contractsApi from '@/services/contractsApi'
 import { PopupService } from '@/popup/popupService'
 import apiService from '@/services/api'
-import { getApiUrl } from '@/utils/backendEnv.js'
+import { getTprmApiUrl } from '@/utils/backendEnv.js'
 
 // Router and route
 const router = useRouter()
@@ -1818,7 +1818,7 @@ const handleFileUpload = async (event) => {
       'Authorization': `Bearer ${token}`
     }
     
-    const uploadUrl = getApiUrl(`/contracts/contracts/${contractId}/upload-ocr/`)
+    const uploadUrl = getTprmApiUrl(`contracts/contracts/${contractId}/upload-ocr/`)
     
     console.log('📤 Request headers:', headers)
     console.log('📤 Request URL:', uploadUrl)

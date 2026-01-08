@@ -77,9 +77,9 @@ def check_audit_reports(request):
                 reviewer.UserName as ReviewerName
             FROM 
                 audit_report ar
-                JOIN audit a ON ar.AuditId = a.AuditId AND a.tenant_id = %s
-                JOIN users auditor ON a.auditor = auditor.UserId AND auditor.tenant_id = %s
-                LEFT JOIN users reviewer ON a.reviewer = reviewer.UserId AND reviewer.tenant_id = %s
+                JOIN audit a ON ar.AuditId = a.AuditId AND a.TenantId = %s
+                JOIN users auditor ON a.auditor = auditor.UserId AND auditor.TenantId = %s
+                LEFT JOIN users reviewer ON a.reviewer = reviewer.UserId AND reviewer.TenantId = %s
             WHERE 
                 ar.FrameworkId = %s
         """
@@ -209,8 +209,8 @@ def handle_selected_reports(audit, selected_reports, tenant_id):
                     cursor.execute("""
                         SELECT u.Email 
                         FROM users u 
-                        JOIN audit a ON u.UserId = a.Auditor AND u.tenant_id = %s
-                        WHERE a.AuditId = %s AND a.tenant_id = %s
+                        JOIN audit a ON u.UserId = a.Auditor AND u.TenantId = %s
+                        WHERE a.AuditId = %s AND a.TenantId = %s
                     """, [tenant_id, audit.AuditId, tenant_id])
                     auditor_email = cursor.fetchone()[0]
                 
@@ -324,9 +324,9 @@ def get_report_details(request):
                 auditor.UserName as auditor,
                 reviewer.UserName as reviewer
             FROM audit_report ar
-            JOIN audit a ON ar.AuditId = a.AuditId AND a.tenant_id = %s
-            JOIN users auditor ON a.Auditor = auditor.UserId AND auditor.tenant_id = %s
-            LEFT JOIN users reviewer ON a.Reviewer = reviewer.UserId AND reviewer.tenant_id = %s
+            JOIN audit a ON ar.AuditId = a.AuditId AND a.TenantId = %s
+            JOIN users auditor ON a.Auditor = auditor.UserId AND auditor.TenantId = %s
+            LEFT JOIN users reviewer ON a.Reviewer = reviewer.UserId AND reviewer.TenantId = %s
             WHERE ar.ReportId IN %s
         """
         

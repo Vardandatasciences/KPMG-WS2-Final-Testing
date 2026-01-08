@@ -134,11 +134,18 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Enterprise Security Headers Middleware - Adds comprehensive security headers to all responses
+    "grc.middleware.EnterpriseSecurityHeadersMiddleware",
     "grc.middleware.JWTAuthenticationMiddleware",
     # MULTI-TENANCY: Add tenant context middleware (after JWT authentication)
     "grc.tenant_middleware.TenantContextMiddleware",
     "grc.tenant_middleware.TenantIsolationMiddleware",
+    # MULTI-TENANCY: Add TPRM tenant context middleware for TPRM modules
+    "tprm_backend.core.tenant_middleware.TenantContextMiddleware",
+    "tprm_backend.core.tenant_middleware.TenantIsolationMiddleware",
     "grc.middleware.AuditLoggingMiddleware",
+    # AUTO-DECRYPT: Automatically decrypt any encrypted data in API responses (safety net)
+    "grc.utils.auto_decrypt_middleware.AutoDecryptMiddleware",
     # Removed grc.rbac.middleware.GRCRBACMiddleware - using simplified decorator-based RBAC instead
 ]
 

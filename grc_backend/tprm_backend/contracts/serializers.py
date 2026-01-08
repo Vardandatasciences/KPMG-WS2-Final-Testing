@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from tprm_backend.utils.base_serializer import AutoDecryptingModelSerializer
 from tprm_backend.mfa_auth.models import User
 from .models import Vendor, VendorContract, ContractTerm, ContractClause, VendorContact, ContractAmendment, ContractRenewal, ContractApproval
 from django.utils import timezone
@@ -10,7 +11,7 @@ import string
 from django.db import IntegrityError
 
 
-class UserSerializer(serializers.ModelSerializer):
+class UserSerializer(AutoDecryptingModelSerializer):
     """Serializer for User model"""
     
     class Meta:
@@ -19,7 +20,7 @@ class UserSerializer(serializers.ModelSerializer):
         read_only_fields = ['userid']
 
 
-class VendorSerializer(serializers.ModelSerializer):
+class VendorSerializer(AutoDecryptingModelSerializer):
     """Serializer for Vendor model"""
     
     # Remove user-related fields since created_by/updated_by are now IntegerFields
@@ -140,7 +141,7 @@ class VendorSerializer(serializers.ModelSerializer):
         return value
 
 
-class ContractTermSerializer(serializers.ModelSerializer):
+class ContractTermSerializer(AutoDecryptingModelSerializer):
     """Serializer for ContractTerm model"""
     
     # Remove user-related fields since created_by/approved_by are now IntegerFields
@@ -232,7 +233,7 @@ class ContractTermSerializer(serializers.ModelSerializer):
                     raise
 
 
-class ContractClauseSerializer(serializers.ModelSerializer):
+class ContractClauseSerializer(AutoDecryptingModelSerializer):
     """Serializer for ContractClause model"""
     
     # Remove user-related fields since created_by is now IntegerField
@@ -274,7 +275,7 @@ class ContractClauseSerializer(serializers.ModelSerializer):
         return value
 
 
-class VendorContractSerializer(serializers.ModelSerializer):
+class VendorContractSerializer(AutoDecryptingModelSerializer):
     """Serializer for VendorContract model"""
     
     # Related field serializers
@@ -450,7 +451,7 @@ class VendorContractSerializer(serializers.ModelSerializer):
         return data
 
 
-class VendorContractCreateSerializer(serializers.ModelSerializer):
+class VendorContractCreateSerializer(AutoDecryptingModelSerializer):
     """Simplified serializer for contract creation"""
     
     vendor_id = serializers.IntegerField()
@@ -604,7 +605,7 @@ class VendorContractCreateSerializer(serializers.ModelSerializer):
         return data
 
 
-class VendorContractUpdateSerializer(serializers.ModelSerializer):
+class VendorContractUpdateSerializer(AutoDecryptingModelSerializer):
     """Serializer for contract updates"""
     
     contract_owner = serializers.IntegerField(required=False, allow_null=True)
@@ -759,7 +760,7 @@ class VendorContractUpdateSerializer(serializers.ModelSerializer):
         return data
 
 
-class ContractArchiveSerializer(serializers.ModelSerializer):
+class ContractArchiveSerializer(AutoDecryptingModelSerializer):
     """Serializer for contract archiving"""
     
     class Meta:
@@ -821,7 +822,7 @@ class ContractStatsSerializer(serializers.Serializer):
     overdue_renewals = serializers.IntegerField()
 
 
-class VendorContactSerializer(serializers.ModelSerializer):
+class VendorContactSerializer(AutoDecryptingModelSerializer):
     """Serializer for VendorContact model"""
     
     # Computed fields
@@ -883,7 +884,7 @@ class VendorContactSerializer(serializers.ModelSerializer):
         return data
 
 
-class VendorContactCreateSerializer(serializers.ModelSerializer):
+class VendorContactCreateSerializer(AutoDecryptingModelSerializer):
     """Simplified serializer for vendor contact creation"""
     
     vendor_id = serializers.IntegerField()
@@ -918,7 +919,7 @@ class VendorContactCreateSerializer(serializers.ModelSerializer):
         return data
 
 
-class VendorContactUpdateSerializer(serializers.ModelSerializer):
+class VendorContactUpdateSerializer(AutoDecryptingModelSerializer):
     """Serializer for vendor contact updates"""
     
     class Meta:
@@ -951,7 +952,7 @@ class VendorContactUpdateSerializer(serializers.ModelSerializer):
         return data
 
 
-class ContractAmendmentSerializer(serializers.ModelSerializer):
+class ContractAmendmentSerializer(AutoDecryptingModelSerializer):
     """Serializer for ContractAmendment model"""
     
     # Computed fields
@@ -1137,7 +1138,7 @@ class ContractAmendmentSerializer(serializers.ModelSerializer):
         return data
 
 
-class ContractAmendmentCreateSerializer(serializers.ModelSerializer):
+class ContractAmendmentCreateSerializer(AutoDecryptingModelSerializer):
     """Simplified serializer for contract amendment creation"""
     
     contract_id = serializers.IntegerField()
@@ -1230,7 +1231,7 @@ class ContractAmendmentCreateSerializer(serializers.ModelSerializer):
         return data
 
 
-class ContractAmendmentUpdateSerializer(serializers.ModelSerializer):
+class ContractAmendmentUpdateSerializer(AutoDecryptingModelSerializer):
     """Serializer for contract amendment updates"""
     
     approved_by = serializers.IntegerField(required=False, allow_null=True)
@@ -1351,7 +1352,7 @@ class VendorContactSearchSerializer(serializers.Serializer):
     page_size = serializers.IntegerField(required=False, min_value=1, max_value=100)
 
 
-class ContractRenewalSerializer(serializers.ModelSerializer):
+class ContractRenewalSerializer(AutoDecryptingModelSerializer):
     """Serializer for ContractRenewal model"""
     
     # Computed fields
@@ -1518,7 +1519,7 @@ class ContractRenewalSerializer(serializers.ModelSerializer):
         return data
 
 
-class ContractRenewalCreateSerializer(serializers.ModelSerializer):
+class ContractRenewalCreateSerializer(AutoDecryptingModelSerializer):
     """Serializer for creating ContractRenewal instances"""
     
     class Meta:
@@ -1652,7 +1653,7 @@ class ContractRenewalCreateSerializer(serializers.ModelSerializer):
         return data
 
 
-class ContractRenewalUpdateSerializer(serializers.ModelSerializer):
+class ContractRenewalUpdateSerializer(AutoDecryptingModelSerializer):
     """Serializer for updating ContractRenewal instances"""
     
     class Meta:
@@ -1767,7 +1768,7 @@ class ContractRenewalSearchSerializer(serializers.Serializer):
     page_size = serializers.IntegerField(required=False, min_value=1, max_value=100)
 
 
-class ContractApprovalSerializer(serializers.ModelSerializer):
+class ContractApprovalSerializer(AutoDecryptingModelSerializer):
     """Serializer for ContractApproval model"""
     
     is_overdue = serializers.SerializerMethodField()
@@ -1855,7 +1856,7 @@ class ContractApprovalSerializer(serializers.ModelSerializer):
         return obj.get_status_display()
 
 
-class ContractApprovalCreateSerializer(serializers.ModelSerializer):
+class ContractApprovalCreateSerializer(AutoDecryptingModelSerializer):
     """Serializer for creating ContractApproval instances"""
     
     class Meta:
@@ -1885,7 +1886,7 @@ class ContractApprovalCreateSerializer(serializers.ModelSerializer):
         return data
 
 
-class ContractApprovalUpdateSerializer(serializers.ModelSerializer):
+class ContractApprovalUpdateSerializer(AutoDecryptingModelSerializer):
     """Serializer for updating ContractApproval instances"""
     
     class Meta:

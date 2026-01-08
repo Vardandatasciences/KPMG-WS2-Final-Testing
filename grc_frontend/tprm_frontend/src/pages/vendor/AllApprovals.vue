@@ -68,7 +68,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 import api from '@/utils/api'
@@ -99,37 +99,61 @@ const getCurrentUserId = () => {
   try {
     console.log('=== USER ID RESOLUTION DEBUG ===')
     
-    // First, try to get user from Vuex store (most reliable source)
+    // First, try to get user_id directly from localStorage (set by App.vue)
+    const directUserId = localStorage.getItem('user_id')
+    if (directUserId) {
+      console.log('✅ Found user_id directly in localStorage:', directUserId)
+      return parseInt(directUserId) || directUserId
+    }
+    
+    // Second, try to get user from Vuex store (most reliable source)
     try {
       const store = useStore()
       const vuexUser = store.getters['auth/currentUser']
       console.log('Vuex store user:', vuexUser)
-      console.log('Vuex store user ID:', vuexUser?.id)
       
-      if (vuexUser && vuexUser.id) {
-        console.log('✅ Using Vuex store user ID:', vuexUser.id)
-        return vuexUser.id
+      if (vuexUser) {
+        // Try all possible user ID field names
+        const userId = vuexUser.UserId || vuexUser.userId || vuexUser.user_id || vuexUser.id || vuexUser.userid
+        if (userId) {
+          console.log('✅ Using Vuex store user ID:', userId)
+          return parseInt(userId) || userId
+        }
       }
     } catch (vuexError) {
       console.log('Could not access Vuex store:', vuexError.message)
     }
     
-    // Fallback to localStorage if Vuex store is not available
+    // Fallback to localStorage - check both 'current_user' and 'user' keys
     console.log('Vuex store not available, trying localStorage...')
-    const currentUserFromStorage = localStorage.getItem('current_user')
-    console.log('localStorage.getItem("current_user"):', currentUserFromStorage)
+    
+    // Try 'current_user' first (preferred)
+    let currentUserFromStorage = localStorage.getItem('current_user')
+    console.log('localStorage.getItem("current_user"):', currentUserFromStorage ? 'Found' : 'Not found')
+    
+    // If not found, try 'user' key as fallback
+    if (!currentUserFromStorage) {
+      currentUserFromStorage = localStorage.getItem('user')
+      console.log('localStorage.getItem("user"):', currentUserFromStorage ? 'Found' : 'Not found')
+    }
     
     if (currentUserFromStorage) {
-      const user = JSON.parse(currentUserFromStorage)
-      console.log('Parsed currentUser object:', user)
-      
-      // Try multiple possible user ID field names
-      const userId = user.id || user.user_id || user.userId || user.userid
-      console.log('Available userId from localStorage:', userId)
-      
-      if (userId) {
-        console.log('✅ Using localStorage userId:', userId)
-        return userId
+      try {
+        const user = JSON.parse(currentUserFromStorage)
+        console.log('Parsed user object keys:', Object.keys(user))
+        
+        // Try ALL possible user ID field names (including UserId with capital U and I)
+        const userId = user.UserId || user.userId || user.user_id || user.id || user.userid || user.UserID
+        console.log('Available userId from localStorage:', userId)
+        
+        if (userId) {
+          console.log('✅ Using localStorage userId:', userId)
+          return parseInt(userId) || userId
+        } else {
+          console.warn('User object found but no ID field detected. Available fields:', Object.keys(user))
+        }
+      } catch (parseError) {
+        console.error('Error parsing user from localStorage:', parseError)
       }
     }
     
@@ -141,36 +165,25 @@ const getCurrentUserId = () => {
   }
 }
 
-const loadUsers = async () => {
-  try {
-    const res = await api.get('/api/v1/vendor-approval/users/')
-    users.value = Array.isArray(res.data) ? res.data : []
-  } catch (e) {
-    console.warn('Failed to load users endpoint, will fallback to reviewers:', e?.message)
-    users.value = []
+const loadData = async (retryCount = 0) => {
+  const maxRetries = 5
+  const retryDelay = 500 // 500ms delay between retries
+  
+  let currentUserId = getCurrentUserId()
+  
+  // If user ID not found and we haven't exceeded retries, wait and retry
+  // This handles race condition where auth sync hasn't completed yet
+  if (!currentUserId && retryCount < maxRetries) {
+    console.log(`User ID not found yet, retrying... (attempt ${retryCount + 1}/${maxRetries})`)
+    await new Promise(resolve => setTimeout(resolve, retryDelay))
+    return loadData(retryCount + 1)
   }
-
-  // Fallback to reviewers list if users empty
-  if (!users.value.length) {
-    try {
-      const r = await api.get('/api/v1/vendor-approval/stages/reviewers/')
-      users.value = (r.data || []).map(x => ({ id: x.id, UserName: x.name }))
-    } catch (e) {
-      console.error('Failed to load reviewers fallback:', e?.message)
-      users.value = []
-    }
-  }
-
-  if (users.value.length && !selectedRequesterId.value) {
-    selectedRequesterId.value = users.value[0].id || users.value[0].UserId
-  }
-}
-
-const loadData = async () => {
-  const currentUserId = getCurrentUserId()
+  
   if (!currentUserId) {
-    console.error('No current user found in localStorage or Vuex store')
+    console.error('No current user found in localStorage or Vuex store after retries')
     console.error('User may not be properly logged in. Please refresh the page or log in again.')
+    console.error('Available localStorage keys:', Object.keys(localStorage).filter(k => k.includes('user') || k.includes('token')))
+    loading.value = false
     return
   }
   
@@ -216,8 +229,24 @@ const viewRequest = (row) => {
   })
 }
 
+// Listen for auth sync messages from parent (GRC) to reload approvals when user data becomes available
+let authMessageHandler = null
+
 onMounted(async () => {
   console.log('AllApprovals component mounted')
+  
+  // Set up message listener for auth sync
+  authMessageHandler = (event) => {
+    if (event.data && event.data.type === 'GRC_AUTH_SYNC' && event.data.user) {
+      console.log('[AllApprovals] Received auth sync, reloading approvals...')
+      // Wait a bit for localStorage to be updated
+      setTimeout(() => {
+        loadData()
+      }, 100)
+    }
+  }
+  
+  window.addEventListener('message', authMessageHandler)
   
   // Check permission before loading data
   // User must have SubmitVendorForApproval permission to view their approval requests
@@ -274,7 +303,15 @@ onMounted(async () => {
   
   hasAccess.value = true
   await loggingService.logPageView('Vendor', 'All Approvals')
+  // Initial load with retry mechanism
   await loadData()
+})
+
+onUnmounted(() => {
+  // Clean up message listener
+  if (authMessageHandler) {
+    window.removeEventListener('message', authMessageHandler)
+  }
 })
 </script>
 

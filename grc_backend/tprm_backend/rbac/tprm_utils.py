@@ -107,7 +107,10 @@ class RBACTPRMUtils:
                     with tprm_connection.cursor() as raw_cursor:
                         raw_cursor.execute("""
                             SELECT RBACId, UserId, UserName, Role, IsActive,
-                                   ViewVendors, CreateVendor, UpdateVendor, DeleteVendor
+                                   ViewVendors, CreateVendor, UpdateVendor, DeleteVendor,
+                                   ViewRFP, CreateRFP, EditRFP, DeleteRFP, CloneRFP,
+                                   SubmitRFPForReview, ApproveRFP, RejectRFP, AssignRFPReviewers,
+                                   ViewRFPApprovalStatus
                             FROM `rbac_tprm`
                             WHERE UserId = %s AND IsActive = 'Y'
                             LIMIT 1
@@ -125,10 +128,22 @@ class RBACTPRMUtils:
                             rbac_record.is_active = raw_row[4]
                             # Set permission fields directly from database
                             if len(raw_row) > 5:
+                                # Vendor permissions
                                 rbac_record.view_vendors = bool(raw_row[5]) if raw_row[5] is not None else False
                                 rbac_record.create_vendor = bool(raw_row[6]) if len(raw_row) > 6 and raw_row[6] is not None else False
                                 rbac_record.update_vendor = bool(raw_row[7]) if len(raw_row) > 7 and raw_row[7] is not None else False
                                 rbac_record.delete_vendor = bool(raw_row[8]) if len(raw_row) > 8 and raw_row[8] is not None else False
+                                # RFP permissions
+                                rbac_record.view_rfp = bool(raw_row[9]) if len(raw_row) > 9 and raw_row[9] is not None else False
+                                rbac_record.create_rfp = bool(raw_row[10]) if len(raw_row) > 10 and raw_row[10] is not None else False
+                                rbac_record.edit_rfp = bool(raw_row[11]) if len(raw_row) > 11 and raw_row[11] is not None else False
+                                rbac_record.delete_rfp = bool(raw_row[12]) if len(raw_row) > 12 and raw_row[12] is not None else False
+                                rbac_record.clone_rfp = bool(raw_row[13]) if len(raw_row) > 13 and raw_row[13] is not None else False
+                                rbac_record.submit_rfp_for_review = bool(raw_row[14]) if len(raw_row) > 14 and raw_row[14] is not None else False
+                                rbac_record.approve_rfp = bool(raw_row[15]) if len(raw_row) > 15 and raw_row[15] is not None else False
+                                rbac_record.reject_rfp = bool(raw_row[16]) if len(raw_row) > 16 and raw_row[16] is not None else False
+                                rbac_record.assign_rfp_reviewers = bool(raw_row[17]) if len(raw_row) > 17 and raw_row[17] is not None else False
+                                rbac_record.view_rfp_approval_status = bool(raw_row[18]) if len(raw_row) > 18 and raw_row[18] is not None else False
                             
                             logger.debug(f"[RBAC TPRM] Retrieved fresh RBAC data via raw SQL for user {user_id}")
                             

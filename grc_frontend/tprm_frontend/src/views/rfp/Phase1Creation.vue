@@ -1835,6 +1835,7 @@
                       </div>
                     </div>
                   </div>
+                </Label>
                 <Label html-for="autoApprove" class="text-sm" title="When enabled, this RFP is automatically approved by the creator without going through the approval workflow">
                   Auto-approve (no approval workflow required)
                 </Label>
@@ -3926,11 +3927,9 @@ const saveSingleDocument = async (index: number) => {
 
     // Upload to S3 via backend API
     const authHeaders = getAuthHeaders()
+    delete authHeaders['Content-Type']  // Remove any Content-Type to let axios set it for FormData
     const uploadResponse = await axios.post(`${API_BASE_URL}/upload-document/`, uploadFormData, {
-      headers: {
-        ...authHeaders,
-        'Content-Type': 'multipart/form-data',
-      },
+      headers: authHeaders,
       timeout: 60000 // 60 second timeout for large files
     })
 
@@ -4210,22 +4209,35 @@ const mergeDocumentsFromFiles = async (docs) => {
 
     // Create FormData with files in order
     const mergeFormData = new FormData()
-    docs.forEach(doc => {
+    let fileCount = 0
+    docs.forEach((doc, idx) => {
       if (doc.file) {
+        console.log(`📎 Appending file ${idx + 1}:`, doc.file.name, `(${doc.file.size} bytes)`)
         mergeFormData.append('files', doc.file)
+        fileCount++
       }
     })
     
+    console.log(`📦 Total files appended: ${fileCount}`)
+    
     if (rfpId) {
       mergeFormData.append('rfp_id', rfpId)
+      console.log(`🔖 RFP ID: ${rfpId}`)
     }
     mergeFormData.append('user_id', '1')
+    
+    // Log FormData contents
+    console.log('📋 FormData contents:')
+    for (let pair of mergeFormData.entries()) {
+      console.log(`  ${pair[0]}:`, pair[1])
+    }
 
+    // Get auth headers but remove Content-Type to let axios handle it for FormData
+    const authHeaders = getAuthHeaders()
+    delete authHeaders['Content-Type']  // Remove any Content-Type to let axios set it for FormData
+    
     const mergeResponse = await axios.post(`${API_BASE_URL}/merge-documents/`, mergeFormData, {
-      headers: {
-        ...getAuthHeaders(),
-        'Content-Type': 'multipart/form-data',
-      },
+      headers: authHeaders,
       timeout: 120000
     })
 
@@ -4439,11 +4451,9 @@ const saveAllDocuments = async () => {
 
         // Upload to S3 via backend API
         const authHeaders = getAuthHeaders()
+        delete authHeaders['Content-Type']  // Remove any Content-Type to let axios set it for FormData
         const uploadResponse = await axios.post(`${API_BASE_URL}/upload-document/`, uploadFormData, {
-          headers: {
-            ...authHeaders,
-            'Content-Type': 'multipart/form-data',
-          },
+          headers: authHeaders,
           timeout: 60000
         })
 
@@ -5333,11 +5343,10 @@ const handleSaveDraft = async () => {
           uploadFormData.append('rfp_id', savedRfpId)
           uploadFormData.append('user_id', '1')
           
+          const authHeaders = getAuthHeaders()
+          delete authHeaders['Content-Type']  // Remove any Content-Type to let axios set it for FormData
           const uploadResponse = await axios.post(`${API_BASE_URL}/upload-document/`, uploadFormData, {
-            headers: {
-              ...getAuthHeaders(),
-              'Content-Type': 'multipart/form-data',
-            },
+            headers: authHeaders,
             timeout: 60000
           })
           
@@ -5759,11 +5768,9 @@ const handleProceedToApprovalWorkflow = async () => {
           try {
             // Upload to S3 via backend API
             const authHeaders = getAuthHeaders()
+            delete authHeaders['Content-Type']  // Remove any Content-Type to let axios set it for FormData
             const uploadResponse = await axios.post(`${API_BASE_URL}/upload-document/`, formData, {
-              headers: {
-                ...authHeaders,
-                'Content-Type': 'multipart/form-data',
-              },
+              headers: authHeaders,
               timeout: 60000 // 60 second timeout for large files
             })
             
@@ -7460,6 +7467,7 @@ nav::-webkit-scrollbar {
 .rfp-circle-option.rfp-regular-circle.active .rfp-circle-inner {
   background-color: #6c757d !important;
   box-shadow: 0 0 4px rgba(108, 117, 125, 0.35) !important;
+}
 /* Auto-adjusting tabs container */
 .tab-container {
   width: 100%;

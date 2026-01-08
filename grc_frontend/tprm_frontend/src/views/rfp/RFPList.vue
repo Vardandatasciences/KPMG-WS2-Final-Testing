@@ -705,7 +705,7 @@ const shareRFP = async (rfp) => {
     // Also try to generate the invitation record in the backend
     try {
       const { getAuthHeaders } = useRfpApi()
-      const response = await fetch(getTprmApiUrl('v1/generate-open-invitation/'), {
+      const response = await fetch(getTprmApiUrl('rfp/generate-open-invitation/'), {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -957,7 +957,7 @@ const formatBudget = (min, max) => {
 const testBackendConnection = async () => {
   try {
     const { getAuthHeaders } = useRfpApi()
-    const response = await fetch(getTprmApiUrl('v1/rfps/'), {
+    const response = await fetch(getTprmApiUrl('rfp/rfps/'), {
       method: 'GET',
       headers: getAuthHeaders(),
     })
@@ -974,6 +974,23 @@ onMounted(async () => {
   await loggingService.logPageView('RFP', 'RFP List')
   loading.value = true
   try {
+    // MULTI-TENANCY: Check if tenant_id has changed and clear store if needed
+    const currentTenantId = localStorage.getItem('tenant_id')
+    const storedTenantId = sessionStorage.getItem('rfp_list_tenant_id')
+    
+    if (storedTenantId && storedTenantId !== currentTenantId) {
+      console.log(`[RFPList] Tenant changed from ${storedTenantId} to ${currentTenantId}, clearing store`)
+      rfpStore.clearStore()
+    }
+    
+    // Store current tenant_id for next check
+    if (currentTenantId) {
+      sessionStorage.setItem('rfp_list_tenant_id', currentTenantId)
+      console.log(`[RFPList] Loading RFPs for tenant_id: ${currentTenantId}`)
+    } else {
+      console.warn('[RFPList] ⚠️ No tenant_id found in localStorage')
+    }
+    
     // Test backend connection first
     const isBackendAvailable = await testBackendConnection()
     if (!isBackendAvailable) {

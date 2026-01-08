@@ -2,9 +2,10 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 import json
+from tprm_backend.utils.encrypted_fields_mixin import TPRMEncryptedFieldsMixin
 
 
-class RFP(models.Model):
+class RFP(TPRMEncryptedFieldsMixin, models.Model):
     """
     Model for Request for Proposal (RFP) data
     """
@@ -36,6 +37,11 @@ class RFP(models.Model):
     
     # Primary key
     rfp_id = models.BigAutoField(primary_key=True, auto_created=True)
+    
+    # MULTI-TENANCY: Link RFP to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='rfps', null=True, blank=True,
+                               help_text="Tenant this RFP belongs to")
     
     # Basic information
     rfp_number = models.CharField(max_length=50, unique=True, null=True, blank=True)
@@ -163,6 +169,11 @@ class RFPEvaluationCriteria(models.Model):
     # Primary key
     criteria_id = models.BigAutoField(primary_key=True)
     
+    # MULTI-TENANCY: Link evaluation criteria to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='rfp_evaluation_criteria', null=True, blank=True,
+                               help_text="Tenant this evaluation criteria belongs to")
+    
     # Foreign key to RFP
     rfp = models.ForeignKey(RFP, on_delete=models.CASCADE, related_name='evaluation_criteria')
     
@@ -253,6 +264,11 @@ class FileStorage(models.Model):
     # Primary key
     id = models.BigAutoField(primary_key=True)
     
+    # MULTI-TENANCY: Link file storage to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='file_storage', null=True, blank=True,
+                               help_text="Tenant this file storage belongs to")
+    
     # File information
     operation_type = models.CharField(max_length=20, choices=OPERATION_TYPE_CHOICES)
     user_id = models.CharField(max_length=255)
@@ -307,6 +323,12 @@ class S3Files(models.Model):
     Model for tracking files stored in S3 - matches the existing s3_files table
     """
     id = models.AutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link S3 file to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='s3_files', null=True, blank=True,
+                               help_text="Tenant this S3 file belongs to")
+    
     url = models.TextField(null=True, blank=True)
     file_type = models.CharField(max_length=50, null=True, blank=True)
     file_name = models.CharField(max_length=255, null=True, blank=True)
@@ -340,6 +362,12 @@ class RFPEvaluationScore(models.Model):
     ]
     
     score_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link evaluation score to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='rfp_evaluation_scores', null=True, blank=True,
+                               help_text="Tenant this evaluation score belongs to")
+    
     response_id = models.BigIntegerField(db_index=True)  # FK to rfp_responses table
     criteria_id = models.BigIntegerField(db_index=True)  # FK to evaluation criteria
     evaluator_id = models.IntegerField(db_index=True)  # FK to users table
@@ -389,6 +417,12 @@ class RFPEvaluatorAssignment(models.Model):
     ]
     
     assignment_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link evaluator assignment to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='rfp_evaluator_assignments', null=True, blank=True,
+                               help_text="Tenant this evaluator assignment belongs to")
+    
     proposal_id = models.BigIntegerField(db_index=True)  # FK to rfp_responses table
     evaluator_id = models.IntegerField(db_index=True)  # FK to users table
     assignment_type = models.CharField(max_length=20, choices=ASSIGNMENT_TYPE_CHOICES, default='evaluation')
@@ -425,6 +459,12 @@ class RFPCommittee(models.Model):
     Maps to rfp_committee table
     """
     committee_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link committee to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='rfp_committees', null=True, blank=True,
+                               help_text="Tenant this committee belongs to")
+    
     rfp_id = models.BigIntegerField(db_index=True)
     response_id = models.JSONField(null=True, blank=True)  # JSON array of response IDs
     member_id = models.IntegerField(db_index=True)
@@ -454,6 +494,12 @@ class RFPFinalEvaluation(models.Model):
     Maps to rfp_final_evaluation table
     """
     final_eval_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link final evaluation to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='rfp_final_evaluations', null=True, blank=True,
+                               help_text="Tenant this final evaluation belongs to")
+    
     rfp_id = models.BigIntegerField(db_index=True)
     response_id = models.BigIntegerField(db_index=True)
     evaluator_id = models.IntegerField(db_index=True)
@@ -493,6 +539,11 @@ class RFPVersions(models.Model):
     
     # Primary key
     version_id = models.CharField(max_length=50, primary_key=True)
+    
+    # MULTI-TENANCY: Link RFP version to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='rfp_versions', null=True, blank=True,
+                               help_text="Tenant this RFP version belongs to")
     
     # Foreign key to RFP
     rfp_id = models.BigIntegerField(db_index=True)
@@ -551,6 +602,11 @@ class RFPChangeRequests(models.Model):
     # Primary key
     change_request_id = models.CharField(max_length=50, primary_key=True)
     
+    # MULTI-TENANCY: Link change request to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='rfp_change_requests', null=True, blank=True,
+                               help_text="Tenant this change request belongs to")
+    
     # Foreign keys
     rfp_id = models.BigIntegerField(db_index=True)
     stage_id = models.CharField(max_length=50, null=True, blank=True)
@@ -599,6 +655,11 @@ class RFPVersionComparisons(models.Model):
     """
     # Primary key
     comparison_id = models.CharField(max_length=50, primary_key=True)
+    
+    # MULTI-TENANCY: Link version comparison to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='rfp_version_comparisons', null=True, blank=True,
+                               help_text="Tenant this version comparison belongs to")
     
     # Foreign keys
     rfp_id = models.BigIntegerField(db_index=True)
@@ -652,6 +713,11 @@ class Vendor(models.Model):
     
     # Primary key
     vendor_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link vendor to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='vendors', null=True, blank=True,
+                               help_text="Tenant this vendor belongs to")
     
     # Basic information
     vendor_code = models.CharField(max_length=50, blank=True, null=True)
@@ -785,6 +851,16 @@ class RFPUnmatchedVendor(models.Model):
     ]
     
     unmatched_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link unmatched vendor to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='rfp_unmatched_vendors', null=True, blank=True,
+                               help_text="Tenant this unmatched vendor belongs to")
+    
+    # Foreign key to RFP - using BigIntegerField to match database schema (see get_unmatched_vendors query)
+    rfp_id = models.BigIntegerField(db_index=True, null=True, blank=True,
+                                   help_text="RFP ID this unmatched vendor is associated with")
+    
     invitation_id = models.BigIntegerField(blank=True, null=True, default=None)
     vendor_name = models.CharField(max_length=255)
     vendor_email = models.CharField(max_length=255)
@@ -830,6 +906,12 @@ class VendorInvitation(models.Model):
     ]
     
     invitation_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link vendor invitation to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='rfp_vendor_invitations', null=True, blank=True,
+                               help_text="Tenant this vendor invitation belongs to")
+    
     rfp = models.ForeignKey('RFP', on_delete=models.CASCADE, related_name='invitations')
     vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, null=True, blank=True)
     vendor_email = models.EmailField(max_length=255, null=True, blank=True)
@@ -864,6 +946,12 @@ class RFPVendorSelection(models.Model):
     Model for linking RFPs with selected vendors
     """
     selection_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link vendor selection to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='rfp_vendor_selections', null=True, blank=True,
+                               help_text="Tenant this vendor selection belongs to")
+    
     rfp = models.ForeignKey('RFP', on_delete=models.CASCADE, related_name='selected_vendors')
     vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, related_name='rfp_selections')
     match_score = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
@@ -905,6 +993,12 @@ class RFPResponse(models.Model):
     ]
     
     response_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link RFP response to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='rfp_responses', null=True, blank=True,
+                               help_text="Tenant this RFP response belongs to")
+    
     vendor_id = models.BigIntegerField(null=True, blank=True)
     invitation_id = models.BigIntegerField(null=True, blank=True)
     submission_date = models.DateTimeField(auto_now_add=True)
@@ -984,6 +1078,11 @@ class RFPAwardNotification(models.Model):
     # Primary key
     notification_id = models.BigAutoField(primary_key=True)
     
+    # MULTI-TENANCY: Link award notification to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='rfp_award_notifications', null=True, blank=True,
+                               help_text="Tenant this award notification belongs to")
+    
     # Foreign key to RFP response
     response_id = models.BigIntegerField(db_index=True)  # FK to rfp_responses table
     
@@ -1029,6 +1128,11 @@ class RFPTypeCustomFields(models.Model):
     """
     # Primary key
     rfp_type_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link RFP type custom fields to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='rfp_type_custom_fields', null=True, blank=True,
+                               help_text="Tenant this RFP type custom fields belongs to")
     
     # RFP type name
     rfp_type = models.CharField(max_length=255)

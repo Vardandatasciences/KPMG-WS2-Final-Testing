@@ -6,6 +6,8 @@ from django.views import View
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from django.middleware.csrf import get_token
+from django.conf import settings
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, parser_classes
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
@@ -15,6 +17,7 @@ import json
 import logging
 import tempfile
 import os
+import traceback
 from datetime import datetime
 
 from .models import Document, OcrResult, ExtractedData
@@ -433,14 +436,14 @@ class HealthCheckView(APIView):
                     's3_service': s3_status,
                     'ai_service': 'available'
                 },
-                'timestamp': datetime.now().isoformat()
+                'timestamp': (timezone.now() if settings.USE_TZ else datetime.now()).isoformat()
             })
             
         except Exception as e:
             return Response({
                 'status': 'unhealthy',
                 'error': str(e),
-                'timestamp': datetime.now().isoformat()
+                'timestamp': (timezone.now() if settings.USE_TZ else datetime.now()).isoformat()
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -483,15 +486,63 @@ class BcpDrpOcrRunView(APIView):
         try:
             logger.info(f"[INFO] BCP/DRP OCR run request for plan_id: {plan_id}")
             
+            # MULTI-TENANCY: Get tenant_id from request
+            try:
+                from tprm_backend.core.tenant_utils import get_tenant_id_from_request
+                tenant_id = get_tenant_id_from_request(request)
+                if tenant_id:
+                    logger.info(f"[INFO] Using tenant_id: {tenant_id} for plan {plan_id}")
+            except Exception as tenant_error:
+                logger.warning(f"[WARNING] Could not get tenant_id: {tenant_error}")
+                tenant_id = None
+            
             # Get plan document from BCP/DRP database first
             try:
                 # Import here to avoid circular imports
-                from bcpdrp.models import Plan
-                plan = Plan.objects.get(plan_id=plan_id)
+                from tprm_backend.bcpdrp.models import Plan
+                
+                # MULTI-TENANCY: Filter by tenant if available
+                # Try with tenant_id first, then fallback to without tenant_id
+                plan = None
+                try:
+                    if tenant_id:
+                        try:
+                            plan = Plan.objects.get(plan_id=plan_id, tenant_id=tenant_id)
+                            logger.info(f"[INFO] Found plan {plan_id} with tenant_id {tenant_id}")
+                        except (Plan.DoesNotExist, Exception) as tenant_error:
+                            # If tenant_id field doesn't exist or plan not found, try without tenant
+                            logger.warning(f"[WARNING] Could not get plan with tenant_id: {tenant_error}, trying without tenant filter")
+                            plan = Plan.objects.get(plan_id=plan_id)
+                            logger.info(f"[INFO] Found plan {plan_id} without tenant filter (fallback)")
+                    else:
+                        plan = Plan.objects.get(plan_id=plan_id)
+                        logger.info(f"[INFO] Found plan {plan_id} without tenant filter")
+                except Plan.DoesNotExist:
+                    raise
+                
                 plan_type = plan.plan_type
-                file_uri = plan.file_uri
+                # ENCRYPTION: file_uri is encrypted, use _plain property to get decrypted value
+                # The TPRMEncryptedFieldsMixin automatically provides _plain properties via __getattribute__
+                try:
+                    # Access decrypted file_uri using _plain property
+                    file_uri = plan.file_uri_plain
+                    logger.info(f"[INFO] Retrieved decrypted file_uri for plan {plan_id}")
+                except Exception as decrypt_error:
+                    logger.warning(f"[WARNING] Error accessing file_uri_plain: {decrypt_error}")
+                    # Fallback: try _get_decrypted_value method
+                    try:
+                        file_uri = plan._get_decrypted_value('file_uri')
+                        logger.info(f"[INFO] Retrieved decrypted file_uri using _get_decrypted_value method")
+                    except Exception as decrypt_error2:
+                        logger.error(f"[ERROR] Could not decrypt file_uri: {decrypt_error2}")
+                        # Last resort: use direct access (might work if field is not actually encrypted)
+                        file_uri = plan.file_uri
+                        logger.warning(f"[WARNING] Using encrypted file_uri value (may cause issues)")
+                
+                logger.info(f"[INFO] File URI for plan {plan_id}: {file_uri[:100] if file_uri else 'None'}...")
                 
                 if not file_uri:
+                    logger.error(f"[ERROR] Plan {plan_id} has no file_uri")
                     return Response({
                         'success': False,
                         'error': f'No document file found for plan {plan_id}'
@@ -500,10 +551,18 @@ class BcpDrpOcrRunView(APIView):
                 logger.info(f"[INFO] Processing {plan_type} plan {plan_id} with file: {file_uri}")
                 
             except Plan.DoesNotExist:
+                logger.error(f"[ERROR] Plan {plan_id} not found")
                 return Response({
                     'success': False,
                     'error': f'Plan {plan_id} not found'
                 }, status=status.HTTP_404_NOT_FOUND)
+            except Exception as import_error:
+                logger.error(f"[ERROR] Error accessing Plan model: {import_error}")
+                logger.error(f"[ERROR] Traceback: {traceback.format_exc()}")
+                return Response({
+                    'success': False,
+                    'error': f'Error accessing plan data: {str(import_error)}'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
             # Validate request data (optional validation)
             serializer = BcpDrpOcrRunSerializer(data={
@@ -551,16 +610,27 @@ class BcpDrpOcrRunView(APIView):
                     
             except Exception as e:
                 logger.error(f"[ERROR] OCR processing error: {e}")
+                logger.error(f"[ERROR] Traceback: {traceback.format_exc()}")
                 return Response({
                     'success': False,
                     'error': f'OCR processing failed: {str(e)}'
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 
         except Exception as e:
+            error_traceback = traceback.format_exc()
             logger.error(f"[ERROR] BCP/DRP OCR run error: {e}")
+            logger.error(f"[ERROR] Traceback: {error_traceback}")
+            # Include error details in response for debugging (only in DEBUG mode)
+            error_message = str(e)
+            try:
+                from django.conf import settings as django_settings
+                if django_settings.DEBUG:
+                    error_message = f"{error_message}\n\nTraceback:\n{error_traceback}"
+            except:
+                pass
             return Response({
                 'success': False,
-                'error': str(e)
+                'error': error_message
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -588,7 +658,7 @@ class BcpDrpExtractDataView(APIView):
             
             # Get plan type from BCP/DRP database
             try:
-                from bcpdrp.models import Plan
+                from tprm_backend.bcpdrp.models import Plan
                 plan = Plan.objects.get(plan_id=plan_id)
                 plan_type = plan.plan_type
             except Plan.DoesNotExist:
@@ -634,7 +704,11 @@ class BcpDrpExtractDataView(APIView):
                 plan.ocr_extracted_data = unified_data
                 plan.ocr_extracted = True
                 if not plan.ocr_extracted_at:
-                    plan.ocr_extracted_at = datetime.now()
+                    # Get current datetime based on USE_TZ setting
+                    if settings.USE_TZ:
+                        plan.ocr_extracted_at = timezone.now()
+                    else:
+                        plan.ocr_extracted_at = datetime.now()
                 plan.save()
                 
                 logger.info(f"[SUCCESS] Unified extracted data saved for {plan_type} plan {plan_id}")
@@ -745,7 +819,7 @@ class BcpDrpExtractedDataView(APIView):
             
             # Get plan type from BCP/DRP database
             try:
-                from bcpdrp.models import Plan
+                from tprm_backend.bcpdrp.models import Plan
                 plan = Plan.objects.get(plan_id=plan_id)
                 plan_type = plan.plan_type
             except Plan.DoesNotExist:

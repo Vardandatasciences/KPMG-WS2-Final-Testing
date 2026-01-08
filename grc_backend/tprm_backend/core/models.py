@@ -1,15 +1,22 @@
 """
+Core Models for TPRM Multi-Tenancy
+
+This module contains the Tenant model and TenantAwareModel base class
+for implementing multi-tenancy across all TPRM modules.
+"""
+"""
 Core models for Vendor Guard Hub.
 """
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.contrib.auth import get_user_model
 from simple_history.models import HistoricalRecords
+from tprm_backend.utils.encrypted_fields_mixin import TPRMEncryptedFieldsMixin
 
 User = get_user_model()
 
 
-class BaseModel(models.Model):
+class BaseModel(TPRMEncryptedFieldsMixin, models.Model):
     """Base model with common fields."""
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -293,3 +300,117 @@ class Integration(BaseModel):
     
     def __str__(self):
         return f"{self.name} ({self.integration_type})"
+
+from django.db import models
+from django.utils import timezone
+
+
+class TenantAwareModel(models.Model):
+    """
+    Abstract base model that automatically sets tenant_id when creating records.
+    
+    Usage:
+        class MyModel(TenantAwareModel):
+            # Your fields here
+            pass
+            
+        # When creating:
+        my_model = MyModel.objects.create(...)  # tenant_id automatically set!
+    """
+    
+    class Meta:
+        abstract = True
+    
+    def save(self, *args, **kwargs):
+        """
+        Override save to automatically set tenant_id if not already set
+        """
+        # Only set tenant if:
+        # 1. Model has tenant field
+        # 2. tenant is not already set
+        # 3. We're creating a new record (pk is None)
+        if hasattr(self, 'tenant') and self.tenant is None and self.pk is None:
+            from .tenant_context import get_current_tenant
+            tenant_id = get_current_tenant()
+            
+            if tenant_id:
+                try:
+                    # Set tenant using the Tenant model
+                    tenant = Tenant.objects.get(tenant_id=tenant_id)
+                    self.tenant = tenant
+                except Tenant.DoesNotExist:
+                    pass  # Tenant not found, skip auto-assignment
+        
+        super().save(*args, **kwargs)
+
+
+class Tenant(models.Model):
+    """
+    Tenant model for multi-tenancy support.
+    Each tenant represents an organization/company using the TPRM platform.
+    
+    This matches the GRC tenants table schema exactly for consistency.
+    """
+    tenant_id = models.AutoField(primary_key=True, db_column='TenantId')
+    name = models.CharField(max_length=255, db_column='Name', help_text="Organization/Company Name")
+    subdomain = models.CharField(max_length=100, unique=True, db_column='Subdomain', 
+                                  help_text="Unique subdomain for tenant")
+    license_key = models.CharField(max_length=100, unique=True, null=True, blank=True, db_column='LicenseKey',
+                                    help_text="Unique license key for tenant")
+    subscription_tier = models.CharField(max_length=50, default='starter', db_column='SubscriptionTier',
+                                        choices=[
+                                            ('starter', 'Starter'),
+                                            ('professional', 'Professional'),
+                                            ('enterprise', 'Enterprise')
+                                        ])
+    status = models.CharField(max_length=20, default='trial', db_column='Status',
+                             choices=[
+                                 ('trial', 'Trial'),
+                                 ('active', 'Active'),
+                                 ('suspended', 'Suspended'),
+                                 ('cancelled', 'Cancelled')
+                             ])
+    max_users = models.IntegerField(default=10, db_column='MaxUsers', 
+                                    help_text="Maximum number of users allowed for this tenant")
+    storage_limit_gb = models.IntegerField(default=10, db_column='StorageLimitGB',
+                                          help_text="Storage limit in GB")
+    created_at = models.DateTimeField(auto_now_add=True, db_column='CreatedAt')
+    updated_at = models.DateTimeField(auto_now=True, db_column='UpdatedAt')
+    trial_ends_at = models.DateTimeField(null=True, blank=True, db_column='TrialEndsAt',
+                                        help_text="Date when trial period ends")
+    
+    # Tenant settings (stored as JSON)
+    settings = models.JSONField(default=dict, db_column='Settings',
+                               help_text="Tenant-specific configuration settings")
+    
+    # Contact information
+    primary_contact_email = models.EmailField(max_length=254, null=True, blank=True, db_column='PrimaryContactEmail',
+                                             help_text="Primary contact email address")
+    primary_contact_name = models.CharField(max_length=255, null=True, blank=True, db_column='PrimaryContactName',
+                                           help_text="Primary contact name")
+    primary_contact_phone = models.CharField(max_length=50, null=True, blank=True, db_column='PrimaryContactPhone',
+                                            help_text="Primary contact phone number")
+    
+    class Meta:
+        db_table = 'tenants'  # Note: table name is 'tenants' (plural) to match GRC
+        verbose_name = 'Tenant'
+        verbose_name_plural = 'Tenants'
+        ordering = ['name']
+        indexes = [
+            models.Index(fields=['subdomain'], name='uniq_tenants_subdomain'),
+            models.Index(fields=['license_key'], name='uniq_tenants_licensekey'),
+            models.Index(fields=['status'], name='idx_tenants_status'),
+        ]
+    
+    def __str__(self):
+        return f"{self.name} ({self.subdomain})"
+    
+    def is_active(self):
+        """Check if tenant is active"""
+        return self.status == 'active'
+    
+    def is_trial_expired(self):
+        """Check if trial period has expired"""
+        if self.status == 'trial' and self.trial_ends_at:
+            return timezone.now() > self.trial_ends_at
+        return False

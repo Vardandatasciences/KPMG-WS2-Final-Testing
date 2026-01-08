@@ -3,6 +3,7 @@ Vendor Core Models - Maps to existing database tables
 """
 
 from django.db import models
+from tprm_backend.utils.encrypted_fields_mixin import TPRMEncryptedFieldsMixin
 
 
 class VendorBaseModel(models.Model):
@@ -13,7 +14,7 @@ class VendorBaseModel(models.Model):
         managed = False  # Don't let Django manage these tables
 
 
-class Users(VendorBaseModel):
+class Users(TPRMEncryptedFieldsMixin, VendorBaseModel):
     """User model mapping to existing users table"""
     
     userid = models.AutoField(db_column='UserId', primary_key=True)
@@ -37,6 +38,12 @@ class VendorCategories(VendorBaseModel):
     """Vendor categories mapping to existing vendor_categories table"""
     
     category_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link vendor category to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.DO_NOTHING, db_column='TenantId', 
+                               related_name='vendor_categories', null=True, blank=True,
+                               help_text="Tenant this vendor category belongs to")
+    
     category_name = models.CharField(max_length=100)
     category_code = models.CharField(unique=True, max_length=20)
     description = models.TextField(blank=True, null=True)
@@ -57,10 +64,16 @@ class VendorCategories(VendorBaseModel):
         return self.category_name
 
 
-class Vendors(VendorBaseModel):
+class Vendors(TPRMEncryptedFieldsMixin, VendorBaseModel):
     """Main vendors table mapping"""
     
     vendor_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link vendor to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.DO_NOTHING, db_column='TenantId', 
+                               related_name='vendor_core_vendors', null=True, blank=True,
+                               help_text="Tenant this vendor belongs to")
+    
     vendor_code = models.CharField(unique=True, max_length=50)
     company_name = models.CharField(max_length=255)
     legal_name = models.CharField(max_length=255, blank=True, null=True)
@@ -101,10 +114,16 @@ class Vendors(VendorBaseModel):
         return self.company_name
 
 
-class VendorContacts(VendorBaseModel):
+class VendorContacts(TPRMEncryptedFieldsMixin, VendorBaseModel):
     """Vendor contacts mapping to existing vendor_contacts table"""
     
     contact_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link vendor contact to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.DO_NOTHING, db_column='TenantId', 
+                               related_name='vendor_core_contacts', null=True, blank=True,
+                               help_text="Tenant this vendor contact belongs to")
+    
     vendor = models.ForeignKey(Vendors, models.DO_NOTHING)
     contact_type = models.CharField(max_length=9, blank=True, null=True)
     first_name = models.CharField(max_length=100, blank=True, null=True)
@@ -129,10 +148,16 @@ class VendorContacts(VendorBaseModel):
         return f"{self.first_name} {self.last_name} - {self.vendor.company_name}"
 
 
-class VendorDocuments(VendorBaseModel):
+class VendorDocuments(TPRMEncryptedFieldsMixin, VendorBaseModel):
     """Vendor documents mapping to existing vendor_documents table"""
     
     document_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link vendor document to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.DO_NOTHING, db_column='TenantId', 
+                               related_name='vendor_core_documents', null=True, blank=True,
+                               help_text="Tenant this vendor document belongs to")
+    
     vendor = models.ForeignKey(Vendors, models.DO_NOTHING)
     document_type = models.CharField(max_length=13, blank=True, null=True)
     document_name = models.CharField(max_length=255)
@@ -183,10 +208,16 @@ class VendorLifecycleStages(VendorBaseModel):
         return self.stage_name
 
 
-class TempVendor(VendorBaseModel):
+class TempVendor(TPRMEncryptedFieldsMixin, VendorBaseModel):
     """Temporary vendor model mapping to temp_vendor table for registration"""
     
     id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link temp vendor to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.DO_NOTHING, db_column='TenantId', 
+                               related_name='temp_vendors', null=True, blank=True,
+                               help_text="Tenant this temp vendor belongs to")
+    
     userid = models.IntegerField(db_column='UserId', blank=True, null=True)
     vendor_code = models.CharField(max_length=50, blank=True, null=True)
     company_name = models.CharField(max_length=255, blank=True, null=True)
@@ -210,7 +241,6 @@ class TempVendor(VendorBaseModel):
     description = models.TextField(blank=True, null=True)
     contacts = models.JSONField(blank=True, null=True)
     documents = models.JSONField(blank=True, null=True)
-    data_inventory = models.JSONField(null=True, blank=True, help_text="JSON mapping vendor field labels to data types (personal, confidential, regular)")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     response_id = models.BigIntegerField(blank=True, null=True)
@@ -230,7 +260,7 @@ class TempVendor(VendorBaseModel):
         return self.company_name or f"Temp Vendor {self.id}"
 
 
-class ExternalScreeningResult(VendorBaseModel):
+class ExternalScreeningResult(TPRMEncryptedFieldsMixin, VendorBaseModel):
     """External screening results mapping to external_screening_results table"""
     
     SCREENING_TYPES = [
@@ -281,7 +311,7 @@ class ExternalScreeningResult(VendorBaseModel):
         return f"{vendor_name} - {self.screening_type} ({self.status})"
 
 
-class ScreeningMatch(VendorBaseModel):
+class ScreeningMatch(TPRMEncryptedFieldsMixin, VendorBaseModel):
     """Screening matches mapping to screening_matches table"""
     
     RESOLUTION_STATUS_CHOICES = [

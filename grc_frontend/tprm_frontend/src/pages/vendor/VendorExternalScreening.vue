@@ -409,7 +409,7 @@ import PopupModal from '@/popup/PopupModal.vue';
 import { PopupService } from '@/popup/popupService';
 import notificationService from '@/services/notificationService';
 import loggingService from '@/services/loggingService';
-import { getTprmApiV1BaseUrl, getTprmApiUrl } from '@/utils/backendEnv';
+import { getTprmApiV1BaseUrl, getTprmApiUrl, getApiV1Url } from '@/utils/backendEnv';
 
 export default {
   name: 'VendorExternalScreening',
@@ -477,17 +477,18 @@ export default {
       this.loading = true;
       this.error = null;
       try {
-        let url = getTprmApiUrl('v1/vendor-core/temp-vendors/');
+        // Use getApiV1Url since backend is at /api/v1/vendor-core/ not /api/tprm/v1/vendor-core/
+        let url = getApiV1Url('vendor-core/temp-vendors/');
         
         // Add search parameter if provided
         if (searchQuery.trim()) {
           url += `?search=${encodeURIComponent(searchQuery.trim())}`;
         }
         
-        console.log('Fetching vendors from:', url);
+        console.log('🔍 Fetching vendors from:', url);
         const response = await apiClient.get(url);
         
-        console.log('Raw API response:', response.data);
+        console.log('📡 Raw API response:', response.data);
         
         // Handle different response formats
         let vendorData = [];
@@ -501,7 +502,7 @@ export default {
           // Custom wrapper response
           vendorData = response.data.data;
         } else {
-          console.error('Unexpected API response format:', response.data);
+          console.error('❌ Unexpected API response format:', response.data);
           this.error = 'Unexpected response format from server';
           return;
         }
@@ -512,19 +513,52 @@ export default {
         );
         
         console.log(`✅ Successfully loaded ${this.vendors.length} vendors`);
-        console.log('Sample vendors:', this.vendors.slice(0, 3));
+        if (response.data.tenant_id) {
+          console.log(`🏢 Tenant ID: ${response.data.tenant_id}`);
+        } else {
+          console.warn('⚠️ No tenant_id in response');
+        }
+        console.log('📋 Sample vendors:', this.vendors.slice(0, 3));
         
         if (this.vendors.length === 0) {
           console.warn('⚠️ No vendors found in database');
+          const helpMessage = response.data.help || 'No vendors found in the database. Please add some vendors first.';
           if (!searchQuery) {
-            this.error = 'No vendors found in the database. Please add some vendors first.';
+            this.error = helpMessage;
           }
+          console.log('💡 Help:', helpMessage);
         }
         
       } catch (error) {
         console.error('❌ Error fetching vendors:', error);
-        console.error('Error details:', error.response?.data);
-        this.error = `Failed to load vendors: ${error.message}`;
+        console.error('🔍 Error details:', error.response?.data);
+        
+        let errorMessage = 'Failed to load vendors';
+        
+        if (error.response) {
+          // Server responded with error
+          if (error.response.status === 403) {
+            errorMessage = 'Access denied. Please check your permissions.';
+          } else if (error.response.status === 401) {
+            errorMessage = 'Authentication required. Please log in.';
+          } else if (error.response.status === 404) {
+            errorMessage = 'Vendors endpoint not found. Please contact support.';
+          } else if (error.response.data?.message) {
+            errorMessage = error.response.data.message;
+          } else if (error.response.data?.error) {
+            errorMessage = error.response.data.error;
+          } else {
+            errorMessage = `Failed to load vendors: ${error.message}`;
+          }
+        } else if (error.request) {
+          // Request made but no response
+          errorMessage = 'No response from server. Please check your connection.';
+        } else {
+          // Other error
+          errorMessage = `Failed to load vendors: ${error.message}`;
+        }
+        
+        this.error = errorMessage;
         this.vendors = [];
       } finally {
         this.loading = false;
@@ -614,7 +648,8 @@ export default {
 
       try {
         console.log(`🔍 Fetching screening results for vendor ID: ${this.selectedVendorId}`);
-        const response = await apiClient.get(getTprmApiUrl(`v1/vendor-core/screening-results/vendor_screening_results/?vendor_id=${this.selectedVendorId}`));
+        // Use getApiV1Url since backend is at /api/v1/vendor-core/ not /api/tprm/v1/vendor-core/
+        const response = await apiClient.get(getApiV1Url(`vendor-core/screening-results/vendor_screening_results/?vendor_id=${this.selectedVendorId}`));
         
         console.log('📡 API Response:', response.data);
         
@@ -817,7 +852,7 @@ export default {
       
       try {
         const response = await apiClient.post(
-          getTprmApiUrl(`v1/vendor-core/screening-results/${this.selectedScreening.screening_id}/update_match_status/`),
+          getApiV1Url(`vendor-core/screening-results/${this.selectedScreening.screening_id}/update_match_status/`),
           {
             match_id: matchId,
             status: status,
@@ -893,7 +928,7 @@ export default {
       try {
         // Update the selected screening to CLEAR status
         const response = await apiClient.post(
-          getTprmApiUrl(`v1/vendor-core/screening-results/${this.selectedScreening.screening_id}/mark_as_cleared/`)
+          getApiV1Url(`vendor-core/screening-results/${this.selectedScreening.screening_id}/mark_as_cleared/`)
         );
         
         if (response.data.message) {
@@ -920,7 +955,7 @@ export default {
           if (note && this.selectedScreening) {
             try {
               const response = await apiClient.post(
-            getTprmApiUrl(`v1/vendor-core/screening-results/${this.selectedScreening.screening_id}/add_note/`),
+            getApiV1Url(`vendor-core/screening-results/${this.selectedScreening.screening_id}/add_note/`),
             { note: note }
           );
           

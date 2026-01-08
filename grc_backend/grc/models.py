@@ -3,8 +3,7 @@ from django.utils import timezone
 from datetime import timedelta
 from django.apps import apps
 # from ...routes.Global.logging_service import send_log
-
-
+from .utils.encrypted_fields_mixin import EncryptedFieldsMixin
 
 from django.contrib.auth.models import User
 
@@ -120,22 +119,22 @@ class Tenant(models.Model):
 
 
 # Users model (Django built-in User model is used)
-class Users(models.Model):
+class Users(EncryptedFieldsMixin, models.Model):
     UserId = models.AutoField(primary_key=True)
     # MULTI-TENANCY: Link user to tenant
     tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId', 
                                related_name='users', null=True, blank=True,
                                help_text="Tenant this user belongs to")
-    UserName = models.CharField(max_length=255)
+    UserName = models.CharField(max_length=1000)
     Password = models.CharField(max_length=255)
     CreatedAt = models.DateTimeField(auto_now_add=True)
     UpdatedAt = models.DateTimeField(auto_now=True)
     # Changed Email from EmailField to CharField to store encrypted data
-    Email = models.CharField(max_length=255)
+    Email = models.CharField(max_length=1000)  # Increased for encryption support
     FirstName=models.CharField(max_length=255)
     LastName=models.CharField(max_length=255)
     # PhoneNumber and Address will be encrypted before storage
-    PhoneNumber=models.CharField(max_length=255, null=True, blank=True)
+    PhoneNumber=models.CharField(max_length=1000, null=True, blank=True)  # Increased for encryption support
     Address=models.TextField(null=True, blank=True)
     IsActive=models.CharField(max_length=1, default='Y', choices=[('Y', 'Yes'), ('N', 'No')])
     DepartmentId=models.CharField(max_length=50)
@@ -151,30 +150,9 @@ class Users(models.Model):
     def __str__(self):
         return f"User {self.UserId} - {self.UserName}"
     
-    def save(self, *args, **kwargs):
-        """
-        Override save to encrypt sensitive fields (Email, PhoneNumber, Address) before storing.
-        Handles both new data and updates, with backward compatibility for existing plain text data.
-        """
-        # Import encryption service
-        from .utils.data_encryption import encrypt_data, is_encrypted_data
-        
-        # Encrypt Email if not already encrypted
-        if self.Email:
-            if not is_encrypted_data(self.Email):
-                self.Email = encrypt_data(self.Email)
-        
-        # Encrypt PhoneNumber if not already encrypted
-        if self.PhoneNumber:
-            if not is_encrypted_data(self.PhoneNumber):
-                self.PhoneNumber = encrypt_data(self.PhoneNumber)
-        
-        # Encrypt Address if not already encrypted
-        if self.Address:
-            if not is_encrypted_data(self.Address):
-                self.Address = encrypt_data(self.Address)
-        
-        super().save(*args, **kwargs)
+    # Note: Encryption is now handled by EncryptedFieldsMixin.save()
+    # The mixin automatically encrypts fields configured in encryption_config.py
+    # Individual save() override removed in favor of mixin
     
     @property
     def email_plain(self):
@@ -284,8 +262,12 @@ class Users(models.Model):
 
 
 
-class CategoryBusinessUnit(models.Model):
+class CategoryBusinessUnit(EncryptedFieldsMixin, models.Model):
     id = models.AutoField(primary_key=True)
+    # MULTI-TENANCY: Link category to tenant
+    tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='category_business_units', null=True, blank=True,
+                               help_text="Tenant this category belongs to")
     source = models.CharField(max_length=50)
     value = models.CharField(max_length=255)
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
@@ -296,7 +278,7 @@ class CategoryBusinessUnit(models.Model):
     def __str__(self):
         return f"{self.source} - {self.value}"
 
-class Domain(models.Model):
+class Domain(EncryptedFieldsMixin, models.Model):
     domain_id = models.AutoField(primary_key=True)
     domain_name = models.CharField(max_length=150, unique=True)
     IsActive = models.CharField(max_length=1, default='Y', choices=[('Y', 'Yes'), ('N', 'No')], db_column='isActive')
@@ -313,7 +295,7 @@ class Domain(models.Model):
         return self.IsActive.upper() == 'Y'
 
 
-class Framework(models.Model):
+class Framework(EncryptedFieldsMixin, models.Model):
     FrameworkId = models.AutoField(primary_key=True)
     
     # MULTI-TENANCY: Link framework to tenant
@@ -330,15 +312,15 @@ class Framework(models.Model):
         blank=True
     )
 
-    FrameworkName = models.CharField(max_length=255)
+    FrameworkName = models.CharField(max_length=1000)  # Increased for encryption support
     CurrentVersion = models.FloatField(default=1.0)
     FrameworkDescription = models.TextField()
     EffectiveDate = models.DateField(null=True, blank=True)
     CreatedByName = models.CharField(max_length=255)
     CreatedByDate = models.DateField()
     Category = models.CharField(max_length=100, null=True, blank=True)
-    DocURL = models.CharField(max_length=255, null=True, blank=True)
-    Identifier = models.CharField(max_length=45, null=True, blank=True)
+    DocURL = models.CharField(max_length=1000, null=True, blank=True)  # Increased for encryption support
+    Identifier = models.CharField(max_length=500, null=True, blank=True)  # Increased for encryption support
     StartDate = models.DateField(null=True, blank=True)
     EndDate = models.DateField(null=True, blank=True)
     Status = models.CharField(max_length=45, null=True, blank=True)
@@ -356,7 +338,7 @@ class Framework(models.Model):
  
 
 # Product versioning for patch enforcement
-class ProductVersion(models.Model):
+class ProductVersion(EncryptedFieldsMixin, models.Model):
     STATUS_CHOICES = [
         ('active', 'Active'),
         ('deprecated', 'Deprecated'),
@@ -389,7 +371,7 @@ class ProductVersion(models.Model):
         return cls.objects.filter(min_supported=True).order_by('-release_date', '-created_at').first()
 
 
-class Kpi(models.Model):
+class Kpi(EncryptedFieldsMixin, models.Model):
     KpiId = models.AutoField(primary_key=True, db_column='Id')
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId', null=True, blank=True)
     FrameworkName = models.CharField(max_length=255, null=True, blank=True)
@@ -413,11 +395,11 @@ class Kpi(models.Model):
         return f"{self.Name} ({self.FrameworkName or 'No Framework'})"
 
 
-class FrameworkVersion(models.Model):
+class FrameworkVersion(EncryptedFieldsMixin, models.Model):
     VersionId = models.AutoField(primary_key=True)
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
     Version = models.FloatField()
-    FrameworkName = models.CharField(max_length=255)
+    FrameworkName = models.CharField(max_length=1000)  # Increased for encryption support
     CreatedBy = models.CharField(max_length=255)
     CreatedDate = models.DateField()
     PreviousVersionId = models.IntegerField(null=True, blank=True)
@@ -427,7 +409,7 @@ class FrameworkVersion(models.Model):
         db_table = 'frameworkversions'
  
  
-class Policy(models.Model):
+class Policy(EncryptedFieldsMixin, models.Model):
     PolicyId = models.AutoField(primary_key=True)
     # MULTI-TENANCY: Link policy to tenant
     tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId', 
@@ -437,26 +419,26 @@ class Policy(models.Model):
     CurrentVersion = models.CharField(max_length=20, default='1.0')
     Status = models.CharField(max_length=50)
     PolicyDescription = models.TextField()
-    PolicyName = models.CharField(max_length=255)
+    PolicyName = models.CharField(max_length=1000)  # Increased for encryption support
     StartDate = models.DateField()
     EndDate = models.DateField(null=True, blank=True)
     Department = models.CharField(max_length=255, null=True, blank=True)
     CreatedByName = models.CharField(max_length=255, null=True, blank=True)
     CreatedByDate = models.DateField(null=True, blank=True)
-    Applicability = models.CharField(max_length=450, null=True, blank=True)
-    DocURL = models.CharField(max_length=255, null=True, blank=True)
+    Applicability = models.CharField(max_length=1000, null=True, blank=True)  # Increased for encryption support
+    DocURL = models.CharField(max_length=1000, null=True, blank=True)  # Increased for encryption support
     Scope = models.TextField(null=True, blank=True)
     Objective = models.TextField(null=True, blank=True)
-    Identifier = models.CharField(max_length=45, null=True, blank=True)
+    Identifier = models.CharField(max_length=500, null=True, blank=True)  # Increased for encryption support
     PermanentTemporary = models.CharField(max_length=45, null=True, blank=True)
     ActiveInactive = models.CharField(max_length=45, null=True, blank=True)
     Reviewer=models.CharField(max_length=255, null=True, blank=True)
     CoverageRate = models.FloatField(null=True, blank=True)
     AcknowledgedUserIds = models.JSONField(default=list, blank=True, null=True)  # Allow null and use empty list as default
     AcknowledgementCount = models.IntegerField(default=0)
-    PolicyType = models.CharField(max_length=255, null=True, blank=True)
-    PolicyCategory = models.CharField(max_length=255, null=True, blank=True)
-    PolicySubCategory = models.CharField(max_length=255, null=True, blank=True)
+    PolicyType = models.CharField(max_length=1000, null=True, blank=True)  # Increased for encryption support
+    PolicyCategory = models.CharField(max_length=1000, null=True, blank=True)  # Increased for encryption support
+    PolicySubCategory = models.CharField(max_length=1000, null=True, blank=True)  # Increased for encryption support
     Reviewer = models.CharField(max_length=255, null=True, blank=True)
     Entities = models.JSONField(default=list, blank=True, null=True)  # Store entity IDs or "all"
     # Data Inventory - JSON field mapping field labels to data types (personal, confidential, regular)
@@ -468,11 +450,11 @@ class Policy(models.Model):
         db_table = 'policies'
  
  
-class PolicyVersion(models.Model):
+class PolicyVersion(EncryptedFieldsMixin, models.Model):
     VersionId = models.AutoField(primary_key=True)
     PolicyId = models.ForeignKey('Policy', on_delete=models.CASCADE, db_column='PolicyId')
     Version = models.CharField(max_length=20)
-    PolicyName = models.CharField(max_length=255)
+    PolicyName = models.CharField(max_length=1000)  # Increased for encryption support
     CreatedBy = models.CharField(max_length=255)
     CreatedDate = models.DateField()
     PreviousVersionId = models.IntegerField(null=True, blank=True)
@@ -481,11 +463,11 @@ class PolicyVersion(models.Model):
     class Meta:
         db_table = 'policyversions'
 
-class PolicyCategory(models.Model):
+class PolicyCategory(EncryptedFieldsMixin, models.Model):
     Id = models.AutoField(primary_key=True)
-    PolicyType = models.CharField(max_length=255)
-    PolicyCategory = models.CharField(max_length=255)
-    PolicySubCategory = models.CharField(max_length=255)
+    PolicyType = models.CharField(max_length=1000)  # Increased for encryption support
+    PolicyCategory = models.CharField(max_length=1000)  # Increased for encryption support
+    PolicySubCategory = models.CharField(max_length=1000)  # Increased for encryption support
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
     retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
@@ -497,14 +479,14 @@ class PolicyCategory(models.Model):
 
  
  
-class SubPolicy(models.Model):
+class SubPolicy(EncryptedFieldsMixin, models.Model):
     SubPolicyId = models.AutoField(primary_key=True)
     # MULTI-TENANCY: Link subpolicy to tenant
     tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId', 
                                related_name='subpolicies', null=True, blank=True,
                                help_text="Tenant this subpolicy belongs to")
     PolicyId = models.ForeignKey('Policy', on_delete=models.CASCADE, db_column='PolicyId')
-    SubPolicyName = models.CharField(max_length=255)
+    SubPolicyName = models.CharField(max_length=1000)  # Increased for encryption support
     CreatedByName = models.CharField(max_length=255)
     CreatedByDate = models.DateField()
     Identifier = models.CharField(max_length=45)
@@ -520,7 +502,7 @@ class SubPolicy(models.Model):
         db_table = 'subpolicies'
  
  
-class PolicyApproval(models.Model):
+class PolicyApproval(EncryptedFieldsMixin, models.Model):
     ApprovalId = models.AutoField(primary_key=True)
     Identifier = models.CharField(max_length=45, db_column='Identifier')
     ExtractedData = models.JSONField(null=True, blank=True)
@@ -539,7 +521,7 @@ class PolicyApproval(models.Model):
     class Meta:
         db_table = 'policyapproval'
 
-class ComplianceApproval(models.Model):
+class ComplianceApproval(EncryptedFieldsMixin, models.Model):
     ApprovalId = models.AutoField(primary_key=True)
     Identifier = models.CharField(max_length=45, db_column='Identifier')
     ExtractedData = models.JSONField(null=True, blank=True)
@@ -558,7 +540,7 @@ class ComplianceApproval(models.Model):
     class Meta:
         db_table = 'complianceapproval'
 
-class FrameworkApproval(models.Model):
+class FrameworkApproval(EncryptedFieldsMixin, models.Model):
     ApprovalId = models.AutoField(primary_key=True)
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId', null=True)
     # Identifier field is optional, uncomment if needed
@@ -578,19 +560,19 @@ class FrameworkApproval(models.Model):
         db_table = 'frameworkapproval'
 
 # Users model (Django built-in User model is used)
-class Compliance(models.Model):
+class Compliance(EncryptedFieldsMixin, models.Model):
     ComplianceId = models.AutoField(primary_key=True)
     # MULTI-TENANCY: Link compliance to tenant
     tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId', 
                                related_name='compliance', null=True, blank=True,
                                help_text="Tenant this compliance belongs to")
     SubPolicy = models.ForeignKey(SubPolicy, on_delete=models.CASCADE, db_column='SubPolicyId', related_name='compliances')
-    ComplianceTitle = models.CharField(max_length=145, null=True, blank=True)
+    ComplianceTitle = models.CharField(max_length=1000, null=True, blank=True)  # Increased for encryption support
     ComplianceItemDescription = models.TextField(null=True, blank=True)
     ComplianceType = models.CharField(max_length=100, null=True, blank=True)
     Scope = models.TextField(null=True, blank=True)
     Objective = models.TextField(null=True, blank=True)
-    BusinessUnitsCovered = models.CharField(max_length=225, null=True, blank=True)
+    BusinessUnitsCovered = models.CharField(max_length=1000, null=True, blank=True)  # Increased for encryption support
     IsRisk = models.BooleanField(null=True, blank=True)
     PossibleDamage = models.TextField(null=True, blank=True)
     mitigation = models.JSONField(null=True, blank=True)
@@ -612,8 +594,8 @@ class Compliance(models.Model):
     CreatedByDate = models.DateField(null=True, blank=True)
     ComplianceVersion = models.CharField(max_length=50, null=False)
     Status = models.CharField(max_length=50, default='Under Review', null=True, blank=True)
-    Identifier = models.CharField(max_length=45, null=True, blank=True)
-    Applicability = models.CharField(max_length=450, null=True, blank=True)
+    Identifier = models.CharField(max_length=500, null=True, blank=True)  # Increased for encryption support
+    Applicability = models.CharField(max_length=1000, null=True, blank=True)  # Increased for encryption support
     PreviousComplianceVersionId = models.ForeignKey(
         'self',
         on_delete=models.SET_NULL,
@@ -719,13 +701,13 @@ class Compliance(models.Model):
                 print(f"Full traceback: {traceback.format_exc()}")
     
 
-class ExportTask(models.Model):
+class ExportTask(EncryptedFieldsMixin, models.Model):
     id = models.AutoField(primary_key=True)
     export_data = models.JSONField(null=True, blank=True)
     file_type = models.CharField(max_length=10)
     user_id = models.CharField(max_length=100)
     s3_url = models.CharField(max_length=255, null=True, blank=True)
-    file_name = models.CharField(max_length=255, null=True, blank=True)
+    file_name = models.CharField(max_length=1000, null=True, blank=True)  # Increased for encryption support
     status = models.CharField(
         max_length=20,
         choices=[
@@ -749,16 +731,16 @@ class ExportTask(models.Model):
 
 
 # Audit model
-class Audit(models.Model):
+class Audit(EncryptedFieldsMixin, models.Model):
     AuditId = models.AutoField(primary_key=True)
     # MULTI-TENANCY: Link audit to tenant
     tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId', 
                                related_name='audit', null=True, blank=True,
                                help_text="Tenant this audit belongs to")
-    Title = models.CharField(max_length=255, null=True, blank=True)
+    Title = models.CharField(max_length=1155, null=True, blank=True)
     Scope = models.TextField(null=True, blank=True)
     Objective = models.TextField(null=True, blank=True)
-    BusinessUnit = models.CharField(max_length=255, null=True, blank=True)
+    BusinessUnit = models.CharField(max_length=1000, null=True, blank=True)  # Increased for encryption support
     Role = models.CharField(max_length=100, null=True, blank=True)
     Responsibility = models.CharField(max_length=255, null=True, blank=True)
     Assignee = models.ForeignKey(Users, on_delete=models.CASCADE, related_name='assignee', db_column='assignee')
@@ -790,7 +772,7 @@ class Audit(models.Model):
 
 
 # AuditFinding model
-class AuditFinding(models.Model):
+class AuditFinding(EncryptedFieldsMixin, models.Model):
     AuditFindingsId = models.AutoField(primary_key=True)
     # MULTI-TENANCY: Link audit finding to tenant
     tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId', 
@@ -829,13 +811,13 @@ class AuditFinding(models.Model):
         super().save(*args, **kwargs)
         # send_log(f"AuditFinding saved: {self.AuditFindingsId}", self.AuditId.AuditId)
  
-class Incident(models.Model):
+class Incident(EncryptedFieldsMixin, models.Model):
     IncidentId = models.AutoField(primary_key=True)
     # MULTI-TENANCY: Link incident to tenant
     tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId', 
                                related_name='incidents', null=True, blank=True,
                                help_text="Tenant this incident belongs to")
-    IncidentTitle = models.CharField(max_length=255)
+    IncidentTitle = models.CharField(max_length=1255)
     Description = models.TextField()
     Mitigation = models.JSONField(null=True, blank=True)
     FrameworkId = models.IntegerField(null=True, blank=True)
@@ -866,9 +848,9 @@ class Incident(models.Model):
         ('RISK', 'Rejected from Risk')
     ])
     
-    AffectedBusinessUnit = models.CharField(max_length=100, null=True, blank=True)
+    AffectedBusinessUnit = models.CharField(max_length=1000, null=True, blank=True)  # Increased for encryption support
     SystemsAssetsInvolved = models.TextField(null=True, blank=True)
-    GeographicLocation = models.CharField(max_length=100, null=True, blank=True)
+    GeographicLocation = models.CharField(max_length=1000, null=True, blank=True)  # Increased for encryption support
     Criticality = models.CharField(max_length=20, null=True, blank=True)
     InitialImpactAssessment = models.TextField(null=True, blank=True)
     InternalContacts = models.TextField(null=True, blank=True)
@@ -892,7 +874,7 @@ class Incident(models.Model):
         db_table = 'incidents'
 
 
-class IncidentApproval(models.Model):
+class IncidentApproval(EncryptedFieldsMixin, models.Model):
     IncidentId = models.IntegerField()
     version = models.CharField(max_length=45)
     ExtractedInfo = models.JSONField(null=True)
@@ -907,7 +889,7 @@ class IncidentApproval(models.Model):
         managed = False  # Since we're connecting to an existing table
 
 
-class AuditReport(models.Model):
+class AuditReport(EncryptedFieldsMixin, models.Model):
     ReportId = models.AutoField(primary_key=True)
     AuditId = models.ForeignKey(Audit, on_delete=models.CASCADE, db_column='AuditId')
     Report = models.TextField()
@@ -919,7 +901,7 @@ class AuditReport(models.Model):
     class Meta:
         db_table = 'audit_report'
 
-class AuditDocument(models.Model):
+class AuditDocument(EncryptedFieldsMixin, models.Model):
     """
     Model for storing documents uploaded for AI audits
     Links documents to specific audits, policiels, and sub-policies
@@ -931,7 +913,7 @@ class AuditDocument(models.Model):
     ComplianceId = models.ForeignKey('Compliance', on_delete=models.CASCADE, db_column='ComplianceId', null=True, blank=True)
     
     # Document details
-    DocumentName = models.CharField(max_length=255)
+    DocumentName = models.CharField(max_length=1000)  # Increased for encryption support
     DocumentType = models.CharField(max_length=50, choices=[
         ('evidence', 'Evidence'),
         ('policy_doc', 'Policy Document'),
@@ -993,7 +975,7 @@ class AuditDocument(models.Model):
     def __str__(self):
         return f"Document {self.DocumentId} - {self.DocumentName} (Audit {self.AuditId})"
 
-class AuditDocumentMapping(models.Model):
+class AuditDocumentMapping(EncryptedFieldsMixin, models.Model):
     """
     Maps specific sections of uploaded documents to compliance requirements
     """
@@ -1002,7 +984,7 @@ class AuditDocumentMapping(models.Model):
     ComplianceId = models.ForeignKey('Compliance', on_delete=models.CASCADE, db_column='ComplianceId')
     
     # Document section details
-    SectionTitle = models.CharField(max_length=255, null=True, blank=True)
+    SectionTitle = models.CharField(max_length=1000, null=True, blank=True)  # Increased for encryption support
     SectionContent = models.TextField(null=True, blank=True)
     PageNumber = models.IntegerField(null=True, blank=True)
     StartPosition = models.IntegerField(null=True, blank=True)  # Character position in document
@@ -1042,7 +1024,7 @@ class AuditDocumentMapping(models.Model):
         # Risk model
 
 # Workflow model
-class Workflow(models.Model):
+class Workflow(EncryptedFieldsMixin, models.Model):
     Id = models.AutoField(primary_key=True)
     FindingId = models.ForeignKey(AuditFinding, on_delete=models.CASCADE, db_column='finding_id')
     IncidentId = models.ForeignKey(Incident, on_delete=models.CASCADE, db_column='IncidentId')
@@ -1054,7 +1036,7 @@ class Workflow(models.Model):
     class Meta:
         db_table = 'workflow'
  
-class AuditVersion(models.Model):
+class AuditVersion(EncryptedFieldsMixin, models.Model):
     AuditId = models.IntegerField()
     Version = models.CharField(max_length=45)
     ExtractedInfo = models.JSONField()
@@ -1074,7 +1056,7 @@ class AuditVersion(models.Model):
 
 
 
-class Notification(models.Model):
+class Notification(EncryptedFieldsMixin, models.Model):
     id = models.AutoField(primary_key=True)
     # MULTI-TENANCY: Link notification to tenant
     tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId', 
@@ -1092,10 +1074,10 @@ class Notification(models.Model):
         db_table = 'notifications'
 
 
-class S3File(models.Model):
+class S3File(EncryptedFieldsMixin, models.Model):
     url = models.TextField()
     file_type = models.CharField(max_length=50, null=True, blank=True)
-    file_name = models.CharField(max_length=255, null=True, blank=True)
+    file_name = models.CharField(max_length=1000, null=True, blank=True)  # Increased for encryption support
     user_id = models.CharField(max_length=100, null=True, blank=True)
     metadata = models.JSONField(null=True, blank=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
@@ -1108,7 +1090,7 @@ class S3File(models.Model):
         return f"{self.file_name} ({self.file_type}) - {self.user_id}"
 
 
-class Risk(models.Model):
+class Risk(EncryptedFieldsMixin, models.Model):
     RiskId = models.AutoField(primary_key=True)  # Primary Key
     # MULTI-TENANCY: Link risk to tenant
     tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId', 
@@ -1140,7 +1122,7 @@ class Risk(models.Model):
     def __str__(self):
         return f"Risk {self.RiskId}"
 
-class RiskInstance(models.Model):
+class RiskInstance(EncryptedFieldsMixin, models.Model):
     # Define choices for RiskStatus
     STATUS_NOT_ASSIGNED = 'Not Assigned'
     STATUS_ASSIGNED = 'Assigned'
@@ -1243,7 +1225,7 @@ class RiskInstance(models.Model):
             print(traceback.format_exc())
 
 
-class RiskAssignment(models.Model):
+class RiskAssignment(EncryptedFieldsMixin, models.Model):
     risk = models.ForeignKey('Risk', on_delete=models.CASCADE, related_name='assignments')
     assigned_to = models.ForeignKey(Users, on_delete=models.CASCADE)
     assigned_by = models.ForeignKey(Users, on_delete=models.CASCADE, related_name='risk_assignments_created')
@@ -1254,7 +1236,7 @@ class RiskAssignment(models.Model):
         db_table = 'risk_assignments'
 
 
-class RiskAssessment(models.Model):
+class RiskAssessment(EncryptedFieldsMixin, models.Model):
     """
     Tracks async risk document processing jobs.
     Used for background processing with AI microservice.
@@ -1293,7 +1275,7 @@ class RiskAssessment(models.Model):
         return f"Risk {self.risk.RiskId} assigned to {self.assigned_to.UserName}"
 
 
-class RiskApproval(models.Model):
+class RiskApproval(EncryptedFieldsMixin, models.Model):
     RiskInstanceId = models.IntegerField()
     version = models.CharField(max_length=45)
     ExtractedInfo = models.JSONField(null=True)
@@ -1308,7 +1290,7 @@ class RiskApproval(models.Model):
         managed = False  # Since we're connecting to an existing table
 
 
-class GRCLog(models.Model):
+class GRCLog(EncryptedFieldsMixin, models.Model):
     LogId = models.AutoField(primary_key=True)
     Timestamp = models.DateTimeField(auto_now_add=True)
     UserId = models.CharField(max_length=50, null=True)
@@ -1319,7 +1301,7 @@ class GRCLog(models.Model):
     EntityType = models.CharField(max_length=50, null=True)
     LogLevel = models.CharField(max_length=20, default='INFO')
     Description = models.TextField(null=True)
-    IPAddress = models.CharField(max_length=45, null=True)
+    IPAddress = models.CharField(max_length=145, null=True)
     AdditionalInfo = models.JSONField(null=True, blank=True)
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
     retentionExpiry = models.DateField(null=True, blank=True)
@@ -1332,11 +1314,11 @@ class GRCLog(models.Model):
 
 
 
-class PasswordLog(models.Model):
+class PasswordLog(EncryptedFieldsMixin, models.Model):
     """Model to track password history and changes"""
     LogId = models.AutoField(primary_key=True)
     UserId = models.IntegerField()  # Foreign key to Users.UserId
-    UserName = models.CharField(max_length=255)
+    UserName = models.CharField(max_length=1000)  # Increased for encryption support
     OldPassword = models.CharField(max_length=255, null=True, blank=True)  # Hashed old password
     NewPassword = models.CharField(max_length=255)  # Hashed new password
     ActionType = models.CharField(max_length=50, choices=[
@@ -1362,7 +1344,7 @@ class PasswordLog(models.Model):
         return f"PasswordLog {self.LogId}: {self.UserName} - {self.ActionType} at {self.Timestamp}"
 
 
-class DataSubjectRequest(models.Model):
+class DataSubjectRequest(EncryptedFieldsMixin, models.Model):
     """
     Data Subject Request model for GDPR/Data Privacy compliance
     Tracks user requests for data access, rectification, erasure, and portability
@@ -1411,7 +1393,7 @@ class DataSubjectRequest(models.Model):
         return f"Request {self.id} - {self.get_request_type_display()} by User {self.user_id.UserId}"
 
 
-class AccessRequest(models.Model):
+class AccessRequest(EncryptedFieldsMixin, models.Model):
     """
     Access Request model for requesting access to pages/features
     Tracks user requests for access permissions that require admin approval
@@ -1451,10 +1433,10 @@ class AccessRequest(models.Model):
 
 
 
-class Entity(models.Model):
+class Entity(EncryptedFieldsMixin, models.Model):
     Id = models.AutoField(primary_key=True)
-    EntityName = models.CharField(max_length=255)
-    Location = models.CharField(max_length=255)
+    EntityName = models.CharField(max_length=1000)  # Increased for encryption support
+    Location = models.CharField(max_length=1000)  # Increased for encryption support
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
     retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
@@ -1464,7 +1446,7 @@ class Entity(models.Model):
     def __str__(self):
         return f"{self.EntityName} ({self.Location})"
 
-class LastChecklistItemVerified(models.Model):
+class LastChecklistItemVerified(EncryptedFieldsMixin, models.Model):
     # Id = models.AutoField(primary_key=True)
     ComplianceId = models.IntegerField(primary_key=True)
     SubPolicyId = models.IntegerField()
@@ -1484,7 +1466,7 @@ class LastChecklistItemVerified(models.Model):
         unique_together = (('ComplianceId', 'SubPolicyId', 'PolicyId', 'FrameworkId'),)
 
 
-class ComplianceBaseline(models.Model):
+class ComplianceBaseline(EncryptedFieldsMixin, models.Model):
     """
     Baseline Configuration model for defining compliance baseline levels
     (Low, Moderate, High) per framework with versioning support
@@ -1540,7 +1522,7 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 
-class RBAC(models.Model):
+class RBAC(EncryptedFieldsMixin, models.Model):
     """
     Role-Based Access Control model for GRC system
     Maps users to their specific permissions across all modules
@@ -1977,7 +1959,7 @@ class RBACManager(models.Manager):
 
 
 
-class BusinessUnit(models.Model):
+class BusinessUnit(EncryptedFieldsMixin, models.Model):
     BusinessUnitId = models.AutoField(primary_key=True)
     Name = models.CharField(max_length=255)
     Code = models.CharField(max_length=50)
@@ -1994,9 +1976,9 @@ class BusinessUnit(models.Model):
         return self.Name
 
 
-class Category(models.Model):
+class Category(EncryptedFieldsMixin, models.Model):
     CategoryId = models.AutoField(primary_key=True)
-    CategoryName = models.CharField(max_length=255)
+    CategoryName = models.CharField(max_length=1000)  # Increased for encryption support
     Description = models.TextField()
     IsActive = models.BooleanField(default=True)
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
@@ -2008,14 +1990,14 @@ class Category(models.Model):
         return self.CategoryName
 
 
-class Department(models.Model):
+class Department(EncryptedFieldsMixin, models.Model):
     DepartmentId = models.AutoField(primary_key=True)
     # MULTI-TENANCY: Link department to tenant
     tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId', 
                                related_name='department', null=True, blank=True,
                                help_text="Tenant this department belongs to")
     EntityId = models.IntegerField()
-    DepartmentName = models.CharField(max_length=255)
+    DepartmentName = models.CharField(max_length=1000)  # Increased for encryption support
     DepartmentHead = models.IntegerField()
     IsActive = models.BooleanField(default=True)
     CreatedDate = models.DateTimeField()
@@ -2029,9 +2011,9 @@ class Department(models.Model):
         return self.DepartmentName
 
 
-class Entity(models.Model):
+class Entity(EncryptedFieldsMixin, models.Model):
     Id = models.AutoField(primary_key=True)
-    EntityName = models.CharField(max_length=255)
+    EntityName = models.CharField(max_length=1000)  # Increased for encryption support
     EntityType = models.CharField(max_length=255)
     ParentEntityId = models.IntegerField(null=True, blank=True)
     LocationId = models.IntegerField()
@@ -2046,7 +2028,7 @@ class Entity(models.Model):
         return self.EntityName
 
 
-class Holiday(models.Model):
+class Holiday(EncryptedFieldsMixin, models.Model):
     HolidayId = models.AutoField(primary_key=True)
     EntityId = models.IntegerField()
     HolidayDate = models.DateField()
@@ -2061,13 +2043,13 @@ class Holiday(models.Model):
         return self.HolidayName
 
 
-class Location(models.Model):
+class Location(EncryptedFieldsMixin, models.Model):
     LocationID = models.AutoField(primary_key=True)
-    AddressLine = models.CharField(max_length=255)
-    City = models.CharField(max_length=255)
-    State = models.CharField(max_length=255, null=True, blank=True)
-    Country = models.CharField(max_length=255)
-    PostalCode = models.CharField(max_length=45, null=True, blank=True)
+    AddressLine = models.CharField(max_length=1000)  # Increased for encryption support
+    City = models.CharField(max_length=1000)  # Increased for encryption support
+    State = models.CharField(max_length=1000, null=True, blank=True)  # Increased for encryption support
+    Country = models.CharField(max_length=1000)  # Increased for encryption support
+    PostalCode = models.CharField(max_length=500, null=True, blank=True)  # Increased for encryption support
     FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
     retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
@@ -2077,7 +2059,7 @@ class Location(models.Model):
         return self.AddressLine
 
 
-class Applicability(models.Model):
+class Applicability(EncryptedFieldsMixin, models.Model):
     ApplicabilityId = models.AutoField(primary_key=True)
     EntityId = models.IntegerField()
     DepartmentId = models.IntegerField()
@@ -2361,7 +2343,7 @@ def set_s3file_retention_expiry(sender, instance, created, **kwargs):
 # Until then, change requests will not automatically set retentionExpiry.
 
 
-class Event(models.Model):
+class Event(EncryptedFieldsMixin, models.Model):
     """
     Event model for GRC Event Management
     """
@@ -2370,7 +2352,7 @@ class Event(models.Model):
     tenant = models.ForeignKey('Tenant', on_delete=models.CASCADE, db_column='TenantId', 
                                related_name='events', null=True, blank=True,
                                help_text="Tenant this event belongs to")
-    EventTitle = models.CharField(max_length=255)
+    EventTitle = models.CharField(max_length=2155)
     EventId_Generated = models.CharField(max_length=50, unique=True)  # Auto-generated ID like EVT-2025-1188
     Description = models.TextField(null=True, blank=True)
     
@@ -2390,7 +2372,7 @@ class Event(models.Model):
         ('Jira Issue', 'Jira Issue')
     ], null=True, blank=True)
     LinkedRecordId = models.IntegerField(null=True, blank=True)
-    LinkedRecordName = models.CharField(max_length=255, null=True, blank=True)
+    LinkedRecordName = models.CharField(max_length=1000, null=True, blank=True)  # Increased for encryption support
     
     # Event Details
     Category = models.CharField(max_length=100, null=True, blank=True)
@@ -2434,7 +2416,7 @@ class Event(models.Model):
     ApprovedAt = models.DateTimeField(null=True, blank=True)
     
     # Additional Fields
-    Comments = models.CharField(max_length=255, null=True, blank=True, db_column='comments')
+    Comments = models.CharField(max_length=1000, null=True, blank=True, db_column='comments')  # Increased for encryption support
     Priority = models.CharField(max_length=20, choices=[
         ('Low', 'Low'),
         ('Medium', 'Medium'),
@@ -2566,7 +2548,7 @@ def set_event_retention_expiry(sender, instance, created, **kwargs):
     _set_retention_expiry(instance, 'event_handling', page_key)
 
 
-class EventType(models.Model):
+class EventType(EncryptedFieldsMixin, models.Model):
     """
     Event Type model for categorizing events by framework
     """
@@ -2585,7 +2567,7 @@ class EventType(models.Model):
         return f"{self.FrameworkName} - {self.eventtype}"
 
 
-class Module(models.Model):
+class Module(EncryptedFieldsMixin, models.Model):
     """
     Module model for GRC system modules
     """
@@ -2602,7 +2584,7 @@ class Module(models.Model):
         return self.modulename
 
 
-class AWSCredentials(models.Model):
+class AWSCredentials(EncryptedFieldsMixin, models.Model):
     """
     AWS Credentials model for storing S3 configuration
     """
@@ -2628,7 +2610,7 @@ class AWSCredentials(models.Model):
         return cls.objects.first()
 
 
-class FileOperations(models.Model):
+class FileOperations(EncryptedFieldsMixin, models.Model):
     """
     File Operations model for tracking file operations in the system
     """
@@ -2713,7 +2695,7 @@ def set_file_operations_retention_expiry(sender, instance, created, **kwargs):
 # EXTERNAL APPLICATIONS MODELS
 # =====================================================
 
-class ExternalApplication(models.Model):
+class ExternalApplication(EncryptedFieldsMixin, models.Model):
     """
     External Applications model for managing external platform integrations
     """
@@ -2725,7 +2707,9 @@ class ExternalApplication(models.Model):
     ]
 
     id = models.AutoField(primary_key=True)
-    name = models.CharField(max_length=255, unique=True)
+    # Note: unique=True removed - MySQL doesn't support unique CharFields > 255 chars
+    # For encrypted fields, uniqueness should be enforced at application level or via hash
+    name = models.CharField(max_length=1000)  # Increased for encryption support
     category = models.CharField(max_length=100)
     type = models.CharField(max_length=100)
     description = models.TextField()
@@ -2745,6 +2729,11 @@ class ExternalApplication(models.Model):
     class Meta:
         db_table = 'external_applications'
         ordering = ['name']
+        # Note: unique constraint on 'name' removed due to MySQL limitation (max 255 chars for unique)
+        # Uniqueness should be enforced at application level for encrypted fields
+        indexes = [
+            models.Index(fields=['name'], name='idx_external_app_name'),
+        ]
 
     def __str__(self):
         return f"{self.name} - {self.get_status_display()}"
@@ -2758,7 +2747,7 @@ class ExternalApplication(models.Model):
         return self.connections.filter(connection_status='active').order_by('-last_used').first()
 
 
-class ExternalApplicationConnection(models.Model):
+class ExternalApplicationConnection(EncryptedFieldsMixin, models.Model):
     """
     External Application Connections model for user-specific connections
     """
@@ -2805,7 +2794,7 @@ class ExternalApplicationConnection(models.Model):
         self.save(update_fields=['last_used'])
 
 
-class ExternalApplicationSyncLog(models.Model):
+class ExternalApplicationSyncLog(EncryptedFieldsMixin, models.Model):
     """
     External Application Sync Logs model for tracking sync activities
     """
@@ -2852,7 +2841,7 @@ class ExternalApplicationSyncLog(models.Model):
         return None
 
 
-class UsersProjectList(models.Model):
+class UsersProjectList(EncryptedFieldsMixin, models.Model):
     """
     Users Project List model for managing project assignments to users
     """
@@ -2863,7 +2852,7 @@ class UsersProjectList(models.Model):
 
     id = models.AutoField(primary_key=True)
     project_id = models.CharField(max_length=100, help_text="Jira project ID")
-    project_name = models.CharField(max_length=255, help_text="Jira project name")
+    project_name = models.CharField(max_length=1000, help_text="Jira project name")  # Increased for encryption support
     project_key = models.CharField(max_length=50, help_text="Jira project key")
     project_details = models.JSONField(null=True, blank=True, help_text="Complete project details from Jira")
     users_list = models.JSONField(help_text="List of user IDs assigned to this project")
@@ -2916,7 +2905,7 @@ class UsersProjectList(models.Model):
         return user_id in (self.users_list or [])
 
 
-class IntegrationDataList(models.Model):
+class IntegrationDataList(EncryptedFieldsMixin, models.Model):
     id = models.BigAutoField(primary_key=True)
     heading = models.CharField(max_length=255)
     source = models.CharField(max_length=255, blank=True, null=True)
@@ -2941,7 +2930,7 @@ class IntegrationDataList(models.Model):
         return f"{self.id} — {self.heading}"
 
 
-class OAuthState(models.Model):
+class OAuthState(EncryptedFieldsMixin, models.Model):
     """
     OAuth State model for storing OAuth state during external OAuth flows
     """
@@ -2973,7 +2962,7 @@ class OAuthState(models.Model):
 # POLICY ACKNOWLEDGEMENT MODELS
 # =====================================================
 
-class PolicyAcknowledgementRequest(models.Model):
+class PolicyAcknowledgementRequest(EncryptedFieldsMixin, models.Model):
     """
     Policy Acknowledgement Request model for tracking acknowledgement campaigns
     """
@@ -3050,7 +3039,7 @@ class PolicyAcknowledgementRequest(models.Model):
         return round((self.AcknowledgedCount / self.TotalUsers) * 100, 2)
 
 
-class PolicyAcknowledgementUser(models.Model):
+class PolicyAcknowledgementUser(EncryptedFieldsMixin, models.Model):
     """
     Policy Acknowledgement User model for tracking individual user acknowledgements
     """
@@ -3138,7 +3127,7 @@ class PolicyAcknowledgementUser(models.Model):
 # CONSENT MANAGEMENT MODELS
 # =====================================================
 
-class ConsentConfiguration(models.Model):
+class ConsentConfiguration(EncryptedFieldsMixin, models.Model):
     """
     Stores configuration for which actions require user consent
     Managed by GRC Administrator
@@ -3180,7 +3169,7 @@ class ConsentConfiguration(models.Model):
         return f"{self.action_label} - {'Enabled' if self.is_enabled else 'Disabled'}"
 
 
-class ConsentAcceptance(models.Model):
+class ConsentAcceptance(EncryptedFieldsMixin, models.Model):
     """
     Tracks when users accept consent for specific actions
     """
@@ -3205,7 +3194,7 @@ class ConsentAcceptance(models.Model):
         return f"{self.user.UserName} accepted {self.action_type} at {self.accepted_at}"
 
 
-class ConsentWithdrawal(models.Model):
+class ConsentWithdrawal(EncryptedFieldsMixin, models.Model):
     """
     Tracks when users withdraw consent for specific actions
     GDPR Article 7(3): Users have the right to withdraw consent at any time
@@ -3237,7 +3226,7 @@ class ConsentWithdrawal(models.Model):
 # COOKIE PREFERENCES MODEL
 # =====================================================
 
-class CookiePreferences(models.Model):
+class CookiePreferences(EncryptedFieldsMixin, models.Model):
     """
     Stores user cookie preferences for GDPR compliance
     """
@@ -3256,7 +3245,7 @@ class CookiePreferences(models.Model):
     AnalyticsCookies = models.BooleanField(default=False, db_column='AnalyticsCookies')
     MarketingCookies = models.BooleanField(default=False, db_column='MarketingCookies')
     PreferencesSaved = models.BooleanField(default=False, db_column='PreferencesSaved')
-    IpAddress = models.CharField(max_length=50, db_column='IpAddress', null=True, blank=True)
+    IpAddress = models.CharField(max_length=128, db_column='IpAddress', null=True, blank=True)
     UserAgent = models.TextField(db_column='UserAgent', null=True, blank=True)
     CreatedAt = models.DateTimeField(auto_now_add=True, db_column='CreatedAt')
     UpdatedAt = models.DateTimeField(auto_now=True, db_column='UpdatedAt')
@@ -3275,7 +3264,7 @@ class CookiePreferences(models.Model):
 
 
 # MFA Models
-class MfaEmailChallenge(models.Model):
+class MfaEmailChallenge(EncryptedFieldsMixin, models.Model):
     """MFA Email OTP Challenge table"""
     STATUS_PENDING = "pending"
     STATUS_SATISFIED = "satisfied"
@@ -3356,7 +3345,7 @@ class MfaEmailChallenge(models.Model):
         self.save(update_fields=['Attempts'])
 
 
-class MfaAuditLog(models.Model):
+class MfaAuditLog(EncryptedFieldsMixin, models.Model):
     """MFA Audit Log table"""
     EVT_ISSUED = "challenge_issued"
     EVT_OK = "challenge_ok"
@@ -3418,7 +3407,7 @@ class MfaAuditLog(models.Model):
         return ip
 
 # Product versioning for patch enforcement
-class ProductVersion(models.Model):
+class ProductVersion(EncryptedFieldsMixin, models.Model):
     STATUS_CHOICES = [
         ('active', 'Active'),
         ('deprecated', 'Deprecated'),
@@ -3456,7 +3445,7 @@ class ProductVersion(models.Model):
 # DATA RETENTION MODULE & PAGE CONFIGURATION MODEL
 # =====================================================
 
-class RetentionModulePageConfig(models.Model):
+class RetentionModulePageConfig(EncryptedFieldsMixin, models.Model):
     """
     Stores module/page level retention selections coming from the UI tree.
     No framework link is stored by request.
@@ -3514,7 +3503,7 @@ RETENTION_DELETE_MODEL_MAP = {
 }
 
 
-class RetentionTimeline(models.Model):
+class RetentionTimeline(EncryptedFieldsMixin, models.Model):
     STATUS_CHOICES = [
         ('Active', 'Active'),
         ('Expired', 'Expired'),
@@ -3715,7 +3704,7 @@ class RetentionTimeline(models.Model):
 # DATA LIFECYCLE AUDIT LOG
 # Logs retention lifecycle actions (create, archive, pause, extend, delete, warnings)
 # =====================================================
-class DataLifecycleAuditLog(models.Model):
+class DataLifecycleAuditLog(EncryptedFieldsMixin, models.Model):
     ACTION_CHOICES = [
         ('CREATE', 'CREATE'),
         ('ARCHIVE', 'ARCHIVE'),
@@ -3863,7 +3852,7 @@ def upsert_retention_timeline(instance, record_type: str, record_name: str = Non
     except Exception as e:
         print(f"[RETENTION] RetentionTimeline upsert failed for {record_type}#{getattr(instance, 'pk', None)}: {e}")
 
-class OrganizationalControl(models.Model):
+class OrganizationalControl(EncryptedFieldsMixin, models.Model):
     """
     Stores organizational controls mapped to framework compliances.
     AI audits these against framework controls to determine mapping status.
@@ -3911,7 +3900,7 @@ class OrganizationalControl(models.Model):
         return f"OrgControl {self.OrgControlId} - {self.MappingStatus}"
  
  
-class OrganizationalControlDocument(models.Model):
+class OrganizationalControlDocument(EncryptedFieldsMixin, models.Model):
     """
     Stores multiple documents for organizational controls.
     One OrganizationalControl can have multiple documents.
@@ -3925,7 +3914,7 @@ class OrganizationalControlDocument(models.Model):
     )
    
     # Document details
-    DocumentName = models.CharField(max_length=255)
+    DocumentName = models.CharField(max_length=1000)  # Increased for encryption support
     DocumentPath = models.CharField(max_length=500)
     DocumentType = models.CharField(max_length=50)  # pdf, docx, txt, etc.
     FileSize = models.BigIntegerField(null=True, blank=True)  # File size in bytes

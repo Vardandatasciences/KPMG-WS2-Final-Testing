@@ -711,7 +711,14 @@ const onAssigneeChange = () => {
 const handleNoApprovalChange = () => {
   if (noApprovalNeeded.value) {
     // Try to get current logged in user from Vuex store first
-    let currentUser = store.getters['auth/currentUser']
+    let currentUser = null
+    
+    try {
+      currentUser = store.getters['auth/currentUser']
+      console.log('Vuex store user:', currentUser)
+    } catch (vuexError) {
+      console.log('Could not access Vuex store:', vuexError.message)
+    }
     
     // If not in store, try to get from localStorage as fallback
     if (!currentUser) {
@@ -726,9 +733,26 @@ const handleNoApprovalChange = () => {
       }
     }
     
-    // Handle both user_id and userid property names (backend returns userid)
-    const userId = currentUser?.user_id || currentUser?.userid
-    const userName = currentUser?.username || `${currentUser?.first_name || ''} ${currentUser?.last_name || ''}`.trim() || currentUser?.email
+    // Try multiple possible user ID field names (checking all common variations)
+    const userId = currentUser?.UserId || currentUser?.id || currentUser?.user_id || currentUser?.userId || currentUser?.userid
+    
+    // First, try to find the user in the users list to get their display_name
+    let userName = ''
+    if (userId) {
+      const userFromList = users.value.find(user => user.user_id == userId)
+      if (userFromList) {
+        // Use display_name from the users list (matches what's shown in dropdown)
+        userName = userFromList.display_name || userFromList.username || ''
+      }
+    }
+    
+    // If not found in users list, construct name from currentUser object
+    if (!userName && currentUser) {
+      userName = currentUser?.username || 
+                 `${currentUser?.first_name || ''} ${currentUser?.last_name || ''}`.trim() || 
+                 currentUser?.email || 
+                 ''
+    }
     
     if (currentUser && userId) {
       // Auto-fill assigner
@@ -738,10 +762,13 @@ const handleNoApprovalChange = () => {
       // Set assignee to same as assigner
       approvalForm.value.assignee_id = userId.toString()
       approvalForm.value.assignee_name = userName
+      
+      console.log('✅ Successfully set assigner and assignee from user:', { userId, userName })
     } else {
       console.error('No current user found in store or localStorage')
       console.log('Store state:', store.getters['auth/currentUser'])
       console.log('localStorage current_user:', localStorage.getItem('current_user'))
+      console.log('Current user object:', currentUser)
       PopupService.warning('Unable to get current user information. Please log in again or select assignee manually.', 'User Not Found')
       noApprovalNeeded.value = false
     }

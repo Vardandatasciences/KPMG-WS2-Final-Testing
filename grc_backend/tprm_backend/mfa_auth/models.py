@@ -3,9 +3,10 @@ from django.utils import timezone
 import hashlib
 import secrets
 import string
+from tprm_backend.utils.encrypted_fields_mixin import TPRMEncryptedFieldsMixin
 
 
-class User(models.Model):
+class User(TPRMEncryptedFieldsMixin, models.Model):
     userid = models.AutoField(db_column="UserId", primary_key=True)
     username = models.CharField(db_column="UserName", max_length=255)
     password = models.CharField(db_column="Password", max_length=255)
@@ -19,6 +20,8 @@ class User(models.Model):
     session_token = models.CharField(db_column="session_token", max_length=1045, null=True, blank=True)
     consent_accepted = models.CharField(db_column="consent_accepted", max_length=1, null=True, blank=True)
     license_key = models.CharField(db_column="license_key", max_length=255, null=True, blank=True)
+    # MULTI-TENANCY: Link user to tenant
+    tenant_id = models.IntegerField(db_column="TenantId", null=True, blank=True, help_text="Tenant this user belongs to")
 
     class Meta:
         db_table = "users"
@@ -46,7 +49,7 @@ class User(models.Model):
 
 
 # --- MFA: Email OTP challenge table ---
-class MfaEmailChallenge(models.Model):
+class MfaEmailChallenge(TPRMEncryptedFieldsMixin, models.Model):
     STATUS_PENDING = "pending"
     STATUS_SATISFIED = "satisfied"
     STATUS_EXPIRED = "expired"
@@ -59,6 +62,12 @@ class MfaEmailChallenge(models.Model):
     ]
 
     challenge_id = models.BigAutoField(db_column="ChallengeId", primary_key=True)
+    
+    # MULTI-TENANCY: Link MFA email challenge to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='mfa_email_challenges', null=True, blank=True,
+                               help_text="Tenant this MFA email challenge belongs to")
+    
     user = models.ForeignKey(
         User,
         db_column="UserId",
@@ -122,7 +131,7 @@ class MfaEmailChallenge(models.Model):
 
 
 # --- MFA: Audit log (optional but recommended) ---
-class MfaAuditLog(models.Model):
+class MfaAuditLog(TPRMEncryptedFieldsMixin, models.Model):
     EVT_ISSUED = "challenge_issued"
     EVT_OK = "challenge_ok"
     EVT_FAIL = "challenge_fail"
@@ -133,6 +142,12 @@ class MfaAuditLog(models.Model):
     ]
 
     mfa_event_id = models.BigAutoField(db_column="MfaEventId", primary_key=True)
+    
+    # MULTI-TENANCY: Link MFA audit log to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='mfa_audit_logs', null=True, blank=True,
+                               help_text="Tenant this MFA audit log belongs to")
+    
     user = models.ForeignKey(
         User,
         db_column="UserId",

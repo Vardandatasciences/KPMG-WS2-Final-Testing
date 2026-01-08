@@ -4,11 +4,12 @@ SLA models for Vendor Guard Hub matching MySQL schema.
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.contrib.auth.models import User
+from tprm_backend.utils.encrypted_fields_mixin import TPRMEncryptedFieldsMixin
 # from simple_history.models import HistoricalRecords
 # from core.models import BaseModel
 
 
-class Vendor(models.Model):
+class Vendor(TPRMEncryptedFieldsMixin, models.Model):
     """Vendor information matching tprm_integration MySQL schema."""
     vendor_id = models.BigAutoField(primary_key=True)
     vendor_code = models.CharField(max_length=50, blank=True, null=True)
@@ -27,7 +28,7 @@ class Vendor(models.Model):
         return self.company_name
 
 
-class Contract(models.Model):
+class Contract(TPRMEncryptedFieldsMixin, models.Model):
     """Contract information matching MySQL schema."""
     contract_id = models.BigAutoField(primary_key=True)
     contract_name = models.CharField(max_length=255)
@@ -42,9 +43,15 @@ class Contract(models.Model):
         return self.contract_name
 
 
-class VendorSLA(models.Model):
+class VendorSLA(TPRMEncryptedFieldsMixin, models.Model):
     """Vendor SLA matching MySQL schema."""
     sla_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link vendor SLA to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='vendor_slas', null=True, blank=True,
+                               help_text="Tenant this vendor SLA belongs to")
+    
     vendor = models.ForeignKey(
         Vendor,
         on_delete=models.CASCADE,
@@ -151,6 +158,12 @@ class VendorSLA(models.Model):
 class SLAMetric(models.Model):
     """SLA metrics matching MySQL schema."""
     metric_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link SLA metric to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='sla_metrics', null=True, blank=True,
+                               help_text="Tenant this SLA metric belongs to")
+    
     sla = models.ForeignKey(
         VendorSLA,
         on_delete=models.CASCADE,
@@ -190,6 +203,12 @@ class SLAMetric(models.Model):
 class SLADocument(models.Model):
     """SLA documents matching MySQL schema."""
     document_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link SLA document to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='sla_documents', null=True, blank=True,
+                               help_text="Tenant this SLA document belongs to")
+    
     vendor = models.ForeignKey(
         Vendor,
         on_delete=models.CASCADE,
@@ -238,6 +257,12 @@ class SLADocument(models.Model):
 class SLACompliance(models.Model):
     """SLA compliance tracking."""
     compliance_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link SLA compliance to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='sla_compliance_records', null=True, blank=True,
+                               help_text="Tenant this SLA compliance belongs to")
+    
     sla = models.ForeignKey(
         VendorSLA,
         on_delete=models.CASCADE,
@@ -284,6 +309,12 @@ class SLACompliance(models.Model):
 class SLAViolation(models.Model):
     """SLA violation records."""
     violation_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link SLA violation to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='sla_violations', null=True, blank=True,
+                               help_text="Tenant this SLA violation belongs to")
+    
     sla = models.ForeignKey(
         VendorSLA,
         on_delete=models.CASCADE,
@@ -343,6 +374,12 @@ class SLAViolation(models.Model):
 class SLAReview(models.Model):
     """SLA review and assessment."""
     review_id = models.BigAutoField(primary_key=True)
+    
+    # MULTI-TENANCY: Link SLA review to tenant
+    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, db_column='TenantId', 
+                               related_name='sla_reviews', null=True, blank=True,
+                               help_text="Tenant this SLA review belongs to")
+    
     sla = models.ForeignKey(
         VendorSLA,
         on_delete=models.CASCADE,

@@ -39,13 +39,14 @@ const getAuthToken = () => {
 // Helper function for API calls with error handling and JWT authentication
 const apiCall = async (url, options = {}) => {
   const token = getAuthToken()
+  const { skipRedirect = false, ...fetchOptions } = options
   
   const defaultOptions = {
     headers: {
       'Content-Type': 'application/json',
       ...(token && { 'Authorization': `Bearer ${token}` }),
     },
-    ...options,
+    ...fetchOptions,
   }
 
   try {
@@ -53,15 +54,17 @@ const apiCall = async (url, options = {}) => {
 
     // Handle 401 Unauthorized
     if (response.status === 401) {
-      console.error('🔒 Authentication failed - redirecting to login')
-      localStorage.removeItem('session_token')
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('refresh_token')
-      localStorage.removeItem('current_user')
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login'
-        // Return a pending promise that never resolves to prevent further execution
-        return new Promise(() => {})
+      console.error('🔒 Authentication failed')
+      if (!skipRedirect) {
+        localStorage.removeItem('session_token')
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('refresh_token')
+        localStorage.removeItem('current_user')
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login'
+          // Return a pending promise that never resolves to prevent further execution
+          return new Promise(() => {})
+        }
       }
       throw new Error('Authentication required')
     }
@@ -72,17 +75,20 @@ const apiCall = async (url, options = {}) => {
       const errorData = await response.json().catch(() => ({}))
       const errorMessage = errorData?.error || errorData?.message || 'You do not have permission to access this resource.'
       const errorCode = errorData?.code || '403'
-      sessionStorage.setItem('access_denied_error', JSON.stringify({
-        message: errorMessage,
-        code: errorCode,
-        timestamp: new Date().toISOString(),
-        path: window.location.pathname
-      }))
-      if (window.location.pathname !== '/access-denied') {
-        console.log('🔄 Redirecting to /access-denied page...')
-        window.location.href = '/access-denied'
-        // Return a pending promise that never resolves to prevent further execution
-        return new Promise(() => {})
+      
+      if (!skipRedirect) {
+        sessionStorage.setItem('access_denied_error', JSON.stringify({
+          message: errorMessage,
+          code: errorCode,
+          timestamp: new Date().toISOString(),
+          path: window.location.pathname
+        }))
+        if (window.location.pathname !== '/access-denied') {
+          console.log('🔄 Redirecting to /access-denied page...')
+          window.location.href = '/access-denied'
+          // Return a pending promise that never resolves to prevent further execution
+          return new Promise(() => {})
+        }
       }
       throw new Error(errorMessage)
     }

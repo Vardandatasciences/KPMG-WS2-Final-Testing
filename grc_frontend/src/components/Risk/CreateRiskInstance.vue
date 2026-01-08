@@ -2484,15 +2484,21 @@ export default {
     },
     checkAuthenticationStatus() {
       // Check JWT authentication status
-      const accessToken = localStorage.getItem('access_token');
+      const accessToken = localStorage.getItem('access_token') || localStorage.getItem('session_token');
       const refreshToken = localStorage.getItem('refresh_token');
-      const user = localStorage.getItem('user');
+      // Check for 'current_user' (used by authService) or 'user' (legacy)
+      const currentUser = localStorage.getItem('current_user');
+      const legacyUser = localStorage.getItem('user');
+      const user = currentUser || legacyUser;
+      const userId = localStorage.getItem('user_id');
       const isAuthenticated = localStorage.getItem('isAuthenticated');
       
       console.log('🔐 Authentication Status Check:');
       console.log('Access Token:', accessToken ? 'Present' : 'Missing');
       console.log('Refresh Token:', refreshToken ? 'Present' : 'Missing');
-      console.log('User Data:', user ? 'Present' : 'Missing');
+      console.log('Current User Data:', currentUser ? 'Present' : 'Missing');
+      console.log('Legacy User Data:', legacyUser ? 'Present' : 'Missing');
+      console.log('User ID:', userId || 'Missing');
       console.log('Is Authenticated:', isAuthenticated);
       
       if (!accessToken) {
@@ -2503,8 +2509,10 @@ export default {
         return false;
       }
       
-      if (!user) {
+      // Accept either current_user or user_id as valid authentication
+      if (!user && !userId) {
         console.error('❌ No user data found. User needs to log in.');
+        console.error('Checked keys: current_user, user, user_id');
         this.$popup.error('User session expired. Please log in again.');
         // Optionally redirect to login
         // this.$router.push('/login');
