@@ -5051,8 +5051,10 @@ def login_user(request):
                 candidate = Users.objects.get(UserId=user_id)
                 logger.debug(f"User found by ID: {candidate.UserId} - {candidate.UserName}")
             else:
-                # Login with Username (default)
-                candidate = Users.objects.get(UserName=username)
+                # Login with Username (default) - handles encrypted usernames
+                candidate = Users.find_by_username(username)
+                if not candidate:
+                    raise Users.DoesNotExist(f"User with username '{username}' not found")
                 logger.debug(f"User found by username: {candidate.UserId} - {candidate.UserName}")
 
             # First try hashed password verification

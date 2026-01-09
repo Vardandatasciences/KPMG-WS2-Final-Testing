@@ -762,7 +762,7 @@ export const createAxiosInstance = (baseURL = API_BASE_URL) => {
       'Content-Type': 'application/json',
       'Accept': 'application/json'
     },
-    timeout: 120000, // 2 minutes timeout (increased for long-running operations like AI analysis)
+    timeout: 300000, // 5 minutes timeout (increased for long-running operations like AI analysis)
     withCredentials: true,  // Send cookies for CSRF protection
     xsrfCookieName: 'csrftoken',
     xsrfHeaderName: 'X-CSRFToken'

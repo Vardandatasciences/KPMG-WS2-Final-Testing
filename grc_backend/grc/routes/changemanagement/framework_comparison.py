@@ -501,8 +501,19 @@ def check_framework_updates(request, framework_id):
         # By default, do NOT auto-process - user will manually trigger via "Start Analysis"
         process_amendment = request.data.get('process_amendment', False)  # Changed default to False
 
+        # Decrypt framework name before sending to API (FrameworkName is encrypted in database)
+        from grc.utils.data_encryption import decrypt_data
+        try:
+            framework_name = framework.FrameworkName_plain if hasattr(framework, 'FrameworkName_plain') else framework.FrameworkName
+            # If still encrypted (no _plain property), try manual decryption
+            if framework_name and framework_name.startswith('gAAAAAB'):  # Encrypted data starts with this
+                framework_name = decrypt_data(framework_name)
+        except Exception as e:
+            logger.warning(f"Failed to decrypt FrameworkName, using as-is: {str(e)}")
+            framework_name = framework.FrameworkName
+
         update_info = run_framework_update_check(
-            framework_name=framework.FrameworkName,
+            framework_name=framework_name,
             last_updated_date=last_date_str,
             api_key=api_key,
             download_dir=download_dir,
@@ -1358,7 +1369,8 @@ def match_amendments_compliances(request, framework_id):
         # Get request parameters
         use_ai = request.data.get('use_ai', True)
         threshold = request.data.get('threshold', 0.3)
-        print(f"[ComplianceMatch] API invoked | framework_id={framework_id} | use_ai={use_ai} | threshold={threshold}")
+        force_rerun = request.data.get('force_rerun', False)  # OPTION: Force re-run, bypass cache
+        print(f"[ComplianceMatch] API invoked | framework_id={framework_id} | use_ai={use_ai} | threshold={threshold} | force_rerun={force_rerun}")
         
         # Get framework
         framework = Framework.objects.get(FrameworkId=framework_id)
@@ -1375,36 +1387,42 @@ def match_amendments_compliances(request, framework_id):
         ai_analysis = latest_amendment.get('ai_analysis', {})
 
         # ------------------------------------------------------------------
-        # Use cached compliance matching result if it exists for this amendment
+        # OPTION: Check for cached results (unless force_rerun is True)
         # ------------------------------------------------------------------
-        cached_matching = latest_amendment.get('compliance_matching_result')
-        if cached_matching and cached_matching.get('results'):
+        if not force_rerun:  # Only use cache if force_rerun is False
+            cached_matching = latest_amendment.get('compliance_matching_result')
+            if cached_matching and cached_matching.get('results'):
+                logger.info(
+                    "[ComplianceMatch] Using cached matching result for framework_id=%s",
+                    framework_id
+                )
+                return Response({
+                    'success': True,
+                    'framework_id': framework.FrameworkId,
+                    'framework_name': framework.FrameworkName,
+                    'amendment_id': latest_amendment.get('amendment_id'),
+                    'amendment_name': latest_amendment.get('amendment_name'),
+                    'use_ai': use_ai,
+                    'threshold': threshold,
+                    'results': cached_matching.get('results', {}),
+                    'summary': {
+                        'total_target_compliances': cached_matching.get('results', {}).get('total_target', 0),
+                        'total_origin_compliances': cached_matching.get('results', {}).get('total_origin', 0),
+                        'matched_count': cached_matching.get('results', {}).get('matched_count', 0),
+                        'unmatched_count': cached_matching.get('results', {}).get('unmatched_count', 0),
+                        'match_percentage': (
+                            cached_matching.get('results', {}).get('matched_count', 0) /
+                            cached_matching.get('results', {}).get('total_target', 1) * 100
+                        ) if cached_matching.get('results', {}).get('total_target') else 0
+                    },
+                    'reused_cached': True,
+                    'message': 'Using saved compliance matching results for this amendment.'
+                }, status=status.HTTP_200_OK)
+        else:
             logger.info(
-                "[ComplianceMatch] Using cached matching result for framework_id=%s",
+                "[ComplianceMatch] Force re-run requested - bypassing cache for framework_id=%s",
                 framework_id
             )
-            return Response({
-                'success': True,
-                'framework_id': framework.FrameworkId,
-                'framework_name': framework.FrameworkName,
-                'amendment_id': latest_amendment.get('amendment_id'),
-                'amendment_name': latest_amendment.get('amendment_name'),
-                'use_ai': use_ai,
-                'threshold': threshold,
-                'results': cached_matching.get('results', {}),
-                'summary': {
-                    'total_target_compliances': cached_matching.get('results', {}).get('total_target', 0),
-                    'total_origin_compliances': cached_matching.get('results', {}).get('total_origin', 0),
-                    'matched_count': cached_matching.get('results', {}).get('matched_count', 0),
-                    'unmatched_count': cached_matching.get('results', {}).get('unmatched_count', 0),
-                    'match_percentage': (
-                        cached_matching.get('results', {}).get('matched_count', 0) /
-                        cached_matching.get('results', {}).get('total_target', 1) * 100
-                    ) if cached_matching.get('results', {}).get('total_target') else 0
-                },
-                'reused_cached': True,
-                'message': 'Using saved compliance matching results for this amendment.'
-            }, status=status.HTTP_200_OK)
         
         # Prepare amendments data
         amendments_data = {
@@ -1691,9 +1709,15 @@ def start_amendment_analysis(request, framework_id):
     Manually trigger amendment processing after user has reviewed the document.
     This is called when user clicks "Start Analysis" button.
     NOW SAVES TO DATABASE: Amendment, latestAmmendmentDate, latestComparisionCheckDate
+    
+    PROCESSES ASYNCHRONOUSLY: Returns immediately and processes in background thread
+    to avoid HTTP timeout issues with long-running AI analysis.
     """
+    import threading
+    
     try:
-        framework = Framework.objects.get(FrameworkId=framework_id)
+        framework_obj = Framework.objects.get(FrameworkId=framework_id)
+        framework_name = framework_obj.FrameworkName
         
         # Find the most recent PDF in change_management folder
         change_management_dir = os.path.join(settings.MEDIA_ROOT, 'change_management')
@@ -1724,7 +1748,7 @@ def start_amendment_analysis(request, framework_id):
         document_name = os.path.basename(document_path)
         
         logger.info(f"Starting manual amendment analysis for framework {framework_id}")
-        logger.info(f"Processing document: {document_name}")
+        logger.info(f"Processing document: {document_name} (ASYNCHRONOUS)")
         
         # Try to load metadata from JSON file if it exists
         metadata_file = os.path.join(os.path.dirname(document_path), f"{os.path.splitext(document_name)[0]}_metadata.json")
@@ -1750,124 +1774,210 @@ def start_amendment_analysis(request, framework_id):
         # Get amendment date from request (override metadata if provided)
         amendment_date_str = request.data.get('amendment_date', amendment_date_str)
         
-        # Process the amendment
-        from .amendment_processor import process_downloaded_amendment
+        # Mark document as processing (set processed=False initially)
+        existing_amendments = framework_obj.Amendment if framework_obj.Amendment else []
+        if not isinstance(existing_amendments, list):
+            existing_amendments = []
         
-        output_dir = change_management_dir
+        # Update or create amendment entry to mark as processing
+        amendment_index = None
+        for idx, existing_amendment in enumerate(existing_amendments):
+            if (existing_amendment.get('amendment_date') == amendment_date_str or
+                existing_amendment.get('document_name') == document_name):
+                amendment_index = idx
+                break
         
-        processing_result = process_downloaded_amendment(
-            pdf_path=document_path,
-            framework_name=framework.FrameworkName,
-            framework_id=framework_id,
-            amendment_date=amendment_date_str,
-            output_dir=output_dir
-        )
-        
-        if processing_result.get('success'):
-            # NOW save to database: Amendment, latestAmmendmentDate, latestComparisionCheckDate
-            amendment_data = processing_result.get('data', {})
-            
-            # Parse amendment date
-            try:
-                latest_date = datetime.strptime(amendment_date_str, "%Y-%m-%d").date()
-            except ValueError:
-                latest_date = datetime.now().date()
-            
-            # Get relative path
-            relative_path = os.path.relpath(document_path, settings.MEDIA_ROOT)
-            
-            # Get existing amendments to preserve S3 URL if it was already saved
-            existing_amendments = framework.Amendment if framework.Amendment else []
-            if not isinstance(existing_amendments, list):
-                existing_amendments = []
-            
-            # Check if this amendment already exists (by date or name) - it should exist if S3 was uploaded
-            amendment_index = None
-            for idx, existing_amendment in enumerate(existing_amendments):
-                if (existing_amendment.get('amendment_date') == amendment_date_str or
-                    existing_amendment.get('amendment_name') == f"{framework.FrameworkName} Amendment - {amendment_date_str}"):
-                    amendment_index = idx
-                    break
-            
-            # Use existing S3 info if available, otherwise use from metadata file
-            if amendment_index is not None:
-                existing_s3_url = existing_amendments[amendment_index].get('s3_url')
-                existing_s3_key = existing_amendments[amendment_index].get('s3_key')
-                existing_s3_stored_name = existing_amendments[amendment_index].get('s3_stored_name')
-                
-                # Prefer existing S3 info, fallback to metadata file
-                final_s3_url = existing_s3_url or s3_url
-                final_s3_key = existing_s3_key or s3_key
-                final_s3_stored_name = existing_s3_stored_name or s3_stored_name
-                
-                # Update existing amendment with processed data
-                existing_amendments[amendment_index].update({
-                    'amendment_id': 1,
-                    'amendment_name': f"{framework.FrameworkName} Amendment - {amendment_date_str}",
-                    'amendment_date': amendment_date_str,
-                    'document_path': document_path,
-                    'document_relative_path': relative_path,
-                    'document_name': document_name,
-                    'document_url': document_url,
-                    's3_url': final_s3_url,  # Preserve existing or use from metadata
-                    's3_key': final_s3_key,
-                    's3_stored_name': final_s3_stored_name,
-                    'downloaded_date': existing_amendments[amendment_index].get('downloaded_date', datetime.now().isoformat()),
-                    'processed': True,
-                    'processed_date': datetime.now().isoformat(),
-                    'extraction_summary': amendment_data.get('extraction_summary', {}),
-                    'sections': amendment_data.get('sections', []),
-                    'framework_info': amendment_data.get('amendment_metadata', {}).get('framework_info', {}),
-                    'ai_analysis': amendment_data.get('ai_analysis', {})
-                })
-                new_amendment = existing_amendments[amendment_index]
-            else:
-                # Create new amendment entry with processed data (S3 info from metadata file)
-                new_amendment = {
-                    'amendment_id': 1,
-                    'amendment_name': f"{framework.FrameworkName} Amendment - {amendment_date_str}",
-                    'amendment_date': amendment_date_str,
-                    'document_path': document_path,
-                    'document_relative_path': relative_path,
-                    'document_name': document_name,
-                    'document_url': document_url,
-                    's3_url': s3_url,  # From metadata file
-                    's3_key': s3_key,  # From metadata file
-                    's3_stored_name': s3_stored_name,  # From metadata file
-                    'downloaded_date': datetime.now().isoformat(),
-                    'processed': True,
-                    'processed_date': datetime.now().isoformat(),
-                    'extraction_summary': amendment_data.get('extraction_summary', {}),
-                    'sections': amendment_data.get('sections', []),
-                    'framework_info': amendment_data.get('amendment_metadata', {}).get('framework_info', {}),
-                    'ai_analysis': amendment_data.get('ai_analysis', {})
-                }
-                existing_amendments.append(new_amendment)
-            
-            # NOW update Framework table with Amendment and dates
-            framework.Amendment = existing_amendments
-            framework.latestAmmendmentDate = latest_date
-            framework.latestComparisionCheckDate = timezone.now().date()
-            framework.save(update_fields=['Amendment', 'latestAmmendmentDate', 'latestComparisionCheckDate'])
-            
-            logger.info(f"Successfully processed and saved amendment to database for framework {framework_id}")
-            
-            return Response({
-                'success': True,
-                'message': f'Amendment processed and saved successfully. Extracted {amendment_data.get("extraction_summary", {}).get("total_policies", 0)} policies and {amendment_data.get("extraction_summary", {}).get("total_compliance_records", 0)} compliance records.',
-                'result': {
-                    'total_policies': amendment_data.get('extraction_summary', {}).get('total_policies', 0),
-                    'total_subpolicies': amendment_data.get('extraction_summary', {}).get('total_subpolicies', 0),
-                    'total_compliance_records': amendment_data.get('extraction_summary', {}).get('total_compliance_records', 0),
-                    'output_file': processing_result.get('output_file')
-                }
-            }, status=status.HTTP_200_OK)
+        if amendment_index is not None:
+            existing_amendments[amendment_index]['processed'] = False
+            existing_amendments[amendment_index]['processed_date'] = None
         else:
-            logger.error(f"Amendment processing failed for framework {framework_id}: {processing_result.get('error')}")
-            return Response({
-                'success': False,
-                'error': f"Processing failed: {processing_result.get('error', 'Unknown error')}"
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            relative_path = os.path.relpath(document_path, settings.MEDIA_ROOT)
+            new_amendment = {
+                'amendment_id': 1,
+                'amendment_name': f"{framework_name} Amendment - {amendment_date_str}",
+                'amendment_date': amendment_date_str,
+                'document_path': document_path,
+                'document_relative_path': relative_path,
+                'document_name': document_name,
+                'document_url': document_url,
+                's3_url': s3_url,
+                's3_key': s3_key,
+                's3_stored_name': s3_stored_name,
+                'downloaded_date': datetime.now().isoformat(),
+                'processed': False,  # Mark as processing
+                'processed_date': None,
+                'extraction_summary': {},
+                'sections': [],
+                'framework_info': {},
+                'ai_analysis': {}
+            }
+            existing_amendments.append(new_amendment)
+        
+        framework_obj.Amendment = existing_amendments
+        framework_obj.save(update_fields=['Amendment'])
+        
+        # Define background processing function
+        def process_in_background():
+            """Process amendment in background thread"""
+            try:
+                from django.db import connection
+                # Close the database connection from the main thread
+                connection.close()
+                
+                from .amendment_processor import process_downloaded_amendment
+                
+                logger.info(f"[Background] Starting processing for framework {framework_id}")
+                
+                processing_result = process_downloaded_amendment(
+                    pdf_path=document_path,
+                    framework_name=framework_name,
+                    framework_id=framework_id,
+                    amendment_date=amendment_date_str,
+                    output_dir=change_management_dir
+                )
+                
+                if processing_result.get('success'):
+                    # NOW save to database: Amendment, latestAmmendmentDate, latestComparisionCheckDate
+                    from grc.models import Framework
+                    framework_obj = Framework.objects.get(FrameworkId=framework_id)
+                    amendment_data = processing_result.get('data', {})
+                    
+                    # Parse amendment date
+                    try:
+                        latest_date = datetime.strptime(amendment_date_str, "%Y-%m-%d").date()
+                    except ValueError:
+                        latest_date = datetime.now().date()
+                    
+                    # Get relative path
+                    relative_path = os.path.relpath(document_path, settings.MEDIA_ROOT)
+                    
+                    # Get existing amendments to preserve S3 URL if it was already saved
+                    existing_amendments = framework_obj.Amendment if framework_obj.Amendment else []
+                    if not isinstance(existing_amendments, list):
+                        existing_amendments = []
+                    
+                    # Check if this amendment already exists (by date or name)
+                    amendment_index = None
+                    for idx, existing_amendment in enumerate(existing_amendments):
+                        if (existing_amendment.get('amendment_date') == amendment_date_str or
+                            existing_amendment.get('document_name') == document_name):
+                            amendment_index = idx
+                            break
+                    
+                    # Use existing S3 info if available, otherwise use from metadata file
+                    if amendment_index is not None:
+                        existing_s3_url = existing_amendments[amendment_index].get('s3_url')
+                        existing_s3_key = existing_amendments[amendment_index].get('s3_key')
+                        existing_s3_stored_name = existing_amendments[amendment_index].get('s3_stored_name')
+                        
+                        # Prefer existing S3 info, fallback to metadata file
+                        final_s3_url = existing_s3_url or s3_url
+                        final_s3_key = existing_s3_key or s3_key
+                        final_s3_stored_name = existing_s3_stored_name or s3_stored_name
+                        
+                        # Update existing amendment with processed data
+                        existing_amendments[amendment_index].update({
+                            'amendment_id': 1,
+                            'amendment_name': f"{framework_obj.FrameworkName} Amendment - {amendment_date_str}",
+                            'amendment_date': amendment_date_str,
+                            'document_path': document_path,
+                            'document_relative_path': relative_path,
+                            'document_name': document_name,
+                            'document_url': document_url,
+                            's3_url': final_s3_url,
+                            's3_key': final_s3_key,
+                            's3_stored_name': final_s3_stored_name,
+                            'downloaded_date': existing_amendments[amendment_index].get('downloaded_date', datetime.now().isoformat()),
+                            'processed': True,
+                            'processed_date': datetime.now().isoformat(),
+                            'extraction_summary': amendment_data.get('extraction_summary', {}),
+                            'sections': amendment_data.get('sections', []),
+                            'framework_info': amendment_data.get('amendment_metadata', {}).get('framework_info', {}),
+                            'ai_analysis': amendment_data.get('ai_analysis', {})
+                        })
+                    else:
+                        # Create new amendment entry with processed data
+                        new_amendment = {
+                            'amendment_id': 1,
+                            'amendment_name': f"{framework_obj.FrameworkName} Amendment - {amendment_date_str}",
+                            'amendment_date': amendment_date_str,
+                            'document_path': document_path,
+                            'document_relative_path': relative_path,
+                            'document_name': document_name,
+                            'document_url': document_url,
+                            's3_url': s3_url,
+                            's3_key': s3_key,
+                            's3_stored_name': s3_stored_name,
+                            'downloaded_date': datetime.now().isoformat(),
+                            'processed': True,
+                            'processed_date': datetime.now().isoformat(),
+                            'extraction_summary': amendment_data.get('extraction_summary', {}),
+                            'sections': amendment_data.get('sections', []),
+                            'framework_info': amendment_data.get('amendment_metadata', {}).get('framework_info', {}),
+                            'ai_analysis': amendment_data.get('ai_analysis', {})
+                        }
+                        existing_amendments.append(new_amendment)
+                    
+                    # Update Framework table with Amendment and dates
+                    framework_obj.Amendment = existing_amendments
+                    framework_obj.latestAmmendmentDate = latest_date
+                    framework_obj.latestComparisionCheckDate = timezone.now().date()
+                    framework_obj.save(update_fields=['Amendment', 'latestAmmendmentDate', 'latestComparisionCheckDate'])
+                    
+                    logger.info(f"[Background] Successfully processed and saved amendment to database for framework {framework_id}")
+                else:
+                    logger.error(f"[Background] Amendment processing failed for framework {framework_id}: {processing_result.get('error')}")
+                    # Update amendment to mark as failed
+                    from grc.models import Framework
+                    framework_obj = Framework.objects.get(FrameworkId=framework_id)
+                    existing_amendments = framework_obj.Amendment if framework_obj.Amendment else []
+                    if not isinstance(existing_amendments, list):
+                        existing_amendments = []
+                    
+                    for amendment in existing_amendments:
+                        if amendment.get('document_name') == document_name:
+                            amendment['processed'] = False
+                            amendment['processing_error'] = processing_result.get('error', 'Unknown error')
+                            break
+                    
+                    framework_obj.Amendment = existing_amendments
+                    framework_obj.save(update_fields=['Amendment'])
+            except Exception as e:
+                logger.error(f"[Background] Error processing amendment: {str(e)}")
+                import traceback
+                logger.error(traceback.format_exc())
+                # Mark as failed
+                try:
+                    from grc.models import Framework
+                    framework_obj = Framework.objects.get(FrameworkId=framework_id)
+                    existing_amendments = framework_obj.Amendment if framework_obj.Amendment else []
+                    if not isinstance(existing_amendments, list):
+                        existing_amendments = []
+                    
+                    for amendment in existing_amendments:
+                        if amendment.get('document_name') == document_name:
+                            amendment['processed'] = False
+                            amendment['processing_error'] = str(e)
+                            break
+                    
+                    framework_obj.Amendment = existing_amendments
+                    framework_obj.save(update_fields=['Amendment'])
+                except:
+                    pass
+        
+        # Start background processing thread
+        thread = threading.Thread(target=process_in_background, daemon=True)
+        thread.start()
+        
+        # Return immediately - processing will happen in background
+        return Response({
+            'success': True,
+            'message': 'Analysis started in background. Processing may take several minutes. Please check back shortly.',
+            'result': {
+                'status': 'processing',
+                'message': 'The document is being processed in the background. The status will update automatically when complete.'
+            }
+        }, status=status.HTTP_202_ACCEPTED)
         
     except Framework.DoesNotExist:
         return Response({

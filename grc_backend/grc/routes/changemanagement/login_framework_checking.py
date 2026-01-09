@@ -227,8 +227,19 @@ def auto_check_all_frameworks(request):
             )
             print(f"✅ PROCEEDING with framework check | id={framework.FrameworkId} name={framework.FrameworkName} | last_check_date={last_check_date.isoformat() if last_check_date else 'None (first check)'}")
 
+            # Decrypt framework name before sending to API (FrameworkName is encrypted in database)
+            from grc.utils.data_encryption import decrypt_data
+            try:
+                framework_name = framework.FrameworkName_plain if hasattr(framework, 'FrameworkName_plain') else framework.FrameworkName
+                # If still encrypted (no _plain property), try manual decryption
+                if framework_name and framework_name.startswith('gAAAAAB'):  # Encrypted data starts with this
+                    framework_name = decrypt_data(framework_name)
+            except Exception as e:
+                print(f"Warning: Failed to decrypt FrameworkName, using as-is: {str(e)}")
+                framework_name = framework.FrameworkName
+            
             update_info = run_framework_update_check(
-                framework_name=framework.FrameworkName,
+                framework_name=framework_name,
                 last_updated_date=last_date_str,
                 api_key=api_key,
                 framework_id=framework.FrameworkId,

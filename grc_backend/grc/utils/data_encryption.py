@@ -65,24 +65,19 @@ class DataEncryptionService:
             # Try environment variable
             key = os.environ.get('GRC_ENCRYPTION_KEY', None)
         
+        # HARD REQUIREMENT: Do NOT silently fall back to a derived key.
+        # If no key is configured, fail fast so we don't "change keys"
+        # without you knowing and break decryption of existing data.
         if not key:
-            # Generate a key from Django SECRET_KEY (for development only)
-            # WARNING: In production, use a dedicated encryption key!
-            logger.warning("No GRC_ENCRYPTION_KEY found. Generating from SECRET_KEY (NOT RECOMMENDED for production)")
-            secret_key = settings.SECRET_KEY
-            salt = secret_key.encode()[:16]  # Use first 16 bytes as salt
-            kdf = PBKDF2HMAC(
-                algorithm=hashes.SHA256(),
-                length=32,
-                salt=salt,
-                iterations=100000,
-                backend=default_backend()
+            raise RuntimeError(
+                "GRC_ENCRYPTION_KEY is not configured. "
+                "Set it in your environment or Django settings to match the key "
+                "used for existing encrypted data. No fallback key will be generated."
             )
-            key = base64.urlsafe_b64encode(kdf.derive(secret_key.encode()))
-        else:
-            # Convert string key to bytes if needed
-            if isinstance(key, str):
-                key = key.encode()
+        
+        # Convert string key to bytes if needed
+        if isinstance(key, str):
+            key = key.encode()
         
         return key
     

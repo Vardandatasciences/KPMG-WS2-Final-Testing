@@ -39,6 +39,7 @@ from ..uploadNist import ai_upload
 from ..uploadNist import pdf_index_extractor
 from ..uploadNist import index_content_extractor
 from ..uploadNist import policy_extractor_enhanced
+from ...utils.file_compression import decompress_if_needed
 
 # Global progress tracking
 processing_status = {}
@@ -355,7 +356,17 @@ def upload_framework_file(request):
         
         # Validate file type
         allowed_extensions = ['.pdf', '.doc', '.docx', '.txt', '.xlsx', '.xls']
-        file_extension = os.path.splitext(uploaded_file.name)[1].lower()
+        
+        # Handle compressed files (.gz extension)
+        original_filename = uploaded_file.name
+        is_compressed = original_filename.lower().endswith('.gz')
+        
+        if is_compressed:
+            # Remove .gz extension to get the original file extension
+            original_filename_without_gz = original_filename[:-3]  # Remove '.gz'
+            file_extension = os.path.splitext(original_filename_without_gz)[1].lower()
+        else:
+            file_extension = os.path.splitext(original_filename)[1].lower()
         
         if file_extension not in allowed_extensions:
             return JsonResponse({
@@ -376,6 +387,17 @@ def upload_framework_file(request):
         with open(file_path, 'wb+') as destination:
             for chunk in uploaded_file.chunks():
                 destination.write(chunk)
+        
+        # Decompress if needed (client-side compression)
+        if is_compressed:
+            try:
+                file_path, was_compressed, compression_stats = decompress_if_needed(file_path)
+                if was_compressed:
+                    # Update file_extension after decompression
+                    file_extension = os.path.splitext(file_path)[1].lower()
+                    print(f"📦 Decompressed file: {compression_stats.get('ratio', 0)}% reduction")
+            except Exception as e:
+                print(f"⚠️ Decompression error (continuing): {str(e)}")
         
         # Create output directory for extracted sections
         output_dir = os.path.join(user_folder, 'extracted_sections')
@@ -405,8 +427,12 @@ def upload_framework_file(request):
                     else:
                         update_progress(task_id, 100, "Error: Failed to process file")
                     
-                    # Create a simple section based on filename
-                    filename_base = os.path.splitext(uploaded_file.name)[0]
+                    # Create a simple section based on filename (use decompressed filename if available)
+                    final_filename_for_base = os.path.basename(file_path) if os.path.exists(file_path) else uploaded_file.name
+                    filename_base = os.path.splitext(final_filename_for_base)[0]
+                    # Remove .gz from filename_base if it exists
+                    if filename_base.endswith('.gz'):
+                        filename_base = filename_base[:-3]
                     section_dir = os.path.join(output_dir, f"1 {filename_base}")
                     json_dir = os.path.join(section_dir, "json_chunks")
                     txt_dir = os.path.join(section_dir, "txt_chunks")
@@ -457,9 +483,12 @@ def upload_framework_file(request):
         thread.daemon = True
         thread.start()
         
+        # Get the final filename (after decompression if applicable)
+        final_filename = os.path.basename(file_path) if os.path.exists(file_path) else uploaded_file.name
+        
         return JsonResponse({
             'message': 'File uploaded successfully. Processing started.',
-            'filename': uploaded_file.name,
+            'filename': final_filename,
             'file_path': file_path,
             'file_size': uploaded_file.size,
             'task_id': task_id,

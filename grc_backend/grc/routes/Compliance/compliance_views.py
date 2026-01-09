@@ -9488,13 +9488,32 @@ def get_frameworks_public(request):
             # Additional safety check: only include Active frameworks
             if fw_data.get('ActiveInactive', '').lower() != 'active':
                 continue
+            
+            # Explicitly decrypt framework fields using a fail-open strategy:
+            # - If value is encrypted and key is correct → returns plaintext
+            # - If value is already plaintext or key doesn't match → returns original string
+            from ...utils.data_encryption import decrypt_data
+            
+            framework_name = fw_data.get('FrameworkName', '')
+            if isinstance(framework_name, str) and framework_name:
+                try:
+                    framework_name = decrypt_data(framework_name)
+                except Exception as e:
+                    print(f"Warning: Failed to decrypt FrameworkName: {e}")
+            
+            framework_description = fw_data.get('FrameworkDescription', '')
+            if isinstance(framework_description, str) and framework_description:
+                try:
+                    framework_description = decrypt_data(framework_description)
+                except Exception as e:
+                    print(f"Warning: Failed to decrypt FrameworkDescription: {e}")
                 
             formatted_fw = {
                 'FrameworkId': fw_data.get('FrameworkId'),
-                'FrameworkName': fw_data.get('FrameworkName'),
+                'FrameworkName': framework_name,  # Use decrypted value
                 'Category': fw_data.get('Category', ''),
                 'ActiveInactive': fw_data.get('ActiveInactive', ''),
-                'FrameworkDescription': fw_data.get('FrameworkDescription', ''),
+                'FrameworkDescription': framework_description,  # Use decrypted value
             }
             formatted_frameworks.append(formatted_fw)
         

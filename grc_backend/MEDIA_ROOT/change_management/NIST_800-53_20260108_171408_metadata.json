@@ -1,0 +1,18 @@
+{
+  "amendment_id": 1,
+  "amendment_name": "gAAAAABpX4aR_C4SICrQoBjh3eZDqddni7cGGoVRkRp3R854CiYSY4SpqgJ3HXbvUbIhc5KzRPhNfc9fmDE597NkqL5AIf6Fdg== Amendment - 2025-08-27",
+  "amendment_date": "2025-08-27",
+  "document_path": "C:\\Users\\puttu\\Music\\GRC_TPRM\\grc_backend\\MEDIA_ROOT\\change_management\\NIST_800-53_20260108_171408.pdf",
+  "document_relative_path": "change_management\\NIST_800-53_20260108_171408.pdf",
+  "document_name": "NIST_800-53_20260108_171408.pdf",
+  "document_url": "https://csrc.nist.gov/csrc/media/Projects/risk-management/800-53%20Comment%20Site/SP800-53-r5.2.0-changes.pdf",
+  "s3_url": "https://vardaanwebsites.s3.ap-south-1.amazonaws.com/system_1767872649583_gbaet6_NIST_800-53_20260108_171408.pdf",
+  "s3_key": "system_1767872649583_gbaet6_NIST_800-53_20260108_171408.pdf",
+  "s3_stored_name": "system_1767872649583_gbaet6_NIST_800-53_20260108_171408.pdf",
+  "downloaded_date": "2026-01-08T17:14:09.189178",
+  "processed": false,
+  "extraction_summary": {},
+  "sections": [],
+  "framework_info": {},
+  "ai_analysis": {}
+}

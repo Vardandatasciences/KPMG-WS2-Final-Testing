@@ -43,3 +43,4 @@ print("If all URLs show ❌, Django server needs to be restarted!")
 print("=" * 80)
 
 
+

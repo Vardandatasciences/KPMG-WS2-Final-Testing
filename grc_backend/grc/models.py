@@ -173,6 +173,17 @@ class Users(EncryptedFieldsMixin, models.Model):
         return decrypt_data(self.Address) if self.Address else None
     
     @property
+    def username_plain(self):
+        """Get decrypted username"""
+        from .utils.data_encryption import decrypt_data
+        return decrypt_data(self.UserName) if self.UserName else None
+    
+    @property
+    def UserName_plain(self):
+        """Get decrypted username (alternative property name for compatibility)"""
+        return self.username_plain
+    
+    @property
     def is_active(self):
         """Django REST Framework compatibility - maps IsActive to is_active"""
         if isinstance(self.IsActive, str):
@@ -256,6 +267,68 @@ class Users(EncryptedFieldsMixin, models.Model):
                     if user.Email.lower().strip() == email_lower:
                         return user
         
+        return None
+    
+    @classmethod
+    def find_by_username(cls, username):
+        """
+        Find a user by username. Decrypts usernames from database and matches with login input.
+        
+        Args:
+            username: Plain text username to search for
+            
+        Returns:
+            Users object if found, None otherwise
+        """
+        if not username:
+            return None
+        
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        from .utils.data_encryption import decrypt_data, is_encrypted_data
+        
+        # Normalize input username for comparison
+        username_normalized = username.strip()
+        logger.debug(f"🔍 Searching for username: '{username_normalized}'")
+        
+        # Get all users and decrypt usernames to compare
+        users = cls.objects.all()
+        logger.debug(f"🔍 Total users in database: {users.count()}")
+        
+        for user in users:
+            if not user.UserName:
+                continue
+                
+            try:
+                # Check if username is encrypted
+                is_encrypted = is_encrypted_data(user.UserName)
+                logger.debug(f"🔍 User {user.UserId}: UserName encrypted={is_encrypted}, length={len(user.UserName)}")
+                
+                if is_encrypted:
+                    # Decrypt and compare
+                    decrypted_username = decrypt_data(user.UserName)
+                    logger.debug(f"🔍 User {user.UserId}: Decrypted username='{decrypted_username}'")
+                    if decrypted_username and decrypted_username.strip() == username_normalized:
+                        logger.info(f"✅ Found user {user.UserId} by username match")
+                        return user
+                else:
+                    # Plain text - direct comparison
+                    logger.debug(f"🔍 User {user.UserId}: Plain text username='{user.UserName}'")
+                    if user.UserName.strip() == username_normalized:
+                        logger.info(f"✅ Found user {user.UserId} by username match (plain text)")
+                        return user
+            except Exception as e:
+                logger.warning(f"⚠️ Error processing user {user.UserId}: {str(e)}")
+                # If decryption fails, try direct comparison (might be plain text)
+                try:
+                    if user.UserName.strip() == username_normalized:
+                        logger.info(f"✅ Found user {user.UserId} by username match (fallback)")
+                        return user
+                except:
+                    continue
+        
+        logger.warning(f"❌ User not found with username: '{username_normalized}'")
         return None
  
 

@@ -106,7 +106,8 @@ export default {
     },
     startNotificationPolling() {
       this.fetchUnreadCount()
-      this.pollInterval = setInterval(this.fetchUnreadCount, 30000) // Poll every 30 seconds instead of 10
+      // OPTIMIZED: Reduced polling frequency from 30s to 2 minutes to reduce server load
+      this.pollInterval = setInterval(this.fetchUnreadCount, 120000) // Poll every 2 minutes
     },
     async logout() {
       try {

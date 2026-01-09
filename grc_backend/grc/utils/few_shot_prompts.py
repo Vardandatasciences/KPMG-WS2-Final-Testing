@@ -508,7 +508,7 @@ Based on the following subpolicy information:
 - Description: {description}
 - Control: {control}
 
-Generate 1-3 different compliance records that would be relevant for this subpolicy. Each compliance should cover different aspects or requirements of the subpolicy.
+Generate 1-2 different compliance records that would be relevant for this subpolicy. Each compliance should cover different aspects or requirements of the subpolicy. Focus on the most critical compliance requirements to reduce processing time.
 For each compliance record, also generate associated risk information.
 
 Follow the examples above for structure and format. Ensure all fields are comprehensive and realistic.

@@ -745,8 +745,10 @@ def jwt_login(request):
                 logger.info(f"🔍 LOGIN DEBUG: User found by ID: {candidate.UserId} - {candidate.UserName}")
                 logger.info(f"🔍 LOGIN DEBUG: User {candidate.UserId} - IsActive: {candidate.IsActive}, HasLicenseKey: {bool(candidate.license_key)}")
             else:
-                # Login with Username (default)
-                candidate = Users.objects.get(UserName=username)
+                # Login with Username (default) - handles encrypted usernames
+                candidate = Users.find_by_username(username)
+                if not candidate:
+                    raise Users.DoesNotExist(f"User with username '{username}' not found")
                 logger.info(f"🔍 LOGIN DEBUG: User found by username: {candidate.UserId} - {candidate.UserName}")
                 logger.info(f"🔍 LOGIN DEBUG: User {candidate.UserId} - IsActive: {candidate.IsActive}, HasLicenseKey: {bool(candidate.license_key)}")
 
@@ -830,7 +832,8 @@ def jwt_login(request):
                             pass
                     else:
                         try:
-                            user_for_email = Users.objects.get(UserName=username)
+                            # Handle encrypted usernames
+                            user_for_email = Users.find_by_username(username)
                         except Users.DoesNotExist:
                             pass
                    
@@ -1331,9 +1334,12 @@ def jwt_logout(request):
                 try:
                     # If user_id is actually a username string, try to find user by username
                     if isinstance(user_id, str) and not user_id.isdigit():
-                        user = Users.objects.get(UserName=user_id)
-                        user_id = user.UserId
-                        username = user.UserName
+                        user = Users.find_by_username(user_id)
+                        if user:
+                            user_id = user.UserId
+                            username = user.UserName
+                        else:
+                            raise Users.DoesNotExist(f"User with username '{user_id}' not found")
                     else:
                         user = Users.objects.get(UserId=user_id)
                         username = user.UserName
@@ -1785,7 +1791,10 @@ def mfa_verify_otp(request):
                 user_id = int(username)
                 candidate = Users.objects.get(UserId=user_id)
             else:
-                candidate = Users.objects.get(UserName=username)
+                # Login with Username - handles encrypted usernames
+                candidate = Users.find_by_username(username)
+                if not candidate:
+                    raise Users.DoesNotExist(f"User with username '{username}' not found")
             
             if check_password(password, candidate.Password):
                 user = candidate
@@ -2043,7 +2052,10 @@ def mfa_resend_otp(request):
                 user_id = int(username)
                 candidate = Users.objects.get(UserId=user_id)
             else:
-                candidate = Users.objects.get(UserName=username)
+                # Login with Username - handles encrypted usernames
+                candidate = Users.find_by_username(username)
+                if not candidate:
+                    raise Users.DoesNotExist(f"User with username '{username}' not found")
             
             if check_password(password, candidate.Password):
                 user = candidate

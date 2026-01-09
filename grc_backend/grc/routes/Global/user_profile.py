@@ -212,6 +212,66 @@ def get_current_user(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+def check_encryption_key(request):
+    """
+    Check which encryption key is being used by GRC.
+    This helps verify if GRC_ENCRYPTION_KEY is loaded correctly.
+    """
+    import os
+    from django.conf import settings
+    from ...utils.data_encryption import get_encryption_service
+    
+    try:
+        # Check environment variable
+        env_key = os.environ.get('GRC_ENCRYPTION_KEY', None)
+        
+        # Check Django settings
+        settings_key = getattr(settings, 'GRC_ENCRYPTION_KEY', None)
+        
+        # Get actual key being used
+        encryption_service = get_encryption_service()
+        actual_key = encryption_service.encryption_key
+        actual_key_str = actual_key.decode() if isinstance(actual_key, bytes) else actual_key
+        
+        # Determine key source
+        if env_key:
+            key_source = 'ENVIRONMENT_VARIABLE'
+            key_preview = env_key[:20] + '...' + env_key[-10:] if len(env_key) > 30 else env_key
+        elif settings_key:
+            key_source = 'DJANGO_SETTINGS'
+            key_preview = settings_key[:20] + '...' + settings_key[-10:] if len(settings_key) > 30 else settings_key
+        else:
+            key_source = 'AUTO_GENERATED_FROM_SECRET_KEY'
+            key_preview = actual_key_str[:20] + '...' + actual_key_str[-10:] if len(actual_key_str) > 30 else actual_key_str
+        
+        # Test encryption/decryption
+        test_text = "Test Framework Name"
+        try:
+            encrypted = encryption_service.encrypt(test_text)
+            decrypted = encryption_service.decrypt(encrypted)
+            encryption_working = (decrypted == test_text)
+        except Exception as e:
+            encryption_working = False
+            encryption_error = str(e)
+        
+        return Response({
+            'key_source': key_source,
+            'key_preview': key_preview,
+            'key_length': len(actual_key_str),
+            'env_key_found': env_key is not None,
+            'settings_key_found': settings_key is not None,
+            'encryption_working': encryption_working,
+            'warning': 'AUTO_GENERATED' if key_source == 'AUTO_GENERATED_FROM_SECRET_KEY' else None,
+            'message': 'Key is auto-generated from SECRET_KEY. Set GRC_ENCRYPTION_KEY in environment!' if key_source == 'AUTO_GENERATED_FROM_SECRET_KEY' else 'Key is configured correctly'
+        })
+    except Exception as e:
+        return Response({
+            'error': f'Failed to check encryption key: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
 def get_data_subject_requests(request, user_id):
     """
     Get data subject requests for a user.

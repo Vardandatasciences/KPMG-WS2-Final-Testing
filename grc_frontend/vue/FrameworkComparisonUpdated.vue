@@ -2041,15 +2041,29 @@ export default {
             manual_automatic: this.complianceForm.manual_automatic
           }
         }
-        await frameworkComparisonService.createComplianceFromAmendment(
+        const response = await frameworkComparisonService.createComplianceFromAmendment(
           this.selectedFrameworkId,
           payload
         )
+        
+        // Show success popup
+        if (response && response.success) {
+          const complianceTitle = response.compliance?.ComplianceTitle || this.complianceForm.compliance_title || 'Compliance'
+          PopupService.success(
+            `Compliance "${complianceTitle}" has been added successfully!`,
+            'Compliance Added'
+          )
+        }
+        
         this.showComplianceModal = false
         this.complianceModalData = null
         await this.matchCompliances()
       } catch (error) {
         this.complianceSaveError = error?.response?.data?.error || error.message || 'Failed to save compliance'
+        PopupService.error(
+          `Failed to add compliance: ${this.complianceSaveError}`,
+          'Error'
+        )
       } finally {
         this.submittingCompliance = false
       }

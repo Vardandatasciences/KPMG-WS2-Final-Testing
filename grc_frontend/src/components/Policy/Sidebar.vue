@@ -1309,7 +1309,8 @@ export default {
       // COMPLETELY DISABLED: Always start notification polling to prevent logout issues
       console.log('🛡️ Sidebar authentication check disabled - always authenticated')
       fetchUnreadCount();
-      pollInterval = setInterval(fetchUnreadCount, 600000);
+      // OPTIMIZED: Reduced from 10 minutes to 2 minutes (still reasonable for notifications)
+      pollInterval = setInterval(fetchUnreadCount, 120000); // Poll every 2 minutes
       
       fetchUsername();
       const savedTheme = localStorage.getItem('selected-theme') || 'light'

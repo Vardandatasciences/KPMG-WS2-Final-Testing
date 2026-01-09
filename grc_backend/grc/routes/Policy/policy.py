@@ -1309,9 +1309,9 @@ Also marks all related policies as inactive and all related subpolicies with Sta
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def framework_detail(request, pk):
-    framework = get_object_or_404(Framework, FrameworkId=pk, tenant_id=tenant_id)
-    # MULTI-TENANCY: Extract tenant_id from request
+    # MULTI-TENANCY: Extract tenant_id from request FIRST
     tenant_id = get_tenant_id_from_request(request)
+    framework = get_object_or_404(Framework, FrameworkId=pk, tenant_id=tenant_id)
 
     
     if request.method == 'GET':
@@ -5820,7 +5820,8 @@ def all_policies_get_framework_version_policies(request, version_id):
         
         # Get ALL PolicyVersions for ALL policies in this framework
         # This is important because versions can be linked across different Policy records
-        all_framework_policy_versions = PolicyVersion.objects.filter(tenant_id=tenant_id, 
+        # FIXED: PolicyVersion doesn't have tenant_id, filter through Policy relationship
+        all_framework_policy_versions = PolicyVersion.objects.filter(
             PolicyId__in=policies.values_list('PolicyId', flat=True)
         )
         
@@ -5856,8 +5857,9 @@ def all_policies_get_framework_version_policies(request, version_id):
         policy_ids_with_only_children = set()
         
         # For each policy, check if ALL its versions are children
+        # FIXED: PolicyVersion doesn't have tenant_id, policies are already tenant-filtered
         for policy in policies:
-            policy_versions = PolicyVersion.objects.filter(tenant_id=tenant_id, PolicyId=policy)
+            policy_versions = PolicyVersion.objects.filter(PolicyId=policy)
             if policy_versions.exists():
                 all_are_children = all(
                     v.PreviousVersionId is not None and v.PreviousVersionId in all_versions_map
@@ -6007,9 +6009,10 @@ def all_policies_get_framework_version_policies(request, version_id):
         policies_with_versions = set(pg['policy_data']['id'] for pg in policy_groups.values())
         
         # For remaining policies, check if they should be shown or hidden
+        # FIXED: PolicyVersion doesn't have tenant_id, policies are already tenant-filtered
         for policy in policies:
             if policy.PolicyId not in policies_with_versions:
-                policy_versions = PolicyVersion.objects.filter(tenant_id=tenant_id, PolicyId=policy)
+                policy_versions = PolicyVersion.objects.filter(PolicyId=policy)
                 if policy_versions.exists():
                     # Check if ALL versions of this policy are children of other policies' versions
                     # This means their PreviousVersionId points to versions from OTHER policies
@@ -6163,7 +6166,8 @@ def all_policies_get_policies(request):
             }
             
             # Get versions for this policy
-            policy_versions = PolicyVersion.objects.filter(tenant_id=tenant_id, PolicyId=policy)
+            # FIXED: PolicyVersion doesn't have tenant_id, policies are already tenant-filtered
+            policy_versions = PolicyVersion.objects.filter(PolicyId=policy)
             versions_data = []
             for version in policy_versions:
                 versions_data.append({
@@ -6263,7 +6267,8 @@ def all_policies_get_policy_versions(request, policy_id):
                            status=status.HTTP_404_NOT_FOUND)
         except PolicyVersion.MultipleObjectsReturned:
             # If there are multiple versions, get all of them
-            direct_versions = list(PolicyVersion.objects.filter(tenant_id=tenant_id, PolicyId=policy))
+            # FIXED: PolicyVersion doesn't have tenant_id, policies are already tenant-filtered
+            direct_versions = list(PolicyVersion.objects.filter(PolicyId=policy))
             print(f"Found {len(direct_versions)} direct versions for policy {policy_id}")
             direct_version = direct_versions[0]  # Just use the first one for starting the chain
         
@@ -6290,7 +6295,13 @@ def all_policies_get_policy_versions(request, policy_id):
                     to_process.append(current_version.PreviousVersionId)
                     
                 # Find versions that reference this one as their previous version
-                next_versions = PolicyVersion.objects.filter(tenant_id=tenant_id, PreviousVersionId=current_id)
+                # FIXED: PolicyVersion doesn't have tenant_id, filter through Policy relationship
+                # Get all tenant-filtered policy IDs first, then filter versions
+                tenant_policy_ids = Policy.objects.filter(tenant_id=tenant_id).values_list('PolicyId', flat=True)
+                next_versions = PolicyVersion.objects.filter(
+                    PreviousVersionId=current_id,
+                    PolicyId__in=tenant_policy_ids
+                )
                 for next_ver in next_versions:
                     if next_ver.VersionId not in visited:
                         to_process.append(next_ver.VersionId)

@@ -2906,6 +2906,7 @@ urlpatterns = [
     path('api/user-permissions/<int:user_id>/update/', views.update_user_permissions, name='api_update_user_permissions'),
 
     path('current-user/', user_profile.get_current_user, name='current-user'),
+    path('check-encryption-key/', user_profile.check_encryption_key, name='check-encryption-key'),
     
     # Profile Edit OTP Verification endpoints
     path('profile-edit-otp/send/', profile_otp_views.send_profile_edit_otp, name='send_profile_edit_otp'),
