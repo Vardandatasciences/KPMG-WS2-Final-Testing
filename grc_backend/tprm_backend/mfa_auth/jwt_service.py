@@ -13,11 +13,19 @@ class JWTService:
         """Generate access and refresh tokens for a user"""
         now = timezone.now()
         
+        # MULTI-TENANCY: Get tenant_id from user
+        tenant_id = None
+        if hasattr(user, 'tenant_id') and user.tenant_id:
+            tenant_id = user.tenant_id
+        elif hasattr(user, 'TenantId') and user.TenantId:
+            tenant_id = user.TenantId
+        
         # Access token payload
         access_payload = {
             'user_id': user.userid,
             'username': user.username,
             'email': user.email,
+            'tenant_id': tenant_id,  # MULTI-TENANCY: Include tenant_id
             'exp': int((now + timedelta(hours=settings.JWT_EXPIRY_HOURS)).timestamp()),
             'iat': int(now.timestamp()),
             'type': 'access'
@@ -27,6 +35,7 @@ class JWTService:
         refresh_payload = {
             'user_id': user.userid,
             'username': user.username,
+            'tenant_id': tenant_id,  # MULTI-TENANCY: Include tenant_id
             'exp': int((now + timedelta(days=settings.JWT_REFRESH_EXPIRY_DAYS)).timestamp()),
             'iat': int(now.timestamp()),
             'type': 'refresh'
@@ -114,10 +123,19 @@ class JWTService:
             
             # Generate new access token
             now = timezone.now()
+            
+            # MULTI-TENANCY: Get tenant_id from user
+            tenant_id = None
+            if hasattr(user, 'tenant_id') and user.tenant_id:
+                tenant_id = user.tenant_id
+            elif hasattr(user, 'TenantId') and user.TenantId:
+                tenant_id = user.TenantId
+            
             access_payload = {
                 'user_id': user.userid,
                 'username': user.username,
                 'email': user.email,
+                'tenant_id': tenant_id,  # MULTI-TENANCY: Include tenant_id
                 'exp': int((now + timedelta(hours=settings.JWT_EXPIRY_HOURS)).timestamp()),
                 'iat': int(now.timestamp()),
                 'type': 'access'

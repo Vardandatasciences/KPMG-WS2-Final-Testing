@@ -1020,13 +1020,37 @@ const submitWorkflow = async () => {
     console.log('Workflow Type Hint:', submitData.rfp_data?.workflow_type_hint)
     console.log('Stages being sent:', submitData.stages_config)
     
-    const response = await axios.post(getTprmApiUrl('approval/workflows/'), submitData, {
-      headers: {
-        ...getAuthHeaders(),
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
+    // Use 'rfp-approval/workflows/' instead of 'approval/workflows/' for compatibility
+    let workflowUrl = getTprmApiUrl('rfp-approval/workflows/')
+    console.log('Workflow creation URL:', workflowUrl)
+    
+    let response
+    try {
+      response = await axios.post(workflowUrl, submitData, {
+        headers: {
+          ...getAuthHeaders(),
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      })
+    } catch (primaryError) {
+      // Try fallback endpoint if primary fails
+      console.warn('Primary endpoint failed, trying fallback:', primaryError)
+      try {
+        const fallbackUrl = getTprmApiUrl('approval/workflows/')
+        console.log('Trying fallback URL:', fallbackUrl)
+        response = await axios.post(fallbackUrl, submitData, {
+          headers: {
+            ...getAuthHeaders(),
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          }
+        })
+      } catch (fallbackError) {
+        // Re-throw the original error if fallback also fails
+        throw primaryError
       }
-    })
+    }
     
     console.log('Workflow creation response:', response.data)
     console.log('Workflow ID:', response.data.workflow_id)
@@ -1042,7 +1066,8 @@ const submitWorkflow = async () => {
     console.error('Error response:', error.response)
     console.error('Error data:', error.response?.data)
     console.error('Error status:', error.response?.status)
-    PopupService.error('Failed to create workflow: ' + (error.response?.data?.error || error.message || 'Unknown error'), 'Workflow Creation Failed')
+    const errorMessage = error.response?.data?.error || error.response?.data?.message || error.message || 'Unknown error'
+    PopupService.error(`Failed to create workflow: ${errorMessage}`, 'Workflow Creation Failed')
   } finally {
     submitting.value = false
   }
@@ -1106,21 +1131,37 @@ const fetchUsers = async () => {
     }
     
     // Build URL with workflow_type parameter
-    let url = getTprmApiUrl('approval/users/')
+    // Use 'rfp-approval/users/' instead of 'approval/users/' for compatibility
+    let url = getTprmApiUrl('rfp-approval/users/')
     if (workflowType) {
       url += `?workflow_type=${workflowType}`
     }
     
     console.log('Fetching users for workflow type:', workflowType)
+    console.log('Users endpoint URL:', url)
     const response = await axios.get(url, {
       headers: getAuthHeaders()
     })
     users.value = response.data
     console.log('Fetched users from backend:', users.value)
+    console.log(`✅ Successfully fetched ${users.value?.length || 0} users`)
   } catch (error) {
     console.error('Error fetching users:', error)
-    // Fallback to empty array if API fails
-    users.value = []
+    // Try fallback endpoint if primary fails
+    try {
+      console.log('Trying fallback endpoint: approval/users/')
+      const fallbackUrl = getTprmApiUrl('approval/users/')
+      const fallbackResponse = await axios.get(fallbackUrl, {
+        headers: getAuthHeaders()
+      })
+      users.value = fallbackResponse.data
+      console.log('✅ Fetched users from fallback endpoint:', users.value)
+    } catch (fallbackError) {
+      console.error('Fallback endpoint also failed:', fallbackError)
+      // Fallback to empty array if API fails
+      users.value = []
+      console.warn('⚠️ No users available - using empty array')
+    }
   } finally {
     loadingUsers.value = false
   }
@@ -1180,7 +1221,7 @@ const fetchRFPFromDatabase = async (rfpId: string) => {
       
       // Fetch evaluation criteria if RFP number is available
       if (response.data.rfp_number) {
-        await fetchEvaluationCriteria(response.data.rfp_number)
+        await fetchEvaluationCriteria(response.data.rfp_number, response.data.rfp_id)
       }
     }
   } catch (error) {
@@ -1189,31 +1230,54 @@ const fetchRFPFromDatabase = async (rfpId: string) => {
 }
 
 // Fetch evaluation criteria for the RFP
-const fetchEvaluationCriteria = async (rfpNumber: string) => {
+const fetchEvaluationCriteria = async (rfpNumber: string, rfpId?: string | number) => {
   try {
-    console.log('Fetching evaluation criteria for RFP:', rfpNumber)
-    const response = await axios.get(getTprmApiUrl(`v1/rfp/${rfpNumber}/evaluation-criteria/`), {
+    console.log('Fetching evaluation criteria for RFP:', rfpNumber, 'rfpId:', rfpId)
+    
+    // Build URL with rfp_number in path, and rfp_id as query parameter for more reliable lookup
+    let url = getTprmApiUrl(`v1/rfp/${rfpNumber || 'unknown'}/evaluation-criteria/`)
+    if (rfpId) {
+      url += `?rfp_id=${rfpId}`
+    }
+    
+    const response = await axios.get(url, {
       headers: getAuthHeaders()
     })
     console.log('Fetched evaluation criteria:', response.data)
     
-    if (response.data && response.data.success && response.data.criteria) {
-      // Transform criteria to match template format
-      const transformedCriteria = response.data.criteria.map((criterion: any) => ({
-        id: criterion.criteria_id,
-        name: criterion.criteria_name,
-        weight: criterion.weight_percentage,
-        description: criterion.criteria_description,
-        type: criterion.evaluation_type,
-        required: criterion.is_mandatory
-      }))
+    if (response.data && response.data.success) {
+      // Check if there's a warning (RFP not found but returning empty criteria)
+      if (response.data.warning) {
+        console.warn('⚠️ Evaluation criteria warning:', response.data.warning)
+        if (response.data.similar_rfps && response.data.similar_rfps.length > 0) {
+          console.log('Similar RFPs found:', response.data.similar_rfps)
+        }
+      }
       
-      // Update rfpRequestData with criteria
-      if (rfpRequestData.value) {
-        rfpRequestData.value.criteria = transformedCriteria
-        console.log('✅ Updated RFP data with evaluation criteria:', transformedCriteria.length, 'criteria')
+      if (response.data.criteria && Array.isArray(response.data.criteria) && response.data.criteria.length > 0) {
+        // Transform criteria to match template format
+        const transformedCriteria = response.data.criteria.map((criterion: any) => ({
+          id: criterion.criteria_id,
+          name: criterion.criteria_name,
+          weight: criterion.weight_percentage,
+          description: criterion.criteria_description,
+          type: criterion.evaluation_type,
+          required: criterion.is_mandatory
+        }))
+        
+        // Update rfpRequestData with criteria
+        if (rfpRequestData.value) {
+          rfpRequestData.value.criteria = transformedCriteria
+          console.log('✅ Updated RFP data with evaluation criteria:', transformedCriteria.length, 'criteria')
+        } else {
+          console.warn('⚠️ rfpRequestData is null, cannot add criteria')
+        }
       } else {
-        console.warn('⚠️ rfpRequestData is null, cannot add criteria')
+        console.log('ℹ️ No evaluation criteria found for RFP:', rfpNumber)
+        // Initialize empty criteria array if none found
+        if (rfpRequestData.value) {
+          rfpRequestData.value.criteria = []
+        }
       }
     } else {
       console.log('ℹ️ No evaluation criteria found for RFP:', rfpNumber)
@@ -1222,8 +1286,13 @@ const fetchEvaluationCriteria = async (rfpNumber: string) => {
         rfpRequestData.value.criteria = []
       }
     }
-  } catch (error) {
-    console.error('Error fetching evaluation criteria:', error)
+  } catch (error: any) {
+    // Handle 404 and other errors gracefully
+    if (error.response && error.response.status === 404) {
+      console.warn('⚠️ RFP not found for evaluation criteria, using empty criteria list')
+    } else {
+      console.error('Error fetching evaluation criteria:', error)
+    }
     // Initialize empty criteria array on error
     if (rfpRequestData.value) {
       rfpRequestData.value.criteria = []
@@ -1346,7 +1415,7 @@ onMounted(async () => {
   } else if (rfpRequestData.value && rfpRequestData.value.rfp_number && !rfpRequestData.value.criteria) {
     // If RFP data exists but criteria are missing, fetch criteria
     console.log('RFP data exists but criteria missing, fetching criteria for RFP:', rfpRequestData.value.rfp_number)
-    fetchEvaluationCriteria(rfpRequestData.value.rfp_number).then(() => {
+    fetchEvaluationCriteria(rfpRequestData.value.rfp_number, rfpRequestData.value.rfp_id).then(() => {
       console.log('Evaluation criteria fetched successfully')
     }).catch((error) => {
       console.error('Failed to fetch evaluation criteria:', error)

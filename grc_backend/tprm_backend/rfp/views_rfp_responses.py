@@ -3,6 +3,7 @@ import uuid
 import hashlib
 import logging
 import threading
+import re
 from django.shortcuts import get_object_or_404
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -12,9 +13,10 @@ from django.utils import timezone
 from django.core.mail import send_mail, EmailMessage
 from django.template.loader import render_to_string
 from django.conf import settings
-from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.decorators import api_view, authentication_classes, permission_classes, parser_classes
 from rest_framework.permissions import AllowAny
-from .models import RFP, Vendor, VendorInvitation, RFPResponse, RFPUnmatchedVendor
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from .models import RFP, Vendor, VendorInvitation, RFPResponse, RFPUnmatchedVendor, S3Files
 from .rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required, rbac_rfp_optional
 
@@ -183,16 +185,19 @@ def build_dynamic_urls(base_url, utm_params=None, vendor_data=None, rfp_id=None)
 @api_view(['POST'])
 @authentication_classes([])
 @permission_classes([AllowAny])
-@rbac_rfp_optional('create_rfp')
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present (even for public endpoints)
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
+# Note: Removed @rbac_rfp_optional, @require_tenant, and @tenant_filter decorators
+# Tenant is extracted from RFP object for public vendor portal access
 def create_unmatched_vendor(request):
     """
     Create an unmatched vendor record for open RFP submissions
     MULTI-TENANCY: Extracts tenant_id from RFP to ensure tenant isolation
     """
     try:
-        data = json.loads(request.body)
+        # Support both DRF request.data and request.body
+        if hasattr(request, 'data') and request.data:
+            data = request.data
+        else:
+            data = json.loads(request.body)
         
         # Required fields
         rfp_id = data.get('rfpId')
@@ -213,28 +218,47 @@ def create_unmatched_vendor(request):
                 'error': 'RFP ID, vendor name, and contact email are required'
             }, status=400)
         
-        # Validate RFP exists
+        # Validate RFP exists and extract tenant
         # MULTI-TENANCY: RFP will have tenant_id, we'll extract it
         try:
-            rfp = RFP.objects.get(rfp_id=rfp_id)
+            rfp = RFP.objects.get(rfp_id=int(rfp_id))
             # MULTI-TENANCY: Get tenant_id from RFP
-            tenant_id = getattr(rfp, 'tenant_id', None)
+            tenant_id = None
+            if hasattr(rfp, 'tenant_id') and rfp.tenant_id:
+                tenant_id = rfp.tenant_id
+            elif hasattr(rfp, 'tenant') and rfp.tenant:
+                tenant_id = rfp.tenant.tenant_id if hasattr(rfp.tenant, 'tenant_id') else getattr(rfp.tenant, 'id', None)
+            
+            # Set tenant_id on request for compatibility with other code
+            if tenant_id:
+                if hasattr(request, '_request'):
+                    request._request.tenant_id = tenant_id
+                request.tenant_id = tenant_id
+            
             if not tenant_id:
+                logger.warning(f"[create_unmatched_vendor] RFP {rfp_id} does not have tenant context")
                 return JsonResponse({
                     'success': False,
                     'error': 'RFP does not have tenant context'
                 }, status=403)
         except RFP.DoesNotExist:
+            logger.error(f"[create_unmatched_vendor] RFP not found with rfp_id: {rfp_id}")
             return JsonResponse({
                 'success': False,
                 'error': f'RFP not found: {rfp_id}'
             }, status=404)
+        except (ValueError, TypeError) as e:
+            logger.error(f"[create_unmatched_vendor] Invalid rfp_id format: {rfp_id}, error: {str(e)}")
+            return JsonResponse({
+                'success': False,
+                'error': f'Invalid rfpId format: {rfp_id}'
+            }, status=400)
         
         with transaction.atomic():
             # Create unmatched vendor record
             # MULTI-TENANCY: Set tenant_id on creation
+            # Note: RFP info is stored in submission_data, and RFP link is via invitation_id
             unmatched_vendor = RFPUnmatchedVendor.objects.create(
-                rfp=rfp,
                 vendor_name=vendor_name,
                 vendor_email=vendor_email,
                 vendor_phone=vendor_phone,
@@ -319,9 +343,8 @@ def create_unmatched_vendor(request):
 @api_view(['POST'])
 @authentication_classes([])
 @permission_classes([AllowAny])
-@rbac_rfp_optional('create_rfp_response')
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present (even for public endpoints)
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
+# Note: Removed @rbac_rfp_optional, @require_tenant, and @tenant_filter decorators
+# Tenant is extracted from RFP object for public vendor portal access
 def create_rfp_response(request):
     """
     Create a new RFP response from vendor portal
@@ -330,8 +353,11 @@ def create_rfp_response(request):
     """
     logger.info(f'[create_rfp_response] Request received - Method: {request.method}, Path: {request.path}')
     try:
-        # Parse request data
-        data = json.loads(request.body)
+        # Support both DRF request.data and request.body
+        if hasattr(request, 'data') and request.data:
+            data = request.data
+        else:
+            data = json.loads(request.body)
         logger.info(f'[create_rfp_response] Request data parsed - rfpId: {data.get("rfpId")}, vendorId: {data.get("vendorId")}, has_proposalData: {bool(data.get("proposalData"))}')
         
         # Basic info
@@ -537,28 +563,47 @@ def create_rfp_response(request):
             # Get RFP
             if rfp_id:
                 # New format: use rfpId directly
-                from rfp.models import RFP
+                from .models import RFP
                 try:
-                    rfp = RFP.objects.get(rfp_id=rfp_id)
+                    rfp = RFP.objects.get(rfp_id=int(rfp_id))
                     # MULTI-TENANCY: Get tenant_id from RFP
-                    tenant_id = getattr(rfp, 'tenant_id', None)
+                    tenant_id = None
+                    if hasattr(rfp, 'tenant_id') and rfp.tenant_id:
+                        tenant_id = rfp.tenant_id
+                    elif hasattr(rfp, 'tenant') and rfp.tenant:
+                        tenant_id = rfp.tenant.tenant_id if hasattr(rfp.tenant, 'tenant_id') else getattr(rfp.tenant, 'id', None)
+                    
+                    # Set tenant_id on request for compatibility with other code
+                    if tenant_id:
+                        if hasattr(request, '_request'):
+                            request._request.tenant_id = tenant_id
+                        request.tenant_id = tenant_id
+                    
                     if not tenant_id:
+                        logger.warning(f"[create_rfp_response] RFP {rfp_id} does not have tenant context")
                         return JsonResponse({
                             'success': False,
                             'error': 'RFP does not have tenant context'
                         }, status=403)
                 except RFP.DoesNotExist:
+                    logger.error(f"[create_rfp_response] RFP not found with rfp_id: {rfp_id}")
                     return JsonResponse({
                         'success': False,
                         'error': f'RFP not found: {rfp_id}'
                     }, status=404)
+                except (ValueError, TypeError) as e:
+                    logger.error(f"[create_rfp_response] Invalid rfp_id format: {rfp_id}, error: {str(e)}")
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'Invalid rfpId format: {rfp_id}'
+                    }, status=400)
                 
-                # CRITICAL: Find invitation ONLY by invitation_id - no fallbacks
-                # Invitations are created during vendor selection, not here
+                # CRITICAL: Find invitation by invitation_id
+                # For open RFPs, create invitation on-the-fly if it doesn't exist
                 # MULTI-TENANCY: Filter invitation by tenant
                 if invitation_id:
                     try:
-                        # Try to find by unique_token first (for string tokens like INV12345)
+                        # Try to find by unique_token first (for string tokens like INV12345 or open-rfp-*)
                         invitation = VendorInvitation.objects.select_related('vendor').get(
                             unique_token=invitation_id,
                             tenant_id=tenant_id
@@ -574,17 +619,114 @@ def create_rfp_response(request):
                             )
                             print(f"[SUCCESS] Found invitation by numeric ID: {numeric_id}, invitation_id={invitation.invitation_id}")
                         except (ValueError, VendorInvitation.DoesNotExist):
+                            # For open RFPs, create invitation on-the-fly if it doesn't exist
+                            if submission_source == 'open':
+                                print(f"[INFO] Open RFP submission - creating invitation on-the-fly: {invitation_id}")
+                                try:
+                                    # Generate invitation URL for open RFP
+                                    external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000')
+                                    if not external_base_url.startswith('http://localhost') and not external_base_url.startswith('https://localhost'):
+                                        port_match = re.search(r':(\d+)', external_base_url)
+                                        port = port_match.group(1) if port_match else '3000'
+                                        external_base_url = f'http://localhost:{port}'
+                                    
+                                    from urllib.parse import urlencode
+                                    base_url = f"{external_base_url}/submit/open"
+                                    params = {'rfpId': str(rfp_id)}
+                                    invitation_url = f"{base_url}?{urlencode(params)}"
+                                    
+                                    # Create invitation for open RFP
+                                    invitation = VendorInvitation.objects.create(
+                                        rfp_id=rfp_id,
+                                        vendor=None,  # No specific vendor for open RFPs
+                                        vendor_email=contact_email or '',
+                                        vendor_name=vendor_name or '',
+                                        vendor_phone=contact_phone or '',
+                                        company_name=org or '',
+                                        invitation_url=invitation_url,
+                                        unique_token=invitation_id,  # Use the provided invitation_id as unique_token
+                                        is_matched_vendor=False,
+                                        submission_source='open',
+                                        invitation_status='CREATED',
+                                        custom_message='',
+                                        tenant_id=tenant_id,  # MULTI-TENANCY: Set tenant_id
+                                        utm_parameters=utm_params if utm_params else {
+                                            'utm_source': 'rfp_portal',
+                                            'utm_medium': 'public',
+                                            'utm_campaign': 'open_rfp',
+                                            'utm_content': f'open_rfp_{rfp_id}'
+                                        }
+                                    )
+                                    print(f"[SUCCESS] Created invitation on-the-fly for open RFP: invitation_id={invitation.invitation_id}, unique_token={invitation_id}")
+                                except Exception as create_error:
+                                    logger.error(f"[create_rfp_response] Failed to create invitation for open RFP: {str(create_error)}")
+                                    return JsonResponse({
+                                        'success': False,
+                                        'error': f'Failed to create invitation for open RFP: {str(create_error)}'
+                                    }, status=500)
+                            else:
+                                # For invited submissions, invitation must exist
+                                return JsonResponse({
+                                    'success': False,
+                                    'error': f'Invitation not found: {invitation_id}. Invitations must be created during vendor selection.'
+                                }, status=404)
+                else:
+                    # If no invitation_id provided, check if it's an open RFP
+                    if submission_source == 'open':
+                        # For open RFPs without invitation_id, generate one
+                        import time
+                        invitation_id = f"open-rfp-{rfp_id}-{int(time.time() * 1000)}"
+                        print(f"[INFO] Open RFP submission without invitation_id - generating: {invitation_id}")
+                        try:
+                            # Generate invitation URL for open RFP
+                            external_base_url = getattr(settings, 'EXTERNAL_BASE_URL', 'http://localhost:3000')
+                            if not external_base_url.startswith('http://localhost') and not external_base_url.startswith('https://localhost'):
+                                port_match = re.search(r':(\d+)', external_base_url)
+                                port = port_match.group(1) if port_match else '3000'
+                                external_base_url = f'http://localhost:{port}'
+                            
+                            from urllib.parse import urlencode
+                            base_url = f"{external_base_url}/submit/open"
+                            params = {'rfpId': str(rfp_id)}
+                            invitation_url = f"{base_url}?{urlencode(params)}"
+                            
+                            # Create invitation for open RFP
+                            invitation = VendorInvitation.objects.create(
+                                rfp_id=rfp_id,
+                                vendor=None,
+                                vendor_email=contact_email or '',
+                                vendor_name=vendor_name or '',
+                                vendor_phone=contact_phone or '',
+                                company_name=org or '',
+                                invitation_url=invitation_url,
+                                unique_token=invitation_id,
+                                is_matched_vendor=False,
+                                submission_source='open',
+                                invitation_status='CREATED',
+                                custom_message='',
+                                tenant_id=tenant_id,
+                                utm_parameters=utm_params if utm_params else {
+                                    'utm_source': 'rfp_portal',
+                                    'utm_medium': 'public',
+                                    'utm_campaign': 'open_rfp',
+                                    'utm_content': f'open_rfp_{rfp_id}'
+                                }
+                            )
+                            print(f"[SUCCESS] Created invitation for open RFP without invitation_id: invitation_id={invitation.invitation_id}")
+                        except Exception as create_error:
+                            logger.error(f"[create_rfp_response] Failed to create invitation for open RFP: {str(create_error)}")
                             return JsonResponse({
                                 'success': False,
-                                'error': f'Invitation not found: {invitation_id}. Invitations must be created during vendor selection.'
-                            }, status=404)
-                else:
-                    return JsonResponse({
-                        'success': False,
-                        'error': 'Invitation ID is required. Invitations must be created during vendor selection.'
-                    }, status=400)
+                                'error': f'Failed to create invitation for open RFP: {str(create_error)}'
+                            }, status=500)
+                    else:
+                        return JsonResponse({
+                            'success': False,
+                            'error': 'Invitation ID is required. Invitations must be created during vendor selection.'
+                        }, status=400)
                 
                 # CRITICAL: vendor_id comes from invitation table OR from request (for open RFPs)
+                # For open RFPs, vendor_id can be None - it's allowed
                 if invitation:
                     # Get vendor_id from invitation if it has a matched vendor
                     if invitation.vendor:
@@ -592,13 +734,18 @@ def create_rfp_response(request):
                         print(f"[CRITICAL] Using vendor_id from invitation.vendor: {vendor_id}")
                     else:
                         # For open RFPs, invitation.vendor might be NULL
-                        # Use vendor_id from request if provided (it should match the invitation)
+                        # Use vendor_id from request if provided, otherwise allow None for open RFPs
                         if vendor_id:
                             print(f"[CRITICAL] Invitation has no matched vendor, using vendor_id from request: {vendor_id}")
+                        elif submission_source == 'open':
+                            # For open RFPs, vendor_id can be None - this is allowed
+                            print(f"[INFO] Open RFP submission without vendor_id - this is allowed")
+                            vendor_id = None
                         else:
+                            # For invited submissions, vendor_id is required
                             return JsonResponse({
                                 'success': False,
-                                'error': 'Invitation does not have a matched vendor and no vendorId provided in request. Please provide vendorId for open RFP submissions.'
+                                'error': 'Invitation does not have a matched vendor and no vendorId provided in request. Please provide vendorId for invited RFP submissions.'
                             }, status=400)
                 else:
                     return JsonResponse({
@@ -806,11 +953,12 @@ def create_rfp_response(request):
                 rfp_response = existing_response
             else:
                 # CRITICAL: vendor_id comes from invitation or request
-                # For open RFPs, invitation.vendor might be NULL, so we use vendor_id from request
-                if not vendor_id:
+                # For open RFPs, vendor_id can be None - this is allowed
+                # Only require vendor_id for invited submissions
+                if not vendor_id and submission_source != 'open':
                     return JsonResponse({
                         'success': False,
-                        'error': 'Vendor ID is required. Must be provided in request or come from invitation.'
+                        'error': 'Vendor ID is required for invited RFP submissions. Must be provided in request or come from invitation.'
                     }, status=400)
                 
                 vendor_id_to_use = vendor_id
@@ -840,6 +988,23 @@ def create_rfp_response(request):
                         final_check_response = RFPResponse.objects.filter(
                             rfp=rfp,
                             vendor_id=vendor_id_to_use,
+                            tenant_id=tenant_id
+                        ).first()
+                elif invitation:
+                    # For open RFPs without vendor_id, check by invitation_id
+                    try:
+                        # MULTI-TENANCY: Filter by tenant
+                        final_check_response = RFPResponse.objects.select_for_update(nowait=True).filter(
+                            rfp=rfp,
+                            invitation_id=invitation.invitation_id,
+                            tenant_id=tenant_id
+                        ).first()
+                    except Exception:
+                        # If lock fails, try without lock
+                        # MULTI-TENANCY: Filter by tenant
+                        final_check_response = RFPResponse.objects.filter(
+                            rfp=rfp,
+                            invitation_id=invitation.invitation_id,
                             tenant_id=tenant_id
                         ).first()
                 
@@ -930,48 +1095,72 @@ def create_rfp_response(request):
                     # Create new response - guaranteed no duplicate
                     # CRITICAL: Determine final vendor_id and invitation_id
                     final_invitation_id = None
-                    final_vendor_id_for_create = vendor_id_to_use
+                    final_vendor_id_for_create = None  # Start with None, only set if vendor exists
                     
                     if invitation:
                         final_invitation_id = invitation.invitation_id
                         print(f"[CRITICAL] Creating response with invitation_id={final_invitation_id}")
                         
-                        # Override vendor_id with invitation vendor if available
+                        # Override vendor_id with invitation vendor if available AND exists in vendors table
                         if invitation.vendor:
-                            final_vendor_id_for_create = invitation.vendor.vendor_id
-                            print(f"[CRITICAL] Overriding vendor_id with invitation.vendor.vendor_id: {final_vendor_id_for_create}")
+                            # Check if vendor exists in vendors table
+                            try:
+                                Vendor.objects.get(vendor_id=invitation.vendor.vendor_id)
+                                final_vendor_id_for_create = invitation.vendor.vendor_id
+                                print(f"[CRITICAL] Using vendor_id from invitation.vendor: {final_vendor_id_for_create}")
+                            except Vendor.DoesNotExist:
+                                print(f"[WARN] Invitation vendor {invitation.vendor.vendor_id} does not exist in vendors table, setting vendor_id to NULL")
+                                final_vendor_id_for_create = None
                         elif hasattr(invitation, 'unmatched_vendor_id') and invitation.unmatched_vendor_id:
-                            final_vendor_id_for_create = invitation.unmatched_vendor_id
-                            print(f"[CRITICAL] Overriding vendor_id with invitation.unmatched_vendor_id: {final_vendor_id_for_create}")
+                            # unmatched_vendor_id is NOT a valid vendor_id - it's from rfp_unmatched_vendors table
+                            # For unmatched vendors, we should set vendor_id to NULL
+                            print(f"[WARN] Invitation has unmatched_vendor_id {invitation.unmatched_vendor_id}, but this is not a valid vendor_id. Setting vendor_id to NULL for unmatched vendor.")
+                            final_vendor_id_for_create = None
+                        else:
+                            # Try to use vendor_id_to_use if it exists in vendors table
+                            if vendor_id_to_use:
+                                try:
+                                    Vendor.objects.get(vendor_id=vendor_id_to_use)
+                                    final_vendor_id_for_create = vendor_id_to_use
+                                    print(f"[CRITICAL] Using vendor_id from request: {final_vendor_id_for_create}")
+                                except Vendor.DoesNotExist:
+                                    print(f"[WARN] Vendor {vendor_id_to_use} does not exist in vendors table, setting vendor_id to NULL")
+                                    final_vendor_id_for_create = None
                     else:
                         print(f"[WARN] Creating response WITHOUT invitation_id")
+                        # Try to use vendor_id_to_use if it exists in vendors table
+                        if vendor_id_to_use:
+                            try:
+                                Vendor.objects.get(vendor_id=vendor_id_to_use)
+                                final_vendor_id_for_create = vendor_id_to_use
+                                print(f"[CRITICAL] Using vendor_id from request: {final_vendor_id_for_create}")
+                            except Vendor.DoesNotExist:
+                                print(f"[WARN] Vendor {vendor_id_to_use} does not exist in vendors table, setting vendor_id to NULL")
+                                final_vendor_id_for_create = None
                     
-                    # CRITICAL: vendor_id MUST come from invitation - no fallbacks
-                    if not final_vendor_id_for_create:
-                        return JsonResponse({
-                            'success': False,
-                            'error': 'Vendor ID must come from invitation. Cannot create response without valid vendor_id from invitation.'
-                        }, status=400)
+                    # Note: vendor_id can be NULL for unmatched vendors (open RFP submissions)
+                    # The invitation_id will still link to the invitation which tracks the unmatched vendor
                     
                     # CRITICAL: Final check right before creating to prevent duplicates
                     # This handles race conditions where multiple requests pass the initial check
+                    # Check for duplicates by invitation_id (more reliable than vendor_id for unmatched vendors)
                     final_duplicate_check = None
-                    if final_vendor_id_for_create:
-                        try:
-                            # MULTI-TENANCY: Filter by tenant
-                            final_duplicate_check = RFPResponse.objects.select_for_update(nowait=True).filter(
-                                rfp=rfp,
-                                vendor_id=final_vendor_id_for_create,
-                                tenant_id=tenant_id
-                            ).first()
-                        except Exception:
-                            # If lock fails, check without lock
-                            # MULTI-TENANCY: Filter by tenant
-                            final_duplicate_check = RFPResponse.objects.filter(
-                                rfp=rfp,
-                                vendor_id=final_vendor_id_for_create,
-                                tenant_id=tenant_id
-                            ).first()
+                    filter_conditions = {
+                        'rfp': rfp,
+                        'tenant_id': tenant_id
+                    }
+                    if final_invitation_id:
+                        filter_conditions['invitation_id'] = final_invitation_id
+                    elif final_vendor_id_for_create:
+                        filter_conditions['vendor_id'] = final_vendor_id_for_create
+                    
+                    try:
+                        # MULTI-TENANCY: Filter by tenant
+                        final_duplicate_check = RFPResponse.objects.select_for_update(nowait=True).filter(**filter_conditions).first()
+                    except Exception:
+                        # If lock fails, check without lock
+                        # MULTI-TENANCY: Filter by tenant
+                        final_duplicate_check = RFPResponse.objects.filter(**filter_conditions).first()
                     
                     if final_duplicate_check:
                         # Another request created it, update instead
@@ -1075,71 +1264,90 @@ def create_rfp_response(request):
                                 logger.info(f'[create_rfp_response] Added UTM parameters to metadata for new response: {utm_params}')
                         
                         # MULTI-TENANCY: Set tenant_id on creation
-                        rfp_response = RFPResponse.objects.create(
-                        # Basic info - CRITICAL: Always set both IDs
-                        invitation_id=final_invitation_id,
-                        rfp=rfp,
-                        vendor_id=final_vendor_id_for_create,
-                        tenant_id=tenant_id,  # MULTI-TENANCY: Set tenant_id
+                        # Note: vendor_id can be NULL for unmatched vendors (open RFP submissions)
+                        create_kwargs = {
+                            # Basic info - CRITICAL: Always set invitation_id if available
+                            'rfp': rfp,
+                            'tenant_id': tenant_id,  # MULTI-TENANCY: Set tenant_id
+                        }
                         
-                        # Store complete nested structure in response_documents
-                        response_documents=response_documents,
+                        # Only set invitation_id if we have one
+                        if final_invitation_id:
+                            create_kwargs['invitation_id'] = final_invitation_id
                         
-                        # Submission details
-                        submission_source=submission_source,
-                        submitted_by=vendor_name,
+                        # Only set vendor_id if it exists in vendors table (not NULL and valid)
+                        if final_vendor_id_for_create:
+                            create_kwargs['vendor_id'] = final_vendor_id_for_create
+                        # If vendor_id is None, don't set it (allows NULL for unmatched vendors)
                         
-                        # CRITICAL: Save vendor contact information as direct fields
-                        org=org,
-                        vendor_name=vendor_name,
-                        contact_email=contact_email,
-                        contact_phone=contact_phone,
-                        
-                        # Documents
-                        document_urls=document_urls if isinstance(document_urls, dict) else {},
-
-                        
-                        # Draft data and proposal data
-                        draft_data=proposal_data if isinstance(proposal_data, dict) else {},
-                        proposal_data=proposal_data if isinstance(proposal_data, dict) else {},
-                        
-                        # CRITICAL: Store UTM parameters in external_submission_data
-                        external_submission_data={
-                            'utm_parameters': utm_params if utm_params else {},
+                        # Add all other fields to create_kwargs
+                        create_kwargs.update({
+                            # Store complete nested structure in response_documents
+                            'response_documents': response_documents,
+                            
+                            # Submission details
                             'submission_source': submission_source,
+                            'submitted_by': vendor_name,
+                            
+                            # CRITICAL: Save vendor contact information as direct fields
+                            'org': org,
+                            'vendor_name': vendor_name,
+                            'contact_email': contact_email,
+                            'contact_phone': contact_phone,
+                            
+                            # Documents
+                            'document_urls': document_urls if isinstance(document_urls, dict) else {},
+                            
+                            # Draft data and proposal data
+                            'draft_data': proposal_data if isinstance(proposal_data, dict) else {},
+                            'proposal_data': proposal_data if isinstance(proposal_data, dict) else {},
+                        })
+                        
+                        # Add remaining fields to create_kwargs
+                        create_kwargs.update({
+                            # CRITICAL: Store UTM parameters in external_submission_data
+                            'external_submission_data': {
+                                'utm_parameters': utm_params if utm_params else {},
+                                'submission_source': submission_source,
+                                'ip_address': ip_address if ip_address else None,
+                                'user_agent': user_agent if user_agent else None,
+                                'submission_timestamp': current_time.isoformat()
+                            } if utm_params else {
+                                'submission_source': submission_source,
+                                'ip_address': ip_address if ip_address else None,
+                                'user_agent': user_agent if user_agent else None,
+                                'submission_timestamp': current_time.isoformat()
+                            },
+                            
+                            # Financial info
+                            'proposed_value': proposed_value,
+                            'technical_score': None,
+                            'commercial_score': None,
+                            'overall_score': None,
+                            'weighted_final_score': None,
+                            
+                            # Evaluation
+                            'evaluation_status': 'SUBMITTED',
+                            'submission_status': 'SUBMITTED',  # CRITICAL: Set submission_status (required field)
+                            'auto_rejected': False,
+                        })
+                        
+                        # Add remaining fields
+                        create_kwargs.update({
+                            'rejection_reason': None,
+                            'evaluated_by': None,
+                            'evaluation_date': None,
+                            'evaluation_comments': None,
+                            
+                            # Progress
+                            'completion_percentage': completion_percentage,
+                            'last_saved_at': current_time,
+                            'submitted_at': current_time,
                             'ip_address': ip_address if ip_address else None,
-                            'user_agent': user_agent if user_agent else None,
-                            'submission_timestamp': current_time.isoformat()
-                        } if utm_params else {
-                            'submission_source': submission_source,
-                            'ip_address': ip_address if ip_address else None,
-                            'user_agent': user_agent if user_agent else None,
-                            'submission_timestamp': current_time.isoformat()
-                        },
+                            'user_agent': user_agent if user_agent else None
+                        })
                         
-                        # Financial info
-                        proposed_value=proposed_value,
-                        technical_score=None,
-                        commercial_score=None,
-                        overall_score=None,
-                        weighted_final_score=None,
-                        
-                        # Evaluation
-                        evaluation_status='SUBMITTED',
-                        submission_status='SUBMITTED',  # CRITICAL: Set submission_status (required field)
-                        auto_rejected=False,
-                        rejection_reason=None,
-                        evaluated_by=None,
-                        evaluation_date=None,
-                        evaluation_comments=None,
-                        
-                        # Progress
-                        completion_percentage=completion_percentage,
-                        last_saved_at=current_time,
-                        submitted_at=current_time,
-                        ip_address=ip_address if ip_address else None,
-                        user_agent=user_agent if user_agent else None
-                    )
+                        rfp_response = RFPResponse.objects.create(**create_kwargs)
                     print(f"Created new response {rfp_response.response_id} for RFP {rfp.rfp_id}, vendor_id={final_vendor_id_for_create}, invitation_id={final_invitation_id}")
                     
                     # FINAL SAFETY CHECK: Ensure IDs are saved even if something went wrong
@@ -1251,9 +1459,9 @@ def create_rfp_response(request):
 @api_view(['POST'])
 @authentication_classes([])
 @permission_classes([AllowAny])
-@rbac_rfp_optional('create_rfp_response')
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present (even for public endpoints)
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
+@parser_classes([MultiPartParser, FormParser, JSONParser])  # Support multipart/form-data for file uploads
+# Note: Removed @rbac_rfp_optional, @require_tenant, and @tenant_filter decorators
+# Tenant is extracted from RFP object for public vendor portal access
 def upload_response_asset(request):
     """
     Upload an attachment for the rich text RFP response editor.
@@ -1262,18 +1470,32 @@ def upload_response_asset(request):
     MULTI-TENANCY: Extracts tenant_id from RFP to ensure tenant isolation
     """
     try:
+        # Support both DRF Request and Django HttpRequest for POST data
+        # For file uploads with multipart/form-data, use request.FILES
         file = request.FILES.get('file')
-        criteria_id = request.POST.get('criteriaId')
-        rfp_id = request.POST.get('rfpId')
-        vendor_id = request.POST.get('vendorId')
-        invitation_id = request.POST.get('invitationId')
-        response_id = request.POST.get('responseId')
-        uploaded_by = request.POST.get('uploadedBy')
+        
+        # For multipart/form-data, DRF parses it into request.data (dict-like) and request.FILES
+        # Try request.data first (DRF), then fallback to request.POST (Django)
+        if hasattr(request, 'data') and request.data:
+            criteria_id = request.data.get('criteriaId')
+            rfp_id = request.data.get('rfpId')
+            vendor_id = request.data.get('vendorId')
+            invitation_id = request.data.get('invitationId')
+            response_id = request.data.get('responseId')
+            uploaded_by = request.data.get('uploadedBy')
+        else:
+            # Fallback to Django request.POST
+            criteria_id = request.POST.get('criteriaId')
+            rfp_id = request.POST.get('rfpId')
+            vendor_id = request.POST.get('vendorId')
+            invitation_id = request.POST.get('invitationId')
+            response_id = request.POST.get('responseId')
+            uploaded_by = request.POST.get('uploadedBy')
         
         # Log received data for debugging
         logger.info(f"[UPLOAD_RESPONSE_ASSET] Received upload request - file: {bool(file)}, criteriaId: {criteria_id}, rfpId: {rfp_id}, vendorId: {vendor_id}, invitationId: {invitation_id}")
-        logger.info(f"[UPLOAD_RESPONSE_ASSET] POST data keys: {list(request.POST.keys())}")
-        logger.info(f"[UPLOAD_RESPONSE_ASSET] FILES keys: {list(request.FILES.keys())}")
+        logger.info(f"[UPLOAD_RESPONSE_ASSET] POST data keys: {list(request.POST.keys()) if hasattr(request, 'POST') else 'N/A'}")
+        logger.info(f"[UPLOAD_RESPONSE_ASSET] FILES keys: {list(request.FILES.keys()) if hasattr(request, 'FILES') else 'N/A'}")
  
         if not file or not criteria_id or not rfp_id:
             missing_fields = []
@@ -1299,19 +1521,41 @@ def upload_response_asset(request):
                 'error': 'rfpId is required and cannot be empty'
             }, status=400)
         
+        try:
+            rfp_id_int = int(rfp_id)
+        except (TypeError, ValueError) as e:
+            logger.warning(f"[UPLOAD_RESPONSE_ASSET] Invalid rfpId provided: {rfp_id}, error: {str(e)}")
+            return JsonResponse({
+                'success': False,
+                'error': f'Invalid rfpId provided: {rfp_id}. Must be a valid integer.'
+            }, status=400)
+        
         # MULTI-TENANCY: Get tenant_id from RFP
         try:
-            rfp = RFP.objects.get(rfp_id=rfp_id)
-            tenant_id = getattr(rfp, 'tenant_id', None)
+            rfp = RFP.objects.get(rfp_id=rfp_id_int)
+            tenant_id = None
+            if hasattr(rfp, 'tenant_id') and rfp.tenant_id:
+                tenant_id = rfp.tenant_id
+            elif hasattr(rfp, 'tenant') and rfp.tenant:
+                tenant_id = rfp.tenant.tenant_id if hasattr(rfp.tenant, 'tenant_id') else getattr(rfp.tenant, 'id', None)
+            
+            # Set tenant_id on request for compatibility with other code
+            if tenant_id:
+                if hasattr(request, '_request'):
+                    request._request.tenant_id = tenant_id
+                request.tenant_id = tenant_id
+            
             if not tenant_id:
+                logger.warning(f"[UPLOAD_RESPONSE_ASSET] RFP {rfp_id_int} does not have tenant context")
                 return JsonResponse({
                     'success': False,
                     'error': 'RFP does not have tenant context'
                 }, status=403)
         except RFP.DoesNotExist:
+            logger.error(f"[UPLOAD_RESPONSE_ASSET] RFP not found with rfp_id: {rfp_id_int}")
             return JsonResponse({
                 'success': False,
-                'error': f'RFP not found: {rfp_id}'
+                'error': f'RFP not found: {rfp_id_int}'
             }, status=404)
         
         # Validate criteria_id is not empty
@@ -1320,15 +1564,6 @@ def upload_response_asset(request):
             return JsonResponse({
                 'success': False,
                 'error': 'criteriaId is required and cannot be empty'
-            }, status=400)
- 
-        try:
-            rfp_id_int = int(rfp_id)
-        except (TypeError, ValueError) as e:
-            logger.warning(f"[UPLOAD_RESPONSE_ASSET] Invalid rfpId provided: {rfp_id}, error: {str(e)}")
-            return JsonResponse({
-                'success': False,
-                'error': f'Invalid rfpId provided: {rfp_id}. Must be a valid integer.'
             }, status=400)
  
         vendor_id_int = None
@@ -1368,7 +1603,7 @@ def upload_response_asset(request):
             temp_file_path = temp_file.name
  
         try:
-            from rfp.s3_service import get_s3_service
+            from .s3_service import get_s3_service
             s3_service = get_s3_service()
             user_identifier = str(
                 vendor_id_int
@@ -1647,7 +1882,7 @@ def get_invitation_details(request, invitation_id):
         existing_response = RFPResponse.objects.filter(invitation=invitation, tenant_id=tenant_id).first()
         
         # Get RFP information separately
-        from rfp.models import RFP
+        from .models import RFP
         rfp = RFP.objects.get(rfp_id=invitation.rfp_id)
         
         return JsonResponse({
@@ -1765,8 +2000,7 @@ def test_risk_analysis(request):
 @authentication_classes([])  # Allow anonymous access for vendor portal
 @permission_classes([AllowAny])  # Allow anonymous access for vendor portal
 # Note: Removed @rbac_rfp_optional decorator to allow fully public access for vendor portal
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present (even for public endpoints)
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
+# Note: Removed @require_tenant and @tenant_filter - tenant is extracted from RFP object
 def get_rfp_details(request):
     """
     Get RFP details for prefilling the form using new query parameter format
@@ -1775,13 +2009,13 @@ def get_rfp_details(request):
     """
     logger.info(f'[get_rfp_details] Request received - Method: {request.method}, Path: {request.path}')
     try:
-        # Get parameters from query string
-        rfp_id = request.GET.get('rfpId')
-        vendor_id = request.GET.get('vendorId', '')
-        org = request.GET.get('org', '')
-        vendor_name = request.GET.get('vendorName', '')
-        contact_email = request.GET.get('contactEmail', '')
-        contact_phone = request.GET.get('contactPhone', '')
+        # Get parameters from query string (support both DRF request and Django request)
+        rfp_id = request.query_params.get('rfpId') or request.GET.get('rfpId')
+        vendor_id = request.query_params.get('vendorId', '') or request.GET.get('vendorId', '')
+        org = request.query_params.get('org', '') or request.GET.get('org', '')
+        vendor_name = request.query_params.get('vendorName', '') or request.GET.get('vendorName', '')
+        contact_email = request.query_params.get('contactEmail', '') or request.GET.get('contactEmail', '')
+        contact_phone = request.query_params.get('contactPhone', '') or request.GET.get('contactPhone', '')
         
         logger.info(f'[get_rfp_details] Query parameters - rfpId: {rfp_id}, vendorId: {vendor_id}, org: {org}, vendorName: {vendor_name}')
         
@@ -1793,19 +2027,36 @@ def get_rfp_details(request):
             }, status=400)
         
         # Get RFP details
-        from rfp.models import RFP, RFPTypeCustomFields
+        from .models import RFP, RFPTypeCustomFields
         logger.info(f'[get_rfp_details] Fetching RFP with rfp_id: {rfp_id}')
         try:
-            rfp = RFP.objects.get(rfp_id=rfp_id)
+            rfp = RFP.objects.get(rfp_id=int(rfp_id))
             # MULTI-TENANCY: Get tenant_id from RFP (for public endpoint)
-            tenant_id = getattr(rfp, 'tenant_id', None)
-            logger.info(f'[get_rfp_details] RFP found - rfp_id: {rfp.rfp_id}, rfp_number: {rfp.rfp_number}, rfp_title: {rfp.rfp_title}, rfp_type: {rfp.rfp_type}')
+            tenant_id = None
+            if hasattr(rfp, 'tenant_id') and rfp.tenant_id:
+                tenant_id = rfp.tenant_id
+            elif hasattr(rfp, 'tenant') and rfp.tenant:
+                tenant_id = rfp.tenant.tenant_id if hasattr(rfp.tenant, 'tenant_id') else getattr(rfp.tenant, 'id', None)
+            
+            # Set tenant_id on request for compatibility with other code
+            if tenant_id:
+                if hasattr(request, '_request'):
+                    request._request.tenant_id = tenant_id
+                request.tenant_id = tenant_id
+            
+            logger.info(f'[get_rfp_details] RFP found - rfp_id: {rfp.rfp_id}, rfp_number: {rfp.rfp_number}, rfp_title: {rfp.rfp_title}, rfp_type: {rfp.rfp_type}, tenant_id: {tenant_id}')
         except RFP.DoesNotExist:
             logger.error(f'[get_rfp_details] RFP not found with rfp_id: {rfp_id}')
             return JsonResponse({
                 'success': False,
                 'error': f'RFP not found: {rfp_id}'
             }, status=404)
+        except (ValueError, TypeError) as e:
+            logger.error(f'[get_rfp_details] Invalid rfp_id format: {rfp_id}, error: {str(e)}')
+            return JsonResponse({
+                'success': False,
+                'error': f'Invalid rfpId format: {rfp_id}'
+            }, status=400)
         
         # Fetch response_fields based on rfp_type from the RFP record
         response_fields = None
@@ -1829,8 +2080,36 @@ def get_rfp_details(request):
         else:
             logger.warning(f'RFP {rfp_id} has no rfp_type set')
         
+        # Fetch evaluation criteria for the RFP
+        evaluation_criteria = []
+        try:
+            from .models import RFPEvaluationCriteria
+            # MULTI-TENANCY: Filter by tenant if available
+            if tenant_id:
+                criteria_queryset = RFPEvaluationCriteria.objects.filter(rfp=rfp, tenant_id=tenant_id).order_by('display_order')
+            else:
+                criteria_queryset = RFPEvaluationCriteria.objects.filter(rfp=rfp).order_by('display_order')
+            
+            for criterion in criteria_queryset:
+                evaluation_criteria.append({
+                    'criteria_id': criterion.criteria_id,
+                    'criteria_name': criterion.criteria_name,
+                    'criteria_description': criterion.criteria_description,
+                    'weight_percentage': float(criterion.weight_percentage) if criterion.weight_percentage else 0,
+                    'evaluation_type': criterion.evaluation_type,
+                    'is_mandatory': criterion.is_mandatory,
+                    'min_score': float(criterion.min_score) if criterion.min_score else None,
+                    'max_score': float(criterion.max_score) if criterion.max_score else None,
+                    'min_word_count': criterion.min_word_count,
+                    'display_order': criterion.display_order
+                })
+            logger.info(f'[get_rfp_details] Found {len(evaluation_criteria)} evaluation criteria')
+        except Exception as e:
+            logger.error(f'[get_rfp_details] Error loading evaluation criteria: {str(e)}', exc_info=True)
+            evaluation_criteria = []
+        
         # Prepare response data
-        logger.info(f'[get_rfp_details] Preparing response data - response_fields present: {response_fields is not None}')
+        logger.info(f'[get_rfp_details] Preparing response data - response_fields present: {response_fields is not None}, evaluation_criteria count: {len(evaluation_criteria)}')
         response_data = {
             'success': True,
             'rfp': {
@@ -1848,7 +2127,8 @@ def get_rfp_details(request):
                 'status': rfp.status,
                 'criticality_level': getattr(rfp, 'criticality_level', None),
                 'documents': rfp.documents,  # Include documents field
-                'response_fields': response_fields  # Include dynamic response fields
+                'response_fields': response_fields,  # Include dynamic response fields
+                'evaluation_criteria': evaluation_criteria  # Include evaluation criteria
             },
             'vendor': {
                 'vendor_id': vendor_id,
@@ -1910,7 +2190,7 @@ def get_open_rfp_details(request, rfp_number):
     """
     logger.info(f'[get_open_rfp_details] Request received - rfp_number: {rfp_number}, Method: {request.method}, Path: {request.path}')
     try:
-        from rfp.models import RFPTypeCustomFields
+        from .models import RFPTypeCustomFields
         logger.info(f'[get_open_rfp_details] Fetching RFP with rfp_number: {rfp_number}')
         rfp = get_object_or_404(RFP, rfp_number=rfp_number)
         # MULTI-TENANCY: Get tenant_id from RFP
@@ -2008,7 +2288,7 @@ def get_open_rfp_by_id(request, rfp_id):
     """
     logger.info(f'[get_open_rfp_by_id] Request received - rfp_id: {rfp_id}, Method: {request.method}, Path: {request.path}')
     try:
-        from rfp.models import RFPTypeCustomFields
+        from .models import RFPTypeCustomFields
         logger.info(f'[get_open_rfp_by_id] Fetching RFP with rfp_id: {rfp_id}')
         rfp = get_object_or_404(RFP, rfp_id=rfp_id)
         logger.info(f'[get_open_rfp_by_id] RFP found - rfp_id: {rfp.rfp_id}, rfp_number: {rfp.rfp_number}, rfp_title: {rfp.rfp_title}, rfp_type: {rfp.rfp_type}, status: {rfp.status}')
@@ -2156,28 +2436,173 @@ def create_open_invitation(request, rfp_number):
 
 
 @api_view(['GET'])
-@authentication_classes([])  # Allow anonymous access for vendor portal
-@permission_classes([AllowAny])  # Allow anonymous access for vendor portal
-# Note: Removed @rbac_rfp_optional decorator to allow fully public access for vendor portal
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present (even for public endpoints)
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
+@authentication_classes([])
+@permission_classes([AllowAny])
 def get_rfp_evaluation_criteria(request, rfp_number):
     """
     Get evaluation criteria for an RFP
     Public endpoint for vendor portal - no authentication required
+    Supports both rfp_number (from URL) and rfp_id (from query param)
     MULTI-TENANCY: Extracts tenant_id from RFP to ensure tenant isolation
     """
     try:
-        rfp = get_object_or_404(RFP, rfp_number=rfp_number)
+        logger.info(f'[get_rfp_evaluation_criteria] Request received - rfp_number: {rfp_number}, path: {request.path}')
+        
+        # Support both rfp_number from URL and rfp_id from query params
+        # For DRF Request, use request.query_params instead of request.GET
+        rfp_id = request.query_params.get('rfp_id') or request.GET.get('rfp_id')
+        logger.info(f'[get_rfp_evaluation_criteria] rfp_id from query: {rfp_id}, rfp_number from URL: {rfp_number}')
+        
+        rfp = None
+        # Prioritize rfp_id from query params if available (more reliable)
+        if rfp_id:
+            # Try to get RFP by rfp_id first
+            try:
+                rfp_id_int = int(rfp_id)
+                logger.info(f'[get_rfp_evaluation_criteria] Looking up RFP by rfp_id: {rfp_id_int}')
+                try:
+                    rfp = RFP.objects.get(rfp_id=rfp_id_int)
+                    logger.info(f'[get_rfp_evaluation_criteria] Found RFP by rfp_id: {rfp.rfp_id}, rfp_number: {rfp.rfp_number}')
+                except RFP.DoesNotExist:
+                    logger.error(f'[get_rfp_evaluation_criteria] RFP with id {rfp_id_int} not found')
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'RFP with id {rfp_id_int} not found'
+                    }, status=404)
+            except (ValueError, TypeError) as e:
+                logger.error(f'[get_rfp_evaluation_criteria] Invalid rfp_id format: {rfp_id}, error: {str(e)}')
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Invalid rfp_id: {rfp_id}'
+                }, status=400)
+        else:
+            # Use rfp_number from URL
+            logger.info(f'[get_rfp_evaluation_criteria] Looking up RFP by rfp_number: {rfp_number}')
+            rfp = None
+            
+            # Try exact match first
+            try:
+                rfp = RFP.objects.get(rfp_number=rfp_number)
+                logger.info(f'[get_rfp_evaluation_criteria] Found RFP by exact rfp_number: {rfp.rfp_id}, rfp_number: {rfp.rfp_number}')
+            except RFP.DoesNotExist:
+                logger.warning(f'[get_rfp_evaluation_criteria] Exact match not found, trying case-insensitive lookup')
+                # Try case-insensitive lookup
+                try:
+                    rfp = RFP.objects.get(rfp_number__iexact=rfp_number)
+                    logger.info(f'[get_rfp_evaluation_criteria] Found RFP by case-insensitive rfp_number: {rfp.rfp_id}, rfp_number: {rfp.rfp_number}')
+                except RFP.DoesNotExist:
+                    # Try to find by partial match (in case of URL encoding issues or extra characters)
+                    logger.warning(f'[get_rfp_evaluation_criteria] Case-insensitive match not found, trying partial match')
+                    partial_match = RFP.objects.filter(rfp_number__icontains=rfp_number).first()
+                    if partial_match:
+                        rfp = partial_match
+                        logger.info(f'[get_rfp_evaluation_criteria] Found RFP by partial match: {rfp.rfp_id}, rfp_number: {rfp.rfp_number}')
+                    else:
+                        # Try to extract numeric ID if rfp_number looks like it contains an ID
+                        # Some RFPs might be referenced by ID in the number
+                        import re
+                        numbers = re.findall(r'\d+', rfp_number)
+                        if numbers:
+                            # Try the last number as potential rfp_id
+                            for num_str in reversed(numbers):
+                                try:
+                                    potential_id = int(num_str)
+                                    if potential_id > 0:
+                                        try:
+                                            rfp = RFP.objects.get(rfp_id=potential_id)
+                                            logger.info(f'[get_rfp_evaluation_criteria] Found RFP by extracted ID {potential_id}: rfp_id={rfp.rfp_id}, rfp_number={rfp.rfp_number}')
+                                            break
+                                        except RFP.DoesNotExist:
+                                            continue
+                                except ValueError:
+                                    continue
+                        
+                        # If still not found, return error with helpful information
+                        if rfp is None:
+                            logger.error(f'[get_rfp_evaluation_criteria] RFP with number {rfp_number} not found after all lookup attempts')
+                            
+                            # Get some sample RFP numbers for debugging
+                            try:
+                                sample_rfps = RFP.objects.all()[:10]
+                                sample_numbers = [r.rfp_number for r in sample_rfps]
+                                logger.info(f'[get_rfp_evaluation_criteria] Sample RFP numbers in database: {sample_numbers}')
+                            except Exception as e:
+                                logger.warning(f'[get_rfp_evaluation_criteria] Could not fetch sample RFPs: {e}')
+                                sample_numbers = []
+                            
+                            # Try to find similar RFP numbers
+                            try:
+                                similar_rfps = RFP.objects.filter(rfp_number__icontains=rfp_number[:15] if len(rfp_number) > 15 else rfp_number)[:5]
+                                similar_numbers = [r.rfp_number for r in similar_rfps]
+                                logger.info(f'[get_rfp_evaluation_criteria] Similar RFP numbers found: {similar_numbers}')
+                            except Exception as e:
+                                logger.warning(f'[get_rfp_evaluation_criteria] Could not fetch similar RFPs: {e}')
+                                similar_numbers = []
+                            
+                            error_msg = f'RFP with number "{rfp_number}" not found'
+                            if similar_numbers:
+                                error_msg += f'. Similar RFPs found: {", ".join(similar_numbers[:3])}'
+                            
+                            # Instead of returning 404, return empty criteria list for better UX
+                            # This allows the frontend to continue working even if RFP number is wrong
+                            logger.warning(f'[get_rfp_evaluation_criteria] RFP not found, returning empty criteria list')
+                            return JsonResponse({
+                                'success': True,
+                                'criteria': [],
+                                'rfp_id': None,
+                                'rfp_title': None,
+                                'rfp_number': rfp_number,
+                                'total_count': 0,
+                                'warning': error_msg,
+                                'similar_rfps': similar_numbers[:5] if similar_numbers else []
+                            })
+        
+        # Ensure rfp was found
+        if rfp is None:
+            logger.warning(f'[get_rfp_evaluation_criteria] RFP lookup failed - rfp is None, returning empty criteria')
+            # Return empty criteria instead of 404 for better UX
+            return JsonResponse({
+                'success': True,
+                'criteria': [],
+                'rfp_id': None,
+                'rfp_title': None,
+                'rfp_number': rfp_number,
+                'total_count': 0,
+                'warning': f'RFP lookup failed for: {rfp_number}. Returning empty criteria list.'
+            })
+        
+        # MULTI-TENANCY: Extract tenant_id from RFP and set it on request
+        # This allows tenant-aware queries without requiring tenant in the request
+        tenant_id = None
+        if hasattr(rfp, 'tenant_id') and rfp.tenant_id:
+            tenant_id = rfp.tenant_id
+            # Set tenant_id on the underlying Django request for compatibility
+            if hasattr(request, '_request'):
+                request._request.tenant_id = tenant_id
+            request.tenant_id = tenant_id
+        elif hasattr(rfp, 'tenant') and rfp.tenant:
+            tenant_id = rfp.tenant.tenant_id if hasattr(rfp.tenant, 'tenant_id') else getattr(rfp.tenant, 'id', None)
+            if hasattr(request, '_request'):
+                request._request.tenant_id = tenant_id
+            request.tenant_id = tenant_id
+        
+        # Filter criteria by tenant if available
+        logger.info(f'[get_rfp_evaluation_criteria] Filtering criteria for tenant_id: {tenant_id}')
+        if tenant_id:
+            criteria_queryset = rfp.evaluation_criteria.filter(tenant_id=tenant_id).order_by('display_order')
+        else:
+            criteria_queryset = rfp.evaluation_criteria.all().order_by('display_order')
+        
+        logger.info(f'[get_rfp_evaluation_criteria] Found {criteria_queryset.count()} criteria for RFP {rfp.rfp_id}')
         
         criteria = []
         try:
-            for criterion in rfp.evaluation_criteria.all():
+            for criterion in criteria_queryset:
                 criteria.append({
                     'criteria_id': criterion.criteria_id,
                     'criteria_name': criterion.criteria_name,
                     'criteria_description': criterion.criteria_description,
-                    'weight_percentage': float(criterion.weight_percentage),
+                    'weight_percentage': float(criterion.weight_percentage) if criterion.weight_percentage else 0,
                     'evaluation_type': criterion.evaluation_type,
                     'is_mandatory': criterion.is_mandatory,
                     'min_score': float(criterion.min_score) if criterion.min_score else None,
@@ -2186,17 +2611,22 @@ def get_rfp_evaluation_criteria(request, rfp_number):
                     'display_order': criterion.display_order
                 })
         except Exception as e:
+            logger.error(f"Error loading evaluation criteria: {e}", exc_info=True)
             print(f"Error loading evaluation criteria: {e}")
             criteria = []
         
+        logger.info(f'[get_rfp_evaluation_criteria] Returning {len(criteria)} criteria for RFP {rfp.rfp_id}')
         return JsonResponse({
             'success': True,
             'criteria': criteria,
+            'rfp_id': rfp.rfp_id,
             'rfp_title': rfp.rfp_title,
-            'rfp_number': rfp.rfp_number
+            'rfp_number': rfp.rfp_number,
+            'total_count': len(criteria)
         })
         
     except Exception as e:
+        logger.error(f"Failed to fetch evaluation criteria: {str(e)}", exc_info=True)
         return JsonResponse({
             'success': False,
             'error': f'Failed to fetch evaluation criteria: {str(e)}'
@@ -2206,16 +2636,19 @@ def get_rfp_evaluation_criteria(request, rfp_number):
 @api_view(['POST'])
 @authentication_classes([])
 @permission_classes([AllowAny])
-@rbac_rfp_optional('create_rfp_response')
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present (even for public endpoints)
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
+# Note: Removed @rbac_rfp_optional, @require_tenant, and @tenant_filter decorators
+# Tenant is extracted from RFP object for public vendor portal access
 def save_draft_response(request):
     """
     Save or update a draft RFP response
     MULTI-TENANCY: Extracts tenant_id from RFP to ensure tenant isolation
     """
     try:
-        data = json.loads(request.body)
+        # Support both DRF request.data and request.body
+        if hasattr(request, 'data') and request.data:
+            data = request.data
+        else:
+            data = json.loads(request.body)
         
         rfp_id = data.get('rfpId')
         vendor_id = data.get('vendorId')
@@ -2264,21 +2697,40 @@ def save_draft_response(request):
         
         with transaction.atomic():
             # Get RFP
-            from rfp.models import RFP
+            from .models import RFP
             try:
-                rfp = RFP.objects.get(rfp_id=rfp_id)
+                rfp = RFP.objects.get(rfp_id=int(rfp_id))
                 # MULTI-TENANCY: Get tenant_id from RFP
-                tenant_id = getattr(rfp, 'tenant_id', None)
+                tenant_id = None
+                if hasattr(rfp, 'tenant_id') and rfp.tenant_id:
+                    tenant_id = rfp.tenant_id
+                elif hasattr(rfp, 'tenant') and rfp.tenant:
+                    tenant_id = rfp.tenant.tenant_id if hasattr(rfp.tenant, 'tenant_id') else getattr(rfp.tenant, 'id', None)
+                
+                # Set tenant_id on request for compatibility with other code
+                if tenant_id:
+                    if hasattr(request, '_request'):
+                        request._request.tenant_id = tenant_id
+                    request.tenant_id = tenant_id
+                
                 if not tenant_id:
+                    logger.warning(f"[save_draft_response] RFP {rfp_id} does not have tenant context")
                     return JsonResponse({
                         'success': False,
                         'error': 'RFP does not have tenant context'
                     }, status=403)
             except RFP.DoesNotExist:
+                logger.error(f"[save_draft_response] RFP not found with rfp_id: {rfp_id}")
                 return JsonResponse({
                     'success': False,
                     'error': f'RFP not found: {rfp_id}'
                 }, status=404)
+            except (ValueError, TypeError) as e:
+                logger.error(f"[save_draft_response] Invalid rfp_id format: {rfp_id}, error: {str(e)}")
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Invalid rfpId format: {rfp_id}'
+                }, status=400)
             
             # Get invitation if invitation_id is provided (for both update and create)
             # CRITICAL: Extract invitation and vendor_id from it
@@ -2617,7 +3069,7 @@ def get_draft_response(request, rfp_id):
         invitation_id = request.GET.get('invitationId')
         
         # Get RFP first
-        from rfp.models import RFP
+        from .models import RFP
         try:
             rfp = RFP.objects.get(rfp_id=rfp_id)
             # MULTI-TENANCY: Get tenant_id from RFP
@@ -2758,7 +3210,7 @@ def upload_document(request):
             }, status=400)
        
         # Import S3 service
-        from rfp.s3_service import get_s3_service
+        from .s3_service import get_s3_service
         import uuid
         import os
         import tempfile
@@ -2805,7 +3257,7 @@ def upload_document(request):
         document_name = request.POST.get('document_name', file.name)
        
         # Save to S3Files table for merging capability
-        from rfp.models import S3Files
+        from .models import S3Files
         import uuid
        
         # Determine file extension
@@ -2869,7 +3321,7 @@ def upload_document(request):
                     else:
                         # Create new response with document (only if RFP exists)
                         try:
-                            from rfp.models import RFP
+                            from .models import RFP
                             rfp = RFP.objects.get(rfp_id=rfp_id)
                            
                             # MULTI-TENANCY: Set tenant_id on creation
@@ -2937,25 +3389,59 @@ def upload_document(request):
 @api_view(['GET'])
 @authentication_classes([])
 @permission_classes([AllowAny])
-@rbac_rfp_optional('view_rfp')
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present (even for public endpoints)
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
+@csrf_exempt
 def list_documents(request, rfp_id):
     """
-    List all documents for an RFP response
+    List all documents for an RFP response - PUBLIC ENDPOINT
+    No authentication required for vendor portal access
     MULTI-TENANCY: Extracts tenant_id from RFP to ensure tenant isolation
     """
     try:
         vendor_id = request.GET.get('vendorId')
         invitation_id = request.GET.get('invitationId')
         
+        # If no vendor/invitation provided, return RFP documents (not vendor response documents)
         if not vendor_id and not invitation_id:
-            return JsonResponse({
-                'success': False,
-                'error': 'Either Vendor ID or Invitation ID is required'
-            }, status=400)
+            # Fetch RFP documents from rfps table
+            try:
+                rfp = RFP.objects.get(rfp_id=rfp_id)
+                rfp_documents = rfp.documents if rfp.documents else []
+                
+                # Resolve S3 file IDs to file details
+                document_details = []
+                if isinstance(rfp_documents, list) and rfp_documents:
+                    for file_id in rfp_documents:
+                        try:
+                            s3_file = S3Files.objects.get(id=file_id)
+                            document_details.append({
+                                'id': s3_file.id,
+                                'file_name': s3_file.file_name,
+                                'file_type': s3_file.file_type,
+                                'url': s3_file.url,
+                                'uploaded_at': s3_file.uploaded_at.isoformat() if s3_file.uploaded_at else None,
+                                'metadata': s3_file.metadata
+                            })
+                        except S3Files.DoesNotExist:
+                            print(f"Warning: S3 file {file_id} not found")
+                            continue
+                
+                print(f"[DEBUG] Returning RFP documents: {len(document_details)} documents")
+                for doc in document_details:
+                    print(f"[DEBUG] Document: id={doc['id']}, name={doc['file_name']}, size={doc.get('metadata', {}).get('size', 'unknown')}")
+                
+                return JsonResponse({
+                    'success': True,
+                    'documents': document_details,
+                    'total_count': len(document_details),
+                    'source': 'rfp_documents'
+                })
+            except RFP.DoesNotExist:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'RFP {rfp_id} not found'
+                }, status=404)
         
-        # Find the response - handle both vendor_id and invitation_id
+        # Find the vendor response - handle both vendor_id and invitation_id
         response = None
         if vendor_id:
             response = RFPResponse.objects.filter(
@@ -2987,22 +3473,52 @@ def list_documents(request, rfp_id):
                     response = None
         
         if not response:
-            # If no response exists yet, return empty documents list instead of 404
-            # This handles the case where vendor is accessing portal for the first time
-            return JsonResponse({
-                'success': True,
-                'documents': {},
-                'total_count': 0,
-                'message': 'No RFP response found yet - returning empty documents list'
-            })
+            # If no response exists yet, return RFP documents instead
+            try:
+                rfp = RFP.objects.get(rfp_id=rfp_id)
+                rfp_documents = rfp.documents if rfp.documents else []
+                
+                # Resolve S3 file IDs to file details
+                document_details = []
+                if isinstance(rfp_documents, list) and rfp_documents:
+                    for file_id in rfp_documents:
+                        try:
+                            s3_file = S3Files.objects.get(id=file_id)
+                            document_details.append({
+                                'id': s3_file.id,
+                                'file_name': s3_file.file_name,
+                                'file_type': s3_file.file_type,
+                                'url': s3_file.url,
+                                'uploaded_at': s3_file.uploaded_at.isoformat() if s3_file.uploaded_at else None,
+                                'metadata': s3_file.metadata
+                            })
+                        except S3Files.DoesNotExist:
+                            print(f"Warning: S3 file {file_id} not found")
+                            continue
+                
+                return JsonResponse({
+                    'success': True,
+                    'documents': document_details,
+                    'total_count': len(document_details),
+                    'source': 'rfp_documents',
+                    'message': 'No vendor response found - returning RFP documents'
+                })
+            except RFP.DoesNotExist:
+                return JsonResponse({
+                    'success': True,
+                    'documents': [],
+                    'total_count': 0,
+                    'message': 'No RFP response found and RFP not found'
+                })
         
-        # Return document URLs
+        # Return vendor response document URLs
         documents = response.document_urls or {}
         
         return JsonResponse({
             'success': True,
             'documents': documents,
-            'total_count': len(documents)
+            'total_count': len(documents),
+            'source': 'vendor_response'
         })
         
     except Exception as e:
@@ -3185,12 +3701,11 @@ def get_rfp_response_by_id(request, response_id):
 @api_view(['GET'])
 @authentication_classes([])
 @permission_classes([AllowAny])
-@rbac_rfp_optional('view_rfp')
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present (even for public endpoints)
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
+@csrf_exempt
 def download_document(request, rfp_id):
     """
-    Download a specific document from S3
+    Download a specific document from S3 - PUBLIC ENDPOINT
+    No authentication required for vendor portal access
     MULTI-TENANCY: Extracts tenant_id from RFP to ensure tenant isolation
     """
     try:
@@ -3233,7 +3748,7 @@ def download_document(request, rfp_id):
             }, status=404)
         
         # Download from S3
-        from rfp.s3_service import get_s3_service
+        from .s3_service import get_s3_service
         s3_service = get_s3_service()
         
         download_result = s3_service.download_file(
@@ -3310,7 +3825,7 @@ def delete_document(request, rfp_id):
         
         # Delete from S3 if key exists
         if s3_key:
-            from rfp.s3_service import get_s3_service
+            from .s3_service import get_s3_service
             s3_service = get_s3_service()
             
             delete_result = s3_service.delete_file(

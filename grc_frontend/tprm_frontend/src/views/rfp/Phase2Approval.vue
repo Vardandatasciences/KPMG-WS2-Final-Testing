@@ -171,6 +171,7 @@ import {
 } from 'lucide-vue-next'
 import { rfpUseToast } from '@/composables/rfpUseToast.js'
 import { API_CONFIG, API_ENDPOINTS, buildApiUrl, apiCall } from '@/config/api.js'
+import { getTprmApiV1Url } from '@/utils/backendEnv.js'
 import Card from '@/components_rfp/ui/Card.vue'
 import CardContent from '@/components_rfp/ui/CardContent.vue'
 import CardDescription from '@/components_rfp/ui/CardDescription.vue'
@@ -201,8 +202,8 @@ const filteredRFPs = computed(() => {
 const fetchUsers = async () => {
   try {
     console.log('🔄 Fetching users...')
-    // Use the correct API endpoint for users (using rfp/users/ path)
-    const url = `${API_CONFIG.BASE_URL}/rfp/users/`
+    // Use the correct API endpoint for users (using TPRM V1 API)
+    const url = getTprmApiV1Url('rfp/users/')
     console.log('📍 Fetching users from URL:', url)
     const data = await apiCall(url, { skipRedirect: true })
     users.value = data || []
@@ -233,8 +234,8 @@ const fetchRFPs = async () => {
   loading.value = true
   try {
     console.log('🔄 Fetching RFPs...')
-    // Use the correct API endpoint for RFPs (using rfp/rfps/ path)
-    const url = `${API_CONFIG.BASE_URL}/rfp/rfps/`
+    // Use the correct API endpoint for RFPs (using TPRM V1 API)
+    const url = getTprmApiV1Url('rfp/rfps/')
     console.log('📍 Fetching from URL:', url)
     const data = await apiCall(url, { skipRedirect: true })
     rfps.value = data?.results || data || [] // Handle pagination if present

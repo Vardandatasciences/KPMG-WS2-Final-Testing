@@ -2238,7 +2238,7 @@ export default {
         case 'Applicability':
           result = this.validateOptionalString(
             value, 'Applicability', 
-            rules.maxLengths.Applicability, 
+            null,  // No character limit
             rules.textPattern
           );
           break;

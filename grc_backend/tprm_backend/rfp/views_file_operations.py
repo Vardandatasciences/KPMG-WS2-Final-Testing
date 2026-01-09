@@ -17,7 +17,7 @@ import tempfile
 from typing import Dict, Any
 
 from .s3_service import get_s3_service
-from .models import FileStorage
+from .models import FileStorage, S3Files, RFP
 from .rfp_authentication import JWTAuthentication, SimpleAuthenticatedPermission
 from tprm_backend.rbac.tprm_decorators import rbac_rfp_required, rbac_rfp_optional
 
@@ -389,11 +389,11 @@ def get_file_by_id(request, file_id):
 @api_view(['GET'])
 @authentication_classes([])  # Allow anonymous access for vendor portal
 @permission_classes([AllowAny])  # Allow anonymous access for vendor portal
-@require_tenant  # MULTI-TENANCY: Ensure tenant is present (even for public endpoints)
-@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
+@csrf_exempt
 def get_s3_file_by_id(request, file_id):
     """
-    Get specific S3 file details by ID
+    Get specific S3 file details by ID - PUBLIC ENDPOINT
+    No authentication required for vendor portal access
     Allows anonymous access for vendor portal document validation
     MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
@@ -404,8 +404,6 @@ def get_s3_file_by_id(request, file_id):
         pass
     
     try:
-        from rfp.models import S3Files
-        
         # MULTI-TENANCY: Filter by tenant (if S3Files has tenant_id field)
         try:
             s3_file = S3Files.objects.get(id=file_id)

@@ -52,25 +52,91 @@ class JWTAuthentication(BaseAuthentication):
                     logger.info(f"[RFP JWT Auth] User authenticated: {user.username}")
                     return (user, token)
                 except ImportError:
-                    # If User model import fails, create a mock user
-                    logger.warning(f"[RFP JWT Auth] User model import failed, creating mock user for user_id: {user_id}")
-                    class MockUser:
-                        def __init__(self, user_id):
-                            self.userid = user_id
-                            self.username = f"user_{user_id}"
-                            self.is_authenticated = True
+                    # If User model import fails, query users table directly
+                    logger.info(f"[RFP JWT Auth] User model import failed, querying users table directly for user_id: {user_id}")
+                    from django.db import connections
                     
-                    return (MockUser(user_id), token)
+                    try:
+                        with connections['default'].cursor() as cursor:
+                            # Query users table to get user information
+                            # Use UserId column (capital U, capital I) - the actual column name in the database
+                            cursor.execute("""
+                                SELECT UserId, UserName, Email, FirstName, LastName
+                                FROM users
+                                WHERE UserId = %s
+                                LIMIT 1
+                            """, [user_id])
+                            
+                            row = cursor.fetchone()
+                            if row:
+                                # Create a user-like object from database row
+                                class DatabaseUser:
+                                    def __init__(self, user_id, username, email, first_name, last_name):
+                                        self.userid = user_id
+                                        self.id = user_id
+                                        self.username = username or f"user_{user_id}"
+                                        self.email = email or ''
+                                        self.first_name = first_name or ''
+                                        self.last_name = last_name or ''
+                                        self.is_authenticated = True
+                                
+                                db_user = DatabaseUser(
+                                    user_id=row[0] or user_id,
+                                    username=row[1],
+                                    email=row[2] or '',
+                                    first_name=row[3] or '',
+                                    last_name=row[4] or ''
+                                )
+                                logger.info(f"[RFP JWT Auth] User loaded from database: {db_user.username}")
+                                return (db_user, token)
+                            else:
+                                logger.warning(f"[RFP JWT Auth] User {user_id} not found in users table")
+                                raise AuthenticationFailed(f'User {user_id} not found')
+                    except Exception as db_error:
+                        logger.error(f"[RFP JWT Auth] Error querying users table: {db_error}")
+                        raise AuthenticationFailed(f'Failed to authenticate user: {str(db_error)}')
                 except Exception as e:
-                    # If User model doesn't exist or other error, create a mock user
-                    logger.warning(f"[RFP JWT Auth] User {user_id} not found or error: {e}, creating mock user")
-                    class MockUser:
-                        def __init__(self, user_id):
-                            self.userid = user_id
-                            self.username = f"user_{user_id}"
-                            self.is_authenticated = True
+                    # If User model doesn't exist or other error, try database query
+                    logger.warning(f"[RFP JWT Auth] User model error: {e}, trying database query")
+                    from django.db import connections
                     
-                    return (MockUser(user_id), token)
+                    try:
+                        with connections['default'].cursor() as cursor:
+                            # Query users table - use UserId column (capital U, capital I)
+                            cursor.execute("""
+                                SELECT UserId, UserName, Email, FirstName, LastName
+                                FROM users
+                                WHERE UserId = %s
+                                LIMIT 1
+                            """, [user_id])
+                            
+                            row = cursor.fetchone()
+                            if row:
+                                class DatabaseUser:
+                                    def __init__(self, user_id, username, email, first_name, last_name):
+                                        self.userid = user_id
+                                        self.id = user_id
+                                        self.username = username or f"user_{user_id}"
+                                        self.email = email or ''
+                                        self.first_name = first_name or ''
+                                        self.last_name = last_name or ''
+                                        self.is_authenticated = True
+                                
+                                db_user = DatabaseUser(
+                                    user_id=row[0] or user_id,
+                                    username=row[1],
+                                    email=row[2] or '',
+                                    first_name=row[3] or '',
+                                    last_name=row[4] or ''
+                                )
+                                logger.info(f"[RFP JWT Auth] User loaded from database: {db_user.username}")
+                                return (db_user, token)
+                            else:
+                                logger.warning(f"[RFP JWT Auth] User {user_id} not found in users table")
+                                raise AuthenticationFailed(f'User {user_id} not found')
+                    except Exception as db_error:
+                        logger.error(f"[RFP JWT Auth] Error querying users table: {db_error}")
+                        raise AuthenticationFailed(f'Failed to authenticate user: {str(db_error)}')
             else:
                 logger.error("[RFP JWT Auth] Token does not contain user_id")
                 raise AuthenticationFailed('Token does not contain user_id')

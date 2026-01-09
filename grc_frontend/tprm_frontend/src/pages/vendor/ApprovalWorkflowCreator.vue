@@ -251,7 +251,7 @@
                   @change="handleQuestionnaireChange"
                   :style="isAutoPopulated ? 'border: 2px solid #10b981; background: #f0fdf4;' : ''"
                 >
-                  <option value="">Select questionnaire</option>
+                  <option value="" disabled>{{ loadingQuestionnaires ? 'Loading questionnaires...' : 'Select questionnaire' }}</option>
                   <option
                     v-for="questionnaire in (questionnaires || [])"
                     :key="questionnaire.questionnaire_id"
@@ -260,6 +260,12 @@
                     {{ getQuestionnaireDisplayName(questionnaire) }}
                   </option>
                 </select>
+                <div v-if="loadingQuestionnaires" class="form-help-text" style="color: #60a5fa; font-weight: 500;">
+                  ⏳ Loading questionnaires...
+                </div>
+                <div v-if="!loadingQuestionnaires && questionnaires && questionnaires.length === 0" class="form-help-text" style="color: #f59e0b; font-weight: 500;">
+                  ⚠️ No questionnaires available. Please check database or permissions.
+                </div>
                 <div v-if="isAutoPopulated && selectedQuestionnaire" class="form-help-text" style="color: #10b981; font-weight: 600;">
                   ✓ Auto-selected from Questionnaire Builder
                 </div>
@@ -1257,10 +1263,9 @@
 </template>
 
 <script>
-import { ref, reactive, computed, onMounted, shallowRef, watch } from 'vue'
+import { ref, reactive, computed, onMounted, shallowRef, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '@/utils/api'
-import { getCurrentUserId } from '@/utils/session'
 import { getMockUsers } from '@/services/users'
 import PopupModal from '@/popup/PopupModal.vue'
 import { PopupService } from '@/popup/popupService'
@@ -1296,7 +1301,7 @@ export default {
       workflow_type: 'MULTI_LEVEL',
       description: '',
       business_object_type: 'Vendor',
-      created_by: 'GRC Administrator',
+      created_by: '', // Will be set from authenticated user API
     })
     
     const requestForm = reactive({
@@ -1316,22 +1321,36 @@ export default {
     const users = shallowRef([])
     const loadingUsers = ref(false)
 
-    const getCurrentUser = () => {
+    // Fetch authenticated user from backend API
+    const fetchAuthenticatedUser = async () => {
       try {
-        const currentUserFromStorage = localStorage.getItem('current_user')
-        if (currentUserFromStorage) {
-          const user = JSON.parse(currentUserFromStorage)
-          return {
-            id: user.id || user.user_id,
-            name: user.name || user.username || user.first_name + ' ' + user.last_name,
-            role: user.role || user.user_role,
-            department: user.department || user.dept
-          }
+        console.log('Fetching authenticated user from /api/v1/vendor-approval/users/me/')
+        const response = await api.get('/api/v1/vendor-approval/users/me/')
+        const user = response.data
+        
+        console.log('Authenticated user from API:', user)
+        
+        // Extract user information from API response
+        const userId = user.id
+        const userName = user.first_name && user.last_name 
+          ? `${user.first_name} ${user.last_name}`.trim()
+          : user.username || user.email || ''
+        const userDept = user.department || ''
+        
+        const currentUser = {
+          id: userId,
+          name: userName,
+          username: user.username,
+          email: user.email,
+          department: userDept
         }
+        
+        console.log('Parsed authenticated user:', currentUser)
+        return currentUser
       } catch (error) {
-        console.error('Error parsing current user from localStorage:', error)
+        console.error('Error fetching authenticated user from API:', error)
+        throw error // Re-throw to let caller handle
       }
-      return null
     }
 
     
@@ -1408,18 +1427,24 @@ export default {
       hasAccess.value = true
       await fetchUsers()
 
-      const currentUser = getCurrentUser()
-      if (currentUser) {
-        workflowForm.created_by = currentUser.name
-        requestForm.requester_id = currentUser.id
-        requestForm.requester_name = currentUser.name
-        requestForm.requester_department = currentUser.department
-        console.log('Current user loaded:', currentUser)
-      } else {
-        console.warn('No current user found in localStorage')
-        // Fallback to default values if no user found
-        workflowForm.created_by = 'Current User'
-        requestForm.requester_name = 'Current User'
+      // Fetch authenticated user from backend API (no fallbacks)
+      try {
+        const currentUser = await fetchAuthenticatedUser()
+        if (currentUser && currentUser.name) {
+          workflowForm.created_by = currentUser.name
+          requestForm.requester_id = currentUser.id
+          requestForm.requester_name = currentUser.name
+          requestForm.requester_department = currentUser.department || ''
+          console.log('Authenticated user loaded and set:', currentUser)
+          console.log('workflowForm.created_by set to:', workflowForm.created_by)
+        } else {
+          console.error('Authenticated user data is incomplete:', currentUser)
+          showError('Failed to load user information. Please refresh the page.')
+        }
+      } catch (error) {
+        console.error('Failed to fetch authenticated user:', error)
+        showError('Failed to load user information. Please refresh the page.')
+        // Don't set any fallback values - leave fields empty
       }
       
       // Auto-expand the first question by default
@@ -1434,6 +1459,23 @@ export default {
       watch(() => selectedAssignmentData.value, (newVal) => {
         console.log('selectedAssignmentData changed:', newVal)
       }, { deep: true })
+      
+      // Watch for changes to created_by to debug and prevent reset to 'GRC Administrator'
+      watch(() => workflowForm.created_by, async (newVal, oldVal) => {
+        console.log('workflowForm.created_by changed from', oldVal, 'to:', newVal)
+        // If someone tries to set it back to 'GRC Administrator' or other invalid values, restore from API
+        if (newVal === 'GRC Administrator' || newVal === 'Current User' || newVal.startsWith('User ')) {
+          try {
+            const currentUser = await fetchAuthenticatedUser()
+            if (currentUser && currentUser.name) {
+              console.warn('Prevented reset to invalid value, restoring authenticated user name:', currentUser.name)
+              workflowForm.created_by = currentUser.name
+            }
+          } catch (error) {
+            console.error('Failed to restore user name from API:', error)
+          }
+        }
+      })
       
       // Check if we need to auto-populate from query parameters
       console.log('Component mounted, checking route query:', route.query)
@@ -1791,7 +1833,42 @@ export default {
 
     const submitWorkflow = async () => {
       try {
+        // Validate workflow form
+        if (!workflowForm.workflow_name || !workflowForm.workflow_name.trim()) {
+          showMessage('Workflow name is required', 'error')
+          activeTab.value = 'workflow'
+          return
+        }
+
+        // Validate request form
+        if (!requestForm.request_title || !requestForm.request_title.trim()) {
+          showMessage('Request title is required', 'error')
+          activeTab.value = 'request'
+          return
+        }
+
+        // Validate stages
         if (!validateStages()) {
+          activeTab.value = 'stages'
+          return
+        }
+
+        // Validate approval type and related data
+        if (approvalType.value === 'questionnaire_approval' && !selectedQuestionnaire.value) {
+          showMessage('Please select a questionnaire', 'error')
+          activeTab.value = 'data'
+          return
+        }
+
+        if (approvalType.value === 'response_approval' && !selectedQuestionnaireAssignment.value) {
+          showMessage('Please select a questionnaire assignment', 'error')
+          activeTab.value = 'data'
+          return
+        }
+
+        if (approvalType.value === 'final_vendor_approval' && !selectedVendor.value) {
+          showMessage('Please select a vendor', 'error')
+          activeTab.value = 'data'
           return
         }
 
@@ -1799,31 +1876,61 @@ export default {
 
         // Prepare the submission data
         const requestData = getRequestData()
-        const vendorId = requestData.vendor_id || requestForm.business_object_id || route.query.vendor_id
+        
+        // Get vendor_id from multiple sources, but allow it to be undefined for questionnaire-only approvals
+        const vendorId = requestData.vendor_id || 
+                        requestData.business_object_id ||
+                        requestForm.business_object_id || 
+                        route.query.vendor_id ||
+                        (selectedQuestionnaireData.value && selectedQuestionnaireData.value.vendor_id) ||
+                        (selectedAssignmentData.value && selectedAssignmentData.value.vendor_id) ||
+                        selectedVendor.value ||
+                        null
         
         console.log('ApprovalWorkflowCreator - Final vendor_id being sent:', vendorId)
         console.log('ApprovalWorkflowCreator - requestData structure:', requestData)
+        console.log('ApprovalWorkflowCreator - Approval type:', approvalType.value)
+        
+        // Remove undefined values from requestData to prevent serialization issues
+        const cleanRequestData = Object.fromEntries(
+          Object.entries(requestData).filter(([_, v]) => v !== undefined && v !== null)
+        )
         
         const submitData = {
           workflow: {
             ...workflowForm,
-            business_object_type: workflowForm.business_object_type || requestForm.business_object_type
+            business_object_type: workflowForm.business_object_type || requestForm.business_object_type || 'Vendor'
           },
           request: {
             ...requestForm,
-            business_object_type: workflowForm.business_object_type || requestForm.business_object_type,
-            request_data: requestData
+            business_object_type: workflowForm.business_object_type || requestForm.business_object_type || 'Vendor',
+            request_data: cleanRequestData
           },
-          // Add vendor_id to main request body for backend compatibility
-          vendor_id: vendorId,
-          business_object_id: vendorId,
-          stages: stages.value.map(stage => ({
-            ...stage,
-            deadline_date: stage.deadline_date ? new Date(stage.deadline_date).toISOString() : null
-          }))
+          stages: stages.value.map(stage => {
+            const stageData = {
+              ...stage,
+              deadline_date: stage.deadline_date ? new Date(stage.deadline_date).toISOString() : null
+            }
+            
+            // Remove weightage if it's null or not applicable
+            // Only include weightage for MULTI_PERSON response_approval workflows
+            if (stageData.weightage === null || stageData.weightage === undefined || 
+                !(workflowForm.workflow_type === 'MULTI_PERSON' && approvalType.value === 'response_approval')) {
+              delete stageData.weightage
+            }
+            
+            return stageData
+          })
         }
         
-        console.log('Submitting comprehensive workflow:', submitData)
+        // Only add vendor_id and business_object_id if they exist
+        // Some approval types (like questionnaire-only) might not require vendor_id
+        if (vendorId) {
+          submitData.vendor_id = vendorId
+          submitData.business_object_id = vendorId
+        }
+        
+        console.log('Submitting comprehensive workflow:', JSON.stringify(submitData, null, 2))
         
         const response = await api.post('/api/v1/vendor-approval/create-workflow-request/', submitData)
         
@@ -1844,10 +1951,30 @@ export default {
         
       } catch (error) {
         console.error('Error creating workflow and request:', error)
-        showMessage(error.response?.data?.error || 'Failed to create workflow and request', 'error')
+        console.error('Error response:', error.response)
+        console.error('Error response data:', error.response?.data)
+        console.error('Error response status:', error.response?.status)
+        
+        // Extract error message
+        let errorMessage = 'Failed to create workflow and request'
+        if (error.response?.data) {
+          if (typeof error.response.data === 'string') {
+            errorMessage = error.response.data
+          } else if (error.response.data.error) {
+            errorMessage = error.response.data.error
+          } else if (error.response.data.details) {
+            errorMessage = error.response.data.details
+          } else if (error.response.data.message) {
+            errorMessage = error.response.data.message
+          }
+        } else if (error.message) {
+          errorMessage = error.message
+        }
+        
+        showMessage(errorMessage, 'error')
         
         // Create error notification
-        await notificationService.createVendorErrorNotification('create_workflow', error.response?.data?.error || error.message, {
+        await notificationService.createVendorErrorNotification('create_workflow', errorMessage, {
           title: 'Workflow Creation Failed',
           workflow_name: workflowForm.workflow_name
         })
@@ -1856,17 +1983,23 @@ export default {
       }
     }
 
-    const resetForm = () => {
+    const resetForm = async () => {
       try {
+        // Fetch authenticated user from API
+        let currentUser = null
+        try {
+          currentUser = await fetchAuthenticatedUser()
+        } catch (error) {
+          console.error('Error fetching authenticated user in resetForm:', error)
+        }
 
-        const currentUser = getCurrentUser()
         // Reset all form data manually
         Object.assign(workflowForm, {
           workflow_name: '',
           workflow_type: 'MULTI_LEVEL',
           description: '',
           business_object_type: 'Vendor',
-          created_by: currentUser
+          created_by: currentUser ? currentUser.name : ''
         })
 
         Object.assign(requestForm, {
@@ -1947,7 +2080,13 @@ export default {
     const fetchQuestionnaires = async () => {
       try {
         loadingQuestionnaires.value = true
+        console.log('Fetching questionnaires from API...')
         const response = await api.get('/api/v1/vendor-approval/questionnaires/active/')
+        
+        console.log('Questionnaires API response:', response)
+        console.log('Response data:', response.data)
+        console.log('Response data type:', typeof response.data)
+        console.log('Is array:', Array.isArray(response.data))
         
         // Ensure we have proper data structure
         if (response.data && Array.isArray(response.data)) {
@@ -1975,33 +2114,64 @@ export default {
         }
         
         console.log('Fetched questionnaires:', questionnaires.value)
+        console.log('Number of questionnaires:', questionnaires.value.length)
         
         if (questionnaires.value.length === 0) {
           showMessage('No questionnaires found in the database.', 'warning')
+        } else {
+          console.log('Successfully loaded', questionnaires.value.length, 'questionnaires')
         }
       } catch (error) {
         console.error('Error fetching questionnaires:', error)
-        showMessage('Failed to load questionnaires from database.', 'error')
+        console.error('Error details:', {
+          message: error.message,
+          response: error.response,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data
+        })
+        
+        // Check error type to provide better feedback
+        const errorStatus = error.response?.status
+        const errorMessage = error.response?.data?.error || error.response?.data?.details || error.message
+        
+        // For permission errors (403), show different message
+        if (errorStatus === 403) {
+          console.warn('Permission denied when fetching questionnaires. User may not have view_vendors permission.')
+          showMessage('You do not have permission to view questionnaires. Please contact your administrator.', 'warning')
+        } else if (errorStatus === 404) {
+          console.warn('Questionnaires endpoint not found (404)')
+          showMessage('Questionnaires endpoint not available. Using fallback data.', 'warning')
+        } else {
+          // For 500 or other server errors, show error but still use mock data
+          console.warn('Server error when fetching questionnaires. Using fallback data.')
+          showMessage('Unable to load questionnaires from server. Using fallback data for testing.', 'warning')
+        }
         
         // Add mock data for testing if API fails
-        questionnaires.value = [
-          {
-            questionnaire_id: '1',
-            questionnaire_name: 'Vendor Onboarding Assessment',
-            questionnaire_type: 'ONBOARDING',
-            description: 'Standard questionnaire for new vendor onboarding process',
-            version: '1.2',
-            created_at: new Date().toISOString()
-          },
-          {
-            questionnaire_id: '2',
-            questionnaire_name: 'Annual Security Review',
-            questionnaire_type: 'ANNUAL',
-            description: 'Annual security assessment for existing vendors',
-            version: '2.0',
-            created_at: new Date().toISOString()
-          }
-        ]
+        // Only add if we don't already have questionnaires
+        if (questionnaires.value.length === 0) {
+          console.log('Adding mock questionnaires for testing...')
+          questionnaires.value = [
+            {
+              questionnaire_id: '1',
+              questionnaire_name: 'Vendor Onboarding Assessment',
+              questionnaire_type: 'ONBOARDING',
+              description: 'Standard questionnaire for new vendor onboarding process',
+              version: '1.2',
+              created_at: new Date().toISOString()
+            },
+            {
+              questionnaire_id: '2',
+              questionnaire_name: 'Annual Security Review',
+              questionnaire_type: 'ANNUAL',
+              description: 'Annual security assessment for existing vendors',
+              version: '2.0',
+              created_at: new Date().toISOString()
+            }
+          ]
+          console.log('Mock questionnaires added:', questionnaires.value.length)
+        }
       } finally {
         loadingQuestionnaires.value = false
       }
@@ -2439,73 +2609,83 @@ export default {
     }
 
     const getRequestData = () => {
-      if (approvalType.value === 'questionnaire_approval' && selectedQuestionnaireData.value.questionnaire_id) {
+      if (approvalType.value === 'questionnaire_approval' && selectedQuestionnaireData.value && selectedQuestionnaireData.value.questionnaire_id) {
         // Get vendor_id from multiple sources with priority
         const vendor_id = selectedQuestionnaireData.value.vendor_id || 
                          requestForm.business_object_id || 
-                         selectedAssignmentData.value.vendor_id || 
+                         selectedAssignmentData.value?.vendor_id || 
                          selectedVendor.value || 
-                         route.query.vendor_id
+                         route.query.vendor_id ||
+                         null
         
         console.log('getRequestData - Preparing questionnaire approval data with vendor_id:', vendor_id)
         console.log('getRequestData - Sources:', {
-          selectedQuestionnaireData_vendor_id: selectedQuestionnaireData.value.vendor_id,
+          selectedQuestionnaireData_vendor_id: selectedQuestionnaireData.value?.vendor_id,
           business_object_id: requestForm.business_object_id,
-          route_query_vendor_id: route.query.vendor_id
+          route_query_vendor_id: route.query.vendor_id,
+          selectedVendor: selectedVendor.value
         })
         
-        return {
+        const requestPayload = {
           questionnaire_id: selectedQuestionnaireData.value.questionnaire_id,
-          questionnaire_name: selectedQuestionnaireData.value.questionnaire_name,
-          questionnaire_type: selectedQuestionnaireData.value.questionnaire_type,
-          description: selectedQuestionnaireData.value.description,
-          version: selectedQuestionnaireData.value.version,
-          approval_type: 'questionnaire_approval',
-          vendor_id: vendor_id,
-          business_object_id: vendor_id // Also set business_object_id for backend compatibility
+          questionnaire_name: selectedQuestionnaireData.value.questionnaire_name || '',
+          questionnaire_type: selectedQuestionnaireData.value.questionnaire_type || 'CUSTOM',
+          description: selectedQuestionnaireData.value.description || '',
+          version: selectedQuestionnaireData.value.version || '1.0',
+          approval_type: 'questionnaire_approval'
         }
-      } else if (approvalType.value === 'response_approval') {
-        return {
-          response_type: responseType.value,
-          response_data: responseData.value,
-          response_priority: responsePriority.value,
+        
+        // Only add vendor_id if it exists
+        if (vendor_id) {
+          requestPayload.vendor_id = vendor_id
+          requestPayload.business_object_id = vendor_id
+        }
+        
+        return requestPayload
+      } else if (approvalType.value === 'response_approval' && selectedAssignmentData.value && selectedAssignmentData.value.assignment_id) {
+        const assignment = selectedAssignmentData.value
+        
+        const requestPayload = {
+          response_type: responseType.value || 'questionnaire_review',
+          response_data: responseData.value || '',
+          response_priority: responsePriority.value || 'MEDIUM',
           questionnaire_assignment_id: selectedQuestionnaireAssignment.value,
           approval_type: 'response_approval',
           
           // Comprehensive assignment data for approvers
           assignment_summary: {
-            assignment_id: selectedAssignmentData.value.assignment_id,
-            questionnaire_id: selectedAssignmentData.value.questionnaire_id,
-            questionnaire_name: selectedAssignmentData.value.questionnaire_name,
-            questionnaire_type: selectedAssignmentData.value.questionnaire_type,
-            questionnaire_description: selectedAssignmentData.value.questionnaire_description,
-            questionnaire_version: selectedAssignmentData.value.questionnaire_version,
-            submission_date: selectedAssignmentData.value.submission_date,
-            overall_score: selectedAssignmentData.value.overall_score,
-            status: selectedAssignmentData.value.status
+            assignment_id: assignment.assignment_id,
+            questionnaire_id: assignment.questionnaire_id || null,
+            questionnaire_name: assignment.questionnaire_name || '',
+            questionnaire_type: assignment.questionnaire_type || 'CUSTOM',
+            questionnaire_description: assignment.questionnaire_description || '',
+            questionnaire_version: assignment.questionnaire_version || '1.0',
+            submission_date: assignment.submission_date || null,
+            overall_score: assignment.overall_score || 0,
+            status: assignment.status || 'SUBMITTED'
           },
           
           // Vendor information
           vendor_information: {
-            vendor_id: selectedAssignmentData.value.vendor_id,
-            company_name: selectedAssignmentData.value.vendor_company_name,
-            vendor_code: selectedAssignmentData.value.vendor_code,
-            legal_name: selectedAssignmentData.value.vendor_legal_name,
-            business_type: selectedAssignmentData.value.vendor_business_type
+            vendor_id: assignment.vendor_id || null,
+            company_name: assignment.vendor_company_name || '',
+            vendor_code: assignment.vendor_code || '',
+            legal_name: assignment.vendor_legal_name || '',
+            business_type: assignment.vendor_business_type || ''
           },
           
           // Response statistics for quick overview
-          response_statistics: selectedAssignmentData.value.response_statistics || {},
+          response_statistics: assignment.response_statistics || {},
           
           // Complete questions and responses for detailed review
-          questions_and_responses: selectedAssignmentData.value.questions_and_responses || [],
+          questions_and_responses: assignment.questions_and_responses || [],
           
           // Assignment metadata
           assignment_metadata: {
-            assigned_date: selectedAssignmentData.value.assigned_date,
-            due_date: selectedAssignmentData.value.due_date,
-            assigned_by: selectedAssignmentData.value.assigned_by,
-            notes: selectedAssignmentData.value.notes
+            assigned_date: assignment.assigned_date || null,
+            due_date: assignment.due_date || null,
+            assigned_by: assignment.assigned_by || null,
+            notes: assignment.notes || ''
           },
           
           // Review context
@@ -2519,24 +2699,35 @@ export default {
               'Risk Assessment',
               'Vendor Capability Evaluation'
             ],
-            review_instructions: `Please review all ${selectedAssignmentData.value.response_statistics?.total_questions || 0} questions and their corresponding vendor responses. Pay special attention to required questions and ensure all responses meet organizational standards and compliance requirements.`
+            review_instructions: `Please review all ${assignment.response_statistics?.total_questions || 0} questions and their corresponding vendor responses. Pay special attention to required questions and ensure all responses meet organizational standards and compliance requirements.`
           }
         }
-      } else if (approvalType.value === 'final_vendor_approval') {
-        return {
-          final_approval_type: finalApprovalType.value,
-          vendor_id: selectedVendor.value,
-          vendor_data: selectedVendorData.value,
-          vendor_risks: vendorRisks.value, // For backward compatibility
-          internal_risks: internalRisks.value,
-          external_risks: externalRisks.value,
-          screening_risks: externalRisks.value, // Alternative name for frontend compatibility
-          risk_summary: riskSummary.value,
-          vendor_info: vendorInfo.value,
-          decision_criteria: decisionCriteria.value,
-          business_impact: businessImpact.value,
-          approval_type: 'final_vendor_approval'
+        
+        // Only add vendor_id if it exists
+        if (assignment.vendor_id) {
+          requestPayload.vendor_id = assignment.vendor_id
+          requestPayload.business_object_id = assignment.vendor_id
         }
+        
+        return requestPayload
+      } else if (approvalType.value === 'final_vendor_approval' && selectedVendor.value) {
+        const requestPayload = {
+          final_approval_type: finalApprovalType.value || '',
+          vendor_id: selectedVendor.value,
+          vendor_data: selectedVendorData.value || {},
+          vendor_risks: vendorRisks.value || [], // For backward compatibility
+          internal_risks: internalRisks.value || [],
+          external_risks: externalRisks.value || [],
+          screening_risks: externalRisks.value || [], // Alternative name for frontend compatibility
+          risk_summary: riskSummary.value || {},
+          vendor_info: vendorInfo.value || '',
+          decision_criteria: decisionCriteria.value || '',
+          business_impact: businessImpact.value || 'MEDIUM',
+          approval_type: 'final_vendor_approval',
+          business_object_id: selectedVendor.value
+        }
+        
+        return requestPayload
       } else {
         // Default empty object when no approval type is selected
         return {}
@@ -4520,3 +4711,4 @@ export default {
   }
 }
 </style>
+
