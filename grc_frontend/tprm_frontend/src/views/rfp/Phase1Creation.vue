@@ -2199,6 +2199,13 @@
       </div>
     </div>
   </div>
+  
+  <!-- TPRM Consent Modal - Outside main content to ensure it's always rendered -->
+  <Teleport to="body">
+    <TPRMConsentModal
+      ref="consentModalRef"
+    />
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -2229,6 +2236,8 @@ import { useRfpApi } from '@/composables/useRfpApi'
 import { buildApiUrl, apiCall } from '@/config/api.js'
 import VendorPortal from '@/views/rfp/VendorPortal.vue'
 import { getTprmApiV1BaseUrl, getTprmApiUrl, getApiOrigin } from '@/utils/backendEnv'
+import TPRMConsentModal from '@/components/Consent/TPRMConsentModal.vue'
+import { executeWithTPRMConsent, TPRM_CONSENT_ACTIONS } from '@/utils/tprmConsentManager.js'
 
 // API base URL - use the Django backend endpoints
 const API_BASE_URL = getTprmApiV1BaseUrl()
@@ -2259,6 +2268,9 @@ const isAutoSaving = ref(false)
 const isSubmitting = ref(false)
 const isGeneratingDocument = ref(false)
 const isUploadingDocuments = ref(false)
+
+// TPRM Consent Modal ref
+const consentModalRef = ref(null)
 const isMergingDocuments = ref(false)
 const uploadProgress = ref({
   current: 0,
@@ -3367,6 +3379,14 @@ const handleCustomFieldDrop = (index: number, category: string, event: DragEvent
 onMounted(async () => {
   await loggingService.logPageView('RFP', 'Phase 1 - RFP Creation')
   
+  // Verify consent modal is available after mount
+  await nextTick()
+  if (consentModalRef.value) {
+    console.log('✅ [TPRM Consent] Consent modal ref is available after mount')
+  } else {
+    console.warn('⚠️ [TPRM Consent] Consent modal ref not available after mount - component may not be rendered')
+  }
+  
   // Fetch RFP types from database
   await fetchRfpTypes()
   
@@ -3927,11 +3947,9 @@ const saveSingleDocument = async (index: number) => {
 
     // Upload to S3 via backend API
     const authHeaders = getAuthHeaders()
+    delete authHeaders['Content-Type']  // Remove any Content-Type to let axios set it for FormData
     const uploadResponse = await axios.post(`${API_BASE_URL}/upload-document/`, uploadFormData, {
-      headers: {
-        ...authHeaders,
-        'Content-Type': 'multipart/form-data',
-      },
+      headers: authHeaders,
       timeout: 60000 // 60 second timeout for large files
     })
 
@@ -4211,22 +4229,35 @@ const mergeDocumentsFromFiles = async (docs) => {
 
     // Create FormData with files in order
     const mergeFormData = new FormData()
-    docs.forEach(doc => {
+    let fileCount = 0
+    docs.forEach((doc, idx) => {
       if (doc.file) {
+        console.log(`📎 Appending file ${idx + 1}:`, doc.file.name, `(${doc.file.size} bytes)`)
         mergeFormData.append('files', doc.file)
+        fileCount++
       }
     })
     
+    console.log(`📦 Total files appended: ${fileCount}`)
+    
     if (rfpId) {
       mergeFormData.append('rfp_id', rfpId)
+      console.log(`🔖 RFP ID: ${rfpId}`)
     }
     mergeFormData.append('user_id', '1')
+    
+    // Log FormData contents
+    console.log('📋 FormData contents:')
+    for (let pair of mergeFormData.entries()) {
+      console.log(`  ${pair[0]}:`, pair[1])
+    }
 
+    // Get auth headers but remove Content-Type to let axios handle it for FormData
+    const authHeaders = getAuthHeaders()
+    delete authHeaders['Content-Type']  // Remove any Content-Type to let axios set it for FormData
+    
     const mergeResponse = await axios.post(`${API_BASE_URL}/merge-documents/`, mergeFormData, {
-      headers: {
-        ...getAuthHeaders(),
-        'Content-Type': 'multipart/form-data',
-      },
+      headers: authHeaders,
       timeout: 120000
     })
 
@@ -4440,11 +4471,9 @@ const saveAllDocuments = async () => {
 
         // Upload to S3 via backend API
         const authHeaders = getAuthHeaders()
+        delete authHeaders['Content-Type']  // Remove any Content-Type to let axios set it for FormData
         const uploadResponse = await axios.post(`${API_BASE_URL}/upload-document/`, uploadFormData, {
-          headers: {
-            ...authHeaders,
-            'Content-Type': 'multipart/form-data',
-          },
+          headers: authHeaders,
           timeout: 60000
         })
 
@@ -5334,11 +5363,10 @@ const handleSaveDraft = async () => {
           uploadFormData.append('rfp_id', savedRfpId)
           uploadFormData.append('user_id', '1')
           
+          const authHeaders = getAuthHeaders()
+          delete authHeaders['Content-Type']  // Remove any Content-Type to let axios set it for FormData
           const uploadResponse = await axios.post(`${API_BASE_URL}/upload-document/`, uploadFormData, {
-            headers: {
-              ...getAuthHeaders(),
-              'Content-Type': 'multipart/form-data',
-            },
+            headers: authHeaders,
             timeout: 60000
           })
           
@@ -5566,14 +5594,78 @@ const handleSaveDraft = async () => {
   }
 }
 
-const handleProceedToApprovalWorkflow = async () => {
-  if (!isFormValid.value) {
-    error('Validation Error', 'Please fill in all required fields and ensure evaluation criteria weights total 100%.')
-    return
+// Show TPRM Consent Modal
+async function showTPRMConsentModal(actionType, config) {
+  console.log('[TPRM Consent] Showing consent modal for action:', actionType, 'config:', config)
+  
+  // Wait for component to mount with retry mechanism
+  let retries = 0
+  const maxRetries = 10
+  while (!consentModalRef.value && retries < maxRetries) {
+    if (retries === 0) {
+      await nextTick()
+    } else {
+      // Wait progressively longer on subsequent retries (50ms, 100ms, 150ms, etc.)
+      await new Promise(resolve => setTimeout(resolve, 50 * retries))
+    }
+    retries++
+    
+    if (consentModalRef.value) {
+      console.log(`[TPRM Consent] Consent modal ref available after ${retries} retries`)
+      break
+    }
+  }
+  
+  if (!consentModalRef.value) {
+    console.error('[TPRM Consent] Consent modal ref not available after', maxRetries, 'retries')
+    console.error('[TPRM Consent] Modal component may not be mounted. Check template.')
+    console.error('[TPRM Consent] consentModalRef:', consentModalRef)
+    console.error('[TPRM Consent] consentModalRef.value:', consentModalRef.value)
+    
+    // For security, don't proceed without consent modal - show error and prevent submission
+    error('Consent Modal Error', 'Consent modal is not available. Please refresh the page and try again. If the problem persists, contact your administrator.')
+    // Return false to prevent submission
+    return false
   }
   
   try {
-    isSubmitting.value = true
+    console.log('[TPRM Consent] Calling consentModalRef.value.show()')
+    // Show the modal and wait for user response
+    // The modal component handles its own visibility internally
+    const accepted = await consentModalRef.value.show(actionType, config)
+    
+    console.log('[TPRM Consent] Consent modal result:', accepted, 'type:', typeof accepted)
+    
+    // Ensure boolean return value
+    const result = accepted === true || accepted === 'true'
+    console.log('[TPRM Consent] Final consent result:', result)
+    return result
+  } catch (error) {
+    console.error('[TPRM Consent] Error showing consent modal:', error)
+    console.error('[TPRM Consent] Error stack:', error.stack)
+    // If modal was cancelled/rejected, return false
+    if (error.message && error.message.includes('cancelled')) {
+      return false
+    }
+    // On any error, don't proceed (fail closed for security)
+    error('Consent Error', 'An error occurred while showing the consent modal. Please try again.')
+    return false
+  }
+}
+
+// Helper function to actually proceed to approval workflow (called after consent is obtained)
+const proceedToApprovalWorkflowAction = async (consentConfig) => {
+  console.log('[TPRM Consent] Proceeding to approval workflow, consentConfig:', consentConfig)
+  
+  try {
+    // Add consent data to RFP data if consent was provided
+    // This will be stored when saving the RFP
+    if (consentConfig) {
+      // Store consent info in formData or pass it along when saving
+      formData.value.consent_accepted = true
+      formData.value.consent_config_id = consentConfig.config_id
+      formData.value.framework_id = 1 // Default TPRM framework
+    }
 
     // Detect change request mode early
     const changeRequestMode = route.query.mode === 'change_request'
@@ -5593,7 +5685,7 @@ const handleProceedToApprovalWorkflow = async () => {
         router.push({ name: 'ChangeRequestManager' })
       }, 800)
       isSubmitting.value = false
-      return
+      return { success: true }
     }
     
     // Get the RFP ID
@@ -5603,7 +5695,7 @@ const handleProceedToApprovalWorkflow = async () => {
     if (!rfpId) {
       error('Error', 'Could not find RFP ID. Please try again.')
       isSubmitting.value = false
-      return
+      throw new Error('Could not find RFP ID')
     }
 
     // Verify auto-approve status from saved RFP
@@ -5760,11 +5852,9 @@ const handleProceedToApprovalWorkflow = async () => {
           try {
             // Upload to S3 via backend API
             const authHeaders = getAuthHeaders()
+            delete authHeaders['Content-Type']  // Remove any Content-Type to let axios set it for FormData
             const uploadResponse = await axios.post(`${API_BASE_URL}/upload-document/`, formData, {
-              headers: {
-                ...authHeaders,
-                'Content-Type': 'multipart/form-data',
-              },
+              headers: authHeaders,
               timeout: 60000 // 60 second timeout for large files
             })
             
@@ -5996,15 +6086,59 @@ const handleProceedToApprovalWorkflow = async () => {
       router.push('/approval-management')
     }, 1000)
     
+    return { success: true }
   } catch (err) {
-    console.error('Error saving RFP:', err)
+    console.error('Error in proceedToApprovalWorkflowAction:', err)
     if (err.response && err.response.data) {
       console.error('Error details:', err.response.data)
       error('Error', `Failed to save RFP: ${JSON.stringify(err.response.data)}`)
     } else {
-      error('Error', 'Failed to save RFP. Please try again.')
+      error('Error', `Failed to save RFP: ${err.message || 'Unknown error'}`)
     }
+    throw err // Re-throw to be caught by outer handler
   } finally {
+    isSubmitting.value = false
+  }
+}
+
+const handleProceedToApprovalWorkflow = async () => {
+  if (!isFormValid.value) {
+    error('Validation Error', 'Please fill in all required fields and ensure evaluation criteria weights total 100%.')
+    return
+  }
+  
+  try {
+    isSubmitting.value = true
+    console.log('[TPRM Consent] ========== Starting consent flow for: tprm_create_rfp')
+    
+    // Wrap proceed to approval workflow with consent check
+    // The consent modal will be shown by executeWithTPRMConsent if consent is required
+    const result = await executeWithTPRMConsent(
+      TPRM_CONSENT_ACTIONS.CREATE_RFP,
+      proceedToApprovalWorkflowAction,
+      showTPRMConsentModal
+    )
+    
+    // Check if proceeding was cancelled due to consent rejection
+    if (result === null) {
+      console.log('[RFP Submit] Proceeding to approval cancelled - consent not accepted')
+      error('Consent Required', 'Submission cancelled. You must accept the consent to proceed to approval workflow.')
+      isSubmitting.value = false
+      return
+    }
+    
+    // Success is already handled in proceedToApprovalWorkflowAction
+  } catch (err) {
+    console.error('Error in handleProceedToApprovalWorkflow:', err)
+    
+    // Check if error is due to consent rejection
+    if (err.message && (err.message.includes('consent') || err.message.includes('Consent') || err.message.includes('cancelled'))) {
+      error('Consent Required', 'Submission cancelled. You must accept the consent to proceed to approval workflow.')
+      isSubmitting.value = false
+      return
+    }
+    
+    // Other errors are already handled in proceedToApprovalWorkflowAction
     isSubmitting.value = false
   }
 }

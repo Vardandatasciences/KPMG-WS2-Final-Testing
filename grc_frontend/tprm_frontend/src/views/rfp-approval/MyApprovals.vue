@@ -359,7 +359,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { API_CONFIG, API_ENDPOINTS, buildApiUrl, apiCall } from '@/config/api.js'
+import { API_CONFIG, API_ENDPOINTS, apiCall } from '@/config/api.js'
 import { useRfpApi } from '@/composables/useRfpApi'
 import PopupModal from '@/popup/PopupModal.vue'
 import { PopupService } from '@/popup/popupService'
@@ -450,7 +450,7 @@ const isWaitingForPreviousStage = (approval) => {
 // Methods
 const fetchUsers = async () => {
   try {
-    const url = buildApiUrl(API_ENDPOINTS.RFP_APPROVAL.USERS)
+    const url = getTprmApiUrl('rfp-approval/users/')
     console.log('🔍 Fetching users from URL:', url)
     
     // Try direct fetch first
@@ -535,7 +535,7 @@ const fetchApprovals = async () => {
 
   loading.value = true
   try {
-    const url = buildApiUrl(`${API_ENDPOINTS.RFP_APPROVAL.USER_APPROVALS}?user_id=${selectedUserId.value}`)
+    const url = getTprmApiUrl(`rfp-approval/user-approvals/?user_id=${selectedUserId.value}`)
     console.log('🔍 Fetching approvals from URL:', url)
     const data = await apiCall(url)
     console.log('✅ Approvals fetched successfully:', data)
@@ -636,7 +636,7 @@ const applyFilters = () => {
 const handleApprove = async (stageId: string) => {
   processingStage.value = stageId
   try {
-    const url = buildApiUrl(API_ENDPOINTS.RFP_APPROVAL.UPDATE_STAGE_STATUS)
+    const url = getTprmApiUrl('rfp-approval/update-stage-status/')
     await apiCall(url, {
       method: 'POST',
       body: JSON.stringify({
@@ -672,7 +672,7 @@ const performReject = async (stageId: string, reason: string) => {
 
   processingStage.value = stageId
   try {
-    const url = buildApiUrl(API_ENDPOINTS.RFP_APPROVAL.UPDATE_STAGE_STATUS)
+    const url = getTprmApiUrl('rfp-approval/update-stage-status/')
     await apiCall(url, {
       method: 'POST',
       body: JSON.stringify({
@@ -773,29 +773,23 @@ const handleEvaluateProposal = async (approval: any) => {
         }
       }
       
-      // If no RFP ID found in request_data, try to get it from the approval request directly
+      // If no RFP ID found in request_data, try to get it from the backend using the dedicated endpoint
       if (!rfpId && approval.approval_id) {
         try {
-          console.log('🔍 DEBUG: Fetching approval request data for RFP ID...')
-          const approvalResponse = await fetch(getTprmApiUrl('approval/requests/'), {
+          console.log('🔍 DEBUG: Fetching RFP ID from approval request using backend endpoint...')
+          const rfpIdResponse = await fetch(getTprmApiUrl(`rfp-approval/get-rfp-id-from-approval/${approval.approval_id}/`), {
             method: 'GET',
             headers: getAuthHeaders()
           })
-          if (approvalResponse.ok) {
-            const approvalData = await approvalResponse.json()
-            const matchingApproval = approvalData.find(a => a.approval_id === approval.approval_id)
-            
-            if (matchingApproval && matchingApproval.request_data) {
-              const requestData = typeof matchingApproval.request_data === 'string' 
-                ? JSON.parse(matchingApproval.request_data) 
-                : matchingApproval.request_data
-              
-              rfpId = requestData.rfp_id || requestData.rfpId
-              console.log('✅ DEBUG: Found RFP ID from approval request:', rfpId)
-            }
+          if (rfpIdResponse.ok) {
+            const rfpIdData = await rfpIdResponse.json()
+            rfpId = rfpIdData.rfp_id
+            console.log('✅ DEBUG: Found RFP ID from backend endpoint:', rfpId)
+          } else {
+            console.log('⚠️ DEBUG: Backend endpoint returned error:', rfpIdResponse.status)
           }
         } catch (e) {
-          console.log('Could not fetch approval request data:', e)
+          console.log('❌ DEBUG: Could not fetch RFP ID from backend:', e)
         }
       }
       

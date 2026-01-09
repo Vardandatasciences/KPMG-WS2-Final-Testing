@@ -64,6 +64,11 @@ def favicon_view(request):
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('favicon.ico', favicon_view, name='favicon'),  # Handle favicon requests
+    
+    # PUBLIC Vendor Invitation Redirect (NO AUTH REQUIRED) - MUST BE FIRST
+    # Handles old invitation URLs and redirects to frontend vendor portal
+    path('rfp/<int:rfp_id>/invitation', rfp_views.vendor_invitation_redirect, name='public_vendor_invitation_redirect'),
+    
     path('api/', include('grc.urls')),  # Use the correct app name for API routes
     path('api/', include('backend.api.urls')),  # Include API module URLs
     
@@ -139,6 +144,9 @@ urlpatterns = [
     
     # TPRM RBAC
     path('api/tprm/rbac/', include('tprm_backend.rbac.tprm_urls')),
+    
+    # TPRM Consent Management
+    path('api/tprm/consent/', include('tprm_backend.consent.urls')),
     
     # TPRM Admin Access Control
     path('api/tprm/admin-access/', include('tprm_backend.admin_access.urls')),

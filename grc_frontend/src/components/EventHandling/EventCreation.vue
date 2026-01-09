@@ -2162,9 +2162,19 @@ export default {
         }
       } catch (error) {
         console.error('Error fetching current user:', error)
-        // Fallback to default values
-        formData.value.owner = 'Current User'
-        formData.value.ownerId = 1
+        // Fallback: try to get user name from localStorage
+        const storedUserName = localStorage.getItem('user_name')
+        const storedUserId = localStorage.getItem('user_id')
+        if (storedUserName) {
+          formData.value.owner = storedUserName
+          formData.value.ownerId = storedUserId || null
+          console.log('Using stored user name from localStorage:', storedUserName)
+        } else {
+          // Last resort: use user_id to construct a default
+          const fallbackUserId = localStorage.getItem('user_id')
+          formData.value.owner = fallbackUserId ? `User ${fallbackUserId}` : 'Unknown User'
+          formData.value.ownerId = fallbackUserId || null
+        }
       } finally {
         loadingCurrentUser.value = false
       }

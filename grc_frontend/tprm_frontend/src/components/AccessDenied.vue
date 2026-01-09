@@ -4,12 +4,12 @@
       <!-- Icon -->
       <div class="mx-auto flex items-center justify-center h-20 w-20 rounded-full bg-red-100 mb-6">
         <ShieldX class="h-10 w-10 text-red-600" />
-      </div>
-      
-      <!-- Title -->
+    </div>
+    
+    <!-- Title -->
       <h1 class="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
-      
-      <!-- Description -->
+    
+    <!-- Description -->
       <p class="text-gray-600 mb-6">
         {{ errorInfo.message }}
       </p>
@@ -81,13 +81,10 @@
 import { API_ENDPOINTS, API_CONFIG, getAuthToken } from '../config/api.js'
 import { getCurrentUserId } from '../utils/session.js'
 import axios from 'axios'
-import { Button } from '@/components/ui/button'
-
 import { ShieldX, ArrowLeft, Home, Mail } from 'lucide-vue-next'
-import Button from './ui/button.vue'
+import Button from '@/components/ui/button.vue'
 
 export default {
-  name: 'AccessDenied',
   components: {
     ShieldX,
     ArrowLeft,

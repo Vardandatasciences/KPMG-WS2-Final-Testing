@@ -857,7 +857,9 @@ class RFPUnmatchedVendor(models.Model):
                                related_name='rfp_unmatched_vendors', null=True, blank=True,
                                help_text="Tenant this unmatched vendor belongs to")
     
-    invitation_id = models.BigIntegerField(blank=True, null=True, default=None)
+    # Link to vendor invitation (which contains the RFP reference)
+    invitation_id = models.BigIntegerField(blank=True, null=True, default=None,
+                                          help_text="Links to rfp_vendor_invitations table")
     vendor_name = models.CharField(max_length=255)
     vendor_email = models.CharField(max_length=255)
     vendor_phone = models.CharField(max_length=50, blank=True, null=True)

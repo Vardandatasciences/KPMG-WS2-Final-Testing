@@ -1477,10 +1477,17 @@
 
   <!-- Popup Modal -->
   <PopupModal />
+  
+  <!-- TPRM Consent Modal - Outside main content to ensure it's always rendered -->
+  <Teleport to="body">
+    <TPRMConsentModal
+      ref="consentModalRef"
+    />
+  </Teleport>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick, Teleport } from 'vue'
 import { useRouter } from 'vue-router'
 import PopupModal from '@/popup/PopupModal.vue'
 import { PopupService } from '@/popup/popupService'
@@ -1491,6 +1498,8 @@ import loggingService from '@/services/loggingService'
 import { useAuthStore } from '@/stores/auth_vendor'
 import { getTprmApiV1BaseUrl, getTprmApiUrl } from '@/utils/backendEnv'
 import { useVendorPermissions } from '@/composables/useVendorPermissions'
+import TPRMConsentModal from '@/components/Consent/TPRMConsentModal.vue'
+import { executeWithTPRMConsent, TPRM_CONSENT_ACTIONS } from '@/utils/tprmConsentManager.js'
 
 const { showSuccess, showError, showWarning, showInfo } = useNotifications()
 // Initialize router and auth store
@@ -1538,6 +1547,9 @@ const vendor_submitError = ref('')
 const vendor_screeningStatus = ref(null)
 const vendor_isLoadingUserData = ref(false)
 const vendor_noVendorInfo = ref(false)
+
+// TPRM Consent Modal ref
+const consentModalRef = ref(null)
 
 const vendor_tabs = [
   { id: 'company-info', label: 'Company Info' },
@@ -2175,10 +2187,76 @@ const vendor_getDocumentStatusClass = (status) => {
   }
 }
 
-// API submission functions
-const vendor_submitRegistration = async () => {
-  // Allow vendors to submit their own registration - no permission check needed
-  // Permission checks are handled by the backend API
+// Show TPRM Consent Modal
+async function showTPRMConsentModal(actionType, config) {
+  console.log('[TPRM Consent] Showing consent modal for action:', actionType, 'config:', config)
+  
+  // Wait for component to mount with retry mechanism
+  let retries = 0
+  const maxRetries = 10
+  while (!consentModalRef.value && retries < maxRetries) {
+    if (retries === 0) {
+      await nextTick()
+    } else {
+      // Wait progressively longer on subsequent retries (50ms, 100ms, 150ms, etc.)
+      await new Promise(resolve => setTimeout(resolve, 50 * retries))
+    }
+    retries++
+    
+    if (consentModalRef.value) {
+      console.log(`[TPRM Consent] Consent modal ref available after ${retries} retries`)
+      break
+    }
+  }
+  
+  if (!consentModalRef.value) {
+    console.error('[TPRM Consent] Consent modal ref not available after', maxRetries, 'retries')
+    console.error('[TPRM Consent] Modal component may not be mounted. Check template.')
+    console.error('[TPRM Consent] consentModalRef:', consentModalRef)
+    console.error('[TPRM Consent] consentModalRef.value:', consentModalRef.value)
+    
+    // For security, don't proceed without consent modal - show error and prevent submission
+    PopupService.error('Consent modal is not available. Please refresh the page and try again. If the problem persists, contact your administrator.', 'Consent Modal Error')
+    // Return false to prevent submission
+    return false
+  }
+  
+  try {
+    console.log('[TPRM Consent] Calling consentModalRef.value.show()')
+    // Show the modal and wait for user response
+    // The modal component handles its own visibility internally
+    const accepted = await consentModalRef.value.show(actionType, config)
+    
+    console.log('[TPRM Consent] Consent modal result:', accepted, 'type:', typeof accepted)
+    
+    // Ensure boolean return value
+    const result = accepted === true || accepted === 'true'
+    console.log('[TPRM Consent] Final consent result:', result)
+    return result
+  } catch (error) {
+    console.error('[TPRM Consent] Error showing consent modal:', error)
+    console.error('[TPRM Consent] Error stack:', error.stack)
+    // If modal was cancelled/rejected, return false
+    if (error.message && error.message.includes('cancelled')) {
+      return false
+    }
+    // On any error, don't proceed (fail closed for security)
+    PopupService.error('An error occurred while showing the consent modal. Please try again.', 'Consent Error')
+    return false
+  }
+}
+
+// Helper function to actually submit registration (called after consent is obtained)
+const submitRegistrationAction = async (consentConfig) => {
+  console.log('[TPRM Consent] Proceeding to submit registration, consentConfig:', consentConfig)
+  
+  // Add consent data to registration data if consent was provided
+  if (consentConfig) {
+    // Store consent info in formData or pass it along when submitting
+    vendor_formData.consent_accepted = true
+    vendor_formData.consent_config_id = consentConfig.config_id
+    vendor_formData.framework_id = 1 // Default TPRM framework
+  }
   
   vendor_isSubmitting.value = true
   vendor_submitError.value = ''
@@ -2365,7 +2443,51 @@ const vendor_submitRegistration = async () => {
     })
     
     PopupService.error('Error: ' + vendor_submitError.value, 'Submission Error')
+    throw error // Re-throw to be caught by outer handler
   } finally {
+    vendor_isSubmitting.value = false
+  }
+  
+  return { success: true }
+}
+
+// API submission functions
+const vendor_submitRegistration = async () => {
+  // Allow vendors to submit their own registration - no permission check needed
+  // Permission checks are handled by the backend API
+  
+  try {
+    vendor_isSubmitting.value = true
+    console.log('[TPRM Consent] ========== Starting consent flow for: tprm_create_vendor')
+    
+    // Wrap submit registration with consent check
+    // The consent modal will be shown by executeWithTPRMConsent if consent is required
+    const result = await executeWithTPRMConsent(
+      TPRM_CONSENT_ACTIONS.CREATE_VENDOR,
+      submitRegistrationAction,
+      showTPRMConsentModal
+    )
+    
+    // Check if submission was cancelled due to consent rejection
+    if (result === null) {
+      console.log('[Vendor Submit] Registration cancelled - consent not accepted')
+      PopupService.warning('Submission cancelled. You must accept the consent to submit the vendor registration.', 'Consent Required')
+      vendor_isSubmitting.value = false
+      return
+    }
+    
+    // Success is already handled in submitRegistrationAction
+  } catch (err) {
+    console.error('Error in vendor_submitRegistration:', err)
+    
+    // Check if error is due to consent rejection
+    if (err.message && (err.message.includes('consent') || err.message.includes('Consent') || err.message.includes('cancelled'))) {
+      PopupService.warning('Submission cancelled. You must accept the consent to submit the vendor registration.', 'Consent Required')
+      vendor_isSubmitting.value = false
+      return
+    }
+    
+    // Other errors are already handled in submitRegistrationAction
     vendor_isSubmitting.value = false
   }
 }
@@ -2718,6 +2840,14 @@ onMounted(async () => {
   try {
     // Log page view
     await loggingService.logPageView('Vendor', 'Vendor Registration')
+    
+    // Verify consent modal is available after mount
+    await nextTick()
+    if (consentModalRef.value) {
+      console.log('✅ [TPRM Consent] Consent modal ref is available after mount')
+    } else {
+      console.warn('⚠️ [TPRM Consent] Consent modal ref not available after mount - component may not be rendered')
+    }
     
     // Ensure user data is available in localStorage
     const hasUserData = vendor_ensureUserDataInStorage()

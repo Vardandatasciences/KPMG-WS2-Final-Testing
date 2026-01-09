@@ -4393,20 +4393,61 @@ const onRfpDocumentSelect = () => {
 const resolveRfpDocumentTabs = async () => {
   try {
     console.log('🔍 Resolving RFP document tabs from:', rfpDocuments.value)
+    console.log('🔍 rfpDocuments.value type:', typeof rfpDocuments.value)
+    console.log('🔍 rfpDocuments.value is array?', Array.isArray(rfpDocuments.value))
+    if (Array.isArray(rfpDocuments.value) && rfpDocuments.value.length > 0) {
+      console.log('🔍 First document:', rfpDocuments.value[0])
+      console.log('🔍 First document has file_name?', !!rfpDocuments.value[0]?.file_name)
+      console.log('🔍 First document has id?', !!rfpDocuments.value[0]?.id)
+      console.log('🔍 First document has url?', !!rfpDocuments.value[0]?.url)
+    }
+    
+    // Check if rfpDocuments already contains full document objects (from API)
+    // Documents from API have: id, file_name, file_type, url
+    if (Array.isArray(rfpDocuments.value) && rfpDocuments.value.length > 0) {
+      const firstDoc = rfpDocuments.value[0]
+      // Check if it's a full document object (has id and either file_name or url)
+      if (firstDoc && typeof firstDoc === 'object' && firstDoc.id && (firstDoc.file_name || firstDoc.url)) {
+        // Documents already have full details, use them directly
+        console.log('✅ Using pre-loaded document details from API')
+        rfpDocTabs.value = rfpDocuments.value
+          .filter(doc => doc && doc.id) // Filter out any invalid entries
+          .map(doc => ({
+            id: doc.id,
+            label: doc.file_name || doc.name || `Document ${doc.id}`,
+            url: doc.url,
+            content_type: doc.file_type || doc.content_type || doc.fileType || 'application/octet-stream'
+          }))
+        console.log('✅ Resolved document tabs:', rfpDocTabs.value)
+        console.log('✅ Resolved document tabs count:', rfpDocTabs.value.length)
+        return
+      }
+    }
     
     // Normalize to array of IDs from any JSON shape
     let ids = []
     if (Array.isArray(rfpDocuments.value)) {
-      ids = rfpDocuments.value.map(item => typeof item === 'object' ? (item.id || item.file_id || item) : item)
+      ids = rfpDocuments.value.map(item => {
+        if (typeof item === 'object' && item !== null) {
+          return item.id || item.file_id || item.document_id || item
+        }
+        return item
+      })
     } else if (rfpDocuments.value && typeof rfpDocuments.value === 'object') {
-      ids = Object.values(rfpDocuments.value).map(item => typeof item === 'object' ? (item.id || item.file_id) : item)
+      ids = Object.values(rfpDocuments.value).map(item => {
+        if (typeof item === 'object' && item !== null) {
+          return item.id || item.file_id || item.document_id
+        }
+        return item
+      })
     }
 
-    ids = ids.filter(Boolean)
+    ids = ids.filter(id => id !== null && id !== undefined && id !== '')
     console.log('🔍 Extracted IDs:', ids)
     
     if (ids.length === 0) {
       console.log('⚠️ No valid document IDs found')
+      console.log('⚠️ rfpDocuments.value:', rfpDocuments.value)
       rfpDocTabs.value = []
       return
     }
@@ -6170,10 +6211,8 @@ const fetchInvitationDetails = async () => {
         if (data.rfp.documents) {
           rfpDocuments.value = data.rfp.documents
           console.log('📋 Stored rfpDocuments:', rfpDocuments.value)
-          // If right panel is on documents, resolve immediately
-          if (rightPanelTab.value === 'documents') {
-            await resolveRfpDocumentTabs()
-          }
+          // Always resolve document tabs to ensure they're available
+          await resolveRfpDocumentTabs()
         } else {
           console.log('⚠️ No documents field found in open RFP response')
         }
@@ -6310,17 +6349,82 @@ const fetchInvitationDetails = async () => {
         
         console.log('✅ Prefilled form with vendor data')
 
-        // Capture RFP-level documents field if present (expects JSON with IDs)
+        // Capture RFP-level documents field if present
         console.log('📋 RFP documents field:', rfp.documents)
-        if (rfp.documents) {
-          rfpDocuments.value = rfp.documents
-          console.log('📋 Stored rfpDocuments:', rfpDocuments.value)
-          // If right panel is on documents, resolve immediately
-          if (rightPanelTab.value === 'documents') {
+        
+        // Fetch full document details from the documents endpoint
+        try {
+          console.log('🔄 Fetching documents from:', `${API_BASE_URL}/rfp-responses/${rfp.rfp_id}/documents/`)
+          const docsResponse = await fetch(`${API_BASE_URL}/rfp-responses/${rfp.rfp_id}/documents/`, {
+            headers: {
+              'Content-Type': 'application/json',
+              ...getAuthHeaders()
+            }
+          })
+          console.log('📡 Documents API response status:', docsResponse.status, docsResponse.ok)
+          
+          if (docsResponse.ok) {
+            const docsData = await docsResponse.json()
+            console.log('📋 Documents API full response:', docsData)
+            console.log('📋 Documents array:', docsData.documents)
+            console.log('📋 Is array?', Array.isArray(docsData.documents))
+            console.log('📋 Length:', docsData.documents?.length)
+            
+            if (docsData.success && docsData.documents && Array.isArray(docsData.documents)) {
+              console.log('✅ Setting rfpDocuments.value to:', docsData.documents)
+              rfpDocuments.value = docsData.documents
+              console.log('✅ After setting, rfpDocuments.value is:', rfpDocuments.value)
+              console.log('✅ rfpDocuments.value length:', rfpDocuments.value.length)
+              console.log('✅ First document:', rfpDocuments.value[0])
+              
+              // Always resolve document tabs immediately after fetching
+              console.log('🔄 About to call resolveRfpDocumentTabs()')
+              await resolveRfpDocumentTabs()
+              console.log('✅ After resolveRfpDocumentTabs, rfpDocTabs.value.length:', rfpDocTabs.value.length)
+              console.log('✅ rfpDocTabs.value:', rfpDocTabs.value)
+            } else {
+              console.warn('⚠️ Documents validation failed:', {
+                success: docsData.success,
+                hasDocuments: !!docsData.documents,
+                isArray: Array.isArray(docsData.documents)
+              })
+              rfpDocuments.value = rfp.documents || []
+              // Try to resolve even if validation failed (might be array of IDs)
+              await resolveRfpDocumentTabs()
+            }
+          } else {
+            console.error('❌ Documents API failed with status:', docsResponse.status)
+            rfpDocuments.value = rfp.documents || []
+            // Try to resolve documents from RFP field (might be array of IDs)
             await resolveRfpDocumentTabs()
           }
+        } catch (error) {
+          console.error('❌ Error fetching documents:', error)
+          rfpDocuments.value = rfp.documents || []
+          // Try to resolve documents from RFP field (might be array of IDs)
+          await resolveRfpDocumentTabs()
+        }
+        
+        // Process evaluation criteria if present in the response
+        console.log('📋 RFP evaluation_criteria field:', rfp.evaluation_criteria)
+        if (rfp.evaluation_criteria && Array.isArray(rfp.evaluation_criteria) && rfp.evaluation_criteria.length > 0) {
+          evaluationCriteria.value = rfp.evaluation_criteria.map(criterion => ({
+            id: criterion.criteria_id,
+            title: criterion.criteria_name,
+            weight: criterion.weight_percentage,
+            description: criterion.criteria_description,
+            type: criterion.evaluation_type === 'narrative' ? 'narrative' : 'text',
+            required: criterion.is_mandatory
+          }))
+          console.log('✅ Loaded evaluation criteria from RFP details:', evaluationCriteria.value.length, 'criteria')
+          
+          // Initialize responses for each criterion
+          evaluationCriteria.value.forEach(criterion => {
+            const existing = responses.value?.[criterion.id]
+            setCriteriaResponse(criterion.id, existing || createEmptyResponseEntry())
+          })
         } else {
-          console.log('⚠️ No documents field found in RFP response')
+          console.log('⚠️ No evaluation criteria found in RFP response')
         }
       } else {
         throw new Error(data?.error || 'Failed to fetch RFP details')
@@ -6483,15 +6587,17 @@ const loadExistingResponse = async () => {
 }
 
 const fetchEvaluationCriteria = async () => {
+  // Prefer rfp_id over rfp_number for more reliable lookup
+  const rfpId = invitationData.value?.rfpId || rfpInfo.value?.rfpId
+  
   // Try to get RFP number from rfpInfo first
   let rfpNumber = rfpInfo.value?.rfpNumber
   
-  // If not available, try to get it from invitationData
-  if (!rfpNumber && invitationData.value?.rfpId) {
-    console.log('⚠️ RFP number not in rfpInfo, will try to fetch from RFP ID:', invitationData.value.rfpId)
-    // We'll fetch the RFP details to get the number
+  // If not available but we have rfp_id, fetch RFP details to get the number
+  if (!rfpNumber && rfpId) {
+    console.log('⚠️ RFP number not in rfpInfo, fetching from RFP ID:', rfpId)
     try {
-      const rfpResponse = await fetch(`${API_BASE_URL}/rfps/${invitationData.value.rfpId}/`, {
+      const rfpResponse = await fetch(`${API_BASE_URL}/rfps/${rfpId}/`, {
         headers: getAuthHeaders()
       })
       if (rfpResponse.ok) {
@@ -6510,17 +6616,23 @@ const fetchEvaluationCriteria = async () => {
     }
   }
   
-  if (!rfpNumber) {
-    console.warn('⚠️ Cannot fetch evaluation criteria: RFP number not available')
+  if (!rfpNumber && !rfpId) {
+    console.warn('⚠️ Cannot fetch evaluation criteria: Neither RFP number nor RFP ID available')
     console.log('Current rfpInfo:', rfpInfo.value)
     console.log('Current invitationData:', invitationData.value)
     return
   }
   
-  console.log('📋 Fetching evaluation criteria for RFP:', rfpNumber)
+  console.log('📋 Fetching evaluation criteria for RFP:', rfpNumber || 'N/A', 'rfpId:', rfpId)
   
   try {
-    const response = await fetch(`${API_BASE_URL}/rfp/${rfpNumber}/evaluation-criteria/`, {
+    // Build URL with rfp_number in path, and rfp_id as query parameter for more reliable lookup
+    let url = `${API_BASE_URL}/rfp/${rfpNumber || 'unknown'}/evaluation-criteria/`
+    if (rfpId) {
+      url += `?rfp_id=${rfpId}`
+    }
+    
+    const response = await fetch(url, {
       headers: getAuthHeaders()
     })
     
@@ -8090,14 +8202,9 @@ onMounted(async () => {
     // Load existing documents
     await loadExistingDocuments()
 
-    // Always try to resolve RFP documents after fetching invitation details
-    // This ensures documents are ready when user switches to Documents tab
-    if (rfpDocuments.value) {
-      console.log('🔄 Initial RFP documents found, resolving tabs...')
-      await resolveRfpDocumentTabs()
-    } else {
-      console.log('⚠️ No RFP documents found in initial load')
-    }
+    // Documents will be resolved automatically after fetching in fetchInvitationDetails
+    // No need to resolve here as rfpDocuments may not be loaded yet
+    console.log('✅ Component initialization complete, documents will load from API')
     
     // Update completion status after all data is loaded
     // Use nextTick to ensure all reactive updates are complete

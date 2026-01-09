@@ -114,6 +114,9 @@ urlpatterns = [
     path('api/rfp-approval/', include('rfp_approval.urls')),  # Add this line for compatibility
     path('api/auth/', include('tprm_project.auth_urls')),
     
+    # TPRM API prefix for approval endpoints (for frontend compatibility)
+    path('api/tprm/approval/', include('rfp_approval.urls')),  # Maps /api/tprm/approval/* to rfp_approval.urls
+    
     # TPRM API prefix routes (for frontend compatibility - /api/tprm/*)
     # IMPORTANT: More specific routes must come BEFORE general routes
     # Vendor-specific routes (most specific)

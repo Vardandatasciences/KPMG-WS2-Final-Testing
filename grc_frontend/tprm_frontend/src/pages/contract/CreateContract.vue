@@ -2559,13 +2559,23 @@
       </div>
       <div class="flex items-center justify-end gap-3 p-6 border-t bg-gray-50">
         <Button variant="outline" @click="closeQuestionnairesModal">Close</Button>
-        <Button @click="editQuestionnaires(selectedTermTitle, selectedTermId, selectedQuestionnaires)">
+        <Button @click="() => {
+          console.log('🖱️ Edit button clicked with:', { title: selectedTermTitle, id: selectedTermId, questions: selectedQuestionnaires?.length })
+          editQuestionnaires(selectedTermTitle, selectedTermId, selectedQuestionnaires)
+        }">
           <Edit class="w-4 h-4 mr-2" />
           Edit Questionnaires
         </Button>
       </div>
     </div>
   </div>
+  
+  <!-- TPRM Consent Modal - Outside main content to ensure it's always rendered -->
+  <Teleport to="body">
+    <TPRMConsentModal
+      ref="consentModalRef"
+    />
+  </Teleport>
 </template>
 
 <script setup>
@@ -2586,6 +2596,8 @@ import contractsApi from '@/services/contractsApi'
 import apiService from '@/services/api'
 import { PopupService } from '@/popup/popupService'
 import { getTprmApiUrl } from '@/utils/backendEnv'
+import TPRMConsentModal from '@/components/Consent/TPRMConsentModal.vue'
+import { executeWithTPRMConsent, TPRM_CONSENT_ACTIONS } from '@/utils/tprmConsentManager.js'
 
 const router = useRouter()
 const route = useRoute()
@@ -2657,6 +2669,9 @@ const selectedFile = ref(null)
 const isLoading = ref(false)
 const isSubmitting = ref(false)
 const errors = ref({})
+
+// TPRM Consent Modal ref
+const consentModalRef = ref(null)
 const successMessage = ref('')
 const vendors = ref([])
 const users = ref([])
@@ -3107,6 +3122,14 @@ onMounted(async () => {
   console.log('🚀 CreateContract onMounted - route.params:', route.params)
   console.log('🚀 CreateContract onMounted - showOCR initial value:', showOCR.value)
   console.log('🚀 CreateContract onMounted - testOCRButton function:', typeof testOCRButton)
+  
+  // Verify consent modal is available after mount
+  await nextTick()
+  if (consentModalRef.value) {
+    console.log('✅ [TPRM Consent] Consent modal ref is available after mount')
+  } else {
+    console.warn('⚠️ [TPRM Consent] Consent modal ref not available after mount - component may not be rendered')
+  }
   
   // Check permission for creating contracts (only for create route, not edit)
   const currentPath = route.path
@@ -3842,8 +3865,154 @@ const handleSaveDraft = async () => {
   }
 }
 
+// Show TPRM Consent Modal
+async function showTPRMConsentModal(actionType, config) {
+  console.log('[TPRM Consent] Showing consent modal for action:', actionType, 'config:', config)
+  
+  // Wait for component to mount with retry mechanism
+  let retries = 0
+  const maxRetries = 10
+  while (!consentModalRef.value && retries < maxRetries) {
+    if (retries === 0) {
+      await nextTick()
+    } else {
+      // Wait progressively longer on subsequent retries (50ms, 100ms, 150ms, etc.)
+      await new Promise(resolve => setTimeout(resolve, 50 * retries))
+    }
+    retries++
+    
+    if (consentModalRef.value) {
+      console.log(`[TPRM Consent] Consent modal ref available after ${retries} retries`)
+      break
+    }
+  }
+  
+  if (!consentModalRef.value) {
+    console.error('[TPRM Consent] Consent modal ref not available after', maxRetries, 'retries')
+    console.error('[TPRM Consent] Modal component may not be mounted. Check template.')
+    console.error('[TPRM Consent] consentModalRef:', consentModalRef)
+    console.error('[TPRM Consent] consentModalRef.value:', consentModalRef.value)
+    
+    // For security, don't proceed without consent modal - show error and prevent submission
+    PopupService.error(
+      'Consent modal is not available. Please refresh the page and try again. If the problem persists, contact your administrator.',
+      'Consent Modal Error'
+    )
+    // Return false to prevent submission
+    return false
+  }
+  
+  try {
+    console.log('[TPRM Consent] Calling consentModalRef.value.show()')
+    // Show the modal and wait for user response
+    // The modal component handles its own visibility internally
+    const accepted = await consentModalRef.value.show(actionType, config)
+    
+    console.log('[TPRM Consent] Consent modal result:', accepted, 'type:', typeof accepted)
+    
+    // Ensure boolean return value
+    const result = accepted === true || accepted === 'true'
+    console.log('[TPRM Consent] Final consent result:', result)
+    return result
+  } catch (error) {
+    console.error('[TPRM Consent] Error showing consent modal:', error)
+    console.error('[TPRM Consent] Error stack:', error.stack)
+    // If modal was cancelled/rejected, return false
+    if (error.message && error.message.includes('cancelled')) {
+      return false
+    }
+    // On any error, don't proceed (fail closed for security)
+    PopupService.error('An error occurred while showing the consent modal. Please try again.', 'Consent Error')
+    return false
+  }
+}
+
+// Helper function to create contract with subcontract (called after consent is obtained)
+const createContractWithSubcontractAction = async (consentConfig) => {
+  console.log('[TPRM Consent] Creating contract with subcontract, consentConfig:', consentConfig)
+  
+  const subcontractData = sessionStorage.getItem('subcontractData')
+  const parsedSubcontractData = JSON.parse(subcontractData)
+  
+  // Prepare main contract data
+  const mainContractData = {
+    ...prepareContractData(),
+    contract_kind: 'MAIN',
+    status: 'PENDING_ASSIGNMENT',
+    workflow_stage: 'under_review'
+  }
+  
+  // Prepare subcontract data
+  const subcontractFormData = {
+    ...parsedSubcontractData,
+    contract_kind: 'SUBCONTRACT',
+    status: 'PENDING_ASSIGNMENT',
+    workflow_stage: 'under_review'
+  }
+  
+  // Add consent data to contract data if consent was provided
+  if (consentConfig) {
+    mainContractData.consent_accepted = true
+    mainContractData.consent_config_id = consentConfig.config_id
+    mainContractData.framework_id = 1 // Default TPRM framework
+  }
+  
+  console.log('📤 Creating both contracts together:', {
+    mainContract: mainContractData,
+    subcontract: subcontractFormData
+  })
+  
+  const response = await contractsApi.createContractWithSubcontract(mainContractData, subcontractFormData)
+  
+  if (response.success) {
+    // Clear subcontract data from session storage
+    sessionStorage.removeItem('subcontractData')
+    
+    PopupService.success('Both contracts have been created and submitted for review.', 'Contract and Subcontract Created Successfully')
+    router.push('/contracts')
+    return response
+  } else {
+    throw new Error(response.message || 'Failed to create contract and subcontract')
+  }
+}
+
+// Helper function to navigate to preview (called after consent is obtained)
+const navigateToPreviewAction = async (consentConfig) => {
+  console.log('[TPRM Consent] Navigating to preview, consentConfig:', consentConfig)
+  
+  // Store consent info in sessionStorage for preview page
+  if (consentConfig) {
+    sessionStorage.setItem('contractConsentAccepted', 'true')
+    sessionStorage.setItem('contractConsentConfigId', consentConfig.config_id.toString())
+    sessionStorage.setItem('contractConsentFrameworkId', '1')
+  }
+  
+  // Load questionnaires BEFORE navigating if terms exist and questionnaires aren't loaded yet
+  // This ensures questionnaires are available in sessionStorage for the preview page
+  if (contractTerms.value.length > 0 && allTermQuestionnaires.value.length === 0) {
+    console.log('📋 Loading questionnaires before navigation...')
+    try {
+      isLoading.value = true
+      // AWAIT the questionnaire loading so they're available before saving to sessionStorage
+      await loadTermQuestionnaires()
+      console.log(`📋 Loaded ${allTermQuestionnaires.value.length} questionnaires before navigation`)
+    } catch (err) {
+      console.error('Error loading questionnaires before navigation:', err)
+      // Continue navigation even if loading fails - preview page can try to load them
+    } finally {
+      isLoading.value = false
+    }
+  }
+  
+  // Now navigate with questionnaires loaded (if they exist)
+  navigateToPreview()
+  
+  return { success: true }
+}
+
 const handleSubmitForReview = async () => {
   console.log('🚀 Submit for Review clicked')
+  console.log('[TPRM Consent] ========== Starting consent flow for: tprm_create_contract')
   console.log('📋 Current form data:', formData.value)
   console.log('📋 Current errors:', errors.value)
   
@@ -3864,91 +4033,71 @@ const handleSubmitForReview = async () => {
     return
   }
   
-  // Check if we have subcontract data in session storage
-  const subcontractData = sessionStorage.getItem('subcontractData')
-  console.log('🔍 Checking for subcontract data:', subcontractData)
-  
-  // Also check if we're explicitly creating a standalone contract
-  const isStandaloneContract = !subcontractData || subcontractData === 'null' || subcontractData === 'undefined'
-  console.log('🔍 Is standalone contract:', isStandaloneContract)
-  
-  if (subcontractData && !isStandaloneContract) {
-    console.log('🔧 Found subcontract data, creating both contracts together')
-    try {
-      isLoading.value = true
-      isSubmitting.value = true
-      errors.value = {}
+  try {
+    isSubmitting.value = true
+    errors.value = {}
+    
+    // Check if we have subcontract data in session storage
+    const subcontractData = sessionStorage.getItem('subcontractData')
+    console.log('🔍 Checking for subcontract data:', subcontractData)
+    
+    // Also check if we're explicitly creating a standalone contract
+    const isStandaloneContract = !subcontractData || subcontractData === 'null' || subcontractData === 'undefined'
+    console.log('🔍 Is standalone contract:', isStandaloneContract)
+    
+    let result = null
+    
+    if (subcontractData && !isStandaloneContract) {
+      console.log('🔧 Found subcontract data, creating both contracts together')
       
-      const parsedSubcontractData = JSON.parse(subcontractData)
+      // Wrap contract creation with consent check
+      result = await executeWithTPRMConsent(
+        TPRM_CONSENT_ACTIONS.CREATE_CONTRACT,
+        createContractWithSubcontractAction,
+        showTPRMConsentModal
+      )
       
-      // Prepare main contract data
-      const mainContractData = {
-        ...prepareContractData(),
-        contract_kind: 'MAIN',
-        status: 'PENDING_ASSIGNMENT',
-        workflow_stage: 'under_review'
+      // Check if contract creation was cancelled due to consent rejection
+      if (result === null) {
+        console.log('[Contract Submit] Contract creation cancelled - consent not accepted')
+        PopupService.info('Contract creation cancelled. You must accept the consent to create the contract.', 'Consent Required')
+        isSubmitting.value = false
+        return
       }
+    } else {
+      // Always navigate to preview page for single contract submission
+      // The preview page will handle the actual database save
+      console.log('✅ Navigating to preview page for contract review')
       
-      // Prepare subcontract data
-      const subcontractFormData = {
-        ...parsedSubcontractData,
-        contract_kind: 'SUBCONTRACT',
-        status: 'PENDING_ASSIGNMENT',
-        workflow_stage: 'under_review'
+      // Wrap navigation with consent check
+      result = await executeWithTPRMConsent(
+        TPRM_CONSENT_ACTIONS.CREATE_CONTRACT,
+        navigateToPreviewAction,
+        showTPRMConsentModal
+      )
+      
+      // Check if navigation was cancelled due to consent rejection
+      if (result === null) {
+        console.log('[Contract Submit] Navigation to preview cancelled - consent not accepted')
+        PopupService.info('Submission cancelled. You must accept the consent to submit the contract for review.', 'Consent Required')
+        isSubmitting.value = false
+        return
       }
-      
-      console.log('📤 Creating both contracts together:', {
-        mainContract: mainContractData,
-        subcontract: subcontractFormData
-      })
-      
-      const response = await contractsApi.createContractWithSubcontract(mainContractData, subcontractFormData)
-      
-      if (response.success) {
-        // Clear subcontract data from session storage
-        sessionStorage.removeItem('subcontractData')
-        
-        PopupService.success('Both contracts have been created and submitted for review.', 'Contract and Subcontract Created Successfully')
-        router.push('/contracts')
-      } else {
-        throw new Error(response.message || 'Failed to create contract and subcontract')
-      }
-    } catch (error) {
-      console.error('❌ Error creating contract and subcontract:', error)
-      errors.value.general = error.message || 'Failed to create contract and subcontract'
-    } finally {
-      isLoading.value = false
+    }
+  } catch (error) {
+    console.error('❌ Error in handleSubmitForReview:', error)
+    
+    // Check if error is due to consent rejection
+    if (error.message && (error.message.includes('consent') || error.message.includes('Consent') || error.message.includes('cancelled'))) {
+      PopupService.warning('Submission cancelled. You must accept the consent to submit the contract for review.', 'Consent Required')
       isSubmitting.value = false
-    }
-  } else {
-    // Always navigate to preview page for single contract submission
-    // The preview page will handle the actual database save
-    console.log('✅ Navigating to preview page for contract review')
-    
-    // Load questionnaires in background (non-blocking) if terms exist
-    // Store current questionnaires in sessionStorage, ContractPreview will load if needed
-    if (contractTerms.value.length > 0 && allTermQuestionnaires.value.length === 0) {
-      console.log('📋 Loading questionnaires in background (non-blocking)...')
-      // Don't await - load in background and update sessionStorage when done
-      loadTermQuestionnaires().then(() => {
-        // Update sessionStorage with loaded questionnaires
-        const previewData = sessionStorage.getItem('contractPreviewData')
-        if (previewData) {
-          try {
-            const data = JSON.parse(previewData)
-            data.allTermQuestionnaires = allTermQuestionnaires.value
-            sessionStorage.setItem('contractPreviewData', JSON.stringify(data))
-            console.log(`📋 Updated sessionStorage with ${allTermQuestionnaires.value.length} questionnaires`)
-          } catch (e) {
-            console.error('Error updating sessionStorage with questionnaires:', e)
-          }
-        }
-      }).catch(err => {
-        console.error('Error loading questionnaires in background:', err)
-      })
+      return
     }
     
-    navigateToPreview()
+    errors.value.general = error.message || 'Failed to submit contract for review'
+    PopupService.error(error.message || 'Failed to submit contract for review', 'Submission Failed')
+  } finally {
+    isSubmitting.value = false
   }
 }
 
@@ -5324,6 +5473,7 @@ async function loadTermQuestionnaires() {
     
     console.log('📋 Loading questionnaires for term categories:', uniqueTermCategories)
     console.log('📋 Also checking term IDs:', uniqueTermIds)
+    console.log('📋 Checking selected templates:', selectedTemplates.value)
     
     // Load all questionnaires in parallel for better performance
     const loadPromises = []
@@ -5371,23 +5521,56 @@ async function loadTermQuestionnaires() {
       }
     }
     
+    // IMPORTANT: Load questionnaires from selected templates
+    for (const [termIdStr, templateId] of Object.entries(selectedTemplates.value)) {
+      if (templateId) {
+        const term = contractTerms.value.find(t => String(t.term_id) === String(termIdStr))
+        if (term) {
+          console.log(`📋 Loading questions from template ${templateId} for term ${termIdStr}`)
+          loadPromises.push(
+            apiService.bcpdrpRequest(`/questionnaire-templates/${templateId}/`, { method: 'GET' })
+              .then(response => {
+                const template = response.data || response
+                const templateQuestions = template.template_questions_json || []
+                // Map template questions to questionnaire format and associate with term
+                return templateQuestions.map((q, index) => ({
+                  ...q,
+                  term_id: termIdStr,
+                  term_category: term.term_category || '',
+                  question_id: q.question_id || (index + 1),
+                  _from_template: true,
+                  _template_id: templateId
+                }))
+              })
+              .catch(error => {
+                console.error(`Error loading template ${templateId} for term ${termIdStr}:`, error)
+                return []
+              })
+          )
+        }
+      }
+    }
+    
     // Wait for all API calls to complete in parallel
     const results = await Promise.all(loadPromises)
     
     // Flatten and combine all results
     const allQuestionnaires = results.flat()
     
-    // Remove duplicates based on question_id
+    // Remove duplicates based on question_id (but keep template questions if they don't conflict)
     const seenIds = new Set()
     allTermQuestionnaires.value = allQuestionnaires.filter(q => {
-      if (seenIds.has(q.question_id)) {
+      const id = q.question_id || `${q.term_id}_${q.question_text}`
+      if (seenIds.has(id) && !q._from_template) {
+        // Skip duplicate non-template questions
         return false
       }
-      seenIds.add(q.question_id)
+      seenIds.add(id)
       return true
     })
     
     console.log('📋 Total unique questionnaires loaded:', allTermQuestionnaires.value.length)
+    console.log('📋 Questionnaires from templates:', allTermQuestionnaires.value.filter(q => q._from_template).length)
     
     // Force reactivity update
     allTermQuestionnaires.value = [...allTermQuestionnaires.value]
@@ -5656,10 +5839,26 @@ function clearTemplateSelection(termId) {
 async function viewTemplateQuestions(termId, templateId) {
   try {
     const termIdStr = String(termId || '')
-    const term = contractTerms.value.find(t => String(t.term_id) === String(termId))
-    const termCategory = term?.term_category || ''
     
-    console.log('📋 Loading questions for template:', { templateId, termId: termIdStr, termCategory })
+    // Try to find term with better logging
+    console.log('🔍 Looking for term:', termIdStr)
+    console.log('🔍 Available terms:', contractTerms.value.map(t => ({ id: t.term_id, title: t.term_title })))
+    
+    const term = contractTerms.value.find(t => String(t.term_id) === String(termId))
+    
+    if (!term) {
+      console.error('❌ Term not found in contractTerms:', { 
+        termId: termIdStr, 
+        availableTerms: contractTerms.value.length,
+        termIds: contractTerms.value.map(t => t.term_id)
+      })
+      PopupService.error(`Term not found. Please ensure the term exists before viewing questions.`, 'Error')
+      return
+    }
+    
+    const termCategory = term.term_category || ''
+    
+    console.log('📋 Loading questions for template:', { templateId, termId: termIdStr, termCategory, termTitle: term.term_title })
     
     const response = await apiService.getTemplateQuestions(templateId, termIdStr, termCategory)
     const questions = response.questions || []
@@ -5680,9 +5879,12 @@ async function viewTemplateQuestions(termId, templateId) {
       allow_document_upload: q.allow_document_upload || false
     }))
     
-    selectedTermTitle.value = term?.term_title || 'Unknown Term'
-    selectedTermId.value = termIdStr
+    // Set these values with the found term to ensure they're valid
+    selectedTermTitle.value = term.term_title
+    selectedTermId.value = term.term_id
     showQuestionnairesModal.value = true
+    
+    console.log('✅ Modal opened with term:', { title: selectedTermTitle.value, id: selectedTermId.value })
   } catch (error) {
     console.error('❌ Error loading template questions:', error)
     PopupService.error(`Failed to load template questions: ${error.message || 'Please try again.'}`, 'Error')
@@ -5803,6 +6005,9 @@ function closeQuestionnairesModal() {
 
 // Edit questionnaires for a term (with existing questions pre-populated)
 function editQuestionnaires(termTitle, termId, existingQuestionnaires = []) {
+  console.log('🔍 editQuestionnaires called with:', { termTitle, termId, questionsCount: existingQuestionnaires?.length })
+  console.log('🔍 Available contractTerms:', contractTerms.value.map(t => ({ id: t.term_id, title: t.term_title })))
+  
   // Get term_category and term_id from the term object
   const term = contractTerms.value.find(t => 
     (termTitle && t.term_title === termTitle) || 
@@ -5810,7 +6015,14 @@ function editQuestionnaires(termTitle, termId, existingQuestionnaires = []) {
   )
   
   if (!term) {
-    console.error('❌ Term not found for editing questionnaires:', { termTitle, termId })
+    console.error('❌ Term not found for editing questionnaires:', { 
+      termTitle, 
+      termId, 
+      availableTerms: contractTerms.value.length,
+      allTermIds: contractTerms.value.map(t => t.term_id),
+      allTermTitles: contractTerms.value.map(t => t.term_title)
+    })
+    PopupService.error(`Term not found. The contract term may have been deleted or the page needs to be refreshed.`, 'Error')
     return
   }
   
@@ -5872,8 +6084,8 @@ function editQuestionnaires(termTitle, termId, existingQuestionnaires = []) {
     console.log(`📋 Stored ${questionsForTemplate.length} questions for editing`)
   }
   
-  // Close the modal
-  closeQuestionnairesModal()
+  // Close the modal AFTER navigation is initiated to prevent race conditions
+  // Don't close the modal yet - let it close after navigation
   
   router.push({
     path: '/questionnaire-templates',
