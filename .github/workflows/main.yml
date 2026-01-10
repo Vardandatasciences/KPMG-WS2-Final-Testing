@@ -1,4 +1,4 @@
-name: Build, Push, Pull, and Run Docker Image to/from ECR
+name: Build and Push Backend to ECR
 
 on:
   push:
@@ -10,10 +10,10 @@ env:
   AWS_REGION: ap-south-1
   ECR_REGISTRY: 480940871468.dkr.ecr.ap-south-1.amazonaws.com
   BACKEND_IMAGE: 480940871468.dkr.ecr.ap-south-1.amazonaws.com/grc_tprm_backend:latest
-  DOCKERFILE_PATH: ./grc_backend/Dockerfile  # Ensure this path is correct if the Dockerfile is inside a folder.
+  DOCKERFILE_PATH: grc_backend/Dockerfile  # Updated to reflect the path
 
 jobs:
-  build-and-push:
+  build-and-push-backend:
     runs-on: self-hosted
     permissions:
       contents: read
@@ -21,6 +21,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: List files in grc_backend directory
+        run: ls -l grc_backend
 
       - name: Configure AWS credentials
         run: |
@@ -39,23 +42,3 @@ jobs:
         run: |
           docker push "${BACKEND_IMAGE}"
           echo "Backend image pushed to ECR successfully"
-
-  pull-and-run:
-    runs-on: self-hosted
-    permissions:
-      contents: read
-
-    steps:
-      - name: Configure AWS credentials
-        run: |
-          aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
-
-      - name: Pull Docker image from ECR
-        run: |
-          docker pull "${BACKEND_IMAGE}"
-          echo "Docker image pulled from ECR successfully"
-
-      - name: Run Docker container
-        run: |
-          docker run -d -p 5000:5000 "${BACKEND_IMAGE}"  # Expose the container port (adjust as needed)
-          echo "Docker container is running."
