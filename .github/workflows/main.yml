@@ -26,6 +26,15 @@ jobs:
         with:
           fetch-depth: 0  # Fetch full history for all changes
 
+      - name: Verify files are checked out
+        run: |
+          echo "Checking out repository contents"
+          ls -l
+          echo "Listing all available directories in the grc_tprm directory:"
+          ls -l ~/grc_tprm
+          echo "Listing all available directories in the grc_tprm/grc_backend directory:"
+          ls -l ~/grc_tprm/grc_backend || echo "grc_backend directory not found!"
+
       - name: Show current commit
         run: |
           echo "Building from commit: ${{ github.sha }}"
@@ -52,7 +61,6 @@ jobs:
         run: |
           # List contents of grc_backend to ensure Dockerfile is present
           ls -l ./grc_backend
-          
           # Build the Docker image
           docker build --no-cache --pull -t grc_tprm_backend:latest -f ${{ env.DOCKERFILE_PATH }} .
 
