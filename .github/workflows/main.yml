@@ -28,6 +28,8 @@ jobs:
       - name: Build Backend Docker image
         working-directory: grc_backend
         run: |
+          # Ensure the Dockerfile exists in the specified working directory
+          ls -l
           docker build -t grc_tprm_backend:latest .
 
       - name: Tag Backend image for ECR

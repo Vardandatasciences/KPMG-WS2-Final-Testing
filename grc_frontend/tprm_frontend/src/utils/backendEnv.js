@@ -1,67 +1,26 @@
+// Import the centralized API configuration
+import { API_BASE_URL as CONFIG_API_BASE_URL, ENVIRONMENT, API_URLS } from '@/config/api.js'
+
 const stripTrailingSlash = (value = '') => value.replace(/\/+$/, '')
 const ensureLeadingSlash = (path = '') => (path.startsWith('/') ? path : `/${path}`)
 
-const resolveWindowOrigin = () => {
-  // Always check environment variables first - these take highest priority
-  const envUrl = import.meta.env.VITE_API_BASE_URL?.replace('/api/tprm', '').replace('/api', '') || 
-                 import.meta.env.VITE_BACKEND_URL
-  
-  if (envUrl) {
-    // Extract origin from env URL if it's a full URL
-    try {
-      const url = new URL(envUrl)
-      return url.origin
-    } catch {
-      // If it's not a full URL, return as is (will be handled by caller)
-      return envUrl
+// Use the centralized API configuration
+const API_BASE_URL = stripTrailingSlash(CONFIG_API_BASE_URL)
+
+// Extract origin from base URL
+const API_ORIGIN = (() => {
+  try {
+    const url = new URL(API_BASE_URL)
+    return url.origin
+  } catch {
+    // Fallback: extract origin manually
+    if (API_BASE_URL.startsWith('http://') || API_BASE_URL.startsWith('https://')) {
+      const match = API_BASE_URL.match(/^(https?:\/\/[^/]+)/)
+      return match ? match[1] : 'https://grc-tprm.vardaands.com'
     }
+    return 'https://grc-tprm.vardaands.com'
   }
-  
-  // Check if we're in development mode and on localhost
-  const isDevelopment = import.meta.env.MODE === 'development' || import.meta.env.DEV
-  const isLocalhost = typeof window !== 'undefined' && window.location && 
-                      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-  
-  // Use localhost in development if on localhost OR if explicitly set via VITE_USE_LOCALHOST=true
-  if (isDevelopment && isLocalhost || import.meta.env.VITE_USE_LOCALHOST === 'true') {
-    if (typeof window !== 'undefined' && window.location) {
-      const { protocol, hostname, port } = window.location
-      if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        const devPorts = new Set(['3000', '4173', '4174', '5173', '5174'])
-        const backendPort = !port || devPorts.has(port) ? '8000' : port
-        const portSegment = backendPort ? `:${backendPort}` : ''
-        console.log('[backendEnv] Using localhost for API in development:', `${protocol}//${hostname}${portSegment}`)
-        return `${protocol}//${hostname}${portSegment}`
-      }
-    }
-  }
-  
-  // DEFAULT: Always use production URL
-  console.log('[backendEnv] Using production API URL (development mode:', isDevelopment, ', localhost:', isLocalhost, ')')
-  return 'https://grc-tprm.vardaands.com'
-}
-
-const resolveApiBaseUrl = () => {
-  const candidates = [
-    import.meta.env?.VITE_API_BASE_URL,
-    import.meta.env?.VITE_API_URL,
-    import.meta.env?.VITE_BACKEND_URL,
-    import.meta.env?.VUE_APP_API_BASE_URL,
-    import.meta.env?.VUE_APP_API_URL
-  ].filter(Boolean)
-
-  if (candidates.length > 0) {
-    return stripTrailingSlash(candidates[0])
-  }
-
-  // Default to production API URL
-  const origin = resolveWindowOrigin()
-  // If origin already includes /api, don't add it again
-  if (origin.includes('/api')) {
-    return stripTrailingSlash(origin)
-  }
-  return `${origin}/api`
-}
+})()
 
 const joinUrl = (base, path = '') => {
   const cleanBase = stripTrailingSlash(base)
@@ -69,41 +28,10 @@ const joinUrl = (base, path = '') => {
   return cleanPath ? `${cleanBase}/${cleanPath}` : cleanBase
 }
 
-const API_BASE_URL = resolveApiBaseUrl()
-const API_ORIGIN = (() => {
-  try {
-    return new URL(API_BASE_URL).origin
-  } catch {
-    return resolveWindowOrigin()
-  }
-})()
 const API_V1_BASE_URL = joinUrl(API_BASE_URL, 'v1')
 
-const resolveTprmBaseUrl = () => {
-  const explicitBase = import.meta.env?.VITE_TPRM_API_BASE_URL
-  if (explicitBase) {
-    return stripTrailingSlash(explicitBase)
-  }
-
-  const prefix = import.meta.env?.VITE_TPRM_API_PREFIX
-  if (prefix) {
-    if (prefix.startsWith('http://') || prefix.startsWith('https://')) {
-      return stripTrailingSlash(prefix)
-    }
-    return `${API_ORIGIN}${ensureLeadingSlash(stripTrailingSlash(prefix))}`
-  }
-
-  // Default to production TPRM API URL
-  // If API_BASE_URL already includes /tprm, return it as is
-  if (API_BASE_URL.includes('/tprm')) {
-    return stripTrailingSlash(API_BASE_URL)
-  }
-  
-  // Otherwise, append /tprm
-  return joinUrl(API_BASE_URL, 'tprm')
-}
-
-const TPRM_API_BASE_URL = resolveTprmBaseUrl()
+// TPRM API Base URL - use the centralized config
+const TPRM_API_BASE_URL = API_BASE_URL
 const TPRM_API_V1_BASE_URL = joinUrl(TPRM_API_BASE_URL, 'v1')
 
 export const getApiOrigin = () => API_ORIGIN

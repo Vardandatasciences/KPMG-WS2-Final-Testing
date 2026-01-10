@@ -1,63 +1,49 @@
-// Helper to detect if we should use localhost
-const getDefaultBaseUrl = () => {
-  // Priority 1: Explicitly set API base URL from environment
-  if (import.meta.env.VITE_API_BASE_URL) {
-    return import.meta.env.VITE_API_BASE_URL
+// API Configuration - Centralized URL Management
+// Change this variable to switch between different environments
+
+// Environment Configuration
+const ENVIRONMENT = 'development'; 
+// Options: 'aws', 'local', 'development'
+
+// API Base URLs for different environments
+const API_URLS = {
+  aws: 'https://grc-tprm.vardaands.com/api/tprm',
+  local: 'http://127.0.0.1:8000/api/tprm',
+  development: 'http://127.0.0.1:8000/api/tprm'
+};
+
+// CRITICAL: Prevent webpack constant folding by using runtime evaluation
+// This ensures the correct URL is used even after minification
+const getApiBaseUrl = () => {
+  // Force runtime evaluation - prevent webpack from inlining
+  const currentEnv = ENVIRONMENT;
+  if (currentEnv === 'aws') {
+    return API_URLS.aws;
+  } else if (currentEnv === 'local') {
+    return API_URLS.local;
+  } else if (currentEnv === 'development') {
+    return API_URLS.development;
   }
-  
-  // Priority 2: Explicitly set TPRM API base URL from environment
-  if (import.meta.env.VITE_TPRM_API_BASE_URL) {
-    return import.meta.env.VITE_TPRM_API_BASE_URL
-  }
-  
-  // Priority 3: Build URL from backend host/port environment variables
-  const backendHost = import.meta.env.VITE_BACKEND_HOST || import.meta.env.VITE_API_HOST
-  const backendPort = import.meta.env.VITE_BACKEND_PORT || import.meta.env.VITE_API_PORT || '8000'
-  const backendProtocol = import.meta.env.VITE_BACKEND_PROTOCOL || import.meta.env.VITE_API_PROTOCOL || 'http'
-  
-  if (backendHost) {
-    const portSegment = backendPort ? `:${backendPort}` : ''
-    return `${backendProtocol}://${backendHost}${portSegment}/api/tprm`
-  }
-  
-  // Priority 4: Check if we're in development mode and on localhost
-  const isDevelopment = import.meta.env.MODE === 'development' || import.meta.env.DEV
-  const isLocalhost = typeof window !== 'undefined' && window.location && 
-                      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-  
-  // Use localhost in development if on localhost (fallback)
-  if (isDevelopment && isLocalhost) {
-    const protocol = window.location.protocol
-    const hostname = window.location.hostname
-    const defaultBackendPort = backendPort || '8000'
-    return `${protocol}//${hostname}:${defaultBackendPort}/api/tprm`
-  }
-  
-  // Priority 5: Use production URL from environment or default
-  return import.meta.env.VITE_PRODUCTION_API_URL || 'https://grc-tprm.vardaands.com/api/tprm'
-}
+  // Default fallback
+  return API_URLS.aws;
+};
+
+// Get the current API base URL based on environment
+// Using function call prevents webpack from inlining the wrong value
+const BASE_URL = getApiBaseUrl();
 
 // API Configuration
-const BASE_URL = getDefaultBaseUrl()
 const API_CONFIG = {
   BASE_URL: BASE_URL,
-  RFP_APPROVAL_BASE: import.meta.env.VITE_RFP_APPROVAL_BASE || `${BASE_URL}/rfp-approval`,
+  RFP_APPROVAL_BASE: `${BASE_URL}/rfp-approval`,
   TIMEOUT: parseInt(import.meta.env.VITE_API_TIMEOUT || '10000', 10), // Default 10 seconds, from env
 }
 
-// Log the API configuration in development
-if (import.meta.env.MODE === 'development' || import.meta.env.DEV) {
-  console.log('[API Config] Environment Variables:')
-  console.log('  - VITE_API_BASE_URL:', import.meta.env.VITE_API_BASE_URL || 'not set')
-  console.log('  - VITE_TPRM_API_BASE_URL:', import.meta.env.VITE_TPRM_API_BASE_URL || 'not set')
-  console.log('  - VITE_BACKEND_HOST:', import.meta.env.VITE_BACKEND_HOST || 'not set')
-  console.log('  - VITE_BACKEND_PORT:', import.meta.env.VITE_BACKEND_PORT || 'not set')
-  console.log('  - VITE_PRODUCTION_API_URL:', import.meta.env.VITE_PRODUCTION_API_URL || 'not set')
-  console.log('[API Config] Resolved Configuration:')
-  console.log('  - BASE_URL:', API_CONFIG.BASE_URL)
-  console.log('  - RFP_APPROVAL_BASE:', API_CONFIG.RFP_APPROVAL_BASE)
-  console.log('  - TIMEOUT:', API_CONFIG.TIMEOUT)
-}
+// Log the API configuration
+console.log(`🔧 TPRM API Configuration: Using ${ENVIRONMENT} environment`);
+console.log(`🌐 Base URL: ${API_CONFIG.BASE_URL}`);
+console.log(`  - RFP_APPROVAL_BASE: ${API_CONFIG.RFP_APPROVAL_BASE}`);
+console.log(`  - TIMEOUT: ${API_CONFIG.TIMEOUT}`);
 
 // API Endpoints
 const API_ENDPOINTS = {
@@ -167,10 +153,16 @@ const apiCall = async (url, options = {}) => {
   }
 }
 
+// Export API base URL for use in other modules
+export const API_BASE_URL = BASE_URL;
+
 export {
   API_CONFIG,
   API_ENDPOINTS,
   buildApiUrl,
   apiCall,
-  getAuthToken
+  getAuthToken,
+  ENVIRONMENT,
+  API_URLS,
+  getApiBaseUrl
 }
