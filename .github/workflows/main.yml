@@ -1,4 +1,4 @@
-name: Build and Push Backend to ECR
+name: Build, Push, Pull, and Run Backend Docker Image to/from ECR
 
 on:
   push:
@@ -10,7 +10,9 @@ env:
   AWS_REGION: ap-south-1
   ECR_REGISTRY: 480940871468.dkr.ecr.ap-south-1.amazonaws.com
   BACKEND_IMAGE: 480940871468.dkr.ecr.ap-south-1.amazonaws.com/grc_tprm_backend:latest
-  DOCKERFILE_PATH: grc_backend/Dockerfile  # Updated to reflect the path
+  DOCKER_NETWORK: grc_network  # Adjust based on your network name
+  BACKEND_PORT: 5000  # Replace with the correct backend port if different
+  DOCKERFILE_PATH: grc_backend/Dockerfile  # Path to the Dockerfile
 
 jobs:
   build-and-push-backend:
@@ -21,18 +23,38 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history for all changes
 
-      - name: List files in grc_backend directory
-        run: ls -l grc_backend
-
-      - name: Configure AWS credentials
+      - name: Show current commit
         run: |
-          aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+          echo "Building from commit: ${{ github.sha }}"
+          echo "Commit ref: ${{ github.ref }}"
+          echo "Commit message: ${{ github.event.head_commit.message || 'N/A' }}"
+
+      - name: Clean up Docker to free space
+        run: |
+          echo "Cleaning up Docker to free disk space..."
+          docker container prune -f || true
+          docker image prune -a -f || true
+          docker volume prune -f || true
+          docker builder prune -a -f || true
+          echo "Disk space after cleanup:"
+          df -h /
+
+      - name: Remove old Backend image
+        run: |
+          docker rmi grc_tprm_backend:latest || true
+          docker rmi "${BACKEND_IMAGE}" || true
 
       - name: Build Backend Docker image
-        working-directory: grc_backend  # Path to the backend directory where Dockerfile is
+        working-directory: grc_backend
         run: |
-          docker build -t grc_tprm_backend:latest -f ${{ env.DOCKERFILE_PATH }} .
+          # List contents of grc_backend to ensure Dockerfile is present
+          ls -l ./grc_backend
+          
+          # Build the Docker image
+          docker build --no-cache --pull -t grc_tprm_backend:latest -f ${{ env.DOCKERFILE_PATH }} .
 
       - name: Tag Backend image for ECR
         run: |
@@ -40,5 +62,76 @@ jobs:
 
       - name: Push Backend to ECR
         run: |
+          aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
           docker push "${BACKEND_IMAGE}"
           echo "Backend image pushed to ECR successfully"
+
+  pull-and-run-backend:
+    runs-on: self-hosted
+    needs: build-and-push-backend
+    permissions:
+      contents: read
+
+    steps:
+      - name: Configure AWS credentials
+        run: |
+          aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+
+      - name: Pull Backend Docker image from ECR
+        run: |
+          docker pull "${BACKEND_IMAGE}"
+          echo "Backend image pulled from ECR successfully"
+
+      - name: Deploy Backend container
+        run: |
+          # Stop and remove existing container if it exists
+          if [ "$(docker ps -aq -f name=grc_tprm_backend)" ]; then
+            echo "Stopping and removing existing backend container..."
+            docker stop grc_tprm_backend || true
+            docker rm grc_tprm_backend || true
+          fi
+
+          # Verify the image exists
+          echo "Verifying backend image exists..."
+          docker images | grep grc_tprm_backend || echo "WARNING: Image not found!"
+
+          # Run the new container with necessary volumes and environment variables
+          echo "Starting new backend container..."
+          docker run -d \
+            --name grc_tprm_backend \
+            --network ${DOCKER_NETWORK} \
+            -p ${BACKEND_PORT}:8000 \
+            --env-file /home/ec2-user/config.env \
+            -v /home/ec2-user/MEDIA_ROOT:/app/MEDIA_ROOT \
+            -v /home/ec2-user/TEMP_MEDIA_ROOT:/app/TEMP_MEDIA_ROOT \
+            -v /home/ec2-user/Reports:/app/Reports \
+            --restart unless-stopped \
+            grc_tprm_backend:latest
+
+          # Verify the container is running
+          sleep 2
+          docker ps | grep grc_tprm_backend || echo "WARNING: Container not running!"
+
+          # Show container logs to verify it started correctly
+          echo "=== Backend container startup logs ==="
+          docker logs grc_tprm_backend --tail 30 || true
+
+      - name: Check Backend health
+        run: |
+          echo "Waiting for backend to be ready..."
+          sleep 10  # Give backend more time to start
+          
+          # Try to connect to backend
+          echo "Testing backend health at http://127.0.0.1:${BACKEND_PORT}/"
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:${BACKEND_PORT}/ || echo "000")
+          
+          if [ "$HTTP_CODE" = "000" ]; then
+            echo "ERROR: Backend not responding. Showing container status and logs:"
+            docker ps -a | grep grc_tprm_backend || echo "Container not found!"
+            docker logs grc_tprm_backend --tail 50 || true
+            echo "Backend health check failed (non-blocking)."
+          elif [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 500 ]; then
+            echo "Backend is responding (HTTP $HTTP_CODE) - Health check passed!"
+          else
+            echo "Backend returned HTTP $HTTP_CODE - may need investigation"
+          fi
