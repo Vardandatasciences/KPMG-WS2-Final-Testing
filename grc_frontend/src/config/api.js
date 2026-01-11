@@ -2,13 +2,13 @@
 // Change this variable to switch between different environments
  
 // Environment Configuration
-const ENVIRONMENT = 'development'; 
+const ENVIRONMENT = 'aws'; 
 // Options: 'aws', 'local', 'development'
  
 // API Base URLs for different environments
 const API_URLS = {
-  // aws: 'https://grc-backend.vardaands.com',
-  aws: 'https://grc-tprm.vardaands.com',
+  // AWS: Use domain without port - nginx proxies /api/ to localhost:8000/api/
+  aws: 'https://riskavaire.vardaands.com',
   local: 'http://127.0.0.1:8000',
   development: 'http://127.0.0.1:8000'
 };

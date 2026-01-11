@@ -63,7 +63,16 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "changeme-in-dev-only")
 DEBUG = os.environ.get("DJANGO_DEBUG", "false").lower() == "true"
 
 
-ALLOWED_HOSTS = ['localhost',"grc-tprm.vardaands.com", 'riskavaire.vardaands.com','grc-backend.vardaands.com','grc-backend.vardaands.com', '15.207.108.158','127.0.0.1','e581-2405-201-c00b-4973-29e6-34b2-9eae-1e0c.ngrok-free.app', '13.204.228.21']
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+    'riskavaire.vardaands.com',  # Main production domain
+    'grc-tprm.vardaands.com',
+    'grc-backend.vardaands.com',
+    '15.207.108.158',
+    '13.204.228.21',
+    'e581-2405-201-c00b-4973-29e6-34b2-9eae-1e0c.ngrok-free.app',
+]
 
 
 # Application definition
