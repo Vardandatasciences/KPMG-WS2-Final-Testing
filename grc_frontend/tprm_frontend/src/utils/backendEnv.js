@@ -1,8 +1,7 @@
 // Import the centralized API configuration
-import { API_BASE_URL as CONFIG_API_BASE_URL, ENVIRONMENT, API_URLS } from '@/config/api.js'
+import { API_BASE_URL as CONFIG_API_BASE_URL } from '@/config/api.js'
 
 const stripTrailingSlash = (value = '') => value.replace(/\/+$/, '')
-const ensureLeadingSlash = (path = '') => (path.startsWith('/') ? path : `/${path}`)
 
 // Use the centralized API configuration
 const API_BASE_URL = stripTrailingSlash(CONFIG_API_BASE_URL)

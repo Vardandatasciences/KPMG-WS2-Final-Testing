@@ -63,7 +63,7 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "changeme-in-dev-only")
 DEBUG = os.environ.get("DJANGO_DEBUG", "false").lower() == "true"
 
 
-ALLOWED_HOSTS = ['localhost',"grc-tprm.vardaands.com", 'grc-backend.vardaands.com','grc-backend.vardaands.com', '15.207.108.158','127.0.0.1','e581-2405-201-c00b-4973-29e6-34b2-9eae-1e0c.ngrok-free.app', '13.204.228.21']
+ALLOWED_HOSTS = ['localhost',"grc-tprm.vardaands.com", 'riskavaire.vardaands.com','grc-backend.vardaands.com','grc-backend.vardaands.com', '15.207.108.158','127.0.0.1','e581-2405-201-c00b-4973-29e6-34b2-9eae-1e0c.ngrok-free.app', '13.204.228.21']
 
 
 # Application definition
@@ -428,10 +428,12 @@ CORS_ALLOWED_ORIGINS = [
     "https://grc-backend.vardaands.com",  # New server IP with port
     "https://13.204.228.21:8000",  # New server IP with port (HTTPS)
     "http://13.204.228.21:8000",
+    "https://riskavaire.vardaands.com",
 ]
 
 # CSRF settings
 CSRF_TRUSTED_ORIGINS = [
+    "https://riskavaire.vardaands.com",
     "http://localhost:3000",  # TPRM frontend development server
     "http://localhost:8081",  # Vue.js development server
     "http://localhost:8080",  # Alternative Vue.js port
