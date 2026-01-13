@@ -20,7 +20,45 @@ class CookieService {
    */
   async savePreferences(preferences) {
     try {
-      const response = await api.post('/api/cookie/preferences/save/', preferences)
+      // CRITICAL: Ensure user_id is in the preferences object BEFORE sending
+      // Check multiple sources for user_id
+      let userId = localStorage.getItem('user_id') || 
+                   localStorage.getItem('userId') ||
+                   sessionStorage.getItem('user_id') ||
+                   sessionStorage.getItem('userId');
+      
+      // Also check current_user object
+      if (!userId) {
+        try {
+          const currentUserStr = localStorage.getItem('current_user');
+          if (currentUserStr) {
+            const currentUser = JSON.parse(currentUserStr);
+            userId = currentUser.UserId || currentUser.user_id || currentUser.userId || currentUser.id;
+          }
+        } catch (e) {
+          // Ignore parse errors
+        }
+      }
+      
+      // Convert to integer if it's a string
+      if (userId) {
+        userId = parseInt(userId);
+      }
+      
+      // CRITICAL: Always include user_id in the preferences object
+      // This ensures it's in the request body even if the interceptor fails
+      const prefsWithUserId = {
+        ...preferences,
+        user_id: userId || preferences.user_id || null  // Use found userId, or existing, or null
+      }
+      
+      console.log('🍪 [CookieService] savePreferences - Final data being sent:', {
+        ...prefsWithUserId,
+        user_id_value: prefsWithUserId.user_id,
+        user_id_type: typeof prefsWithUserId.user_id
+      });
+      
+      const response = await api.post('/api/cookie/preferences/save/', prefsWithUserId)
       return response.data
     } catch (error) {
       console.error('Error saving cookie preferences:', error)

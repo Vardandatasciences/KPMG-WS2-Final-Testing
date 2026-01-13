@@ -38,12 +38,23 @@ def require_consent(action_type):
         @wraps(view_func)
         def wrapped_view(request, *args, **kwargs):
             try:
+                # Helper function to safely get data from request (handles both DRF and Django requests)
+                def get_request_data(request, key, default=None):
+                    """Get data from request, handling both DRF Request and Django WSGIRequest"""
+                    if hasattr(request, 'data'):
+                        # DRF Request object
+                        return request.data.get(key, default)
+                    elif hasattr(request, 'POST'):
+                        # Django WSGIRequest object
+                        return request.POST.get(key, default)
+                    return default
+                
                 # Get framework_id from request
                 framework_id = None
                 
                 # Try multiple sources for framework_id
                 if request.method == 'POST' or request.method == 'PUT':
-                    framework_id = request.data.get('framework_id') or request.data.get('FrameworkId')
+                    framework_id = get_request_data(request, 'framework_id') or get_request_data(request, 'FrameworkId')
                 elif request.method == 'GET':
                     framework_id = request.GET.get('framework_id') or request.GET.get('FrameworkId')
                 
@@ -69,8 +80,8 @@ def require_consent(action_type):
                         return view_func(request, *args, **kwargs)
                     
                     # Consent is enabled - check if user has accepted
-                    consent_accepted = request.data.get('consent_accepted', False) if request.method in ['POST', 'PUT'] else False
-                    consent_config_id = request.data.get('consent_config_id') if request.method in ['POST', 'PUT'] else None
+                    consent_accepted = get_request_data(request, 'consent_accepted', False) if request.method in ['POST', 'PUT'] else False
+                    consent_config_id = get_request_data(request, 'consent_config_id') if request.method in ['POST', 'PUT'] else None
                     
                     if not consent_accepted or not consent_config_id:
                         logger.warning(f"[Consent] Consent required but not provided for {action_type}")

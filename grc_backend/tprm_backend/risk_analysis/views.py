@@ -115,13 +115,16 @@ class RiskViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """Get filtered queryset based on request parameters
-        MULTI-TENANCY: Filter by tenant
+        MULTI-TENANCY: Filter by tenant (include NULL tenant_id records if no tenant_id provided)
         """
         # MULTI-TENANCY: Filter by tenant
         tenant_id = get_tenant_id_from_request(self.request)
         if tenant_id:
-            queryset = Risk.objects.filter(tenant_id=tenant_id)
+            # Include records with matching tenant_id OR NULL tenant_id (for backward compatibility)
+            from django.db.models import Q
+            queryset = Risk.objects.filter(Q(tenant_id=tenant_id) | Q(tenant_id__isnull=True))
         else:
+            # If no tenant_id, return all records (including those with NULL tenant_id)
             queryset = Risk.objects.all()
         
         # Apply custom filters (module filtering removed)
@@ -240,16 +243,15 @@ class RiskHeatmapViewSet(viewsets.ViewSet):
     permission_classes = [SimpleAuthenticatedPermission]
     
     def list(self, request):
-        """Get heatmap data dynamically from risk records"""
+        """Get heatmap data dynamically from risk records
+        MULTI-TENANCY: Filter by tenant_id
+        """
         try:
+            # MULTI-TENANCY: Get tenant_id from request
+            tenant_id = get_tenant_id_from_request(request)
             service = RiskAnalysisService()
-            module_name = request.query_params.get('module', None)
-            
-            if module_name:
-                module = get_object_or_404(TPRMModule, name=module_name)
-                heatmap_data = service.get_heatmap_data(module)
-            else:
-                heatmap_data = service.get_heatmap_data()
+            # Module filtering removed - using entity-data-row approach
+            heatmap_data = service.get_heatmap_data(tenant_id=tenant_id)
             
             serializer = HeatmapDataSerializer(heatmap_data, many=True)
             return Response(serializer.data)
@@ -296,21 +298,27 @@ class DashboardAPIView(APIView):
         """Get dashboard data including risks, heatmap, and statistics"""
         try:
             # Get risk statistics
+            # MULTI-TENANCY: Pass tenant_id to statistics service
+            tenant_id = get_tenant_id_from_request(request)
             service = RiskAnalysisService()
-            stats = service.get_risk_statistics()
+            stats = service.get_risk_statistics(tenant_id=tenant_id)
             
             # Get recent risks
-            # MULTI-TENANCY: Filter by tenant_id
+            # MULTI-TENANCY: Filter by tenant_id (include NULL tenant_id records if no tenant_id provided)
             tenant_id = get_tenant_id_from_request(request)
             if tenant_id:
-                recent_risks = Risk.objects.filter(tenant_id=tenant_id).order_by('-created_at')[:10]
+                # Include records with matching tenant_id OR NULL tenant_id (for backward compatibility)
+                from django.db.models import Q
+                recent_risks = Risk.objects.filter(Q(tenant_id=tenant_id) | Q(tenant_id__isnull=True)).order_by('-created_at')[:10]
             else:
+                # If no tenant_id, return all records (including those with NULL tenant_id)
                 recent_risks = Risk.objects.all().order_by('-created_at')[:10]
             risk_serializer = RiskListSerializer(recent_risks, many=True)
             
             # Get heatmap data dynamically
+            # MULTI-TENANCY: Pass tenant_id to heatmap service
             service = RiskAnalysisService()
-            heatmap_data = service.get_heatmap_data()
+            heatmap_data = service.get_heatmap_data(tenant_id=tenant_id)
             heatmap_serializer = HeatmapDataSerializer(heatmap_data, many=True)
             
             # Entity list now comes from EntityDataService

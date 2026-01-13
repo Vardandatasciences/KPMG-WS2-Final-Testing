@@ -64,6 +64,8 @@ def require_tenant(view_func):
     Decorator to ensure request has tenant context
     Returns 403 error if tenant is not found
     
+    For file uploads, tries to get tenant from user_id in POST data
+    
     Usage:
         @require_tenant
         @api_view(['GET'])
@@ -73,22 +75,45 @@ def require_tenant(view_func):
     """
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
-        if not hasattr(request, 'tenant') or request.tenant is None:
-            logger.warning(f"[Tenant Utils] Tenant required but not found for {request.method} {request.path}")
-            # Check if we're using DRF (has .data attribute means DRF Request)
-            if hasattr(request, 'data'):
-                from rest_framework.response import Response
-                return Response({
-                    'error': 'Tenant context not found',
-                    'detail': 'This endpoint requires tenant authentication'
-                }, status=403)
-            else:
-                return JsonResponse({
-                    'error': 'Tenant context not found',
-                    'detail': 'This endpoint requires tenant authentication'
-                }, status=403)
+        # Check if tenant is already set
+        if hasattr(request, 'tenant') and request.tenant is not None:
+            return view_func(request, *args, **kwargs)
         
-        return view_func(request, *args, **kwargs)
+        # For file uploads (multipart/form-data), try to get tenant from user_id in POST data
+        if request.method == 'POST' and hasattr(request, 'POST'):
+            user_id = request.POST.get('user_id')
+            if user_id:
+                try:
+                    # Import models using relative import (same package level)
+                    from .models import Users, Tenant
+                    user = Users.objects.get(UserId=user_id)
+                    if hasattr(user, 'tenant_id') and user.tenant_id:
+                        # Set tenant on request for downstream use
+                        try:
+                            tenant = Tenant.objects.get(tenant_id=user.tenant_id)
+                            request.tenant = tenant
+                            request.tenant_id = user.tenant_id
+                            logger.info(f"[Tenant Utils] Got tenant {user.tenant_id} from user_id {user_id} in POST data")
+                            return view_func(request, *args, **kwargs)
+                        except Tenant.DoesNotExist:
+                            logger.warning(f"[Tenant Utils] Tenant {user.tenant_id} not found for user {user_id}")
+                except Exception as e:
+                    logger.warning(f"[Tenant Utils] Error getting tenant from user_id {user_id}: {e}")
+        
+        # If tenant still not found, return error
+        logger.warning(f"[Tenant Utils] Tenant required but not found for {request.method} {request.path}")
+        # Check if we're using DRF (has .data attribute means DRF Request)
+        if hasattr(request, 'data'):
+            from rest_framework.response import Response
+            return Response({
+                'error': 'Tenant context not found',
+                'detail': 'This endpoint requires tenant authentication'
+            }, status=403)
+        else:
+            return JsonResponse({
+                'error': 'Tenant context not found',
+                'detail': 'This endpoint requires tenant authentication'
+            }, status=403)
     
     return wrapper
 

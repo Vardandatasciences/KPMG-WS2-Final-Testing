@@ -126,17 +126,24 @@ class Risk(TPRMEncryptedFieldsMixin, models.Model):
         super().save(*args, **kwargs)
     
     @classmethod
-    def get_heatmap_data(cls, module_name=None):
+    def get_heatmap_data(cls, module_name=None, tenant_id=None):
         """
         Dynamically generate heatmap data from risk records
         
         Args:
             module_name: Optional module name to filter by (not used for now)
+            tenant_id: Optional tenant_id to filter by (MULTI-TENANCY)
             
         Returns:
             List of heatmap data dictionaries
         """
-        queryset = cls.objects.all()
+        # MULTI-TENANCY: Filter by tenant if provided
+        if tenant_id:
+            from django.db.models import Q
+            # Include records with matching tenant_id OR NULL tenant_id (for backward compatibility)
+            queryset = cls.objects.filter(Q(tenant_id=tenant_id) | Q(tenant_id__isnull=True))
+        else:
+            queryset = cls.objects.all()
         # Module filtering disabled for now since we're using entity-data-row approach
         
         # Group risks by likelihood and impact ranges

@@ -35,23 +35,23 @@
     </div>
 
     <!-- Debug Info -->
-    <div style="background: #fff3cd; border: 2px solid #ffc107; padding: 12px; margin-bottom: 16px; border-radius: 8px;">
-      <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div>
+    <div class="cfm-debug-info">
+      <div class="cfm-debug-content">
+        <div class="cfm-debug-text">
           <strong>🔍 Debug Info:</strong><br>
           Available Frameworks: {{ availableFrameworks.length }}<br>
           <template v-if="availableFrameworks.length > 0">
-            <div style="max-height: 100px; overflow-y: auto; margin-top: 8px; padding: 8px; background: white; border-radius: 4px;">
-              <div v-for="fw in availableFrameworks" :key="fw.framework_id" style="margin: 4px 0;">
+            <div class="cfm-debug-list">
+              <div v-for="fw in availableFrameworks" :key="fw.framework_id" class="cfm-debug-item">
                 {{ fw.framework_id }}: {{ fw.framework_name }} ({{ fw.category }})
               </div>
             </div>
           </template>
           <template v-else>
-            <span style="color: red;">No frameworks loaded! Check console for errors.</span>
+            <span class="cfm-debug-error">No frameworks loaded! Check console for errors.</span>
           </template>
         </div>
-        <button @click="loadAvailableFrameworks" class="cfm-btn cfm-btn-secondary" style="margin-left: 12px;">
+        <button @click="loadAvailableFrameworks" class="cfm-btn cfm-btn-secondary cfm-reload-btn">
           <i class="fas fa-sync"></i> Reload Frameworks
         </button>
       </div>
@@ -782,15 +782,46 @@ export default {
 <style scoped>
 .cross-framework-mapping-container {
   padding: 24px;
-  margin-left: 270px;
+  margin-left: 280px;
+  width: calc(100% - 280px);
+  max-width: calc(100vw - 280px);
+  height: calc(100vh - 80px);
+  max-height: calc(100vh - 80px);
+  box-sizing: border-box;
+  overflow-y: auto;
+  overflow-x: hidden !important;
   background: #f9fafb;
-  min-height: 100vh;
+  position: relative;
+  /* Custom scrollbar styling */
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e0 #f7fafc;
+}
+
+.cross-framework-mapping-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.cross-framework-mapping-container::-webkit-scrollbar-track {
+  background: #f7fafc;
+  border-radius: 4px;
+}
+
+.cross-framework-mapping-container::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 4px;
+}
+
+.cross-framework-mapping-container::-webkit-scrollbar-thumb:hover {
+  background: #a0aec0;
 }
 
 .cfm-header {
   margin-bottom: 24px;
   padding-bottom: 20px;
   border-bottom: 2px solid #e5e7eb;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .cfm-title {
@@ -801,6 +832,10 @@ export default {
   display: flex;
   align-items: center;
   gap: 12px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+  flex-wrap: wrap;
 }
 
 .cfm-title i {
@@ -811,6 +846,9 @@ export default {
   color: #6b7280;
   font-size: 1rem;
   margin: 0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
 }
 
 .cfm-action-bar {
@@ -818,6 +856,10 @@ export default {
   gap: 12px;
   margin-bottom: 24px;
   justify-content: center;
+  flex-wrap: wrap;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .cfm-btn {
@@ -866,10 +908,14 @@ export default {
 /* Split Screen Layout */
 .cfm-split-container {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   gap: 0;
   margin-bottom: 24px;
   min-height: 600px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .cfm-panel {
@@ -877,6 +923,11 @@ export default {
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   overflow: hidden;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 
 .cfm-panel-left {
@@ -908,10 +959,40 @@ export default {
   display: flex;
   align-items: center;
   gap: 8px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+  flex-wrap: wrap;
 }
 
 .cfm-panel-content {
   padding: 24px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1;
+  min-height: 0;
+  box-sizing: border-box;
+  /* Custom scrollbar styling */
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e0 #f7fafc;
+}
+
+.cfm-panel-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.cfm-panel-content::-webkit-scrollbar-track {
+  background: #f7fafc;
+  border-radius: 4px;
+}
+
+.cfm-panel-content::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 4px;
+}
+
+.cfm-panel-content::-webkit-scrollbar-thumb:hover {
+  background: #a0aec0;
 }
 
 .cfm-framework-selector {
@@ -928,12 +1009,17 @@ export default {
 
 .cfm-select {
   width: 100%;
+  max-width: 100%;
   padding: 12px;
   border: 2px solid #d1d5db;
   border-radius: 8px;
   font-size: 1rem;
   transition: all 0.2s;
   background: white;
+  box-sizing: border-box;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  min-width: 0;
 }
 
 .cfm-select:focus {
@@ -948,6 +1034,10 @@ export default {
   border-radius: 8px;
   padding: 16px;
   margin-bottom: 20px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .cfm-info-item {
@@ -969,6 +1059,12 @@ export default {
 .cfm-info-value {
   color: #1f2937;
   font-weight: 500;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+  text-align: right;
+  flex: 1;
+  min-width: 0;
 }
 
 .cfm-compliances-list {
@@ -988,6 +1084,11 @@ export default {
   margin: 0;
   font-size: 1rem;
   color: #1f2937;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+  flex: 1;
+  min-width: 0;
 }
 
 .cfm-count-badge {
@@ -1002,7 +1103,11 @@ export default {
 .cfm-compliances-scroll {
   max-height: 500px;
   overflow-y: auto;
+  overflow-x: hidden;
   padding-right: 8px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .cfm-compliances-scroll::-webkit-scrollbar {
@@ -1033,6 +1138,10 @@ export default {
   cursor: pointer;
   transition: all 0.2s;
   background: white;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .cfm-compliance-item:hover {
@@ -1063,6 +1172,8 @@ export default {
 
 .cfm-compliance-content {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .cfm-compliance-title {
@@ -1070,6 +1181,9 @@ export default {
   color: #1f2937;
   margin-bottom: 4px;
   font-size: 0.95rem;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
 }
 
 .cfm-compliance-desc {
@@ -1077,6 +1191,9 @@ export default {
   font-size: 0.85rem;
   line-height: 1.4;
   margin-bottom: 8px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
 }
 
 .cfm-compliance-meta {
@@ -1100,8 +1217,12 @@ export default {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 0 24px;
+  padding: 0 12px;
   position: relative;
+  flex-shrink: 0;
+  min-width: 80px;
+  max-width: 100px;
+  box-sizing: border-box;
 }
 
 .cfm-connector-line {
@@ -1131,13 +1252,18 @@ export default {
 .cfm-connector-label {
   margin-top: 12px;
   background: white;
-  padding: 8px 16px;
+  padding: 8px 12px;
   border-radius: 20px;
   font-weight: 600;
   color: #3b82f6;
   font-size: 0.9rem;
   z-index: 1;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  white-space: nowrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 /* Results Section */
@@ -1146,6 +1272,10 @@ export default {
   border-radius: 12px;
   padding: 24px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .cfm-results-header {
@@ -1155,6 +1285,11 @@ export default {
   margin-bottom: 24px;
   padding-bottom: 16px;
   border-bottom: 2px solid #e5e7eb;
+  flex-wrap: wrap;
+  gap: 15px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .cfm-results-header h3 {
@@ -1169,6 +1304,7 @@ export default {
 .cfm-results-stats {
   display: flex;
   gap: 20px;
+  flex-wrap: wrap;
 }
 
 .cfm-stat-item {
@@ -1234,13 +1370,17 @@ export default {
 
 .cfm-mapping-result {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   gap: 20px;
   padding: 20px;
   border: 2px solid #e5e7eb;
   border-radius: 8px;
   transition: all 0.2s;
   position: relative;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .cfm-mapping-result:hover {
@@ -1274,6 +1414,9 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .cfm-mapping-empty {
@@ -1284,6 +1427,10 @@ export default {
   border: 2px dashed #d1d5db;
   border-radius: 8px;
   background: #f9fafb;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .cfm-empty-placeholder {
@@ -1315,6 +1462,9 @@ export default {
   font-size: 1rem;
   font-weight: 600;
   color: #1f2937;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
 }
 
 .cfm-control-identifier {
@@ -1333,6 +1483,9 @@ export default {
   font-size: 0.85rem;
   color: #6b7280;
   line-height: 1.4;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
 }
 
 .cfm-mapping-arrow {
@@ -1341,6 +1494,10 @@ export default {
   align-items: center;
   justify-content: center;
   gap: 8px;
+  flex-shrink: 0;
+  min-width: 60px;
+  max-width: 80px;
+  box-sizing: border-box;
 }
 
 .cfm-mapping-arrow i {
@@ -1466,10 +1623,83 @@ export default {
   opacity: 1;
 }
 
+/* Debug Info Styles */
+.cfm-debug-info {
+  background: #fff3cd;
+  border: 2px solid #ffc107;
+  padding: 12px;
+  margin-bottom: 16px;
+  border-radius: 8px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.cfm-debug-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.cfm-debug-text {
+  flex: 1;
+  min-width: 0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.cfm-debug-list {
+  max-height: 100px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  margin-top: 8px;
+  padding: 8px;
+  background: white;
+  border-radius: 4px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.cfm-debug-item {
+  margin: 4px 0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+}
+
+.cfm-debug-error {
+  color: red;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+}
+
+.cfm-reload-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 /* Responsive Design */
+@media (max-width: 1024px) {
+  .cross-framework-mapping-container {
+    margin-left: 250px;
+    width: calc(100% - 250px);
+    max-width: calc(100vw - 250px);
+  }
+}
+
 @media (max-width: 1200px) {
   .cross-framework-mapping-container {
-    margin-left: 0;
+    margin-left: 220px;
+    width: calc(100% - 220px);
+    max-width: calc(100vw - 220px);
     padding: 16px;
   }
 
@@ -1489,6 +1719,17 @@ export default {
   .cfm-mapping-arrow {
     transform: rotate(90deg);
     margin: 12px 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .cross-framework-mapping-container {
+    margin-left: 0;
+    width: 100%;
+    max-width: 100vw;
+    padding: 16px;
+    height: calc(100vh - 60px);
+    max-height: calc(100vh - 60px);
   }
 }
 </style>

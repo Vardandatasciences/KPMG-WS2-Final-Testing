@@ -1866,6 +1866,26 @@ def save_edited_framework_to_database(request):
             if len(parts) > 1 and parts[1] != 'PCI':
                 user_id = parts[1].split('.')[0]
         
+        # Get logged-in user's name instead of defaulting to 'Admin'
+        created_by_name = framework_data.get('CreatedByName', '')
+        if not created_by_name:
+            # Try to get username from Users model using user_id
+            try:
+                from ...models import Users
+                user_obj = Users.objects.filter(UserId=user_id).first()
+                if user_obj:
+                    created_by_name = getattr(user_obj, 'UserName_plain', None) or getattr(user_obj, 'UserName', None) or str(user_obj.UserName)
+                    print(f"✅ Got username from Users model: {created_by_name}")
+                else:
+                    # Fallback to session or request user
+                    created_by_name = getattr(request.user, 'username', None) or request.session.get('grc_username', 'Admin')
+                    print(f"⚠️ User not found, using fallback: {created_by_name}")
+            except Exception as e:
+                print(f"⚠️ Error getting username: {str(e)}, using fallback")
+                created_by_name = getattr(request.user, 'username', None) or request.session.get('grc_username', 'Admin')
+        else:
+            print(f"✅ Using CreatedByName from framework_data: {created_by_name}")
+        
         media_root = Path(settings.MEDIA_ROOT)
         user_folder = media_root / f"upload_{user_id}"
         checked_sections_path = user_folder / "checked_section.json"
@@ -1890,7 +1910,7 @@ def save_edited_framework_to_database(request):
                 CurrentVersion=float(framework_data.get('CurrentVersion', 1.0)) if framework_data.get('CurrentVersion') else 1.0,
                 FrameworkDescription=framework_data.get('FrameworkDescription', ''),
                 EffectiveDate=framework_data.get('EffectiveDate') or date.today(),
-                CreatedByName=framework_data.get('CreatedByName', 'Admin'),
+                CreatedByName=created_by_name,
                 CreatedByDate=date.today(),
                 Category=framework_data.get('Category', ''),
                 Identifier=framework_data.get('Identifier', ''),
@@ -1919,6 +1939,10 @@ def save_edited_framework_to_database(request):
                     print(f"  Policy {policy_idx + 1}: {policy_data.get('policy_title', 'N/A')}")
                     
                     # Create Policy
+                    policy_created_by_name = policy_data.get('CreatedByName', '')
+                    if not policy_created_by_name:
+                        policy_created_by_name = created_by_name  # Use the same name from framework
+                    
                     policy = Policy.objects.create(
                         FrameworkId=framework,
                         CurrentVersion='1.0',
@@ -1927,7 +1951,7 @@ def save_edited_framework_to_database(request):
                         PolicyName=policy_data.get('policy_title', 'Untitled Policy'),
                         StartDate=date.today(),
                         Department=policy_data.get('Department', ''),
-                        CreatedByName=policy_data.get('CreatedByName', 'Admin'),
+                        CreatedByName=policy_created_by_name,
                         CreatedByDate=date.today(),
                         Applicability=policy_data.get('Applicability', ''),
                         Scope=policy_data.get('scope', ''),
@@ -1948,10 +1972,14 @@ def save_edited_framework_to_database(request):
                         subpolicy_id = subpolicy_data.get('subpolicy_id', '')
                         print(f"    Subpolicy {subpolicy_idx + 1}: {subpolicy_data.get('subpolicy_title', 'N/A')} (ID: {subpolicy_id})")
                         
+                        subpolicy_created_by_name = subpolicy_data.get('CreatedByName', '')
+                        if not subpolicy_created_by_name:
+                            subpolicy_created_by_name = created_by_name  # Use the same name from framework
+                        
                         subpolicy = SubPolicy.objects.create(
                             PolicyId=policy,
                             SubPolicyName=subpolicy_data.get('subpolicy_title', 'Untitled SubPolicy'),
-                            CreatedByName=subpolicy_data.get('CreatedByName', 'Admin'),
+                            CreatedByName=subpolicy_created_by_name,
                             CreatedByDate=date.today(),
                             Identifier=subpolicy_id,
                             Description=subpolicy_data.get('subpolicy_description', ''),
@@ -2004,7 +2032,10 @@ def save_edited_framework_to_database(request):
                     # Truncate fields to match model max_length constraints
                     compliance_title = (compliance_data.get('ComplianceTitle', 'Untitled Compliance') or 'Untitled Compliance')[:145]
                     business_units = (compliance_data.get('BusinessUnitsCovered', '') or '')[:225]
-                    created_by = (compliance_data.get('CreatedByName', 'Admin') or 'Admin')[:250]
+                    compliance_created_by_name = compliance_data.get('CreatedByName', '')
+                    if not compliance_created_by_name:
+                        compliance_created_by_name = created_by_name  # Use the same name from framework
+                    created_by = (compliance_created_by_name or created_by_name)[:250]
                     identifier = (compliance_data.get('Identifier', '') or '')[:45]
                     applicability = (compliance_data.get('Applicability', '') or '')[:450]
                     risk_category = (compliance_data.get('RiskCategory', '') or '')[:45]

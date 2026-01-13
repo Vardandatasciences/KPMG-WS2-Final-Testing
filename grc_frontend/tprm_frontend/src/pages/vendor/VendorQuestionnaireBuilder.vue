@@ -1358,20 +1358,37 @@ const activateQuestionnaire = async () => {
       await questionnaireStore.activateQuestionnaire(questionnaireId.value, questionnaire.value, questions.value)
       
       // Show success message and redirect to approval workflow
-      PopupService.confirm(
-        'Questionnaire activated successfully! Would you like to send it for approval now?',
-        'Questionnaire Activated',
-        () => {
-          // Redirect to ApprovalWorkflowCreator with questionnaire data
-          console.log('VendorQuestionnaireBuilder - Full questionnaire object:', questionnaire.value)
-          console.log('VendorQuestionnaireBuilder - vendor_id being passed:', questionnaire.value.vendor_id)
-          const vendorId = questionnaire.value.vendor_id ? `&vendor_id=${questionnaire.value.vendor_id}` : ''
-          console.log('VendorQuestionnaireBuilder - Full URL parameter:', vendorId)
-          const fullUrl = `http://localhost:3000/vendor-approval-workflow-creator?workflow_type=MULTI_PERSON&approval_type=questionnaire_approval&questionnaire_id=${questionnaireId.value}&questionnaire_name=${encodeURIComponent(questionnaire.value.questionnaire_name)}&questionnaire_type=${questionnaire.value.questionnaire_type}&auto_populate=true${vendorId}`
-          console.log('VendorQuestionnaireBuilder - Redirecting to:', fullUrl)
-          window.location.href = fullUrl
-        }
-      )
+      PopupService.success('Questionnaire activated successfully! Redirecting to approval workflow...', 'Questionnaire Activated')
+      
+      // Build query parameters for approval workflow
+      const queryParams = {
+        workflow_type: 'MULTI_PERSON',
+        approval_type: 'questionnaire_approval',
+        questionnaire_id: questionnaireId.value,
+        questionnaire_name: questionnaire.value.questionnaire_name,
+        questionnaire_type: questionnaire.value.questionnaire_type,
+        auto_populate: 'true'
+      }
+      
+      // Add vendor_id if available
+      if (questionnaire.value.vendor_id) {
+        queryParams.vendor_id = questionnaire.value.vendor_id
+      }
+      
+      console.log('VendorQuestionnaireBuilder - Redirecting to approval workflow with params:', queryParams)
+      
+      // Use Vue Router for navigation instead of window.location
+      setTimeout(() => {
+        router.push({
+          name: 'Vendor Approval Workflow Creator',
+          query: queryParams
+        }).catch(err => {
+          console.error('Navigation error:', err)
+          // Fallback to path-based navigation
+          const queryString = new URLSearchParams(queryParams).toString()
+          router.push(`/vendor-approval-workflow-creator?${queryString}`).catch(console.error)
+        })
+      }, 1000) // Small delay to show success message
     } catch (error) {
       if (error.message.includes('does not exist')) {
         // Questionnaire doesn't exist, create a new one
@@ -1390,31 +1407,37 @@ const activateQuestionnaire = async () => {
         await questionnaireStore.activateQuestionnaire(questionnaireId.value, questionnaire.value, questions.value)
         
         // Show success message and redirect to approval workflow
-        PopupService.confirm(
-          'Questionnaire created and activated successfully! Would you like to send it for approval now?',
-          'Questionnaire Activated',
-          () => {
-            // Redirect to ApprovalWorkflowCreator with questionnaire data
-            console.log('VendorQuestionnaireBuilder - Full questionnaire object:', questionnaire.value)
-            console.log('VendorQuestionnaireBuilder - vendor_id being passed:', questionnaire.value.vendor_id)
-            const vendorId = questionnaire.value.vendor_id ? `&vendor_id=${questionnaire.value.vendor_id}` : ''
-            console.log('VendorQuestionnaireBuilder - Full URL parameter:', vendorId)
-            const fullUrl = `http://localhost:3000/vendor-approval-workflow-creator?workflow_type=MULTI_PERSON&approval_type=questionnaire_approval&questionnaire_id=${questionnaireId.value}&questionnaire_name=${encodeURIComponent(questionnaire.value.questionnaire_name)}&questionnaire_type=${questionnaire.value.questionnaire_type}&auto_populate=true${vendorId}`
-            console.log('VendorQuestionnaireBuilder - Redirecting to:', fullUrl)
-            window.location.href = fullUrl
-          },
-          () => {
-            // Update route to include ID
-            router.replace({ 
-              name: 'Vendor Questionnaire Builder', 
-              query: { id: questionnaireId.value } 
-            }).catch(err => {
-              console.error('Navigation error:', err)
-              // Fallback to path-based navigation
-              router.replace(`/vendor-questionnaire?id=${questionnaireId.value}`).catch(console.error)
-            })
-          }
-        )
+        PopupService.success('Questionnaire created and activated successfully! Redirecting to approval workflow...', 'Questionnaire Activated')
+        
+        // Build query parameters for approval workflow
+        const queryParams = {
+          workflow_type: 'MULTI_PERSON',
+          approval_type: 'questionnaire_approval',
+          questionnaire_id: questionnaireId.value,
+          questionnaire_name: questionnaire.value.questionnaire_name,
+          questionnaire_type: questionnaire.value.questionnaire_type,
+          auto_populate: 'true'
+        }
+        
+        // Add vendor_id if available
+        if (questionnaire.value.vendor_id) {
+          queryParams.vendor_id = questionnaire.value.vendor_id
+        }
+        
+        console.log('VendorQuestionnaireBuilder - Redirecting to approval workflow with params:', queryParams)
+        
+        // Use Vue Router for navigation instead of window.location
+        setTimeout(() => {
+          router.push({
+            name: 'Vendor Approval Workflow Creator',
+            query: queryParams
+          }).catch(err => {
+            console.error('Navigation error:', err)
+            // Fallback to path-based navigation
+            const queryString = new URLSearchParams(queryParams).toString()
+            router.push(`/vendor-approval-workflow-creator?${queryString}`).catch(console.error)
+          })
+        }, 1000) // Small delay to show success message
       } else {
         throw error
       }

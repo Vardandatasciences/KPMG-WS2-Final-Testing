@@ -4836,7 +4836,7 @@ def resolve_file_operation_evidence(evidence_urls, event):
                         cursor.execute("""
                             SELECT stored_name, s3_url, s3_key, s3_bucket, file_type, original_name, 
                                    content_type, export_format, file_size, created_at
-                            FROM grc.file_operations 
+                            FROM grc2.file_operations 
                             WHERE id = %s
                         """, [file_op_id])
                         
@@ -5176,7 +5176,7 @@ def link_evidence_to_incident(request):
                             cursor.execute("""
                                 SELECT stored_name, s3_url, s3_key, s3_bucket, file_type, 
                                        original_name, content_type, export_format, file_size
-                                FROM grc.file_operations 
+                                FROM grc2.file_operations 
                                 WHERE id = %s AND s3_url IS NOT NULL AND s3_url != ''
                             """, [file_operation_id])
                             
@@ -5218,7 +5218,7 @@ def link_evidence_to_incident(request):
                             cursor.execute("""
                                 SELECT stored_name, s3_url, s3_key, s3_bucket, file_type, 
                                        original_name, content_type, export_format, file_size
-                                FROM grc.file_operations 
+                                FROM grc2.file_operations 
                                 WHERE s3_url IS NOT NULL AND s3_url != ''
                                 AND (LOWER(original_name) LIKE %s OR LOWER(stored_name) LIKE %s)
                                 ORDER BY id DESC
@@ -5262,7 +5262,7 @@ def link_evidence_to_incident(request):
                             cursor.execute("""
                                 SELECT stored_name, s3_url, s3_key, s3_bucket, file_type, 
                                        original_name, content_type, export_format, file_size
-                                FROM grc.file_operations 
+                                FROM grc2.file_operations 
                                 WHERE s3_url IS NOT NULL AND s3_url != ''
                                 AND file_type IN ('pdf', 'xlsx', 'docx', 'csv', 'json')
                                 ORDER BY id DESC
@@ -5517,7 +5517,7 @@ def get_incident_linked_evidence(request, incident_id):
                                 cursor.execute("""
                                     SELECT stored_name, s3_url, s3_key, s3_bucket, file_type, 
                                            original_name, content_type, export_format, file_size
-                                    FROM grc.file_operations 
+                                    FROM grc2.file_operations 
                                     WHERE id = %s AND s3_url IS NOT NULL AND s3_url != ''
                                 """, [file_operation_id])
                                 

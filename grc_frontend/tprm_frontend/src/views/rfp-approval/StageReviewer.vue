@@ -350,17 +350,24 @@
                     </div>
 
                     <!-- Attached Documents -->
-                    <div v-if="getRfpDetailsForStage(stage).documents && getRfpDetailsForStage(stage).documents.length > 0" class="bg-red-50 rounded-lg p-4 border border-red-100">
+                    <div v-if="hasRfpDetails(stage)" class="bg-red-50 rounded-lg p-4 border border-red-100">
                       <h5 class="text-sm font-semibold text-red-900 mb-3 flex items-center space-x-2">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
                         </svg>
-                        <span>Attached Documents ({{ getRfpDetailsForStage(stage).documents.length }})</span>
+                        <span>Attached Documents 
+                          <span v-if="getRfpDetailsForStage(stage)?.documents && Array.isArray(getRfpDetailsForStage(stage).documents)">
+                            ({{ getRfpDetailsForStage(stage).documents.length }})
+                          </span>
+                          <span v-else>(0)</span>
+                        </span>
                       </h5>
-                      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      
+                      <!-- Documents List -->
+                      <div v-if="getRfpDetailsForStage(stage)?.documents && Array.isArray(getRfpDetailsForStage(stage).documents) && getRfpDetailsForStage(stage).documents.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                         <div
                           v-for="(doc, index) in getRfpDetailsForStage(stage).documents" 
-                          :key="index"
+                          :key="doc.id || doc.file_id || index"
                           @click="openDocument(doc)"
                           class="bg-white rounded-lg p-3 border border-red-200 hover:border-red-400 hover:shadow-md transition-all duration-200 group cursor-pointer"
                         >
@@ -373,12 +380,23 @@
                             <div class="flex-1 min-w-0">
                               <p class="text-sm font-medium text-gray-900 truncate">{{ getDocumentName(doc) }}</p>
                               <p class="text-xs text-gray-500">Click to open</p>
+                              <p v-if="doc.file_type" class="text-xs text-gray-400 mt-1">{{ doc.file_type.toUpperCase() }}</p>
                             </div>
                             <svg class="w-4 h-4 text-gray-400 group-hover:text-red-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
                             </svg>
                           </div>
                         </div>
+                      </div>
+                      
+                      <!-- No Documents Message -->
+                      <div v-else class="text-center py-6">
+                        <div class="text-gray-400 mb-2">
+                          <svg class="mx-auto h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                          </svg>
+                        </div>
+                        <p class="text-sm text-gray-600">No documents attached to this RFP</p>
                       </div>
                     </div>
 
@@ -970,7 +988,29 @@ const stageDecision = reactive({
         const data = await apiCall(url)
         console.log('✅ RFP Details fetched successfully:', data)
         console.log('📄 RFP Documents:', data.documents)
+        console.log('📄 RFP Documents type:', typeof data.documents)
+        console.log('📄 RFP Documents is array:', Array.isArray(data.documents))
+        console.log('📄 RFP Documents length:', data.documents ? (Array.isArray(data.documents) ? data.documents.length : 'Not an array') : 'null/undefined')
         console.log('📋 RFP Evaluation Criteria:', data.evaluation_criteria)
+        
+        // Ensure documents is always an array
+        if (data && !Array.isArray(data.documents)) {
+          if (data.documents === null || data.documents === undefined) {
+            data.documents = []
+          } else if (typeof data.documents === 'string') {
+            try {
+              const parsed = JSON.parse(data.documents)
+              data.documents = Array.isArray(parsed) ? parsed : []
+            } catch (e) {
+              console.warn('⚠️ Could not parse documents string:', e)
+              data.documents = []
+            }
+          } else {
+            data.documents = []
+          }
+        }
+        
+        console.log('📄 Final RFP Documents after processing:', data.documents)
         return data
       } catch (error) {
         console.error('❌ Error fetching RFP details:', error)
@@ -1863,7 +1903,24 @@ const loadRfpDetailsForStage = async (stage) => {
 }
 
 const getRfpDetailsForStage = (stage) => {
-  return rfpDetails.value[stage.stage_id] || null
+  const details = rfpDetails.value[stage.stage_id] || null
+  if (details && !Array.isArray(details.documents)) {
+    // Ensure documents is always an array
+    if (details.documents === null || details.documents === undefined) {
+      details.documents = []
+    } else if (typeof details.documents === 'string') {
+      try {
+        const parsed = JSON.parse(details.documents)
+        details.documents = Array.isArray(parsed) ? parsed : []
+      } catch (e) {
+        console.warn('⚠️ Could not parse documents string in getRfpDetailsForStage:', e)
+        details.documents = []
+      }
+    } else {
+      details.documents = []
+    }
+  }
+  return details
 }
 
 const hasRfpDetails = (stage) => {
@@ -1919,25 +1976,44 @@ const getDocumentUrl = (document) => {
 }
 
 const getDocumentName = (document) => {
+  if (!document) {
+    return 'Unknown Document'
+  }
+  
   if (typeof document === 'string') {
     const name = document.split('/').pop() || 'Document'
     return name.split('?')[0] // Remove query parameters
   }
-  if (document && document.file_name) {
-    return document.file_name
+  
+  if (typeof document === 'object') {
+    // Try various field names for document name
+    const nameFields = [
+      'document_name',
+      'file_name', 
+      'fileName',
+      'name',
+      'original_name',
+      'originalName',
+      'title',
+      'filename'
+    ]
+    
+    for (const field of nameFields) {
+      if (document[field]) {
+        return String(document[field])
+      }
+    }
+    
+    // If document has a URL, extract filename from it
+    if (document.url) {
+      const urlParts = document.url.split('/')
+      const fileName = urlParts[urlParts.length - 1]
+      if (fileName && fileName !== '') {
+        return fileName.split('?')[0] // Remove query parameters
+      }
+    }
   }
-  if (document && document.fileName) {
-    return document.fileName
-  }
-  if (document && document.name) {
-    return document.name
-  }
-  if (document && document.original_name) {
-    return document.original_name
-  }
-  if (document && document.originalName) {
-    return document.originalName
-  }
+  
   return 'Document'
 }
 

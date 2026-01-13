@@ -126,23 +126,23 @@ def get_acknowledgement_by_token(request, token):
         print(f"DEBUG: Received token (decoded): {decoded_token}")
         print(f"DEBUG: Token length: {len(decoded_token) if decoded_token else 0}")
         
-        # Try with decoded token first
-        ack_user = PolicyAcknowledgementUser.objects.filter(Token=decoded_token, tenant_id=tenant_id).first()
+        # Try with decoded token first (filter through AcknowledgementRequest__PolicyId relationship)
+        ack_user = PolicyAcknowledgementUser.objects.filter(Token=decoded_token, AcknowledgementRequest__PolicyId__tenant_id=tenant_id).first()
         
         # If not found, try with original token (in case it wasn't URL encoded)
         if not ack_user and decoded_token != token:
             print(f"DEBUG: Trying with original token...")
-            ack_user = PolicyAcknowledgementUser.objects.filter(Token=token, tenant_id=tenant_id).first()
+            ack_user = PolicyAcknowledgementUser.objects.filter(Token=token, AcknowledgementRequest__PolicyId__tenant_id=tenant_id).first()
         
         if not ack_user:
             # Debug: Check if any tokens exist
-            total_with_tokens = PolicyAcknowledgementUser.objects.filter(Token__isnull=False, tenant_id=tenant_id).count()
+            total_with_tokens = PolicyAcknowledgementUser.objects.filter(Token__isnull=False, AcknowledgementRequest__PolicyId__tenant_id=tenant_id).count()
             print(f"DEBUG: Token not found. Total records with tokens: {total_with_tokens}")
             
             # Try to find similar tokens (first 20 chars)
             if len(decoded_token) > 20:
                 sample_token = decoded_token[:20]
-                similar = PolicyAcknowledgementUser.objects.filter(Token__startswith=sample_token, tenant_id=tenant_id).first()
+                similar = PolicyAcknowledgementUser.objects.filter(Token__startswith=sample_token, AcknowledgementRequest__PolicyId__tenant_id=tenant_id).first()
                 if similar:
                     print(f"DEBUG: Found similar token starting with: {sample_token}")
             
@@ -162,7 +162,7 @@ def get_acknowledgement_by_token(request, token):
         user = ack_user.UserId
         
         # Use the token that was found (either decoded or original)
-        found_token = decoded_token if PolicyAcknowledgementUser.objects.filter(Token=decoded_token, tenant_id=tenant_id).exists() else token
+        found_token = decoded_token if PolicyAcknowledgementUser.objects.filter(Token=decoded_token, AcknowledgementRequest__PolicyId__tenant_id=tenant_id).exists() else token
         
         # Check if already acknowledged
         if ack_user.Status == 'Acknowledged':
@@ -206,7 +206,7 @@ def get_acknowledgement_by_token(request, token):
             }, status=status.HTTP_200_OK)
         
         # Use the token that was found (either decoded or original)
-        found_token = decoded_token if PolicyAcknowledgementUser.objects.filter(Token=decoded_token, tenant_id=tenant_id).exists() else token
+        found_token = decoded_token if PolicyAcknowledgementUser.objects.filter(Token=decoded_token, AcknowledgementRequest__PolicyId__tenant_id=tenant_id).exists() else token
         
         # Prepare response data (ack_request, policy, user already retrieved above)
         response_data = {
@@ -297,10 +297,10 @@ def acknowledge_policy_by_token(request, token):
         data = request.data
         comments = data.get('comments', '')
         
-        # Find acknowledgement user by token (try decoded first, then original)
-        ack_user = PolicyAcknowledgementUser.objects.filter(Token=decoded_token, tenant_id=tenant_id).first()
+        # Find acknowledgement user by token (try decoded first, then original) (filter through AcknowledgementRequest__PolicyId relationship)
+        ack_user = PolicyAcknowledgementUser.objects.filter(Token=decoded_token, AcknowledgementRequest__PolicyId__tenant_id=tenant_id).first()
         if not ack_user and decoded_token != token:
-            ack_user = PolicyAcknowledgementUser.objects.filter(Token=token, tenant_id=tenant_id).first()
+            ack_user = PolicyAcknowledgementUser.objects.filter(Token=token, AcknowledgementRequest__PolicyId__tenant_id=tenant_id).first()
         
         if not ack_user:
             return Response({
@@ -399,10 +399,10 @@ def get_policy_document_by_token(request, token):
         # URL decode the token
         decoded_token = unquote(token)
         
-        # Find acknowledgement user by token (try decoded first, then original)
-        ack_user = PolicyAcknowledgementUser.objects.filter(Token=decoded_token, tenant_id=tenant_id).first()
+        # Find acknowledgement user by token (try decoded first, then original) (filter through AcknowledgementRequest__PolicyId relationship)
+        ack_user = PolicyAcknowledgementUser.objects.filter(Token=decoded_token, AcknowledgementRequest__PolicyId__tenant_id=tenant_id).first()
         if not ack_user and decoded_token != token:
-            ack_user = PolicyAcknowledgementUser.objects.filter(Token=token, tenant_id=tenant_id).first()
+            ack_user = PolicyAcknowledgementUser.objects.filter(Token=token, AcknowledgementRequest__PolicyId__tenant_id=tenant_id).first()
         
         if not ack_user:
             return Response({

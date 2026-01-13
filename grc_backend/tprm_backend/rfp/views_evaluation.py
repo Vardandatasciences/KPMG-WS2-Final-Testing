@@ -324,11 +324,19 @@ def save_evaluation_scores(request, response_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_evaluation_scores(request, response_id):
     """
     Get evaluation scores for an RFP response from rfp_evaluation_scores table
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
+        
         # Get the RFP response to validate it exists
         # MULTI-TENANCY: Filter by tenant
         try:
@@ -413,13 +421,22 @@ def get_evaluation_scores(request, response_id):
 @authentication_classes([JWTAuthentication])
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_rfp_required('view_rfp')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_evaluation_scores_bulk(request):
     """
     Get evaluation scores for multiple RFP responses from rfp_evaluation_scores table
     Accepts comma-separated response_ids as query parameter
     Returns scores grouped by response_id for mean calculation
+    Also returns vendor information for each response
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
     """
     try:
+        # MULTI-TENANCY: Get tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        if not tenant_id:
+            return Response({'error': 'Tenant context not found'}, status=403)
+        
         # Get response_ids from query parameters
         response_ids_param = request.query_params.get('response_ids', '')
        
@@ -444,8 +461,8 @@ def get_evaluation_scores_bulk(request):
                 'error': 'No valid response_ids provided'
             }, status=status.HTTP_400_BAD_REQUEST)
        
-        # MULTI-TENANCY: Verify all response_ids belong to tenant
-        responses = RFPResponse.objects.filter(response_id__in=response_ids, tenant_id=tenant_id)
+        # MULTI-TENANCY: Verify all response_ids belong to tenant and get vendor info
+        responses = RFPResponse.objects.filter(response_id__in=response_ids, tenant_id=tenant_id).select_related()
         valid_response_ids = list(responses.values_list('response_id', flat=True))
         
         if not valid_response_ids:
@@ -453,6 +470,23 @@ def get_evaluation_scores_bulk(request):
                 'success': False,
                 'error': 'No valid responses found for the provided response_ids'
             }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Build vendor information map for each response
+        vendor_info_by_response = {}
+        for response in responses:
+            vendor_info_by_response[response.response_id] = {
+                'response_id': response.response_id,
+                'vendor_id': response.vendor_id,
+                'vendor_name': response.vendor_name or 'Unknown Vendor',
+                'organization_name': getattr(response, 'organization_name', None) or response.vendor_name,
+                'company_name': getattr(response, 'company_name', None) or response.vendor_name,
+                'technical_score': float(response.technical_score) if response.technical_score else None,
+                'commercial_score': float(response.commercial_score) if response.commercial_score else None,
+                'overall_score': float(response.overall_score) if response.overall_score else None,
+                'evaluation_status': response.evaluation_status,
+                'submission_status': getattr(response, 'submission_status', None),
+                'proposed_value': float(response.proposed_value) if response.proposed_value else None,
+            }
         
         # Query evaluation scores for all response_ids
         # MULTI-TENANCY: Filter by tenant (via response)
@@ -488,13 +522,14 @@ def get_evaluation_scores_bulk(request):
             if resp_id not in scores_by_response:
                 scores_by_response[resp_id] = []
             scores_by_response[resp_id].append(score_dict)
-       
+        
         return Response({
             'success': True,
             'response_ids': response_ids,
             'total_scores': len(scores_data),
             'scores_by_response': scores_by_response,
-            'scores': scores_data  # Flat list for backward compatibility
+            'scores': scores_data,  # Flat list for backward compatibility
+            'vendor_info': vendor_info_by_response  # Include vendor information for each response
         }, status=status.HTTP_200_OK)
        
     except Exception as e:
