@@ -1535,7 +1535,7 @@ def get_rejected_framework_versions(request, user_id=None):
         if user_id:
             query_filters['UserId'] = user_id
             
-        rejections = FrameworkApproval.objects.filter(tenant_id=tenant_id, **query_filters).order_by('-ApprovalId')
+        rejections = FrameworkApproval.objects.filter(FrameworkId__tenant_id=tenant_id, **query_filters).order_by('-ApprovalId')
         
         # Group by FrameworkId to get only the latest rejection for each framework
         framework_rejections = {}
@@ -1639,8 +1639,9 @@ def resubmit_rejected_framework(request, framework_id):
             return Response({"error": "Only rejected frameworks can be resubmitted"}, status=status.HTTP_400_BAD_REQUEST)
         
         # Get the latest framework approval (should be a rejected reviewer version 'r1')
-        latest_approval = FrameworkApproval.objects.filter(tenant_id=tenant_id, 
+        latest_approval = FrameworkApproval.objects.filter(
             FrameworkId=framework,
+            FrameworkId__tenant_id=tenant_id,
             ApprovedNot=False,
             Version__startswith='r'
         ).order_by('-ApprovalId').first()
@@ -2003,8 +2004,9 @@ def resubmit_framework_approval(request, framework_id):
             return Response({"error": "Only rejected frameworks can be resubmitted"}, status=400)
         
         # Get the latest framework approval (should be a rejected reviewer version)
-        latest_approval = FrameworkApproval.objects.filter(tenant_id=tenant_id, 
+        latest_approval = FrameworkApproval.objects.filter(
             FrameworkId=framework,
+            FrameworkId__tenant_id=tenant_id,
             ApprovedNot=False,
             Version__startswith='r'
         ).order_by('-ApprovalId').first()
@@ -2016,8 +2018,9 @@ def resubmit_framework_approval(request, framework_id):
         print(f"DEBUG: Found latest approval with id: {latest_approval.ApprovalId}, version: {latest_approval.Version}")
         
         # Get the FIRST approval to maintain UserId consistency throughout the approval flow
-        first_approval = FrameworkApproval.objects.filter(tenant_id=tenant_id, 
-            FrameworkId=framework
+        first_approval = FrameworkApproval.objects.filter(
+            FrameworkId=framework,
+            FrameworkId__tenant_id=tenant_id
         ).order_by('Version').first()  # Get the first approval by version
         
         print(f"DEBUG: Found first approval with id: {first_approval.ApprovalId}, version: {first_approval.Version}, UserId: {first_approval.UserId}")

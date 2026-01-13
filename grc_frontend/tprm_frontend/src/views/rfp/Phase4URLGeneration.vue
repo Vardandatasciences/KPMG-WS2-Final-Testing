@@ -2,7 +2,7 @@
   <div class="phase-container">
     <!-- Back Button -->
     <div class="back-button-container">
-      <a href="/rfp-vendor-selection" class="back-button">
+      <a @click.prevent="router.push('/rfp-vendor-selection')" class="back-button" style="cursor: pointer;">
         <ArrowLeft class="back-icon" />
         <span class="back-text">Back to Vendor Selection</span>
       </a>
@@ -317,7 +317,7 @@
                   <h3 class="empty-title">No invitations sent yet</h3>
                   <p class="empty-description">Generate and send unique invitation URLs to selected vendors.</p>
                 </div>
-                <rfp-button @click="generateAndSendInvitations" :disabled="loading" class="empty-action-button">
+                <rfp-button @click="handleGenerateAndSend" :disabled="loading" class="empty-action-button">
                   <Send class="button-icon" />
                   Generate & Send Invitations
               </rfp-button>
@@ -724,10 +724,17 @@
             </rfp-button>
             <rfp-button
               @click="viewInvitations"
-              class="success-button success-button-primary"
+              class="success-button success-button-secondary"
             >
               <Eye class="button-icon" />
               View Invitations
+            </rfp-button>
+            <rfp-button
+              @click="navigateAfterSuccess"
+              class="success-button success-button-primary"
+            >
+              <CheckCircle2 class="button-icon" />
+              Continue
             </rfp-button>
           </div>
         </div>
@@ -896,8 +903,12 @@ import rfpCardContent from '@/components_rfp/rfpCardContent.vue'
 import rfpCardTitle from '@/components_rfp/rfpCardTitle.vue'
 import newInvitationService from '@/services/newInvitationService.js'
 import vendorInvitationService from '@/services/vendorInvitationService.js'
+import { useRouter } from 'vue-router'
 
 const { success: showToast, error: showErrorToast } = rfpUseToast()
+
+// Router
+const router = useRouter()
 
 // Authentication
 const { getAuthHeaders } = useRfpApi()
@@ -1106,6 +1117,22 @@ const resendInvitation = async (invitationId) => {
   }
 }
 
+// Handle generate and send - fetch contacts first if needed
+const handleGenerateAndSend = async () => {
+  try {
+    // If contacts are not loaded, fetch them first (will show confirmation dialog)
+    if (!primaryContacts.value || primaryContacts.value.length === 0) {
+      await fetchPrimaryContacts()
+    } else {
+      // Contacts already loaded, proceed directly
+      await generateAndSendInvitations()
+    }
+  } catch (error) {
+    console.error('❌ [DEBUG] Error in handleGenerateAndSend:', error)
+    showErrorToast("Failed to prepare invitations", "An error occurred while preparing vendor contacts.")
+  }
+}
+
 // Fetch primary contacts for selected vendors
 const fetchPrimaryContacts = async () => {
   try {
@@ -1281,6 +1308,7 @@ const generateAndSendInvitations = async () => {
     if (!selectedVendorsData || !selectedRFPData) {
       console.error('❌ [DEBUG] Missing vendor or RFP data in localStorage')
       showErrorToast("No vendor selection found", "Please go back to Phase 3 and select vendors first.")
+      loading.value = false
       return
     }
     
@@ -1294,6 +1322,16 @@ const generateAndSendInvitations = async () => {
     
     // Update RFP ID from the stored data
     rfpId.value = rfpData.rfp_id
+    
+    // If primaryContacts are not loaded, fetch them first
+    if (!primaryContacts.value || primaryContacts.value.length === 0) {
+      console.log('📧 [DEBUG] Primary contacts not loaded, fetching them first...')
+      await fetchPrimaryContacts()
+      // Wait for user to confirm contacts in the dialog
+      // The confirmAndSendInvitations will be called after confirmation
+      loading.value = false
+      return
+    }
     
     // Prepare vendor data for NEW URI method
     const selectedVendors = []
@@ -1372,8 +1410,15 @@ const generateAndSendInvitations = async () => {
         // Send email invitations using the new service
         const emailResponse = await newInvitationService.sendInvitationEmails(response.invitations, rfpData)
         console.log('✅ [DEBUG] Email sending response:', emailResponse)
+        console.log('✅ [DEBUG] Email response structure:', {
+          success: emailResponse.success,
+          sent_emails: emailResponse.sent_emails,
+          failed_emails: emailResponse.failed_emails,
+          sentCount: emailResponse.sent_emails?.length,
+          failedCount: emailResponse.failed_emails?.length
+        })
         
-        if (emailResponse.success) {
+        if (emailResponse && emailResponse.success !== false) {
           const sentCount = emailResponse.sent_emails?.length || 0
           const failedCount = emailResponse.failed_emails?.length || 0
           
@@ -1433,14 +1478,19 @@ const generateAndSendInvitations = async () => {
         await loadInvitations()
         await loadInvitationStats()
         await loadRecentActivity()
+      } else {
+        console.error('❌ [DEBUG] Invitation generation failed:', response)
+        showErrorToast("Failed to generate invitations", response.error || "Please check console for details.")
       }
     } catch (error) {
-      console.error('Error creating invitations:', error)
-      showErrorToast("Failed to create invitations")
+      console.error('❌ [DEBUG] Error creating invitations:', error)
+      console.error('❌ [DEBUG] Error details:', error.response?.data || error.message)
+      showErrorToast("Failed to create invitations", error.response?.data?.error || error.message || "Please check console for details.")
     }
   } catch (error) {
-    console.error('Error in invitation process:', error)
-    showErrorToast("Failed to process invitations")
+    console.error('❌ [DEBUG] Error in invitation process:', error)
+    console.error('❌ [DEBUG] Error details:', error.response?.data || error.message)
+    showErrorToast("Failed to process invitations", error.response?.data?.error || error.message || "Please check console for details.")
   } finally {
     loading.value = false
   }
@@ -1573,6 +1623,20 @@ const showInvitationSuccessPopup = (data) => {
     invitations: data.invitations
   }
   showSuccessPopup.value = true
+}
+
+// Navigate to next step after successful invitation sending
+const navigateAfterSuccess = () => {
+  closeSuccessPopup()
+  // Navigate to RFP details or dashboard
+  // You can customize this route based on your application flow
+  const selectedRFPData = localStorage.getItem('selectedRFP')
+  if (selectedRFPData) {
+    const rfpData = JSON.parse(selectedRFPData)
+    router.push(`/rfps/${rfpData.rfp_id}`)
+  } else {
+    router.push('/rfps')
+  }
 }
 
 const closeSuccessPopup = () => {
@@ -1711,7 +1775,7 @@ const clearTestDataAndGoToPhase3 = () => {
   
   // Navigate to Phase 3
   setTimeout(() => {
-    window.location.href = '/rfp-vendor-selection'
+    router.push('/rfp-vendor-selection')
   }, 1000)
 }
 

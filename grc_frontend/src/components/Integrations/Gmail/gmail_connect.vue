@@ -404,7 +404,33 @@ export default {
         }
       } catch (error) {
         console.error('Error fetching Gmail messages:', error)
-        this.gmailError = error.response?.data?.error || error.message || 'Failed to fetch Gmail messages'
+        console.error('Error response:', error.response)
+        console.error('Error details:', {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          message: error.message
+        })
+        
+        // Provide more detailed error messages
+        if (error.response) {
+          const status = error.response.status
+          const errorData = error.response.data
+          
+          if (status === 404) {
+            this.gmailError = errorData?.error || 'User or Gmail application not found. Please connect your Gmail account first.'
+          } else if (status === 401) {
+            this.gmailError = 'Authentication failed. Please reconnect your Gmail account.'
+          } else if (status === 403) {
+            this.gmailError = 'Access denied. Please check your Gmail connection permissions.'
+          } else {
+            this.gmailError = errorData?.error || `Failed to fetch Gmail messages (Status: ${status})`
+          }
+        } else if (error.request) {
+          this.gmailError = 'Network error. Please check your internet connection and try again.'
+        } else {
+          this.gmailError = error.message || 'Failed to fetch Gmail messages'
+        }
       } finally {
         this.gmailLoading = false
       }

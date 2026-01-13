@@ -62,8 +62,8 @@
             <div class="ml-4">
               <p class="text-sm font-medium text-gray-900">Review Proposals</p>
               <p class="text-xs text-gray-500">View submitted proposals</p>
+            </div>
           </div>
-        </div>
           
           <div class="flex-1 h-0.5 mx-4" :class="selectedRFP && proposals.length > 0 ? 'bg-gradient-to-r from-blue-600 to-indigo-600' : 'bg-gray-200'"></div>
           
@@ -79,7 +79,206 @@
             </div>
           </div>
         </div>
-    </div>
+      </div>
+
+      <!-- Status Banner -->
+      <div v-if="selectedRFP" class="bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg p-4 mb-8">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center">
+            <div class="flex-shrink-0">
+              <Icons name="check-circle" class="h-6 w-6 text-green-500" />
+            </div>
+            <div class="ml-3 flex-1">
+              <p class="text-sm font-medium text-green-800">
+                <strong>RFP Selected:</strong> {{ selectedRFPDetails?.rfp_title }} 
+              </p>
+              <p v-if="proposals.length > 0" class="text-sm text-green-700 mt-1">
+                <strong>{{ proposals.length }} proposals</strong> available for evaluation. Select proposals and assign evaluators.
+              </p>
+              <p v-else-if="!loading" class="text-sm text-yellow-700 mt-1">
+                No proposals submitted yet. You can still proceed to comparison or wait for proposals.
+              </p>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <div v-if="selectedProposals.length > 0" class="flex items-center gap-2">
+              <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                {{ selectedProposals.length }} selected
+              </span>
+            </div>
+            <Button 
+              @click="loadRFPProposals" 
+              size="sm" 
+              variant="outline"
+              class="flex items-center"
+              :disabled="loading"
+            >
+              <Icons name="refresh-cw" class="h-4 w-4 mr-1" />
+              Refresh
+            </Button>
+            <Button 
+              v-if="proposals.length > 0"
+              @click="navigateToComparison" 
+              size="sm" 
+              variant="outline"
+              class="flex items-center"
+            >
+              <Icons name="arrow-right" class="h-4 w-4 mr-1" />
+              Go to Comparison
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Proposals Section -->
+      <div v-if="selectedRFP && proposals.length > 0" class="space-y-8 mb-8">
+        <!-- Proposals Header with Bulk Actions -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+          <div class="px-6 py-4 border-b border-gray-200">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-xl font-semibold text-gray-900">Vendor Proposals</h3>
+                <p class="text-sm text-gray-600 mt-1">{{ proposals.length }} proposals submitted for {{ selectedRFPDetails?.rfp_title }}</p>
+              </div>
+              <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2">
+                  <input
+                    type="checkbox" 
+                    :checked="selectedProposals.length === proposals.length && proposals.length > 0"
+                    :indeterminate="selectedProposals.length > 0 && selectedProposals.length < proposals.length"
+                    @change="toggleAllProposals"
+                    class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <span class="text-sm font-medium text-gray-700">Select All</span>
+                </div>
+                <Button 
+                  v-if="selectedProposals.length > 0"
+                  @click="assignEvaluatorsToSelected"
+                  class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 shadow-lg"
+                >
+                  <Icons name="users" class="h-4 w-4 mr-2" />
+                  Assign Evaluators ({{ selectedProposals.length }})
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Proposals Grid -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+          <div class="p-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              <div 
+                v-for="proposal in proposals" 
+                :key="proposal.response_id" 
+                class="relative bg-white border-2 rounded-xl p-6 transition-all duration-200 hover:shadow-lg"
+                :class="selectedProposals.includes(proposal.response_id) ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'"
+              >
+              <!-- Selection Checkbox -->
+              <div class="absolute top-4 right-4">
+                <input
+                  type="checkbox" 
+                  :checked="selectedProposals.includes(proposal.response_id)"
+                  @change="toggleProposalSelection(proposal.response_id)"
+                  class="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+              </div>
+
+              <!-- Proposal Header -->
+              <div class="pr-8">
+                <div class="flex items-start justify-between mb-4">
+                  <div class="flex-1">
+                    <h4 class="text-lg font-semibold text-gray-900 mb-1">{{ proposal.vendor_name || 'Unknown Vendor' }}</h4>
+                    <p class="text-sm text-gray-600 font-medium">
+                      {{ proposal.organization_name || proposal.company_name || proposal.org || 'No organization specified' }}
+                    </p>
+                  </div>
+                  <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
+                        :class="getStatusBadgeClass(proposal.evaluation_status)">
+                    {{ proposal.evaluation_status }}
+                  </span>
+                </div>
+                
+                <!-- Proposal Details -->
+                <div class="space-y-3">
+                  <div class="flex items-center text-sm text-gray-600">
+                    <Icons name="calendar" class="h-4 w-4 mr-2" />
+                    Submitted: {{ formatDate(proposal.submitted_at) }}
+                  </div>
+                  <div v-if="proposal.proposed_value" class="flex items-center text-sm text-gray-600">
+                    <Icons name="dollar-sign" class="h-4 w-4 mr-2" />
+                    Value: ${{ proposal.proposed_value.toLocaleString() }}
+                  </div>
+                  <div v-if="proposal.contact_email" class="flex items-center text-sm text-gray-600">
+                    <Icons name="mail" class="h-4 w-4 mr-2" />
+                    {{ proposal.contact_email }}
+                  </div>
+                </div>
+                
+                <!-- Action Buttons -->
+                <div class="flex items-center gap-2 mt-6">
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    @click="viewProposal(proposal)"
+                    class="flex-1"
+                  >
+                    <Icons name="eye" class="h-4 w-4 mr-1" />
+                    View
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    @click="assignEvaluator(proposal)"
+                    class="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white"
+                  >
+                    <Icons name="user-plus" class="h-4 w-4 mr-1" />
+                    Assign
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      </div>
+
+      <!-- Loading State -->
+      <div v-if="loading" class="flex items-center justify-center py-16 mb-8">
+        <div class="text-center">
+          <div class="animate-spin rounded-full h-16 w-16 border-4 border-blue-200 border-t-blue-600 mx-auto mb-6"></div>
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">Loading proposals...</h3>
+          <p class="text-sm text-gray-600">Please wait while we fetch the data.</p>
+        </div>
+      </div>
+
+      <!-- No Proposals Message -->
+      <div v-if="selectedRFP && proposals.length === 0 && !loading" class="text-center py-16 mb-8">
+        <div class="max-w-md mx-auto">
+          <div class="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Icons name="inbox" class="h-10 w-10 text-gray-400" />
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-2">No proposals found</h3>
+          <p class="text-gray-600 mb-6">No proposals were found for this RFP. This could mean:</p>
+          <ul class="text-sm text-gray-500 text-left mb-6 space-y-1">
+            <li>• No vendors have submitted proposals yet</li>
+            <li>• Proposals exist but have different submission statuses</li>
+            <li>• There might be a data issue</li>
+          </ul>
+          <div class="flex flex-col sm:flex-row gap-3 justify-center">
+            <Button @click="loadRFPProposals" variant="outline" class="flex items-center">
+              <Icons name="refresh-cw" class="h-4 w-4 mr-2" />
+              Refresh Proposals
+            </Button>
+            <Button @click="onRFPSelectionChange" variant="outline" class="flex items-center">
+              <Icons name="arrow-left" class="h-4 w-4 mr-2" />
+              Select Different RFP
+            </Button>
+          </div>
+          <div class="mt-4 text-xs text-gray-400">
+            Check the browser console for detailed debug information
+          </div>
+        </div>
+      </div>
 
       <!-- RFP Selection -->
       <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-8">
@@ -269,192 +468,7 @@
           </div>
         </div>
       </div>
-
-      <!-- Status Banner -->
-      <div v-if="selectedRFP" class="bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg p-4 mb-8">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center">
-            <div class="flex-shrink-0">
-              <Icons name="check-circle" class="h-6 w-6 text-green-500" />
-            </div>
-            <div class="ml-3 flex-1">
-              <p class="text-sm font-medium text-green-800">
-                <strong>RFP Selected:</strong> {{ selectedRFPDetails?.rfp_title }} 
-              </p>
-              <p v-if="proposals.length > 0" class="text-sm text-green-700 mt-1">
-                <strong>{{ proposals.length }} proposals</strong> available for evaluation
-              </p>
-              <p v-else-if="!loading" class="text-sm text-yellow-700 mt-1">
-                No proposals submitted yet
-              </p>
-            </div>
-          </div>
-          <div class="flex items-center gap-3">
-            <div v-if="selectedProposals.length > 0" class="flex items-center gap-2">
-              <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-                {{ selectedProposals.length }} selected
-              </span>
-            </div>
-            <Button 
-              @click="loadRFPProposals" 
-              size="sm" 
-              variant="outline"
-              class="flex items-center"
-              :disabled="loading"
-            >
-              <Icons name="refresh-cw" class="h-4 w-4 mr-1" />
-              Refresh
-            </Button>
-          </div>
-        </div>
-        </div>
-
-      <!-- Proposals Section -->
-      <div v-if="selectedRFP && proposals.length > 0" class="space-y-8">
-        <!-- Proposals Header with Bulk Actions -->
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200">
-          <div class="px-6 py-4 border-b border-gray-200">
-            <div class="flex items-center justify-between">
-              <div>
-                <h3 class="text-xl font-semibold text-gray-900">Vendor Proposals</h3>
-                <p class="text-sm text-gray-600 mt-1">{{ proposals.length }} proposals submitted for {{ selectedRFPDetails?.rfp_title }}</p>
-              </div>
-              <div class="flex items-center gap-3">
-                <div class="flex items-center gap-2">
-            <input
-                    type="checkbox" 
-                    :checked="selectedProposals.length === proposals.length && proposals.length > 0"
-                    :indeterminate="selectedProposals.length > 0 && selectedProposals.length < proposals.length"
-                    @change="toggleAllProposals"
-                    class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <span class="text-sm font-medium text-gray-700">Select All</span>
-                </div>
-                <Button 
-                  v-if="selectedProposals.length > 0"
-                  @click="assignEvaluatorsToSelected"
-                  class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 shadow-lg"
-                >
-                  <Icons name="users" class="h-4 w-4 mr-2" />
-                  Assign Evaluators ({{ selectedProposals.length }})
-                </Button>
-              </div>
-          </div>
-        </div>
-
-          <!-- Proposals Grid -->
-          <div class="p-6">
-            <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-              <div 
-                v-for="proposal in proposals" 
-                :key="proposal.response_id" 
-                class="relative bg-white border-2 rounded-xl p-6 transition-all duration-200 hover:shadow-lg"
-                :class="selectedProposals.includes(proposal.response_id) ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'"
-              >
-                <!-- Selection Checkbox -->
-                <div class="absolute top-4 right-4">
-            <input
-                    type="checkbox" 
-                    :checked="selectedProposals.includes(proposal.response_id)"
-                    @change="toggleProposalSelection(proposal.response_id)"
-                    class="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-          />
-        </div>
-
-                <!-- Proposal Header -->
-                <div class="pr-8">
-                  <div class="flex items-start justify-between mb-4">
-                    <div class="flex-1">
-                      <h4 class="text-lg font-semibold text-gray-900 mb-1">{{ proposal.vendor_name }}</h4>
-                      <p class="text-sm text-gray-600">{{ proposal.org || 'No organization specified' }}</p>
-                    </div>
-                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
-                          :class="getStatusBadgeClass(proposal.evaluation_status)">
-                      {{ proposal.evaluation_status }}
-                    </span>
-                  </div>
-                  
-                  <!-- Proposal Details -->
-                  <div class="space-y-3">
-                    <div class="flex items-center text-sm text-gray-600">
-                      <Icons name="calendar" class="h-4 w-4 mr-2" />
-                      Submitted: {{ formatDate(proposal.submitted_at) }}
-                    </div>
-                    <div v-if="proposal.proposed_value" class="flex items-center text-sm text-gray-600">
-                      <Icons name="dollar-sign" class="h-4 w-4 mr-2" />
-                      Value: ${{ proposal.proposed_value.toLocaleString() }}
-                    </div>
-                    <div v-if="proposal.contact_email" class="flex items-center text-sm text-gray-600">
-                      <Icons name="mail" class="h-4 w-4 mr-2" />
-                      {{ proposal.contact_email }}
-                    </div>
-                  </div>
-                  
-                  <!-- Action Buttons -->
-                  <div class="flex items-center gap-2 mt-6">
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      @click="viewProposal(proposal)"
-              class="flex-1"
-                    >
-                      <Icons name="eye" class="h-4 w-4 mr-1" />
-                      View
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      @click="assignEvaluator(proposal)"
-                      class="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white"
-                    >
-                      <Icons name="user-plus" class="h-4 w-4 mr-1" />
-                      Assign
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          </div>
-        </div>
-
-      <!-- Loading State -->
-      <div v-if="loading" class="flex items-center justify-center py-16">
-        <div class="text-center">
-          <div class="animate-spin rounded-full h-16 w-16 border-4 border-blue-200 border-t-blue-600 mx-auto mb-6"></div>
-          <h3 class="text-lg font-semibold text-gray-900 mb-2">Loading proposals...</h3>
-          <p class="text-sm text-gray-600">Please wait while we fetch the data.</p>
-        </div>
-        </div>
-
-      <!-- No Proposals Message -->
-      <div v-if="selectedRFP && proposals.length === 0 && !loading" class="text-center py-16">
-        <div class="max-w-md mx-auto">
-          <div class="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Icons name="inbox" class="h-10 w-10 text-gray-400" />
-          </div>
-          <h3 class="text-xl font-semibold text-gray-900 mb-2">No proposals found</h3>
-          <p class="text-gray-600 mb-6">No proposals were found for this RFP. This could mean:</p>
-          <ul class="text-sm text-gray-500 text-left mb-6 space-y-1">
-            <li>• No vendors have submitted proposals yet</li>
-            <li>• Proposals exist but have different submission statuses</li>
-            <li>• There might be a data issue</li>
-          </ul>
-          <div class="flex flex-col sm:flex-row gap-3 justify-center">
-            <Button @click="loadRFPProposals" variant="outline" class="flex items-center">
-              <Icons name="refresh-cw" class="h-4 w-4 mr-2" />
-              Refresh Proposals
-            </Button>
-            <Button @click="onRFPSelectionChange" variant="outline" class="flex items-center">
-              <Icons name="arrow-left" class="h-4 w-4 mr-2" />
-              Select Different RFP
-            </Button>
-          </div>
-          <div class="mt-4 text-xs text-gray-400">
-            Check the browser console for detailed debug information
-          </div>
-        </div>
-        </div>
-      </div>
+    </div>
   </div>
 
   <!-- Popup Modal -->
@@ -510,7 +524,30 @@ const onRFPSelectionChange = async () => {
   selectedProposals.value = []
   
   if (selectedRFP.value) {
-    await loadRFPProposals()
+    try {
+      await loadRFPProposals()
+      console.log('✅ Proposals loaded. Users can now assign evaluators or proceed to comparison.')
+    } catch (error) {
+      console.error('Error loading proposals:', error)
+      PopupService.error('Failed to load proposals. Please try again.', 'Loading Failed')
+    }
+    
+    // Store RFP data in localStorage for potential use in comparison page later
+    // But don't redirect automatically - let users assign evaluators first
+    if (selectedRFPDetails.value) {
+      const rfpData = {
+        rfp_id: selectedRFP.value,
+        rfp_title: selectedRFPDetails.value?.rfp_title,
+        rfp_number: selectedRFPDetails.value?.rfp_number,
+        description: selectedRFPDetails.value?.description,
+        rfp_type: selectedRFPDetails.value?.rfp_type,
+        status: selectedRFPDetails.value?.status,
+        proposal_count: proposals.value?.length || 0
+      }
+      localStorage.setItem('selected_rfp_for_comparison', JSON.stringify(rfpData))
+      localStorage.setItem('selected_rfp_proposals', JSON.stringify(proposals.value || []))
+      console.log('📋 RFP data stored for later use:', rfpData)
+    }
   } else {
     proposals.value = []
     selectedRFPDetails.value = null
@@ -585,8 +622,9 @@ const loadRFPProposals = async () => {
     const proposalsData = await proposalsResponse.json()
     
     // Ensure we get all proposals - handle both response formats
+    let rawProposals = []
     if (proposalsData.success && proposalsData.responses) {
-      proposals.value = proposalsData.responses
+      rawProposals = proposalsData.responses
       console.log(`Loaded ${proposalsData.responses.length} proposals for RFP ${selectedRFP.value}`)
       
       // Log debug information if available
@@ -597,18 +635,61 @@ const loadRFPProposals = async () => {
         console.log(`Responses returned: ${proposalsData.debug_info.responses_returned}`)
       }
     } else if (Array.isArray(proposalsData)) {
-      proposals.value = proposalsData
+      rawProposals = proposalsData
       console.log(`Loaded ${proposalsData.length} proposals for RFP ${selectedRFP.value}`)
     } else {
-      proposals.value = []
+      rawProposals = []
       console.warn('No proposals found or unexpected response format:', proposalsData)
     }
     
+    // Process proposals to extract organization name from multiple sources
+    proposals.value = rawProposals.map(proposal => {
+      // Extract organization name from multiple possible sources
+      let orgName = proposal.org
+        || proposal.organization_name
+        || proposal.company_name
+      
+      // If not found in direct fields, check response_documents
+      if (!orgName && proposal.response_documents) {
+        let responseDocs = proposal.response_documents
+        // Handle case where response_documents might be a string
+        if (typeof responseDocs === 'string') {
+          try {
+            responseDocs = JSON.parse(responseDocs)
+          } catch (e) {
+            console.warn('Could not parse response_documents:', e)
+            responseDocs = {}
+          }
+        }
+        
+        if (responseDocs && typeof responseDocs === 'object') {
+          orgName = responseDocs.organization_name
+            || responseDocs.company_name
+            || responseDocs.org
+            || responseDocs.vendor?.organization_name
+            || responseDocs.vendor?.company_name
+            || responseDocs.vendor?.org
+            || responseDocs.company?.name
+            || responseDocs.organization?.name
+        }
+      }
+      
+      // Return proposal with extracted organization name
+      return {
+        ...proposal,
+        org: orgName || proposal.org || 'No organization specified',
+        organization_name: orgName || proposal.organization_name,
+        company_name: orgName || proposal.company_name
+      }
+    })
+    
     // Log proposal details for debugging
     if (proposals.value.length > 0) {
-      console.log('Proposals loaded:', proposals.value.map(p => ({
+      console.log('Proposals loaded with organization names:', proposals.value.map(p => ({
         response_id: p.response_id,
         vendor_name: p.vendor_name,
+        org: p.org,
+        organization_name: p.organization_name,
         submission_status: p.submission_status,
         evaluation_status: p.evaluation_status,
         submitted_at: p.submitted_at
@@ -739,6 +820,20 @@ const selectRfpCard = async (rfp) => {
 
 const navigateToMyApprovals = () => {
   router.push('/my-approvals')
+}
+
+const navigateToComparison = () => {
+  if (selectedRFP.value) {
+    router.push({
+      path: '/rfp-comparison',
+      query: { rfp_id: selectedRFP.value }
+    }).catch(err => {
+      console.error('Navigation error:', err)
+      window.location.href = `/rfp-comparison?rfp_id=${selectedRFP.value}`
+    })
+  } else {
+    PopupService.warning('Please select an RFP first.', 'No RFP Selected')
+  }
 }
 
 const viewProposal = (proposal) => {

@@ -690,18 +690,40 @@ export default {
         const approvalType = payload?.approval_type || payload?.request_data?.approval_type
         const questionnaireId = payload?.questionnaire_id || payload?.request_data?.questionnaire_id
         
+        // Normalize approval type for comparison (handle both "questionnaire approval" and "questionnaire_approval")
+        const normalizedApprovalType = String(approvalType || '').toLowerCase().replace(/\s+/g, '_')
+        
+        console.log('🔍 Fetching questions for stage:', {
+          stage_id: stage.stage_id,
+          approval_type: approvalType,
+          normalized_approval_type: normalizedApprovalType,
+          questionnaire_id: questionnaireId,
+          payload_keys: Object.keys(payload || {})
+        })
+        
         // Fetch questionnaire questions for regular questionnaire approval
-        if (String(approvalType || '').toLowerCase().includes('questionnaire') && questionnaireId && approvalType !== 'response_approval') {
+        // Check for "questionnaire_approval" (not "response_approval") and ensure questionnaireId exists
+        if (normalizedApprovalType === 'questionnaire_approval' && questionnaireId) {
           try {
+            console.log(`📋 Fetching questions for questionnaire_id: ${questionnaireId}`)
             const qRes = await api.get(`/api/v1/vendor-approval/questionnaires/${questionnaireId}/questions/`)
             questionsMap.value[stage.stage_id] = qRes.data || []
+            console.log(`✅ Loaded ${questionsMap.value[stage.stage_id].length} questions for stage ${stage.stage_id}`)
           } catch (e) {
+            console.error('❌ Error fetching questionnaire questions:', e)
+            console.error('Error details:', e.response?.data || e.message)
             questionsMap.value[stage.stage_id] = []
           }
+        } else {
+          console.log('⏭️ Skipping question fetch:', {
+            reason: !questionnaireId ? 'No questionnaire_id' : `Approval type is "${normalizedApprovalType}", not "questionnaire_approval"`,
+            normalized_approval_type: normalizedApprovalType,
+            questionnaire_id: questionnaireId
+          })
         }
         
         // Fetch questionnaire responses for response approval
-        if (approvalType === 'response_approval') {
+        if (normalizedApprovalType === 'response_approval') {
           try {
             const questionsResponses = payload?.request_data?.questions_and_responses || payload?.questions_and_responses || []
             
@@ -1015,7 +1037,8 @@ export default {
     const isFinalVendorApproval = (stage) => {
       const payload = stage.request_data || tryParse(stage.request_data_display) || {}
       const rd = payload.request_data || payload
-      return String(rd.approval_type || '').toLowerCase() === 'final_vendor_approval'
+      const approvalType = String(rd.approval_type || '').toLowerCase().replace(/\s+/g, '_')
+      return approvalType === 'final_vendor_approval'
     }
 
     const getVendorData = (stage) => {
@@ -1161,7 +1184,8 @@ export default {
     const isResponseApproval = (stage) => {
       const payload = stage.request_data || tryParse(stage.request_data_display) || {}
       const rd = payload.request_data || payload
-      return String(rd.approval_type || '').toLowerCase() === 'response_approval'
+      const approvalType = String(rd.approval_type || '').toLowerCase().replace(/\s+/g, '_')
+      return approvalType === 'response_approval'
     }
 
     const updateScore = (questionId, score) => {

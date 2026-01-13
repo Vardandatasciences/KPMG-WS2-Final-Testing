@@ -3752,17 +3752,17 @@ export default {
         
         // Extract version names directly from the response if available
         if (responseData.version_names && Array.isArray(responseData.version_names)) {
-          // Filter only R versions
+          // Show all versions (U1, U2, R1, R2, etc.)
           this.allVersionNames = responseData.version_names.filter(version => 
-            version && version.toString().startsWith('R')
+            version && version.toString().trim() !== ''
           );
-          console.log(`Using filtered R version_names from API response:`, this.allVersionNames);
+          console.log(`Using all version_names from API response:`, this.allVersionNames);
         } else {
           // Fall back to extracting from versions array
           this.allVersionNames = versions
             .map(v => v.version)
-            .filter(version => version && version.toString().startsWith('R'));
-          console.log(`Extracted filtered R version names from versions array:`, this.allVersionNames);
+            .filter(version => version && version.toString().trim() !== '');
+          console.log(`Extracted all version names from versions array:`, this.allVersionNames);
         }
         
         if (versions && versions.length > 0) {

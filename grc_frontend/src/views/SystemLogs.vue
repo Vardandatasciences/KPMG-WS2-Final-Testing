@@ -515,11 +515,37 @@ onMounted(() => {
 
 <style scoped>
 .system-logs-page {
-  padding: 20px;
-  max-width: calc(100% - 280px);
+  padding: 24px;
   width: calc(100% - 280px);
+  max-width: calc(100vw - 280px);
+  height: calc(100vh - 80px);
+  max-height: calc(100vh - 80px);
   margin: 0 0 0 280px; /* Account for sidebar width */
-  min-height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden !important;
+  box-sizing: border-box;
+  position: relative;
+  /* Custom scrollbar styling */
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e0 #f7fafc;
+}
+
+.system-logs-page::-webkit-scrollbar {
+  width: 8px;
+}
+
+.system-logs-page::-webkit-scrollbar-track {
+  background: #f7fafc;
+  border-radius: 4px;
+}
+
+.system-logs-page::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 4px;
+}
+
+.system-logs-page::-webkit-scrollbar-thumb:hover {
+  background: #a0aec0;
 }
 
 .header-row {
@@ -529,12 +555,20 @@ onMounted(() => {
   margin-bottom: 20px;
   flex-wrap: wrap;
   gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .header-row h1 {
   margin: 0;
   font-size: 28px;
   color: #333;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+  flex: 1;
+  min-width: 0;
 }
 
 .header-info {
@@ -564,21 +598,29 @@ onMounted(() => {
   gap: 10px;
   margin-bottom: 20px;
   flex-wrap: wrap;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .search-input {
   flex: 1;
   min-width: 200px;
+  max-width: 100%;
   padding: 10px;
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 14px;
+  box-sizing: border-box;
 }
 
 .filters {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .date-input {
@@ -587,6 +629,10 @@ onMounted(() => {
   border-radius: 4px;
   font-size: 14px;
   background-color: white;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .date-label {
@@ -595,6 +641,8 @@ onMounted(() => {
   color: #333;
   display: flex;
   align-items: center;
+  white-space: normal;
+  word-wrap: break-word;
 }
 
 .clear-btn {
@@ -677,6 +725,12 @@ onMounted(() => {
 
 .logs-container {
   margin-top: 20px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .logs-info {
@@ -685,18 +739,53 @@ onMounted(() => {
   margin-bottom: 10px;
   font-size: 14px;
   color: #666;
+  flex-wrap: wrap;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .table-wrapper {
-  overflow-x: auto;
+  overflow-x: hidden !important;
+  overflow-y: auto;
   border: 1px solid #ddd;
+  border-radius: 4px;
+  max-height: calc(100vh - 450px);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  position: relative;
+  /* Custom scrollbar styling */
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e0 #f7fafc;
+}
+
+.table-wrapper::-webkit-scrollbar {
+  width: 8px;
+}
+
+.table-wrapper::-webkit-scrollbar-track {
+  background: #f7fafc;
   border-radius: 4px;
 }
 
+.table-wrapper::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 4px;
+}
+
+.table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #a0aec0;
+}
+
 .logs-table {
-  width: 100%;
+  width: 100% !important;
+  max-width: 100% !important;
   border-collapse: collapse;
   background-color: white;
+  table-layout: fixed;
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .logs-table thead {
@@ -704,13 +793,20 @@ onMounted(() => {
 }
 
 .logs-table th {
-  padding: 12px;
+  padding: 12px 8px;
   text-align: left;
   font-weight: 600;
   color: #333;
   border-bottom: 2px solid #ddd;
-  white-space: nowrap;
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
   position: relative;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .logs-table th.sortable {
@@ -737,9 +833,17 @@ onMounted(() => {
 }
 
 .logs-table td {
-  padding: 12px;
+  padding: 12px 8px;
   border-bottom: 1px solid #eee;
   font-size: 14px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  white-space: normal;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .logs-table tbody tr:hover {
@@ -775,10 +879,15 @@ onMounted(() => {
 }
 
 .description-cell {
-  max-width: 300px;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .log-level-info {
@@ -807,6 +916,9 @@ onMounted(() => {
   background-color: #f9f9f9;
   border-radius: 4px;
   flex-wrap: wrap;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .page-btn {
@@ -891,12 +1003,91 @@ onMounted(() => {
   border-color: #999;
 }
 
+/* Column width adjustments for better layout */
+.logs-table th:nth-child(1),
+.logs-table td:nth-child(1) {
+  width: 12%;
+  min-width: 0;
+  max-width: 15%;
+}
+
+.logs-table th:nth-child(2),
+.logs-table td:nth-child(2) {
+  width: 10%;
+  min-width: 0;
+  max-width: 12%;
+}
+
+.logs-table th:nth-child(3),
+.logs-table td:nth-child(3) {
+  width: 10%;
+  min-width: 0;
+  max-width: 12%;
+}
+
+.logs-table th:nth-child(4),
+.logs-table td:nth-child(4) {
+  width: 12%;
+  min-width: 0;
+  max-width: 15%;
+}
+
+.logs-table th:nth-child(5),
+.logs-table td:nth-child(5) {
+  width: 10%;
+  min-width: 0;
+  max-width: 12%;
+}
+
+.logs-table th:nth-child(6),
+.logs-table td:nth-child(6) {
+  width: 8%;
+  min-width: 0;
+  max-width: 10%;
+}
+
+.logs-table th:nth-child(7),
+.logs-table td:nth-child(7) {
+  width: 20%;
+  min-width: 0;
+  max-width: 25%;
+}
+
+.logs-table th:nth-child(8),
+.logs-table td:nth-child(8) {
+  width: 10%;
+  min-width: 0;
+  max-width: 12%;
+}
+
+.logs-table th:nth-child(9),
+.logs-table td:nth-child(9) {
+  width: 8%;
+  min-width: 0;
+  max-width: 10%;
+}
+
+@media (max-width: 1024px) {
+  .system-logs-page {
+    width: calc(100% - 240px);
+    max-width: calc(100vw - 240px);
+    margin-left: 240px;
+    padding: 16px;
+  }
+  
+  .table-wrapper {
+    max-height: calc(100vh - 400px);
+  }
+}
+
 @media (max-width: 768px) {
   .system-logs-page {
     margin-left: 0;
     width: 100%;
     max-width: 100%;
     padding: 10px;
+    height: calc(100vh - 60px);
+    max-height: calc(100vh - 60px);
   }
   
   .search-filter-row {
@@ -913,7 +1104,12 @@ onMounted(() => {
   
   .logs-table th,
   .logs-table td {
-    padding: 8px;
+    padding: 8px 4px;
+    font-size: 11px;
+  }
+  
+  .table-wrapper {
+    max-height: calc(100vh - 350px);
   }
 }
 </style>

@@ -27,15 +27,25 @@ class RBACTPRMUtils:
         
         # Try to get user_id from request.user (set by JWTAuthentication)
         try:
-            if hasattr(request, 'user') and request.user:
+            if hasattr(request, 'user') and request.user and not request.user.is_anonymous:
+                # Check for UserId (custom Users model field)
+                if hasattr(request.user, 'UserId'):
+                    user_id = request.user.UserId
+                    if user_id:
+                        logger.info(f"[RBAC TPRM] Successfully extracted user_id from request.user.UserId: {user_id}")
+                        return user_id
+                # Check for userid (lowercase)
                 if hasattr(request.user, 'userid'):
                     user_id = request.user.userid
-                    logger.info(f"[RBAC TPRM] Successfully extracted user_id from request.user: {user_id}")
-                    return user_id
-                elif hasattr(request.user, 'id'):
+                    if user_id:
+                        logger.info(f"[RBAC TPRM] Successfully extracted user_id from request.user.userid: {user_id}")
+                        return user_id
+                # Check for id (Django default) - but only if it's not None
+                if hasattr(request.user, 'id'):
                     user_id = request.user.id
-                    logger.info(f"[RBAC TPRM] Successfully extracted user_id from request.user.id: {user_id}")
-                    return user_id
+                    if user_id:  # Only return if not None
+                        logger.info(f"[RBAC TPRM] Successfully extracted user_id from request.user.id: {user_id}")
+                        return user_id
         except Exception as e:
             logger.error(f"[RBAC TPRM] Error extracting user_id from request.user: {e}")
         
@@ -50,20 +60,22 @@ class RBACTPRMUtils:
                 from django.conf import settings
                 secret_key = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
                 payload = jwt.decode(token, secret_key, algorithms=['HS256'])
-                user_id = payload.get('user_id')
+                
+                # Try multiple field names for user_id in JWT payload
+                user_id = payload.get('user_id') or payload.get('UserId') or payload.get('id')
                 
                 if user_id:
                     logger.info(f"[RBAC TPRM] Successfully extracted user_id from JWT: {user_id}")
                     return user_id
                 else:
-                    logger.warning("[RBAC TPRM] No user_id found in JWT payload")
+                    logger.warning(f"[RBAC TPRM] No user_id found in JWT payload. Available keys: {list(payload.keys())}")
                     
         except Exception as e:
             logger.error(f"[RBAC TPRM] Error extracting user_id from JWT: {e}")
         
         # Fallback to session authentication
         try:
-            user_id = request.session.get('user_id')
+            user_id = request.session.get('user_id') or request.session.get('grc_user_id')
             if user_id:
                 logger.info(f"[RBAC TPRM] Successfully extracted user_id from session: {user_id}")
                 return user_id

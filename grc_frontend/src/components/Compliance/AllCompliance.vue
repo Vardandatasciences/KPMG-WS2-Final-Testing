@@ -1337,6 +1337,11 @@ function showControlDetailsModal(compliance) {
   padding-top: 20px;
   padding-bottom: 10px;
   border-bottom:none!important;
+  flex-wrap: wrap;
+  gap: 15px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .compliance-view-title {
@@ -1345,12 +1350,18 @@ function showControlDetailsModal(compliance) {
   font-size: 1.8rem;
   font-weight: 700;
   letter-spacing: 0.5px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  flex: 1;
+  min-width: 0;
 }
 
 .compliance-header-actions {
   display: flex;
   align-items: center;
   gap: 15px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 /* View toggle button styles removed - only list view is available */

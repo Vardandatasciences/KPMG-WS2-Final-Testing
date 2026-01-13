@@ -2617,7 +2617,13 @@
       </div>
       </div>
       <div v-if="policyTabs.length && policyTabs[activePolicyTab]" class="VV-universal-submit-wrapper">
-        <button class="VV-universal-submit-btn" @click.prevent="showVersionModal = true" :disabled="isPolicyCreatorReviewerSame">Submit</button>
+        <button 
+          class="VV-universal-submit-btn" 
+          @click.prevent="showVersionModal = true" 
+          :disabled="selectedTab === 'framework' ? isFrameworkCreatorReviewerSame : isPolicyCreatorReviewerSame"
+        >
+          Submit
+        </button>
       </div>
     </div>
     <!-- Add submit button for policy tab -->

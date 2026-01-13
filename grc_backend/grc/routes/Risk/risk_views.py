@@ -714,7 +714,7 @@ class RiskViewSet(viewsets.ModelViewSet):
                     LEFT JOIN users u ON ri.UserId = u.UserId
                     LEFT JOIN department d ON u.DepartmentId = d.DepartmentId
                     LEFT JOIN businessunits bu ON d.BusinessUnitId = bu.BusinessUnitId
-                    WHERE r.tenant_id = %s
+                    WHERE r.TenantId = %s
                     ORDER BY r.CreatedAt DESC
                 """, [tenant_id])
                 
@@ -1117,7 +1117,7 @@ class RiskInstanceViewSet(viewsets.ModelViewSet):
             from django.db import connection
             with connection.cursor() as cursor:
                 cursor.execute("""
-                    SELECT * FROM risk_instance WHERE RiskInstanceId = %s AND tenant_id = %s
+                    SELECT * FROM risk_instance WHERE RiskInstanceId = %s AND TenantId = %s
                 """, [instance_id, tenant_id])
                
                 columns = [col[0] for col in cursor.description]
@@ -1208,7 +1208,7 @@ class RiskInstanceViewSet(viewsets.ModelViewSet):
                 from django.db import connection
                 with connection.cursor() as cursor:
                     cursor.execute("""
-                        SELECT COUNT(*) FROM risk_instance WHERE RiskId = %s AND tenant_id = %s
+                        SELECT COUNT(*) FROM risk_instance WHERE RiskId = %s AND TenantId = %s
                     """, [risk_id, tenant_id])
                     existing_count = cursor.fetchone()[0]
                     # Set recurrence count to existing count + 1
@@ -1697,7 +1697,7 @@ def assign_risk_instance(request):
         # Just validate the user exists
         from django.db import connection
         with connection.cursor() as cursor:
-            cursor.execute("SELECT UserId, UserName FROM grc.users WHERE UserId = %s", [user_id])
+            cursor.execute("SELECT UserId, UserName FROM grc2.users WHERE UserId = %s", [user_id])
             user = cursor.fetchone()
         
         if not user:
@@ -1787,7 +1787,7 @@ def get_custom_users(request):
         # Using raw SQL query to fetch from your custom table
         from django.db import connection
         with connection.cursor() as cursor:
-            cursor.execute("SELECT * FROM grc.users")
+            cursor.execute("SELECT * FROM grc2.users")
             columns = [col[0] for col in cursor.description]
             users = [
                 dict(zip(columns, row))
@@ -1831,7 +1831,7 @@ def get_custom_user(request, user_id):
         # Using raw SQL query to fetch from your custom table
         from django.db import connection
         with connection.cursor() as cursor:
-            cursor.execute("SELECT * FROM grc.users WHERE UserId = %s", [user_id])
+            cursor.execute("SELECT * FROM grc2.users WHERE UserId = %s", [user_id])
             columns = [col[0] for col in cursor.description]
             row = cursor.fetchone()
             
@@ -2020,11 +2020,11 @@ def get_user_risks(request, user_id):
         try:
             from django.db import connection
             with connection.cursor() as cursor:
-                cursor.execute("SELECT user_id FROM grc.users WHERE user_id = %s", [user_id])
+                cursor.execute("SELECT user_id FROM grc2.users WHERE user_id = %s", [user_id])
                 user = cursor.fetchone()
                 
             if not user:
-                print(f"User with ID {user_id} not found in grc.users table, but continuing anyway")
+                print(f"User with ID {user_id} not found in grc2.users table, but continuing anyway")
                 # Return empty list instead of 404
                 return Response([])
         except Exception as db_error:
@@ -2384,7 +2384,7 @@ def update_mitigation_approval(request):
             # Get the latest version for this risk
             cursor.execute("""
                 SELECT ra.ExtractedInfo, ra.UserId, ra.ApproverId, ra.version 
-                FROM grc.risk_approval ra
+                FROM grc2.risk_approval ra
                 WHERE ra.RiskInstanceId = %s
                 ORDER BY 
                     CASE 
@@ -2415,18 +2415,26 @@ def update_mitigation_approval(request):
                 # If version already has _update suffix, don't add it again
                 update_version = current_version + "_update" if "_update" not in current_version else current_version
                 
+                # Get framework ID for this risk instance
+                from .framework_filter_helper import get_active_framework_filter
+                framework_id = get_active_framework_filter(request)
+                
                 # Insert a new record with the interim version
                 cursor.execute("""
-                    INSERT INTO grc.risk_approval 
-                    (RiskInstanceId, version, ExtractedInfo, UserId, ApproverId)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO grc2.risk_approval 
+                    (RiskInstanceId, version, ExtractedInfo, UserId, ApproverId, FrameworkId)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                 """, [
                     approval_id,
                     update_version,
                     json.dumps(extracted_info_dict),
                     user_id,
-                    approver_id
+                    approver_id,
+                    framework_id  # Add framework ID (can be None)
                 ])
+                
+                # Explicitly commit the transaction
+                connection.commit()
                 
                 return Response({
                     'success': True,
@@ -2446,7 +2454,7 @@ def get_reviewer_id(reviewer_name):
         print(type(reviewer_name),'--------------saddaes-----------------------------')
         from django.db import connection
         with connection.cursor() as cursor:
-            cursor.execute("SELECT user_id FROM grc.users WHERE user_name = %s", [reviewer_name])
+            cursor.execute("SELECT user_id FROM grc2.users WHERE user_name = %s", [reviewer_name])
             row = cursor.fetchone()
             print(row,'-------------------------------------------')
             if row:
@@ -2466,8 +2474,13 @@ def get_reviewer_id(reviewer_name):
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def assign_reviewer(request):
     """Assign a reviewer to a risk instance and create approval record"""
+    print(f"🚀 [ASSIGN REVIEWER] ========== FUNCTION CALLED ==========")
+    print(f"🚀 [ASSIGN REVIEWER] Request method: {request.method}")
+    print(f"🚀 [ASSIGN REVIEWER] Request data: {request.data}")
+    
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
+    print(f"🚀 [ASSIGN REVIEWER] Tenant ID: {tenant_id}")
 
     print(request.data,'-------------------------------------------')
     risk_id = request.data.get('risk_id')
@@ -2491,6 +2504,8 @@ def assign_reviewer(request):
     mitigations = request.data.get('mitigations')  # Get mitigation data with status
     risk_form_details = request.data.get('risk_form_details', None)  # Get form details
     create_approval_record = request.data.get('create_approval_record', False)  # Flag to determine if we should create approval record
+    
+    print(f"🔵 [ASSIGN REVIEWER] Called with risk_id={risk_id}, user_id={user_id}, reviewer_id={reviewer_id}, create_approval_record={create_approval_record}")
     
     # Validate required fields before proceeding
     if not risk_id:
@@ -2530,22 +2545,22 @@ def assign_reviewer(request):
         if isinstance(reviewer_id, str) and not reviewer_id.isdigit():
             # It's a name, look up the ID
             with connection.cursor() as cursor:
-                cursor.execute("SELECT UserId, UserName, email FROM grc.users WHERE UserName = %s", [reviewer_id])
+                cursor.execute("SELECT UserId, UserName, email FROM grc2.users WHERE UserName = %s", [reviewer_id])
                 reviewer = cursor.fetchone()
                 
                 if not reviewer:
                     # Try to find by partial match
-                    cursor.execute("SELECT UserId, UserName, email FROM grc.users WHERE UserName LIKE %s LIMIT 1", [f"%{reviewer_id}%"])
+                    cursor.execute("SELECT UserId, UserName, email FROM grc2.users WHERE UserName LIKE %s LIMIT 1", [f"%{reviewer_id}%"])
                     reviewer = cursor.fetchone()
         else:
             # It's already an ID or a string that can be converted to an ID
             with connection.cursor() as cursor:
-                cursor.execute("SELECT UserId, UserName, email FROM grc.users WHERE UserId = %s", [reviewer_id])
+                cursor.execute("SELECT UserId, UserName, email FROM grc2.users WHERE UserId = %s", [reviewer_id])
                 reviewer = cursor.fetchone()
         
         # Also get user info
         with connection.cursor() as cursor:
-            cursor.execute("SELECT UserId, UserName, email FROM grc.users WHERE UserId = %s", [user_id])
+            cursor.execute("SELECT UserId, UserName, email FROM grc2.users WHERE UserId = %s", [user_id])
             user = cursor.fetchone()
         
         if not reviewer:
@@ -2581,17 +2596,19 @@ def assign_reviewer(request):
         # Ensure ReviewerId is set correctly in the database with direct SQL update
         with connection.cursor() as cursor:
             cursor.execute("""
-                UPDATE grc.risk_instance
+                UPDATE grc2.risk_instance
                 SET ReviewerId = %s
                 WHERE RiskInstanceId = %s
             """, [reviewer_id, risk_id])
         
         # Only create approval record if explicitly requested (from workflow submission)
+        print(f"🔵 [ASSIGN REVIEWER] Checking create_approval_record flag: {create_approval_record} (type: {type(create_approval_record)})")
         if create_approval_record:
+            print(f"✅ [ASSIGN REVIEWER] create_approval_record is True - will create version entry")
             # Determine the next version number (U1, U2, etc.)
             with connection.cursor() as cursor:
                 cursor.execute("""
-                    SELECT version FROM grc.risk_approval 
+                    SELECT version FROM grc2.risk_approval 
                     WHERE RiskInstanceId = %s AND version LIKE 'U%%'
                     ORDER BY CAST(SUBSTRING(version, 2) AS UNSIGNED) DESC
                     LIMIT 1
@@ -2675,22 +2692,54 @@ def assign_reviewer(request):
             if risk_form_details and 'user_submitted_date' in risk_form_details:
                 extracted_info["user_submitted_date"] = risk_form_details["user_submitted_date"]
             
+            # Get framework ID for this risk instance
+            from .framework_filter_helper import get_active_framework_filter
+            framework_id = get_active_framework_filter(request)
+            
             # Insert into risk_approval table with ApprovedRejected as NULL for new submissions
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    INSERT INTO grc.risk_approval 
-                    (RiskInstanceId, version, ExtractedInfo, UserId, ApproverId, ApprovedRejected)
-                    VALUES (%s, %s, %s, %s, %s, NULL)
-                    """,
-                    [
-                        risk_id,
-                        version,  # Use the version we calculated
-                        json.dumps(extracted_info),
-                        user_id,
-                        reviewer_id
-                    ]
-                )
+            try:
+                with connection.cursor() as cursor:
+                    print(f"🔵 [RISK APPROVAL] Inserting into risk_approval: RiskInstanceId={risk_id}, version={version}, UserId={user_id}, ApproverId={reviewer_id}, FrameworkId={framework_id}")
+                    cursor.execute(
+                        """
+                        INSERT INTO grc2.risk_approval 
+                        (RiskInstanceId, version, ExtractedInfo, UserId, ApproverId, ApprovedRejected, FrameworkId)
+                        VALUES (%s, %s, %s, %s, %s, NULL, %s)
+                        """,
+                        [
+                            risk_id,
+                            version,  # Use the version we calculated
+                            json.dumps(extracted_info),
+                            user_id,
+                            reviewer_id,
+                            framework_id  # Add framework ID (can be None)
+                        ]
+                    )
+                    rows_affected = cursor.rowcount
+                    print(f"✅ [RISK APPROVAL] Insert successful! Rows affected: {rows_affected}, Last row ID: {cursor.lastrowid}")
+                    
+                    # Explicitly commit the transaction
+                    connection.commit()
+                    print(f"✅ [RISK APPROVAL] Transaction committed successfully")
+                    
+                    # Verify the insert by querying back
+                    cursor.execute("""
+                        SELECT RiskInstanceId, version, UserId, ApproverId, FrameworkId 
+                        FROM grc2.risk_approval 
+                        WHERE RiskInstanceId = %s AND version = %s
+                        ORDER BY RiskInstanceId DESC, version DESC LIMIT 1
+                    """, [risk_id, version])
+                    verify_row = cursor.fetchone()
+                    if verify_row:
+                        print(f"✅ [RISK APPROVAL] Verified: Record exists in database - {verify_row}")
+                    else:
+                        print(f"⚠️ [RISK APPROVAL] WARNING: Record not found after insert!")
+            except Exception as insert_error:
+                print(f"❌ [RISK APPROVAL] Error inserting into risk_approval: {insert_error}")
+                import traceback
+                traceback.print_exc()
+                connection.rollback()
+                raise  # Re-raise to be caught by outer try-except
             
             # Send notification to reviewer about new mitigation to review
             try:
@@ -2716,6 +2765,8 @@ def assign_reviewer(request):
                 print(f"Notification result: {notification_result}")
             except Exception as e:
                 print(f"Error sending notification: {e}")
+        else:
+            print(f"ℹ️ [ASSIGN REVIEWER] Skipping version creation - create_approval_record is False")
         
         return Response({
             'success': True,
@@ -2751,11 +2802,11 @@ def get_reviewer_tasks(request, user_id):
         try:
             from django.db import connection
             with connection.cursor() as cursor:
-                cursor.execute("SELECT user_id FROM grc.users WHERE user_id = %s", [user_id])
+                cursor.execute("SELECT user_id FROM grc2.users WHERE user_id = %s", [user_id])
                 user = cursor.fetchone()
                 
             if not user:
-                print(f"User with ID {user_id} not found in grc.users table, but continuing anyway")
+                print(f"User with ID {user_id} not found in grc2.users table, but continuing anyway")
                 # Return empty list instead of 404
                 return Response([])
         except Exception as db_error:
@@ -2780,17 +2831,17 @@ def get_reviewer_tasks(request, user_id):
                 query = f"""
                     WITH latest_versions AS (
                         SELECT ra.RiskInstanceId, MAX(ra.version) as latest_version
-                        FROM grc.risk_approval ra
+                        FROM grc2.risk_approval ra
                         WHERE ra.ApproverId = %(approver_id)s
                         GROUP BY ra.RiskInstanceId
                     )
                     SELECT ra.RiskInstanceId, ra.ExtractedInfo, ra.UserId, ra.ApproverId, ra.version,
                            ri.RiskDescription, ri.Criticality, ri.Category, ri.RiskStatus, ri.RiskPriority,
                            r.FrameworkId
-                    FROM grc.risk_approval ra
+                    FROM grc2.risk_approval ra
                     JOIN latest_versions lv ON ra.RiskInstanceId = lv.RiskInstanceId AND ra.version = lv.latest_version
-                    LEFT JOIN grc.risk_instance ri ON ra.RiskInstanceId = ri.RiskInstanceId
-                    LEFT JOIN grc.risk r ON ri.RiskId = r.RiskId
+                    LEFT JOIN grc2.risk_instance ri ON ra.RiskInstanceId = ri.RiskInstanceId
+                    LEFT JOIN grc2.risk r ON ri.RiskId = r.RiskId
                     WHERE ra.ApproverId = %(approver_id)s
                     {framework_where}
                 """
@@ -2840,11 +2891,11 @@ def get_reviewer_tasks(request, user_id):
                            ri.RiskStatus, 
                            ri.RiskPriority,
                            r.FrameworkId
-                    FROM grc.risk_instance ri
-                    LEFT JOIN grc.risk r ON ri.RiskId = r.RiskId
+                    FROM grc2.risk_instance ri
+                    LEFT JOIN grc2.risk r ON ri.RiskId = r.RiskId
                     WHERE ri.ReviewerId = %(approver_id)s
                     AND NOT EXISTS (
-                        SELECT 1 FROM grc.risk_approval ra 
+                        SELECT 1 FROM grc2.risk_approval ra 
                         WHERE ra.RiskInstanceId = ri.RiskInstanceId 
                         AND ra.ApproverId = %(approver_id)s
                     )
@@ -2896,7 +2947,7 @@ def get_reviewer_tasks(request, user_id):
                         previous_version = f"U{previous_num}"
                         cursor.execute("""
                             SELECT ExtractedInfo
-                            FROM grc.risk_approval
+                            FROM grc2.risk_approval
                             WHERE RiskInstanceId = %s AND version = %s
                             LIMIT 1
                         """, [risk_id, previous_version])
@@ -3016,7 +3067,7 @@ def complete_review(request):
                 # Get the latest version
                 cursor.execute("""
                     SELECT ExtractedInfo, UserId, ApproverId, version
-                    FROM grc.risk_approval
+                    FROM grc2.risk_approval
                     WHERE RiskInstanceId = %s
                     ORDER BY version DESC
                     LIMIT 1
@@ -3030,7 +3081,7 @@ def complete_review(request):
                 
                 # Determine the next R version
                 cursor.execute("""
-                    SELECT version FROM grc.risk_approval 
+                    SELECT version FROM grc2.risk_approval 
                     WHERE RiskInstanceId = %s AND version LIKE 'R%%'
                     ORDER BY version DESC
                     LIMIT 1
@@ -3100,8 +3151,9 @@ def complete_review(request):
                 framework_id = get_active_framework_filter(request)
                 
                 # Insert new record with the R version and set ApprovedRejected column
+                print(f"🔵 [RISK REVIEW] Inserting into risk_approval: RiskInstanceId={risk_id}, version={new_version}, UserId={user_id}, ApproverId={approver_id}, FrameworkId={framework_id}, Approved={approved}")
                 cursor.execute("""
-                    INSERT INTO grc.risk_approval 
+                    INSERT INTO grc2.risk_approval 
                     (RiskInstanceId, version, ExtractedInfo, UserId, ApproverId, ApprovedRejected, FrameworkId)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """, [
@@ -3113,6 +3165,9 @@ def complete_review(request):
                     "Approved" if approved else "Rejected",
                     framework_id  # Add framework ID (can be None)
                 ])
+                rows_affected = cursor.rowcount
+                print(f"✅ [RISK REVIEW] Insert successful! Rows affected: {rows_affected}, Last row ID: {cursor.lastrowid}")
+                
                 if framework_id:
                     print(f"✅ [RISK REVIEW] Created review record with FrameworkId: {framework_id}")
                 else:
@@ -3121,10 +3176,27 @@ def complete_review(request):
                 # Update the risk status based on approval
                 risk_status = 'Approved' if approved else 'Revision Required by User'
                 cursor.execute("""
-                    UPDATE grc.risk_instance
+                    UPDATE grc2.risk_instance
                     SET RiskStatus = %s
                     WHERE RiskInstanceId = %s
                 """, [risk_status, risk_id])
+                
+                # Explicitly commit the transaction
+                connection.commit()
+                print(f"✅ [RISK REVIEW] Transaction committed successfully")
+                
+                # Verify the insert by querying back
+                cursor.execute("""
+                    SELECT RiskInstanceId, version, UserId, ApproverId, FrameworkId, ApprovedRejected
+                    FROM grc2.risk_approval 
+                    WHERE RiskInstanceId = %s AND version = %s
+                    ORDER BY RiskInstanceId DESC, version DESC LIMIT 1
+                """, [risk_id, new_version])
+                verify_row = cursor.fetchone()
+                if verify_row:
+                    print(f"✅ [RISK REVIEW] Verified: Record exists in database - {verify_row}")
+                else:
+                    print(f"⚠️ [RISK REVIEW] WARNING: Record not found after insert!")
                 
             except Exception as e:
                 print(f"Database error: {e}")
@@ -3208,7 +3280,7 @@ def get_user_notifications(request, user_id):
                     WHERE 
                         ra.UserId = %s 
                         AND ra.version LIKE 'R%%'
-                        AND ri.tenant_id = %s
+                        AND ri.TenantId = %s
                 """, [user_id, tenant_id])
                 
                 columns = [col[0] for col in cursor.description]
@@ -3333,7 +3405,7 @@ def get_reviewer_comments(request, risk_id):
             # Get the latest R version for this risk
             cursor.execute("""
                 SELECT ra.ExtractedInfo
-                FROM grc.risk_approval ra
+                FROM grc2.risk_approval ra
                 WHERE ra.RiskInstanceId = %s 
                 AND ra.version LIKE 'R%%'
                 ORDER BY version DESC
@@ -3385,7 +3457,7 @@ def get_latest_review(request, risk_id):
             # Get the latest R version of review data
             cursor.execute("""
                 SELECT ExtractedInfo
-                FROM grc.risk_approval
+                FROM grc2.risk_approval
                 WHERE RiskInstanceId = %s AND version LIKE 'R%%'
                 ORDER BY 
                     CAST(SUBSTRING(version, 2) AS UNSIGNED) DESC
@@ -3423,7 +3495,7 @@ def get_assigned_reviewer(request, risk_id):
             # First check if we have both ReviewerId and Reviewer columns populated
             cursor.execute("""
                 SELECT RiskInstanceId, ReviewerId, Reviewer 
-                FROM grc.risk_instance
+                FROM grc2.risk_instance
                 WHERE RiskInstanceId = %s
                 LIMIT 1
             """, [risk_id])
@@ -3455,7 +3527,7 @@ def get_assigned_reviewer(request, risk_id):
                 if reviewer_name is not None and reviewer_id is None:
                     print(f"Only have reviewer_name, looking up ID for: {reviewer_name}")
                     cursor.execute("""
-                        SELECT UserId FROM grc.users
+                        SELECT UserId FROM grc2.users
                         WHERE UserName = %s
                         LIMIT 1
                     """, [reviewer_name])
@@ -3467,7 +3539,7 @@ def get_assigned_reviewer(request, risk_id):
                         
                         # Update the ReviewerId field in the risk_instance table
                         cursor.execute("""
-                            UPDATE grc.risk_instance
+                            UPDATE grc2.risk_instance
                             SET ReviewerId = %s
                             WHERE RiskInstanceId = %s
                         """, [reviewer_id, risk_id])
@@ -3488,7 +3560,7 @@ def get_assigned_reviewer(request, risk_id):
                 if reviewer_id is not None and reviewer_name is None:
                     print(f"Only have reviewer_id, looking up name for: {reviewer_id}")
                     cursor.execute("""
-                        SELECT UserName FROM grc.users
+                        SELECT UserName FROM grc2.users
                         WHERE UserId = %s
                         LIMIT 1
                     """, [reviewer_id])
@@ -3500,7 +3572,7 @@ def get_assigned_reviewer(request, risk_id):
                         
                         # Update the Reviewer field in the risk_instance table
                         cursor.execute("""
-                            UPDATE grc.risk_instance
+                            UPDATE grc2.risk_instance
                             SET Reviewer = %s
                             WHERE RiskInstanceId = %s
                         """, [reviewer_name, risk_id])
@@ -3521,8 +3593,8 @@ def get_assigned_reviewer(request, risk_id):
             # If not found in RiskInstance, fall back to checking risk_approval table
             cursor.execute("""
                 SELECT ApproverId, UserName 
-                FROM grc.risk_approval ra
-                JOIN grc.users u ON ra.ApproverId = u.UserId
+                FROM grc2.risk_approval ra
+                JOIN grc2.users u ON ra.ApproverId = u.UserId
                 WHERE ra.RiskInstanceId = %s
                 LIMIT 1
             """, [risk_id])
@@ -3641,10 +3713,17 @@ class GRCLogList(generics.ListCreateAPIView):
     permission_classes = [RiskViewPermission]
     
     def get_queryset(self):
-        # MULTI-TENANCY: Filter by tenant_id
+        # MULTI-TENANCY: GRCLog doesn't have tenant_id field, so filter by UserId
         tenant_id = get_tenant_id_from_request(self.request)
         if tenant_id:
-            queryset = GRCLog.objects.filter(tenant_id=tenant_id).order_by('-Timestamp')
+            # Get all user IDs for this tenant
+            from ...models import Users
+            tenant_users = Users.objects.filter(tenant_id=tenant_id).values_list('UserId', flat=True)
+            tenant_user_ids = [str(uid) for uid in tenant_users]
+            if tenant_user_ids:
+                queryset = GRCLog.objects.filter(UserId__in=tenant_user_ids).order_by('-Timestamp')
+            else:
+                queryset = GRCLog.objects.none()
         else:
             queryset = GRCLog.objects.none()
         
@@ -3688,10 +3767,15 @@ class GRCLogDetail(generics.RetrieveAPIView):
     
     # MULTI-TENANCY: Override get_queryset to filter by tenant
     def get_queryset(self):
-        """Filter queryset by tenant_id"""
+        """Filter queryset by tenant - GRCLog doesn't have tenant_id, so filter by UserId"""
         tenant_id = get_tenant_id_from_request(self.request)
         if tenant_id:
-            return GRCLog.objects.filter(tenant_id=tenant_id)
+            # Get all user IDs for this tenant
+            from ...models import Users
+            tenant_users = Users.objects.filter(tenant_id=tenant_id).values_list('UserId', flat=True)
+            tenant_user_ids = [str(uid) for uid in tenant_users]
+            if tenant_user_ids:
+                return GRCLog.objects.filter(UserId__in=tenant_user_ids)
         return GRCLog.objects.none()
 
 @api_view(['GET'])
@@ -3710,9 +3794,25 @@ def get_system_logs(request):
         if user_id:
             is_admin = RBACUtils.is_system_admin(user_id)
         
-        # MULTI-TENANCY: Filter by tenant_id first
-        queryset = GRCLog.objects.filter(tenant_id=tenant_id).order_by('-Timestamp')
-         # If not admin, filter by user_id
+        # MULTI-TENANCY: GRCLog doesn't have tenant_id field, so filter by UserId
+        # Get all user IDs for this tenant
+        from ...models import Users
+        tenant_user_ids = []
+        if tenant_id:
+            tenant_users = Users.objects.filter(tenant_id=tenant_id).values_list('UserId', flat=True)
+            tenant_user_ids = [str(uid) for uid in tenant_users]
+        
+        # Start with base queryset
+        queryset = GRCLog.objects.all().order_by('-Timestamp')
+        
+        # Filter by tenant users if tenant_id is available
+        if tenant_id and tenant_user_ids:
+            queryset = queryset.filter(UserId__in=tenant_user_ids)
+        elif tenant_id:
+            # If tenant_id exists but no users found, return empty queryset
+            queryset = GRCLog.objects.none()
+        
+        # If not admin, further filter by user_id
         if not is_admin and user_id:
             queryset = queryset.filter(UserId=str(user_id))
         
@@ -3878,19 +3978,27 @@ def generate_test_notification(request, user_id):
         }
         
         with connection.cursor() as cursor:
+            # Get framework ID for this risk instance
+            from .framework_filter_helper import get_active_framework_filter
+            framework_id = get_active_framework_filter(request)
+            
             # Insert test approval record - use a simple query with the exact columns that exist
             cursor.execute("""
                 INSERT INTO risk_approval 
-                (RiskInstanceId, UserId, ApproverId, version, ExtractedInfo, ApprovedRejected)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                (RiskInstanceId, UserId, ApproverId, version, ExtractedInfo, ApprovedRejected, FrameworkId)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, [
                 risk_instance_id,
                 user_id,
                 user_id + 1,  # Approver ID different from user ID
                 "R1",
                 json.dumps(extracted_info),
-                "Approved"
+                "Approved",
+                framework_id  # Add framework ID (can be None)
             ])
+            
+            # Explicitly commit the transaction
+            connection.commit()
         
         return Response({
             "success": True,
@@ -4420,7 +4528,7 @@ def get_risk_heatmap_data(request):
         
         # Apply policy filter - Need to filter through ComplianceId
         if policy_id and policy_id != 'all':
-            from grc.models import Policy, SubPolicy, Compliance
+            from grc2.models import Policy, SubPolicy, Compliance
             try:
                 policy = Policy.objects.get(PolicyId=policy_id)
                 subpolicy_ids = SubPolicy.objects.filter(PolicyId=policy).values_list('SubPolicyId', flat=True)
@@ -4531,7 +4639,7 @@ def get_risks_by_heatmap_coordinates(request, impact, likelihood):
         
         # Apply policy filter - Need to filter through ComplianceId
         if policy_id and policy_id != 'all':
-            from grc.models import Policy, SubPolicy, Compliance
+            from grc2.models import Policy, SubPolicy, Compliance
             try:
                 policy = Policy.objects.get(PolicyId=policy_id)
                 subpolicy_ids = SubPolicy.objects.filter(PolicyId=policy).values_list('SubPolicyId', flat=True)
@@ -4666,7 +4774,7 @@ def risk_trend_over_time(request):
         
         # Apply policy filter - Need to filter through ComplianceId
         if policy_id and policy_id != 'all':
-            from grc.models import Policy, SubPolicy, Compliance
+            from grc2.models import Policy, SubPolicy, Compliance
             try:
                 policy = Policy.objects.get(PolicyId=policy_id)
                 subpolicy_ids = SubPolicy.objects.filter(PolicyId=policy).values_list('SubPolicyId', flat=True)
@@ -5418,7 +5526,7 @@ def risk_metrics_by_category(request):
     
     # Apply policy filter - Need to filter through ComplianceId
     if policy_id and policy_id != 'all':
-        from grc.models import Policy, SubPolicy, Compliance
+        from grc2.models import Policy, SubPolicy, Compliance
         try:
             policy = Policy.objects.get(PolicyId=policy_id)
             subpolicy_ids = SubPolicy.objects.filter(PolicyId=policy).values_list('SubPolicyId', flat=True)

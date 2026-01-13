@@ -65,8 +65,12 @@ api.interceptors.request.use((config) => {
     config.url.includes('/cookie/preferences/')
   );
   
-  // Get JWT token from localStorage (authService stores it as 'access_token')
-  const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+  // Get JWT token from multiple possible locations
+  const token = localStorage.getItem('access_token') || 
+                localStorage.getItem('token') ||
+                localStorage.getItem('session_token') ||
+                sessionStorage.getItem('access_token') ||
+                sessionStorage.getItem('token');
   
   // ALWAYS send JWT token if available, even for cookie preferences endpoints
   // This allows the backend to extract user_id from the token for logged-in users
@@ -75,39 +79,144 @@ api.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token}`;
     if (isCookiePreferencesEndpoint) {
       console.log(`🍪 [API] Cookie preferences endpoint - including JWT token to enable user_id extraction: ${config.method?.toUpperCase()} ${config.url}`);
+      console.log(`🍪 [API] Token preview: ${token.substring(0, 20)}...`);
     } else {
       console.log(`🔐 [API] Adding JWT token to request: ${config.method?.toUpperCase()} ${config.url}`);
     }
   } else {
     if (isCookiePreferencesEndpoint) {
-      console.log(`🍪 [API] Cookie preferences endpoint - no JWT token (anonymous request): ${config.method?.toUpperCase()} ${config.url}`);
+      console.log(`🍪 [API] Cookie preferences endpoint - no JWT token found in localStorage/sessionStorage`);
+      console.log(`🍪 [API] Checked: access_token, token, session_token in localStorage and sessionStorage`);
+      console.log(`🍪 [API] This will be an anonymous request: ${config.method?.toUpperCase()} ${config.url}`);
     } else {
       console.log(`⚠️ [API] No JWT token found for request: ${config.method?.toUpperCase()} ${config.url}`);
     }
   }
  
-  // Add user_id to request if available (for backward compatibility)
-  const userId = localStorage.getItem('user_id');
-  if (userId && !config.url.includes('api/incidents/recent/')) {
+  // CRITICAL: Add user_id to request if available (for backward compatibility)
+  // Try multiple sources for user_id
+  let userId = localStorage.getItem('user_id') || 
+               localStorage.getItem('userId') ||
+               sessionStorage.getItem('user_id') ||
+               sessionStorage.getItem('userId');
+  
+  // Also check current_user object
+  if (!userId) {
+    try {
+      const currentUserStr = localStorage.getItem('current_user');
+      if (currentUserStr) {
+        const currentUser = JSON.parse(currentUserStr);
+        userId = currentUser.UserId || currentUser.user_id || currentUser.userId || currentUser.id;
+      }
+    } catch (e) {
+      // Ignore parse errors
+    }
+  }
+  
+  // Convert to integer if it's a string
+  if (userId) {
+    userId = parseInt(userId);
+  }
+  
+  // CRITICAL: For cookie preferences endpoint, ALWAYS add user_id if available
+  // This ensures user_id is sent even if it was null/undefined in the original data
+  if (userId && !isNaN(userId) && !config.url.includes('api/incidents/recent/')) {
     // Add user_id to query params for GET requests
     if (config.method === 'get') {
       config.params = config.params || {};
       config.params.user_id = userId;
+      if (isCookiePreferencesEndpoint) {
+        console.log(`🍪 [API] Interceptor: Added user_id=${userId} to query params`);
+      }
     }
     // Add user_id to request body for POST/PUT requests
     else if (config.method === 'post' || config.method === 'put') {
-      if (config.data && typeof config.data === 'object') {
-        config.data.user_id = userId;
+      // CRITICAL: Ensure config.data exists and is a proper object
+      // If data is null/undefined, create new object
+      // If data exists but isn't an object, convert it
+      if (!config.data) {
+        config.data = {};
+      } else if (typeof config.data !== 'object' || Array.isArray(config.data)) {
+        // If data is not a plain object, wrap it
+        config.data = { data: config.data };
+      } else {
+        // Make sure we're working with a mutable object (not frozen)
+        config.data = { ...config.data };
       }
+      
+      // ALWAYS override user_id if we found one (even if it was null/undefined in original data)
+      // This is critical for cookie preferences - we want to link them to the user
+      const originalUserId = config.data.user_id;
+      config.data.user_id = userId;
+      
+      if (isCookiePreferencesEndpoint) {
+        if (originalUserId !== userId) {
+          console.log(`🍪 [API] Interceptor: Added/Updated user_id=${userId} to request body (was: ${originalUserId})`);
+          console.log(`🍪 [API] Interceptor: Full data object after modification:`, JSON.stringify(config.data));
+        } else {
+          console.log(`🍪 [API] Interceptor: user_id=${userId} already in request body`);
+        }
+      }
+    }
+  } else if (isCookiePreferencesEndpoint) {
+    if (!userId) {
+      console.log(`🍪 [API] Interceptor: No user_id found in localStorage/sessionStorage for cookie preferences`);
+      console.log(`🍪 [API] Interceptor: Checked localStorage keys: user_id, userId`);
+      console.log(`🍪 [API] Interceptor: Checked sessionStorage keys: user_id, userId`);
+      console.log(`🍪 [API] Interceptor: Checked current_user object in localStorage`);
+    } else {
+      console.log(`🍪 [API] Interceptor: user_id found but isNaN: ${userId}`);
     }
   }
  
-  // Log outgoing requests
-  console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`, {
-    data: config.data,
-    params: config.params
-  });
- 
+  // CRITICAL: Final verification and fix for cookie preferences
+  if (isCookiePreferencesEndpoint && (config.method === 'post' || config.method === 'put')) {
+    // Double-check that user_id is in the data
+    const userId = localStorage.getItem('user_id') || 
+                   localStorage.getItem('userId') ||
+                   sessionStorage.getItem('user_id') ||
+                   sessionStorage.getItem('userId');
+    
+    if (userId && !isNaN(parseInt(userId))) {
+      const parsedUserId = parseInt(userId);
+      // Ensure config.data is an object
+      if (!config.data || typeof config.data !== 'object' || Array.isArray(config.data)) {
+        config.data = config.data ? { data: config.data } : {};
+      }
+      // Force set user_id one more time as a safety measure
+      config.data.user_id = parsedUserId;
+    }
+    
+    // Also ensure JWT token is set
+    const token = localStorage.getItem('access_token') || 
+                  localStorage.getItem('token') ||
+                  localStorage.getItem('session_token') ||
+                  sessionStorage.getItem('access_token') ||
+                  sessionStorage.getItem('token');
+    
+    if (token && !config.headers.Authorization) {
+      config.headers.Authorization = `Bearer ${token}`;
+      console.log(`🍪 [API] Final check: Added JWT token to headers`);
+    }
+  }
+  
+  // Log outgoing requests AFTER all modifications
+  if (isCookiePreferencesEndpoint) {
+    console.log(`🍪 [API] Final request config for ${config.method?.toUpperCase()} ${config.url}:`, {
+      hasAuthHeader: !!config.headers.Authorization,
+      authHeaderPreview: config.headers.Authorization ? config.headers.Authorization.substring(0, 30) + '...' : 'None',
+      data: config.data,
+      dataKeys: config.data ? Object.keys(config.data) : [],
+      user_id_in_data: config.data?.user_id,
+      params: config.params
+    });
+  } else {
+    console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`, {
+      data: config.data,
+      params: config.params
+    });
+  }
+
   return config;
 });
  

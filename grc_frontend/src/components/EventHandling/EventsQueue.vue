@@ -1688,12 +1688,17 @@ export default {
   overflow-y: auto;
   max-height: calc(100vh - 200px);
   position: relative;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .events-queue-table {
   width: 100%;
+  max-width: 100%;
   border-collapse: collapse;
-  min-width: 800px;
+  table-layout: auto;
+  box-sizing: border-box;
 }
 
 .events-queue-table-header {
@@ -1719,6 +1724,12 @@ export default {
   top: 0;
   z-index: 100;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-sizing: border-box;
+}
+
+.events-queue-table-th.events-queue-title-col {
+  white-space: normal;
+  word-wrap: break-word;
 }
 
 .events-queue-actions-col {
@@ -1732,6 +1743,8 @@ export default {
 
 .events-queue-title-col {
   min-width: 300px;
+  max-width: none;
+  width: auto;
 }
 
 .events-queue-timestamp-col {
@@ -1781,6 +1794,8 @@ export default {
   position: relative;
   z-index: 1;
   background-color: inherit;
+  box-sizing: border-box;
+  max-width: 100%;
 }
 
 .events-queue-source-cell {
@@ -1792,9 +1807,14 @@ export default {
   text-align: left;
   vertical-align: top;
   word-wrap: break-word;
-  overflow: visible;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  overflow: hidden;
   position: static;
   z-index: 1;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 /* Override global button styles for events queue title links */
@@ -1809,19 +1829,24 @@ button.events-queue-title-link,
   text-align: left !important;
   display: block;
   width: 100%;
+  max-width: 100%;
   background: transparent !important;
   background-color: transparent !important;
   border: none !important;
   padding: 0 !important;
-  line-height: 1.3;
-  word-wrap: break-word;
-  white-space: normal;
+  line-height: 1.4;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+  word-break: break-word !important;
+  white-space: normal !important;
   box-shadow: none !important;
   outline: none;
   font-size: 0.85rem;
   position: relative;
   z-index: 1;
-  overflow: visible;
+  overflow: hidden;
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .events-queue-title-link:hover,

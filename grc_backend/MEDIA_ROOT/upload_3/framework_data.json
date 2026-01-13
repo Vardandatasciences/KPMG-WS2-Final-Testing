@@ -17,54 +17,36 @@
       "folder_path": "001-Introduction_Protecting_Cardholder_Data",
       "policies": [
         {
-          "policy_id": "PCI-DSS-SEC-001",
-          "policy_title": "Cardholder Data Protection Policy",
-          "policy_description": "Establishes requirements for protecting cardholder data throughout the payment card processing ecosystem to mitigate risks of financial fraud and data breaches.",
-          "policy_text": "It is imperative that merchants use standard security procedures and technologies to thwart theft of cardholder data. Compliance with the PCI DSS helps to alleviate vulnerabilities and protect cardholder data.",
-          "scope": "This policy applies to all merchants, service providers, and financial institutions involved in payment card transactions, including point-of-sale devices, mobile devices, personal computers, servers, and web applications.",
-          "objective": "The primary objective of this policy is to ensure the security of cardholder data by implementing robust security measures and compliance with PCI DSS standards. Specific objectives include: (1) protecting sensitive consumer financial information; (2) preventing unauthorized access to cardholder data; (3) ensuring compliance with regulatory requirements.",
-          "policy_type": "Security",
-          "policy_category": "Data Protection",
-          "policy_subcategory": "Payment Card Security",
+          "policy_id": "PCI-DSS-GEN-001",
+          "policy_title": "Access Control Requirements",
+          "policy_description": "This policy outlines the requirements for access control to ensure the security of sensitive data.",
+          "policy_text": "All users must authenticate before accessing systems. Privileged accounts require multi-factor authentication. Access must be reviewed quarterly.",
+          "scope": "All entities involved in payment card processing",
+          "objective": "To ensure that only authorized personnel have access to sensitive data and systems",
+          "policy_type": "Security Policy",
+          "policy_category": "Financial Security and Compliance",
+          "policy_subcategory": "Access Control",
           "subpolicies": [
             {
-              "subpolicy_id": "PCI-DSS-SEC-001.01",
-              "subpolicy_title": "Vulnerability Management Policy",
-              "subpolicy_description": "Establishes requirements for identifying and managing vulnerabilities in the card-processing ecosystem.",
-              "subpolicy_text": "Merchant-based vulnerabilities may appear almost anywhere in the card-processing ecosystem, including point-of-sale devices, mobile devices, and web shopping applications.",
-              "control": {
-                "WHAT": "Conduct regular vulnerability assessments and penetration testing.",
-                "WHO": "IT Security team and third-party security consultants.",
-                "WHEN": "Quarterly and after any significant system changes.",
-                "HOW": "Utilize automated scanning tools and manual testing techniques.",
-                "WHERE": "All systems involved in payment card processing."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-001.01",
+              "subpolicy_title": "User Authentication",
+              "subpolicy_description": "This subpolicy outlines the requirements for user authentication to ensure that only authorized personnel have access to systems.",
+              "subpolicy_text": "All users must authenticate before accessing systems.",
+              "control": "1.1"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-001.02",
-              "subpolicy_title": "Data Transmission Security Policy",
-              "subpolicy_description": "Defines requirements for securing the transmission of cardholder data to service providers.",
-              "subpolicy_text": "The transmission of cardholder data must be secured to prevent interception and unauthorized access.",
-              "control": {
-                "WHAT": "Implement encryption for all cardholder data transmissions.",
-                "WHO": "Network Security team and IT staff.",
-                "WHEN": "Continuously during data transmission.",
-                "HOW": "Use TLS 1.2 or higher for all communications.",
-                "WHERE": "All network connections transmitting cardholder data."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-001.02",
+              "subpolicy_title": "Privileged Account Management",
+              "subpolicy_description": "This subpolicy outlines the requirements for privileged account management to ensure that only authorized personnel have access to sensitive data and systems.",
+              "subpolicy_text": "Privileged accounts require multi-factor authentication.",
+              "control": "1.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-001.03",
-              "subpolicy_title": "Access Control Policy for Cardholder Data",
-              "subpolicy_description": "Establishes access control measures to limit access to cardholder data to authorized personnel only.",
-              "subpolicy_text": "Access to cardholder data must be restricted based on the principle of least privilege.",
-              "control": {
-                "WHAT": "Implement role-based access controls and regular access reviews.",
-                "WHO": "Access management team and department managers.",
-                "WHEN": "Access reviews must be conducted quarterly.",
-                "HOW": "Utilize access control lists and logging mechanisms.",
-                "WHERE": "All systems storing or processing cardholder data."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-001.03",
+              "subpolicy_title": "Access Review",
+              "subpolicy_description": "This subpolicy outlines the requirements for access review to ensure that only authorized personnel have access to sensitive data and systems.",
+              "subpolicy_text": "Access must be reviewed quarterly.",
+              "control": "1.3"
             }
           ]
         }
@@ -79,54 +61,36 @@
       "folder_path": "002-Overview_of_PCI_Requirements",
       "policies": [
         {
-          "policy_id": "PCI-DSS-SEC-002",
-          "policy_title": "Cardholder Data Protection Policy",
-          "policy_description": "Establishes requirements for protecting cardholder data throughout the payment card processing ecosystem to mitigate risks of financial fraud and data breaches.",
-          "policy_text": "This policy outlines the necessary steps to assess, repair, and report on the security of cardholder data. It emphasizes the importance of identifying vulnerabilities, securely managing data, and maintaining compliance with PCI DSS standards.",
-          "scope": "This policy applies to all merchants, service providers, and financial institutions involved in payment card transactions, including point-of-sale devices, mobile devices, personal computers, servers, and web applications.",
-          "objective": "The primary objective of this policy is to ensure the security of cardholder data by implementing robust security measures and compliance with PCI DSS standards. Specific objectives include: (1) protecting sensitive consumer financial information; (2) preventing unauthorized access to cardholder data; (3) ensuring compliance with regulatory requirements.",
-          "policy_type": "Security",
-          "policy_category": "Data Protection",
-          "policy_subcategory": "Payment Card Security",
+          "policy_id": "PCI-DSS-GEN-002",
+          "policy_title": "Access Control Requirements",
+          "policy_description": "This policy outlines the requirements for access control to ensure the security of sensitive data.",
+          "policy_text": "All users must authenticate before accessing systems. Privileged accounts require multi-factor authentication. Access must be reviewed quarterly.",
+          "scope": "All entities involved in payment card processing",
+          "objective": "To ensure that all users have secure access to systems and data",
+          "policy_type": "Security Policy",
+          "policy_category": "Financial Security and Compliance",
+          "policy_subcategory": "Access Control",
           "subpolicies": [
             {
-              "subpolicy_id": "PCI-DSS-SEC-002.01",
-              "subpolicy_title": "Vulnerability Management Policy",
-              "subpolicy_description": "Establishes requirements for identifying and managing vulnerabilities in the card-processing ecosystem.",
-              "subpolicy_text": "This subpolicy outlines the procedures for assessing vulnerabilities, repairing identified issues, and reporting compliance status.",
-              "control": {
-                "WHAT": "Identify and manage vulnerabilities in the card-processing ecosystem.",
-                "WHO": "IT Security team and compliance officers.",
-                "WHEN": "Ongoing, with assessments conducted quarterly.",
-                "HOW": "Utilize vulnerability scanning tools and conduct manual reviews of systems.",
-                "WHERE": "All systems involved in payment card processing, including servers, applications, and network devices."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-002.01",
+              "subpolicy_title": "User Authentication",
+              "subpolicy_description": "This subpolicy outlines the requirements for user authentication.",
+              "subpolicy_text": "All users must authenticate before accessing systems.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-002.02",
-              "subpolicy_title": "Data Inventory and Management Policy",
-              "subpolicy_description": "Defines requirements for maintaining an inventory of cardholder data and ensuring secure management practices.",
-              "subpolicy_text": "This subpolicy mandates the identification and inventory of all locations where cardholder data is stored, processed, or transmitted.",
-              "control": {
-                "WHAT": "Conduct an inventory of all cardholder data locations and ensure secure management.",
-                "WHO": "Data management team and IT Security.",
-                "WHEN": "Annually, with updates as necessary.",
-                "HOW": "Use data discovery tools and maintain a centralized inventory database.",
-                "WHERE": "All organizational systems and databases that handle cardholder data."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-002.02",
+              "subpolicy_title": "Privileged Account Management",
+              "subpolicy_description": "This subpolicy outlines the requirements for privileged account management.",
+              "subpolicy_text": "Privileged accounts require multi-factor authentication.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-002.03",
-              "subpolicy_title": "Compliance Reporting Policy",
-              "subpolicy_description": "Establishes requirements for documenting assessment and remediation details and submitting compliance reports.",
-              "subpolicy_text": "This subpolicy outlines the process for reporting compliance status to acquiring banks and card brands.",
-              "control": {
-                "WHAT": "Document assessment findings and submit compliance reports.",
-                "WHO": "Compliance officers and IT Security team.",
-                "WHEN": "After each assessment and remediation cycle.",
-                "HOW": "Compile reports detailing vulnerabilities, remediation actions, and compliance status.",
-                "WHERE": "Reports are submitted to acquiring banks and relevant stakeholders."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-002.03",
+              "subpolicy_title": "Access Review",
+              "subpolicy_description": "This subpolicy outlines the requirements for access review.",
+              "subpolicy_text": "Access must be reviewed quarterly.",
+              "control": ""
             }
           ]
         }
@@ -141,54 +105,36 @@
       "folder_path": "002-Overview_of_PCI_Requirements\\001-The_PCI_Data_Security_Standard",
       "policies": [
         {
-          "policy_id": "PCI-DSS-SEC-003",
-          "policy_title": "PCI DSS Compliance Policy",
-          "policy_description": "Establishes requirements for ongoing compliance with the Payment Card Industry Data Security Standard (PCI DSS) to protect cardholder data.",
-          "policy_text": "This policy outlines the three ongoing steps for adhering to the PCI DSS: Assess, Repair, and Report. Organizations must identify all locations of cardholder data, take an inventory of IT assets and business processes for payment card processing, analyze them for vulnerabilities, fix identified vulnerabilities, securely remove unnecessary cardholder data storage, and document assessment and remediation details.",
-          "scope": "This policy applies to all entities that store, process, or transmit cardholder data, including merchants, payment processors, acquirers, issuers, and service providers.",
-          "objective": "The primary objective of this policy is to ensure continuous compliance with PCI DSS requirements, thereby protecting sensitive cardholder data and minimizing the risk of data breaches.",
-          "policy_type": "Security",
-          "policy_category": "Data Protection",
-          "policy_subcategory": "Payment Card Security",
+          "policy_id": "PCI-DSS-GEN-003",
+          "policy_title": "Access Control Requirements",
+          "policy_description": "This policy outlines the requirements for access control to ensure the security of sensitive data.",
+          "policy_text": "All users must authenticate before accessing systems. Privileged accounts require multi-factor authentication. Access must be reviewed quarterly.",
+          "scope": "All entities involved in payment card processing",
+          "objective": "To ensure that all users have secure access to systems and data",
+          "policy_type": "Security Policy",
+          "policy_category": "Financial Security and Compliance",
+          "policy_subcategory": "Access Control",
           "subpolicies": [
             {
-              "subpolicy_id": "PCI-DSS-SEC-003.01",
-              "subpolicy_title": "Cardholder Data Assessment Policy",
-              "subpolicy_description": "Establishes requirements for assessing cardholder data locations and vulnerabilities.",
-              "subpolicy_text": "Organizations must conduct regular assessments to identify all locations of cardholder data and analyze them for vulnerabilities.",
-              "control": {
-                "WHO": "Compliance team and IT security personnel",
-                "WHAT": "Conduct assessments of cardholder data locations and vulnerabilities.",
-                "WHEN": "At least annually and after any significant changes to the environment.",
-                "HOW": "Utilize vulnerability scanning tools and manual reviews.",
-                "WHERE": "All systems and processes involved in payment card processing."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-003.01",
+              "subpolicy_title": "User Authentication",
+              "subpolicy_description": "This subpolicy outlines the requirements for user authentication.",
+              "subpolicy_text": "All users must authenticate before accessing systems.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-003.02",
-              "subpolicy_title": "Vulnerability Repair Policy",
-              "subpolicy_description": "Establishes requirements for repairing identified vulnerabilities in the cardholder data environment.",
-              "subpolicy_text": "Organizations must fix identified vulnerabilities and securely remove unnecessary cardholder data storage.",
-              "control": {
-                "WHO": "IT security team and system administrators",
-                "WHAT": "Repair identified vulnerabilities and remove unnecessary cardholder data.",
-                "WHEN": "Immediately upon identification of vulnerabilities.",
-                "HOW": "Implement patches, updates, and secure data deletion methods.",
-                "WHERE": "All systems that store, process, or transmit cardholder data."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-003.02",
+              "subpolicy_title": "Privileged Account Management",
+              "subpolicy_description": "This subpolicy outlines the requirements for privileged account management.",
+              "subpolicy_text": "Privileged accounts require multi-factor authentication.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-003.03",
-              "subpolicy_title": "Compliance Reporting Policy",
-              "subpolicy_description": "Establishes requirements for documenting and reporting PCI DSS compliance.",
-              "subpolicy_text": "Organizations must document assessment and remediation details and submit compliance reports to the acquiring bank and card brands.",
-              "control": {
-                "WHO": "Compliance team and management",
-                "WHAT": "Document and report PCI DSS compliance status.",
-                "WHEN": "After each assessment and remediation cycle.",
-                "HOW": "Prepare compliance reports and submit them to relevant stakeholders.",
-                "WHERE": "To the acquiring bank and card brands involved in payment processing."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-003.03",
+              "subpolicy_title": "Access Review",
+              "subpolicy_description": "This subpolicy outlines the requirements for access review.",
+              "subpolicy_text": "Access must be reviewed quarterly.",
+              "control": ""
             }
           ]
         }
@@ -203,54 +149,36 @@
       "folder_path": "003-Security_Controls_and_Processes_for_PCI",
       "policies": [
         {
-          "policy_id": "PCI-DSS-SEC-004",
-          "policy_title": "PCI DSS Compliance Process Policy",
-          "policy_description": "Establishes requirements for ongoing compliance with the Payment Card Industry Data Security Standard (PCI DSS) to protect cardholder data.",
-          "policy_text": "This policy outlines the three ongoing steps for adhering to the PCI DSS: Assess, Repair, and Report. Organizations must identify all locations of cardholder data, take an inventory of IT assets and business processes for payment card processing, analyze them for vulnerabilities, fix identified vulnerabilities, securely remove unnecessary cardholder data storage, and document assessment and remediation details.",
-          "scope": "This policy applies to all entities that store, process, or transmit cardholder data, including merchants, payment processors, acquirers, issuers, and service providers.",
-          "objective": "The primary objective of this policy is to ensure continuous compliance with PCI DSS requirements, thereby protecting cardholder data and mitigating risks associated with data breaches and financial fraud.",
-          "policy_type": "Security",
-          "policy_category": "Compliance",
-          "policy_subcategory": "Payment Card Industry Data Security",
+          "policy_id": "PCI-DSS-GEN-004",
+          "policy_title": "Access Control Requirements",
+          "policy_description": "This policy outlines the requirements for access control to ensure the security of sensitive data.",
+          "policy_text": "All users must authenticate before accessing systems. Privileged accounts require multi-factor authentication. Access must be reviewed quarterly.",
+          "scope": "All entities involved in payment card processing",
+          "objective": "To ensure that all users have secure access to systems and data",
+          "policy_type": "Security Policy",
+          "policy_category": "Financial Security and Compliance",
+          "policy_subcategory": "Access Control",
           "subpolicies": [
             {
-              "subpolicy_id": "PCI-DSS-SEC-004.01",
-              "subpolicy_title": "Cardholder Data Assessment",
-              "subpolicy_description": "Organizations must identify all locations of cardholder data and take an inventory of IT assets and business processes for payment card processing.",
-              "subpolicy_text": "Conduct a thorough assessment to locate all cardholder data and inventory IT assets involved in payment processing.",
-              "control": {
-                "WHO": "Compliance team and IT Security team",
-                "WHAT": "Identify and inventory all locations of cardholder data and related IT assets.",
-                "WHEN": "Annually or whenever significant changes occur in the IT environment.",
-                "HOW": "Utilize data discovery tools and manual audits to locate cardholder data.",
-                "WHERE": "All systems and applications that handle payment card transactions."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-004.01",
+              "subpolicy_title": "User Authentication",
+              "subpolicy_description": "This subpolicy outlines the requirements for user authentication.",
+              "subpolicy_text": "All users must authenticate before accessing systems.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-004.02",
-              "subpolicy_title": "Vulnerability Repair Process",
-              "subpolicy_description": "Organizations must analyze identified vulnerabilities and fix them promptly.",
-              "subpolicy_text": "Implement a process for identifying, prioritizing, and remediating vulnerabilities that could expose cardholder data.",
-              "control": {
-                "WHO": "IT Security team and vulnerability management team",
-                "WHAT": "Analyze and remediate vulnerabilities in systems that store or process cardholder data.",
-                "WHEN": "Immediately upon identification of vulnerabilities, with a review every quarter.",
-                "HOW": "Conduct vulnerability scans and penetration testing, followed by remediation efforts.",
-                "WHERE": "All systems and applications involved in payment processing."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-004.02",
+              "subpolicy_title": "Privileged Account Management",
+              "subpolicy_description": "This subpolicy outlines the requirements for privileged account management.",
+              "subpolicy_text": "Privileged accounts require multi-factor authentication.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-004.03",
-              "subpolicy_title": "Compliance Reporting",
-              "subpolicy_description": "Organizations must document assessment and remediation details and submit compliance reports to relevant entities.",
-              "subpolicy_text": "Establish a reporting mechanism to document compliance efforts and submit necessary reports to acquiring banks and card brands.",
-              "control": {
-                "WHO": "Compliance team and IT Security team",
-                "WHAT": "Document compliance assessments and remediation actions, and prepare reports for submission.",
-                "WHEN": "After each assessment cycle and upon request from acquiring banks or card brands.",
-                "HOW": "Use standardized reporting templates and maintain records of compliance activities.",
-                "WHERE": "All documentation systems and compliance management tools."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-004.03",
+              "subpolicy_title": "Access Review",
+              "subpolicy_description": "This subpolicy outlines the requirements for access review.",
+              "subpolicy_text": "Access must be reviewed quarterly.",
+              "control": ""
             }
           ]
         }
@@ -265,54 +193,36 @@
       "folder_path": "003-Security_Controls_and_Processes_for_PCI\\001-Build_and_Maintain_a_Secure_Network_and",
       "policies": [
         {
-          "policy_id": "PCI-DSS-SEC-005",
-          "policy_title": "PCI DSS Network and Systems Security Policy",
-          "policy_description": "Establishes requirements for building and maintaining a secure network and systems to protect cardholder data.",
-          "policy_text": "This policy outlines the three ongoing steps for adhering to the PCI DSS: Assess, Repair, and Report. Organizations must identify all locations of cardholder data, take an inventory of IT assets and business processes for payment card processing, analyze them for vulnerabilities, fix identified vulnerabilities, securely remove unnecessary cardholder data storage, and document assessment and remediation details.",
-          "scope": "This policy applies to all entities that store, process, or transmit cardholder data, including merchants, payment processors, acquirers, issuers, and service providers.",
-          "objective": "The primary objective of this policy is to ensure the security of cardholder data by establishing a framework for continuous assessment, remediation, and reporting of vulnerabilities within the network and systems.",
-          "policy_type": "Security",
-          "policy_category": "Network Security",
-          "policy_subcategory": "Vulnerability Management",
+          "policy_id": "PCI-DSS-GEN-005",
+          "policy_title": "Access Control Requirements",
+          "policy_description": "This policy outlines the requirements for access control to ensure the security of sensitive data.",
+          "policy_text": "All users must authenticate before accessing systems. Privileged accounts require multi-factor authentication. Access must be reviewed quarterly.",
+          "scope": "All entities involved in payment card processing",
+          "objective": "To ensure that all users have secure access to systems and data",
+          "policy_type": "Security Policy",
+          "policy_category": "Financial Security and Compliance",
+          "policy_subcategory": "Access Control",
           "subpolicies": [
             {
-              "subpolicy_id": "PCI-DSS-SEC-005.01",
-              "subpolicy_title": "Cardholder Data Location Assessment",
-              "subpolicy_description": "Organizations must identify all locations of cardholder data within their systems.",
-              "subpolicy_text": "Conduct a thorough assessment to locate all instances of cardholder data across the organization.",
-              "control": {
-                "WHAT": "Identify all locations of cardholder data.",
-                "WHO": "IT Security team and compliance officers.",
-                "WHEN": "Annually and whenever significant changes occur in the environment.",
-                "HOW": "Utilize data discovery tools and manual reviews.",
-                "WHERE": "All systems and databases that handle payment card information."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-005.01",
+              "subpolicy_title": "User Authentication",
+              "subpolicy_description": "This subpolicy outlines the requirements for user authentication.",
+              "subpolicy_text": "All users must authenticate before accessing systems.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-005.02",
-              "subpolicy_title": "Vulnerability Remediation",
-              "subpolicy_description": "Organizations must fix identified vulnerabilities and securely remove unnecessary cardholder data storage.",
-              "subpolicy_text": "Implement a process for remediating vulnerabilities and ensuring that only necessary cardholder data is retained.",
-              "control": {
-                "WHAT": "Fix identified vulnerabilities and remove unnecessary data.",
-                "WHO": "IT Security team and system administrators.",
-                "WHEN": "Immediately upon identification of vulnerabilities.",
-                "HOW": "Apply patches, updates, and secure data deletion methods.",
-                "WHERE": "All systems that store or process cardholder data."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-005.02",
+              "subpolicy_title": "Privileged Account Management",
+              "subpolicy_description": "This subpolicy outlines the requirements for privileged account management.",
+              "subpolicy_text": "Privileged accounts require multi-factor authentication.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-005.03",
-              "subpolicy_title": "Compliance Reporting",
-              "subpolicy_description": "Organizations must document assessment and remediation details and submit compliance reports.",
-              "subpolicy_text": "Establish a reporting process to document compliance efforts and share with relevant stakeholders.",
-              "control": {
-                "WHAT": "Document assessment and remediation details and submit compliance reports.",
-                "WHO": "Compliance officers and IT Security team.",
-                "WHEN": "Quarterly and upon request from acquiring banks or card brands.",
-                "HOW": "Generate compliance reports and maintain documentation of assessments.",
-                "WHERE": "All relevant compliance and security documentation repositories."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-005.03",
+              "subpolicy_title": "Access Review",
+              "subpolicy_description": "This subpolicy outlines the requirements for access review.",
+              "subpolicy_text": "Access must be reviewed quarterly.",
+              "control": ""
             }
           ]
         }
@@ -327,36 +237,36 @@
       "folder_path": "003-Security_Controls_and_Processes_for_PCI\\002-Protect_Cardholder_Data",
       "policies": [
         {
-          "policy_id": "PCI-DSS-SEC-006",
-          "policy_title": "Cardholder Data Protection Policy",
-          "policy_description": "Establishes requirements for protecting cardholder data throughout the payment card processing ecosystem to mitigate risks of financial fraud and data breaches.",
-          "policy_text": "This policy outlines the three ongoing steps for adhering to the PCI DSS: Assess, Repair, and Report. Organizations must identify all locations of cardholder data, take an inventory of IT assets and business processes for payment card processing, analyze them for vulnerabilities, fix identified vulnerabilities, securely remove unnecessary cardholder data storage, and document assessment and remediation details.",
-          "scope": "This policy applies to all entities that store, process, or transmit cardholder data, including merchants, payment processors, acquirers, issuers, and service providers.",
-          "objective": "The primary objective of this policy is to establish clear requirements and guidelines for protecting cardholder data, ensuring compliance with PCI DSS and enhancing the security of payment card transactions.",
-          "policy_type": "Security",
-          "policy_category": "Data Protection",
-          "policy_subcategory": "Cardholder Data Security",
+          "policy_id": "PCI-DSS-GEN-006",
+          "policy_title": "Access Control Requirements",
+          "policy_description": "This policy outlines the requirements for access control to ensure the security of sensitive data.",
+          "policy_text": "All users must authenticate before accessing systems. Privileged accounts require multi-factor authentication. Access must be reviewed quarterly.",
+          "scope": "All entities involved in payment card processing",
+          "objective": "To ensure that all users have secure access to systems and data",
+          "policy_type": "Security Policy",
+          "policy_category": "Financial Security and Compliance",
+          "policy_subcategory": "Access Control",
           "subpolicies": [
             {
-              "subpolicy_id": "PCI-DSS-SEC-006.01",
-              "subpolicy_title": "Assess Cardholder Data Locations",
-              "subpolicy_description": "Organizations must identify all locations where cardholder data is stored, processed, or transmitted.",
-              "subpolicy_text": "This subpolicy mandates a comprehensive assessment of all systems and processes that handle cardholder data.",
-              "control": "WHAT: Identify all locations of cardholder data. WHO: IT Security team and compliance officers. WHEN: Annually or upon significant changes to the environment. HOW: Conduct audits and inventory assessments. WHERE: All organizational systems and processes involved in payment card processing."
+              "subpolicy_id": "PCI-DSS-GEN-006.01",
+              "subpolicy_title": "User Authentication",
+              "subpolicy_description": "This subpolicy outlines the requirements for user authentication.",
+              "subpolicy_text": "All users must authenticate before accessing systems.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-006.02",
-              "subpolicy_title": "Repair Vulnerabilities",
-              "subpolicy_description": "Organizations must fix identified vulnerabilities and securely remove unnecessary cardholder data storage.",
-              "subpolicy_text": "This subpolicy outlines the requirements for vulnerability management and data sanitization.",
-              "control": "WHAT: Fix identified vulnerabilities and remove unnecessary cardholder data. WHO: IT Security team and system administrators. WHEN: Immediately upon identification of vulnerabilities. HOW: Apply patches, updates, and secure data deletion methods. WHERE: All systems that store or process cardholder data."
+              "subpolicy_id": "PCI-DSS-GEN-006.02",
+              "subpolicy_title": "Privileged Account Management",
+              "subpolicy_description": "This subpolicy outlines the requirements for privileged account management.",
+              "subpolicy_text": "Privileged accounts require multi-factor authentication.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-006.03",
-              "subpolicy_title": "Report Compliance Status",
-              "subpolicy_description": "Organizations must document assessment and remediation details and submit compliance reports to relevant stakeholders.",
-              "subpolicy_text": "This subpolicy requires the documentation of compliance efforts and communication with acquiring banks and card brands.",
-              "control": "WHAT: Document assessment and remediation details. WHO: Compliance officers and IT Security team. WHEN: After each assessment cycle and upon completion of remediation efforts. HOW: Generate compliance reports and submit to acquiring banks. WHERE: Compliance management systems and relevant stakeholder communication channels."
+              "subpolicy_id": "PCI-DSS-GEN-006.03",
+              "subpolicy_title": "Access Review",
+              "subpolicy_description": "This subpolicy outlines the requirements for access review.",
+              "subpolicy_text": "Access must be reviewed quarterly.",
+              "control": ""
             }
           ]
         }
@@ -371,54 +281,36 @@
       "folder_path": "003-Security_Controls_and_Processes_for_PCI\\003-Maintain_a_Vulnerability_Management_Prog",
       "policies": [
         {
-          "policy_id": "PCI-DSS-SEC-007",
-          "policy_title": "Vulnerability Management Policy",
-          "policy_description": "Establishes requirements for identifying, managing, and remediating vulnerabilities in the card-processing ecosystem to protect cardholder data.",
-          "policy_text": "This policy outlines the three ongoing steps for adhering to the PCI DSS: Assess, Repair, and Report. Organizations must identify all locations of cardholder data, take an inventory of IT assets and business processes for payment card processing, analyze them for vulnerabilities, fix identified vulnerabilities, securely remove unnecessary cardholder data storage, and document assessment and remediation details.",
-          "scope": "This policy applies to all entities that store, process, or transmit cardholder data, including merchants, payment processors, acquirers, issuers, and service providers.",
-          "objective": "The primary objective of this policy is to ensure the security of cardholder data by implementing robust security measures and compliance with PCI DSS standards. Specific objectives include: (1) protecting sensitive consumer financial information; (2) preventing unauthorized access to cardholder data; (3) ensuring compliance with regulatory requirements.",
-          "policy_type": "Security",
-          "policy_category": "Data Protection",
-          "policy_subcategory": "Payment Card Security",
+          "policy_id": "PCI-DSS-GEN-007",
+          "policy_title": "Access Control Requirements",
+          "policy_description": "This policy outlines the requirements for access control to ensure the security of sensitive data.",
+          "policy_text": "All users must authenticate before accessing systems. Privileged accounts require multi-factor authentication. Access must be reviewed quarterly.",
+          "scope": "All entities involved in payment card processing",
+          "objective": "To ensure that all users have secure access to systems and data",
+          "policy_type": "Security Policy",
+          "policy_category": "Financial Security and Compliance",
+          "policy_subcategory": "Access Control",
           "subpolicies": [
             {
-              "subpolicy_id": "PCI-DSS-SEC-007.01",
-              "subpolicy_title": "Vulnerability Assessment Procedures",
-              "subpolicy_description": "Establishes procedures for identifying and assessing vulnerabilities in the cardholder data environment.",
-              "subpolicy_text": "Organizations must conduct regular vulnerability assessments to identify potential weaknesses in their systems and processes.",
-              "control": {
-                "WHAT": "Conduct regular vulnerability assessments.",
-                "WHO": "IT Security team and compliance officers.",
-                "WHEN": "At least quarterly and after any significant changes to the environment.",
-                "HOW": "Utilize automated scanning tools and manual testing methods.",
-                "WHERE": "All systems and applications that store, process, or transmit cardholder data."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-007.01",
+              "subpolicy_title": "User Authentication",
+              "subpolicy_description": "This subpolicy outlines the requirements for user authentication.",
+              "subpolicy_text": "All users must authenticate before accessing systems.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-007.02",
-              "subpolicy_title": "Vulnerability Remediation Procedures",
-              "subpolicy_description": "Establishes requirements for fixing identified vulnerabilities in a timely manner.",
-              "subpolicy_text": "Organizations must implement a process for remediating identified vulnerabilities based on their severity and risk to cardholder data.",
-              "control": {
-                "WHAT": "Remediate identified vulnerabilities based on risk assessment.",
-                "WHO": "IT Security team and system administrators.",
-                "WHEN": "Within 30 days of identification for critical vulnerabilities.",
-                "HOW": "Apply patches, configuration changes, or other remediation techniques.",
-                "WHERE": "All systems and applications that store, process, or transmit cardholder data."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-007.02",
+              "subpolicy_title": "Privileged Account Management",
+              "subpolicy_description": "This subpolicy outlines the requirements for privileged account management.",
+              "subpolicy_text": "Privileged accounts require multi-factor authentication.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-007.03",
-              "subpolicy_title": "Documentation and Reporting Procedures",
-              "subpolicy_description": "Establishes requirements for documenting vulnerability assessments and remediation efforts.",
-              "subpolicy_text": "Organizations must maintain detailed records of vulnerability assessments, remediation actions taken, and compliance reports submitted to relevant stakeholders.",
-              "control": {
-                "WHAT": "Document all vulnerability assessments and remediation actions.",
-                "WHO": "IT Security team and compliance officers.",
-                "WHEN": "Immediately after assessments and remediation actions.",
-                "HOW": "Use a centralized documentation system for tracking and reporting.",
-                "WHERE": "All systems and applications involved in the vulnerability management process."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-007.03",
+              "subpolicy_title": "Access Review",
+              "subpolicy_description": "This subpolicy outlines the requirements for access review.",
+              "subpolicy_text": "Access must be reviewed quarterly.",
+              "control": ""
             }
           ]
         }
@@ -433,54 +325,36 @@
       "folder_path": "003-Security_Controls_and_Processes_for_PCI\\004-Implement_Strong_Access_Control_Measures",
       "policies": [
         {
-          "policy_id": "PCI-DSS-SEC-008",
-          "policy_title": "PCI DSS Compliance Policy",
-          "policy_description": "Establishes requirements for ongoing compliance with the Payment Card Industry Data Security Standard (PCI DSS) to protect cardholder data.",
-          "policy_text": "This policy outlines the three ongoing steps for adhering to the PCI DSS: Assess, Repair, and Report. Organizations must identify all locations of cardholder data, take an inventory of IT assets and business processes for payment card processing, analyze them for vulnerabilities, fix identified vulnerabilities, securely remove unnecessary cardholder data storage, and document assessment and remediation details.",
-          "scope": "This policy applies to all entities that store, process, or transmit cardholder data, including merchants, payment processors, acquirers, issuers, and service providers.",
-          "objective": "The primary objective of this policy is to ensure the security of cardholder data by implementing robust security measures and compliance with PCI DSS standards.",
-          "policy_type": "Security",
-          "policy_category": "Compliance",
-          "policy_subcategory": "Data Security",
+          "policy_id": "PCI-DSS-GEN-008",
+          "policy_title": "Access Control Requirements",
+          "policy_description": "This policy outlines the requirements for access control to ensure the security of sensitive data.",
+          "policy_text": "All users must authenticate before accessing systems. Privileged accounts require multi-factor authentication. Access must be reviewed quarterly.",
+          "scope": "All entities involved in payment card processing",
+          "objective": "To ensure that all users have secure access to systems and data",
+          "policy_type": "Security Policy",
+          "policy_category": "Financial Security and Compliance",
+          "policy_subcategory": "Access Control",
           "subpolicies": [
             {
-              "subpolicy_id": "PCI-DSS-SEC-008.01",
-              "subpolicy_title": "Assess Cardholder Data Locations",
-              "subpolicy_description": "Organizations must identify all locations where cardholder data is stored, processed, or transmitted.",
-              "subpolicy_text": "This subpolicy mandates the identification of all locations of cardholder data to ensure comprehensive security measures are applied.",
-              "control": {
-                "WHAT": "Identify all locations of cardholder data.",
-                "WHO": "Compliance and IT Security teams.",
-                "WHEN": "Annually and whenever new systems are introduced.",
-                "HOW": "Conduct audits and inventory assessments.",
-                "WHERE": "All organizational systems and networks handling cardholder data."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-008.01",
+              "subpolicy_title": "User Authentication",
+              "subpolicy_description": "This subpolicy outlines the requirements for user authentication.",
+              "subpolicy_text": "All users must authenticate before accessing systems.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-008.02",
-              "subpolicy_title": "Repair Identified Vulnerabilities",
-              "subpolicy_description": "Organizations must fix identified vulnerabilities and securely remove unnecessary cardholder data storage.",
-              "subpolicy_text": "This subpolicy outlines the requirement to address vulnerabilities and ensure that only necessary cardholder data is retained.",
-              "control": {
-                "WHAT": "Fix identified vulnerabilities and remove unnecessary data.",
-                "WHO": "IT Security team and system administrators.",
-                "WHEN": "Immediately upon identification of vulnerabilities.",
-                "HOW": "Implement patches, updates, and secure data deletion processes.",
-                "WHERE": "All systems that store or process cardholder data."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-008.02",
+              "subpolicy_title": "Privileged Account Management",
+              "subpolicy_description": "This subpolicy outlines the requirements for privileged account management.",
+              "subpolicy_text": "Privileged accounts require multi-factor authentication.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-008.03",
-              "subpolicy_title": "Report Compliance Status",
-              "subpolicy_description": "Organizations must document assessment and remediation details and submit compliance reports to relevant entities.",
-              "subpolicy_text": "This subpolicy requires organizations to maintain documentation of compliance efforts and report to acquiring banks and card brands.",
-              "control": {
-                "WHAT": "Document assessment and remediation details and submit compliance reports.",
-                "WHO": "Compliance officers and IT Security team.",
-                "WHEN": "Quarterly and upon request from acquiring banks or card brands.",
-                "HOW": "Compile reports detailing compliance status and remediation efforts.",
-                "WHERE": "Documentation systems and reporting platforms."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-008.03",
+              "subpolicy_title": "Access Review",
+              "subpolicy_description": "This subpolicy outlines the requirements for access review.",
+              "subpolicy_text": "Access must be reviewed quarterly.",
+              "control": ""
             }
           ]
         }
@@ -495,54 +369,36 @@
       "folder_path": "003-Security_Controls_and_Processes_for_PCI\\005-Regularly_Monitor_and_Test_Networks",
       "policies": [
         {
-          "policy_id": "PCI-DSS-SEC-009",
-          "policy_title": "PCI DSS Compliance Monitoring and Testing Policy",
-          "policy_description": "Establishes requirements for the ongoing monitoring and testing of networks to ensure compliance with the Payment Card Industry Data Security Standard (PCI DSS) and to protect cardholder data.",
-          "policy_text": "This policy outlines the ongoing steps for adhering to the PCI DSS: Assess, Repair, and Report. Organizations must regularly monitor and test networks to identify vulnerabilities, fix identified vulnerabilities, securely remove unnecessary cardholder data storage, and document assessment and remediation details.",
-          "scope": "This policy applies to all entities that store, process, or transmit cardholder data, including merchants, payment processors, acquirers, issuers, and service providers.",
-          "objective": "The primary objective of this policy is to ensure continuous compliance with PCI DSS by establishing a framework for regular monitoring and testing of networks, thereby protecting cardholder data and maintaining the integrity of payment card transactions.",
-          "policy_type": "Security",
-          "policy_category": "Network Security",
-          "policy_subcategory": "Monitoring and Testing",
+          "policy_id": "PCI-DSS-GEN-009",
+          "policy_title": "Access Control Requirements",
+          "policy_description": "This policy outlines the requirements for access control to ensure the security of sensitive data.",
+          "policy_text": "All users must authenticate before accessing systems. Privileged accounts require multi-factor authentication. Access must be reviewed quarterly.",
+          "scope": "All entities involved in payment card processing",
+          "objective": "To ensure that all users have secure access to systems and data",
+          "policy_type": "Security Policy",
+          "policy_category": "Financial Security and Compliance",
+          "policy_subcategory": "Access Control",
           "subpolicies": [
             {
-              "subpolicy_id": "PCI-DSS-SEC-009.01",
-              "subpolicy_title": "Network Vulnerability Assessment",
-              "subpolicy_description": "Conduct regular vulnerability assessments of all networks that store, process, or transmit cardholder data.",
-              "subpolicy_text": "Organizations must perform vulnerability assessments at least quarterly and after any significant changes to the network.",
-              "control": {
-                "WHAT": "Conduct vulnerability assessments of networks.",
-                "WHO": "IT Security team and network administrators.",
-                "WHEN": "Quarterly and after significant network changes.",
-                "HOW": "Utilize automated scanning tools and manual testing methods.",
-                "WHERE": "All networks involved in payment card processing."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-009.01",
+              "subpolicy_title": "User Authentication",
+              "subpolicy_description": "This subpolicy outlines the requirements for user authentication.",
+              "subpolicy_text": "All users must authenticate before accessing systems.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-009.02",
-              "subpolicy_title": "Remediation of Identified Vulnerabilities",
-              "subpolicy_description": "Implement a process for remediating identified vulnerabilities in a timely manner.",
-              "subpolicy_text": "Organizations must prioritize and address vulnerabilities based on risk assessment results.",
-              "control": {
-                "WHAT": "Remediate identified vulnerabilities.",
-                "WHO": "IT Security team and relevant system owners.",
-                "WHEN": "Immediately upon identification, with a maximum remediation timeframe of 30 days.",
-                "HOW": "Apply patches, change configurations, and implement additional security controls as necessary.",
-                "WHERE": "All systems and networks that store, process, or transmit cardholder data."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-009.02",
+              "subpolicy_title": "Privileged Account Management",
+              "subpolicy_description": "This subpolicy outlines the requirements for privileged account management.",
+              "subpolicy_text": "Privileged accounts require multi-factor authentication.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-009.03",
-              "subpolicy_title": "Documentation and Reporting of Compliance",
-              "subpolicy_description": "Document all assessment and remediation activities and report compliance status to relevant stakeholders.",
-              "subpolicy_text": "Organizations must maintain records of vulnerability assessments, remediation efforts, and compliance reports.",
-              "control": {
-                "WHAT": "Document and report compliance activities.",
-                "WHO": "Compliance team and IT Security team.",
-                "WHEN": "After each assessment and remediation cycle.",
-                "HOW": "Use compliance management tools and maintain logs of activities.",
-                "WHERE": "Centralized compliance repository accessible to stakeholders."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-009.03",
+              "subpolicy_title": "Access Review",
+              "subpolicy_description": "This subpolicy outlines the requirements for access review.",
+              "subpolicy_text": "Access must be reviewed quarterly.",
+              "control": ""
             }
           ]
         }
@@ -557,54 +413,36 @@
       "folder_path": "003-Security_Controls_and_Processes_for_PCI\\006-Maintain_an_Information_Security_Policy",
       "policies": [
         {
-          "policy_id": "PCI-DSS-SEC-010",
-          "policy_title": "PCI DSS Compliance Policy",
-          "policy_description": "Establishes requirements for ongoing compliance with the Payment Card Industry Data Security Standard (PCI DSS) to protect cardholder data.",
-          "policy_text": "This policy outlines the three ongoing steps for adhering to the PCI DSS: Assess, Repair, and Report. Organizations must identify all locations of cardholder data, take an inventory of IT assets and business processes for payment card processing, analyze them for vulnerabilities, fix identified vulnerabilities, securely remove unnecessary cardholder data storage, and document assessment and remediation details.",
-          "scope": "This policy applies to all entities that store, process, or transmit cardholder data, including merchants, payment processors, acquirers, issuers, and service providers.",
-          "objective": "The primary objective of this policy is to ensure the protection of cardholder data through continuous compliance with PCI DSS requirements, thereby minimizing the risk of data breaches and maintaining trust with customers and partners.",
-          "policy_type": "Security",
-          "policy_category": "Compliance",
-          "policy_subcategory": "Data Security",
+          "policy_id": "PCI-DSS-GEN-010",
+          "policy_title": "Access Control Requirements",
+          "policy_description": "This policy outlines the requirements for access control to ensure the security of sensitive data.",
+          "policy_text": "All users must authenticate before accessing systems. Privileged accounts require multi-factor authentication. Access must be reviewed quarterly.",
+          "scope": "All entities involved in payment card processing",
+          "objective": "To ensure that all users have secure access to systems and data",
+          "policy_type": "Security Policy",
+          "policy_category": "Financial Security and Compliance",
+          "policy_subcategory": "Access Control",
           "subpolicies": [
             {
-              "subpolicy_id": "PCI-DSS-SEC-010.01",
-              "subpolicy_title": "Assess Cardholder Data Locations",
-              "subpolicy_description": "Organizations must identify all locations where cardholder data is stored, processed, or transmitted.",
-              "subpolicy_text": "This subpolicy mandates the identification and documentation of all locations of cardholder data within the organization.",
-              "control": {
-                "WHAT": "Identify and document all locations of cardholder data.",
-                "WHO": "Data Protection Officer and IT Security team.",
-                "WHEN": "Annually and whenever new systems or processes are introduced.",
-                "HOW": "Conduct a comprehensive inventory and mapping of data flows.",
-                "WHERE": "All organizational systems, databases, and applications that handle cardholder data."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-010.01",
+              "subpolicy_title": "User Authentication",
+              "subpolicy_description": "This subpolicy outlines the requirements for user authentication.",
+              "subpolicy_text": "All users must authenticate before accessing systems.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-010.02",
-              "subpolicy_title": "Repair Identified Vulnerabilities",
-              "subpolicy_description": "Organizations must fix identified vulnerabilities and securely remove unnecessary cardholder data storage.",
-              "subpolicy_text": "This subpolicy outlines the process for remediating vulnerabilities and ensuring secure data handling practices.",
-              "control": {
-                "WHAT": "Remediate vulnerabilities and remove unnecessary cardholder data.",
-                "WHO": "IT Security team and relevant business units.",
-                "WHEN": "Immediately upon identification of vulnerabilities and during regular maintenance cycles.",
-                "HOW": "Implement patches, updates, and secure data deletion methods.",
-                "WHERE": "All systems and processes involved in cardholder data handling."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-010.02",
+              "subpolicy_title": "Privileged Account Management",
+              "subpolicy_description": "This subpolicy outlines the requirements for privileged account management.",
+              "subpolicy_text": "Privileged accounts require multi-factor authentication.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-010.03",
-              "subpolicy_title": "Report Compliance Status",
-              "subpolicy_description": "Organizations must document assessment and remediation details and submit compliance reports to relevant stakeholders.",
-              "subpolicy_text": "This subpolicy requires the documentation of compliance efforts and communication with stakeholders.",
-              "control": {
-                "WHAT": "Document compliance assessments and remediation efforts.",
-                "WHO": "Compliance Officer and IT Security team.",
-                "WHEN": "Quarterly and upon completion of remediation efforts.",
-                "HOW": "Prepare compliance reports and submit them to acquiring banks and card brands.",
-                "WHERE": "Documentation systems and compliance management tools."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-010.03",
+              "subpolicy_title": "Access Review",
+              "subpolicy_description": "This subpolicy outlines the requirements for access review.",
+              "subpolicy_text": "Access must be reviewed quarterly.",
+              "control": ""
             }
           ]
         }
@@ -619,54 +457,36 @@
       "folder_path": "003-Security_Controls_and_Processes_for_PCI\\007-Compensating_Controls_for_PCI_DSS_Requir",
       "policies": [
         {
-          "policy_id": "PCI-DSS-SEC-011",
-          "policy_title": "PCI DSS Compliance Policy",
-          "policy_description": "Establishes requirements for ongoing compliance with the Payment Card Industry Data Security Standard (PCI DSS) to protect cardholder data.",
-          "policy_text": "This policy outlines the three ongoing steps for adhering to the PCI DSS: Assess, Repair, and Report. Organizations must identify all locations of cardholder data, take an inventory of IT assets and business processes for payment card processing, analyze them for vulnerabilities, fix identified vulnerabilities, securely remove unnecessary cardholder data storage, and document assessment and remediation details.",
-          "scope": "This policy applies to all entities that store, process, or transmit cardholder data, including merchants, payment processors, acquirers, issuers, and service providers.",
-          "objective": "The primary objective of this policy is to ensure the protection of cardholder data through continuous compliance with PCI DSS requirements, thereby minimizing the risk of data breaches and ensuring the integrity of payment card transactions.",
-          "policy_type": "Security",
-          "policy_category": "Compliance",
-          "policy_subcategory": "Payment Card Industry Data Security Standard",
+          "policy_id": "PCI-DSS-GEN-011",
+          "policy_title": "Access Control Requirements",
+          "policy_description": "This policy outlines the requirements for access control to ensure the security of sensitive data.",
+          "policy_text": "All users must authenticate before accessing systems. Privileged accounts require multi-factor authentication. Access must be reviewed quarterly.",
+          "scope": "All entities involved in payment card processing",
+          "objective": "To ensure that all users have secure access to systems and data",
+          "policy_type": "Security Policy",
+          "policy_category": "Financial Security and Compliance",
+          "policy_subcategory": "Access Control",
           "subpolicies": [
             {
-              "subpolicy_id": "PCI-DSS-SEC-011.01",
-              "subpolicy_title": "Assess PCI DSS Compliance",
-              "subpolicy_description": "Organizations must regularly assess their compliance with PCI DSS by identifying all locations of cardholder data and analyzing vulnerabilities.",
-              "subpolicy_text": "This subpolicy mandates the identification of all locations of cardholder data, taking an inventory of IT assets and business processes for payment card processing, and analyzing them for vulnerabilities.",
-              "control": {
-                "WHAT": "Identify all locations of cardholder data and analyze for vulnerabilities.",
-                "WHO": "Compliance team and IT Security team.",
-                "WHEN": "At least annually and after any significant changes to the environment.",
-                "HOW": "Conduct vulnerability assessments and maintain an inventory of cardholder data locations.",
-                "WHERE": "All systems and processes involved in payment card processing."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-011.01",
+              "subpolicy_title": "User Authentication",
+              "subpolicy_description": "This subpolicy outlines the requirements for user authentication.",
+              "subpolicy_text": "All users must authenticate before accessing systems.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-011.02",
-              "subpolicy_title": "Repair Identified Vulnerabilities",
-              "subpolicy_description": "Organizations must fix identified vulnerabilities and securely remove unnecessary cardholder data storage.",
-              "subpolicy_text": "This subpolicy requires organizations to address vulnerabilities found during assessments and to securely remove any unnecessary cardholder data storage.",
-              "control": {
-                "WHAT": "Fix identified vulnerabilities and remove unnecessary cardholder data.",
-                "WHO": "IT Security team and Data Management team.",
-                "WHEN": "Immediately upon identification of vulnerabilities and during regular data reviews.",
-                "HOW": "Implement patches, updates, and secure data deletion methods.",
-                "WHERE": "All systems and databases that store cardholder data."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-011.02",
+              "subpolicy_title": "Privileged Account Management",
+              "subpolicy_description": "This subpolicy outlines the requirements for privileged account management.",
+              "subpolicy_text": "Privileged accounts require multi-factor authentication.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-011.03",
-              "subpolicy_title": "Report Compliance Status",
-              "subpolicy_description": "Organizations must document assessment and remediation details and submit compliance reports to relevant stakeholders.",
-              "subpolicy_text": "This subpolicy mandates the documentation of assessment results and remediation actions, along with the submission of compliance reports to acquiring banks and card brands.",
-              "control": {
-                "WHAT": "Document assessment and remediation details and submit compliance reports.",
-                "WHO": "Compliance team and IT Security team.",
-                "WHEN": "After each assessment and remediation cycle.",
-                "HOW": "Prepare compliance reports and maintain records of assessments.",
-                "WHERE": "To acquiring banks, card brands, and internal compliance records."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-011.03",
+              "subpolicy_title": "Access Review",
+              "subpolicy_description": "This subpolicy outlines the requirements for access review.",
+              "subpolicy_text": "Access must be reviewed quarterly.",
+              "control": ""
             }
           ]
         }
@@ -681,54 +501,36 @@
       "folder_path": "004-How_to_Comply_with_PCI_DSS",
       "policies": [
         {
-          "policy_id": "PCI-DSS-SEC-012",
-          "policy_title": "PCI DSS Compliance Policy",
-          "policy_description": "Establishes requirements for ongoing compliance with the Payment Card Industry Data Security Standard (PCI DSS) to protect cardholder data.",
-          "policy_text": "This policy outlines the three ongoing steps for adhering to the PCI DSS: Assess, Repair, and Report. Organizations must identify all locations of cardholder data, take an inventory of IT assets and business processes for payment card processing, analyze them for vulnerabilities, fix identified vulnerabilities, securely remove unnecessary cardholder data storage, and document assessment and remediation details.",
-          "scope": "This policy applies to all entities that store, process, or transmit cardholder data, including merchants, payment processors, acquirers, issuers, and service providers.",
-          "objective": "The primary objective of this policy is to ensure the protection of cardholder data through continuous compliance with PCI DSS requirements, thereby minimizing the risk of data breaches and ensuring the integrity of payment card transactions.",
-          "policy_type": "Security",
-          "policy_category": "Compliance",
-          "policy_subcategory": "Data Security",
+          "policy_id": "PCI-DSS-GEN-012",
+          "policy_title": "Access Control Requirements",
+          "policy_description": "This policy outlines the requirements for access control to ensure the security of sensitive data.",
+          "policy_text": "All users must authenticate before accessing systems. Privileged accounts require multi-factor authentication. Access must be reviewed quarterly.",
+          "scope": "All entities involved in payment card processing",
+          "objective": "To ensure that all users have secure access to systems and data",
+          "policy_type": "Security Policy",
+          "policy_category": "Financial Security and Compliance",
+          "policy_subcategory": "Access Control",
           "subpolicies": [
             {
-              "subpolicy_id": "PCI-DSS-SEC-012.01",
-              "subpolicy_title": "Assess Cardholder Data Locations",
-              "subpolicy_description": "Organizations must identify all locations where cardholder data is stored, processed, or transmitted.",
-              "subpolicy_text": "This subpolicy mandates the identification and documentation of all locations of cardholder data within the organization.",
-              "control": {
-                "WHAT": "Identify and document all locations of cardholder data.",
-                "WHO": "Data Protection Officer and IT Security Team.",
-                "WHEN": "Annually and whenever new systems are implemented.",
-                "HOW": "Conduct a thorough inventory and mapping of data flows.",
-                "WHERE": "All organizational systems, databases, and applications handling cardholder data."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-012.01",
+              "subpolicy_title": "User Authentication",
+              "subpolicy_description": "This subpolicy outlines the requirements for user authentication.",
+              "subpolicy_text": "All users must authenticate before accessing systems.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-012.02",
-              "subpolicy_title": "Repair Identified Vulnerabilities",
-              "subpolicy_description": "Organizations must fix identified vulnerabilities and securely remove unnecessary cardholder data storage.",
-              "subpolicy_text": "This subpolicy requires organizations to address vulnerabilities and ensure that only necessary cardholder data is retained.",
-              "control": {
-                "WHAT": "Fix identified vulnerabilities and remove unnecessary cardholder data.",
-                "WHO": "IT Security Team and System Administrators.",
-                "WHEN": "Immediately upon identification of vulnerabilities and during regular maintenance cycles.",
-                "HOW": "Implement patches, updates, and secure data deletion methods.",
-                "WHERE": "All systems and applications that store or process cardholder data."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-012.02",
+              "subpolicy_title": "Privileged Account Management",
+              "subpolicy_description": "This subpolicy outlines the requirements for privileged account management.",
+              "subpolicy_text": "Privileged accounts require multi-factor authentication.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-012.03",
-              "subpolicy_title": "Report Compliance Status",
-              "subpolicy_description": "Organizations must document assessment and remediation details and submit compliance reports to relevant entities.",
-              "subpolicy_text": "This subpolicy outlines the requirement for organizations to maintain records of compliance efforts and submit necessary reports.",
-              "control": {
-                "WHAT": "Document assessment and remediation details and submit compliance reports.",
-                "WHO": "Compliance Officer and IT Security Team.",
-                "WHEN": "Quarterly and upon request from acquiring banks or card brands.",
-                "HOW": "Compile reports detailing compliance status and remediation actions taken.",
-                "WHERE": "To acquiring banks, card brands, and internal compliance records."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-012.03",
+              "subpolicy_title": "Access Review",
+              "subpolicy_description": "This subpolicy outlines the requirements for access review.",
+              "subpolicy_text": "Access must be reviewed quarterly.",
+              "control": ""
             }
           ]
         }
@@ -743,54 +545,36 @@
       "folder_path": "004-How_to_Comply_with_PCI_DSS\\001-Choosing_a_Qualified_Security_Assessor",
       "policies": [
         {
-          "policy_id": "PCI-DSS-COMP-013",
-          "policy_title": "PCI DSS Compliance Process Policy",
-          "policy_description": "Establishes requirements for ongoing compliance with the Payment Card Industry Data Security Standard (PCI DSS) to protect cardholder data.",
-          "policy_text": "This policy outlines the three ongoing steps for adhering to the PCI DSS: Assess, Repair, and Report. Organizations must identify all locations of cardholder data, take an inventory of IT assets and business processes for payment card processing, analyze them for vulnerabilities, fix identified vulnerabilities, securely remove unnecessary cardholder data storage, and document assessment and remediation details.",
-          "scope": "This policy applies to all entities that store, process, or transmit cardholder data, including merchants, payment processors, acquirers, issuers, and service providers.",
-          "objective": "The primary objective of this policy is to ensure continuous compliance with PCI DSS requirements, thereby protecting cardholder data and minimizing the risk of data breaches.",
-          "policy_type": "Compliance",
+          "policy_id": "PCI-DSS-GEN-013",
+          "policy_title": "Access Control Requirements",
+          "policy_description": "This policy outlines the requirements for access control to ensure the security of sensitive data.",
+          "policy_text": "All users must authenticate before accessing systems. Privileged accounts require multi-factor authentication. Access must be reviewed quarterly.",
+          "scope": "All entities involved in payment card processing",
+          "objective": "To ensure that all users have secure access to systems and data",
+          "policy_type": "Security Policy",
           "policy_category": "Financial Security and Compliance",
-          "policy_subcategory": "PCI DSS Compliance",
+          "policy_subcategory": "Access Control",
           "subpolicies": [
             {
-              "subpolicy_id": "PCI-DSS-COMP-013.01",
-              "subpolicy_title": "Assess Cardholder Data Locations",
-              "subpolicy_description": "Organizations must identify all locations where cardholder data is stored, processed, or transmitted.",
-              "subpolicy_text": "This subpolicy mandates a comprehensive assessment of all systems and processes that handle cardholder data.",
-              "control": {
-                "WHAT": "Identify all locations of cardholder data.",
-                "WHO": "Compliance team and IT Security team.",
-                "WHEN": "Annually and whenever new systems are implemented.",
-                "HOW": "Conduct audits and inventory checks of all systems handling cardholder data.",
-                "WHERE": "All organizational systems, applications, and databases."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-013.01",
+              "subpolicy_title": "User Authentication",
+              "subpolicy_description": "This subpolicy outlines the requirements for user authentication.",
+              "subpolicy_text": "All users must authenticate before accessing systems.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-COMP-013.02",
-              "subpolicy_title": "Repair Identified Vulnerabilities",
-              "subpolicy_description": "Organizations must fix identified vulnerabilities and securely remove unnecessary cardholder data storage.",
-              "subpolicy_text": "This subpolicy requires organizations to implement remediation measures for any vulnerabilities found during assessments.",
-              "control": {
-                "WHAT": "Fix identified vulnerabilities and remove unnecessary cardholder data.",
-                "WHO": "IT Security team and system administrators.",
-                "WHEN": "Immediately upon identification of vulnerabilities.",
-                "HOW": "Apply patches, updates, and secure data deletion methods.",
-                "WHERE": "All systems and processes that handle cardholder data."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-013.02",
+              "subpolicy_title": "Privileged Account Management",
+              "subpolicy_description": "This subpolicy outlines the requirements for privileged account management.",
+              "subpolicy_text": "Privileged accounts require multi-factor authentication.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-COMP-013.03",
-              "subpolicy_title": "Report Compliance Status",
-              "subpolicy_description": "Organizations must document assessment and remediation details and submit compliance reports to relevant entities.",
-              "subpolicy_text": "This subpolicy outlines the requirements for reporting compliance status to acquiring banks and card brands.",
-              "control": {
-                "WHAT": "Document assessment and remediation details and submit compliance reports.",
-                "WHO": "Compliance team and management.",
-                "WHEN": "Quarterly and upon request from acquiring banks or card brands.",
-                "HOW": "Prepare compliance reports and maintain documentation of assessments.",
-                "WHERE": "All relevant compliance reporting systems and documentation repositories."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-013.03",
+              "subpolicy_title": "Access Review",
+              "subpolicy_description": "This subpolicy outlines the requirements for access review.",
+              "subpolicy_text": "Access must be reviewed quarterly.",
+              "control": ""
             }
           ]
         }
@@ -805,54 +589,36 @@
       "folder_path": "004-How_to_Comply_with_PCI_DSS\\002-Choosing_an_Approved_Scanning_Vendor",
       "policies": [
         {
-          "policy_id": "PCI-DSS-SEC-014",
-          "policy_title": "PCI DSS Compliance Process Policy",
-          "policy_description": "Establishes requirements for ongoing compliance with the Payment Card Industry Data Security Standard (PCI DSS) to protect cardholder data.",
-          "policy_text": "This policy outlines the three ongoing steps for adhering to the PCI DSS: Assess, Repair, and Report. Organizations must identify all locations of cardholder data, take an inventory of IT assets and business processes for payment card processing, analyze them for vulnerabilities, fix identified vulnerabilities, securely remove unnecessary cardholder data storage, and document assessment and remediation details.",
-          "scope": "This policy applies to all entities that store, process, or transmit cardholder data, including merchants, payment processors, acquirers, issuers, and service providers.",
-          "objective": "The primary objective of this policy is to ensure continuous compliance with PCI DSS, thereby protecting cardholder data and minimizing the risk of data breaches.",
-          "policy_type": "Security",
-          "policy_category": "Compliance",
-          "policy_subcategory": "Payment Card Industry Data Security Standard (PCI DSS)",
+          "policy_id": "PCI-DSS-GEN-014",
+          "policy_title": "Access Control Requirements",
+          "policy_description": "This policy outlines the requirements for access control to ensure the security of sensitive data.",
+          "policy_text": "All users must authenticate before accessing systems. Privileged accounts require multi-factor authentication. Access must be reviewed quarterly.",
+          "scope": "All entities involved in payment card processing",
+          "objective": "To ensure that all users have secure access to systems and data",
+          "policy_type": "Security Policy",
+          "policy_category": "Financial Security and Compliance",
+          "policy_subcategory": "Access Control",
           "subpolicies": [
             {
-              "subpolicy_id": "PCI-DSS-SEC-014.01",
-              "subpolicy_title": "Assess Cardholder Data Locations",
-              "subpolicy_description": "Organizations must identify all locations where cardholder data is stored, processed, or transmitted.",
-              "subpolicy_text": "This subpolicy mandates the identification of all locations of cardholder data to ensure comprehensive security measures are applied.",
-              "control": {
-                "WHAT": "Identify all locations of cardholder data.",
-                "WHO": "Compliance team and IT Security team.",
-                "WHEN": "Annually and whenever new systems are implemented.",
-                "HOW": "Conduct audits and inventory assessments.",
-                "WHERE": "All organizational systems and processes handling cardholder data."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-014.01",
+              "subpolicy_title": "User Authentication",
+              "subpolicy_description": "This subpolicy outlines the requirements for user authentication.",
+              "subpolicy_text": "All users must authenticate before accessing systems.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-014.02",
-              "subpolicy_title": "Repair Vulnerabilities",
-              "subpolicy_description": "Organizations must fix identified vulnerabilities and securely remove unnecessary cardholder data storage.",
-              "subpolicy_text": "This subpolicy requires organizations to address vulnerabilities and ensure that only necessary cardholder data is retained.",
-              "control": {
-                "WHAT": "Fix identified vulnerabilities and remove unnecessary cardholder data.",
-                "WHO": "IT Security team and system administrators.",
-                "WHEN": "Immediately upon identification of vulnerabilities.",
-                "HOW": "Implement patches, updates, and secure data deletion methods.",
-                "WHERE": "All systems and applications that store or process cardholder data."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-014.02",
+              "subpolicy_title": "Privileged Account Management",
+              "subpolicy_description": "This subpolicy outlines the requirements for privileged account management.",
+              "subpolicy_text": "Privileged accounts require multi-factor authentication.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-014.03",
-              "subpolicy_title": "Report Compliance Status",
-              "subpolicy_description": "Organizations must document assessment and remediation details and submit compliance reports to relevant entities.",
-              "subpolicy_text": "This subpolicy outlines the requirement for organizations to maintain documentation of compliance efforts and report to acquiring banks and card brands.",
-              "control": {
-                "WHAT": "Document assessment and remediation details and submit compliance reports.",
-                "WHO": "Compliance team and management.",
-                "WHEN": "Quarterly and upon request from acquiring banks or card brands.",
-                "HOW": "Prepare compliance reports and maintain records of assessments.",
-                "WHERE": "All relevant compliance documentation repositories."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-014.03",
+              "subpolicy_title": "Access Review",
+              "subpolicy_description": "This subpolicy outlines the requirements for access review.",
+              "subpolicy_text": "Access must be reviewed quarterly.",
+              "control": ""
             }
           ]
         }
@@ -867,54 +633,36 @@
       "folder_path": "004-How_to_Comply_with_PCI_DSS\\003-Scope_of_PCI_DSS_Requirements",
       "policies": [
         {
-          "policy_id": "PCI-DSS-SEC-015",
-          "policy_title": "PCI DSS Compliance Policy",
-          "policy_description": "Establishes requirements for ongoing compliance with the Payment Card Industry Data Security Standard (PCI DSS) to protect cardholder data.",
-          "policy_text": "This policy outlines the three ongoing steps for adhering to the PCI DSS: Assess, Repair, and Report. Organizations must identify all locations of cardholder data, take an inventory of IT assets and business processes for payment card processing, analyze them for vulnerabilities, fix identified vulnerabilities, securely remove unnecessary cardholder data storage, and document assessment and remediation details.",
-          "scope": "This policy applies to all entities that store, process, or transmit cardholder data, including merchants, payment processors, acquirers, issuers, and service providers.",
-          "objective": "The primary objective of this policy is to ensure the protection of cardholder data through continuous compliance with PCI DSS requirements, thereby minimizing the risk of data breaches and ensuring the integrity of payment card transactions.",
-          "policy_type": "Security",
-          "policy_category": "Compliance",
-          "policy_subcategory": "Payment Card Industry Data Security",
+          "policy_id": "PCI-DSS-GEN-015",
+          "policy_title": "Access Control Requirements",
+          "policy_description": "This policy outlines the requirements for access control to ensure the security of sensitive data.",
+          "policy_text": "All users must authenticate before accessing systems. Privileged accounts require multi-factor authentication. Access must be reviewed quarterly.",
+          "scope": "All entities involved in payment card processing",
+          "objective": "To ensure that all users have secure access to systems and data",
+          "policy_type": "Security Policy",
+          "policy_category": "Financial Security and Compliance",
+          "policy_subcategory": "Access Control",
           "subpolicies": [
             {
-              "subpolicy_id": "PCI-DSS-SEC-015.01",
-              "subpolicy_title": "Assess Cardholder Data Locations",
-              "subpolicy_description": "Organizations must identify all locations where cardholder data is stored, processed, or transmitted.",
-              "subpolicy_text": "This subpolicy mandates a comprehensive assessment of all systems and processes that handle cardholder data to ensure all locations are documented and secured.",
-              "control": {
-                "WHAT": "Identify and document all locations of cardholder data.",
-                "WHO": "Compliance team and IT Security team.",
-                "WHEN": "Annually and whenever new systems are introduced.",
-                "HOW": "Conduct audits and inventory checks of all systems handling cardholder data.",
-                "WHERE": "All organizational systems, databases, and applications involved in payment processing."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-015.01",
+              "subpolicy_title": "User Authentication",
+              "subpolicy_description": "This subpolicy outlines the requirements for user authentication.",
+              "subpolicy_text": "All users must authenticate before accessing systems.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-015.02",
-              "subpolicy_title": "Repair Identified Vulnerabilities",
-              "subpolicy_description": "Organizations must fix identified vulnerabilities and securely remove unnecessary cardholder data storage.",
-              "subpolicy_text": "This subpolicy requires organizations to implement remediation plans for vulnerabilities found during assessments and to ensure that any unnecessary cardholder data is securely deleted.",
-              "control": {
-                "WHAT": "Fix vulnerabilities and remove unnecessary cardholder data.",
-                "WHO": "IT Security team and system administrators.",
-                "WHEN": "Immediately upon identification of vulnerabilities.",
-                "HOW": "Apply patches, update systems, and securely delete data using approved methods.",
-                "WHERE": "All systems and applications that store or process cardholder data."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-015.02",
+              "subpolicy_title": "Privileged Account Management",
+              "subpolicy_description": "This subpolicy outlines the requirements for privileged account management.",
+              "subpolicy_text": "Privileged accounts require multi-factor authentication.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-015.03",
-              "subpolicy_title": "Report Compliance Status",
-              "subpolicy_description": "Organizations must document assessment and remediation details and submit compliance reports to relevant entities.",
-              "subpolicy_text": "This subpolicy outlines the requirement for organizations to maintain records of compliance activities and to report their compliance status to acquiring banks and card brands.",
-              "control": {
-                "WHAT": "Document and report compliance status and remediation efforts.",
-                "WHO": "Compliance team and management.",
-                "WHEN": "Quarterly and upon request from acquiring banks or card brands.",
-                "HOW": "Prepare compliance reports and maintain documentation of assessments and remediation actions.",
-                "WHERE": "All relevant compliance documentation repositories and reporting systems."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-015.03",
+              "subpolicy_title": "Access Review",
+              "subpolicy_description": "This subpolicy outlines the requirements for access review.",
+              "subpolicy_text": "Access must be reviewed quarterly.",
+              "control": ""
             }
           ]
         }
@@ -929,36 +677,36 @@
       "folder_path": "004-How_to_Comply_with_PCI_DSS\\004-Using_the_Self-Assessment_Questionnaire",
       "policies": [
         {
-          "policy_id": "PCI-DSS-COMP-016",
-          "policy_title": "PCI DSS Compliance Process Policy",
-          "policy_description": "Establishes requirements for ongoing compliance with the Payment Card Industry Data Security Standard (PCI DSS) to protect cardholder data.",
-          "policy_text": "This policy outlines the three ongoing steps for adhering to the PCI DSS: Assess, Repair, and Report. Organizations must identify all locations of cardholder data, take an inventory of IT assets and business processes for payment card processing, analyze them for vulnerabilities, fix identified vulnerabilities, securely remove unnecessary cardholder data storage, and document assessment and remediation details.",
-          "scope": "This policy applies to all entities that store, process, or transmit cardholder data, including merchants, payment processors, acquirers, issuers, and service providers.",
-          "objective": "The primary objective of this policy is to ensure continuous compliance with PCI DSS requirements, thereby protecting cardholder data and minimizing the risk of data breaches.",
-          "policy_type": "Compliance",
+          "policy_id": "PCI-DSS-GEN-016",
+          "policy_title": "Access Control Requirements",
+          "policy_description": "This policy outlines the requirements for access control to ensure the security of sensitive data.",
+          "policy_text": "All users must authenticate before accessing systems. Privileged accounts require multi-factor authentication. Access must be reviewed quarterly.",
+          "scope": "All entities involved in payment card processing",
+          "objective": "To ensure that all users have secure access to systems and data",
+          "policy_type": "Security Policy",
           "policy_category": "Financial Security and Compliance",
-          "policy_subcategory": "Payment Card Industry Data Security Standard (PCI DSS)",
+          "policy_subcategory": "Access Control",
           "subpolicies": [
             {
-              "subpolicy_id": "PCI-DSS-COMP-016.01",
-              "subpolicy_title": "Assessing Cardholder Data Locations",
-              "subpolicy_description": "Organizations must identify all locations of cardholder data and take an inventory of IT assets and business processes for payment card processing.",
-              "subpolicy_text": "This subpolicy mandates the identification and inventory of all cardholder data locations and related IT assets.",
-              "control": "WHAT: Identify and inventory all locations of cardholder data. WHO: Compliance team and IT department. WHEN: Annually or upon significant changes in the environment. HOW: Conduct data discovery scans and manual reviews. WHERE: All systems and databases that handle cardholder data."
+              "subpolicy_id": "PCI-DSS-GEN-016.01",
+              "subpolicy_title": "User Authentication",
+              "subpolicy_description": "This subpolicy outlines the requirements for user authentication.",
+              "subpolicy_text": "All users must authenticate before accessing systems.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-COMP-016.02",
-              "subpolicy_title": "Repairing Identified Vulnerabilities",
-              "subpolicy_description": "Organizations must fix identified vulnerabilities and securely remove unnecessary cardholder data storage.",
-              "subpolicy_text": "This subpolicy outlines the process for addressing vulnerabilities and ensuring secure data handling.",
-              "control": "WHAT: Fix identified vulnerabilities and remove unnecessary cardholder data. WHO: IT Security team and system administrators. WHEN: Immediately upon identification of vulnerabilities. HOW: Apply patches, update configurations, and securely delete data. WHERE: All systems that store or process cardholder data."
+              "subpolicy_id": "PCI-DSS-GEN-016.02",
+              "subpolicy_title": "Privileged Account Management",
+              "subpolicy_description": "This subpolicy outlines the requirements for privileged account management.",
+              "subpolicy_text": "Privileged accounts require multi-factor authentication.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-COMP-016.03",
-              "subpolicy_title": "Reporting Compliance Status",
-              "subpolicy_description": "Organizations must document assessment and remediation details and submit compliance reports to the acquiring bank and card brands.",
-              "subpolicy_text": "This subpolicy requires the documentation of compliance activities and reporting to relevant stakeholders.",
-              "control": "WHAT: Document assessment and remediation details and submit compliance reports. WHO: Compliance team and management. WHEN: Quarterly and upon completion of remediation activities. HOW: Use standardized reporting templates and maintain records. WHERE: Compliance management systems and relevant databases."
+              "subpolicy_id": "PCI-DSS-GEN-016.03",
+              "subpolicy_title": "Access Review",
+              "subpolicy_description": "This subpolicy outlines the requirements for access review.",
+              "subpolicy_text": "Access must be reviewed quarterly.",
+              "control": ""
             }
           ]
         }
@@ -973,54 +721,36 @@
       "folder_path": "004-How_to_Comply_with_PCI_DSS\\005-Reporting",
       "policies": [
         {
-          "policy_id": "PCI-DSS-COMP-017",
-          "policy_title": "PCI DSS Compliance Reporting Policy",
-          "policy_description": "Establishes requirements for documenting assessment and remediation details related to PCI DSS compliance and reporting to relevant stakeholders.",
-          "policy_text": "This policy outlines the ongoing steps for adhering to the PCI DSS: Assess, Repair, and Report. Organizations must document assessment and remediation details and submit compliance reports to the acquiring bank and card brands.",
-          "scope": "This policy applies to all entities that store, process, or transmit cardholder data, including merchants, payment processors, acquirers, issuers, and service providers.",
-          "objective": "The primary objective of this policy is to ensure that organizations maintain compliance with PCI DSS by documenting necessary assessments and remediation efforts, thereby protecting cardholder data and maintaining trust with stakeholders.",
-          "policy_type": "Compliance",
+          "policy_id": "PCI-DSS-GEN-017",
+          "policy_title": "Access Control Requirements",
+          "policy_description": "This policy outlines the requirements for access control to ensure the security of sensitive data.",
+          "policy_text": "All users must authenticate before accessing systems. Privileged accounts require multi-factor authentication. Access must be reviewed quarterly.",
+          "scope": "All entities involved in payment card processing",
+          "objective": "To ensure that all users have secure access to systems and data",
+          "policy_type": "Security Policy",
           "policy_category": "Financial Security and Compliance",
-          "policy_subcategory": "Reporting and Documentation",
+          "policy_subcategory": "Access Control",
           "subpolicies": [
             {
-              "subpolicy_id": "PCI-DSS-COMP-017.01",
-              "subpolicy_title": "Assessment Documentation Requirements",
-              "subpolicy_description": "Organizations must document all assessments related to cardholder data locations and vulnerabilities.",
-              "subpolicy_text": "All assessments must be documented, including locations of cardholder data, inventory of IT assets, and identified vulnerabilities.",
-              "control": {
-                "WHAT": "Document all assessment findings and remediation actions.",
-                "WHO": "Compliance team and IT Security team.",
-                "WHEN": "Immediately after assessments are conducted.",
-                "HOW": "Use standardized reporting templates and tools.",
-                "WHERE": "All documentation must be stored in a secure compliance management system."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-017.01",
+              "subpolicy_title": "User Authentication",
+              "subpolicy_description": "This subpolicy outlines the requirements for user authentication.",
+              "subpolicy_text": "All users must authenticate before accessing systems.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-COMP-017.02",
-              "subpolicy_title": "Remediation Action Documentation",
-              "subpolicy_description": "Organizations must document all actions taken to remediate identified vulnerabilities.",
-              "subpolicy_text": "All remediation actions must be recorded, including the fixing of vulnerabilities and secure removal of unnecessary cardholder data storage.",
-              "control": {
-                "WHAT": "Record all remediation actions taken.",
-                "WHO": "IT Security team and relevant department managers.",
-                "WHEN": "Immediately after remediation actions are completed.",
-                "HOW": "Utilize incident management systems to log actions.",
-                "WHERE": "Documentation must be maintained in a secure location accessible to compliance auditors."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-017.02",
+              "subpolicy_title": "Privileged Account Management",
+              "subpolicy_description": "This subpolicy outlines the requirements for privileged account management.",
+              "subpolicy_text": "Privileged accounts require multi-factor authentication.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-COMP-017.03",
-              "subpolicy_title": "Compliance Reporting to Stakeholders",
-              "subpolicy_description": "Organizations must submit compliance reports to the acquiring bank and card brands.",
-              "subpolicy_text": "Compliance reports must be prepared and submitted as per the requirements of the acquiring bank and card brands.",
-              "control": {
-                "WHAT": "Prepare and submit compliance reports.",
-                "WHO": "Compliance team and designated reporting officers.",
-                "WHEN": "As per the reporting schedule defined by the acquiring bank and card brands.",
-                "HOW": "Compile reports based on documented assessments and remediation actions.",
-                "WHERE": "Reports must be submitted through secure channels as specified by the stakeholders."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-017.03",
+              "subpolicy_title": "Access Review",
+              "subpolicy_description": "This subpolicy outlines the requirements for access review.",
+              "subpolicy_text": "Access must be reviewed quarterly.",
+              "control": ""
             }
           ]
         }
@@ -1035,36 +765,36 @@
       "folder_path": "004-How_to_Comply_with_PCI_DSS\\006-Implementing_PCI_DSS_into_Business-as-Us",
       "policies": [
         {
-          "policy_id": "PCI-DSS-SEC-018",
-          "policy_title": "PCI DSS Compliance Process Policy",
-          "policy_description": "Establishes requirements for ongoing compliance with the Payment Card Industry Data Security Standard (PCI DSS) to protect cardholder data.",
-          "policy_text": "This policy outlines the three ongoing steps for adhering to the PCI DSS: Assess, Repair, and Report. Organizations must identify all locations of cardholder data, take an inventory of IT assets and business processes for payment card processing, analyze them for vulnerabilities, fix identified vulnerabilities, securely remove unnecessary cardholder data storage, and document assessment and remediation details.",
-          "scope": "This policy applies to all entities that store, process, or transmit cardholder data, including merchants, payment processors, acquirers, issuers, and service providers.",
-          "objective": "The primary objective of this policy is to ensure that all entities involved in payment card processing maintain a secure environment and comply with PCI DSS requirements to protect cardholder data.",
-          "policy_type": "Security",
-          "policy_category": "Compliance",
-          "policy_subcategory": "PCI DSS",
+          "policy_id": "PCI-DSS-GEN-018",
+          "policy_title": "Access Control Requirements",
+          "policy_description": "This policy outlines the requirements for access control to ensure the security of sensitive data.",
+          "policy_text": "All users must authenticate before accessing systems. Privileged accounts require multi-factor authentication. Access must be reviewed quarterly.",
+          "scope": "All entities involved in payment card processing",
+          "objective": "To ensure that all users have secure access to systems and data",
+          "policy_type": "Security Policy",
+          "policy_category": "Financial Security and Compliance",
+          "policy_subcategory": "Access Control",
           "subpolicies": [
             {
-              "subpolicy_id": "PCI-DSS-SEC-018.01",
-              "subpolicy_title": "Assess Cardholder Data Locations",
-              "subpolicy_description": "Organizations must identify all locations of cardholder data and take an inventory of IT assets and business processes for payment card processing.",
-              "subpolicy_text": "This subpolicy mandates the identification and documentation of all locations where cardholder data is stored, processed, or transmitted.",
-              "control": "WHAT: Identify and document all locations of cardholder data. WHO: Compliance team and IT department. WHEN: Annually or whenever significant changes occur. HOW: Conduct data mapping exercises and inventory assessments. WHERE: All organizational systems and processes involved in payment card processing."
+              "subpolicy_id": "PCI-DSS-GEN-018.01",
+              "subpolicy_title": "User Authentication",
+              "subpolicy_description": "This subpolicy outlines the requirements for user authentication.",
+              "subpolicy_text": "All users must authenticate before accessing systems.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-018.02",
-              "subpolicy_title": "Repair Identified Vulnerabilities",
-              "subpolicy_description": "Organizations must fix identified vulnerabilities and securely remove unnecessary cardholder data storage.",
-              "subpolicy_text": "This subpolicy requires organizations to address vulnerabilities found during assessments and ensure that unnecessary cardholder data is securely deleted.",
-              "control": "WHAT: Remediate identified vulnerabilities and remove unnecessary cardholder data. WHO: IT Security team and data management personnel. WHEN: Immediately upon identification of vulnerabilities. HOW: Implement patches, updates, and secure deletion methods. WHERE: All systems that store or process cardholder data."
+              "subpolicy_id": "PCI-DSS-GEN-018.02",
+              "subpolicy_title": "Privileged Account Management",
+              "subpolicy_description": "This subpolicy outlines the requirements for privileged account management.",
+              "subpolicy_text": "Privileged accounts require multi-factor authentication.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-018.03",
-              "subpolicy_title": "Report Compliance Status",
-              "subpolicy_description": "Organizations must document assessment and remediation details and submit compliance reports to the acquiring bank and card brands.",
-              "subpolicy_text": "This subpolicy outlines the requirements for documenting compliance efforts and reporting to relevant stakeholders.",
-              "control": "WHAT: Document assessment results and remediation actions, and prepare compliance reports. WHO: Compliance team and IT Security team. WHEN: After each assessment cycle and upon request. HOW: Use standardized reporting templates and maintain records of compliance activities. WHERE: All documentation systems used for compliance reporting."
+              "subpolicy_id": "PCI-DSS-GEN-018.03",
+              "subpolicy_title": "Access Review",
+              "subpolicy_description": "This subpolicy outlines the requirements for access review.",
+              "subpolicy_text": "Access must be reviewed quarterly.",
+              "control": ""
             }
           ]
         }
@@ -1079,36 +809,36 @@
       "folder_path": "005-Web_Resources",
       "policies": [
         {
-          "policy_id": "PCI-DSS-COMP-019",
-          "policy_title": "PCI DSS Compliance Process Policy",
-          "policy_description": "Establishes the ongoing process for assessing, repairing, and reporting on PCI DSS compliance to protect cardholder data.",
-          "policy_text": "This policy outlines the three ongoing steps for adhering to the PCI DSS: Assess, Repair, and Report.",
-          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in payment card processing and cardholder data management.",
-          "objective": "The primary objective of this policy is to ensure continuous compliance with PCI DSS requirements, thereby protecting cardholder data and maintaining a secure transaction environment.",
-          "policy_type": "Compliance",
+          "policy_id": "PCI-DSS-GEN-019",
+          "policy_title": "Access Control Requirements",
+          "policy_description": "This policy outlines the requirements for access control to ensure the security of sensitive data.",
+          "policy_text": "All users must authenticate before accessing systems. Privileged accounts require multi-factor authentication. Access must be reviewed quarterly.",
+          "scope": "All entities involved in payment card processing",
+          "objective": "To ensure that all users have secure access to systems and data",
+          "policy_type": "Security Policy",
           "policy_category": "Financial Security and Compliance",
-          "policy_subcategory": "PCI DSS Compliance",
+          "policy_subcategory": "Access Control",
           "subpolicies": [
             {
-              "subpolicy_id": "PCI-DSS-COMP-019.01",
-              "subpolicy_title": "Assessment of Cardholder Data Locations",
-              "subpolicy_description": "Identifying all locations of cardholder data and taking an inventory of IT assets and business processes.",
-              "subpolicy_text": "Conduct a thorough assessment to identify all locations where cardholder data is stored, processed, or transmitted.",
-              "control": "WHAT: Identify and document all locations of cardholder data. WHO: Compliance team and IT asset management team. WHEN: Annually or whenever significant changes occur. HOW: Use data discovery tools and manual audits. WHERE: All systems and networks involved in payment card processing."
+              "subpolicy_id": "PCI-DSS-GEN-019.01",
+              "subpolicy_title": "User Authentication",
+              "subpolicy_description": "This subpolicy outlines the requirements for user authentication.",
+              "subpolicy_text": "All users must authenticate before accessing systems.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-COMP-019.02",
-              "subpolicy_title": "Repairing Identified Vulnerabilities",
-              "subpolicy_description": "Fixing identified vulnerabilities and securely removing unnecessary cardholder data storage.",
-              "subpolicy_text": "Implement remediation measures for any vulnerabilities identified during the assessment phase.",
-              "control": "WHAT: Address and remediate vulnerabilities. WHO: IT Security team and system administrators. WHEN: Immediately upon identification of vulnerabilities. HOW: Apply patches, update configurations, and remove unnecessary data. WHERE: All systems and applications that handle cardholder data."
+              "subpolicy_id": "PCI-DSS-GEN-019.02",
+              "subpolicy_title": "Privileged Account Management",
+              "subpolicy_description": "This subpolicy outlines the requirements for privileged account management.",
+              "subpolicy_text": "Privileged accounts require multi-factor authentication.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-COMP-019.03",
-              "subpolicy_title": "Reporting Compliance Status",
-              "subpolicy_description": "Documenting assessment and remediation details and submitting compliance reports to relevant stakeholders.",
-              "subpolicy_text": "Prepare and submit compliance reports to the acquiring bank and card brands as required.",
-              "control": "WHAT: Document compliance status and remediation efforts. WHO: Compliance team and reporting officers. WHEN: Quarterly or as required by stakeholders. HOW: Generate reports based on assessment findings and remediation actions. WHERE: All relevant reporting systems and stakeholders."
+              "subpolicy_id": "PCI-DSS-GEN-019.03",
+              "subpolicy_title": "Access Review",
+              "subpolicy_description": "This subpolicy outlines the requirements for access review.",
+              "subpolicy_text": "Access must be reviewed quarterly.",
+              "control": ""
             }
           ]
         }
@@ -1123,54 +853,36 @@
       "folder_path": "006-About_the_PCI_Security_Standards_Council",
       "policies": [
         {
-          "policy_id": "PCI-DSS-SEC-020",
-          "policy_title": "PCI DSS Compliance Policy",
-          "policy_description": "Establishes requirements for ongoing compliance with the Payment Card Industry Data Security Standard (PCI DSS) to protect cardholder data.",
-          "policy_text": "This policy outlines the three ongoing steps for adhering to the PCI DSS: Assess, Repair, and Report. Organizations must identify all locations of cardholder data, take an inventory of IT assets and business processes for payment card processing, analyze them for vulnerabilities, fix identified vulnerabilities, securely remove unnecessary cardholder data storage, and document assessment and remediation details.",
-          "scope": "This policy applies to all entities that store, process, or transmit cardholder data, including merchants, payment processors, acquirers, issuers, and service providers.",
-          "objective": "The primary objective of this policy is to ensure the protection of cardholder data through continuous compliance with PCI DSS requirements, thereby minimizing the risk of data breaches and enhancing the security posture of the organization.",
-          "policy_type": "Security",
-          "policy_category": "Compliance",
-          "policy_subcategory": "Data Security",
+          "policy_id": "PCI-DSS-GEN-020",
+          "policy_title": "Access Control Requirements",
+          "policy_description": "This policy outlines the requirements for access control to ensure the security of sensitive data.",
+          "policy_text": "All users must authenticate before accessing systems. Privileged accounts require multi-factor authentication. Access must be reviewed quarterly.",
+          "scope": "All entities involved in payment card processing",
+          "objective": "To ensure that all users have secure access to systems and data",
+          "policy_type": "Security Policy",
+          "policy_category": "Financial Security and Compliance",
+          "policy_subcategory": "Access Control",
           "subpolicies": [
             {
-              "subpolicy_id": "PCI-DSS-SEC-020.01",
-              "subpolicy_title": "Assess Cardholder Data Locations",
-              "subpolicy_description": "Organizations must identify all locations where cardholder data is stored, processed, or transmitted.",
-              "subpolicy_text": "This subpolicy mandates the identification and documentation of all locations of cardholder data within the organization.",
-              "control": {
-                "WHAT": "Identify and document all locations of cardholder data.",
-                "WHO": "Data Protection Officer and IT Security Team.",
-                "WHEN": "Annually and whenever new systems or processes are introduced.",
-                "HOW": "Conduct a comprehensive inventory and risk assessment.",
-                "WHERE": "All organizational systems, applications, and databases that handle cardholder data."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-020.01",
+              "subpolicy_title": "User Authentication",
+              "subpolicy_description": "This subpolicy outlines the requirements for user authentication.",
+              "subpolicy_text": "All users must authenticate before accessing systems.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-020.02",
-              "subpolicy_title": "Repair Identified Vulnerabilities",
-              "subpolicy_description": "Organizations must fix identified vulnerabilities and securely remove unnecessary cardholder data storage.",
-              "subpolicy_text": "This subpolicy requires organizations to address vulnerabilities found during assessments and to ensure that unnecessary cardholder data is securely deleted.",
-              "control": {
-                "WHAT": "Fix identified vulnerabilities and remove unnecessary cardholder data.",
-                "WHO": "IT Security Team and System Administrators.",
-                "WHEN": "Immediately upon identification of vulnerabilities and during regular maintenance cycles.",
-                "HOW": "Implement patches, updates, and secure deletion methods.",
-                "WHERE": "All systems and applications that store or process cardholder data."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-020.02",
+              "subpolicy_title": "Privileged Account Management",
+              "subpolicy_description": "This subpolicy outlines the requirements for privileged account management.",
+              "subpolicy_text": "Privileged accounts require multi-factor authentication.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-020.03",
-              "subpolicy_title": "Report Compliance Status",
-              "subpolicy_description": "Organizations must document assessment and remediation details and submit compliance reports to relevant stakeholders.",
-              "subpolicy_text": "This subpolicy outlines the requirements for documenting compliance efforts and reporting to acquiring banks and card brands.",
-              "control": {
-                "WHAT": "Document assessment and remediation details and submit compliance reports.",
-                "WHO": "Compliance Officer and IT Security Team.",
-                "WHEN": "After each assessment cycle and upon request from stakeholders.",
-                "HOW": "Prepare detailed reports and submit them through secure channels.",
-                "WHERE": "To acquiring banks, card brands, and other relevant entities."
-              }
+              "subpolicy_id": "PCI-DSS-GEN-020.03",
+              "subpolicy_title": "Access Review",
+              "subpolicy_description": "This subpolicy outlines the requirements for access review.",
+              "subpolicy_text": "Access must be reviewed quarterly.",
+              "control": ""
             }
           ]
         }
@@ -1185,36 +897,36 @@
       "folder_path": "006-About_the_PCI_Security_Standards_Council\\001-Report_p",
       "policies": [
         {
-          "policy_id": "PCI-DSS-SEC-021",
-          "policy_title": "PCI DSS Compliance Process Policy",
-          "policy_description": "Establishes requirements for ongoing compliance with the Payment Card Industry Data Security Standard (PCI DSS) to protect cardholder data.",
-          "policy_text": "This policy outlines the three ongoing steps for adhering to the PCI DSS: Assess, Repair, and Report. Organizations must identify all locations of cardholder data, take an inventory of IT assets and business processes for payment card processing, analyze them for vulnerabilities, fix identified vulnerabilities, securely remove unnecessary cardholder data storage, and document assessment and remediation details.",
-          "scope": "This policy applies to all entities that store, process, or transmit cardholder data, including merchants, payment processors, acquirers, issuers, and service providers.",
-          "objective": "The primary objective of this policy is to ensure that all entities involved in payment card processing maintain a secure environment and comply with PCI DSS requirements. Specific objectives include: (1) protecting cardholder data from unauthorized access; (2) ensuring the integrity and confidentiality of payment card transactions; (3) establishing a framework for continuous compliance and risk management.",
-          "policy_type": "Security",
-          "policy_category": "Compliance",
-          "policy_subcategory": "Payment Card Industry Data Security Standard (PCI DSS)",
+          "policy_id": "PCI-DSS-GEN-021",
+          "policy_title": "Access Control Requirements",
+          "policy_description": "This policy outlines the requirements for access control to ensure the security of sensitive data.",
+          "policy_text": "All users must authenticate before accessing systems. Privileged accounts require multi-factor authentication. Access must be reviewed quarterly.",
+          "scope": "All entities involved in payment card processing",
+          "objective": "To ensure that all users have secure access to systems and data",
+          "policy_type": "Security Policy",
+          "policy_category": "Financial Security and Compliance",
+          "policy_subcategory": "Access Control",
           "subpolicies": [
             {
-              "subpolicy_id": "PCI-DSS-SEC-021.01",
-              "subpolicy_title": "Assess Cardholder Data Locations",
-              "subpolicy_description": "Organizations must identify all locations of cardholder data and take an inventory of IT assets and business processes for payment card processing.",
-              "subpolicy_text": "This subpolicy mandates that organizations conduct a thorough assessment of all systems and processes that handle cardholder data.",
-              "control": "WHAT: Identify and document all locations of cardholder data. WHO: Compliance and IT Security teams. WHEN: Annually or whenever significant changes occur. HOW: Use data discovery tools and manual audits. WHERE: All systems and applications that process, store, or transmit cardholder data."
+              "subpolicy_id": "PCI-DSS-GEN-021.01",
+              "subpolicy_title": "User Authentication",
+              "subpolicy_description": "This subpolicy outlines the requirements for user authentication.",
+              "subpolicy_text": "All users must authenticate before accessing systems.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-021.02",
-              "subpolicy_title": "Repair Identified Vulnerabilities",
-              "subpolicy_description": "Organizations must fix identified vulnerabilities and securely remove unnecessary cardholder data storage.",
-              "subpolicy_text": "This subpolicy requires organizations to implement remediation processes for any vulnerabilities found during assessments.",
-              "control": "WHAT: Remediate identified vulnerabilities and remove unnecessary cardholder data. WHO: IT Security team and system administrators. WHEN: Within 30 days of identification. HOW: Apply patches, update configurations, and securely delete data. WHERE: All systems that store or process cardholder data."
+              "subpolicy_id": "PCI-DSS-GEN-021.02",
+              "subpolicy_title": "Privileged Account Management",
+              "subpolicy_description": "This subpolicy outlines the requirements for privileged account management.",
+              "subpolicy_text": "Privileged accounts require multi-factor authentication.",
+              "control": "3.2"
             },
             {
-              "subpolicy_id": "PCI-DSS-SEC-021.03",
-              "subpolicy_title": "Report Compliance Status",
-              "subpolicy_description": "Organizations must document assessment and remediation details and submit compliance reports to the acquiring bank and card brands.",
-              "subpolicy_text": "This subpolicy outlines the requirements for reporting compliance status to relevant stakeholders.",
-              "control": "WHAT: Document all assessment and remediation activities and submit compliance reports. WHO: Compliance team and designated reporting personnel. WHEN: Annually or as required by the acquiring bank. HOW: Prepare reports based on PCI DSS requirements and submit them electronically. WHERE: To the acquiring bank and relevant card brands."
+              "subpolicy_id": "PCI-DSS-GEN-021.03",
+              "subpolicy_title": "Access Review",
+              "subpolicy_description": "This subpolicy outlines the requirements for access review.",
+              "subpolicy_text": "Access must be reviewed quarterly.",
+              "control": ""
             }
           ]
         }

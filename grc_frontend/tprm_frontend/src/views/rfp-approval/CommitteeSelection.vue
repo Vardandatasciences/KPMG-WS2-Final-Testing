@@ -77,15 +77,15 @@
                 :key="member.user_id"
                 class="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-all duration-200"
                 :class="{
-                  'border-blue-300 bg-blue-50': selectedMembers.some(m => m.user_id === member.user_id),
-                  'border-gray-200': !selectedMembers.some(m => m.user_id === member.user_id)
+                  'border-blue-300 bg-blue-50': isMemberSelected(member),
+                  'border-gray-200': !isMemberSelected(member)
                 }"
               >
                 <div class="flex items-center justify-between">
                   <div class="flex items-center space-x-3">
                     <input
                       type="checkbox"
-                      :checked="selectedMembers.some(m => m.user_id === member.user_id)"
+                      :checked="isMemberSelected(member)"
                       @change="toggleMemberSelection(member)"
                       class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                     />
@@ -110,17 +110,17 @@
                     </div>
                   </div>
                   
-                  <div v-if="selectedMembers.some(m => m.user_id === member.user_id)" class="flex items-center space-x-2">
+                  <div v-if="isMemberSelected(member)" class="flex items-center space-x-2">
                     <button 
                       @click="setAsChair(member)"
                       :class="[
                         'px-3 py-1 text-xs font-medium rounded-md transition-colors',
-                        selectedMembers.find(m => m.user_id === member.user_id)?.is_chair 
+                        selectedMembers.find(m => normalizeUserId(m) === normalizeUserId(member))?.is_chair 
                           ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200' 
                           : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                       ]"
                     >
-                      {{ selectedMembers.find(m => m.user_id === member.user_id)?.is_chair ? '👑 Chair' : 'Set as Chair' }}
+                      {{ selectedMembers.find(m => normalizeUserId(m) === normalizeUserId(member))?.is_chair ? '👑 Chair' : 'Set as Chair' }}
                     </button>
                     <button 
                       @click="removeMember(member)"
@@ -267,19 +267,34 @@ const searchQuery = ref('')
 const departmentFilter = ref('')
 const saving = ref(false)
 
+// Helper function to normalize user ID for comparisons
+const normalizeUserId = (user) => {
+  if (!user) return ''
+  return String(user.user_id || user.id || user.UserId || '')
+}
+
+// Helper function to check if a member is selected
+const isMemberSelected = (member) => {
+  if (!member) return false
+  const memberId = normalizeUserId(member)
+  return selectedMembers.value.some(m => normalizeUserId(m) === memberId)
+}
+
 // Computed properties
 const filteredMembers = computed(() => {
   let filtered = availableMembers.value
+  console.log('🔍 Filtering members. Total available:', filtered.length, 'Selected:', selectedMembers.value.length)
 
   // Filter by search query
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase()
     filtered = filtered.filter(member => 
-      member.first_name.toLowerCase().includes(query) ||
-      member.last_name.toLowerCase().includes(query) ||
-      member.email.toLowerCase().includes(query) ||
-      member.username.toLowerCase().includes(query)
+      member.first_name?.toLowerCase().includes(query) ||
+      member.last_name?.toLowerCase().includes(query) ||
+      member.email?.toLowerCase().includes(query) ||
+      member.username?.toLowerCase().includes(query)
     )
+    console.log('🔍 After search filter:', filtered.length)
   }
 
   // Filter by department
@@ -287,11 +302,22 @@ const filteredMembers = computed(() => {
     filtered = filtered.filter(member => 
       member.department_id === departmentFilter.value
     )
+    console.log('🔍 After department filter:', filtered.length)
   }
 
   // Exclude already selected members
-  const selectedIds = selectedMembers.value.map(m => m.user_id)
-  filtered = filtered.filter(member => !selectedIds.includes(member.user_id))
+  // Normalize IDs to strings for comparison
+  const selectedIds = selectedMembers.value.map(m => normalizeUserId(m))
+  const beforeExclusion = filtered.length
+  filtered = filtered.filter(member => {
+    const memberId = normalizeUserId(member)
+    const isExcluded = selectedIds.includes(memberId)
+    if (isExcluded) {
+      console.log('🚫 Excluding member:', member.first_name, member.last_name, 'ID:', memberId)
+    }
+    return !isExcluded
+  })
+  console.log('🔍 After exclusion filter:', filtered.length, `(excluded ${beforeExclusion - filtered.length} members)`)
 
   return filtered
 })
@@ -346,8 +372,12 @@ const loadRFPData = async () => {
 
 const loadAvailableMembers = async () => {
   try {
-    console.log('Loading available members from database...')
-    const response = await fetch(`${API_BASE_URL}/users/?t=` + Date.now(), {
+    console.log('Loading available members from database (filtered: Executive and Procurement roles)...')
+    // Use the filtered endpoint that only returns Executive and Procurement roles
+    const url = getTprmApiUrl('rfp-approval/users/')
+    console.log('Fetching users from filtered endpoint:', url)
+    
+    const response = await fetch(url, {
       method: 'GET',
       headers: getAuthHeaders()
     })
@@ -371,15 +401,27 @@ const loadAvailableMembers = async () => {
         return
       }
       
-      // Filter active users
-      availableMembers.value = users.filter(user => 
-        user.is_active === 'Y' || user.is_active === true || user.is_active === 1
-      )
+      // Filter active users (backend already filters by role, but ensure active status)
+      // Normalize user data: ensure user_id field exists (map from id if needed)
+      availableMembers.value = users
+        .filter(user => 
+          user.is_active === 'Y' || user.is_active === true || user.is_active === 1
+        )
+        .map(user => ({
+          ...user,
+          user_id: user.user_id || user.id || user.UserId, // Normalize to user_id
+          id: user.id || user.user_id || user.UserId, // Keep id for compatibility
+          department_id: user.department_id || user.department || 'General'
+        }))
       
-      console.log('Loaded available members:', availableMembers.value.length)
+      console.log('Loaded available members (Executive and Procurement only):', availableMembers.value.length)
+      if (availableMembers.value.length > 0) {
+        console.log('Sample member data:', availableMembers.value[0])
+        console.log('All member IDs:', availableMembers.value.map(m => ({ id: m.id, user_id: m.user_id, UserId: m.UserId })))
+      }
       
       if (availableMembers.value.length === 0) {
-        PopupService.warning('No active users found in the database. Please add users first.', 'No Users')
+        PopupService.warning('No active users with Executive or Procurement roles found. Please add users with these roles first.', 'No Users')
       }
     } else {
       console.error('Failed to load users:', response.status, response.statusText)
@@ -445,7 +487,12 @@ const loadExistingCommittee = async () => {
 }
 
 const toggleMemberSelection = (member) => {
-  const isSelected = selectedMembers.value.some(m => m.user_id === member.user_id)
+  // Normalize IDs for comparison
+  const memberId = String(member.user_id || member.id || member.UserId || '')
+  const isSelected = selectedMembers.value.some(m => {
+    const selectedId = String(m.user_id || m.id || m.UserId || '')
+    return selectedId === memberId
+  })
   
   if (isSelected) {
     removeMember(member)
@@ -457,6 +504,8 @@ const toggleMemberSelection = (member) => {
 const addMember = (member) => {
   const newMember = {
     ...member,
+    user_id: member.user_id || member.id || member.UserId, // Ensure user_id exists
+    id: member.id || member.user_id || member.UserId, // Keep id for compatibility
     member_role: 'Committee Member',
     is_chair: false
   }
@@ -464,7 +513,12 @@ const addMember = (member) => {
 }
 
 const removeMember = (member) => {
-  selectedMembers.value = selectedMembers.value.filter(m => m.user_id !== member.user_id)
+  // Normalize IDs for comparison
+  const memberId = String(member.user_id || member.id || member.UserId || '')
+  selectedMembers.value = selectedMembers.value.filter(m => {
+    const selectedId = String(m.user_id || m.id || m.UserId || '')
+    return selectedId !== memberId
+  })
 }
 
 const setAsChair = (member) => {
@@ -474,7 +528,12 @@ const setAsChair = (member) => {
   })
   
   // Set this member as chair
-  const memberIndex = selectedMembers.value.findIndex(m => m.user_id === member.user_id)
+  // Normalize IDs for comparison
+  const memberId = String(member.user_id || member.id || member.UserId || '')
+  const memberIndex = selectedMembers.value.findIndex(m => {
+    const selectedId = String(m.user_id || m.id || m.UserId || '')
+    return selectedId === memberId
+  })
   if (memberIndex !== -1) {
     selectedMembers.value[memberIndex].is_chair = true
   }
@@ -651,7 +710,7 @@ const createCommitteeEvaluationWorkflow = async (rfpId, committeeMembers, respon
       workflow_name: `Committee Evaluation - RFP ${rfpId}`,
       workflow_type: 'MULTI_PERSON', // Parallel workflow
       description: `Parallel committee evaluation workflow for RFP ${rfpId} with ${committeeMembers.length} committee members`,
-      business_object_type: 'RFP', // Must be 'RFP' for integration.approval_workflows table
+      business_object_type: 'Committee Evaluation', // Must be 'Committee Evaluation' for backend to create proper approval stages
       is_active: true,
       created_by: 1, // Default user ID
       stages_config: [],

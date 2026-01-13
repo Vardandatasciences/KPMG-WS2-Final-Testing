@@ -2136,10 +2136,36 @@ export default {
 <style scoped>
 .FC_framework-comparison-container {
   padding: 24px;
-  max-width: 1400px;
-  margin: 0 auto;
   margin-left: 280px;
-  max-width: 100%;
+  width: calc(100% - 280px);
+  max-width: calc(100vw - 280px);
+  height: calc(100vh - 80px);
+  max-height: calc(100vh - 80px);
+  box-sizing: border-box;
+  overflow-y: auto;
+  overflow-x: hidden !important;
+  position: relative;
+  /* Custom scrollbar styling */
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e0 #f7fafc;
+}
+
+.FC_framework-comparison-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.FC_framework-comparison-container::-webkit-scrollbar-track {
+  background: #f7fafc;
+  border-radius: 4px;
+}
+
+.FC_framework-comparison-container::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 4px;
+}
+
+.FC_framework-comparison-container::-webkit-scrollbar-thumb:hover {
+  background: #a0aec0;
 }
 
 .FC_framework-comparison-header {
@@ -2147,12 +2173,19 @@ export default {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 15px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .FC_header-actions {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .FC_header-actions-left {
@@ -2274,10 +2307,14 @@ export default {
 .FC_notification-row__name {
   font-weight: 600;
   color: var(--text-primary);
-  max-width: 180px;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  flex: 1;
+  min-width: 0;
 }
 
 .FC_notification-row__status {
@@ -2307,16 +2344,28 @@ export default {
   padding-left: 2px;
 }
 
+.FC_header-content {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .FC_header-content h1 {
   font-size: 2rem;
   font-weight: 700;
   color: var(--text-primary);
   margin-bottom: 4px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
 }
 
 .FC_framework-comparison-subtitle {
   color: var(--text-secondary);
   font-size: 1rem;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
 }
 
 .FC_export-button {
@@ -2364,6 +2413,10 @@ export default {
   padding: 20px;
   margin-bottom: 24px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .FC_document-viewer-card {
@@ -2506,17 +2559,27 @@ export default {
   gap: 20px;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .FC_framework-selector {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 1;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .FC_framework-label {
   font-weight: 500;
   color: var(--text-primary);
+  white-space: normal;
+  word-wrap: break-word;
+  flex-shrink: 0;
 }
 
 .FC_framework-select,
@@ -2530,7 +2593,12 @@ export default {
   font-size: 14px;
   transition: all 0.2s ease;
   cursor: pointer;
-  min-width: 120px;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .FC_framework-select:focus,
@@ -2543,7 +2611,9 @@ export default {
 
 .FC_search-container {
   flex: 1;
-  max-width: 400px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .FC_search-input-wrapper {
@@ -2640,9 +2710,13 @@ export default {
 
 .FC_comparison-view {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
   margin-bottom: 24px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .FC_framework-side {
@@ -2650,6 +2724,9 @@ export default {
   border: 1px solid var(--border-color);
   border-radius: 8px;
   overflow: hidden;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .FC_framework-side-header {
@@ -2666,6 +2743,11 @@ export default {
   font-weight: 600;
   color: var(--text-primary);
   flex-wrap: wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+  min-width: 0;
+  flex: 1;
 }
 
 .FC_add-all-button {
@@ -2713,9 +2795,32 @@ export default {
 }
 
 .FC_framework-side-content {
-  max-height: 600px;
+  max-height: calc(100vh - 500px);
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 16px;
+  box-sizing: border-box;
+  /* Custom scrollbar styling */
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e0 #f7fafc;
+}
+
+.FC_framework-side-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.FC_framework-side-content::-webkit-scrollbar-track {
+  background: #f7fafc;
+  border-radius: 4px;
+}
+
+.FC_framework-side-content::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 4px;
+}
+
+.FC_framework-side-content::-webkit-scrollbar-thumb:hover {
+  background: #a0aec0;
 }
 
 .FC_structured-sections {
@@ -2869,6 +2974,9 @@ export default {
   display: block;
   margin-bottom: 4px;
   color: var(--text-primary);
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
 }
 
 .FC_compliance-chip-desc {
@@ -2937,6 +3045,10 @@ export default {
   display: flex;
   align-items: center;
   gap: 8px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+  min-width: 0;
   margin-bottom: 4px;
   flex-wrap: wrap;
 }
@@ -3200,9 +3312,22 @@ export default {
   }
 }
 
+@media (max-width: 1024px) {
+  .FC_framework-comparison-container {
+    margin-left: 250px;
+    width: calc(100% - 250px);
+    max-width: calc(100vw - 250px);
+  }
+}
+
 @media (max-width: 768px) {
   .FC_framework-comparison-container {
+    margin-left: 0;
+    width: 100%;
+    max-width: 100vw;
     padding: 16px;
+    height: calc(100vh - 60px);
+    max-height: calc(100vh - 60px);
   }
   
   .FC_framework-comparison-header {
@@ -3219,6 +3344,10 @@ export default {
   .FC_filters-content {
     flex-direction: column;
     align-items: stretch;
+  }
+  
+  .FC_framework-selector {
+    width: 100%;
   }
   
   .FC_policy-header,

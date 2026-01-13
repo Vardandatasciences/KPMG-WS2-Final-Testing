@@ -126,32 +126,15 @@ def generate_invitations_new_format(request):
                 # Prepare parameters
                 vendor_id = vendor_data.get('vendor_id')
                 
-                # Get primary contact information if this is a matched vendor
-                contact_data = None
-                if vendor_id:
-                    with connection.cursor() as cursor:
-                        cursor.execute('''
-                            SELECT first_name, last_name, email, phone, mobile
-                            FROM vendor_contacts
-                            WHERE vendor_id = %s AND contact_type = 'PRIMARY' AND is_primary = 1 AND is_active = 1
-                            LIMIT 1
-                        ''', [vendor_id])
-                        contact = cursor.fetchone()
-                        if contact:
-                            contact_data = {
-                                'name': f'{contact[0]} {contact[1]}'.strip(),
-                                'email': contact[2],
-                                'phone': contact[3] or contact[4]  # Use mobile if phone is empty
-                            }
-                
-                # Use contact data if available, otherwise fall back to vendor data
+                # Use vendor data directly (frontend already provides all contact information)
+                # No need to query vendor_contacts table as the frontend sends complete contact info
                 params = {
                     'rfpId': str(rfp_id),
                     'vendorId': str(vendor_id) if vendor_id is not None else '',
                     'org': vendor_data.get('company_name', ''),
-                    'vendorName': contact_data['name'] if contact_data else vendor_data.get('vendor_name', ''),
-                    'contactEmail': contact_data['email'] if contact_data else vendor_data.get('email', ''),
-                    'contactPhone': contact_data['phone'] if contact_data else vendor_data.get('phone', '')
+                    'vendorName': vendor_data.get('vendor_name', ''),
+                    'contactEmail': vendor_data.get('email', ''),
+                    'contactPhone': vendor_data.get('phone', '')
                 }
                 
                 print(f'[DEBUG] Backend processing vendor:')

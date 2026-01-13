@@ -2197,7 +2197,7 @@ def debug_mttd_calculation(request):
         with connection.cursor() as cursor:
             cursor.execute("""
                 SELECT AVG(ABS(TIMESTAMPDIFF(SECOND, CreatedAt, IdentifiedAt)) / 60) AS MTTD_minutes
-                FROM grc.incidents
+                FROM grc2.incidents
                 WHERE CreatedAt IS NOT NULL
                 AND IdentifiedAt IS NOT NULL
                 AND IdentifiedAt >= CreatedAt

@@ -277,7 +277,7 @@ export default {
     const savePreferences = async () => {
       isSaving.value = true
       try {
-        // Always check for user_id - it might have been set after login
+        // CRITICAL: Always check for user_id - it might have been set after login
         // Try multiple sources for user_id - check multiple times to catch recent logins
         let userId = null
         
@@ -319,8 +319,22 @@ export default {
         
         const sessionId = cookieService.getSessionId()
         
-        // Convert to integer if found
-        const currentUserId = userId ? parseInt(userId) : null
+        // Convert to integer if found, but keep as string if it's a valid number string
+        let currentUserId = null
+        if (userId) {
+          const parsed = parseInt(userId)
+          currentUserId = isNaN(parsed) ? null : parsed
+        }
+        
+        // CRITICAL: Double-check by looking for JWT token - if token exists, user should be logged in
+        const token = localStorage.getItem('access_token') || 
+                     localStorage.getItem('token') ||
+                     localStorage.getItem('session_token')
+        
+        if (token && !currentUserId) {
+          console.warn('🍪 [CookieBanner] WARNING: JWT token found but no user_id in localStorage!')
+          console.warn('🍪 [CookieBanner] This might indicate a login issue. Token exists but user_id is missing.')
+        }
         
         // Log for debugging
         if (currentUserId) {
@@ -329,17 +343,35 @@ export default {
           console.log('🍪 [CookieBanner] No user ID found - saving as anonymous session (will link later if user logs in)')
         }
         
+        // CRITICAL: Always include user_id in the data object, even if it's null
+        // The interceptor will override it if user_id is found in localStorage
         const prefsToSave = {
           ...preferences.value,
           user_id: currentUserId,  // Send null if not found, backend will handle it
           session_id: sessionId
         }
         
+        // CRITICAL: Double-check user_id one more time before sending
+        // This ensures we have the latest value from localStorage
+        const finalUserId = localStorage.getItem('user_id') || 
+                           localStorage.getItem('userId') ||
+                           sessionStorage.getItem('user_id') ||
+                           sessionStorage.getItem('userId');
+        
+        if (finalUserId) {
+          const parsedFinalUserId = parseInt(finalUserId);
+          if (!isNaN(parsedFinalUserId)) {
+            prefsToSave.user_id = parsedFinalUserId;
+            console.log('🍪 [CookieBanner] Updated user_id in prefsToSave to:', parsedFinalUserId);
+          }
+        }
+        
         console.log('🍪 [CookieBanner] Saving preferences:', {
           ...prefsToSave,
-          has_user_id: !!currentUserId,
-          user_id_value: currentUserId,
+          has_user_id: !!prefsToSave.user_id,
+          user_id_value: prefsToSave.user_id,
           user_id_from_storage: userId,
+          final_user_id: finalUserId,
           session_id: sessionId
         })
         
@@ -461,13 +493,39 @@ export default {
       window.addEventListener('authChanged', () => {
         setTimeout(() => {
           console.log('🍪 [CookieBanner] Auth changed event detected, attempting to link preferences')
-          linkPreferencesToUser()
-          // Also re-save current preferences if they exist to ensure user_id is set
-          if (cookieService.hasPreferencesSaved()) {
-            console.log('🍪 [CookieBanner] Re-saving preferences after auth change to ensure user_id is set')
-            savePreferences()
+          
+          // CRITICAL: Check if user_id is now available
+          const userId = localStorage.getItem('user_id') || 
+                        localStorage.getItem('userId') ||
+                        sessionStorage.getItem('user_id') ||
+                        sessionStorage.getItem('userId');
+          
+          if (userId) {
+            console.log('🍪 [CookieBanner] User ID found after auth change:', userId)
+            linkPreferencesToUser()
+            // Also re-save current preferences if they exist to ensure user_id is set
+            if (cookieService.hasPreferencesSaved()) {
+              console.log('🍪 [CookieBanner] Re-saving preferences after auth change to ensure user_id is set')
+              // Force re-save with current user_id
+              savePreferences()
+            }
+          } else {
+            console.warn('🍪 [CookieBanner] Auth changed but user_id still not found in localStorage')
           }
-        }, 1000) // Delay to ensure user_id is set in localStorage
+        }, 1500) // Increased delay to ensure user_id is set in localStorage after login
+      })
+      
+      // Also listen for storage events (when user_id is set in another tab/window)
+      window.addEventListener('storage', (e) => {
+        if (e.key === 'user_id' || e.key === 'userId' || e.key === 'access_token' || e.key === 'token') {
+          console.log('🍪 [CookieBanner] Storage change detected for:', e.key)
+          setTimeout(() => {
+            linkPreferencesToUser()
+            if (cookieService.hasPreferencesSaved()) {
+              savePreferences()
+            }
+          }, 500)
+        }
       })
       
       // Listen for storage changes (when user_id is set in another tab/window)
