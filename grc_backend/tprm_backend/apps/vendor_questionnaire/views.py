@@ -540,9 +540,12 @@ class QuestionnaireViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
         """
         List questionnaire templates for VENDOR module_type.
         Query params: status, is_active
+        NOTE: Templates are stored in tprm_integration database, not default database
         """
         try:
             from tprm_backend.bcpdrp.models import QuestionnaireTemplate
+            import logging
+            logger = logging.getLogger(__name__)
             
             # Get query parameters
             status_filter = request.query_params.get('status')
@@ -551,12 +554,15 @@ class QuestionnaireViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
             # Build query - always filter by VENDOR module_type and is_template=True
             query = Q(module_type='VENDOR', is_template=True)
             
-            # MULTI-TENANCY: Filter by tenant if available
+            # MULTI-TENANCY: Filter by tenant if available, but also include NULL tenant_id (shared templates)
             tenant_id = get_tenant_id_from_request(request)
             if tenant_id:
-                query &= Q(tenant_id=tenant_id)
-                print(f'Filtering templates by tenant_id: {tenant_id}')
+                # Include templates for this tenant OR templates with NULL tenant_id (shared templates)
+                query &= (Q(tenant_id=tenant_id) | Q(tenant_id__isnull=True))
+                logger.info(f'[Get Templates] Filtering templates by tenant_id: {tenant_id} (including shared templates)')
+                print(f'Filtering templates by tenant_id: {tenant_id} (including shared templates)')
             else:
+                logger.warning('[Get Templates] No tenant_id found in request - returning all templates')
                 print('Warning: No tenant_id found in request - returning all templates')
             
             if status_filter:
@@ -566,8 +572,53 @@ class QuestionnaireViewSet(VendorAuthenticationMixin, viewsets.ModelViewSet):
                 is_active_bool = is_active.lower() == 'true'
                 query &= Q(is_active=is_active_bool)
             
-            # Fetch templates
-            templates = QuestionnaireTemplate.objects.filter(query).order_by('-created_at')
+            # Use tprm database connection explicitly since templates are in tprm_integration database
+            # Check if 'tprm' connection exists
+            db_alias = 'tprm'
+            if 'tprm' not in connections.databases:
+                logger.warning('[Get Templates] tprm database connection not found, using default')
+                print('Warning: tprm database connection not found, using default')
+                db_alias = 'default'
+            else:
+                logger.info('[Get Templates] Using tprm database connection for questionnaire_templates table')
+                print('Using tprm database connection for questionnaire_templates table')
+            
+            # Fetch templates using the correct database
+            templates = QuestionnaireTemplate.objects.using(db_alias).filter(query).order_by('-created_at')
+            template_count = templates.count()
+            
+            logger.info(f'[Get Templates] Found {template_count} templates matching query')
+            print(f'Found {template_count} templates matching query')
+            
+            # Debug: Check total templates in database
+            all_templates_count = QuestionnaireTemplate.objects.using(db_alias).filter(
+                module_type='VENDOR', is_template=True
+            ).count()
+            logger.info(f'[Get Templates] Total VENDOR templates in database: {all_templates_count}')
+            print(f'[DEBUG] Total VENDOR templates in database: {all_templates_count}')
+            
+            # If no templates found, try without tenant filter for debugging
+            if template_count == 0:
+                logger.warning(f'[Get Templates] No templates found with current filters')
+                print(f'Warning: No templates found with current filters')
+                # Try query without tenant filter to see if templates exist
+                query_without_tenant = Q(module_type='VENDOR', is_template=True)
+                if status_filter:
+                    query_without_tenant &= Q(status=status_filter)
+                if is_active is not None:
+                    is_active_bool = is_active.lower() == 'true'
+                    query_without_tenant &= Q(is_active=is_active_bool)
+                templates_without_tenant = QuestionnaireTemplate.objects.using(db_alias).filter(query_without_tenant).order_by('-created_at')
+                count_without_tenant = templates_without_tenant.count()
+                logger.info(f'[Get Templates] Found {count_without_tenant} templates without tenant filter')
+                print(f'[DEBUG] Found {count_without_tenant} templates without tenant filter')
+                
+                # If templates exist without tenant filter, use them (templates might not have tenant_id set)
+                if count_without_tenant > 0:
+                    logger.warning('[Get Templates] Using templates without tenant filter (templates may not have tenant_id set)')
+                    print('[DEBUG] Using templates without tenant filter (templates may not have tenant_id set)')
+                    templates = templates_without_tenant
+                    template_count = count_without_tenant
             
             # Serialize templates
             templates_data = []

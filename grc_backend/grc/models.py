@@ -1356,10 +1356,10 @@ class RiskApproval(EncryptedFieldsMixin, models.Model):
     ApproverId = models.CharField(max_length=45, null=True)
     ApprovedRejected = models.CharField(max_length=45, null=True)
     Date = models.DateTimeField(null=True, auto_now_add=True)
-    FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId')
+    FrameworkId = models.ForeignKey('Framework', on_delete=models.CASCADE, db_column='FrameworkId', null=True, blank=True)
     retentionExpiry = models.DateField(null=True, blank=True)
     class Meta:
-        db_table = 'grc.risk_approval'
+        db_table = 'grc2.risk_approval'
         managed = False  # Since we're connecting to an existing table
 
 

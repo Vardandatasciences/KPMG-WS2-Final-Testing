@@ -381,7 +381,7 @@
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-2">
                     Assigned User
-                    <span class="text-xs text-gray-500 font-normal ml-1">(Management & Executive only)</span>
+                    <span class="text-xs text-gray-500 font-normal ml-1">(Executive & Procurement only)</span>
                   </label>
                   <select
                     v-model="stage.assigned_user_id"
@@ -399,7 +399,7 @@
                     </option>
                   </select>
                   <p v-if="users.length === 0" class="mt-1 text-xs text-red-600">
-                    No users with Management or Executive role available
+                    No users with Executive or Procurement role available
                   </p>
                 </div>
                 

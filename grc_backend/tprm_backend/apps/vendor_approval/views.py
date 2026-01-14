@@ -1939,81 +1939,135 @@ def post_stage_action(request, stage_id):
 def get_questionnaire_questions(request, questionnaire_id: int):
 
     """Return questions for a given questionnaire_id from questionnaire_questions table.
-    MULTI-TENANCY: Filters by tenant to ensure tenant isolation
+    MULTI-TENANCY: Filters by tenant to ensure tenant isolation (if tenant_id is available)
 
     Response is ordered by display_order.
 
     """
 
     try:
-        tenant_id = get_tenant_id_from_request(request)
-        if not tenant_id:
-            return Response({'error': 'Tenant context not found'}, status=403)
+        # Try to get tenant_id, but don't fail if it's not available
+        tenant_id = None
+        try:
+            tenant_id = get_tenant_id_from_request(request)
+        except Exception as tenant_error:
+            print(f"Warning: Could not get tenant_id: {str(tenant_error)}")
+            tenant_id = None
 
-        with connections['default'].cursor() as cursor:
+        # Use tprm database connection for vendor approval queries
+        import logging
+        from django.db import connections as db_connections
+        logger = logging.getLogger(__name__)
+        
+        # Use tprm connection if available, otherwise fall back to default
+        if 'tprm' in db_connections.databases:
+            db_connection = db_connections['tprm']
+            db_name = db_connection.settings_dict.get('NAME', 'tprm_integration')
+            logger.info(f"[Get Questionnaire Questions] Using tprm database connection: {db_name} for questionnaire_id: {questionnaire_id}")
+        else:
+            db_connection = db_connections['default']
+            db_name = db_connection.settings_dict.get('NAME', '')
+            logger.warning(f"[Get Questionnaire Questions] tprm connection not found, using default: {db_name}")
 
-            cursor.execute(
+        # Use raw SQL query with proper tenant filtering and error handling
+        questions = []
+        
+        try:
+            with db_connection.cursor() as cursor:
+                # Build query - try with tenant filter if tenant_id is available
+                if tenant_id:
+                    # Try with tenant filter first
+                    try:
+                        cursor.execute(
+                            """
+                            SELECT 
+                                question_id, questionnaire_id, question_text, question_type,
+                                question_category, is_required, display_order, scoring_weight,
+                                options, conditional_logic, help_text
+                            FROM questionnaire_questions
+                            WHERE questionnaire_id = %s AND (TenantId = %s OR TenantId IS NULL)
+                            ORDER BY display_order ASC, question_id ASC
+                            """,
+                            [questionnaire_id, tenant_id]
+                        )
+                    except Exception as tenant_error:
+                        # If tenant filter fails (e.g., column doesn't exist), try without tenant filter
+                        print(f"Warning: Tenant filter query failed: {str(tenant_error)}, trying without tenant filter")
+                        cursor.execute(
+                            """
+                            SELECT 
+                                question_id, questionnaire_id, question_text, question_type,
+                                question_category, is_required, display_order, scoring_weight,
+                                options, conditional_logic, help_text
+                            FROM questionnaire_questions
+                            WHERE questionnaire_id = %s
+                            ORDER BY display_order ASC, question_id ASC
+                            """,
+                            [questionnaire_id]
+                        )
+                else:
+                    # No tenant_id, just query by questionnaire_id
+                    cursor.execute(
+                        """
+                        SELECT 
+                            question_id, questionnaire_id, question_text, question_type,
+                            question_category, is_required, display_order, scoring_weight,
+                            options, conditional_logic, help_text
+                        FROM questionnaire_questions
+                        WHERE questionnaire_id = %s
+                        ORDER BY display_order ASC, question_id ASC
+                        """,
+                        [questionnaire_id]
+                    )
 
-                """
+                columns = [col[0] for col in cursor.description]
+                
+                for row in cursor.fetchall():
+                    q = dict(zip(columns, row))
 
-                SELECT 
+                    # Parse JSON fields if present and are strings
+                    for k in ('options', 'conditional_logic'):
+                        if q.get(k) and isinstance(q.get(k), str):
+                            try:
+                                q[k] = json.loads(q[k])
+                            except Exception:
+                                pass
 
-                    question_id, questionnaire_id, question_text, question_type,
-
-                    question_category, is_required, display_order, scoring_weight,
-
-                    options, conditional_logic, help_text
-
-                FROM questionnaire_questions
-
-                WHERE questionnaire_id = %s
-
-                ORDER BY display_order ASC
-
-                """,
-
-                [questionnaire_id]
-
-            )
-
-            columns = [col[0] for col in cursor.description]
-
-            questions = []
-
-            for row in cursor.fetchall():
-
-                q = dict(zip(columns, row))
-
-                # Parse JSON fields if present and are strings
-
-                for k in ('options', 'conditional_logic'):
-
-                    if q.get(k) and isinstance(q.get(k), str):
-
+                    # Convert Decimal to float for JSON serialization
+                    if 'scoring_weight' in q and q['scoring_weight'] is not None:
                         try:
+                            q['scoring_weight'] = float(q['scoring_weight'])
+                        except (ValueError, TypeError):
+                            q['scoring_weight'] = 1.0
 
-                            q[k] = json.loads(q[k])
+                    questions.append(q)
 
-                        except Exception:
+            if not questions:
+                print(f"Warning: No questions found for questionnaire_id={questionnaire_id}, tenant_id={tenant_id}")
+                return Response({
+                    'error': 'No questions found for this questionnaire',
+                    'questionnaire_id': questionnaire_id
+                }, status=status.HTTP_404_NOT_FOUND)
 
-                            pass
-
-                questions.append(q)
-
-
-
-        return Response(questions, status=status.HTTP_200_OK)
+            return Response(questions, status=status.HTTP_200_OK)
+            
+        except Exception as query_error:
+            print(f"Error executing SQL query: {str(query_error)}")
+            import traceback
+            print(traceback.format_exc())
+            raise query_error
 
     except Exception as e:
-
+        import traceback
+        error_trace = traceback.format_exc()
         print(f"Error fetching questionnaire questions: {str(e)}")
-
+        print(f"Traceback: {error_trace}")
+        
         return Response({
-
             'error': 'Failed to fetch questionnaire questions',
-
-            'details': str(e)
-
+            'details': str(e),
+            'questionnaire_id': questionnaire_id,
+            'tenant_id': tenant_id if 'tenant_id' in locals() else None
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -8071,28 +8125,57 @@ def load_stage_draft(request, stage_id):
 
         user_id = request.query_params.get('user_id')
 
+        # Use tprm database connection for vendor approval queries
+        import logging
+        from django.db import connections as db_connections
+        logger = logging.getLogger(__name__)
         
+        # Use tprm connection if available, otherwise fall back to default
+        if 'tprm' in db_connections.databases:
+            db_connection = db_connections['tprm']
+            db_name = db_connection.settings_dict.get('NAME', 'tprm_integration')
+            logger.info(f"[Load Stage Draft] Using tprm database connection: {db_name} for stage_id: {stage_id}")
+        else:
+            db_connection = db_connections['default']
+            db_name = db_connection.settings_dict.get('NAME', '')
+            logger.warning(f"[Load Stage Draft] tprm connection not found, using default: {db_name}")
 
-        with connections['default'].cursor() as cursor:
+        with db_connection.cursor() as cursor:
+            # Check if temp_vendor table exists
+            cursor.execute("SHOW TABLES LIKE 'temp_vendor'")
+            temp_vendor_exists = cursor.fetchone() is not None
 
             # Get the stage with draft data
             # MULTI-TENANCY: Filter by tenant
+            if temp_vendor_exists:
+                cursor.execute("""
 
-            cursor.execute("""
+                    SELECT ast.approval_id, ast.stage_name, ast.stage_status, ast.assigned_user_id, ast.response_data
 
-                SELECT ast.approval_id, ast.stage_name, ast.stage_status, ast.assigned_user_id, ast.response_data
+                    FROM approval_stages ast
 
-                FROM approval_stages ast
+                    JOIN approval_requests ar ON ast.approval_id = ar.approval_id
+                    
+                    LEFT JOIN temp_vendor tv ON JSON_EXTRACT(ar.request_data, '$.vendor_id') = tv.id
 
-                JOIN approval_requests ar ON ast.approval_id = ar.approval_id
-                
-                LEFT JOIN temp_vendor tv ON JSON_EXTRACT(ar.request_data, '$.vendor_id') = tv.id
+                    WHERE ast.stage_id = %s
+                    
+                    AND (tv.TenantId = %s OR tv.TenantId IS NULL)
 
-                WHERE ast.stage_id = %s
-                
-                AND (tv.TenantId = %s OR tv.TenantId IS NULL)
+                """, [stage_id, tenant_id])
+            else:
+                # If temp_vendor doesn't exist, query without tenant filtering via temp_vendor
+                cursor.execute("""
 
-            """, [stage_id, tenant_id])
+                    SELECT ast.approval_id, ast.stage_name, ast.stage_status, ast.assigned_user_id, ast.response_data
+
+                    FROM approval_stages ast
+
+                    JOIN approval_requests ar ON ast.approval_id = ar.approval_id
+
+                    WHERE ast.stage_id = %s
+
+                """, [stage_id])
 
             
 

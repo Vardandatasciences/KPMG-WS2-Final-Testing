@@ -453,6 +453,10 @@ def record_consent_acceptance(request):
         if not ip_address:
             ip_address = get_client_ip(request)
         
+        # Sanitize IP address to fit database column (max 45 chars)
+        from ...utils import sanitize_ip_address
+        sanitized_ip = sanitize_ip_address(ip_address)
+        
         # Get user agent from request if not provided in data
         user_agent = data.get('user_agent')
         if not user_agent:
@@ -464,7 +468,7 @@ def record_consent_acceptance(request):
             config=config,
             action_type=action_type,
             framework=framework,
-            ip_address=ip_address,
+            ip_address=sanitized_ip,
             user_agent=user_agent
         )
         

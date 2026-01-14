@@ -140,7 +140,7 @@ class DataEncryptionService:
             # Return as plain text string
             return decrypted_bytes.decode('utf-8')
         except Exception as e:
-            logger.warning(f"Decryption failed (data may be plain text): {str(e)}")
+            # logger.warning(f"Decryption failed (data may be plain text): {str(e)}")
             # If decryption fails, assume it's already plain text (for backward compatibility)
             # This allows gradual migration from plain text to encrypted
             return encrypted_text

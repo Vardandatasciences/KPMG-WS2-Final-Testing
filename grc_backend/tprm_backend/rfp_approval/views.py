@@ -736,7 +736,7 @@ def workflows(request):
                     # Also check the database to be sure
                     if rfp_id:
                         try:
-                            from rfp.models import RFP
+                            # RFP is already imported at the top of the file
                             rfp = RFP.objects.filter(rfp_id=rfp_id).first()
                             if rfp and rfp.auto_approve:
                                 return Response({
@@ -1248,7 +1248,7 @@ def workflow_detail(request, workflow_id):
 def users(request):
     """
     Get all users for dropdown selection
-    Only fetches users with Management and Executive roles from rbac_tprm table
+    Only fetches users with Executive and Procurement roles from rbac_tprm table
     Fetches users directly from tprm_integration database (users table)
     MULTI-TENANCY: Ensures tenant context is present
     """
@@ -1257,8 +1257,8 @@ def users(request):
         return Response({'error': 'Tenant context not found'}, status=403)
     
     try:
-        # Only fetch users with Management and Executive roles from rbac_tprm
-        allowed_roles = ['Management', 'Executive']
+        # Only fetch users with Executive and Procurement roles from rbac_tprm
+        allowed_roles = ['Executive', 'Procurement']
         
         print(f"[users] Fetching users with roles: {allowed_roles} from tprm_integration database")
         
@@ -1302,7 +1302,7 @@ def users(request):
                 cursor.execute(query, allowed_roles)
                 
                 results = cursor.fetchall()
-                print(f"[users] Found {len(results)} users with Management/Executive roles")
+                print(f"[users] Found {len(results)} users with Executive/Procurement roles")
                 
                 for row in results:
                     user_id, username, email, first_name, last_name, role = row
@@ -1373,10 +1373,10 @@ def users(request):
         
         print(f"[users] Total users returned: {len(users_data)}")
         if len(users_data) == 0:
-            print("[users] WARNING: No users found with Management or Executive roles!")
+            print("[users] WARNING: No users found with Executive or Procurement roles!")
             print("[users] This might indicate:")
             print("[users]   1. No users exist in tprm_integration.users table")
-            print("[users]   2. No users have Management or Executive roles in rbac_tprm table")
+            print("[users]   2. No users have Executive or Procurement roles in rbac_tprm table")
             print("[users]   3. Database connection issue")
         
         return Response(users_data)
@@ -1393,18 +1393,23 @@ def users(request):
                 'first_name': 'Admin',
                 'last_name': 'User',
                 'email': 'admin@company.com',
+                'id': '1',
+                'username': 'executive',
+                'first_name': 'Executive',
+                'last_name': 'User',
+                'email': 'executive@company.com',
                 'role': 'Executive',
                 'department': 'IT',
                 'is_active': True
             },
             {
                 'id': '2',
-                'username': 'manager',
-                'first_name': 'Manager',
+                'username': 'procurement',
+                'first_name': 'Procurement',
                 'last_name': 'User',
-                'email': 'manager@company.com',
-                'role': 'Management',
-                'department': 'Operations',
+                'email': 'procurement@company.com',
+                'role': 'Procurement',
+                'department': 'Procurement',
                 'is_active': True
             }
         ]
@@ -1672,15 +1677,31 @@ def get_proposal_id_from_approval(request, approval_id):
     
     try:
         # MULTI-TENANCY: Filter approval request by tenant
-        approval_request = ApprovalRequests.objects.get(approval_id=approval_id, tenant_id=tenant_id)
+        # Try with tenant_id first, then without if not found
+        try:
+            approval_request = ApprovalRequests.objects.get(approval_id=approval_id, tenant_id=tenant_id)
+        except ApprovalRequests.DoesNotExist:
+            # Try without tenant filter as fallback
+            try:
+                approval_request = ApprovalRequests.objects.get(approval_id=approval_id)
+                print(f"[get_proposal_id_from_approval] Found approval without tenant filter: {approval_id}")
+            except ApprovalRequests.DoesNotExist:
+                return Response({'error': 'Approval request not found'}, status=404)
         
         # Parse request_data to find RFP ID
         request_data = approval_request.request_data
+        if request_data is None:
+            return Response({'error': 'Approval request has no request_data'}, status=400)
+        
+        # Handle string format
         if isinstance(request_data, str):
             try:
                 request_data = json.loads(request_data)
-            except json.JSONDecodeError:
-                return Response({'error': 'Invalid request_data format'}, status=400)
+            except json.JSONDecodeError as e:
+                print(f"[get_proposal_id_from_approval] JSON decode error: {e}")
+                return Response({'error': f'Invalid request_data format: {str(e)}'}, status=400)
+        
+        print(f"[get_proposal_id_from_approval] Processing approval_id: {approval_id}, request_data type: {type(request_data)}")
         
         # Handle case where request_data is a list (array of proposals)
         if isinstance(request_data, list) and len(request_data) > 0:
@@ -1689,6 +1710,7 @@ def get_proposal_id_from_approval(request, approval_id):
             if isinstance(first_proposal, dict):
                 proposal_id = first_proposal.get('response_id')
                 if proposal_id:
+                    print(f"[get_proposal_id_from_approval] Found response_id in list: {proposal_id}")
                     return Response({
                         'proposal_id': proposal_id,
                         'all_response_ids': [item.get('response_id') for item in request_data if item.get('response_id')],
@@ -1699,44 +1721,243 @@ def get_proposal_id_from_approval(request, approval_id):
         # First, try to find direct response_id in request_data (for dict format)
         proposal_id = None
         if isinstance(request_data, dict):
+            # Check multiple possible field names
             proposal_id = (request_data.get('response_id') or 
                           request_data.get('proposal_id') or 
                           request_data.get('rfp_response_id') or
                           request_data.get('id') or
                           request_data.get('proposalId') or
                           request_data.get('responseId'))
+            
+            # Also check nested structures
+            if not proposal_id:
+                # Check rfp_data nested structure
+                rfp_data = request_data.get('rfp_data') or request_data.get('rfpData')
+                if isinstance(rfp_data, dict):
+                    proposal_id = (rfp_data.get('response_id') or 
+                                  rfp_data.get('proposal_id') or
+                                  rfp_data.get('responseId'))
+                
+                # Check selected_proposals array
+                if not proposal_id:
+                    selected_proposals = request_data.get('selected_proposals') or request_data.get('selectedProposals')
+                    if isinstance(selected_proposals, list) and len(selected_proposals) > 0:
+                        first_proposal = selected_proposals[0]
+                        if isinstance(first_proposal, dict):
+                            proposal_id = first_proposal.get('response_id') or first_proposal.get('responseId')
         
         # If no direct response_id found, try to get RFP ID and find responses
         if not proposal_id and isinstance(request_data, dict):
-            rfp_id = request_data.get('rfp_id')
-            if rfp_id:
-                # Import here to avoid circular imports
-                from rfp.models import RFPResponse
+            # Extract RFP ID - handle both string and numeric formats
+            rfp_id = None
+            # Try multiple possible field names
+            for key in ['rfp_id', 'rfpId', 'rfpID']:
+                if key in request_data and request_data[key]:
+                    rfp_id = request_data[key]
+                    break
+            
+            # Try nested structures
+            if not rfp_id:
+                for key in ['rfp_data', 'rfpData']:
+                    if key in request_data and isinstance(request_data[key], dict):
+                        nested_data = request_data[key]
+                        for nested_key in ['rfp_id', 'rfpId', 'rfpID']:
+                            if nested_key in nested_data and nested_data[nested_key]:
+                                rfp_id = nested_data[nested_key]
+                                break
+                        if rfp_id:
+                            break
+            
+            # Convert to string for consistent comparison (RFP IDs can be strings or numbers)
+            # Also filter out empty strings and None
+            if rfp_id and str(rfp_id).strip():
+                rfp_id_str = str(rfp_id).strip()
+                print(f"[get_proposal_id_from_approval] Found rfp_id: {rfp_id} (type: {type(rfp_id)}, str: {rfp_id_str}), searching for responses...")
+                
+                # Import here to avoid circular imports (already imported at top, but keeping for clarity)
+                # RFPResponse and RFP are already imported at the top of the file
+                
+                # Verify RFP exists (for debugging)
+                try:
+                    rfp_exists = RFP.objects.filter(rfp_id=rfp_id_str).exists()
+                    if not rfp_exists:
+                        try:
+                            rfp_id_int = int(rfp_id)
+                            rfp_exists = RFP.objects.filter(rfp_id=rfp_id_int).exists()
+                        except (ValueError, TypeError):
+                            pass
+                    print(f"[get_proposal_id_from_approval] RFP exists check: {rfp_exists}")
+                except Exception as e:
+                    print(f"[get_proposal_id_from_approval] Error checking RFP existence: {e}")
                 
                 # Get all responses for this RFP
                 # MULTI-TENANCY: Filter responses by tenant
-                responses = RFPResponse.objects.filter(rfp_id=rfp_id, tenant_id=tenant_id)
+                # Try both string and numeric RFP ID matching
+                responses = None
                 
-                if responses.exists():
-                    # For now, return the first response ID
-                    # In a real implementation, you might want to filter by evaluator assignment
-                    first_response = responses.first()
-                    proposal_id = first_response.response_id
+                # First, try to find the actual RFP record to get the correct ID format
+                actual_rfp_id = None
+                try:
+                    rfp_record = RFP.objects.filter(rfp_id=rfp_id_str).first()
+                    if not rfp_record:
+                        try:
+                            rfp_id_int = int(rfp_id)
+                            rfp_record = RFP.objects.filter(rfp_id=rfp_id_int).first()
+                        except (ValueError, TypeError):
+                            pass
+                    
+                    if rfp_record:
+                        actual_rfp_id = rfp_record.rfp_id
+                        print(f"[get_proposal_id_from_approval] Found RFP record, actual_rfp_id: {actual_rfp_id} (type: {type(actual_rfp_id)})")
+                    else:
+                        # Try by RFP number as fallback
+                        rfp_number = request_data.get('rfp_number')
+                        if rfp_number:
+                            print(f"[get_proposal_id_from_approval] Trying to find RFP by number: {rfp_number}")
+                            rfp_record = RFP.objects.filter(rfp_number=rfp_number, tenant_id=tenant_id).first()
+                            if rfp_record:
+                                actual_rfp_id = rfp_record.rfp_id
+                                print(f"[get_proposal_id_from_approval] Found RFP by number, actual_rfp_id: {actual_rfp_id}")
+                except Exception as e:
+                    print(f"[get_proposal_id_from_approval] Error finding RFP record: {e}")
+                
+                # Use actual_rfp_id if found, otherwise use the original rfp_id
+                search_rfp_id = actual_rfp_id if actual_rfp_id is not None else rfp_id_str
+                
+                try:
+                    # Try filtering by tenant first
+                    responses = RFPResponse.objects.filter(rfp_id=search_rfp_id, tenant_id=tenant_id)
+                    if not responses.exists():
+                        # Try with numeric RFP ID if search_rfp_id is numeric
+                        try:
+                            rfp_id_int = int(search_rfp_id)
+                            responses = RFPResponse.objects.filter(rfp_id=rfp_id_int, tenant_id=tenant_id)
+                        except (ValueError, TypeError):
+                            pass
+                    
+                    # If still no responses, try without tenant filter (for debugging)
+                    if not responses.exists():
+                        print(f"[get_proposal_id_from_approval] No responses with tenant filter, trying without tenant...")
+                        responses = RFPResponse.objects.filter(rfp_id=search_rfp_id)
+                        if not responses.exists():
+                            try:
+                                rfp_id_int = int(search_rfp_id)
+                                responses = RFPResponse.objects.filter(rfp_id=rfp_id_int)
+                            except (ValueError, TypeError):
+                                pass
+                except Exception as filter_error:
+                    print(f"[get_proposal_id_from_approval] Error querying responses: {filter_error}")
+                    import traceback
+                    traceback.print_exc()
+                    responses = None
+                
+                if responses and responses.exists():
+                    response_count = responses.count()
+                    print(f"[get_proposal_id_from_approval] Found {response_count} response(s) for RFP {rfp_id}")
+                    # For proposal evaluation, try to find the response assigned to this evaluator
+                    # Get evaluator_id from the approval stage (if stage_id is provided in query params)
+                    evaluator_id = None
+                    stage_id = request.GET.get('stage_id')
+                    
+                    if stage_id:
+                        try:
+                            from tprm_backend.rfp_approval.models import ApprovalStages
+                            stage = ApprovalStages.objects.get(stage_id=stage_id, approval_id=approval_id)
+                            evaluator_id = stage.assigned_user_id
+                            print(f"[get_proposal_id_from_approval] Found evaluator_id from stage: {evaluator_id}")
+                        except ApprovalStages.DoesNotExist:
+                            print(f"[get_proposal_id_from_approval] Stage not found: {stage_id}")
+                    
+                    # If no evaluator_id from stage, try to get from request query params
+                    if not evaluator_id:
+                        evaluator_id_param = request.GET.get('evaluator_id') or request.GET.get('userId')
+                        if evaluator_id_param:
+                            try:
+                                evaluator_id = int(evaluator_id_param)
+                                print(f"[get_proposal_id_from_approval] Found evaluator_id from query params: {evaluator_id}")
+                            except (ValueError, TypeError):
+                                pass
+                    
+                    # Try to find response assigned to this evaluator using RFPEvaluatorAssignment
+                    if evaluator_id:
+                        try:
+                            from tprm_backend.rfp.models import RFPEvaluatorAssignment
+                            
+                            # Get all response IDs for this RFP
+                            response_ids = list(responses.values_list('response_id', flat=True))
+                            
+                            # Find assignment for this evaluator and one of these responses
+                            # MULTI-TENANCY: Filter by tenant
+                            try:
+                                assignment = RFPEvaluatorAssignment.objects.filter(
+                                    evaluator_id=evaluator_id,
+                                    proposal_id__in=response_ids,
+                                    assignment_type='evaluation',
+                                    tenant_id=tenant_id
+                                ).first()
+                            except Exception as filter_error:
+                                # If tenant_id filter fails, try without tenant filter
+                                print(f"[get_proposal_id_from_approval] Error filtering by tenant, trying without: {filter_error}")
+                                assignment = RFPEvaluatorAssignment.objects.filter(
+                                    evaluator_id=evaluator_id,
+                                    proposal_id__in=response_ids,
+                                    assignment_type='evaluation'
+                                ).first()
+                            
+                            if assignment:
+                                proposal_id = assignment.proposal_id
+                                print(f"[get_proposal_id_from_approval] Found response_id from evaluator assignment: {proposal_id}")
+                            else:
+                                # No assignment found, try to find by matching response to evaluator
+                                # This could happen if assignment was created differently
+                                print(f"[get_proposal_id_from_approval] No assignment found for evaluator {evaluator_id}, trying first response")
+                                first_response = responses.first()
+                                proposal_id = first_response.response_id
+                        except Exception as e:
+                            print(f"[get_proposal_id_from_approval] Error checking evaluator assignment: {e}")
+                            # Fallback to first response
+                            first_response = responses.first()
+                            proposal_id = first_response.response_id
+                    else:
+                        # No evaluator_id available, just get the first response
+                        print(f"[get_proposal_id_from_approval] No evaluator_id found, using first response")
+                        first_response = responses.first()
+                        proposal_id = first_response.response_id
                     
                     # Also return all response IDs for potential selection
                     all_response_ids = list(responses.values_list('response_id', flat=True))
                     
+                    print(f"[get_proposal_id_from_approval] Returning response_id: {proposal_id}")
                     return Response({
                         'proposal_id': proposal_id,
                         'all_response_ids': all_response_ids,
                         'rfp_id': rfp_id,
                         'approval_id': approval_id,
+                        'evaluator_id': evaluator_id,
                         'request_data': request_data
                     })
+                else:
+                    print(f"[get_proposal_id_from_approval] No responses found for RFP {rfp_id} (tenant_id: {tenant_id})")
+                    # If we found an RFP ID but no responses, provide a more helpful error
+                    return Response({
+                        'error': f'No proposals found for RFP {rfp_id}. The RFP may not have any submitted proposals yet, or the proposals may belong to a different tenant.',
+                        'approval_id': approval_id,
+                        'rfp_id': rfp_id,
+                        'request_data_keys': list(request_data.keys()) if isinstance(request_data, dict) else None,
+                        'request_data_type': type(request_data).__name__,
+                        'tenant_id': tenant_id
+                    }, status=404)
         
         if not proposal_id:
-            return Response({'error': 'No proposal ID found in approval data'}, status=404)
+            print(f"[get_proposal_id_from_approval] No proposal_id found. request_data keys: {list(request_data.keys()) if isinstance(request_data, dict) else 'N/A'}")
+            return Response({
+                'error': 'No proposal ID found in approval data',
+                'approval_id': approval_id,
+                'request_data_keys': list(request_data.keys()) if isinstance(request_data, dict) else None,
+                'request_data_type': type(request_data).__name__
+            }, status=404)
         
+        print(f"[get_proposal_id_from_approval] Returning proposal_id: {proposal_id}")
         return Response({
             'proposal_id': proposal_id,
             'approval_id': approval_id,
@@ -1744,9 +1965,16 @@ def get_proposal_id_from_approval(request, approval_id):
         })
         
     except ApprovalRequests.DoesNotExist:
+        print(f"[get_proposal_id_from_approval] Approval request not found: {approval_id}")
         return Response({'error': 'Approval request not found'}, status=404)
     except Exception as e:
-        return Response({'error': str(e)}, status=500)
+        print(f"[get_proposal_id_from_approval] Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return Response({
+            'error': str(e),
+            'error_type': type(e).__name__
+        }, status=500)
 
 @api_view(['GET'])
 @authentication_classes([JWTAuthentication])
@@ -3293,7 +3521,7 @@ def get_document_url(request, file_id):
     Get document URL from s3_files table by file ID
     """
     try:
-        from rfp.models import S3Files
+        from tprm_backend.rfp.models import S3Files
         
         # Get file from s3_files table
         s3_file = S3Files.objects.get(id=file_id)
@@ -3327,7 +3555,7 @@ def get_risks_for_response(request, response_id):
     Query: entity='RFP' AND row=response_id (as string)
     """
     try:
-        from apps.vendor_risk.models import RiskTPRM
+        from tprm_backend.apps.vendor_risk.models import RiskTPRM
         
         # Convert response_id to string for comparison (row field is varchar(50))
         response_id_str = str(response_id)
@@ -3450,7 +3678,8 @@ def get_rfp_details_for_change_request(request, rfp_id):
         return Response({'error': 'Tenant context not found'}, status=403)
     
     try:
-        from rfp.models import RFP, RFPEvaluationCriteria
+        from tprm_backend.rfp.models import RFPEvaluationCriteria
+        # RFP is already imported at the top
         
         # Get RFP details - use rfp_id field, not id
         # MULTI-TENANCY: Filter by tenant
@@ -3459,8 +3688,8 @@ def get_rfp_details_for_change_request(request, rfp_id):
         # Get change requests for this RFP
         change_requests = []
         try:
-            from rfp_approval.models import ApprovalRequests, ApprovalStages, ApprovalWorkflows
-            from rfp_approval.models import ApprovalComments
+            from tprm_backend.rfp_approval.models import ApprovalRequests, ApprovalStages, ApprovalWorkflows
+            from tprm_backend.rfp_approval.models import ApprovalComments
             import json
             
             # Find approval requests for this RFP by:
@@ -3654,7 +3883,7 @@ def get_rfp_details_for_change_request(request, rfp_id):
             print(f"🔍 Related manager returned {criteria_count} criteria")
             
             # Debug: Check what criteria exist for ALL RFPs to see if data exists
-            from rfp.models import RFPEvaluationCriteria
+            from tprm_backend.rfp.models import RFPEvaluationCriteria
             all_criteria_count = RFPEvaluationCriteria.objects.all().count()
             print(f"🔍 TOTAL criteria in entire database: {all_criteria_count}")
             
@@ -3896,7 +4125,7 @@ def get_rfp_details_for_change_request(request, rfp_id):
                 # Try ORM as last resort
                 try:
                     print(f"🔄 Trying ORM as last resort for rfp_id={rfp.rfp_id}")
-                    from rfp.models import RFPEvaluationCriteria
+                    from tprm_backend.rfp.models import RFPEvaluationCriteria
                     # Use the RFP object directly (most reliable)
                     orm_criteria = RFPEvaluationCriteria.objects.filter(rfp=rfp).order_by('display_order')
                     if not orm_criteria.exists():
@@ -4068,31 +4297,91 @@ def get_rfp_details(request, rfp_id):
         documents_data = []
         if rfp.documents:
             try:
-                from rfp.models import S3Files
+                from tprm_backend.rfp.models import S3Files
+                import json
                 
                 # Handle both array of IDs and array of objects
                 document_ids = rfp.documents
-                if isinstance(document_ids, list):
+                
+                # If documents is a string, try to parse it as JSON
+                if isinstance(document_ids, str):
+                    try:
+                        document_ids = json.loads(document_ids)
+                        print(f"[get_rfp_details] Parsed documents string: {document_ids}")
+                    except (json.JSONDecodeError, ValueError):
+                        print(f"[get_rfp_details] Could not parse documents string: {document_ids}")
+                        document_ids = None
+                
+                if document_ids:
+                    # Ensure it's a list
+                    if not isinstance(document_ids, list):
+                        # If it's a single value, convert to list
+                        document_ids = [document_ids]
+                    
+                    print(f"[get_rfp_details] Processing {len(document_ids)} document(s) for RFP {rfp.rfp_id}")
+                    
                     for doc_item in document_ids:
-                        # If it's an integer (file ID), fetch from s3_files
-                        if isinstance(doc_item, int):
-                            try:
-                                s3_file = S3Files.objects.get(id=doc_item)
-                                documents_data.append({
-                                    'id': s3_file.id,
-                                    'url': s3_file.url,
-                                    'file_name': s3_file.file_name,
-                                    'file_type': s3_file.file_type,
-                                    'uploaded_at': s3_file.uploaded_at.isoformat() if s3_file.uploaded_at else None
-                                })
-                            except S3Files.DoesNotExist:
-                                print(f"Warning: S3 file with ID {doc_item} not found")
-                                continue
-                        # If it's already an object, use it as is
-                        elif isinstance(doc_item, dict):
-                            documents_data.append(doc_item)
+                        try:
+                            # If it's an integer or string that can be converted to int (file ID), fetch from s3_files
+                            doc_id = None
+                            if isinstance(doc_item, int):
+                                doc_id = doc_item
+                            elif isinstance(doc_item, str) and doc_item.isdigit():
+                                doc_id = int(doc_item)
+                            elif isinstance(doc_item, dict) and ('id' in doc_item or 'file_id' in doc_item or 's3_file_id' in doc_item):
+                                doc_id = doc_item.get('id') or doc_item.get('file_id') or doc_item.get('s3_file_id')
+                                if isinstance(doc_id, str) and doc_id.isdigit():
+                                    doc_id = int(doc_id)
+                            
+                            if doc_id:
+                                try:
+                                    # MULTI-TENANCY: Try with tenant filter first, then without if not found
+                                    s3_file = None
+                                    try:
+                                        s3_file = S3Files.objects.get(id=doc_id, tenant_id=tenant_id)
+                                        print(f"[get_rfp_details] Found S3 file {doc_id} with tenant {tenant_id}")
+                                    except S3Files.DoesNotExist:
+                                        # Try without tenant filter (for cross-tenant access)
+                                        try:
+                                            s3_file = S3Files.objects.get(id=doc_id)
+                                            print(f"[get_rfp_details] Found S3 file {doc_id} without tenant filter")
+                                        except S3Files.DoesNotExist:
+                                            print(f"[get_rfp_details] Warning: S3 file with ID {doc_id} not found")
+                                            continue
+                                    
+                                    documents_data.append({
+                                        'id': s3_file.id,
+                                        'url': s3_file.url,
+                                        'file_name': s3_file.file_name,
+                                        'file_type': s3_file.file_type,
+                                        'uploaded_at': s3_file.uploaded_at.isoformat() if s3_file.uploaded_at else None,
+                                        'document_name': s3_file.document_name if hasattr(s3_file, 'document_name') else s3_file.file_name
+                                    })
+                                    print(f"[get_rfp_details] Added document: {s3_file.file_name} (ID: {s3_file.id})")
+                                except Exception as file_err:
+                                    print(f"[get_rfp_details] Error fetching S3 file {doc_id}: {str(file_err)}")
+                                    import traceback
+                                    traceback.print_exc()
+                                    continue
+                            # If it's already an object with required fields, use it as is
+                            elif isinstance(doc_item, dict):
+                                # Ensure it has at least a URL or file_name
+                                if doc_item.get('url') or doc_item.get('file_name') or doc_item.get('fileName'):
+                                    documents_data.append(doc_item)
+                                    print(f"[get_rfp_details] Added document object: {doc_item.get('file_name') or doc_item.get('fileName') or 'Unknown'}")
+                                else:
+                                    print(f"[get_rfp_details] Skipping document object without URL or file_name: {doc_item}")
+                            else:
+                                print(f"[get_rfp_details] Skipping unrecognized document item type: {type(doc_item)}, value: {doc_item}")
+                        except Exception as item_err:
+                            print(f"[get_rfp_details] Error processing document item {doc_item}: {str(item_err)}")
+                            import traceback
+                            traceback.print_exc()
+                            continue
+                
+                print(f"[get_rfp_details] Successfully processed {len(documents_data)} document(s) for RFP {rfp.rfp_id}")
             except Exception as e:
-                print(f"Error processing documents: {str(e)}")
+                print(f"[get_rfp_details] Error processing documents: {str(e)}")
                 import traceback
                 traceback.print_exc()
         
@@ -4465,7 +4754,7 @@ def change_requests(request):
                         if not rfp_id and request_data.get('id'):
                             try:
                                 numeric_id = int(request_data.get('id'))
-                                from rfp.models import RFP as RFPModel
+                                # RFP is already imported at the top, use RFP directly
                                 # MULTI-TENANCY: Filter by tenant
                                 rfp_obj = RFPModel.objects.get(id=numeric_id, tenant_id=tenant_id)
                                 rfp_id = rfp_obj.rfp_id
@@ -4543,7 +4832,7 @@ def change_requests(request):
             created_version_id = None
             try:
                 if approval_id and rfp_id:
-                    from rfp.models import RFP
+                    # RFP is already imported at the top
                     from rfp.serializers import RFPSerializer
 
                     # MULTI-TENANCY: Filter by tenant
@@ -4664,7 +4953,7 @@ def respond_to_change_request(request):
                 if not json_payload:
                     rfp_id = data.get('rfp_id')
                     if rfp_id:
-                        from rfp.models import RFP
+                        # RFP is already imported at the top
                         from rfp.serializers import RFPSerializer
                         # MULTI-TENANCY: Filter by tenant
                         rfp = RFP.objects.get(rfp_id=rfp_id, tenant_id=tenant_id)

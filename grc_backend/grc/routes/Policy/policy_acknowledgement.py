@@ -442,10 +442,10 @@ def get_policy_acknowledgement_requests(request, policy_id):
     try:
         policy = get_object_or_404(Policy, PolicyId=policy_id, tenant_id=tenant_id)
         
-        # Get all acknowledgement requests for this policy
+        # Get all acknowledgement requests for this policy (filter through PolicyId relationship)
         requests = PolicyAcknowledgementRequest.objects.filter(
             PolicyId=policy,
-            tenant_id=tenant_id
+            PolicyId__tenant_id=tenant_id
         ).select_related('CreatedBy').order_by('-CreatedAt')
         
         requests_data = []
@@ -539,11 +539,11 @@ def get_user_pending_acknowledgements(request):
                 'pending_acknowledgements': []
             }, status=status.HTTP_404_NOT_FOUND)
         
-        # Get all pending acknowledgements for this user
+        # Get all pending acknowledgements for this user (filter through AcknowledgementRequest__PolicyId relationship)
         pending_acks = PolicyAcknowledgementUser.objects.filter(
             UserId=user,
             Status__in=['Pending', 'Overdue'],
-            tenant_id=tenant_id
+            AcknowledgementRequest__PolicyId__tenant_id=tenant_id
         ).select_related('AcknowledgementRequest', 'AcknowledgementRequest__PolicyId')
         
         print(f"DEBUG: Found {pending_acks.count()} pending acknowledgements")
@@ -759,17 +759,17 @@ def get_acknowledgement_report(request, acknowledgement_request_id):
     tenant_id = get_tenant_id_from_request(request)
     
     try:
-        # Get acknowledgement request
+        # Get acknowledgement request (filter through PolicyId relationship)
         ack_request = get_object_or_404(
             PolicyAcknowledgementRequest,
             AcknowledgementRequestId=acknowledgement_request_id,
-            tenant_id=tenant_id
+            PolicyId__tenant_id=tenant_id
         )
         
-        # Get all user acknowledgements
+        # Get all user acknowledgements (filter through AcknowledgementRequest__PolicyId relationship)
         user_acks = PolicyAcknowledgementUser.objects.filter(
             AcknowledgementRequest=ack_request,
-            tenant_id=tenant_id
+            AcknowledgementRequest__PolicyId__tenant_id=tenant_id
         ).select_related('UserId').order_by('-AcknowledgedAt', 'UserId__UserName')
         
         users_data = []

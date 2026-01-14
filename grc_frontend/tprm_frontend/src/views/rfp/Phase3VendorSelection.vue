@@ -1293,8 +1293,12 @@ import rfpButton from '@/components_rfp/rfpButton.vue'
 import rfpCard from '@/components_rfp/rfpCard.vue'
 import rfpCardHeader from '@/components_rfp/rfpCardHeader.vue'
 import rfpCardContent from '@/components_rfp/rfpCardContent.vue'
+import { useRouter } from 'vue-router'
 
 const { success, error } = rfpUseToast()
+
+// Router
+const router = useRouter()
 
 // Authentication
 const { getAuthHeaders } = useRfpApi()
@@ -2186,9 +2190,9 @@ const handleGenerateURLs = async () => {
     // Navigate to next phase - Phase 4 will handle contact fetching and invitation creation
     success("Ready for Next Phase", `All ${allSelectedVendors.value.total} vendors are ready for contact review and invitation distribution.`)
     
-    // Navigate to Phase 4
+    // Navigate to Phase 4 using Vue Router
     setTimeout(() => {
-      window.location.href = '/rfp-url-generation'
+      router.push('/rfp-url-generation')
     }, 1000)
     
   } catch (err) {

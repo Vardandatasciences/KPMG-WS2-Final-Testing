@@ -1317,74 +1317,90 @@ const handleNoApprovalChange = () => {
     let userId = null
     let userName = null
     
-    // Method 1: Try to get user_id directly from localStorage (stored separately, not encrypted)
-    userId = localStorage.getItem('user_id') || 
-             localStorage.getItem('userId') || 
-             localStorage.getItem('UserId')
-    
-    // Method 2: Try to get from JWT token (not encrypted)
-    if (!userId) {
-      try {
-        const token = localStorage.getItem('access_token') || localStorage.getItem('session_token')
-        if (token) {
-          // Decode JWT token to get user_id
-          const base64Url = token.split('.')[1]
-          if (base64Url) {
-            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
-            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-              return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
-            }).join(''))
-            const payload = JSON.parse(jsonPayload)
-            userId = payload.user_id || payload.userId || payload.UserId || payload.sub || payload.userid
-            console.log('✅ Extracted user_id from JWT token:', userId)
+    // Method 1: Try to get from JWT token FIRST (most reliable source of current logged-in user)
+    // This should be checked first to avoid using stale localStorage values
+    try {
+      const token = localStorage.getItem('access_token') || localStorage.getItem('session_token')
+      if (token) {
+        // Decode JWT token to get user_id
+        const base64Url = token.split('.')[1]
+        if (base64Url) {
+          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+          const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+          }).join(''))
+          const payload = JSON.parse(jsonPayload)
+          userId = payload.user_id || payload.userId || payload.UserId || payload.sub || payload.userid
+          if (userId) {
+            console.log('✅ Extracted user_id from JWT token (most reliable source):', userId)
           }
         }
-      } catch (e) {
-        console.warn('⚠️ Error extracting user_id from token:', e)
       }
+    } catch (e) {
+      console.warn('⚠️ Error extracting user_id from token:', e)
     }
     
-    // Method 3: Try to get from Vuex store
+    // Method 2: Try to get from Vuex store (second most reliable)
     if (!userId) {
       const currentUser = store.getters['auth/currentUser']
       if (currentUser) {
-        userId = currentUser.user_id || currentUser.userid || currentUser.id
-        userName = currentUser.username || `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim() || currentUser.email
+        userId = currentUser.UserId || currentUser.user_id || currentUser.userId || currentUser.userid || currentUser.id
+        userName = currentUser.UserName || currentUser.username || `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim() || currentUser.email
+        if (userId) {
+          console.log('✅ Extracted user_id from Vuex store:', userId)
+        }
       }
     }
     
-    // Method 4: Try to get from users list (if already loaded)
-    if (userId && !userName && users.value && users.value.length > 0) {
-      const user = users.value.find(u => u.user_id == userId || u.userid == userId)
-      if (user) {
-        userName = user.username || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email
-      }
-    }
-    
-    // Method 5: Try to parse encrypted current_user (last resort - may have encrypted values)
-    if (!userId || !userName) {
+    // Method 3: Try to parse current_user from localStorage (check UserId with capital letters)
+    if (!userId) {
       try {
         const userStr = localStorage.getItem('current_user')
         if (userStr) {
           const parsedUser = JSON.parse(userStr)
-          // Even if encrypted, we might be able to get user_id if it's stored separately
-          if (!userId) {
-            userId = parsedUser.user_id || parsedUser.userid || parsedUser.id || parsedUser.UserId
+          // Check for UserId (capital U, capital I) first, then lowercase variants
+          userId = parsedUser.UserId || parsedUser.user_id || parsedUser.userId || parsedUser.userid || parsedUser.id
+          if (userId) {
+            console.log('✅ Extracted user_id from localStorage current_user:', userId)
           }
           // Try to get username, but it might be encrypted
           if (!userName) {
-            userName = parsedUser.username || `${parsedUser.first_name || ''} ${parsedUser.last_name || ''}`.trim() || parsedUser.email
-            // If username looks encrypted (starts with gAAAAA), try to get from users list
-            if (userName && userName.startsWith('gAAAAA') && users.value && users.value.length > 0) {
-              const user = users.value.find(u => u.user_id == userId)
-              if (user) {
-                userName = user.username || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email
-              }
-            }
+            userName = parsedUser.UserName || parsedUser.username || `${parsedUser.first_name || ''} ${parsedUser.last_name || ''}`.trim() || parsedUser.email
           }
         }
       } catch (error) {
         console.warn('⚠️ Error parsing user from localStorage (may be encrypted):', error)
+      }
+    }
+    
+    // Method 4: Fallback to localStorage user_id (least reliable - may be stale)
+    // Only use this if JWT token and Vuex store don't have the user
+    if (!userId) {
+      userId = localStorage.getItem('user_id') || 
+               localStorage.getItem('userId') || 
+               localStorage.getItem('UserId')
+      if (userId) {
+        console.log('⚠️ Using user_id from localStorage (fallback - may be stale):', userId)
+      }
+    }
+    
+    // Method 5: Try to get username from users list (if already loaded and userId found)
+    if (userId && !userName && users.value && users.value.length > 0) {
+      const user = users.value.find(u => u.user_id == userId || u.userid == userId)
+      if (user) {
+        userName = user.username || user.display_name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email
+        if (userName) {
+          console.log('✅ Found username from users list:', userName)
+        }
+      }
+    }
+    
+    // Method 6: If username looks encrypted (starts with gAAAAA), try to get from users list
+    if (userName && userName.startsWith('gAAAAA') && users.value && users.value.length > 0 && userId) {
+      const user = users.value.find(u => u.user_id == userId || u.userid == userId)
+      if (user) {
+        userName = user.username || user.display_name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email
+        console.log('✅ Decrypted username from users list:', userName)
       }
     }
     

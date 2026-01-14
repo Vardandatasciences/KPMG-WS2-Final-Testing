@@ -516,8 +516,34 @@ export default {
   margin-left: 240px; /* Account for sidebar width */
   margin-top: 80px; /* Account for navbar height */
   width: calc(100% - 240px);
-  min-height: calc(100vh - 100px);
+  max-width: calc(100vw - 240px);
+  height: calc(100vh - 80px);
+  max-height: calc(100vh - 80px);
   box-sizing: border-box;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+  /* Custom scrollbar styling */
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e0 #f7fafc;
+}
+
+.domains-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.domains-container::-webkit-scrollbar-track {
+  background: #f7fafc;
+  border-radius: 4px;
+}
+
+.domains-container::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 4px;
+}
+
+.domains-container::-webkit-scrollbar-thumb:hover {
+  background: #a0aec0;
 }
 
 .header {
@@ -532,6 +558,9 @@ export default {
   display: flex;
   align-items: center;
   gap: 12px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  flex-wrap: wrap;
 }
 
 .header h1 i {
@@ -542,6 +571,8 @@ export default {
   color: #666;
   font-size: 14px;
   margin: 0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .loading-container,
@@ -595,9 +626,12 @@ export default {
 
 .domains-content {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .domain-section {
@@ -609,6 +643,9 @@ export default {
   min-height: 200px;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .domain-card {
@@ -619,13 +656,11 @@ export default {
 .domain-section:hover {
   border-color: #003399;
   box-shadow: 0 4px 12px rgba(0, 51, 153, 0.15);
-  transform: translateY(-2px);
 }
 
 .domain-section.drag-over {
   border-color: #003399;
   background: #f0f4ff;
-  transform: scale(1.02);
   box-shadow: 0 6px 16px rgba(0, 51, 153, 0.2);
 }
 
@@ -653,6 +688,10 @@ export default {
   display: flex;
   align-items: center;
   gap: 12px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  min-width: 0;
+  flex: 1;
 }
 
 .domain-header h2 i {
@@ -678,7 +717,7 @@ export default {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  max-height: 500px;
+  max-height: calc(100vh - 400px);
   scroll-behavior: smooth;
   /* Custom scrollbar styling */
   scrollbar-width: thin;
@@ -713,6 +752,9 @@ export default {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   user-select: none;
   -webkit-user-select: none;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .framework-item:active {
@@ -736,6 +778,8 @@ export default {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
+  width: 100%;
 }
 
 .drag-handle {
@@ -750,6 +794,8 @@ export default {
 
 .framework-info {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .framework-info h3 {
@@ -758,6 +804,9 @@ export default {
   color: #1a1a1a;
   margin: 0 0 8px 0;
   line-height: 1.4;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .framework-meta {
@@ -869,7 +918,7 @@ export default {
 }
 
 /* Responsive Design */
-@media (max-width: 1200px) {
+@media (max-width: 1400px) {
   .domains-content {
     grid-template-columns: 1fr;
   }
@@ -880,7 +929,10 @@ export default {
     padding: 16px;
     margin-left: 0;
     width: 100%;
+    max-width: 100vw;
     margin-top: 60px;
+    height: calc(100vh - 60px);
+    max-height: calc(100vh - 60px);
   }
 
   .domain-section {
@@ -889,6 +941,10 @@ export default {
 
   .framework-content {
     flex-wrap: wrap;
+  }
+  
+  .frameworks-list {
+    max-height: calc(100vh - 350px);
   }
 }
 </style>

@@ -244,21 +244,30 @@ class RiskAnalysisService:
             logger.error(f"Error analyzing comprehensive plan data for {entity}: {str(e)}")
             raise
     
-    def get_heatmap_data(self, module_name: str = None) -> List[Dict]:
-        """Get heatmap data dynamically from risk records"""
+    def get_heatmap_data(self, module_name: str = None, tenant_id: int = None) -> List[Dict]:
+        """Get heatmap data dynamically from risk records
+        MULTI-TENANCY: Optionally filter by tenant_id
+        """
         try:
-            heatmap_data = Risk.get_heatmap_data(module_name)
+            heatmap_data = Risk.get_heatmap_data(module_name, tenant_id=tenant_id)
             logger.info(f"Generated heatmap data for {len(heatmap_data)} cells")
             return heatmap_data
         except Exception as e:
             logger.error(f"Error generating heatmap data: {str(e)}")
             raise
     
-    def get_risk_statistics(self, module_name: str = None) -> Dict:
-        """Get risk statistics for dashboard"""
+    def get_risk_statistics(self, module_name: str = None, tenant_id: int = None) -> Dict:
+        """Get risk statistics for dashboard
+        MULTI-TENANCY: Optionally filter by tenant_id
+        """
         try:
-            # For now, get all risks since we're not using module filtering
-            risks = Risk.objects.all()
+            # Get risks - filter by tenant if provided, otherwise get all
+            if tenant_id:
+                from django.db.models import Q
+                # Include records with matching tenant_id OR NULL tenant_id (for backward compatibility)
+                risks = Risk.objects.filter(Q(tenant_id=tenant_id) | Q(tenant_id__isnull=True))
+            else:
+                risks = Risk.objects.all()
             
             total_risks = risks.count()
             
