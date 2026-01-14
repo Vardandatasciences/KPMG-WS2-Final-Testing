@@ -67,7 +67,10 @@ def dashboard_overview(request):
         
         # Temporal Metrics
         logger.info("Collecting temporal metrics...")
-        temporal_metrics = get_temporal_metrics()
+        # MULTI-TENANCY: Get tenant_id from request and pass to temporal metrics
+        from tprm_backend.core.tenant_utils import get_tenant_id_from_request
+        tenant_id = get_tenant_id_from_request(request)
+        temporal_metrics = get_temporal_metrics(tenant_id=tenant_id)
         
         logger.info("Dashboard overview data collection completed successfully")
         
@@ -457,38 +460,47 @@ def get_user_metrics():
         return {}
 
 
-def get_temporal_metrics():
-    """Get time-based analysis metrics"""
+def get_temporal_metrics(tenant_id=None):
+    """Get time-based analysis metrics
+    MULTI-TENANCY: Optionally filter by tenant_id
+    """
     try:
+        # Build base filters with date range
+        date_filter = Q(submitted_at__gte=timezone.now() - timedelta(days=365))
+        if tenant_id:
+            date_filter = date_filter & Q(tenant_id=tenant_id)
+        
         # Monthly plan submissions (last 12 months)
-        monthly_plans = Plan.objects.filter(
-            submitted_at__gte=timezone.now() - timedelta(days=365)
-        ).extra(
+        monthly_plans = Plan.objects.filter(date_filter).extra(
             select={'month': 'DATE_FORMAT(submitted_at, "%%Y-%%m")'}
         ).values('month').annotate(count=Count('plan_id')).order_by('month')
         
         # Monthly evaluations (last 12 months)
-        monthly_evaluations = Evaluation.objects.filter(
-            submitted_at__gte=timezone.now() - timedelta(days=365),
-            status='SUBMITTED'
-        ).extra(
+        eval_filter = Q(submitted_at__gte=timezone.now() - timedelta(days=365), status='SUBMITTED')
+        if tenant_id:
+            eval_filter = eval_filter & Q(tenant_id=tenant_id)
+        monthly_evaluations = Evaluation.objects.filter(eval_filter).extra(
             select={'month': 'DATE_FORMAT(submitted_at, "%%Y-%%m")'}
         ).values('month').annotate(count=Count('evaluation_id')).order_by('month')
         
         # Monthly test completions (last 12 months)
-        monthly_tests = TestAssignmentsResponses.objects.filter(
-            submitted_at__gte=timezone.now() - timedelta(days=365),
-            status='SUBMITTED'
-        ).extra(
+        test_filter = Q(submitted_at__gte=timezone.now() - timedelta(days=365), status='SUBMITTED')
+        if tenant_id:
+            test_filter = test_filter & Q(tenant_id=tenant_id)
+        monthly_tests = TestAssignmentsResponses.objects.filter(test_filter).extra(
             select={'month': 'DATE_FORMAT(submitted_at, "%%Y-%%m")'}
         ).values('month').annotate(count=Count('questionnaire_id')).order_by('month')
         
-        # Monthly risk creation (last 12 months)
-        monthly_risks = Risk.objects.filter(
-            created_at__gte=timezone.now() - timedelta(days=365)
-        ).extra(
-            select={'month': 'DATE_FORMAT(created_at, "%%Y-%%m")'}
-        ).values('month').annotate(count=Count('id')).order_by('month')
+        # Monthly risk creation (last 12 months) - include NULL tenant_id for backward compatibility
+        if RISK_MODELS_AVAILABLE and Risk:
+            risk_filter = Q(created_at__gte=timezone.now() - timedelta(days=365))
+            if tenant_id:
+                risk_filter = risk_filter & (Q(tenant_id=tenant_id) | Q(tenant_id__isnull=True))
+            monthly_risks = Risk.objects.filter(risk_filter).extra(
+                select={'month': 'DATE_FORMAT(created_at, "%%Y-%%m")'}
+            ).values('month').annotate(count=Count('id')).order_by('month')
+        else:
+            monthly_risks = []
         
         return {
             'monthly_plans': list(monthly_plans),
@@ -498,8 +510,13 @@ def get_temporal_metrics():
         }
         
     except Exception as e:
-        logger.error(f"Error calculating temporal metrics: {str(e)}")
-        return {}
+        logger.error(f"Error calculating temporal metrics: {str(e)}", exc_info=True)
+        return {
+            'monthly_plans': [],
+            'monthly_evaluations': [],
+            'monthly_tests': [],
+            'monthly_risks': []
+        }
 
 
 @api_view(['GET'])
@@ -563,12 +580,17 @@ def dashboard_risk_metrics(request):
 @permission_classes([SimpleAuthenticatedPermission])
 @rbac_bcp_drp_required('view_plans')
 def dashboard_temporal_metrics(request):
-    """Get temporal analysis metrics"""
+    """Get temporal analysis metrics
+    MULTI-TENANCY: Filters by tenant_id
+    """
     try:
-        metrics = get_temporal_metrics()
+        # MULTI-TENANCY: Get tenant_id from request
+        from tprm_backend.core.tenant_utils import get_tenant_id_from_request
+        tenant_id = get_tenant_id_from_request(request)
+        metrics = get_temporal_metrics(tenant_id=tenant_id)
         return success_response(metrics)
     except Exception as e:
-        logger.error(f"Error fetching temporal metrics: {str(e)}")
+        logger.error(f"Error fetching temporal metrics: {str(e)}", exc_info=True)
         return error_response("Failed to fetch temporal metrics", status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

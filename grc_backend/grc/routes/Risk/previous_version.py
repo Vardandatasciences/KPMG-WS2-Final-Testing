@@ -25,24 +25,24 @@ def get_all_versions(request, risk_id):
     try:
         with connection.cursor() as cursor:
             # First, let's check if there's any data in the table at all
-            cursor.execute("SELECT COUNT(*) FROM grc.risk_approval")
+            cursor.execute("SELECT COUNT(*) FROM grc2.risk_approval")
             total_count = cursor.fetchone()[0]
             print(f"Total records in risk_approval table: {total_count}")
             
             # Check if there are any records for this specific risk ID
-            cursor.execute("SELECT COUNT(*) FROM grc.risk_approval WHERE RiskInstanceId = %s", [risk_id])
+            cursor.execute("SELECT COUNT(*) FROM grc2.risk_approval WHERE RiskInstanceId = %s", [risk_id])
             risk_count = cursor.fetchone()[0]
             print(f"Records for RiskInstanceId {risk_id}: {risk_count}")
             
             # Let's also see what RiskInstanceIds exist in the table
-            cursor.execute("SELECT DISTINCT RiskInstanceId FROM grc.risk_approval LIMIT 10")
+            cursor.execute("SELECT DISTINCT RiskInstanceId FROM grc2.risk_approval LIMIT 10")
             existing_ids = cursor.fetchall()
             print(f"Existing RiskInstanceIds (first 10): {[row[0] for row in existing_ids]}")
             
             cursor.execute("""
                 SELECT RiskInstanceId, version, ExtractedInfo, UserId, ApproverId, 
                        Date, ApprovedRejected
-                FROM grc.risk_approval 
+                FROM grc2.risk_approval 
                 WHERE RiskInstanceId = %s
                 ORDER BY version
             """, [risk_id])
@@ -143,7 +143,7 @@ def get_previous_version(request, risk_id, version):
         with connection.cursor() as cursor:
             cursor.execute("""
                 SELECT RiskInstanceId, version, ExtractedInfo, UserId, ApproverId
-                FROM grc.risk_approval 
+                FROM grc2.risk_approval 
                 WHERE RiskInstanceId = %s AND version = %s
             """, [risk_id, version])
             
@@ -231,7 +231,7 @@ def get_version_comparison(request, risk_id, version1, version2):
             # Get both versions
             cursor.execute("""
                 SELECT RiskInstanceId, version, ExtractedInfo, UserId, ApproverId
-                FROM grc.risk_approval 
+                FROM grc2.risk_approval 
                 WHERE RiskInstanceId = %s AND version IN (%s, %s)
                 ORDER BY version ASC
             """, [risk_id, version1, version2])

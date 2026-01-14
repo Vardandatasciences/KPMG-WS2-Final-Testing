@@ -847,7 +847,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNotifications } from '@/composables/useNotifications'
 import loggingService from '@/services/loggingService'
@@ -996,7 +996,20 @@ const loadDashboardData = async () => {
     dataSource.value = 'real'
     error.value = null // Clear any previous errors
     
+    // Debug temporal_metrics
+    console.log('🔍 DEBUG: temporal_metrics exists:', !!responseData.temporal_metrics)
+    console.log('🔍 DEBUG: temporal_metrics data:', responseData.temporal_metrics)
+    if (responseData.temporal_metrics) {
+      console.log('🔍 DEBUG: monthly_plans:', responseData.temporal_metrics.monthly_plans)
+      console.log('🔍 DEBUG: monthly_evaluations:', responseData.temporal_metrics.monthly_evaluations)
+      console.log('🔍 DEBUG: monthly_tests:', responseData.temporal_metrics.monthly_tests)
+    }
+    
     console.log('✅ DEBUG: Dashboard data successfully loaded')
+    
+    // Update trends chart after data is loaded
+    await nextTick()
+    updateTrendsChart()
     
   } catch (err: any) {
     console.error('❌ DEBUG: Dashboard API Error Details:')
@@ -1740,27 +1753,46 @@ const getMockDashboardData = () => {
 
 // Enhanced Monthly Trends Methods
 const updateTrendsChart = () => {
-  console.log('Updating trends chart with:', {
+  console.log('🔍 DEBUG: updateTrendsChart called')
+  console.log('🔍 DEBUG: Chart update with filters:', {
     timeRange: selectedTimeRange.value,
     planType: selectedPlanType.value,
     department: selectedDepartment.value,
     viewMode: selectedViewMode.value,
     movingAverage: selectedMovingAverage.value
   })
+  console.log('🔍 DEBUG: dashboardData exists:', !!dashboardData.value)
+  console.log('🔍 DEBUG: temporal_metrics exists:', !!dashboardData.value?.temporal_metrics)
   
   // Process the data based on current filters
-  processTrendsData()
+  try {
+    processTrendsData()
+    console.log('✅ DEBUG: Trends chart updated successfully')
+  } catch (error) {
+    console.error('❌ DEBUG: Error updating trends chart:', error)
+  }
 }
 
 const processTrendsData = () => {
+  console.log('🔍 DEBUG: processTrendsData called')
+  console.log('🔍 DEBUG: dashboardData.value exists:', !!dashboardData.value)
+  console.log('🔍 DEBUG: temporal_metrics exists:', !!dashboardData.value?.temporal_metrics)
+  
   if (!dashboardData.value?.temporal_metrics) {
+    console.log('⚠️ DEBUG: No temporal_metrics, using mock data')
     // Use mock data if no real data available
     const mockData = getMockTemporalData()
     processTemporalData(mockData)
     return
   }
   
-  processTemporalData(dashboardData.value.temporal_metrics)
+  const temporalData = dashboardData.value.temporal_metrics
+  console.log('🔍 DEBUG: Processing temporal data:', temporalData)
+  console.log('🔍 DEBUG: monthly_plans length:', temporalData.monthly_plans?.length || 0)
+  console.log('🔍 DEBUG: monthly_evaluations length:', temporalData.monthly_evaluations?.length || 0)
+  console.log('🔍 DEBUG: monthly_tests length:', temporalData.monthly_tests?.length || 0)
+  
+  processTemporalData(temporalData)
 }
 
 const processTemporalData = (temporalData) => {
@@ -1902,6 +1934,8 @@ const calculateYoYChange = (data) => {
 }
 
 const generateChartElements = (data) => {
+  console.log('🔍 DEBUG: generateChartElements called with data:', data)
+  
   const chartWidth = chartDimensions.value.width
   const chartHeight = chartDimensions.value.height
   const margin = { top: 40, right: 40, bottom: 60, left: 80 }
@@ -1910,26 +1944,34 @@ const generateChartElements = (data) => {
   
   // Generate all months data for consistent x-axis
   const allMonths = generateAllMonths(data)
+  console.log('🔍 DEBUG: Generated months for chart:', allMonths.length)
   trendsXAxisLabels.value = allMonths.map(m => m.label)
   
   // Calculate Y-axis scale
   const maxValue = calculateMaxValue(data)
   const yScale = maxValue > 0 ? chartAreaHeight / maxValue : 1
   trendsYAxisLabels.value = generateYAxisLabels(maxValue)
+  console.log('🔍 DEBUG: Chart scale - maxValue:', maxValue, 'yScale:', yScale)
   
   // Generate trend lines
   trendLines.value = generateTrendLines(data, allMonths, chartAreaWidth, chartAreaHeight, margin, yScale)
+  console.log('🔍 DEBUG: Generated trend lines:', trendLines.value.length)
   
   // Generate area paths
   areaPaths.value = generateAreaPaths(data, allMonths, chartAreaWidth, chartAreaHeight, margin, yScale)
+  console.log('🔍 DEBUG: Generated area paths:', areaPaths.value.length)
   
   // Generate moving average lines
   if (selectedMovingAverage.value !== 'none') {
     movingAverageLines.value = generateMovingAverageLines(data, allMonths, chartAreaWidth, chartAreaHeight, margin, yScale)
+    console.log('🔍 DEBUG: Generated moving average lines:', movingAverageLines.value.length)
+  } else {
+    movingAverageLines.value = []
   }
   
   // Generate interactive data points
   interactiveDataPoints.value = generateInteractiveDataPoints(data, allMonths, chartAreaWidth, chartAreaHeight, margin, yScale)
+  console.log('🔍 DEBUG: Generated interactive data points:', interactiveDataPoints.value.length)
 }
 
 const generateAllMonths = (data) => {
@@ -1938,22 +1980,50 @@ const generateAllMonths = (data) => {
   const evaluations = data.monthly_evaluations || []
   const tests = data.monthly_tests || []
   
+  console.log('🔍 DEBUG: generateAllMonths - plans:', plans.length, 'evaluations:', evaluations.length, 'tests:', tests.length)
+  
   // Get all unique months
   const monthSet = new Set()
   ;[...plans, ...evaluations, ...tests].forEach(item => {
-    if (item.month) monthSet.add(item.month)
+    if (item && item.month) {
+      monthSet.add(item.month)
+    }
   })
   
   const sortedMonths = Array.from(monthSet).sort()
+  console.log('🔍 DEBUG: Unique months found:', sortedMonths)
+  
+  // If no months found, generate last 12 months as fallback
+  if (sortedMonths.length === 0) {
+    console.log('⚠️ DEBUG: No months found in data, generating last 12 months as fallback')
+    const today = new Date()
+    for (let i = 11; i >= 0; i--) {
+      const date = new Date(today.getFullYear(), today.getMonth() - i, 1)
+      const monthStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+      sortedMonths.push(monthStr)
+    }
+  }
   
   sortedMonths.forEach((month, index) => {
-    allMonths.push({
-      month,
-      label: new Date(month + '-01').toLocaleDateString('en-US', { month: 'short' }),
-      index
-    })
+    try {
+      // Handle month format (YYYY-MM)
+      const dateStr = month.includes('-') ? month + '-01' : `${month}-01`
+      const date = new Date(dateStr)
+      if (!isNaN(date.getTime())) {
+        allMonths.push({
+          month,
+          label: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+          index
+        })
+      } else {
+        console.warn('⚠️ DEBUG: Invalid month format:', month)
+      }
+    } catch (e) {
+      console.error('❌ DEBUG: Error parsing month:', month, e)
+    }
   })
   
+  console.log('🔍 DEBUG: Generated months:', allMonths.length)
   return allMonths
 }
 
@@ -1962,8 +2032,13 @@ const calculateMaxValue = (data) => {
   const evaluations = data.monthly_evaluations || []
   const tests = data.monthly_tests || []
   
-  const allValues = [...plans, ...evaluations, ...tests].map(item => item.count || 0)
-  return Math.max(...allValues, 20) // Minimum scale of 20
+  const allValues = [...plans, ...evaluations, ...tests]
+    .filter(item => item && typeof item === 'object')
+    .map(item => item.count || 0)
+  
+  const maxValue = allValues.length > 0 ? Math.max(...allValues, 20) : 20 // Minimum scale of 20
+  console.log('🔍 DEBUG: Calculated max value:', maxValue, 'from', allValues.length, 'values')
+  return maxValue
 }
 
 const generateYAxisLabels = (maxValue) => {
@@ -1980,79 +2055,100 @@ const generateTrendLines = (data, allMonths, chartAreaWidth, chartAreaHeight, ma
     tests: '#f59e0b'
   }
   
+  // Guard against empty months array
+  if (!allMonths || allMonths.length === 0) {
+    console.warn('⚠️ DEBUG: No months available for trend lines')
+    return lines
+  }
+  
+  // Calculate step size (handle single month case)
+  const stepSize = allMonths.length > 1 ? chartAreaWidth / (allMonths.length - 1) : 0
+  
   // Plans line
   if (data.monthly_plans && data.monthly_plans.length > 0) {
     const points = allMonths.map((month, index) => {
-      const dataPoint = data.monthly_plans.find(p => p.month === month.month)
+      const dataPoint = data.monthly_plans.find(p => p && p.month === month.month)
       const value = dataPoint?.count || 0
-      const x = margin.left + (index * (chartAreaWidth / (allMonths.length - 1)))
+      const x = margin.left + (index * stepSize)
       const y = margin.top + chartAreaHeight - (value * yScale)
       return `${x},${y}`
     }).join(' ')
     
-    lines.push({
-      points,
-      color: colors.plans
-    })
+    if (points) {
+      lines.push({
+        points,
+        color: colors.plans
+      })
+    }
   }
   
   // Evaluations line
   if (data.monthly_evaluations && data.monthly_evaluations.length > 0) {
     const points = allMonths.map((month, index) => {
-      const dataPoint = data.monthly_evaluations.find(p => p.month === month.month)
+      const dataPoint = data.monthly_evaluations.find(p => p && p.month === month.month)
       const value = dataPoint?.count || 0
-      const x = margin.left + (index * (chartAreaWidth / (allMonths.length - 1)))
+      const x = margin.left + (index * stepSize)
       const y = margin.top + chartAreaHeight - (value * yScale)
       return `${x},${y}`
     }).join(' ')
     
-    lines.push({
-      points,
-      color: colors.evaluations
-    })
+    if (points) {
+      lines.push({
+        points,
+        color: colors.evaluations
+      })
+    }
   }
   
   // Tests line
   if (data.monthly_tests && data.monthly_tests.length > 0) {
     const points = allMonths.map((month, index) => {
-      const dataPoint = data.monthly_tests.find(p => p.month === month.month)
+      const dataPoint = data.monthly_tests.find(p => p && p.month === month.month)
       const value = dataPoint?.count || 0
-      const x = margin.left + (index * (chartAreaWidth / (allMonths.length - 1)))
+      const x = margin.left + (index * stepSize)
       const y = margin.top + chartAreaHeight - (value * yScale)
       return `${x},${y}`
     }).join(' ')
     
-    lines.push({
-      points,
-      color: colors.tests
-    })
+    if (points) {
+      lines.push({
+        points,
+        color: colors.tests
+      })
+    }
   }
   
+  console.log('🔍 DEBUG: Generated trend lines:', lines.length)
   return lines
 }
 
 const generateAreaPaths = (data, allMonths, chartAreaWidth, chartAreaHeight, margin, yScale) => {
   const areas = []
-  const colors = {
-    plans: '#3b82f6',
-    evaluations: '#10b981',
-    tests: '#f59e0b'
+  
+  // Guard against empty months array
+  if (!allMonths || allMonths.length === 0) {
+    return areas
   }
+  
+  // Calculate step size (handle single month case)
+  const stepSize = allMonths.length > 1 ? chartAreaWidth / (allMonths.length - 1) : 0
   
   // Plans area
   if (data.monthly_plans && data.monthly_plans.length > 0) {
     const pathData = allMonths.map((month, index) => {
-      const dataPoint = data.monthly_plans.find(p => p.month === month.month)
+      const dataPoint = data.monthly_plans.find(p => p && p.month === month.month)
       const value = dataPoint?.count || 0
-      const x = margin.left + (index * (chartAreaWidth / (allMonths.length - 1)))
+      const x = margin.left + (index * stepSize)
       const y = margin.top + chartAreaHeight - (value * yScale)
       return index === 0 ? `M ${x} ${margin.top + chartAreaHeight} L ${x} ${y}` : `L ${x} ${y}`
     }).join(' ') + ` L ${margin.left + chartAreaWidth} ${margin.top + chartAreaHeight} Z`
     
-    areas.push({
-      path: pathData,
-      gradient: 'url(#plansGradient)'
-    })
+    if (pathData) {
+      areas.push({
+        path: pathData,
+        gradient: 'url(#plansGradient)'
+      })
+    }
   }
   
   return areas
@@ -2104,6 +2200,14 @@ const generateInteractiveDataPoints = (data, allMonths, chartAreaWidth, chartAre
     tests: '#f59e0b'
   }
   
+  // Guard against empty months array
+  if (!allMonths || allMonths.length === 0) {
+    return points
+  }
+  
+  // Calculate step size (handle single month case)
+  const stepSize = allMonths.length > 1 ? chartAreaWidth / (allMonths.length - 1) : 0
+  
   // Generate points for each metric
   const metrics = [
     { key: 'monthly_plans', name: 'Plans', color: colors.plans },
@@ -2112,28 +2216,31 @@ const generateInteractiveDataPoints = (data, allMonths, chartAreaWidth, chartAre
   ]
   
   metrics.forEach(metric => {
-    if (data[metric.key] && data[metric.key].length > 0) {
+    if (data[metric.key] && Array.isArray(data[metric.key]) && data[metric.key].length > 0) {
       data[metric.key].forEach(dataPoint => {
-        const monthIndex = allMonths.findIndex(m => m.month === dataPoint.month)
-        if (monthIndex >= 0) {
-          const x = margin.left + (monthIndex * (chartAreaWidth / (allMonths.length - 1)))
-          const y = margin.top + chartAreaHeight - (dataPoint.count * yScale)
-          
-          points.push({
-            x,
-            y,
-            color: metric.color,
-            name: metric.name,
-            value: dataPoint.count,
-            month: allMonths[monthIndex].label,
-            fullMonth: dataPoint.month,
-            metric: metric.key
-          })
+        if (dataPoint && dataPoint.month) {
+          const monthIndex = allMonths.findIndex(m => m.month === dataPoint.month)
+          if (monthIndex >= 0) {
+            const x = margin.left + (monthIndex * stepSize)
+            const y = margin.top + chartAreaHeight - ((dataPoint.count || 0) * yScale)
+            
+            points.push({
+              x,
+              y,
+              color: metric.color,
+              name: metric.name,
+              value: dataPoint.count || 0,
+              month: allMonths[monthIndex].label,
+              fullMonth: dataPoint.month,
+              metric: metric.key
+            })
+          }
         }
       })
     }
   })
   
+  console.log('🔍 DEBUG: Generated interactive data points:', points.length)
   return points
 }
 
@@ -2309,6 +2416,17 @@ const getMockTemporalData = () => {
   }
 }
 
+// Watch for dashboardData changes and update chart
+watch(() => dashboardData.value?.temporal_metrics, (newTemporalMetrics) => {
+  console.log('🔍 DEBUG: temporal_metrics changed:', newTemporalMetrics)
+  if (newTemporalMetrics) {
+    // Use nextTick to ensure DOM is updated
+    nextTick(() => {
+      updateTrendsChart()
+    })
+  }
+}, { deep: true, immediate: false })
+
 // Load data on component mount
 onMounted(async () => {
   console.log('🔍 DEBUG: Dashboard component mounted')
@@ -2325,10 +2443,11 @@ onMounted(async () => {
   await loggingService.logBCPView()
   await loadDashboardData()
   
-  // Initialize trends chart after data is loaded
+  // Initialize trends chart after data is loaded (with delay to ensure DOM is ready)
+  await nextTick()
   setTimeout(() => {
     updateTrendsChart()
-  }, 1000)
+  }, 500)
 })
 </script>
 

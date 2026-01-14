@@ -285,44 +285,28 @@ def debug_user_permissions(request, action, resource_type=None, resource_id=None
 
 
 def get_user_detailed_permissions(user_id):
-    """Get detailed permissions for a user from all RBAC tables"""
+    """Get detailed permissions for a user from RBAC table"""
     try:
-        from ...models import RBAC, RBACModulePermission, RBACUserPermission, RBACDepartmentAccess
+        from ...models import RBAC
         
         # Get user's RBAC info
-        rbac_info = RBAC.objects.filter(UserId=user_id).first()
+        rbac_info = RBAC.objects.filter(user_id=user_id).first()
         if not rbac_info:
             logger.warning(f"[RBAC] No RBAC info found for user {user_id}")
             return None
         
         permissions = {}
         
-        # 1. Get role-based module permissions
-        role_permissions = RBACModulePermission.objects.filter(Role=rbac_info.Role)
-        for perm in role_permissions:
-            module = perm.Module
-            if module not in permissions:
-                permissions[module] = {}
-            permissions[module][perm.Permission] = perm.IsAllowed
-        
-        # 2. Get user-specific permission overrides
-        user_permissions = RBACUserPermission.objects.filter(UserId=user_id)
-        for perm in user_permissions:
-            module = perm.Module
-            if module not in permissions:
-                permissions[module] = {}
-            # User permissions override role permissions
-            permissions[module][perm.Permission] = perm.IsAllowed
-        
-        # 3. Get department access info
-        dept_access = RBACDepartmentAccess.objects.filter(
-            Department=rbac_info.Department
-        )
-        
-        if dept_access.exists():
-            permissions['Department_Access'] = {}
-            for access in dept_access:
-                permissions['Department_Access'][f"access_{access.ResourceType}"] = access.CanAccess
+        # Get permissions from the single RBAC model
+        # Map RBAC fields to module permissions
+        if hasattr(rbac_info, 'create_incident'):
+            permissions['Incident'] = {
+                'view': getattr(rbac_info, 'view_all_incident', False),
+                'create': getattr(rbac_info, 'create_incident', False),
+                'edit': getattr(rbac_info, 'edit_incident', False),
+                'approve': getattr(rbac_info, 'approve_incident', False),
+                'assign': getattr(rbac_info, 'assign_incident', False),
+            }
         
         logger.info(f"[RBAC] Retrieved detailed permissions for user {user_id}: {permissions}")
         return permissions
@@ -380,36 +364,30 @@ def debug_permission_check(user_id, module, permission, result):
         logger.info(f"[RBAC PERM CHECK] User {user_id} checking {module}.{permission} = {result}")
         
         # Get the actual database values
-        from ...models import RBACModulePermission, RBACUserPermission, RBAC
+        from ...models import RBAC
         
-        # Get user's role
-        rbac_info = RBAC.objects.filter(UserId=user_id).first()
+        # Get user's RBAC record
+        rbac_info = RBAC.objects.filter(user_id=user_id).first()
         if rbac_info:
-            logger.info(f"[RBAC PERM CHECK] User Role: {rbac_info.Role}")
+            logger.info(f"[RBAC PERM CHECK] User Role: {rbac_info.role}")
             
-            # Check role permission
-            role_perm = RBACModulePermission.objects.filter(
-                Role=rbac_info.Role,
-                Module=module,
-                Permission=permission
-            ).first()
+            # Map permission names to RBAC fields
+            permission_map = {
+                'view': 'view_all_incident',
+                'create': 'create_incident',
+                'edit': 'edit_incident',
+                'approve': 'approve_incident',
+                'assign': 'assign_incident',
+            }
             
-            if role_perm:
-                logger.info(f"[RBAC PERM CHECK] Role Permission in DB: {role_perm.IsAllowed}")
+            rbac_field = permission_map.get(permission.lower())
+            if rbac_field:
+                has_perm = getattr(rbac_info, rbac_field, False)
+                logger.info(f"[RBAC PERM CHECK] Permission in DB ({rbac_field}): {has_perm}")
             else:
-                logger.info(f"[RBAC PERM CHECK] No role permission found in DB")
-            
-            # Check user override
-            user_perm = RBACUserPermission.objects.filter(
-                UserId=user_id,
-                Module=module,
-                Permission=permission
-            ).first()
-            
-            if user_perm:
-                logger.info(f"[RBAC PERM CHECK] User Override in DB: {user_perm.IsAllowed}")
-            else:
-                logger.info(f"[RBAC PERM CHECK] No user override found in DB")
+                logger.info(f"[RBAC PERM CHECK] No permission mapping found for {permission}")
+        else:
+            logger.info(f"[RBAC PERM CHECK] No RBAC record found for user {user_id}")
         
     except Exception as e:
         logger.error(f"[RBAC PERM CHECK] Error debugging permission check: {str(e)}")
@@ -2398,18 +2376,36 @@ def create_incident(request):
         validated_data = validate_incident_data(request.data)
         
         # SECURITY FIX: Always use the authenticated user's ID for incident creation
-        # Get the authenticated user's ID from session (which contains custom Users.UserId)
+        # Get the authenticated user's ID from JWT token or session
+        from ...rbac.utils import RBACUtils
         authenticated_user_id = None
-        if hasattr(request, 'session') and 'user_id' in request.session:
-            authenticated_user_id = request.session['user_id']
-        elif hasattr(request, 'session') and 'grc_user_id' in request.session:
-            authenticated_user_id = request.session['grc_user_id']
+        try:
+            authenticated_user_id = RBACUtils.get_user_id_from_request(request)
+        except Exception as e:
+            logger.warning(f"[AUTH] Error getting user ID from request: {e}")
         
-        # TEMPORARILY DISABLED: For development, use default user if no authentication
+        # Fallback to session if JWT doesn't work
         if not authenticated_user_id:
-            # Use a default user ID for development
-            authenticated_user_id = 1  # Default user ID
-            print(f"[DEV] No authenticated user found, using default user ID: {authenticated_user_id}")
+            if hasattr(request, 'session') and 'user_id' in request.session:
+                authenticated_user_id = request.session['user_id']
+            elif hasattr(request, 'session') and 'grc_user_id' in request.session:
+                authenticated_user_id = request.session['grc_user_id']
+        
+        # If still no user ID, return error (don't use default user)
+        if not authenticated_user_id:
+            send_log(
+                module="Incident",
+                actionType="CREATE_INCIDENT_ERROR",
+                description="No authenticated user found in request",
+                userId=None,
+                userName="Unknown",
+                entityType="Incident",
+                logLevel="ERROR",
+                ipAddress=client_ip
+            )
+            return Response({
+                'error': 'User authentication required. Please log in and try again.'
+            }, status=status.HTTP_401_UNAUTHORIZED)
         
         # MULTI-TENANCY: Verify the user exists in our custom Users table and belongs to tenant
         try:

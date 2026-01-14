@@ -2759,31 +2759,16 @@ export default {
       console.log('Subpolicies in resubmission data:', resubmitData.subpolicies);
       console.log('Number of subpolicies:', resubmitData.subpolicies.length);
       
-        // First check the current policy status to ensure it can be resubmitted
-        console.log(`Checking current status for policy ${actualPolicyId}`);
-        axios.get(API_ENDPOINTS.POLICY(actualPolicyId))
-          .then(policyResponse => {
-            const policyStatus = policyResponse.data.Status;
-            console.log(`Current policy status: ${policyStatus}`);
-            
-            // Check if policy can be resubmitted
-            if (policyStatus === 'Approved') {
-              throw new Error('Cannot resubmit an approved policy. The policy has already been approved.');
-            }
-            
-            if (policyStatus !== 'Rejected' && policyStatus !== 'Under Review') {
-              throw new Error(`Cannot resubmit a policy with status '${policyStatus}'. Only rejected or under review policies can be resubmitted.`);
-            }
-            
-            // If we reach here, the policy can be resubmitted
-            // Use the existing endpoint but wrap the data properly
-            const wrappedData = {
-              ExtractedData: resubmitData
-            };
-            
-            console.log(`Making request to: /api/policies/${actualPolicyId}/resubmit-approval/`);
-            return axios.put(API_ENDPOINTS.POLICY_RESUBMIT_APPROVAL(actualPolicyId), wrappedData);
-          })
+        // For rejected policy versions, we should allow resubmission regardless of the underlying policy status
+        // The approval is rejected, so the user should be able to resubmit it
+        // The backend endpoint will handle the validation
+        // Use the existing endpoint but wrap the data properly
+        const wrappedData = {
+          ExtractedData: resubmitData
+        };
+        
+        console.log(`Making request to: /api/policies/${actualPolicyId}/resubmit-approval/`);
+        return axios.put(API_ENDPOINTS.POLICY_RESUBMIT_APPROVAL(actualPolicyId), wrappedData)
         .then(response => {
           console.log('Policy resubmitted successfully:', response.data);
           
@@ -4231,68 +4216,38 @@ export default {
     openRejectedPolicy(policy) {
       console.log('Opening rejected policy for editing:', policy);
       
-      // Check if the policy can actually be resubmitted
-      const policyId = this.getPolicyId(policy);
-      console.log(`Checking if policy ${policyId} can be resubmitted...`);
+      // For rejected policy versions, we should allow editing regardless of the underlying policy status
+      // The approval is rejected, so the user should be able to resubmit it
+      // Check the approval status instead of the policy status
+      const approvalStatus = policy.ExtractedData?.Status || (policy.ApprovedNot === false ? 'Rejected' : (policy.ApprovedNot === true ? 'Approved' : 'Under Review'));
+      const dbStatus = policy.dbStatus;
       
-      // First check the current policy status
-              axios.get(API_ENDPOINTS.POLICY(policyId))
-        .then(policyResponse => {
-          const policyStatus = policyResponse.data.Status;
-          console.log(`Current policy status: ${policyStatus}`);
-          
-          // Check if policy can be resubmitted
-          if (policyStatus === 'Approved') {
-            PopupService.warning('This policy has already been approved and cannot be resubmitted.', 'Policy Already Approved');
-            this.sendPushNotification({
-              title: 'Policy Already Approved',
-              message: 'This policy has already been approved and cannot be resubmitted.',
-              category: 'policy',
-              priority: 'medium',
-              user_id: this.currentUserId || 'default_user'
-            });
-            return;
-          }
-          
-          if (policyStatus !== 'Rejected' && policyStatus !== 'Under Review') {
-            PopupService.warning(`Cannot resubmit a policy with status '${policyStatus}'. Only rejected or under review policies can be resubmitted.`, 'Invalid Policy Status');
-            this.sendPushNotification({
-              title: 'Invalid Policy Status',
-              message: `Cannot resubmit a policy with status '${policyStatus}'. Only rejected or under review policies can be resubmitted.`,
-              category: 'policy',
-              priority: 'medium',
-              user_id: this.currentUserId || 'default_user'
-            });
-            return;
-          }
-          
-          // If we reach here, the policy can be resubmitted
-          this.editingPolicy = JSON.parse(JSON.stringify(policy)); // Deep copy
-          
-          // Store the original data for change detection
-          this.originalPolicyData = JSON.parse(JSON.stringify(policy.ExtractedData || {}));
-          
-          // Log the editing policy data structure for debugging
-          console.log('Editing policy data structure:', this.editingPolicy);
-          console.log('Subpolicies in editing policy:', this.editingPolicy.subpolicies);
-          console.log('ExtractedData in editing policy:', this.editingPolicy.ExtractedData);
-          
-          // Initialize policy category fields
-          this.initializePolicyCategoryFields(this.editingPolicy);
-          
-          this.showEditModal = true;
-        })
-        .catch(error => {
-          console.error('Error checking policy status:', error);
-          PopupService.error('Error checking policy status. Please try again.', 'Status Check Error');
-          this.sendPushNotification({
-            title: 'Policy Status Check Error',
-            message: 'Error checking policy status. Please try again.',
-            category: 'policy',
-            priority: 'high',
-            user_id: this.currentUserId || 'default_user'
-          });
-        });
+      console.log(`Approval status: ${approvalStatus}, DB status: ${dbStatus}`);
+      
+      // Check if the approval is actually rejected
+      const isRejected = approvalStatus === 'Rejected' || dbStatus === 'Rejected' || policy.ApprovedNot === false;
+      
+      if (!isRejected) {
+        // If the approval is not rejected, don't allow editing
+        PopupService.warning('This policy approval is not rejected and cannot be edited from the rejected versions list.', 'Invalid Approval Status');
+        return;
+      }
+      
+      // If we reach here, the approval is rejected, so allow editing
+      this.editingPolicy = JSON.parse(JSON.stringify(policy)); // Deep copy
+      
+      // Store the original data for change detection
+      this.originalPolicyData = JSON.parse(JSON.stringify(policy.ExtractedData || {}));
+      
+      // Log the editing policy data structure for debugging
+      console.log('Editing policy data structure:', this.editingPolicy);
+      console.log('Subpolicies in editing policy:', this.editingPolicy.subpolicies);
+      console.log('ExtractedData in editing policy:', this.editingPolicy.ExtractedData);
+      
+      // Initialize policy category fields
+      this.initializePolicyCategoryFields(this.editingPolicy);
+      
+      this.showEditModal = true;
     },
     
     // Close the edit modal

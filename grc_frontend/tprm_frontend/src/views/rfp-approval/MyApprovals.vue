@@ -391,8 +391,11 @@ const selectedApproval = ref(null)
 const filteredApprovals = computed(() => {
   let filtered = approvals.value
 
-  // Filter to show only RFP business object type
-  filtered = filtered.filter(approval => approval.business_object_type === 'RFP')
+  // Filter to show only RFP and Committee Evaluation business object types
+  filtered = filtered.filter(approval => 
+    approval.business_object_type === 'RFP' || 
+    approval.business_object_type === 'Committee Evaluation'
+  )
 
   if (statusFilter.value !== 'all') {
     filtered = filtered.filter(approval => approval.stage_status === statusFilter.value)
@@ -412,7 +415,10 @@ const filteredApprovals = computed(() => {
 const recentActivity = computed(() => {
   // Get completed approvals (approved or rejected) and sort by completion date
   return approvals.value
-    .filter(approval => approval.business_object_type === 'RFP')
+    .filter(approval => 
+      approval.business_object_type === 'RFP' || 
+      approval.business_object_type === 'Committee Evaluation'
+    )
     .filter(approval => approval.stage_status === 'APPROVED' || approval.stage_status === 'REJECTED')
     .sort((a, b) => {
       const dateA = new Date(a.completed_at || a.updated_at)
@@ -424,7 +430,10 @@ const recentActivity = computed(() => {
 
 const hasSequentialWorkflows = computed(() => {
   return approvals.value
-    .filter(approval => approval.business_object_type === 'RFP')
+    .filter(approval => 
+      approval.business_object_type === 'RFP' || 
+      approval.business_object_type === 'Committee Evaluation'
+    )
     .some(approval => 
       approval.workflow_type === 'MULTI_LEVEL' || 
       approval.workflow_type === 'SEQUENTIAL' ||
@@ -857,7 +866,17 @@ const handleEvaluateProposal = async (approval: any) => {
       
        try {
          // Try to get proposal ID from backend using the correct approval_id
-         const response = await fetch(getTprmApiUrl(`rfp-approval/get-proposal-id/${approval.approval_id}/`), {
+         // Pass stage_id and userId to help backend find the correct proposal assignment
+         const queryParams = new URLSearchParams({
+           stage_id: approval.stage_id || '',
+           evaluator_id: selectedUserId.value || '',
+           userId: selectedUserId.value || ''
+         })
+         
+         const endpoint = `${getTprmApiUrl(`rfp-approval/get-proposal-id/${approval.approval_id}/`)}?${queryParams.toString()}`
+         console.log('🔍 DEBUG: Calling backend endpoint:', endpoint)
+         
+         const response = await fetch(endpoint, {
            method: 'GET',
            headers: getAuthHeaders()
          })
@@ -868,7 +887,8 @@ const handleEvaluateProposal = async (approval: any) => {
            responseId = data.proposal_id
            console.log('✅ DEBUG: Found proposal ID from backend:', responseId)
          } else {
-           console.log('❌ DEBUG: Backend lookup failed - no valid response_id found')
+           const errorText = await response.text()
+           console.log('❌ DEBUG: Backend lookup failed:', response.status, errorText)
            PopupService.error('❌ No proposal data found!\n\nThis approval does not contain vendor proposal information.\nPlease select an approval that was created for proposal evaluation.', 'No Proposal Data')
            return
          }

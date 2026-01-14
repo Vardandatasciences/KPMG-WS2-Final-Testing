@@ -1,15 +1,40 @@
 /* Updated: All backgrounds changed to white - Clear browser cache if needed */
 
 .compliance-container {
-  padding: 4px 45px 0 0;
+  padding: 4px 24px 0 0;
   margin-left: 280px;
-  width: calc(100% - 250px);
-  min-height: calc(100vh - 60px);
+  width: calc(100% - 280px);
+  max-width: calc(100vw - 280px);
+  height: calc(100vh - 60px);
+  max-height: calc(100vh - 60px);
   box-sizing: border-box;
+  overflow-y: auto;
   overflow-x: hidden;
   background: transparent;
   border: none;
   box-shadow: none;
+  position: relative;
+  /* Custom scrollbar styling */
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e0 #f7fafc;
+}
+
+.compliance-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.compliance-container::-webkit-scrollbar-track {
+  background: #f7fafc;
+  border-radius: 4px;
+}
+
+.compliance-container::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 4px;
+}
+
+.compliance-container::-webkit-scrollbar-thumb:hover {
+  background: #a0aec0;
 }
 
 .compliance-container h1 {
@@ -44,8 +69,10 @@
   padding: 0 !important;
   margin: 0 !important;
   width: 100% !important;
+  max-width: 100% !important;
   box-sizing: border-box !important;
-  overflow-x: auto;
+  overflow-x: hidden !important;
+  overflow-y: visible !important;
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
@@ -548,23 +575,27 @@
   background-color: transparent;
   border-radius: 0;
   border: none;
-  overflow: auto;
+  overflow: visible;
   margin-top: 0;
   box-shadow: none;
   width: 100%;
-  overflow-x: auto;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
 }
 
 .compliance-table {
   width: 100%;
+  max-width: 100%;
   border-collapse: collapse;
   background-color: transparent;
   border-radius: 0;
   overflow: hidden;
   box-shadow: none;
-  table-layout: auto;
+  table-layout: fixed;
   border: none;
+  box-sizing: border-box;
 }
 
 .compliance-table th {
@@ -575,7 +606,10 @@
   color: #495057 !important;
   border-bottom: 1px solid #e5e7eb;
   word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
   font-size: 0.9rem;
+  white-space: normal;
 }
 
 /* Force table header to light ash color */
@@ -590,7 +624,10 @@ table.compliance-table thead th,
   border-bottom: 1px solid #e5e7eb;
   color: #1f2937;
   word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
   vertical-align: top;
+  white-space: normal;
 }
 
 .compliance-table tr:last-child td {
@@ -602,9 +639,20 @@ table.compliance-table thead th,
 }
 
 .compliance-name {
-  min-width: 150px;
+  min-width: 0;
+  max-width: 100%;
   word-wrap: break-word;
   overflow-wrap: break-word;
+  word-break: break-word;
+  hyphens: auto;
+}
+
+.compliance-description {
+  min-width: 0;
+  max-width: 100%;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
   hyphens: auto;
 }
 
@@ -648,6 +696,7 @@ table.compliance-table thead th,
   .compliance-container {
     margin-left: 200px;
     width: calc(100% - 200px);
+    max-width: calc(100vw - 200px);
   }
 }
 
@@ -655,7 +704,10 @@ table.compliance-table thead th,
   .compliance-container {
     margin-left: 0;
     width: 100%;
+    max-width: 100vw;
     padding: 15px;
+    height: calc(100vh - 60px);
+    max-height: calc(100vh - 60px);
   }
   
   .expanded-details-grid {
@@ -790,6 +842,8 @@ table.compliance-table thead th,
   border-radius: 0;
   padding: 0;
   border: none;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 .compliance-dynamic-table-wrapper .compliance-action-btn {

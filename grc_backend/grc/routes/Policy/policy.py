@@ -80,6 +80,69 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def convert_department_to_name(department_value, tenant_id=None):
+    """
+    Convert department ID(s) to department name(s).
+    
+    Args:
+        department_value: Can be:
+            - A string like "All Departments"
+            - A single department ID (number or string)
+            - Comma-separated department IDs (e.g., "2,3")
+            - Already a department name
+        tenant_id: Optional tenant ID for filtering departments
+    
+    Returns:
+        String with department name(s), or original value if conversion fails
+    """
+    if not department_value:
+        return department_value
+    
+    # If already a name (not numeric), return as is
+    department_str = str(department_value).strip()
+    if department_str.lower() in ['all departments', 'all']:
+        return 'All Departments'
+    
+    # Check if it's numeric (department ID)
+    try:
+        from ...models import Department
+        
+        # Handle comma-separated IDs
+        if ',' in department_str:
+            ids = [id_str.strip() for id_str in department_str.split(',')]
+            names = []
+            for dept_id_str in ids:
+                try:
+                    dept_id = int(dept_id_str)
+                    dept = Department.objects.filter(DepartmentId=dept_id).first()
+                    if dept:
+                        names.append(dept.DepartmentName)
+                    else:
+                        # If department not found, keep the ID
+                        names.append(dept_id_str)
+                except (ValueError, TypeError):
+                    # If not a number, assume it's already a name
+                    names.append(dept_id_str)
+            return ', '.join(names) if names else department_str
+        
+        # Handle single ID
+        dept_id = int(department_str)
+        dept = Department.objects.filter(DepartmentId=dept_id).first()
+        if dept:
+            return dept.DepartmentName
+        else:
+            # Department ID not found, return original value
+            return department_str
+            
+    except (ValueError, TypeError):
+        # Not numeric, assume it's already a department name
+        return department_str
+    except Exception as e:
+        logger.error(f"Error converting department to name: {str(e)}")
+        # On error, return original value
+        return department_str
+
+
 # Test endpoint for debugging authentication
 @api_view(['GET'])
 @permission_classes([AllowAny])
@@ -919,6 +982,10 @@ def framework_list(request):
                                 print(f"DEBUG: No data_inventory found in policy_data. Available keys: {list(policy_data.keys())}")
                             
                             # Security: Create policy with parameterized queries
+                            # Convert department ID(s) to department name(s)
+                            department_value = policy_data.get('Department', '')
+                            department_name = convert_department_to_name(department_value, tenant_id)
+                            
                             policy = Policy.objects.create(
                                 FrameworkId=framework,
                                 PolicyName=policy_data['PolicyName'],
@@ -926,7 +993,7 @@ def framework_list(request):
                                 Status='Under Review',
                                 StartDate=policy_data['StartDate'],
                                 EndDate=policy_data['EndDate'],
-                                Department=policy_data['Department'],
+                                Department=department_name,
                                 CreatedByName=policy_data['CreatedByName'],
                                 CreatedByDate=date.today(),
                                 Applicability=policy_data['Applicability'],
@@ -1200,7 +1267,7 @@ def framework_list(request):
 
  
 @api_view(['GET'])
-@permission_classes([PolicyViewPermission])
+@permission_classes([PolicyApprovalWorkflowPermission])  # Use PolicyApprovalWorkflowPermission to allow framework reviewers to view policies
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_policies_by_framework(request, framework_id):
@@ -1269,11 +1336,20 @@ def get_policies_by_framework(request, framework_id):
 def get_subpolicies_by_policy(request, policy_id):
     """
     Get all subpolicies for a specific policy
+    MULTI-TENANCY: Only returns subpolicies for policies belonging to user's tenant
     """
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
 
     try:
+        # MULTI-TENANCY: First validate that the policy belongs to the tenant
+        policy = Policy.objects.filter(PolicyId=policy_id, tenant_id=tenant_id).first()
+        if not policy:
+            return Response({
+                'error': 'Policy not found in your organization'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Get subpolicies for this policy that belong to the tenant
         subpolicies = SubPolicy.objects.filter(tenant_id=tenant_id, PolicyId=policy_id)
         serializer = SubPolicySerializer(subpolicies, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -2008,6 +2084,10 @@ def add_policy_to_framework(request, framework_id):
                             policy_data_inventory = cleaned_inventory if cleaned_inventory else None
                     
                     # Security: Sanitize all input data before database storage
+                    # Convert department ID(s) to department name(s)
+                    department_value = policy_data.get('Department', '')
+                    department_name = convert_department_to_name(department_value, tenant_id)
+                    
                     policy_create_data = {
                         'FrameworkId': framework,
                         'PolicyName': escape_html(policy_data['PolicyName']),
@@ -2015,7 +2095,7 @@ def add_policy_to_framework(request, framework_id):
                         'Status': 'Under Review',
                         'StartDate': policy_data['StartDate'],
                         'EndDate': policy_data['EndDate'],
-                        'Department': escape_html(policy_data['Department']),
+                        'Department': escape_html(department_name),
                         'CreatedByName': escape_html(policy_data['CreatedByName']),
                         'CreatedByDate': datetime.now().date(),
                         'Applicability': escape_html(policy_data['Applicability']),
@@ -4623,9 +4703,10 @@ def list_rejected_policy_approvals_for_user(request, user_id):
     
     # Filter policies where the user is either the creator (UserId) or the reviewer (ReviewerId)
     # and the approval status is rejected (ApprovedNot=0)
+    # MULTI-TENANCY: Filter through PolicyId foreign key relationship
     rejected_approvals = PolicyApproval.objects.filter(
         Q(ReviewerId=user_id) | Q(UserId=user_id),
-        tenant_id=tenant_id,
+        PolicyId__tenant_id=tenant_id,
         ApprovedNot=0  # Use 0 instead of False for consistency
     ).order_by('-ApprovalId')  # Get the most recent first
     
@@ -5898,7 +5979,7 @@ def all_policies_get_framework_version_policies(request, version_id):
                         'id': root_policy.PolicyId,
                         'name': root_policy.PolicyName,
                         'category': root_policy.Department,
-                        'status': root_policy.Status,
+                        'status': root_policy.ActiveInactive,  # Use ActiveInactive instead of Status
                         'description': root_policy.PolicyDescription,
                         'type': root_policy.PolicyType or 'External',
                         'versions': []
@@ -6064,7 +6145,7 @@ def all_policies_get_framework_version_policies(request, version_id):
                         'id': policy.PolicyId,
                         'name': policy.PolicyName,
                         'category': policy.Department,
-                        'status': policy.Status,
+                        'status': policy.ActiveInactive,  # Use ActiveInactive instead of Status
                         'description': policy.PolicyDescription,
                         'type': policy.PolicyType or 'External',
                         'versions': versions_data
@@ -6076,7 +6157,7 @@ def all_policies_get_framework_version_policies(request, version_id):
                         'id': policy.PolicyId,
                         'name': policy.PolicyName,
                         'category': policy.Department,
-                        'status': policy.Status,
+                        'status': policy.ActiveInactive,  # Use ActiveInactive instead of Status
                         'description': policy.PolicyDescription,
                         'type': policy.PolicyType or 'External',
                         'versions': []
@@ -6170,7 +6251,7 @@ def all_policies_get_policies(request):
                 'id': policy.PolicyId,
                 'name': policy.PolicyName,
                 'category': policy.Department,
-                'status': policy.Status,
+                'status': policy.ActiveInactive,  # Use ActiveInactive instead of Status
                 'description': policy.PolicyDescription,
                 'versions': []
             }
@@ -6662,11 +6743,34 @@ def all_policies_get_framework_versions(request, framework_id):
                 
                 # Count policies for this framework (without filtering by version)
                 # This gets all policies associated with this framework regardless of version
-                policy_count = Policy.objects.filter(tenant_id=tenant_id, 
+                policies_for_version = Policy.objects.filter(tenant_id=tenant_id, 
                     FrameworkId=version_framework
-                ).count()
+                )
+                policy_count = policies_for_version.count()
                 
                 print(f"Found {policy_count} policies for framework {version_framework.FrameworkId}")
+                
+                # Calculate version status based on policies:
+                # If all policies are inactive, version should be inactive
+                # If at least one policy is active, version should be active
+                active_policies_count = policies_for_version.filter(ActiveInactive='Active').count()
+                inactive_policies_count = policies_for_version.filter(ActiveInactive='Inactive').count()
+                
+                # Determine version status based on policies
+                if policy_count == 0:
+                    # No policies - use framework status
+                    version_status = version_framework.ActiveInactive or 'Unknown'
+                elif inactive_policies_count == policy_count:
+                    # All policies are inactive - version should be inactive
+                    version_status = 'Inactive'
+                elif active_policies_count > 0:
+                    # At least one policy is active - version should be active
+                    version_status = 'Active'
+                else:
+                    # Fallback to framework status
+                    version_status = version_framework.ActiveInactive or 'Unknown'
+                
+                print(f"Version {version.VersionId} status: {version_status} (Active policies: {active_policies_count}, Inactive: {inactive_policies_count}, Total: {policy_count})")
                 
                 # Get previous version details if available
                 previous_version = None
@@ -6685,7 +6789,7 @@ def all_policies_get_framework_versions(request, framework_id):
                     'name': formatted_name,
                     'version': version.Version,
                     'category': version_framework.Category or 'General',
-                    'status': version_framework.ActiveInactive or 'Unknown',
+                    'status': version_status,  # Use calculated status based on policies
                     'description': version_framework.FrameworkDescription or '',
                     'created_date': version.CreatedDate,
                     'created_by': version.CreatedBy,
@@ -8602,6 +8706,10 @@ def create_tailored_framework(request):
                         print(f"DEBUG: Policy data_inventory: {policy_data_inventory}")
                     
                     # Security: Sanitize policy data before database storage
+                    # Convert department ID(s) to department name(s)
+                    department_value = policy_data.get('department', '')
+                    department_name = convert_department_to_name(department_value, tenant_id)
+                    
                     policy = Policy.objects.create(
                         FrameworkId=framework,
                         PolicyName=escape_html(policy_data.get('title', '')),
@@ -8609,7 +8717,7 @@ def create_tailored_framework(request):
                         Status='Under Review',
                         StartDate=policy_start_date,
                         EndDate=policy_end_date,
-                        Department=escape_html(policy_data.get('department', '')),
+                        Department=escape_html(department_name),
                         CreatedByName=escape_html(policy_created_by_name),
                         CreatedByDate=date.today(),
                         Applicability=escape_html(policy_data.get('applicability', '')),
@@ -9244,6 +9352,10 @@ def create_tailored_policy(request):
             print(f"DEBUG: Policy data_inventory: {policy_data_inventory}")
             
             # Security: Sanitize policy data before database storage (Django ORM provides SQL injection protection)
+            # Convert department ID(s) to department name(s)
+            department_value = data.get('Department', '')
+            department_name = convert_department_to_name(department_value, tenant_id)
+            
             new_policy_data = {
                 'FrameworkId': target_framework,
                 'Status': 'Under Review',
@@ -9251,7 +9363,7 @@ def create_tailored_policy(request):
                 'PolicyDescription': escape_html(data.get('PolicyDescription', '')),
                 'StartDate': start_date,
                 'EndDate': end_date,
-                'Department': escape_html(data.get('Department', '')),
+                'Department': escape_html(department_name),
                 'CreatedByName': escape_html(created_by_name),
                 'CreatedByDate': date.today(),
                 'Applicability': escape_html(data.get('Applicability', '')),
@@ -9775,19 +9887,41 @@ def resubmit_policy_by_id(request, policy_id):
         policy = Policy.objects.get(PolicyId=policy_id, tenant_id=tenant_id)
         print(f"DEBUG: Found policy with name: {policy.PolicyName}, status: {policy.Status}")
         
-        # Verify policy exists and can be resubmitted
-        allowed_statuses = ['Rejected', 'Under Review']
-        if policy.Status not in allowed_statuses:
-            print(f"DEBUG: Policy status '{policy.Status}' is not in allowed statuses {allowed_statuses}")
-            return Response({"error": "Only rejected or under review policies can be resubmitted"}, status=400)
-            
-        # Get the latest PolicyApproval to check its status
+        # Get the latest PolicyApproval to check its status (this is what matters for resubmission)
         latest_approval = PolicyApproval.objects.filter(PolicyId__tenant=tenant_id, 
             PolicyId=policy
         ).order_by('-Version').first()
         
-        if latest_approval and latest_approval.ApprovedNot is True:
-            return Response({"error": "Cannot resubmit an approved policy"}, status=400)
+        # Check approval status instead of policy status
+        # For rejected policy versions, the approval is rejected but the policy might still be "Approved"
+        if latest_approval:
+            approval_status = latest_approval.ExtractedData.get('Status', None) if latest_approval.ExtractedData else None
+            approved_not = latest_approval.ApprovedNot
+            
+            print(f"DEBUG: Latest approval - ApprovedNot: {approved_not}, ExtractedData.Status: {approval_status}")
+            
+            # Check if approval is already approved
+            if approved_not is True:
+                print(f"DEBUG: Approval is already approved (ApprovedNot=True)")
+                return Response({"error": "Cannot resubmit an approved policy"}, status=400)
+            
+            # Check if approval status allows resubmission
+            # Allow resubmission if approval is rejected (ApprovedNot=False) or under review (ApprovedNot=None and Status is not Approved)
+            if approved_not is False:
+                print(f"DEBUG: Approval is rejected (ApprovedNot=False), allowing resubmission")
+            elif approved_not is None and (approval_status == 'Under Review' or approval_status == 'Rejected' or approval_status is None):
+                print(f"DEBUG: Approval is under review (ApprovedNot=None, Status={approval_status}), allowing resubmission")
+            elif approval_status == 'Approved':
+                print(f"DEBUG: Approval status is 'Approved', not allowing resubmission")
+                return Response({"error": "Cannot resubmit an approved policy"}, status=400)
+            else:
+                print(f"DEBUG: Approval status check passed, allowing resubmission")
+        else:
+            # No approval found, check policy status as fallback
+            allowed_statuses = ['Rejected', 'Under Review']
+            if policy.Status not in allowed_statuses:
+                print(f"DEBUG: No approval found and policy status '{policy.Status}' is not in allowed statuses {allowed_statuses}")
+                return Response({"error": "Only rejected or under review policies can be resubmitted"}, status=400)
         
         # Get the latest PolicyApproval for this policy to determine next version
         if latest_approval:

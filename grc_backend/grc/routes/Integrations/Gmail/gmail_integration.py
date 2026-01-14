@@ -929,13 +929,40 @@ def get_gmail_connection_status(request):
                     'message': 'Gmail not connected'
                 })
                 
-        except (Users.DoesNotExist, ExternalApplication.DoesNotExist):
+        except Users.DoesNotExist:
+            logger.error(f"User with ID {user_id} not found")
             return JsonResponse({
                 'success': True,
                 'connected': False,
                 'status': 'not_connected',
-                'message': 'Gmail application not found'
+                'message': f'User with ID {user_id} not found'
             })
+        except ExternalApplication.DoesNotExist:
+            logger.error("Gmail application not found in database")
+            # Try to create the Gmail application if it doesn't exist
+            try:
+                gmail_app = ExternalApplication.objects.create(
+                    name='Gmail',
+                    description='Google Gmail Integration',
+                    category='Communication',
+                    type='OAuth',
+                    version='1.0',
+                    is_active=True,
+                    status='available'
+                )
+                logger.info("Created Gmail application in database")
+                return JsonResponse({
+                    'success': True,
+                    'connected': False,
+                    'status': 'not_connected',
+                    'message': 'Gmail application created. Please connect your Gmail account.'
+                })
+            except Exception as create_error:
+                logger.error(f"Failed to create Gmail application: {str(create_error)}")
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Gmail application not found and could not be created. Please contact support.'
+                }, status=500)
             
     except Exception as e:
         logger.error(f"Error checking Gmail connection status: {str(e)}")
@@ -1202,11 +1229,36 @@ def get_gmail_messages(request):
                 'save_message': 'Messages automatically saved to database' if save_result.get('success', False) else 'Failed to save messages to database'
             })
             
-        except (Users.DoesNotExist, ExternalApplication.DoesNotExist):
+        except Users.DoesNotExist:
+            logger.error(f"User with ID {user_id} not found")
             return JsonResponse({
                 'success': False,
-                'error': 'User or Gmail application not found'
+                'error': f'User with ID {user_id} not found. Please check your user ID.'
             }, status=404)
+        except ExternalApplication.DoesNotExist:
+            logger.error("Gmail application not found in database")
+            # Try to create the Gmail application if it doesn't exist
+            try:
+                gmail_app = ExternalApplication.objects.create(
+                    name='Gmail',
+                    description='Google Gmail Integration',
+                    category='Communication',
+                    type='OAuth',
+                    version='1.0',
+                    is_active=True,
+                    status='available'
+                )
+                logger.info("Created Gmail application in database")
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Gmail application created but no active connection found. Please connect your Gmail account first.'
+                }, status=404)
+            except Exception as create_error:
+                logger.error(f"Failed to create Gmail application: {str(create_error)}")
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Gmail application not found and could not be created. Please contact support.'
+                }, status=500)
             
     except HttpError as e:
         logger.error(f"Gmail API error: {str(e)}")

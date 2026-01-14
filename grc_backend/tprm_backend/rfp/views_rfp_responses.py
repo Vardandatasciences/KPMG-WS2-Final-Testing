@@ -3581,19 +3581,84 @@ def get_rfp_responses(request):
         response_data = []
         for response in responses_to_use:
             try:
-                # Extract vendor information from response_documents
+                # Extract vendor information from response_documents JSON field
                 response_documents = response.response_documents or {}
-                vendor_name = response_documents.get('vendor_name', '')
-                contact_email = response_documents.get('contact_email', '')
-                contact_phone = response_documents.get('contact_phone', '')
-                org = response_documents.get('org', '')
+                
+                # Handle case where response_documents might be a string
+                if isinstance(response_documents, str):
+                    try:
+                        response_documents = json.loads(response_documents)
+                    except json.JSONDecodeError:
+                        print(f"DEBUG: Could not parse response_documents as JSON for response {response.response_id}")
+                        response_documents = {}
+                
+                # Ensure response_documents is a dict
+                if not isinstance(response_documents, dict):
+                    response_documents = {}
+                
+                # Extract vendor_name from multiple possible locations in response_documents
+                vendor_name = (
+                    response_documents.get('vendor_name') or
+                    response_documents.get('vendor', {}).get('vendor_name') if isinstance(response_documents.get('vendor'), dict) else None or
+                    response_documents.get('companyInfo', {}).get('vendor_name') if isinstance(response_documents.get('companyInfo'), dict) else None or
+                    response_documents.get('basic_info', {}).get('vendor_name') if isinstance(response_documents.get('basic_info'), dict) else None or
+                    response_documents.get('contact', {}).get('vendor_name') if isinstance(response_documents.get('contact'), dict) else None or
+                    ''
+                )
+                
+                # Extract organization name from multiple possible locations in response_documents
+                org = (
+                    response_documents.get('org') or
+                    response_documents.get('organization_name') or
+                    response_documents.get('company_name') or
+                    response_documents.get('vendor', {}).get('org') if isinstance(response_documents.get('vendor'), dict) else None or
+                    response_documents.get('vendor', {}).get('organization_name') if isinstance(response_documents.get('vendor'), dict) else None or
+                    response_documents.get('vendor', {}).get('company_name') if isinstance(response_documents.get('vendor'), dict) else None or
+                    response_documents.get('companyInfo', {}).get('org') if isinstance(response_documents.get('companyInfo'), dict) else None or
+                    response_documents.get('companyInfo', {}).get('organization_name') if isinstance(response_documents.get('companyInfo'), dict) else None or
+                    response_documents.get('companyInfo', {}).get('company_name') if isinstance(response_documents.get('companyInfo'), dict) else None or
+                    response_documents.get('company', {}).get('name') if isinstance(response_documents.get('company'), dict) else None or
+                    response_documents.get('organization', {}).get('name') if isinstance(response_documents.get('organization'), dict) else None or
+                    ''
+                )
+                
+                # Extract contact information from response_documents
+                contact_email = (
+                    response_documents.get('contact_email') or
+                    response_documents.get('email') or
+                    response_documents.get('vendor', {}).get('contact_email') if isinstance(response_documents.get('vendor'), dict) else None or
+                    response_documents.get('vendor', {}).get('email') if isinstance(response_documents.get('vendor'), dict) else None or
+                    response_documents.get('companyInfo', {}).get('contact_email') if isinstance(response_documents.get('companyInfo'), dict) else None or
+                    response_documents.get('companyInfo', {}).get('email') if isinstance(response_documents.get('companyInfo'), dict) else None or
+                    response_documents.get('contact', {}).get('email') if isinstance(response_documents.get('contact'), dict) else None or
+                    ''
+                )
+                
+                contact_phone = (
+                    response_documents.get('contact_phone') or
+                    response_documents.get('phone') or
+                    response_documents.get('vendor', {}).get('contact_phone') if isinstance(response_documents.get('vendor'), dict) else None or
+                    response_documents.get('vendor', {}).get('phone') if isinstance(response_documents.get('vendor'), dict) else None or
+                    response_documents.get('companyInfo', {}).get('contact_phone') if isinstance(response_documents.get('companyInfo'), dict) else None or
+                    response_documents.get('companyInfo', {}).get('phone') if isinstance(response_documents.get('companyInfo'), dict) else None or
+                    response_documents.get('contact', {}).get('phone') if isinstance(response_documents.get('contact'), dict) else None or
+                    ''
+                )
+                
+                # Use organization_name and company_name as aliases for org
+                organization_name = org
+                company_name = org
+                
+                print(f"DEBUG: Extracted from response_documents for response {response.response_id}: vendor_name={vendor_name}, org={org}, contact_email={contact_email}")
                 
                 response_data.append({
                     'response_id': response.response_id,
                     'rfp_id': response.rfp_id,
                     'vendor_id': response.vendor_id,
-                    'vendor_name': vendor_name,
-                    'org': org,  # Ensure org field is included
+                    'vendor_name': vendor_name or 'Unknown Vendor',
+                    'org': org or 'No organization specified',
+                    'organization_name': organization_name or None,
+                    'company_name': company_name or None,
                     'contact_email': contact_email,
                     'contact_phone': contact_phone,
                     'proposal_data': response.response_documents,
@@ -3610,6 +3675,8 @@ def get_rfp_responses(request):
                 })
             except Exception as e:
                 print(f"DEBUG: Error processing response {response.response_id}: {str(e)}")
+                import traceback
+                traceback.print_exc()
                 continue
         
         print(f"DEBUG: Returning {len(response_data)} responses")

@@ -1089,15 +1089,18 @@ const statusClass = (status) => {
 // Helper: treat both "Active" and "Approved" as active for toggle/label logic
 const isPolicyActive = (policy) => {
   if (!policy || !policy.status) return false
-  const s = policy.status.toLowerCase()
-  return s.includes('active') || s.includes('approved')
+  const s = policy.status.toLowerCase().trim()
+  // Check for exact match "active" (not "inactive") or includes "approved"
+  // Must be exactly "active" - "inactive" should return false
+  return s === 'active' || (s.includes('approved') && !s.includes('inactive'))
 }
 
 // Helper: map workflow statuses like "Approved" to display label "Active"
 const getPolicyStatusLabel = (policy) => {
   if (!policy || !policy.status) return ''
-  const s = policy.status.toLowerCase()
+  const s = policy.status.toLowerCase().trim()
   if (s.includes('approved')) return 'Active'
+  // Return the original status (Active or Inactive)
   return policy.status
 }
 

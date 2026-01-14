@@ -1346,6 +1346,60 @@ const loadProposalData = async () => {
     console.log('Starting document extraction...')
     
     try {
+      // PRIORITY 0: Fetch RFP documents from the RFP's documents column
+      const rfpId = parsedProposalData.rfp_id
+      if (rfpId) {
+        try {
+          console.log('📄 Fetching RFP documents from RFP documents column for RFP ID:', rfpId)
+          const rfpDetailsEndpoint = getTprmApiUrl(`rfp-approval/rfp-details/${rfpId}/`)
+          const rfpDetailsResponse = await fetch(rfpDetailsEndpoint, {
+            method: 'GET',
+            headers: getAuthHeaders()
+          })
+          
+          if (rfpDetailsResponse.ok) {
+            const rfpDetails = await rfpDetailsResponse.json()
+            console.log('✅ RFP details fetched:', rfpDetails)
+            
+            // Extract documents from RFP details
+            if (rfpDetails.documents && Array.isArray(rfpDetails.documents) && rfpDetails.documents.length > 0) {
+              console.log(`✅ Found ${rfpDetails.documents.length} RFP documents`)
+              
+              rfpDetails.documents.forEach((doc, index) => {
+                if (doc && (doc.url || doc.file_name)) {
+                  const rfpDoc = {
+                    id: doc.id || `rfp_${index}`,
+                    name: doc.file_name || doc.name || `RFP Document ${index + 1}`,
+                    file_name: doc.file_name || doc.name || `RFP Document ${index + 1}`,
+                    type: 'rfp_document',
+                    file_type: doc.file_type || doc.content_type || getFileTypeFromName(doc.file_name || ''),
+                    size: doc.size || doc.metadata?.size,
+                    url: doc.url || doc.download_url,
+                    download_url: doc.url || doc.download_url,
+                    preview_url: doc.url || doc.preview_url || doc.download_url,
+                    uploaded_at: doc.uploaded_at || doc.upload_date,
+                    category: 'RFP Documents',
+                    description: doc.description || 'Document from RFP',
+                    source: 'rfp_documents'
+                  }
+                  console.log('✅ Adding RFP document:', rfpDoc)
+                  documents.value.push(rfpDoc)
+                }
+              })
+            } else {
+              console.log('⚠️ No documents found in RFP details or documents is not an array')
+            }
+          } else {
+            console.log('⚠️ Failed to fetch RFP details:', rfpDetailsResponse.status)
+          }
+        } catch (rfpError) {
+          console.error('❌ Error fetching RFP documents:', rfpError)
+          // Continue with other document sources even if RFP fetch fails
+        }
+      } else {
+        console.log('⚠️ No RFP ID found in proposal data, skipping RFP documents fetch')
+      }
+      
       // PRIORITY 1: Extract from document_urls (contains real S3 URLs)
       if (proposalData.value?.document_urls) {
         console.log('✅ Found document_urls (REAL S3 URLs):', proposalData.value.document_urls)

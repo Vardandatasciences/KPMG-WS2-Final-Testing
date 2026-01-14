@@ -2317,34 +2317,60 @@ def submit_compliance_review(request, approval_id):
         # ===== CRITICAL: UPDATE THE ACTUAL COMPLIANCE RECORD =====
         if 'SubPolicy' in extracted_data or approval.Identifier:
             try:
-                # Find the compliance being reviewed by Identifier (not by Status)
-                # This allows updating compliance status even after it has been approved/rejected before
-                current_compliance = Compliance.objects.filter(tenant_id=tenant_id, 
-                    Identifier=approval.Identifier
-                ).order_by('-ComplianceId').first()  # Get the latest compliance with this identifier
+                # Check if this is a deactivation request first
+                is_deactivation_request = (
+                    extracted_data.get('type') == 'compliance_deactivation' or
+                    extracted_data.get('RequestType') == 'Change Status to Inactive' or
+                    (approval.Identifier and 'COMP-DEACTIVATE' in approval.Identifier)
+                )
+                
+                # For deactivation requests, use compliance_id from ExtractedData
+                # For regular approvals, use Identifier
+                if is_deactivation_request and extracted_data.get('compliance_id'):
+                    # Find compliance by ComplianceId for deactivation requests
+                    compliance_id = extracted_data.get('compliance_id')
+                    print(f"Deactivation request detected, looking for compliance_id: {compliance_id}")
+                    current_compliance = Compliance.objects.filter(
+                        tenant_id=tenant_id,
+                        ComplianceId=compliance_id
+                    ).first()
+                else:
+                    # Find the compliance being reviewed by Identifier (not by Status)
+                    # This allows updating compliance status even after it has been approved/rejected before
+                    current_compliance = Compliance.objects.filter(tenant_id=tenant_id, 
+                        Identifier=approval.Identifier
+                    ).order_by('-ComplianceId').first()  # Get the latest compliance with this identifier
                 
                 if current_compliance:
                     print(f"\n=== UPDATING COMPLIANCE RECORD ===")
                     print(f"Processing compliance: {current_compliance.ComplianceId}")
                     print(f"Current compliance status before update: {current_compliance.Status}")
                     print(f"Current compliance ActiveInactive before update: {current_compliance.ActiveInactive}")
+                    print(f"Is deactivation request: {is_deactivation_request}")
                     
                     if approved_not is True:
-                        # If approved, set current to Approved and Active
+                        # If approved
                         current_compliance.Status = 'Approved'
-                        current_compliance.ActiveInactive = 'Active'
-                        print(f"Setting compliance to Approved and Active")
                         
-                        # Get and deactivate the previous version if it exists
-                        if current_compliance.PreviousComplianceVersionId:
-                            try:
-                                prev_compliance = current_compliance.PreviousComplianceVersionId
-                                if prev_compliance.ActiveInactive == 'Active':
-                                    prev_compliance.ActiveInactive = 'Inactive'
-                                    prev_compliance.save()
-                                    print(f"Deactivated previous version: {prev_compliance.ComplianceId}")
-                            except Exception as e:
-                                print(f"Error deactivating previous version: {e}")
+                        if is_deactivation_request:
+                            # For deactivation requests, set to Inactive
+                            current_compliance.ActiveInactive = 'Inactive'
+                            print(f"Setting compliance to Approved and Inactive (deactivation approved)")
+                        else:
+                            # For regular compliance approvals, set to Active
+                            current_compliance.ActiveInactive = 'Active'
+                            print(f"Setting compliance to Approved and Active")
+                            
+                            # Get and deactivate the previous version if it exists (only for regular approvals)
+                            if current_compliance.PreviousComplianceVersionId:
+                                try:
+                                    prev_compliance = current_compliance.PreviousComplianceVersionId
+                                    if prev_compliance.ActiveInactive == 'Active':
+                                        prev_compliance.ActiveInactive = 'Inactive'
+                                        prev_compliance.save()
+                                        print(f"Deactivated previous version: {prev_compliance.ComplianceId}")
+                                except Exception as e:
+                                    print(f"Error deactivating previous version: {e}")
                     else:
                         # If rejected, mark as rejected
                         current_compliance.Status = 'Rejected'
@@ -2384,14 +2410,44 @@ def submit_compliance_review(request, approval_id):
                         # Continue even if notification fails
                     
                 else:
-                    print(f"❌ ERROR: No compliance found for Identifier {approval.Identifier}")
-                    print(f"Available compliances with this identifier:")
-                    all_compliances = Compliance.objects.filter(tenant_id=tenant_id, Identifier=approval.Identifier)
-                    for comp in all_compliances:
-                        print(f"  - ComplianceId: {comp.ComplianceId}, Status: {comp.Status}, ActiveInactive: {comp.ActiveInactive}")
+                    print(f"❌ ERROR: No compliance found")
+                    if is_deactivation_request:
+                        print(f"  Deactivation request - looked for compliance_id: {extracted_data.get('compliance_id')}")
+                        # Try to find by the actual compliance identifier (without COMP-DEACTIVATE prefix)
+                        if extracted_data.get('identifier'):
+                            actual_identifier = extracted_data.get('identifier')
+                            print(f"  Trying to find by actual identifier: {actual_identifier}")
+                            current_compliance = Compliance.objects.filter(
+                                tenant_id=tenant_id,
+                                Identifier=actual_identifier
+                            ).order_by('-ComplianceId').first()
+                            
+                            if current_compliance:
+                                print(f"✅ Found compliance by actual identifier: {current_compliance.ComplianceId}")
+                                # Process the update (reuse the same logic below)
+                                if approved_not is True:
+                                    current_compliance.Status = 'Approved'
+                                    current_compliance.ActiveInactive = 'Inactive'
+                                    print(f"Setting compliance to Approved and Inactive (deactivation approved)")
+                                else:
+                                    current_compliance.Status = 'Rejected'
+                                    current_compliance.ActiveInactive = 'Inactive'
+                                    print(f"Setting compliance to Rejected and Inactive")
+                                
+                                current_compliance.save()
+                                print(f"✅ SUCCESSFULLY UPDATED compliance status to: {current_compliance.Status}")
+                                print(f"✅ SUCCESSFULLY UPDATED compliance ActiveInactive to: {current_compliance.ActiveInactive}")
+                            else:
+                                print(f"❌ Still no compliance found by identifier: {actual_identifier}")
+                    else:
+                        print(f"  Regular approval - looked for Identifier: {approval.Identifier}")
+                        print(f"Available compliances with this identifier:")
+                        all_compliances = Compliance.objects.filter(tenant_id=tenant_id, Identifier=approval.Identifier)
+                        for comp in all_compliances:
+                            print(f"  - ComplianceId: {comp.ComplianceId}, Status: {comp.Status}, ActiveInactive: {comp.ActiveInactive}")
                         
                     # Try finding by other criteria if identifier search fails
-                    if extracted_data.get('SubPolicy'):
+                    if not current_compliance and extracted_data.get('SubPolicy'):
                         subpolicy_id = extracted_data.get('SubPolicy')
                         title = extracted_data.get('ComplianceTitle', '')
                         description = extracted_data.get('ComplianceItemDescription', '')
@@ -2407,9 +2463,20 @@ def submit_compliance_review(request, approval_id):
                         if alternative_compliance:
                             print(f"Found alternative compliance: {alternative_compliance.ComplianceId}")
                             # Update this compliance instead
+                            # Check if this is a deactivation request
+                            is_deactivation_request = (
+                                extracted_data.get('type') == 'compliance_deactivation' or
+                                extracted_data.get('RequestType') == 'Change Status to Inactive' or
+                                (approval.Identifier and 'COMP-DEACTIVATE' in approval.Identifier)
+                            )
+                            
                             if approved_not is True:
                                 alternative_compliance.Status = 'Approved'
-                                alternative_compliance.ActiveInactive = 'Active'
+                                if is_deactivation_request:
+                                    alternative_compliance.ActiveInactive = 'Inactive'
+                                    print(f"Setting alternative compliance to Approved and Inactive (deactivation approved)")
+                                else:
+                                    alternative_compliance.ActiveInactive = 'Active'
                             else:
                                 alternative_compliance.Status = 'Rejected'
                                 alternative_compliance.ActiveInactive = 'Inactive'
@@ -4804,7 +4871,7 @@ def all_policies_get_framework_version_policies(request, version_id):
                 'id': policy.PolicyId,
                 'name': policy.PolicyName,
                 'category': policy.Department,
-                'status': policy.Status,
+                'status': policy.ActiveInactive,  # Use ActiveInactive instead of Status
                 'description': policy.PolicyDescription,
                 'versions': []
             }
@@ -5309,7 +5376,7 @@ def all_policies_get_subpolicy_compliances(request, subpolicy_id):
         compliances = Compliance.objects.filter(tenant_id=tenant_id, 
             SubPolicy=subpolicy_id,
             Status='Approved'
-        ).select_related('SubPolicy', 'SubPolicy__PolicyId', 'SubPolicy__PolicyId__FrameworkId')
+        ).select_related('SubPolicy', 'SubPolicy__PolicyId', 'SubPolicy__PolicyId__FrameworkId', 'PreviousComplianceVersionId')
         
         print(f"Found {compliances.count()} approved compliances for subpolicy {subpolicy_id}")
         
@@ -5321,12 +5388,53 @@ def all_policies_get_subpolicy_compliances(request, subpolicy_id):
         
         compliances_data = []
         for compliance in compliances:
+            # Fetch previous version information
+            previous_version_id = None
+            previous_version_details = None
+            
+            # Get PreviousComplianceVersionId - try both ID field and object
+            prev_version_id = None
+            try:
+                # First try to get the ID directly
+                prev_version_id = getattr(compliance, 'PreviousComplianceVersionId_id', None)
+                # If that doesn't work, try accessing the related object
+                if not prev_version_id and compliance.PreviousComplianceVersionId:
+                    prev_version_id = compliance.PreviousComplianceVersionId.ComplianceId
+            except Exception as e:
+                print(f"⚠️ Error accessing PreviousComplianceVersionId for ComplianceId {compliance.ComplianceId}: {str(e)}")
+            
+            if prev_version_id:
+                try:
+                    # Explicitly fetch the previous version from Compliance table
+                    previous_version = Compliance.objects.filter(
+                        ComplianceId=prev_version_id,
+                        tenant_id=tenant_id
+                    ).first()
+                    
+                    if previous_version:
+                        previous_version_id = previous_version.ComplianceId
+                        previous_version_details = {
+                            'ComplianceId': previous_version.ComplianceId,
+                            'ComplianceVersion': previous_version.ComplianceVersion,
+                            'ComplianceItemDescription': previous_version.ComplianceItemDescription,
+                            'Identifier': previous_version.Identifier,
+                            'Status': previous_version.Status,
+                            'ActiveInactive': previous_version.ActiveInactive
+                        }
+                        print(f"✅ FOUND previous version for ComplianceId {compliance.ComplianceId}: ID={previous_version_id}, Version={previous_version.ComplianceVersion}")
+                    else:
+                        print(f"⚠️ PreviousComplianceVersionId points to {prev_version_id} but NOT FOUND for ComplianceId {compliance.ComplianceId}")
+                except Exception as e:
+                    print(f"⚠️ Error fetching previous version for ComplianceId {compliance.ComplianceId}: {str(e)}")
+            else:
+                print(f"ℹ️ No PreviousComplianceVersionId for ComplianceId {compliance.ComplianceId} (Version {compliance.ComplianceVersion})")
+            
             compliances_data.append({
                 'ComplianceId': compliance.ComplianceId,
                 'ComplianceItemDescription': compliance.ComplianceItemDescription,
                 'ComplianceTitle': compliance.ComplianceTitle,
                 'Status': compliance.Status,
-                'ActiveInactive': compliance.ActiveInactive,
+                'ActiveInactive': compliance.ActiveInactive,  # Read directly from Compliance table
                 'Criticality': compliance.Criticality,
                 'MaturityLevel': compliance.MaturityLevel,
                 'MandatoryOptional': compliance.MandatoryOptional,
@@ -5344,7 +5452,9 @@ def all_policies_get_subpolicy_compliances(request, subpolicy_id):
                 'Probability': compliance.Probability,
                 'SubPolicyName': compliance.SubPolicy.SubPolicyName,
                 'PolicyName': compliance.SubPolicy.PolicyId.PolicyName,
-                'FrameworkName': compliance.SubPolicy.PolicyId.FrameworkId.FrameworkName
+                'FrameworkName': compliance.SubPolicy.PolicyId.FrameworkId.FrameworkName,
+                'PreviousVersionId': previous_version_id,  # Add previous version ID
+                'PreviousVersion': previous_version_details  # Add full previous version details
             })
         
         return Response({
@@ -5369,35 +5479,109 @@ def all_policies_get_compliance_versions(request, compliance_id):
     """
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
+    
+    print(f"🔵 [VERSIONING ENDPOINT] Called for ComplianceId: {compliance_id}, tenant_id: {tenant_id}")
 
     try:
-        # Get the initial compliance
-        compliance = get_object_or_404(Compliance, ComplianceId=compliance_id, tenant_id=tenant_id)
+        # Get the initial compliance with PreviousComplianceVersionId relationship loaded
+        compliance = Compliance.objects.select_related('PreviousComplianceVersionId').filter(
+            ComplianceId=compliance_id, 
+            tenant_id=tenant_id
+        ).first()
+        
+        if not compliance:
+            print(f"❌ [VERSIONING ENDPOINT] Compliance with ID {compliance_id} not found")
+            return Response({'error': f'Compliance with ID {compliance_id} not found'},
+                          status=status.HTTP_404_NOT_FOUND)
+        
+        print(f"🔍 Starting version fetch for ComplianceId {compliance_id}, Identifier: {compliance.Identifier}")
         
         # Initialize list to store all versions
         versions = []
         current = compliance
         
         # First, get all previous versions
+        print(f"🔍 Traversing backwards from ComplianceId {compliance.ComplianceId}...")
         while current:
             versions.append(current)
-            current = current.PreviousComplianceVersionId
+            prev_id = getattr(current, 'PreviousComplianceVersionId_id', None)
+            print(f"   Added version {current.ComplianceVersion} (ID: {current.ComplianceId}), PreviousComplianceVersionId_id: {prev_id}")
+            
+            if prev_id:
+                # Fetch next previous version with relationship loaded
+                current = Compliance.objects.select_related('PreviousComplianceVersionId').filter(
+                    ComplianceId=prev_id,
+                    tenant_id=tenant_id
+                ).first()
+            else:
+                current = None
             
         # Then, get all next versions
+        print(f"🔍 Traversing forwards from ComplianceId {compliance.ComplianceId}...")
         current = compliance
         while True:
-            next_versions = Compliance.objects.filter(tenant_id=tenant_id, PreviousComplianceVersionId=current.ComplianceId)
+            next_versions = Compliance.objects.select_related('PreviousComplianceVersionId').filter(
+                tenant_id=tenant_id, 
+                PreviousComplianceVersionId=current.ComplianceId
+            )
             if not next_versions.exists():
                 break
             current = next_versions.first()
             versions.append(current)
+            print(f"   Added next version {current.ComplianceVersion} (ID: {current.ComplianceId})")
             
         # Sort versions by version number
         versions.sort(key=lambda x: float(x.ComplianceVersion), reverse=True)
+        print(f"✅ Total versions found: {len(versions)}")
         
         # Convert to response format
         versions_data = []
         for version in versions:
+            # Fetch previous version details from Compliance table if it exists
+            previous_version_id = None
+            previous_version_details = None
+            
+            # Get PreviousComplianceVersionId - try both ID field and object
+            prev_version_id = None
+            try:
+                # First try to get the ID directly
+                prev_version_id = getattr(version, 'PreviousComplianceVersionId_id', None)
+                # If that doesn't work, try accessing the related object
+                if not prev_version_id and version.PreviousComplianceVersionId:
+                    prev_version_id = version.PreviousComplianceVersionId.ComplianceId
+            except Exception as e:
+                print(f"⚠️ Error accessing PreviousComplianceVersionId for ComplianceId {version.ComplianceId}: {str(e)}")
+            
+            print(f"🔍 Checking previous version for ComplianceId {version.ComplianceId} (Version {version.ComplianceVersion}): PreviousComplianceVersionId_id = {prev_version_id}")
+            
+            if prev_version_id:
+                try:
+                    # Explicitly fetch the previous version from Compliance table
+                    previous_version = Compliance.objects.filter(
+                        ComplianceId=prev_version_id,
+                        tenant_id=tenant_id
+                    ).first()
+                    
+                    if previous_version:
+                        previous_version_id = previous_version.ComplianceId
+                        previous_version_details = {
+                            'ComplianceId': previous_version.ComplianceId,
+                            'ComplianceVersion': previous_version.ComplianceVersion,
+                            'ComplianceItemDescription': previous_version.ComplianceItemDescription,
+                            'Identifier': previous_version.Identifier,
+                            'Status': previous_version.Status,
+                            'ActiveInactive': previous_version.ActiveInactive
+                        }
+                        print(f"✅ FOUND previous version for ComplianceId {version.ComplianceId}: ID={previous_version_id}, Version={previous_version.ComplianceVersion}, Identifier={previous_version.Identifier}")
+                    else:
+                        print(f"⚠️ PreviousComplianceVersionId points to {prev_version_id} but NOT FOUND in Compliance table for ComplianceId {version.ComplianceId}")
+                except Exception as e:
+                    print(f"⚠️ Error fetching previous version for ComplianceId {version.ComplianceId}: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+            else:
+                print(f"ℹ️ No PreviousComplianceVersionId for ComplianceId {version.ComplianceId} (Version {version.ComplianceVersion}) - this is the first version")
+            
             version_data = {
                 'ComplianceId': version.ComplianceId,
                 'ComplianceVersion': version.ComplianceVersion,
@@ -5405,14 +5589,15 @@ def all_policies_get_compliance_versions(request, compliance_id):
                 'Status': version.Status,
                 'Criticality': version.Criticality,
                 'MaturityLevel': version.MaturityLevel,
-                'ActiveInactive': version.ActiveInactive,
+                'ActiveInactive': version.ActiveInactive,  # Read directly from Compliance table
                 'CreatedByName': version.CreatedByName,
                 'CreatedByDate': version.CreatedByDate.isoformat() if version.CreatedByDate else None,
                 'Identifier': version.Identifier,
                 'IsRisk': version.IsRisk,
                 'MandatoryOptional': version.MandatoryOptional,
                 'ManualAutomatic': version.ManualAutomatic,
-                'PreviousVersionId': version.PreviousComplianceVersionId.ComplianceId if version.PreviousComplianceVersionId else None
+                'PreviousVersionId': previous_version_id,  # Use explicitly fetched ID
+                'PreviousVersion': previous_version_details  # Include full previous version details
             }
             versions_data.append(version_data)
             
@@ -6083,40 +6268,193 @@ def get_compliance_details(request, compliance_id):
     try:
         compliance = get_object_or_404(Compliance, ComplianceId=compliance_id, tenant_id=tenant_id)
         
-
+        # For editing/copying: Get the latest APPROVED version from ComplianceApproval, then fallback to Compliance table
+        # For approval viewing: Use ComplianceApproval table if available
+        is_for_approval = request.GET.get('for_approval', 'false').lower() == 'true'
         
-        # Prepare the detailed response with all available fields
-        response_data = {
-            'ComplianceId': compliance.ComplianceId,
-            'ComplianceTitle': compliance.ComplianceTitle,
-            'ComplianceItemDescription': compliance.ComplianceItemDescription,
-            'ComplianceType': compliance.ComplianceType,
-            'Scope': compliance.Scope,
-            'Objective': compliance.Objective,
-            'BusinessUnitsCovered': compliance.BusinessUnitsCovered,
-            'IsRisk': compliance.IsRisk,
-            'PossibleDamage': compliance.PossibleDamage,
-            'mitigation': compliance.mitigation,
-            'Criticality': compliance.Criticality,
-            'MandatoryOptional': compliance.MandatoryOptional,
-            'ManualAutomatic': compliance.ManualAutomatic,
-            'Impact': compliance.Impact,
-            'Probability': compliance.Probability,
-            'MaturityLevel': compliance.MaturityLevel,
-            'ActiveInactive': compliance.ActiveInactive,
-            'PermanentTemporary': compliance.PermanentTemporary,
-            'Status': compliance.Status,
-            'ComplianceVersion': compliance.ComplianceVersion,
-            'Identifier': compliance.Identifier,
-            'Applicability': compliance.Applicability,
-            'CreatedByName': compliance.CreatedByName,
-            'CreatedByDate': compliance.CreatedByDate.isoformat() if compliance.CreatedByDate else None,
-            'SubPolicy': compliance.SubPolicy_id,
-            'PotentialRiskScenarios': compliance.PotentialRiskScenarios,
-            'RiskType': compliance.RiskType,
-            'RiskCategory': compliance.RiskCategory,
-            'RiskBusinessImpact': compliance.RiskBusinessImpact
-        }
+        latest_approval = None
+        extracted_data = None
+        
+        # Check ComplianceApproval for latest approved version (for both editing/copying and approval viewing)
+        try:
+            if is_for_approval:
+                print(f"🔍 DEBUG: Fetching compliance details for APPROVAL VIEWING - ComplianceId: {compliance_id}, Identifier: {compliance.Identifier}")
+            else:
+                print(f"🔍 DEBUG: Fetching compliance details for EDITING/COPYING - ComplianceId: {compliance_id}, Identifier: {compliance.Identifier}")
+                print(f"🔍 Looking for latest APPROVED version from ComplianceApproval table...")
+            
+            # Get ALL user versions first, then filter for approved ones
+            # Approved can be indicated by:
+            # 1. ApprovedNot=True (database field)
+            # 2. ExtractedData.Status = "Approved" (JSON field)
+            # 3. ExtractedData.compliance_approval.approved = true (JSON field)
+            all_user_versions = ComplianceApproval.objects.filter(
+                Identifier=compliance.Identifier,
+                Version__startswith='u'  # User versions only
+            ).order_by('-ApprovalId')
+            
+            print(f"🔍 DEBUG: Found {all_user_versions.count()} total user versions")
+            
+            # Helper function to check if an approval is approved
+            def is_approved(approval):
+                # Check database field
+                if approval.ApprovedNot is True:
+                    return True
+                
+                # Check ExtractedData JSON fields
+                if isinstance(approval.ExtractedData, dict):
+                    # Check Status field
+                    if approval.ExtractedData.get('Status') == 'Approved':
+                        return True
+                    # Check compliance_approval.approved field
+                    compliance_approval = approval.ExtractedData.get('compliance_approval', {})
+                    if isinstance(compliance_approval, dict) and compliance_approval.get('approved') is True:
+                        return True
+                
+                return False
+            
+            # Filter for approved versions
+            approved_approvals_list = [a for a in all_user_versions if is_approved(a)]
+            print(f"🔍 DEBUG: Found {len(approved_approvals_list)} approved user versions (checking ApprovedNot=True OR Status='Approved' OR compliance_approval.approved=true)")
+            
+            # Debug: Check ALL versions for this identifier to see what exists
+            print(f"🔍 DEBUG: Total ComplianceApproval records for {compliance.Identifier}: {all_user_versions.count()}")
+            for v in all_user_versions[:5]:  # Show first 5
+                is_approved_status = is_approved(v)
+                status_in_data = v.ExtractedData.get('Status') if isinstance(v.ExtractedData, dict) else 'N/A'
+                approved_in_data = v.ExtractedData.get('compliance_approval', {}).get('approved') if isinstance(v.ExtractedData, dict) else 'N/A'
+                print(f"   - ApprovalId: {v.ApprovalId}, Version: {v.Version}, ApprovedNot: {v.ApprovedNot}, Status: {status_in_data}, compliance_approval.approved: {approved_in_data}, IsApproved: {is_approved_status}")
+            
+            # Helper function to find latest version by comparing version numbers (u2 > u1)
+            def get_latest_version(approvals):
+                latest = None
+                latest_version_num = -1
+                
+                for approval in approvals:
+                    version = approval.Version or ''
+                    if version.startswith('u') and len(version) > 1:
+                        try:
+                            version_num = int(version[1:])  # Extract number after 'u'
+                            if version_num > latest_version_num:
+                                latest_version_num = version_num
+                                latest = approval
+                        except ValueError:
+                            if latest is None or approval.ApprovalId > latest.ApprovalId:
+                                latest = approval
+                
+                if latest is None and len(approvals) > 0:
+                    latest = approvals[0]  # First in list (already sorted by ApprovalId desc)
+                
+                return latest
+            
+            # Priority 1: Use approved version if available (for both editing/copying and approval viewing)
+            if approved_approvals_list:
+                latest_approval = get_latest_version(approved_approvals_list)
+                if latest_approval:
+                    extracted_data = latest_approval.ExtractedData
+                    print(f"✅ Found latest APPROVED ComplianceApproval (ID: {latest_approval.ApprovalId}, Version: {latest_approval.Version})")
+                    print(f"   📝 ComplianceItemDescription: '{extracted_data.get('ComplianceItemDescription') if isinstance(extracted_data, dict) else 'NOT A DICT'}'")
+                    print(f"   👤 CreatedByName: '{extracted_data.get('CreatedByName') if isinstance(extracted_data, dict) else 'NOT A DICT'}'")
+            else:
+                if is_for_approval:
+                    # For approval viewing: Also check pending versions if no approved version
+                    pending_approvals = ComplianceApproval.objects.filter(
+                        Identifier=compliance.Identifier,
+                        ApprovedNot=None,  # Pending approvals
+                        Version__startswith='u'
+                    ).order_by('-ApprovalId')
+                    
+                    if pending_approvals.exists():
+                        latest_approval = get_latest_version(pending_approvals)
+                        if latest_approval:
+                            extracted_data = latest_approval.ExtractedData
+                            print(f"✅ Found latest PENDING ComplianceApproval (ID: {latest_approval.ApprovalId}, Version: {latest_approval.Version})")
+                else:
+                    print(f"ℹ️ No approved version found in ComplianceApproval, will use Compliance table data")
+        except Exception as e:
+            print(f"⚠️ Warning: Could not get ComplianceApproval for Identifier {compliance.Identifier}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+        
+        # Use ExtractedData from ComplianceApproval if available (approved version for editing/copying, or any for approval viewing)
+        # For editing/copying: Use ExtractedData values, but fallback to Compliance table for missing fields
+        if extracted_data and isinstance(extracted_data, dict):
+            if is_for_approval:
+                print(f"✅ Using ExtractedData from ComplianceApproval for approval viewing - compliance {compliance_id}")
+            else:
+                print(f"✅ Using ExtractedData from latest APPROVED ComplianceApproval for editing/copying - compliance {compliance_id}")
+                print(f"   Will use Compliance table as fallback for any missing fields")
+            
+            compliance_id_from_data = extracted_data.get('ComplianceId') or extracted_data.get('compliance_id') or compliance_id
+            
+            # Use ExtractedData values when available, fallback to Compliance table for missing fields
+            # This ensures ALL fields are populated for editing/copying
+            response_data = {
+                'ComplianceId': compliance_id_from_data,
+                'ComplianceTitle': extracted_data.get('ComplianceTitle') or compliance.ComplianceTitle,
+                'ComplianceItemDescription': extracted_data.get('ComplianceItemDescription') or compliance.ComplianceItemDescription,
+                'ComplianceType': extracted_data.get('ComplianceType') or compliance.ComplianceType,
+                'Scope': extracted_data.get('Scope') or compliance.Scope,
+                'Objective': extracted_data.get('Objective') or compliance.Objective,
+                'BusinessUnitsCovered': extracted_data.get('BusinessUnitsCovered') or compliance.BusinessUnitsCovered,
+                'IsRisk': extracted_data.get('IsRisk') if 'IsRisk' in extracted_data else compliance.IsRisk,
+                'PossibleDamage': extracted_data.get('PossibleDamage') or compliance.PossibleDamage,
+                'mitigation': extracted_data.get('mitigation') or compliance.mitigation,
+                'Criticality': extracted_data.get('Criticality') or compliance.Criticality,
+                'MandatoryOptional': extracted_data.get('MandatoryOptional') or compliance.MandatoryOptional,
+                'ManualAutomatic': extracted_data.get('ManualAutomatic') or compliance.ManualAutomatic,
+                'Impact': extracted_data.get('Impact') or compliance.Impact,
+                'Probability': extracted_data.get('Probability') or compliance.Probability,
+                'MaturityLevel': extracted_data.get('MaturityLevel') or compliance.MaturityLevel,
+                'ActiveInactive': extracted_data.get('ActiveInactive') or compliance.ActiveInactive,
+                'PermanentTemporary': extracted_data.get('PermanentTemporary') or compliance.PermanentTemporary,
+                'Status': extracted_data.get('Status') or compliance.Status,
+                'ComplianceVersion': extracted_data.get('ComplianceVersion') or compliance.ComplianceVersion,
+                'Identifier': extracted_data.get('Identifier') or compliance.Identifier,
+                'Applicability': extracted_data.get('Applicability') or compliance.Applicability,
+                'CreatedByName': extracted_data.get('CreatedByName') or compliance.CreatedByName,
+                'CreatedByDate': extracted_data.get('CreatedByDate') or (compliance.CreatedByDate.isoformat() if compliance.CreatedByDate else None),
+                'SubPolicy': extracted_data.get('SubPolicy') or compliance.SubPolicy_id,
+                'PotentialRiskScenarios': extracted_data.get('PotentialRiskScenarios') or compliance.PotentialRiskScenarios,
+                'RiskType': extracted_data.get('RiskType') or compliance.RiskType,
+                'RiskCategory': extracted_data.get('RiskCategory') or compliance.RiskCategory,
+                'RiskBusinessImpact': extracted_data.get('RiskBusinessImpact') or compliance.RiskBusinessImpact
+            }
+        else:
+            # For editing/copying: Always use Compliance table
+            print(f"ℹ️ Using data from Compliance table for compliance {compliance_id}")
+            # Prepare the detailed response with all available fields from Compliance table
+            response_data = {
+                'ComplianceId': compliance.ComplianceId,
+                'ComplianceTitle': compliance.ComplianceTitle,
+                'ComplianceItemDescription': compliance.ComplianceItemDescription,
+                'ComplianceType': compliance.ComplianceType,
+                'Scope': compliance.Scope,
+                'Objective': compliance.Objective,
+                'BusinessUnitsCovered': compliance.BusinessUnitsCovered,
+                'IsRisk': compliance.IsRisk,
+                'PossibleDamage': compliance.PossibleDamage,
+                'mitigation': compliance.mitigation,
+                'Criticality': compliance.Criticality,
+                'MandatoryOptional': compliance.MandatoryOptional,
+                'ManualAutomatic': compliance.ManualAutomatic,
+                'Impact': compliance.Impact,
+                'Probability': compliance.Probability,
+                'MaturityLevel': compliance.MaturityLevel,
+                'ActiveInactive': compliance.ActiveInactive,
+                'PermanentTemporary': compliance.PermanentTemporary,
+                'Status': compliance.Status,
+                'ComplianceVersion': compliance.ComplianceVersion,
+                'Identifier': compliance.Identifier,
+                'Applicability': compliance.Applicability,
+                'CreatedByName': compliance.CreatedByName,
+                'CreatedByDate': compliance.CreatedByDate.isoformat() if compliance.CreatedByDate else None,
+                'SubPolicy': compliance.SubPolicy_id,
+                'PotentialRiskScenarios': compliance.PotentialRiskScenarios,
+                'RiskType': compliance.RiskType,
+                'RiskCategory': compliance.RiskCategory,
+                'RiskBusinessImpact': compliance.RiskBusinessImpact
+            }
         
         # Add the subpolicy and policy names
         try:
@@ -6880,7 +7218,8 @@ def get_category_business_units(request):
         if not source:
             return Response({"error": "Source parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
         
-        units = CategoryBusinessUnit.objects.filter(source=source)
+        # Filter by source and tenant_id (tenant field)
+        units = CategoryBusinessUnit.objects.filter(source=source, tenant_id=tenant_id)
         units_data = [{"id": unit.id, "value": unit.value} for unit in units]
         
         return Response({
@@ -6912,12 +7251,12 @@ def add_category_business_unit(request):
         if not source or not value:
             return Response({"error": "Both source and value are required"}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Check if the value already exists for this source
-        if CategoryBusinessUnit.objects.filter(source=source, value=value).exists():
+        # Check if the value already exists for this source and tenant
+        if CategoryBusinessUnit.objects.filter(source=source, value=value, tenant_id=tenant_id).exists():
             return Response({"error": f"Value '{value}' already exists for source '{source}'"}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Create new record
-        new_unit = CategoryBusinessUnit.objects.create(source=source, value=value)
+        # Create new record with tenant_id
+        new_unit = CategoryBusinessUnit.objects.create(source=source, value=value, tenant_id=tenant_id)
         
         return Response({
             "success": True,
@@ -8057,17 +8396,89 @@ def get_compliance_approvals_by_reviewer(request, user_id):
             return Response({'error': f'Invalid reviewer_id: {str(e)}. Must be a valid integer.'}, status=400)
         
         print(f"🔍 DEBUG: Filtering compliance approvals by ReviewerId: {reviewer_id}")
-        # Filter for pending approvals (ApprovedNot=None) to show only items that need review
-        approvals = ComplianceApproval.objects.filter(
+        
+        # CRITICAL APPROACH: 
+        # 1. Get ALL Identifiers that have at least one pending approval for this reviewer
+        # 2. For each Identifier, get ALL pending user versions (u*) regardless of ReviewerId
+        # 3. Select the LATEST one (highest ApprovalId) for each Identifier
+        # 4. This ensures we show u2, u3, etc. instead of old u1 versions
+        
+        print(f"🔍 Step 1: Getting all Identifiers with user versions for reviewer {reviewer_id}...")
+        # Get all unique Identifiers that have user versions assigned to this reviewer
+        # We want to show the LATEST user version for each Identifier
+        reviewer_identifiers = ComplianceApproval.objects.filter(
             ReviewerId=reviewer_id,
-            ApprovedNot=None  # Only show pending approvals
-        ).order_by('-ApprovalId')
-        print(f"✅ Found {approvals.count()} pending compliance approvals for reviewer {reviewer_id} (before framework filter)")
+            Version__startswith='u'
+        ).values_list('Identifier', flat=True).distinct()
+        
+        print(f"✅ Found {len(reviewer_identifiers)} unique Identifiers with user versions for reviewer {reviewer_id}")
+        
+        # Step 2: For each Identifier, get ALL user versions and select the LATEST (highest ApprovalId)
+        filtered_approvals = []
+        
+        for identifier in reviewer_identifiers:
+            # Get ALL user versions for this Identifier (regardless of ApprovedNot status)
+            # We want the LATEST user version (highest ApprovalId)
+            all_versions_for_identifier = ComplianceApproval.objects.filter(
+                Identifier=identifier,
+                Version__startswith='u'
+            ).order_by('-ApprovalId')  # Latest first (highest ApprovalId)
+            
+            # Debug logging for the specific identifier we're tracking
+            if identifier == 'COMP-5577-260112-80f21c':
+                # First, check ALL records for this identifier (no filters)
+                all_for_identifier = ComplianceApproval.objects.filter(Identifier=identifier)
+                print(f"🔍 DEBUG: TOTAL records for {identifier}: {all_for_identifier.count()}")
+                for v in all_for_identifier:
+                    print(f"   ALL - ApprovalId: {v.ApprovalId}, Version: {v.Version}, ReviewerId: {v.ReviewerId}, ApprovedNot: {v.ApprovedNot} (type: {type(v.ApprovedNot)})")
+                
+                # Now check filtered results
+                versions_list = list(all_versions_for_identifier)
+                print(f"🔍 DEBUG: FILTERED pending user versions (ApprovedNot__isnull=True, Version starts with 'u') for {identifier}: {len(versions_list)}")
+                for v in versions_list:
+                    print(f"   FILTERED - ApprovalId: {v.ApprovalId}, Version: {v.Version}, ReviewerId: {v.ReviewerId}, ApprovedNot: {v.ApprovedNot}")
+            
+            if all_versions_for_identifier.exists():
+                # Get the latest one (highest ApprovalId = first in sorted list)
+                latest_approval = all_versions_for_identifier.first()
+                
+                # Debug for the specific identifier
+                if identifier == 'COMP-5577-260112-80f21c':
+                    print(f"🔍 DEBUG: Selected latest approval for {identifier}: ApprovalId={latest_approval.ApprovalId}, Version={latest_approval.Version}, ReviewerId={latest_approval.ReviewerId}, ApprovedNot={latest_approval.ApprovedNot}")
+                
+                # Only include if it's assigned to this reviewer
+                # We want to show the LATEST user version regardless of ApprovedNot status
+                if latest_approval.ReviewerId == reviewer_id:
+                    filtered_approvals.append(latest_approval)
+                    print(f"✅ Added LATEST user version for {identifier}: {latest_approval.Version} (ApprovalId: {latest_approval.ApprovalId}, ApprovedNot: {latest_approval.ApprovedNot})")
+                else:
+                    print(f"⏭️ Skipping {identifier}: Latest version (ApprovalId: {latest_approval.ApprovalId}) assigned to ReviewerId: {latest_approval.ReviewerId}, not {reviewer_id}")
+        
+        approvals = filtered_approvals
+        print(f"✅ Filtered to {len(approvals)} latest user versions for reviewer {reviewer_id}")
+        
+        # Debug: Check what we got for the specific identifier
+        debug_identifier = 'COMP-5577-260112-80f21c'
+        debug_approval = next((a for a in approvals if a.Identifier == debug_identifier), None)
+        if debug_approval:
+            print(f"🔍 DEBUG: Selected approval for {debug_identifier}:")
+            print(f"   - ApprovalId: {debug_approval.ApprovalId}, Version: {debug_approval.Version}, ReviewerId: {debug_approval.ReviewerId}")
+        else:
+            print(f"⚠️ DEBUG: No approval selected for {debug_identifier}")
+            # Check what exists
+            all_for_debug = ComplianceApproval.objects.filter(
+                Identifier=debug_identifier,
+                ApprovedNot=None,
+                Version__startswith='u'
+            ).order_by('-ApprovalId')
+            print(f"   Found {all_for_debug.count()} pending user versions in database:")
+            for a in all_for_debug:
+                print(f"      - ApprovalId: {a.ApprovalId}, Version: {a.Version}, ReviewerId: {a.ReviewerId}, ApprovedNot: {a.ApprovedNot}")
         
         # Log all framework IDs in the results before filtering
-        if approvals.exists():
-            framework_ids_before = approvals.values_list('FrameworkId_id', flat=True).distinct()
-            print(f"🔍 DEBUG: Framework IDs in results before filter: {list(framework_ids_before)}")
+        if approvals:
+            framework_ids_before = [a.FrameworkId_id for a in approvals if hasattr(a, 'FrameworkId_id')]
+            print(f"🔍 DEBUG: Framework IDs in results before filter: {list(set(framework_ids_before))}")
         
         # Apply framework filter if provided
         if framework_id:
@@ -8079,10 +8490,10 @@ def get_compliance_approvals_by_reviewer(request, user_id):
             
             if framework_id_int:
                 print(f"🔍 DEBUG: Filtering compliance reviewer tasks by framework_id: {framework_id_int}")
-                approvals_before_count = approvals.count()
-                # Use FrameworkId_id for direct integer comparison (more reliable)
-                approvals = approvals.filter(FrameworkId_id=framework_id_int)
-                approvals_after_count = approvals.count()
+                approvals_before_count = len(approvals)
+                # Filter by FrameworkId_id
+                approvals = [a for a in approvals if hasattr(a, 'FrameworkId_id') and a.FrameworkId_id == framework_id_int]
+                approvals_after_count = len(approvals)
                 print(f"✅ Framework filter applied. Before: {approvals_before_count}, After: {approvals_after_count} compliance reviewer tasks.")
                 
                 # If framework filter resulted in 0 results, log a warning
@@ -8099,20 +8510,33 @@ def get_compliance_approvals_by_reviewer(request, user_id):
             serializer = ComplianceApprovalSerializer(approvals, many=True)
             serialized_data = serializer.data
             
-            # Ensure CreatedByName is present in ExtractedData for all serialized approvals
+            # Use ExtractedData directly from ComplianceApproval table - DO NOT sync from Compliance table
+            # The ExtractedData in ComplianceApproval is the source of truth for reviewer tasks
             for approval_data in serialized_data:
-                if approval_data.get('ExtractedData'):
-                    # Ensure CreatedByName is present
-                    if 'CreatedByName' not in approval_data['ExtractedData'] or not approval_data['ExtractedData'].get('CreatedByName'):
-                        user_name = get_user_name_by_id(approval_data.get('UserId'))
-                        if user_name:
-                            approval_data['ExtractedData']['CreatedByName'] = user_name
-                else:
-                    # If ExtractedData is None or missing, create it with CreatedByName
-                    approval_data['ExtractedData'] = {}
+                identifier = approval_data.get('Identifier')
+                extracted_data = approval_data.get('ExtractedData', {})
+                
+                # Use ExtractedData directly from ComplianceApproval - don't overwrite with Compliance table data
+                if not extracted_data:
+                    extracted_data = {}
+                
+                # Ensure essential fields are present
+                if not extracted_data.get('type'):
+                    extracted_data['type'] = 'compliance'
+                if not extracted_data.get('Identifier') and identifier:
+                    extracted_data['Identifier'] = identifier
+                
+                # Ensure CreatedByName is present in ExtractedData (only if missing)
+                if 'CreatedByName' not in extracted_data or not extracted_data.get('CreatedByName'):
                     user_name = get_user_name_by_id(approval_data.get('UserId'))
                     if user_name:
-                        approval_data['ExtractedData']['CreatedByName'] = user_name
+                        extracted_data['CreatedByName'] = user_name
+                
+                approval_data['ExtractedData'] = extracted_data
+                
+                print(f"✅ Using ExtractedData directly from ComplianceApproval for Identifier: {identifier}")
+                print(f"   📝 ComplianceItemDescription: '{extracted_data.get('ComplianceItemDescription', 'NOT FOUND')}'")
+                print(f"   👤 CreatedByName: '{extracted_data.get('CreatedByName', 'NOT FOUND')}'")
             
             print(f"✅ Successfully serialized {len(serialized_data)} compliance approvals")
             return Response(serialized_data, status=200)
@@ -9515,11 +9939,11 @@ def test_compliance_export(request):
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def get_frameworks_public(request):
     """
-    # MULTI-TENANCY: Extract tenant_id from request
-    tenant_id = get_tenant_id_from_request(request)
-
     Fetch all frameworks for public access (no permission required)
     """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+    
     try:
         print("DEBUG: get_frameworks_public was called")
         # Get only active frameworks for dropdowns

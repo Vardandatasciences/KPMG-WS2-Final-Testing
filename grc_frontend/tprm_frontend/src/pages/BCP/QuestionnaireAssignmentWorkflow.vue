@@ -710,65 +710,128 @@ const onAssigneeChange = () => {
 
 const handleNoApprovalChange = () => {
   if (noApprovalNeeded.value) {
-    // Try to get current logged in user from Vuex store first
+    let userId = null
+    let userName = null
     let currentUser = null
     
+    // Method 1: Try to get from JWT token FIRST (most reliable source of current logged-in user)
+    // This should be checked first to avoid using stale localStorage values
     try {
-      currentUser = store.getters['auth/currentUser']
-      console.log('Vuex store user:', currentUser)
-    } catch (vuexError) {
-      console.log('Could not access Vuex store:', vuexError.message)
+      const token = localStorage.getItem('access_token') || localStorage.getItem('session_token')
+      if (token) {
+        // Decode JWT token to get user_id
+        const base64Url = token.split('.')[1]
+        if (base64Url) {
+          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+          const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+          }).join(''))
+          const payload = JSON.parse(jsonPayload)
+          userId = payload.user_id || payload.userId || payload.UserId || payload.sub || payload.userid
+          if (userId) {
+            console.log('✅ Extracted user_id from JWT token (most reliable source):', userId)
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('⚠️ Error extracting user_id from token:', e)
     }
     
-    // If not in store, try to get from localStorage as fallback
-    if (!currentUser) {
+    // Method 2: Try to get from Vuex store (second most reliable)
+    if (!userId) {
+      try {
+        currentUser = store.getters['auth/currentUser']
+        if (currentUser) {
+          userId = currentUser.UserId || currentUser.user_id || currentUser.userId || currentUser.userid || currentUser.id
+          userName = currentUser.UserName || currentUser.username || `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim() || currentUser.email
+          if (userId) {
+            console.log('✅ Extracted user_id from Vuex store:', userId)
+          }
+        }
+      } catch (vuexError) {
+        console.log('Could not access Vuex store:', vuexError.message)
+      }
+    } else {
+      // If we got userId from JWT, still try to get currentUser from store for userName
+      try {
+        currentUser = store.getters['auth/currentUser']
+        if (currentUser) {
+          userName = currentUser.UserName || currentUser.username || `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim() || currentUser.email
+        }
+      } catch (vuexError) {
+        // Ignore error
+      }
+    }
+    
+    // Method 3: Try to parse current_user from localStorage (check UserId with capital letters)
+    if (!userId || !userName) {
       try {
         const userStr = localStorage.getItem('current_user')
         if (userStr) {
-          currentUser = JSON.parse(userStr)
-          console.log('Retrieved user from localStorage:', currentUser)
+          const parsedUser = JSON.parse(userStr)
+          // Check for UserId (capital U, capital I) first, then lowercase variants
+          if (!userId) {
+            userId = parsedUser.UserId || parsedUser.user_id || parsedUser.userId || parsedUser.userid || parsedUser.id
+            if (userId) {
+              console.log('✅ Extracted user_id from localStorage current_user:', userId)
+            }
+          }
+          // Try to get username, but it might be encrypted
+          if (!userName) {
+            userName = parsedUser.UserName || parsedUser.username || `${parsedUser.first_name || ''} ${parsedUser.last_name || ''}`.trim() || parsedUser.email
+          }
+          if (!currentUser) {
+            currentUser = parsedUser
+          }
         }
       } catch (error) {
-        console.error('Error parsing user from localStorage:', error)
+        console.warn('⚠️ Error parsing user from localStorage (may be encrypted):', error)
       }
     }
     
-    // Try multiple possible user ID field names (checking all common variations)
-    const userId = currentUser?.UserId || currentUser?.id || currentUser?.user_id || currentUser?.userId || currentUser?.userid
-    
-    // First, try to find the user in the users list to get their display_name
-    let userName = ''
-    if (userId) {
-      const userFromList = users.value.find(user => user.user_id == userId)
+    // Method 4: Try to get username from users list (if already loaded and userId found)
+    if (userId && !userName && users.value && users.value.length > 0) {
+      const userFromList = users.value.find(user => user.user_id == userId || user.userid == userId)
       if (userFromList) {
-        // Use display_name from the users list (matches what's shown in dropdown)
         userName = userFromList.display_name || userFromList.username || ''
+        if (userName) {
+          console.log('✅ Found username from users list:', userName)
+        }
       }
     }
     
-    // If not found in users list, construct name from currentUser object
+    // Method 5: If username looks encrypted (starts with gAAAAA), try to get from users list
+    if (userName && userName.startsWith('gAAAAA') && users.value && users.value.length > 0 && userId) {
+      const userFromList = users.value.find(user => user.user_id == userId || user.userid == userId)
+      if (userFromList) {
+        userName = userFromList.display_name || userFromList.username || ''
+        console.log('✅ Decrypted username from users list:', userName)
+      }
+    }
+    
+    // Method 6: If still no userName, construct from currentUser object
     if (!userName && currentUser) {
-      userName = currentUser?.username || 
-                 `${currentUser?.first_name || ''} ${currentUser?.last_name || ''}`.trim() || 
-                 currentUser?.email || 
+      userName = currentUser.UserName || currentUser.username || 
+                 `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim() || 
+                 currentUser.email || 
                  ''
     }
     
-    if (currentUser && userId) {
+    if (userId) {
       // Auto-fill assigner
       approvalForm.value.assigner_id = userId.toString()
-      approvalForm.value.assigner_name = userName
+      approvalForm.value.assigner_name = userName || `User ${userId}`
       
       // Set assignee to same as assigner
       approvalForm.value.assignee_id = userId.toString()
-      approvalForm.value.assignee_name = userName
+      approvalForm.value.assignee_name = userName || `User ${userId}`
       
       console.log('✅ Successfully set assigner and assignee from user:', { userId, userName })
     } else {
-      console.error('No current user found in store or localStorage')
+      console.error('❌ No current user found in any storage location')
       console.log('Store state:', store.getters['auth/currentUser'])
+      console.log('localStorage user_id:', localStorage.getItem('user_id'))
       console.log('localStorage current_user:', localStorage.getItem('current_user'))
-      console.log('Current user object:', currentUser)
       PopupService.warning('Unable to get current user information. Please log in again or select assignee manually.', 'User Not Found')
       noApprovalNeeded.value = false
     }

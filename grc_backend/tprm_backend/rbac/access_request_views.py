@@ -173,6 +173,15 @@ def get_access_requests(request, user_id):
         
         # Get user making the request
         requesting_user_id = RBACTPRMUtils.get_user_id_from_request(request)
+        
+        # If not found from JWT/session, use the user_id from URL path as fallback
+        if not requesting_user_id:
+            try:
+                requesting_user_id = int(user_id)
+                logger.info(f"[TPRM Access Request] Using user_id from URL path: {requesting_user_id}")
+            except (ValueError, TypeError):
+                logger.warning(f"[TPRM Access Request] Invalid user_id in URL path: {user_id}")
+        
         logger.info(f"[TPRM Access Request] Requesting user_id: {requesting_user_id}")
         
         if not requesting_user_id:

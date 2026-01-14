@@ -158,10 +158,21 @@ def get_next_policy_reviewer_version(policy):
     Get the next reviewer version for a policy
     """
     # Get the latest reviewer version for this policy
-    latest_reviewer_approval = PolicyApproval.objects.filter(tenant_id=tenant_id, 
-        PolicyId=policy,
-        Version__startswith='r'
-    ).order_by('-Version').first()
+    # MULTI-TENANCY: Filter through PolicyId foreign key relationship
+    # Get tenant_id from policy object (Django creates tenant_id field for ForeignKey)
+    tenant_id = getattr(policy, 'tenant_id', None)
+    if tenant_id:
+        latest_reviewer_approval = PolicyApproval.objects.filter(
+            PolicyId=policy,
+            PolicyId__tenant_id=tenant_id,
+            Version__startswith='r'
+        ).order_by('-Version').first()
+    else:
+        # Fallback if tenant_id is not available
+        latest_reviewer_approval = PolicyApproval.objects.filter(
+            PolicyId=policy,
+            Version__startswith='r'
+        ).order_by('-Version').first()
     
     if latest_reviewer_approval:
         # Parse the version and increment

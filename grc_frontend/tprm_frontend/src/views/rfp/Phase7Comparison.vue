@@ -402,7 +402,7 @@
                         {{ vendor.overallScore || vendor.totalScore }}
                       </span>
                     </div>
-                    <h4 class="font-semibold text-gray-900 mb-2">{{ vendor.name || vendor.company_name }}</h4>
+                    <h4 class="font-semibold text-gray-900 mb-2">{{ vendor.organization_name || vendor.company_name || vendor.name }}</h4>
                     <div class="space-y-2 text-sm">
                       <div class="flex justify-between">
                         <span class="text-gray-600">Score:</span>
@@ -472,8 +472,8 @@
                           <div class="space-y-1">
                             <div class="flex items-center gap-2">
                               <div>
-                                <p class="font-semibold text-gray-900">{{ vendor.name || vendor.company_name || 'Unknown Vendor' }}</p>
-                                <p v-if="vendor.company_name && vendor.company_name !== vendor.name" class="text-xs text-gray-500 mt-0.5">{{ vendor.company_name }}</p>
+                                <p class="font-semibold text-gray-900">{{ vendor.organization_name || vendor.company_name || vendor.name || 'Unknown Vendor' }}</p>
+                                <p v-if="vendor.name && vendor.name !== (vendor.organization_name || vendor.company_name)" class="text-xs text-gray-500 mt-0.5">{{ vendor.name }}</p>
                               </div>
                               <span v-if="vendor.totalEvaluators > 0" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800" title="Number of evaluators">
                                 {{ vendor.totalEvaluators }} eval.
@@ -1241,6 +1241,9 @@ const fetchComparisonData = async (rfpId) => {
       // The vendor information should be in response_documents field of each response
       const vendorDetailsMap = {} // Keep empty for now since vendor API doesn't exist
       
+      // Map to store vendor info from evaluation scores API
+      const vendorInfoMap = {}
+      
       // Fetch evaluation scores for all responses to calculate mean scores
       const responseIds = data.responses.map(r => r.response_id).join(',')
       
@@ -1308,6 +1311,15 @@ const fetchComparisonData = async (rfpId) => {
           })
           if (scoresResponse.ok) {
             const scoresData = await scoresResponse.json()
+            
+            // Store vendor_info from API response for later use
+            if (scoresData && scoresData.vendor_info) {
+              console.log('📦 Vendor info from API:', scoresData.vendor_info)
+              // Store vendor info in a map for easy lookup
+              Object.keys(scoresData.vendor_info).forEach(responseId => {
+                vendorInfoMap[responseId] = scoresData.vendor_info[responseId]
+              })
+            }
             
             // Process scores to calculate means and variance
             if (scoresData && scoresData.success && scoresData.scores) {
@@ -1473,41 +1485,50 @@ const fetchComparisonData = async (rfpId) => {
             || vendor.vendor.name
         }
         
-        // Try multiple possible field names for vendor name - prioritize response_documents first
-        // Also check if vendor_name or org are directly in the response (they might be there)
-        let vendorName = docVendorName
-          || vendor.vendor_name 
-          || vendor.org  // org might be the organization name
+        // Try multiple possible field names for vendor organization - prioritize organization_name first
+        // Prioritize vendorInfoMap from API first, then check response_documents, then direct vendor fields
+        const apiVendorInfo = vendorInfoMap[responseId]
+        let vendorName = apiVendorInfo?.organization_name
+          || apiVendorInfo?.company_name
+          || apiVendorInfo?.vendor_name
+          || docOrg  // organization name from response_documents
           || vendor.organization_name 
           || vendor.company_name
+          || vendor.org  // org might be the organization name
+          || docVendorName
+          || vendor.vendor_name 
+          || nestedCompanyName
           || nestedVendorName
         
-        // If we have org but no vendor_name, use org as the vendor name
-        if (!vendorName && vendor.org) {
-          vendorName = vendor.org
-        }
-        
-        // If still no name, check nested vendor object more thoroughly
+        // If still no organization name, check nested vendor object more thoroughly
         if (!vendorName && vendor.vendor) {
           if (typeof vendor.vendor === 'object') {
-            vendorName = vendor.vendor.name
-              || vendor.vendor.organization_name
+            vendorName = vendor.vendor.organization_name
               || vendor.vendor.company_name
-              || vendor.vendor.vendor_name
               || vendor.vendor.org
+              || vendor.vendor.name
+              || vendor.vendor.vendor_name
           } else if (typeof vendor.vendor === 'string') {
             vendorName = vendor.vendor
           }
         }
         
-        // Check response_documents more deeply if it's an object
+        // Check response_documents more deeply if it's an object - prioritize organization fields
         if (!vendorName && responseDocs && typeof responseDocs === 'object') {
-          // Try checking nested structures
-          vendorName = responseDocs.vendor?.name
-            || responseDocs.vendor?.vendor_name
+          // Try checking nested structures - prioritize organization/company names
+          vendorName = responseDocs.organization?.name
             || responseDocs.company?.name
-            || responseDocs.organization?.name
+            || responseDocs.organization_name
+            || responseDocs.company_name
+            || responseDocs.org
+            || responseDocs.vendor?.organization_name
+            || responseDocs.vendor?.company_name
+            || responseDocs.vendor?.org
             || responseDocs.contact?.company_name
+            || responseDocs.basic_info?.organization_name
+            || responseDocs.basic_info?.company_name
+            || responseDocs.vendor?.name
+            || responseDocs.vendor?.vendor_name
             || responseDocs.basic_info?.vendor_name
             || responseDocs.basic_info?.name
         }
@@ -1609,8 +1630,9 @@ const fetchComparisonData = async (rfpId) => {
         
         return {
           id: responseId,
-          name: vendorName,
-          company_name: companyName,
+          name: vendorName, // This now contains organization_name (prioritized above)
+          company_name: companyName || vendorName, // Fallback to vendorName if companyName not found
+          organization_name: vendorName, // Explicitly set organization name
           contact_email: docContactEmail || vendor.contact_email || vendor.email || vendorDetails?.email || '',
           email: docContactEmail || vendor.contact_email || vendor.email || vendorDetails?.email || '',
           // Use mean scores from evaluators, fallback to existing scores

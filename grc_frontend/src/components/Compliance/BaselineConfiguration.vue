@@ -393,9 +393,38 @@ export default {
 
 <style scoped>
 .baseline-config-container {
-  padding: 50px 20px 20px 280px;
+  padding: 24px;
+  margin-left: 280px;
+  width: calc(100% - 280px);
+  max-width: calc(100vw - 280px);
+  height: calc(100vh - 80px);
+  max-height: calc(100vh - 80px);
+  box-sizing: border-box;
+  overflow-y: auto;
+  overflow-x: hidden;
   background-color: #f8f9fa;
-  min-height: 100vh;
+  position: relative;
+  /* Custom scrollbar styling */
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e0 #f7fafc;
+}
+
+.baseline-config-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.baseline-config-container::-webkit-scrollbar-track {
+  background: #f7fafc;
+  border-radius: 4px;
+}
+
+.baseline-config-container::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 4px;
+}
+
+.baseline-config-container::-webkit-scrollbar-thumb:hover {
+  background: #a0aec0;
 }
 
 .baseline-header {
@@ -405,6 +434,11 @@ export default {
   margin-bottom: 30px;
   padding-bottom: 15px;
   border-bottom: 2px solid #4f8cff;
+  flex-wrap: wrap;
+  gap: 15px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .baseline-header h2 {
@@ -412,6 +446,10 @@ export default {
   color: #344054;
   font-size: 1.8rem;
   font-weight: 700;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  flex: 1;
+  min-width: 0;
 }
 
 .baseline-framework-selector {
@@ -431,8 +469,11 @@ export default {
   border-radius: 6px;
   background-color: white;
   font-size: 14px;
-  min-width: 250px;
+  min-width: 0;
+  max-width: 300px;
+  width: 100%;
   color: #495057;
+  box-sizing: border-box;
 }
 
 .baseline-content {
@@ -440,6 +481,18 @@ export default {
   border-radius: 12px;
   padding: 24px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.compliance-settings-section {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  position: relative;
 }
 
 .filters-section {
@@ -451,6 +504,10 @@ export default {
   background-color: #f8f9fa;
   border-radius: 8px;
   border: 1px solid #e9ecef;
+  flex-wrap: wrap;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .filter-group {
@@ -463,7 +520,10 @@ export default {
   font-weight: 500;
   color: #495057;
   font-size: 14px;
-  white-space: nowrap;
+  white-space: normal;
+  word-wrap: break-word;
+  min-width: 0;
+  flex-shrink: 1;
 }
 
 .filter-select {
@@ -472,9 +532,12 @@ export default {
   border-radius: 6px;
   background-color: white;
   font-size: 14px;
-  min-width: 150px;
+  min-width: 0;
+  max-width: 180px;
+  width: 100%;
   color: #495057;
   cursor: pointer;
+  box-sizing: border-box;
 }
 
 .filter-select:focus {
@@ -516,7 +579,9 @@ export default {
 .results-text {
   font-size: 14px;
   color: #495057;
-  white-space: nowrap;
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .results-text strong {
@@ -527,22 +592,53 @@ export default {
 
 .compliance-settings-table-wrapper {
   margin-bottom: 24px;
-  overflow-x: auto;
+  overflow-x: hidden !important;
   overflow-y: auto;
-  max-height: calc(100vh - 300px);
+  max-height: calc(100vh - 450px);
   position: relative;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  /* Force no horizontal scroll */
+  -webkit-overflow-scrolling: touch;
+  /* Custom scrollbar styling */
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e0 #f7fafc;
+}
+
+.compliance-settings-table-wrapper::-webkit-scrollbar {
+  width: 8px;
+}
+
+.compliance-settings-table-wrapper::-webkit-scrollbar-track {
+  background: #f7fafc;
+  border-radius: 4px;
+}
+
+.compliance-settings-table-wrapper::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 4px;
+}
+
+.compliance-settings-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #a0aec0;
 }
 
 .compliance-settings-table {
-  width: 100%;
+  width: 100% !important;
+  max-width: 100% !important;
   border-collapse: collapse;
   background-color: white;
   position: relative;
+  table-layout: fixed;
+  box-sizing: border-box;
+  /* Force table to respect container width */
+  min-width: 0;
 }
 
 .compliance-settings-table th {
   background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  padding: 12px;
+  padding: 12px 8px;
   text-align: left;
   font-weight: 600;
   color: #495057;
@@ -553,14 +649,79 @@ export default {
   position: sticky;
   top: 0;
   z-index: 10;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  white-space: normal;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* Set flexible column widths to prevent overflow */
+.compliance-settings-table th:nth-child(1),
+.compliance-settings-table td:nth-child(1) {
+  width: 8%;
+  min-width: 0;
+  max-width: 10%;
+}
+
+.compliance-settings-table th:nth-child(2),
+.compliance-settings-table td:nth-child(2) {
+  width: auto;
+  min-width: 0;
+  max-width: 40%;
+}
+
+.compliance-settings-table th:nth-child(3),
+.compliance-settings-table td:nth-child(3) {
+  width: 12%;
+  min-width: 0;
+  max-width: 15%;
+}
+
+.compliance-settings-table th:nth-child(4),
+.compliance-settings-table td:nth-child(4) {
+  width: 8%;
+  min-width: 0;
+  max-width: 10%;
+}
+
+.compliance-settings-table th:nth-child(5),
+.compliance-settings-table td:nth-child(5) {
+  width: 12%;
+  min-width: 0;
+  max-width: 15%;
+}
+
+.compliance-settings-table th:nth-child(6),
+.compliance-settings-table td:nth-child(6) {
+  width: 10%;
+  min-width: 0;
+  max-width: 12%;
+}
+
+.compliance-settings-table th:nth-child(7),
+.compliance-settings-table td:nth-child(7) {
+  width: 10%;
+  min-width: 0;
+  max-width: 12%;
 }
 
 .compliance-settings-table td {
-  padding: 12px;
+  padding: 12px 8px;
   border-bottom: 1px solid #f1f3f4;
   color: #495057;
   position: relative;
   vertical-align: middle;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  white-space: normal;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .compliance-settings-table tbody tr:hover {
@@ -574,6 +735,12 @@ export default {
   font-size: 0.85rem;
   font-weight: 500;
   text-transform: capitalize;
+  display: inline-block;
+  max-width: 100%;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+  box-sizing: border-box;
 }
 
 .status-mandatory {
@@ -598,6 +765,12 @@ export default {
   font-weight: 500;
   background-color: #d1fae5;
   color: #065f46;
+  display: inline-block;
+  max-width: 100%;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+  box-sizing: border-box;
 }
 
 .inactive-badge {
@@ -607,6 +780,12 @@ export default {
   font-weight: 500;
   background-color: #f3f4f6;
   color: #6b7280;
+  display: inline-block;
+  max-width: 100%;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+  box-sizing: border-box;
 }
 
 .edit-btn {
@@ -624,7 +803,10 @@ export default {
   gap: 6px;
   position: static;
   z-index: auto;
-  white-space: nowrap;
+  white-space: normal;
+  word-wrap: break-word;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .edit-btn:hover {
@@ -846,6 +1028,65 @@ export default {
 
 .btn-save-version:active:not(:disabled) {
   transform: translateY(0);
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .baseline-config-container {
+    margin-left: 200px;
+    width: calc(100% - 200px);
+    max-width: calc(100vw - 200px);
+  }
+}
+
+@media (max-width: 768px) {
+  .baseline-config-container {
+    margin-left: 0;
+    width: 100%;
+    max-width: 100vw;
+    padding: 16px;
+    height: calc(100vh - 60px);
+    max-height: calc(100vh - 60px);
+  }
+  
+  .baseline-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .filters-section {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .filter-group {
+    width: 100%;
+  }
+  
+  .filter-results-count {
+    margin-left: 0;
+    margin-right: 0;
+    width: 100%;
+  }
+  
+  .clear-filters-btn {
+    margin-left: 0;
+    width: 100%;
+  }
+  
+  .compliance-settings-table-wrapper {
+    max-height: calc(100vh - 500px);
+  }
+  
+  .compliance-settings-table {
+    table-layout: auto;
+  }
+  
+  .compliance-settings-table th,
+  .compliance-settings-table td {
+    font-size: 0.85rem;
+    padding: 8px;
+  }
 }
 
 </style>
