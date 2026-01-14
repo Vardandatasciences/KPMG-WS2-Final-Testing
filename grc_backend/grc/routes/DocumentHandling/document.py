@@ -134,10 +134,8 @@ def get_documents(request):
                         if upload_response and 'originalName' in upload_response:
                             display_name = upload_response['originalName']
                             # logger.info(f"Using originalName from upload_response: {display_name}")
-                        else:
-                            logger.info(f"No originalName in upload_response for file {file_op.id}")
-                    else:
-                        logger.info(f"No upload_response in metadata for file {file_op.id}")
+                        # else: No originalName found - use fallback, no need to log
+                    # else: No upload_response in metadata - use fallback, no need to log
                 except (json.JSONDecodeError, TypeError) as e:
                     logger.warning(f"Error parsing metadata for file {file_op.id}: {str(e)}")
             

@@ -14,6 +14,35 @@ from grc.models import Users, ExternalApplication, ExternalApplicationConnection
 
 logger = logging.getLogger(__name__)
 
+def get_or_create_jira_application():
+    """
+    Get or create Jira application.
+    Since 'name' field is encrypted, we can't query by it directly.
+    Instead, we use non-encrypted fields (icon_class, category, type) to find existing app,
+    or create a new one if not found.
+    """
+    # Try to find existing Jira app by non-encrypted fields
+    jira_app = ExternalApplication.objects.filter(
+        icon_class='fas fa-tasks',
+        category='Project Management',
+        type='Issue Tracking'
+    ).first()
+    
+    if jira_app:
+        return jira_app, False
+    
+    # If not found, create new one
+    jira_app = ExternalApplication.objects.create(
+        name='Jira',
+        category='Project Management',
+        type='Issue Tracking',
+        description='Jira integration for project and issue management',
+        icon_class='fas fa-tasks',
+        status='connected',
+        is_active=True
+    )
+    return jira_app, True
+
 class JiraIntegration:
     def __init__(self, access_token):
         self.access_token = access_token
@@ -546,24 +575,15 @@ def jira_oauth_callback(request):
                 # Save the access token and connection details
                 try:
                     user = Users.objects.get(UserId=user_id)
-                    jira_app, created = ExternalApplication.objects.get_or_create(
-                        name='Jira',
-                        defaults={
-                            'category': 'Project Management',
-                            'type': 'Issue Tracking',
-                            'description': 'Jira integration for project and issue management',
-                            'icon_class': 'fas fa-tasks',
-                            'status': 'connected'
-                        }
-                    )
+                    jira_app, created = get_or_create_jira_application()
                     
-                    # Update the application status to connected if it was created or already exists
-                    if not created:
-                        jira_app.status = 'connected'
-                        jira_app.save()
-                        logger.info("Updated existing Jira application status to 'connected'")
-                    else:
+                    # Update the application status to connected
+                    jira_app.status = 'connected'
+                    jira_app.save()
+                    if created:
                         logger.info("Created new Jira application with 'connected' status")
+                    else:
+                        logger.info("Updated existing Jira application status to 'connected'")
                     
                     # Prepare projects_data with resources information
                     projects_data = {
@@ -602,7 +622,37 @@ def jira_oauth_callback(request):
                         sync_completed_at=datetime.now()
                     )
                     
-                    logger.info(f"Successfully saved Jira connection with {len(resources_data)} resources")
+                    logger.info(f"✅ Successfully saved Jira connection with {len(resources_data)} resources")
+                    logger.info(f"📊 DEBUG: Connection ID: {connection.id}, User ID: {user_id}")
+                    try:
+                        resource_names = []
+                        for r in resources_data:
+                            if isinstance(r, dict):
+                                resource_names.append(r.get('name', r.get('id', str(r))))
+                            else:
+                                resource_names.append(str(r))
+                        logger.info(f"📊 DEBUG: Resources saved: {resource_names}")
+                    except Exception as e:
+                        logger.info(f"📊 DEBUG: Resources saved (error formatting): {resources_data}")
+                    logger.info(f"📊 DEBUG: Connection status: {connection.connection_status}")
+                    logger.info(f"📊 DEBUG: Connection has token: {bool(connection.connection_token)}")
+                    
+                    # Verify connection was saved correctly
+                    verify_connection = ExternalApplicationConnection.objects.filter(
+                        application=jira_app,
+                        user=user,
+                        connection_status='active'
+                    ).first()
+                    if verify_connection:
+                        try:
+                            verify_resources = []
+                            if verify_connection.projects_data and isinstance(verify_connection.projects_data, dict):
+                                verify_resources = verify_connection.projects_data.get('resources', [])
+                            logger.info(f"✅ VERIFIED: Connection found in DB - ID: {verify_connection.id}, Resources count: {len(verify_resources)}")
+                        except Exception as e:
+                            logger.info(f"✅ VERIFIED: Connection found in DB - ID: {verify_connection.id} (error reading resources: {str(e)})")
+                    else:
+                        logger.error(f"❌ VERIFICATION FAILED: Connection NOT found in DB immediately after saving!")
                     
                     # Store success flag in session temporarily (token is already saved in DB)
                     request.session['jira_oauth_success'] = True
@@ -642,16 +692,7 @@ def jira_oauth_callback(request):
             if access_token:
                 try:
                     user = Users.objects.get(UserId=user_id)
-                    jira_app, created = ExternalApplication.objects.get_or_create(
-                        name='Jira',
-                        defaults={
-                            'category': 'Project Management',
-                            'type': 'Issue Tracking',
-                            'description': 'Jira integration for project and issue management',
-                            'icon_class': 'fas fa-tasks',
-                            'status': 'connected'
-                        }
-                    )
+                    jira_app, created = get_or_create_jira_application()
                     
                     connection, created = ExternalApplicationConnection.objects.update_or_create(
                         application=jira_app,
@@ -708,7 +749,7 @@ def jira_projects(request):
             
             try:
                 user = Users.objects.get(UserId=user_id)
-                jira_app = ExternalApplication.objects.get(name='Jira')
+                jira_app, _ = get_or_create_jira_application()
                 connection = ExternalApplicationConnection.objects.get(
                     application=jira_app,
                     user=user,
@@ -747,7 +788,7 @@ def jira_projects(request):
             if not access_token:
                 try:
                     user = Users.objects.get(UserId=user_id)
-                    jira_app = ExternalApplication.objects.get(name='Jira')
+                    jira_app, _ = get_or_create_jira_application()
                     connection = ExternalApplicationConnection.objects.get(
                         application=jira_app,
                         user=user,
@@ -828,7 +869,7 @@ def jira_project_details(request):
             
             try:
                 user = Users.objects.get(UserId=user_id)
-                jira_app = ExternalApplication.objects.get(name='Jira')
+                jira_app, _ = get_or_create_jira_application()
                 connection = ExternalApplicationConnection.objects.get(
                     application=jira_app,
                     user=user,
@@ -894,7 +935,7 @@ def jira_project_details(request):
                 logger.info("Access token not provided or invalid, fetching from stored connection")
                 try:
                     user = Users.objects.get(UserId=user_id)
-                    jira_app = ExternalApplication.objects.get(name='Jira')
+                    jira_app, _ = get_or_create_jira_application()
                     connection = ExternalApplicationConnection.objects.get(
                         application=jira_app,
                         user=user,
@@ -934,7 +975,7 @@ def jira_project_details(request):
                 # Save project details to database
                 try:
                     user = Users.objects.get(UserId=user_id)
-                    jira_app = ExternalApplication.objects.get(name='Jira')
+                    jira_app, _ = get_or_create_jira_application()
                     connection = ExternalApplicationConnection.objects.get(
                         application=jira_app,
                         user=user
@@ -993,19 +1034,44 @@ def jira_resources(request):
         
         try:
             user = Users.objects.get(UserId=user_id)
-            jira_app = ExternalApplication.objects.get(name='Jira')
+            logger.info(f"🔍 DEBUG: Found user {user_id}")
+            jira_app, created = get_or_create_jira_application()
+            if created:
+                logger.info(f"🔍 DEBUG: Created new Jira app: {jira_app.id}")
+            else:
+                logger.info(f"🔍 DEBUG: Found existing Jira app: {jira_app.id}")
+            
+            # Debug: Check all connections for this user/app
+            all_conns = ExternalApplicationConnection.objects.filter(
+                application=jira_app,
+                user=user
+            )
+            logger.info(f"🔍 DEBUG: Total connections for user {user_id} and Jira app: {all_conns.count()}")
+            for conn in all_conns:
+                logger.info(f"🔍 DEBUG: Connection {conn.id}: status={conn.connection_status}, created={conn.created_at}, has_token={bool(conn.connection_token)}")
+            
             connection = ExternalApplicationConnection.objects.get(
                 application=jira_app,
                 user=user,
                 connection_status='active'
             )
             
-            logger.info(f"Jira resources request for user {user_id}, connection {connection.id}")
-            logger.info(f"Connection projects_data: {connection.projects_data}")
+            logger.info(f"✅ Jira resources request for user {user_id}, connection {connection.id}")
+            logger.info(f"📊 Connection projects_data: {connection.projects_data}")
             
             if connection.projects_data and 'resources' in connection.projects_data:
                 resources = connection.projects_data['resources']
-                logger.info(f"Found {len(resources)} resources in database")
+                logger.info(f"📊 Found {len(resources)} resources in database")
+                try:
+                    resource_list = []
+                    for r in resources:
+                        if isinstance(r, dict):
+                            resource_list.append(r.get('name', r.get('id', str(r))))
+                        else:
+                            resource_list.append(str(r))
+                    logger.info(f"📊 DEBUG: Available resources/projects: {resource_list}")
+                except Exception as e:
+                    logger.info(f"📊 DEBUG: Available resources/projects (error formatting): {resources}")
                 
                 return JsonResponse({
                     'success': True,
@@ -1049,8 +1115,35 @@ def jira_resources(request):
                         'error': 'No connection token available'
                     })
                 
-        except (Users.DoesNotExist, ExternalApplication.DoesNotExist, ExternalApplicationConnection.DoesNotExist):
-            logger.error(f"Jira connection not found for user {user_id}")
+        except Users.DoesNotExist:
+            logger.error(f"❌ User {user_id} not found")
+            return JsonResponse({
+                'success': False,
+                'error': f'User {user_id} not found'
+            })
+        except ExternalApplication.DoesNotExist:
+            # This should never happen since we use get_or_create, but keep for safety
+            logger.error(f"❌ Jira application not found in database")
+            return JsonResponse({
+                'success': False,
+                'error': 'Jira application not found'
+            })
+        except ExternalApplicationConnection.DoesNotExist:
+            logger.error(f"❌ Jira connection not found for user {user_id}")
+            # Debug: Check what connections exist
+            try:
+                user = Users.objects.get(UserId=user_id)
+                jira_app, _ = get_or_create_jira_application()
+                all_conns = ExternalApplicationConnection.objects.filter(
+                    application=jira_app,
+                    user=user
+                )
+                logger.error(f"🔍 DEBUG: Found {all_conns.count()} total connections (any status) for user {user_id}")
+                for conn in all_conns:
+                    logger.error(f"🔍 DEBUG: Connection {conn.id}: status={conn.connection_status}, created={conn.created_at}, updated={conn.updated_at}")
+            except Exception as debug_e:
+                logger.error(f"❌ Debug query failed: {str(debug_e)}")
+            
             return JsonResponse({
                 'success': False,
                 'error': 'Jira connection not found'
@@ -1119,7 +1212,8 @@ def jira_stored_data(request):
         
         try:
             user = Users.objects.get(UserId=user_id)
-            jira_app = ExternalApplication.objects.get(name='Jira')
+            jira_app, _ = get_or_create_jira_application()
+            
             connection = ExternalApplicationConnection.objects.get(
                 application=jira_app,
                 user=user,
