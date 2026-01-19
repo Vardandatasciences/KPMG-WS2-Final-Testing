@@ -1,0 +1,36 @@
+{
+  "framework_metadata": {
+    "framework_name": "NIST SP 800-53 Security and Privacy Controls",
+    "current_version": "5.0",
+    "framework_description": "NIST Special Publication 800-53 provides a catalog of security and privacy controls for federal information systems and organizations to protect organizational operations and assets, individuals, other organizations, and the Nation from a diverse set of threats including hostile attacks, human errors, natural disasters, structural failures, foreign intelligence entities, and privacy risks.",
+    "category": "Security and Privacy Controls",
+    "start_date": "2020-09-23",
+    "end_date": null,
+    "identifier_prefix": "NIST-800-53"
+  },
+  "extraction_summary": {
+    "total_sections_processed": 3,
+    "total_policies": 38,
+    "total_subpolicies": 8,
+    "policy_type_distribution": {
+      "Control Enhancement": 7,
+      "New Control": 1,
+      "Revised existing control enhancement": 1,
+      "Revision to Existing Control/Control Enhancement Discussion": 3,
+      "Updated discussion to address flaw remediation testing": 1,
+      "Added as related control to newly added SI-02(07)": 6,
+      "Update to Related Controls or References": 1,
+      "Added as related control to newly added SA-15(13)": 2,
+      "Updated discussion to address limiting the functions that have access to operate with elevated privileges": 1,
+      "SA": 5,
+      "SI": 2,
+      "AU": 2,
+      "CA": 1,
+      "IR": 3,
+      "MA": 1,
+      "SR": 1
+    },
+    "api_calls_made": 3,
+    "extraction_date": "2026-01-19T15:12:59.026222"
+  }
+}

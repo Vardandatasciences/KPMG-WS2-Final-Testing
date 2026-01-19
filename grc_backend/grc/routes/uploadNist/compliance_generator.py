@@ -40,45 +40,18 @@ from datetime import datetime
 # Use Django settings for OpenAI API key
 from django.conf import settings
 
-# Phase 1, 2, 3 Optimizations - Import shared AI utilities
+# Simple imports - use AI provider from risk_ai_doc (just for provider detection)
 from ...routes.Risk.risk_ai_doc import (
     AI_PROVIDER,
-    call_ollama_json,
-    call_openai_json,
-    _select_ollama_model_by_complexity,
+    OPENAI_API_KEY,
+    OPENAI_MODEL,
     OLLAMA_BASE_URL,
     OLLAMA_MODEL_DEFAULT,
-    OLLAMA_MODEL_FAST,
-    OLLAMA_MODEL_COMPLEX,
-    OPENAI_API_KEY,
-    OPENAI_API_URL,
-    OPENAI_MODEL,
+    OLLAMA_TIMEOUT,
+    OLLAMA_TEMPERATURE
 )
-
-# Phase 2 Optimizations
-from ...utils.document_preprocessor import calculate_document_hash
-from ...utils.few_shot_prompts import (
-    get_field_extraction_prompt,
-    get_compliance_generation_prompt
-)
-
-# Phase 3 Optimizations
-from ...utils.rag_system import (
-    add_document_to_rag,
-    retrieve_relevant_context,
-    build_rag_prompt,
-    is_rag_available,
-    get_rag_stats
-)
-from ...utils.model_router import (
-    route_model,
-    track_system_load,
-    get_current_system_load
-)
-from ...utils.request_queue import (
-    process_with_queue,
-    get_queue_status
-)
+import requests
+import re
 
 def get_api_key():
     """Get OpenAI API key from Django settings"""
@@ -99,65 +72,97 @@ def load_excel_data(file_path):
         print(f"Error loading Excel file: {e}")
         return None
  
-def _generate_compliance_with_ai(subpolicy_name, description, control, current_date, document_hash=None):
+def _generate_compliance_with_ai(subpolicy_name, description, control, current_date):
     """
-    Generate compliance records using optimized AI (Phase 1, 2, 3).
-    Replaces LangChain with direct AI calls for better performance.
+    Generate compliance records using simple direct API call - NO optimizations, NO caching.
+    Uses AI provider from risk_ai_doc (Ollama or OpenAI).
     """
-    # Phase 3: Try to retrieve relevant context from RAG
-    rag_context = None
-    if is_rag_available():
-        try:
-            query = f"Compliance requirements for subpolicy: {subpolicy_name}. Control: {control}"
-            retrieved = retrieve_relevant_context(query, n_results=3)
-            if retrieved:
-                rag_context = retrieved
-                print(f"   📚 Phase 3 RAG: Retrieved {len(retrieved)} relevant chunks for compliance generation")
-        except Exception as e:
-            print(f"   ⚠️  RAG retrieval failed: {e}")
-    
-    # Phase 2: Build prompt with few-shot examples
-    base_prompt = get_compliance_generation_prompt(
-        subpolicy_name=subpolicy_name,
-        description=description,
-        control=control,
-        current_date=current_date
-    )
-    
-    # Remove the old prompt building code - now using few-shot template
-    # The get_compliance_generation_prompt already includes the full prompt with examples
-    
-    # Phase 3: Enhance prompt with RAG context if available
-    if rag_context:
-        prompt = build_rag_prompt(
-            user_query=base_prompt,
-            retrieved_context=rag_context,
-            base_prompt=None
-        )
-    else:
-        prompt = base_prompt
-    
-    # Phase 3: Use intelligent model routing
-    selected_model = route_model(
-        task_type="compliance_generation",
-        text_length=len(prompt),
-        accuracy_required="high",
-        system_load=get_current_system_load(),
-        provider=AI_PROVIDER,
-    )
-    print(f"   🧠 Phase 3 Model Routing: Selected model '{selected_model}' for compliance generation")
-    
-    # Call AI with selected model and caching (Phase 1 & 2)
-    start_time = time.time()
+    # Simple prompt - no optimizations
+    prompt = f"""Generate compliance records for the following subpolicy.
+
+SubPolicy Name: {subpolicy_name}
+Description: {description}
+Control: {control}
+Current Date: {current_date}
+
+Generate compliance records in JSON format with the following structure:
+{{
+  "compliances": [
+    {{
+      "ComplianceTitle": "Title of the compliance requirement",
+      "ComplianceItemDescription": "Detailed description of the compliance requirement",
+      "ComplianceType": "Type of compliance",
+      "Criticality": "High/Medium/Low",
+      "MandatoryOptional": "Mandatory or Optional",
+      "ManualAutomatic": "Manual or Automatic",
+      "Status": "Active or Inactive"
+    }}
+  ]
+}}
+
+Return only valid JSON, no markdown formatting."""
+
+    # Simple direct API call - NO caching, NO optimizations
     if AI_PROVIDER == 'ollama':
-        result = call_ollama_json(prompt, model=selected_model, document_hash=document_hash)
+        # Direct Ollama API call
+        url = f"{OLLAMA_BASE_URL}/api/generate"
+        payload = {
+            "model": OLLAMA_MODEL_DEFAULT,
+            "prompt": prompt,
+            "stream": False,
+            "options": {
+                "temperature": OLLAMA_TEMPERATURE,
+            },
+            "format": "json"
+        }
+        
+        response = requests.post(url, json=payload, timeout=OLLAMA_TIMEOUT)
+        response.raise_for_status()
+        
+        response_data = response.json()
+        raw = response_data.get("response", "")
+        
+        # Parse JSON
+        json_match = re.search(r'\{.*\}', raw, re.DOTALL)
+        if json_match:
+            return json.loads(json_match.group())
+        else:
+            return json.loads(raw)
     else:
-        result = call_openai_json(prompt, document_hash=document_hash)
-    
-    processing_time = time.time() - start_time
-    track_system_load(processing_time, len(prompt))
-    
-    return result
+        # Direct OpenAI API call
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {OPENAI_API_KEY}"
+        }
+        
+        model_clean = str(OPENAI_MODEL).strip().strip('"').strip("'")
+        
+        payload = {
+            "model": model_clean,
+            "messages": [
+                {"role": "system", "content": "You are a compliance expert. Generate compliance records in JSON format."},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.3
+        }
+        
+        response = requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=120
+        )
+        response.raise_for_status()
+        
+        response_data = response.json()
+        raw = response_data.get("choices", [{}])[0].get("message", {}).get("content", "")
+        
+        # Parse JSON
+        json_match = re.search(r'\{.*\}', raw, re.DOTALL)
+        if json_match:
+            return json.loads(json_match.group())
+        else:
+            return json.loads(raw)
 
 def setup_llm_chain(api_key=None):
     """
@@ -172,13 +177,9 @@ def setup_llm_chain(api_key=None):
             control = inputs.get("Control", "")
             current_date = inputs.get("current_date", datetime.now().strftime("%Y-%m-%d"))
             
-            # Calculate document hash for caching
-            document_text = f"{subpolicy_name}\n{description}\n{control}"
-            document_hash = calculate_document_hash(document_text)
-            
-            # Use optimized AI generation
+            # Use simple AI generation
             result = _generate_compliance_with_ai(
-                subpolicy_name, description, control, current_date, document_hash
+                subpolicy_name, description, control, current_date
             )
             
             # Return in LangChain-compatible format
@@ -193,7 +194,7 @@ def setup_llm_chain(api_key=None):
 def process_excel_data(df, chain=None):
     """
     Process each row of Excel data and generate separate compliance and risk records.
-    Phase 1, 2, 3 optimized - uses direct AI calls instead of LangChain.
+    Uses simple direct AI calls - no optimizations.
     """
     compliance_results = []
     risk_results = []
@@ -212,12 +213,7 @@ def process_excel_data(df, chain=None):
     compliance_id_counter = 1  # Track compliance IDs for risk linking
     risk_id_counter = 1  # Track risk IDs
     
-    # Phase 2: Calculate hash for entire dataset for caching
-    dataset_text = "\n".join([
-        f"{row['SubPolicyName']}\n{row['Description']}\n{row['Control']}"
-        for _, row in df.iterrows()
-    ])
-    dataset_hash = calculate_document_hash(dataset_text)
+    # No caching - simple processing
    
     for index, row in df.iterrows():
         print(f"Processing row {index+1}/{total_rows}...")
@@ -229,7 +225,7 @@ def process_excel_data(df, chain=None):
             Description = row["Description"]
             Control = row["Control"]
            
-            # Phase 1, 2, 3: Generate compliance records using optimized AI
+            # Generate compliance records using simple direct AI call
             if chain:
                 # Backward compatibility with LangChain chain
                 result = chain.invoke({
@@ -243,11 +239,9 @@ def process_excel_data(df, chain=None):
                 except:
                     compliance_data = result if isinstance(result, dict) else {}
             else:
-                # Use optimized direct AI call
-                document_text = f"{SubPolicyName}\n{Description}\n{Control}"
-                document_hash = calculate_document_hash(document_text)
+                # Use simple direct AI call
                 compliance_data = _generate_compliance_with_ai(
-                    SubPolicyName, Description, Control, current_date, document_hash
+                    SubPolicyName, Description, Control, current_date
                 )
            
             # Parse the JSON response
@@ -371,10 +365,12 @@ def generate_compliance_for_single_subpolicy(
     subpolicy_name,
     description,
     control,
-    api_key=None
+    api_key=None,
+    framework_id=None,
+    amendment_date=None,
 ):
     """
-    Generate compliance and risk records for a single subpolicy (Phase 1, 2, 3 optimized).
+    Generate compliance and risk records for a single subpolicy using simple AI call.
     
     Args:
         subpolicy_id (int): ID of the subpolicy
@@ -388,69 +384,70 @@ def generate_compliance_for_single_subpolicy(
     """
     try:
         current_date = datetime.now().strftime("%Y-%m-%d")
+        print(f"\n[AMENDMENT][COMPLIANCE] ▶️ Generating compliances for SubPolicyId={subpolicy_id} | {subpolicy_name}")
+
+        # Cancellation check (best-effort)
+        if framework_id:
+            try:
+                from grc.models import Framework
+                fw = Framework.objects.get(FrameworkId=int(framework_id))
+                amendments = fw.Amendment if fw.Amendment else []
+                if isinstance(amendments, list) and amendments:
+                    for a in reversed(amendments):
+                        if not isinstance(a, dict):
+                            continue
+                        if amendment_date and a.get('amendment_date') != amendment_date:
+                            continue
+                        if a.get('cancel_requested'):
+                            print(f"[AMENDMENT][COMPLIANCE] 🛑 Cancel requested - skipping SubPolicyId={subpolicy_id}")
+                            return []
+                        break
+            except Exception:
+                pass
         
-        # Phase 2: Calculate document hash for caching
-        document_text = f"{subpolicy_name}\n{description}\n{control}"
-        document_hash = calculate_document_hash(document_text)
+        # Generate compliance records using simple AI call
+        result = _generate_compliance_with_ai(
+            subpolicy_name, description, control, current_date
+        )
         
-        # Phase 3: Use queuing for large documents
-        def _do_generation():
-            # Generate compliance records using optimized AI (Phase 1, 2, 3)
-            result = _generate_compliance_with_ai(
-                subpolicy_name, description, control, current_date, document_hash
-            )
-            
-            # Handle both dict and string responses
-            if isinstance(result, str):
-                compliance_data = json.loads(result)
-            else:
-                compliance_data = result
-            
-            compliances = compliance_data.get("compliances", [])
-            
-            # Process each compliance and add subpolicy reference
-            processed_compliances = []
-            for compliance in compliances:
-                # Extract risk data if present
-                risk_data = compliance.pop("risk", None)
-                
-                # Add subpolicy reference
-                compliance["SubPolicyId"] = subpolicy_id
-                compliance["SubPolicyName"] = subpolicy_name
-                
-                # Include risk data in compliance record
-                if risk_data:
-                    compliance["risk_details"] = risk_data
-                
-                processed_compliances.append(compliance)
-            
-            # Phase 3: Store generated compliance in RAG
-            if is_rag_available() and processed_compliances:
-                try:
-                    compliance_text = json.dumps(processed_compliances, indent=2)
-                    add_document_to_rag(
-                        document_text=compliance_text,
-                        document_id=f"compliance_{subpolicy_id}_{document_hash[:16]}",
-                        metadata={
-                            "type": "compliance_generation",
-                            "subpolicy_id": subpolicy_id,
-                            "subpolicy_name": subpolicy_name,
-                            "generated_at": current_date,
-                            "num_compliances": len(processed_compliances)
-                        }
-                    )
-                    print(f"   ✅ Phase 3 RAG: Stored compliance generation in knowledge base")
-                except Exception as e:
-                    print(f"   ⚠️  Phase 3 RAG: Failed to store compliance: {e}")
-            
-            return processed_compliances
-        
-        # Use queuing for large inputs
-        if len(document_text) > 5000:
-            request_id = f"compliance_gen_{subpolicy_id}_{hash(document_text)}"
-            return process_with_queue(request_id, _do_generation)
+        # Handle both dict and string responses
+        if isinstance(result, str):
+            compliance_data = json.loads(result)
         else:
-            return _do_generation()
+            compliance_data = result
+        
+        compliances = compliance_data.get("compliances", [])
+        print(f"[AMENDMENT][COMPLIANCE]   ✅ AI returned compliances={len(compliances)}")
+        
+        # Process each compliance and add subpolicy reference
+        processed_compliances = []
+        for compliance in compliances:
+            # Extract risk data if present
+            risk_data = compliance.pop("risk", None)
+            
+            # Add subpolicy reference
+            compliance["SubPolicyId"] = subpolicy_id
+            compliance["SubPolicyName"] = subpolicy_name
+            
+            # Include risk data in compliance record
+            if risk_data:
+                compliance["risk_details"] = risk_data
+            
+            processed_compliances.append(compliance)
+
+        # ---- Live printing of what was generated ----
+        try:
+            for c_idx, c in enumerate(processed_compliances, 1):
+                title = (c.get("ComplianceTitle") or c.get("compliance_title") or "").strip()
+                ctype = (c.get("ComplianceType") or c.get("compliance_type") or "").strip()
+                crit = (c.get("Criticality") or c.get("criticality") or "").strip()
+                mand = (c.get("MandatoryOptional") or c.get("mandatory") or "").strip()
+                manauto = (c.get("ManualAutomatic") or c.get("manual_automatic") or "").strip()
+                print(f"[AMENDMENT][COMPLIANCE]      C{c_idx}: {title} | type={ctype} | criticality={crit} | {mand}/{manauto}")
+        except Exception as e:
+            print(f"[AMENDMENT][COMPLIANCE]   ⚠️ Could not print generated compliances: {e}")
+        
+        return processed_compliances
         
     except Exception as e:
         print(f"Error generating compliance for subpolicy {subpolicy_id}: {e}")

@@ -38,6 +38,36 @@ from .routes.Integrations.Sentinel.sentinel import (
     receive_incident_webhook, get_received_incidents,
     save_sentinel_incident, get_saved_incidents
 )
+
+# Jira + Integrations + Streamline
+from .routes.Integrations.jira import (
+    jira_oauth,
+    jira_oauth_callback,
+    jira_projects,
+    jira_project_details,
+    jira_project_issues,
+    jira_resources,
+    jira_users,
+    jira_assign_project,
+    jira_stored_data,
+)
+from .routes.Integrations.streamLine import (
+    get_user_projects as streamline_get_user_projects,
+    get_project_details as streamline_get_project_details,
+    get_user_statistics as streamline_get_user_statistics,
+    save_task_action as streamline_save_task_action,
+    save_project_tasks as streamline_save_project_tasks,
+    get_user_task_actions as streamline_get_user_task_actions,
+)
+from .routes.Integrations.event_integration import (
+    test_integration_auth,
+    get_external_applications,
+    connect_external_application,
+    disconnect_external_application,
+    get_application_details,
+    refresh_application_status,
+    get_sync_logs,
+)
 from .routes.Policy.policy import (
 
     framework_list, framework_detail, policy_detail, policy_list,
@@ -3030,6 +3060,7 @@ urlpatterns = [
     path('change-management/framework/<int:framework_id>/check-updates/', framework_comparison.check_framework_updates, name='check-framework-updates'),
     path('change-management/scan-downloads/', framework_comparison.scan_downloads_for_processing, name='scan-downloads-for-processing'),
     path('change-management/framework/<int:framework_id>/start-analysis/', framework_comparison.start_amendment_analysis, name='start-amendment-analysis'),
+    path('change-management/framework/<int:framework_id>/cancel-analysis/', framework_comparison.cancel_amendment_analysis, name='cancel-amendment-analysis'),
     path('change-management/framework/<int:framework_id>/document-info/', framework_comparison.get_amendment_document_info, name='get-amendment-document-info'),
     path('change-management/frameworks/update-notifications/', login_framework_checking.get_framework_update_notifications, name='get-framework-update-notifications'),
     path('change-management/auto-check-frameworks/', login_framework_checking.auto_check_all_frameworks, name='auto-check-frameworks'),
@@ -3066,6 +3097,40 @@ path('bamboohr/oauth/', bamboohr_oauth, name='bamboohr-oauth'),
     path('sentinel/save-incident/', save_sentinel_incident, name='sentinel-save-incident'),
     path('sentinel/saved-incidents/', get_saved_incidents, name='sentinel-get-saved-incidents'),
  
+
+    # ========================================================================
+    # JIRA INTEGRATION
+    # ========================================================================
+    path('jira/oauth/', jira_oauth, name='jira-oauth'),
+    path('jira/oauth-callback/', jira_oauth_callback, name='jira-oauth-callback'),
+    path('jira/projects/', jira_projects, name='jira-projects'),
+    path('jira/project-details/', jira_project_details, name='jira-project-details'),
+    path('jira/project-issues/', jira_project_issues, name='jira-project-issues'),
+    path('jira/resources/', jira_resources, name='jira-resources'),
+    path('jira/users/', jira_users, name='jira-users'),
+    path('jira/assign-project/', jira_assign_project, name='jira-assign-project'),
+    path('jira/stored-data/', jira_stored_data, name='jira-stored-data'),
+
+    # ========================================================================
+    # INTEGRATIONS (EXTERNAL APPS LIST/STATUS)
+    # ========================================================================
+    path('integrations/test-auth/', test_integration_auth, name='integrations-test-auth'),
+    path('integrations/applications/', get_external_applications, name='get-external-applications'),
+    path('integrations/connect/', connect_external_application, name='connect-external-application'),
+    path('integrations/disconnect/', disconnect_external_application, name='disconnect-external-application'),
+    path('integrations/applications/<int:application_id>/', get_application_details, name='get-application-details'),
+    path('integrations/refresh-status/', refresh_application_status, name='refresh-application-status'),
+    path('integrations/sync-logs/<int:application_id>/', get_sync_logs, name='get-sync-logs'),
+
+    # ========================================================================
+    # STREAMLINE (USER PROJECTS + TASK ACTIONS)
+    # ========================================================================
+    path('streamline/user-projects/', streamline_get_user_projects, name='streamline-get-user-projects'),
+    path('streamline/project-details/', streamline_get_project_details, name='streamline-get-project-details'),
+    path('streamline/user-statistics/', streamline_get_user_statistics, name='streamline-get-user-statistics'),
+    path('streamline/task-action/', streamline_save_task_action, name='streamline-save-task-action'),
+    path('streamline/save-project-tasks/', streamline_save_project_tasks, name='streamline-save-project-tasks'),
+    path('streamline/user-task-actions/', streamline_get_user_task_actions, name='streamline-get-user-task-actions'),
 
  
 ]

@@ -1696,6 +1696,17 @@ export default {
         () => {
           // User confirmed cancellation
           try {
+            // Tell backend to cancel too
+            if (this.selectedFrameworkId) {
+              frameworkComparisonService.cancelAmendmentAnalysis(this.selectedFrameworkId)
+                .then(() => {
+                  console.log('🛑 Cancel requested on backend')
+                })
+                .catch((e) => {
+                  console.warn('⚠️ Failed to request backend cancel:', e)
+                })
+            }
+
             // Stop polling
             this.stopAnalysisPolling()
             

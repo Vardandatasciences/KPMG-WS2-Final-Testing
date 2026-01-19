@@ -32,27 +32,12 @@ class JiraBackendManager:
         Get or create the Jira external application record
         """
         try:
-            jira_app, created = ExternalApplication.objects.get_or_create(
-                name=self.jira_app_name,
-                defaults={
-                    'category': 'Project Management',
-                    'type': 'Issue Tracking',
-                    'description': 'Atlassian Jira - Issue and project tracking tool',
-                    'icon_class': 'fab fa-jira',
-                    'version': 'v1.0.0',
-                    'status': 'disconnected',
-                    'is_active': True,
-                    'features': [
-                        'Project Management',
-                        'Issue Tracking',
-                        'Workflow Management',
-                        'Reporting',
-                        'Integration APIs'
-                    ],
-                    'api_endpoint': 'https://api.atlassian.com/ex/jira/',
-                    'oauth_url': 'https://auth.atlassian.com/authorize'
-                }
-            )
+            # IMPORTANT:
+            # ExternalApplication.name is encrypted in this codebase, so querying by name can
+            # create duplicate "Jira" application rows. Reuse the safer helper from jira.py
+            # that matches on non-encrypted fields.
+            from .jira import get_or_create_jira_application as safe_get_or_create  # local import to avoid cycles
+            jira_app, created = safe_get_or_create()
             
             if created:
                 logger.info(f"Created new Jira application record: {jira_app.id}")
@@ -70,6 +55,23 @@ class JiraBackendManager:
                 'success': False,
                 'error': str(e)
             }
+
+    def _coerce_json_dict(self, value):
+        """
+        Ensure we always work with a dict for JSONField data.
+        JSONField should return dict, but some historical data can be a JSON string.
+        """
+        if value is None:
+            return {}
+        if isinstance(value, dict):
+            return value
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+                return parsed if isinstance(parsed, dict) else {}
+            except Exception:
+                return {}
+        return {}
     
     def save_jira_connection(self, user_id, access_token, refresh_token=None, token_expires_at=None, jira_account_info=None):
         """
@@ -195,8 +197,15 @@ class JiraBackendManager:
                 if not connection.connection_token:
                     connection.connection_token = f'jira_projects_sync_{user_id}_{int(timezone.now().timestamp())}'
                 
-                # Prepare projects data structure
+                # IMPORTANT:
+                # Do NOT overwrite existing projects_data, because jira.py stores critical fields
+                # here (e.g., 'resources' / cloud_id, access token metadata, etc.). Overwriting
+                # breaks subsequent issue/subtask fetching in Streamline.
+                existing = self._coerce_json_dict(connection.projects_data)
+
+                # Prepare merged projects data structure
                 projects_data_structure = {
+                    **existing,
                     'projects': projects_data,
                     'last_updated': timezone.now().isoformat(),
                     'projects_count': len(projects_data)
@@ -698,6 +707,8 @@ class JiraBackendManager:
         """
         Assign a Jira project to selected users
         
+        Fetches full project details + issues and stores in ExternalApplicationConnection.projects_data
+        
         Args:
             assigned_by_user_id (int): User ID who is assigning the project
             project_data (dict): Project data from Jira
@@ -723,6 +734,19 @@ class JiraBackendManager:
                         'success': False,
                         'error': 'No users selected for assignment'
                     }
+
+                # Normalize user IDs to integers to avoid JSONField contains mismatches
+                # Streamline queries with users_list__contains=[int(user_id)].
+                normalized_users = []
+                for u in selected_users:
+                    try:
+                        normalized_users.append(int(u))
+                    except (ValueError, TypeError):
+                        return {
+                            'success': False,
+                            'error': f'Invalid user_id in selected_users: {u}'
+                        }
+                selected_users = normalized_users
                 
                 # Check if all selected users exist
                 existing_users = Users.objects.filter(UserId__in=selected_users, IsActive='Y')
@@ -743,6 +767,111 @@ class JiraBackendManager:
                         'error': 'Invalid project data provided'
                     }
                 
+                # Get Jira connection for the assigned_by_user to fetch full project details
+                # Import here to avoid circular imports
+                from .jira import JiraIntegration, get_decrypted_token, decrypt_projects_data
+                
+                jira_app_result = self.get_or_create_jira_application()
+                if not jira_app_result['success']:
+                    return jira_app_result
+                jira_app = jira_app_result['application']
+                
+                # Get connection for assigned_by_user
+                try:
+                    connection = ExternalApplicationConnection.objects.get(
+                        application=jira_app,
+                        user=assigned_by_user,
+                        connection_status='active'
+                    )
+                except ExternalApplicationConnection.DoesNotExist:
+                    return {
+                        'success': False,
+                        'error': 'Jira connection not found. Please connect to Jira first.'
+                    }
+                
+                # Get decrypted token and projects_data
+                access_token = get_decrypted_token(connection)
+                if not access_token:
+                    return {
+                        'success': False,
+                        'error': 'Failed to retrieve access token. Please reconnect to Jira.'
+                    }
+                
+                # Get cloud_id from stored resources
+                projects_data = decrypt_projects_data(connection) or {}
+                resources = projects_data.get('resources', [])
+                if not resources:
+                    return {
+                        'success': False,
+                        'error': 'No Jira resources found. Please reconnect to Jira.'
+                    }
+                cloud_id = resources[0].get('id')
+                
+                # Fetch full project details + issues using JiraIntegration
+                logger.info(f"🔄 Fetching full project details + issues for project {project_key} (ID: {project_id})")
+                jira_integration = JiraIntegration(access_token)
+                details_result = jira_integration.get_project_details(
+                    cloud_id=cloud_id,
+                    project_id=project_id,
+                    project_key=project_key
+                )
+                
+                # Prepare complete project data with issues
+                full_details = {}
+                issues_count = 0
+                if details_result.get('success'):
+                    full_details = details_result.get('data', {})
+                    issues_data = full_details.get('issues', {})
+                    issues_count = len(issues_data.get('issues', []))
+                    logger.info(f"✅ Successfully fetched {issues_count} issues for project {project_key}")
+                else:
+                    error_msg = details_result.get('error', 'Unknown error')
+                    logger.warning(f"⚠️ Failed to fetch project details from API: {error_msg}")
+                    logger.info(f"💾 Storing basic project data only (API call failed)")
+                
+                complete_project_data = {
+                    'project': project_data,  # Basic project info (always available)
+                    'full_details': full_details,  # Full details (may be empty if API failed)
+                    'fetched_at': timezone.now().isoformat(),
+                    'fetched_by_user_id': assigned_by_user_id,
+                    'fetch_success': details_result.get('success', False),
+                    'fetch_error': details_result.get('error') if not details_result.get('success') else None
+                }
+                
+                # Store in ExternalApplicationConnection.projects_data
+                # Initialize project_details if not exists
+                if 'project_details' not in projects_data:
+                    projects_data['project_details'] = {}
+                
+                # Store complete project data keyed by project_id (as string for consistency)
+                projects_data['project_details'][project_id] = complete_project_data
+                projects_data['last_updated'] = timezone.now().isoformat()
+                
+                logger.info(f"📝 DEBUG: About to save projects_data with {len(projects_data.get('project_details', {}))} projects")
+                logger.info(f"📝 DEBUG: Project details keys: {list(projects_data.get('project_details', {}).keys())}")
+                
+                # Save updated projects_data
+                connection.projects_data = projects_data
+                connection.last_used = timezone.now()
+                connection.save()
+                
+                # Verify the save worked by reading back from DB
+                connection.refresh_from_db()
+                verify_projects_data = decrypt_projects_data(connection) or {}
+                verify_project_details = verify_projects_data.get('project_details', {})
+                logger.info(f"✅ VERIFY: After save, found {len(verify_project_details)} projects in connection {connection.id}")
+                logger.info(f"✅ VERIFY: Project IDs in DB: {list(verify_project_details.keys())}")
+                
+                if project_id not in verify_project_details:
+                    logger.error(f"❌ CRITICAL: Project {project_id} NOT found in DB after save! Keys present: {list(verify_project_details.keys())}")
+                else:
+                    stored_project = verify_project_details[project_id]
+                    stored_issues = stored_project.get('full_details', {}).get('issues', {})
+                    stored_issues_count = len(stored_issues.get('issues', [])) if isinstance(stored_issues, dict) else 0
+                    logger.info(f"✅ VERIFY: Project {project_id} found in DB with {stored_issues_count} issues")
+                
+                logger.info(f"💾 Stored project data for {project_key} (ID: {project_id}) in connection.projects_data - {issues_count} issues stored")
+                
                 # Determine list type
                 list_type = 'single' if len(selected_users) == 1 else 'multiple'
                 
@@ -753,7 +882,7 @@ class JiraBackendManager:
                     defaults={
                         'project_name': project_name,
                         'project_key': project_key,
-                        'project_details': project_data,
+                        'project_details': project_data,  # Basic project info for UsersProjectList
                         'users_list': selected_users,
                         'list_type': list_type,
                         'is_active': True
@@ -780,7 +909,11 @@ class JiraBackendManager:
                         'full_name': user.get_full_name()
                     })
                 
-                logger.info(f"Successfully assigned project {project_name} to {len(selected_users)} users")
+                issues_count = 0
+                if details_result.get('success') and details_result.get('data', {}).get('issues'):
+                    issues_count = len(details_result['data']['issues'].get('issues', []))
+                
+                logger.info(f"Successfully assigned project {project_name} to {len(selected_users)} users. Fetched {issues_count} issues.")
                 
                 return {
                     'success': True,
@@ -790,7 +923,9 @@ class JiraBackendManager:
                     'project_key': project_key,
                     'assigned_users': assigned_users_details,
                     'list_type': list_type,
-                    'created': created
+                    'created': created,
+                    'issues_fetched': issues_count,
+                    'project_data_stored': True
                 }
                 
         except Exception as e:

@@ -302,6 +302,26 @@ const frameworkComparisonService = {
       throw error;
     }
   }
+  ,
+  /**
+   * Cancel manual analysis of amendment document
+   */
+  async cancelAmendmentAnalysis(frameworkId) {
+    try {
+      const response = await axios.post(
+        API_ENDPOINTS.CHANGE_MGMT_CANCEL_ANALYSIS(frameworkId),
+        {},
+        {
+          withCredentials: true,
+          timeout: 30000
+        }
+      );
+      return response.data;
+    } catch (error) {
+      console.error(`Error cancelling analysis for framework ${frameworkId}:`, error);
+      throw error;
+    }
+  }
 };
 
 export default frameworkComparisonService;

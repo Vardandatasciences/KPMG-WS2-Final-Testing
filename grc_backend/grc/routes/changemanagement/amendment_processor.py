@@ -170,7 +170,7 @@ class AmendmentProcessor:
             logger.error(f"Error extracting sections from PDF: {str(e)}")
             return None
     
-    def extract_policies_and_subpolicies(self, sections_dir: str, api_key: str = None) -> Optional[Dict[str, Any]]:
+    def extract_policies_and_subpolicies(self, sections_dir: str, api_key: str = None, framework_id: int = None, amendment_date: str = None) -> Optional[Dict[str, Any]]:
         """
         Extract policies and subpolicies using policy_extractor_enhanced.py.
         
@@ -206,6 +206,8 @@ class AmendmentProcessor:
                 sections_dir=sections_dir,
                 output_dir=policies_dir,
                 api_key=api_key,
+                framework_id=framework_id,
+                amendment_date=amendment_date,
                 verbose=True
             )
             
@@ -223,12 +225,9 @@ class AmendmentProcessor:
             logger.error(traceback.format_exc())
             return None
     
-    def generate_compliance_records(self, policies_data: Dict[str, Any], api_key: str = None) -> Dict[str, Any]:
+    def generate_compliance_records(self, policies_data: Dict[str, Any], api_key: str = None, framework_id: int = None, amendment_date: str = None) -> Dict[str, Any]:
         """
-        Generate compliance records for all subpolicies using OPTIMIZED batch processing.
-        
-        OPTIMIZATION: Processes subpolicies in batches (5-10 at a time) with parallel processing
-        to reduce total time from 7-12 minutes to 2-4 minutes.
+        Generate compliance records for all subpolicies using simple sequential processing.
         
         Args:
             policies_data: Dictionary containing extracted policies
@@ -240,14 +239,12 @@ class AmendmentProcessor:
         try:
             from ..uploadNist.compliance_generator import generate_compliance_for_single_subpolicy
             from django.conf import settings
-            import threading
-            from concurrent.futures import ThreadPoolExecutor, as_completed
             
             # Get API key from settings if not provided
             if not api_key:
                 api_key = getattr(settings, 'OPENAI_API_KEY', None)
             
-            logger.info("Generating compliance records for subpolicies (OPTIMIZED: batch + parallel processing)")
+            logger.info("Generating compliance records for subpolicies (simple sequential processing)")
             
             # Collect all subpolicies first
             subpolicy_list = []
@@ -271,22 +268,45 @@ class AmendmentProcessor:
             
             logger.info(f"Collected {total_subpolicies} subpolicies for processing")
             
-            # OPTIMIZATION: Process in parallel batches
-            # Use ThreadPoolExecutor for parallel processing
-            # Process 8 subpolicies concurrently (respecting rate limits)
+            # Simple sequential processing (no parallel processing)
             compliance_results = []
             processed_subpolicies = 0
-            lock = threading.Lock()  # Thread-safe list appending
             
-            def process_single_subpolicy(subpolicy_data):
-                """Process a single subpolicy and return results"""
+            def _cancel_requested() -> bool:
+                if not framework_id:
+                    return False
                 try:
+                    from grc.models import Framework
+                    fw = Framework.objects.get(FrameworkId=framework_id)
+                    amendments = fw.Amendment if fw.Amendment else []
+                    if not isinstance(amendments, list) or not amendments:
+                        return False
+                    # Prefer latest matching by amendment_date if available
+                    for a in reversed(amendments):
+                        if not isinstance(a, dict):
+                            continue
+                        if amendment_date and a.get('amendment_date') != amendment_date:
+                            continue
+                        return bool(a.get('cancel_requested'))
+                    return bool(amendments[-1].get('cancel_requested')) if isinstance(amendments[-1], dict) else False
+                except Exception:
+                    return False
+
+            for idx, subpolicy_data in enumerate(subpolicy_list, 1):
+                try:
+                    if _cancel_requested():
+                        logger.warning(f"🛑 Cancel requested - stopping compliance generation at {idx-1}/{total_subpolicies}")
+                        break
+                    logger.info(f"Processing subpolicy {idx}/{total_subpolicies}: {subpolicy_data['subpolicy_title']}")
+                    
                     compliances = generate_compliance_for_single_subpolicy(
                         subpolicy_id=subpolicy_data['subpolicy_id'],
                         subpolicy_name=subpolicy_data['subpolicy_title'],
                         description=subpolicy_data['subpolicy_description'],
                         control=subpolicy_data['control'],
-                        api_key=api_key
+                        api_key=api_key,
+                        framework_id=framework_id,
+                        amendment_date=amendment_date,
                     )
                     
                     if compliances:
@@ -295,54 +315,16 @@ class AmendmentProcessor:
                             compliance['PolicyId'] = subpolicy_data['policy_id']
                             compliance['PolicyTitle'] = subpolicy_data['policy_title']
                         
-                        return {
-                            'success': True,
-                            'compliances': compliances,
-                            'subpolicy_title': subpolicy_data['subpolicy_title']
-                        }
-                    return {'success': False, 'compliances': [], 'subpolicy_title': subpolicy_data['subpolicy_title']}
-                    
+                        compliance_results.extend(compliances)
+                        processed_subpolicies += 1
+                        
+                        if idx % 10 == 0:  # Log progress every 10 subpolicies
+                            logger.info(f"Progress: {idx}/{total_subpolicies} subpolicies processed ({processed_subpolicies} successful)")
+                    else:
+                        logger.warning(f"Failed to generate compliance for: {subpolicy_data['subpolicy_title']}")
+                        
                 except Exception as e:
                     logger.error(f"Error generating compliance for subpolicy {subpolicy_data['subpolicy_id']}: {str(e)}")
-                    return {'success': False, 'compliances': [], 'error': str(e)}
-            
-            # OPTIMIZATION: Process in parallel with adaptive worker count
-            # This reduces time from 7-12 min to 1-3 min (up to 8x speedup)
-            # Use fewer workers for small batches to avoid overhead
-            if total_subpolicies <= 20:
-                max_workers = min(4, total_subpolicies)  # Up to 4 workers for small batches
-            elif total_subpolicies <= 50:
-                max_workers = 6  # 6 workers for medium batches
-            else:
-                max_workers = 8  # 8 workers for large batches (145+ subpolicies)
-            logger.info(f"Starting parallel processing with {max_workers} concurrent workers (optimized for {total_subpolicies} subpolicies)...")
-            
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                # Submit all tasks
-                future_to_subpolicy = {
-                    executor.submit(process_single_subpolicy, sp): sp 
-                    for sp in subpolicy_list
-                }
-                
-                # Process completed tasks as they finish
-                completed = 0
-                for future in as_completed(future_to_subpolicy):
-                    completed += 1
-                    try:
-                        result = future.result()
-                        
-                        if result.get('success') and result.get('compliances'):
-                            with lock:
-                                compliance_results.extend(result['compliances'])
-                                processed_subpolicies += 1
-                            
-                            if completed % 10 == 0:  # Log progress every 10 subpolicies
-                                logger.info(f"Progress: {completed}/{total_subpolicies} subpolicies processed ({processed_subpolicies} successful)")
-                        else:
-                            logger.warning(f"Failed to generate compliance for: {result.get('subpolicy_title', 'unknown')}")
-                            
-                    except Exception as e:
-                        logger.error(f"Error processing subpolicy: {str(e)}")
             
             logger.info(f"✅ Generated compliance records for {processed_subpolicies}/{total_subpolicies} subpolicies")
             logger.info(f"✅ Total compliance records generated: {len(compliance_results)}")
@@ -549,7 +531,9 @@ def process_downloaded_amendment(
         from django.conf import settings
         # Get OpenAI API key from settings (which reads from environment variable OPENAI_API_KEY)
         api_key = getattr(settings, 'OPENAI_API_KEY', None)
-        policies_data = processor.extract_policies_and_subpolicies(sections_dir, api_key=api_key)
+        policies_data = processor.extract_policies_and_subpolicies(
+            sections_dir, api_key=api_key, framework_id=framework_id, amendment_date=amendment_date
+        )
         if not policies_data:
             return {
                 'success': False,
@@ -558,7 +542,9 @@ def process_downloaded_amendment(
         
         # Step 3: Generate compliance records
         logger.info("Step 3/4: Generating compliance records...")
-        compliance_data = processor.generate_compliance_records(policies_data, api_key=api_key)
+        compliance_data = processor.generate_compliance_records(
+            policies_data, api_key=api_key, framework_id=framework_id, amendment_date=amendment_date
+        )
         
         # Step 4: Combine and save results
         logger.info("Step 4/4: Combining and saving results...")
