@@ -237,7 +237,9 @@ const loadNotification = async () => {
 
   try {
     const response = await fetch(`${API_BASE_URL}/award-response/${awardToken}/`, {
-      method: 'GET'
+      method: 'GET',
+      // Add timeout to detect connection issues faster
+      signal: AbortSignal.timeout(10000) // 10 second timeout
     })
     if (response.ok) {
       const data = await response.json()
@@ -247,11 +249,22 @@ const loadNotification = async () => {
         error.value = data.error || 'Failed to load notification'
       }
     } else {
-      error.value = 'Failed to load notification'
+      if (response.status === 404) {
+        error.value = 'Invalid or expired link. Please contact the RFP team if you believe this is an error.'
+      } else {
+        error.value = `Failed to load notification (Error ${response.status})`
+      }
     }
   } catch (err) {
-    error.value = 'Network error occurred'
     console.error('Error loading notification:', err)
+    // Check if it's a connection error
+    if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
+      error.value = 'Unable to connect to the server. Please ensure the backend server is running and try again.'
+    } else if (err.name === 'AbortError' || err.name === 'TimeoutError') {
+      error.value = 'Request timed out. Please check your connection and try again.'
+    } else {
+      error.value = 'Network error occurred. Please check your connection and try again.'
+    }
   } finally {
     loading.value = false
   }
@@ -272,14 +285,25 @@ const respondToAward = async (action) => {
       body: JSON.stringify({
         action: action,
         comments: comments.value
-      })
+      }),
+      // Add timeout to detect connection issues faster
+      signal: AbortSignal.timeout(15000) // 15 second timeout for POST requests
     })
 
     if (response.ok) {
       const data = await response.json()
       if (data.success) {
         if (action === 'accept') {
-          PopupService.success('Award accepted successfully! You will receive further instructions via email.', 'Award Accepted')
+          const message = data.message || 'Award accepted successfully! You will receive further instructions via email.'
+          PopupService.success(message, 'Award Accepted')
+          
+          // Show credential info if available
+          if (data.credentials_created && data.credentials_info) {
+            console.log('Credentials created:', data.credentials_info)
+            if (data.credentials_info.email_sent) {
+              PopupService.success('Your vendor portal credentials have been sent to your email address.', 'Credentials Sent')
+            }
+          }
         } else {
           PopupService.success('Your response has been recorded. The RFP team has been notified.', 'Response Submitted')
         }
@@ -287,14 +311,30 @@ const respondToAward = async (action) => {
         await loadNotification()
         showDeclineWarning.value = false
       } else {
-        PopupService.error('Failed to process response: ' + data.error, 'Processing Failed')
+        PopupService.error('Failed to process response: ' + (data.error || 'Unknown error'), 'Processing Failed')
       }
     } else {
-      PopupService.error('Failed to process response', 'Response Failed')
+      const errorText = await response.text().catch(() => '')
+      let errorMessage = 'Failed to process response'
+      try {
+        const errorData = JSON.parse(errorText)
+        errorMessage = errorData.error || errorMessage
+      } catch (e) {
+        // Use default message
+      }
+      PopupService.error(errorMessage, 'Response Failed')
     }
   } catch (err) {
-    PopupService.error('Error processing response: ' + err.message, 'Error')
     console.error('Error responding to award:', err)
+    let errorMessage = 'Error processing response'
+    if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
+      errorMessage = 'Unable to connect to the server. Please ensure the backend server is running and try again.'
+    } else if (err.name === 'AbortError' || err.name === 'TimeoutError') {
+      errorMessage = 'Request timed out. Please check your connection and try again.'
+    } else {
+      errorMessage = 'Error processing response: ' + err.message
+    }
+    PopupService.error(errorMessage, 'Error')
   } finally {
     responding.value = false
   }

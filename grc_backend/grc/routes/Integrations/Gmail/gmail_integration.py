@@ -17,6 +17,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from grc.models import ExternalApplication, ExternalApplicationConnection, ExternalApplicationSyncLog, Users, IntegrationDataList
+from grc.utils.data_encryption import decrypt_data, is_encrypted_data
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,65 @@ import tempfile
 import pickle
 
 OAUTH_STATES_FILE = os.path.join(tempfile.gettempdir(), 'gmail_oauth_states.pkl')
+
+def decrypt_projects_data(connection):
+    """
+    Safely decrypt and parse projects_data from ExternalApplicationConnection
+    
+    Args:
+        connection: ExternalApplicationConnection instance
+        
+    Returns:
+        dict: Parsed projects_data as dictionary
+    """
+    try:
+        projects_data = connection.projects_data
+        
+        # Handle None or empty
+        if not projects_data:
+            return {}
+        
+        # If it's already a dict (JSONField returns dict), check if encrypted
+        if isinstance(projects_data, dict):
+            # Check if it might be a serialized encrypted string stored as dict
+            # In some cases, the field might store {'data': 'encrypted_string'}
+            if 'data' in projects_data and isinstance(projects_data['data'], str):
+                # Try to decrypt the nested data
+                decrypted_str = decrypt_data(projects_data['data'])
+                if decrypted_str:
+                    try:
+                        return json.loads(decrypted_str)
+                    except json.JSONDecodeError:
+                        return projects_data
+            # If it's already a proper dict, return as-is
+            return projects_data
+        
+        # If it's a string, try to decrypt and parse
+        if isinstance(projects_data, str):
+            # First, try to decrypt if encrypted
+            if is_encrypted_data(projects_data):
+                logger.info(f"Decrypting encrypted projects_data for connection {connection.id}")
+                decrypted_str = decrypt_data(projects_data)
+                if decrypted_str:
+                    try:
+                        return json.loads(decrypted_str)
+                    except json.JSONDecodeError as e:
+                        logger.error(f"Failed to parse decrypted projects_data as JSON: {e}")
+                        return {}
+            else:
+                # Try to parse as plain JSON
+                try:
+                    return json.loads(projects_data)
+                except json.JSONDecodeError as e:
+                    logger.warning(f"projects_data is neither encrypted nor valid JSON: {e}")
+                    return {}
+        
+        logger.warning(f"Unexpected projects_data type: {type(projects_data)}")
+        return {}
+        
+    except Exception as e:
+        logger.error(f"Error decrypting/parsing projects_data: {str(e)}", exc_info=True)
+        return {}
 
 def store_oauth_state(state, user_id, flow_data):
     """Store OAuth state in temporary file"""
@@ -62,7 +122,8 @@ def store_oauth_state(state, user_id, flow_data):
         with open(OAUTH_STATES_FILE, 'wb') as f:
             pickle.dump(states, f)
         
-        logger.info(f"Stored OAuth state {state}")
+        logger.info(f"Stored OAuth state {state} to file: {OAUTH_STATES_FILE}")
+        logger.info(f"Total states in file: {len(states)}")
         return True
     except Exception as e:
         logger.error(f"Error storing OAuth state: {str(e)}")
@@ -72,36 +133,70 @@ def get_oauth_state(state):
     """Retrieve OAuth state from temporary file"""
     try:
         logger.info(f"Looking for OAuth state: {state}")
+        logger.info(f"OAuth states file path: {OAUTH_STATES_FILE}")
         
         if not os.path.exists(OAUTH_STATES_FILE):
-            logger.warning("OAuth states file not found")
+            logger.warning(f"OAuth states file not found at: {OAUTH_STATES_FILE}")
             return None
         
         # Load states
         with open(OAUTH_STATES_FILE, 'rb') as f:
             states = pickle.load(f)
         
-        logger.info(f"Found {len(states)} OAuth states")
+        logger.info(f"Found {len(states)} OAuth states in file")
+        logger.info(f"Available state keys: {list(states.keys())}")
         
         if state in states:
             stored_data = states[state]
-            created_at = timezone.datetime.fromisoformat(stored_data['created_at'].replace('Z', '+00:00'))
+            logger.info(f"Found state data: {stored_data}")
             
-            # Check if state is expired (10 minutes)
-            if timezone.now() - created_at > timedelta(minutes=10):
-                logger.warning(f"OAuth state {state} expired")
-                del states[state]
-                with open(OAUTH_STATES_FILE, 'wb') as f:
-                    pickle.dump(states, f)
-                return None
-            
-            logger.info(f"Found matching OAuth state: {state}")
-            return stored_data
+            # Parse created_at timestamp
+            try:
+                created_at_str = stored_data['created_at']
+                # Handle different datetime formats
+                if 'Z' in created_at_str:
+                    created_at_str = created_at_str.replace('Z', '+00:00')
+                elif '+' not in created_at_str and created_at_str.count(':') == 2:
+                    # If no timezone info, assume UTC
+                    created_at_str = created_at_str + '+00:00'
+                
+                # Parse datetime string
+                if '+' in created_at_str or created_at_str.endswith('Z'):
+                    # Has timezone info
+                    created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+                else:
+                    # No timezone info, assume UTC and make timezone-aware
+                    created_at = datetime.fromisoformat(created_at_str)
+                    created_at = timezone.make_aware(created_at, timezone.utc)
+                
+                # Ensure it's timezone-aware
+                if created_at.tzinfo is None:
+                    created_at = timezone.make_aware(created_at, timezone.utc)
+                
+                # Check if state is expired (15 minutes - increased from 10)
+                time_diff = timezone.now() - created_at
+                logger.info(f"State age: {time_diff.total_seconds()} seconds")
+                
+                if time_diff > timedelta(minutes=15):
+                    logger.warning(f"OAuth state {state} expired (age: {time_diff})")
+                    del states[state]
+                    with open(OAUTH_STATES_FILE, 'wb') as f:
+                        pickle.dump(states, f)
+                    return None
+                
+                logger.info(f"Found matching OAuth state: {state} (age: {time_diff.total_seconds()}s)")
+                return stored_data
+            except Exception as parse_error:
+                logger.error(f"Error parsing created_at timestamp: {str(parse_error)}")
+                logger.error(f"created_at value: {stored_data.get('created_at')}")
+                # Return the state anyway if parsing fails (might be a format issue)
+                return stored_data
         
         logger.warning(f"No matching OAuth state found for: {state}")
+        logger.warning(f"State keys in file: {list(states.keys())}")
         return None
     except Exception as e:
-        logger.error(f"Error retrieving OAuth state: {str(e)}")
+        logger.error(f"Error retrieving OAuth state: {str(e)}", exc_info=True)
         return None
 
 def delete_oauth_state(state):
@@ -332,6 +427,10 @@ def save_message_data_to_db(user_id, messages_with_attachments):
         if not connection:
             return {'success': False, 'error': 'Gmail connection not found'}
         
+        # Get user_info from connection projects_data (decrypt if needed)
+        current_projects_data = decrypt_projects_data(connection)
+        stored_user_info = current_projects_data.get('user_info', {})
+        
         # Structure the messages data properly
         structured_messages = []
         total_attachments = 0
@@ -430,8 +529,15 @@ def save_message_data_to_db(user_id, messages_with_attachments):
             
             structured_messages.append(structured_message)
         
-        # Create comprehensive data structure
+        # Create comprehensive data structure with user_info
         gmail_data_structure = {
+            'user_info': {
+                'id': stored_user_info.get('id', ''),
+                'name': stored_user_info.get('name', ''),
+                'email': stored_user_info.get('email', ''),
+                'picture': stored_user_info.get('picture', '')
+            },
+            'connected_at': current_projects_data.get('connected_at', timezone.now().isoformat()),
             'gmail_messages': {
                 'metadata': {
                     'extracted_at': timezone.now().isoformat(),
@@ -439,7 +545,7 @@ def save_message_data_to_db(user_id, messages_with_attachments):
                     'total_attachments': total_attachments,
                     'user_id': user_id,
                     'extraction_method': 'gmail_api_v1',
-                    'message_limit': 10,
+                    'message_limit': 15,
                     'include_attachments': True
                 },
                 'messages': structured_messages
@@ -448,18 +554,9 @@ def save_message_data_to_db(user_id, messages_with_attachments):
             'version': '1.0'
         }
         
-        # Get current data and merge properly
-        # Since projects_data is a JSONField, it returns a dict directly
-        current_data = connection.projects_data or {}
-        if isinstance(current_data, str):
-            # Handle case where it might be stored as string
-            try:
-                current_data = json.loads(current_data)
-            except (json.JSONDecodeError, TypeError):
-                current_data = {}
-        
-        # Update with new Gmail data structure
-        current_data.update(gmail_data_structure)
+        # Replace with new Gmail data structure (including user_info)
+        # This ensures we have the complete structure with user_info, connected_at, and messages
+        current_data = gmail_data_structure
         
         # Save to database - JSONField handles serialization automatically
         # No need to use json.dumps() as Django JSONField stores it properly
@@ -574,7 +671,13 @@ def gmail_oauth_callback(request):
             auth_code = request.GET.get('code')
             error = request.GET.get('error')
             
+            # URL decode the state if needed
+            if state:
+                from urllib.parse import unquote
+                state = unquote(state)
+            
             if error:
+                logger.error(f"OAuth error received: {error}")
                 return JsonResponse({
                     'success': False,
                     'error': f'OAuth Error: {error}'
@@ -586,21 +689,31 @@ def gmail_oauth_callback(request):
             auth_code = data.get('auth_code')
         
         logger.info(f"OAuth callback received - Code: {auth_code[:10] if auth_code else 'None'}..., State: {state}")
+        logger.info(f"OAuth states file location: {OAUTH_STATES_FILE}")
         
         if not state or not auth_code:
             logger.error("Missing state or auth_code in callback")
+            logger.error(f"State: {state}, Code: {auth_code[:20] if auth_code else 'None'}")
             return JsonResponse({
                 'success': False,
                 'error': 'State and auth_code are required'
             }, status=400)
         
-        # Retrieve stored OAuth state from database
+        # Retrieve stored OAuth state from file
         stored_state = get_oauth_state(state)
         if not stored_state:
             logger.error(f"Invalid or expired OAuth state: {state}")
+            logger.error(f"State file exists: {os.path.exists(OAUTH_STATES_FILE)}")
+            if os.path.exists(OAUTH_STATES_FILE):
+                try:
+                    with open(OAUTH_STATES_FILE, 'rb') as f:
+                        all_states = pickle.load(f)
+                        logger.error(f"All states in file: {list(all_states.keys())}")
+                except Exception as e:
+                    logger.error(f"Could not read states file: {str(e)}")
             return JsonResponse({
                 'success': False,
-                'error': 'Invalid or expired OAuth state'
+                'error': 'Invalid or expired OAuth state. Please try connecting again.'
             }, status=400)
         
         user_id = stored_state['flow_data']['user_id']
@@ -775,7 +888,7 @@ def save_gmail_connection(user_id, access_token, refresh_token, token_expires_at
                 'type': 'OAuth',
                 'version': '1.0',
                 'is_active': True,
-                'status': 'available'
+                'status': 'pending'
             }
         )
         
@@ -864,12 +977,36 @@ def get_gmail_connection_status(request):
         
         try:
             user = Users.objects.get(UserId=user_id)
-            gmail_app = ExternalApplication.objects.get(name='Gmail')
-            connection = ExternalApplicationConnection.objects.filter(
-                application=gmail_app,
-                user=user,
-                connection_status='active'
-            ).first()
+            
+            # Look for ANY active Gmail connection across all Gmail applications
+            all_gmail_apps = ExternalApplication.objects.filter(name='Gmail')
+            connection = None
+            
+            if not all_gmail_apps.exists():
+                # No Gmail app exists, create one
+                logger.info("No Gmail application found, creating one")
+                gmail_app = ExternalApplication.objects.create(
+                    name='Gmail',
+                    description='Google Gmail Integration',
+                    category='Communication',
+                    type='OAuth',
+                    version='1.0',
+                    is_active=True,
+                    status='pending'
+                )
+                logger.info(f"Created Gmail application with ID: {gmail_app.id}")
+            else:
+                # Check all Gmail apps for active connection
+                for app in all_gmail_apps:
+                    conn = ExternalApplicationConnection.objects.filter(
+                        application=app,
+                        user=user,
+                        connection_status='active'
+                    ).first()
+                    if conn:
+                        connection = conn
+                        logger.info(f"Found active Gmail connection (ID: {conn.id}) for app ID: {app.id}")
+                        break
             
             if connection:
                 # Check if token is still valid
@@ -886,14 +1023,8 @@ def get_gmail_connection_status(request):
                             'message': 'Gmail connection expired'
                         })
                 
-                # Check if there's stored data
-                projects_data = connection.projects_data or {}
-                if isinstance(projects_data, str):
-                    try:
-                        projects_data = json.loads(projects_data)
-                    except (json.JSONDecodeError, TypeError):
-                        projects_data = {}
-                
+                # Check if there's stored data (decrypt if needed)
+                projects_data = decrypt_projects_data(connection)
                 has_stored_data = 'gmail_messages' in projects_data
                 messages_count = 0
                 attachments_count = 0
@@ -937,32 +1068,6 @@ def get_gmail_connection_status(request):
                 'status': 'not_connected',
                 'message': f'User with ID {user_id} not found'
             })
-        except ExternalApplication.DoesNotExist:
-            logger.error("Gmail application not found in database")
-            # Try to create the Gmail application if it doesn't exist
-            try:
-                gmail_app = ExternalApplication.objects.create(
-                    name='Gmail',
-                    description='Google Gmail Integration',
-                    category='Communication',
-                    type='OAuth',
-                    version='1.0',
-                    is_active=True,
-                    status='available'
-                )
-                logger.info("Created Gmail application in database")
-                return JsonResponse({
-                    'success': True,
-                    'connected': False,
-                    'status': 'not_connected',
-                    'message': 'Gmail application created. Please connect your Gmail account.'
-                })
-            except Exception as create_error:
-                logger.error(f"Failed to create Gmail application: {str(create_error)}")
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Gmail application not found and could not be created. Please contact support.'
-                }, status=500)
             
     except Exception as e:
         logger.error(f"Error checking Gmail connection status: {str(e)}")
@@ -979,9 +1084,15 @@ def refresh_gmail_token(connection):
         if not connection.refresh_token:
             return False
         
+        # Decrypt tokens before using them
+        access_token = decrypt_data(connection.connection_token) if connection.connection_token else None
+        refresh_token_decrypted = decrypt_data(connection.refresh_token) if connection.refresh_token else None
+        
+        logger.info(f"[Token Refresh] Decrypted tokens for refresh (access: {len(access_token) if access_token else 0}, refresh: {len(refresh_token_decrypted) if refresh_token_decrypted else 0})")
+        
         credentials = Credentials(
-            token=connection.connection_token,
-            refresh_token=connection.refresh_token,
+            token=access_token,
+            refresh_token=refresh_token_decrypted,
             token_uri='https://oauth2.googleapis.com/token',
             client_id=GMAIL_CLIENT_ID,
             client_secret=GMAIL_CLIENT_SECRET
@@ -990,16 +1101,18 @@ def refresh_gmail_token(connection):
         # Refresh the token
         credentials.refresh(Request())
         
-        # Update connection with new token
+        # Update connection with new token (model will handle encryption if configured)
         connection.connection_token = credentials.token
         connection.token_expires_at = credentials.expiry
         connection.last_used = timezone.now()
         connection.save()
         
+        logger.info(f"[Token Refresh] Successfully refreshed token")
+        
         return True
         
     except Exception as e:
-        logger.error(f"Error refreshing Gmail token: {str(e)}")
+        logger.error(f"Error refreshing Gmail token: {str(e)}", exc_info=True)
         return False
 
 @csrf_exempt
@@ -1035,10 +1148,13 @@ def test_gmail_headers(request):
                         'error': 'Gmail connection expired'
                     }, status=401)
             
-            # Build Gmail service
+            # Build Gmail service (decrypt tokens if needed)
+            access_token = decrypt_data(connection.connection_token) if connection.connection_token else None
+            refresh_token_decrypted = decrypt_data(connection.refresh_token) if connection.refresh_token else None
+            
             credentials = Credentials(
-                token=connection.connection_token,
-                refresh_token=connection.refresh_token,
+                token=access_token,
+                refresh_token=refresh_token_decrypted,
                 token_uri='https://oauth2.googleapis.com/token',
                 client_id=GMAIL_CLIENT_ID,
                 client_secret=GMAIL_CLIENT_SECRET
@@ -1116,20 +1232,74 @@ def get_gmail_messages(request):
             
         include_attachments = request.GET.get('include_attachments', 'true').lower() == 'true'
         
-        # Get user's Gmail connection
+        # Get user object first (outside inner try block so it's available in exception handler)
         try:
             user = Users.objects.get(UserId=user_id)
-            gmail_app = ExternalApplication.objects.get(name='Gmail')
-            connection = ExternalApplicationConnection.objects.filter(
-                application=gmail_app,
-                user=user,
-                connection_status='active'
-            ).first()
+        except Users.DoesNotExist:
+            logger.error(f"User with ID {user_id} not found")
+            return JsonResponse({
+                'success': False,
+                'error': f'User with ID {user_id} not found. Please check your user ID.'
+            }, status=404)
+        
+        # Get Gmail application and connection
+        try:
+            # Look for Gmail app - names might be encrypted, so decrypt them
+            all_apps = ExternalApplication.objects.all()
+            gmail_apps = []
+            
+            logger.info(f"🔍 Checking {all_apps.count()} applications for Gmail...")
+            
+            for app in all_apps:
+                # Try to decrypt the name
+                decrypted_name = decrypt_data(app.name) if app.name else app.name
+                logger.info(f"   📱 App ID {app.id}: encrypted_name='{app.name[:50]}...', decrypted='{decrypted_name}'")
+                
+                if decrypted_name and 'gmail' in decrypted_name.lower():
+                    gmail_apps.append(app)
+                    logger.info(f"   ✅ Found Gmail app! ID={app.id}, decrypted name='{decrypted_name}'")
+            
+            logger.info(f"📧 Found {len(gmail_apps)} Gmail application(s) after decryption")
+            
+            connection = None
+            
+            # Check all connections for this user (debugging)
+            all_user_connections = ExternalApplicationConnection.objects.filter(user=user)
+            logger.info(f"📊 User {user_id} has {all_user_connections.count()} total connections")
+            
+            # Log what applications these connections are linked to
+            for conn in all_user_connections[:5]:  # Show first 5
+                logger.info(f"   📎 Connection ID {conn.id}: app_name='{conn.application.name[:50]}...', status={conn.connection_status}")
+            
+            for app in gmail_apps:
+                logger.info(f"🔍 Checking Gmail app ID: {app.id}")
+                all_conns_for_app = ExternalApplicationConnection.objects.filter(
+                    application=app,
+                    user=user
+                )
+                logger.info(f"   Found {all_conns_for_app.count()} connection(s) for this app")
+                
+                for c in all_conns_for_app:
+                    logger.info(f"   Connection ID {c.id}: status={c.connection_status}")
+                
+                conn = ExternalApplicationConnection.objects.filter(
+                    application=app,
+                    user=user,
+                    connection_status='active'
+                ).first()
+                
+                if conn:
+                    connection = conn
+                    logger.info(f"✅ Found active connection (ID: {conn.id}) linked to Gmail app ID: {app.id}")
+                    break
             
             if not connection:
+                logger.error(f"❌ No active Gmail connection found for user {user_id}")
+                logger.error(f"   Total Gmail apps: {len(gmail_apps)}")
+                logger.error(f"   Total user connections: {all_user_connections.count()}")
                 return JsonResponse({
                     'success': False,
-                    'error': 'Gmail not connected'
+                    'error': 'Gmail not connected. Please connect your Gmail account from the integrations page.'
                 }, status=401)
             
             # Check and refresh token if needed
@@ -1140,10 +1310,16 @@ def get_gmail_messages(request):
                         'error': 'Gmail connection expired'
                     }, status=401)
             
-            # Build Gmail service
+            # Build Gmail service (decrypt tokens if needed)
+            access_token = decrypt_data(connection.connection_token) if connection.connection_token else None
+            refresh_token_decrypted = decrypt_data(connection.refresh_token) if connection.refresh_token else None
+            
+            logger.info(f"Using decrypted access token (length: {len(access_token) if access_token else 0})")
+            logger.info(f"Using decrypted refresh token (length: {len(refresh_token_decrypted) if refresh_token_decrypted else 0})")
+            
             credentials = Credentials(
-                token=connection.connection_token,
-                refresh_token=connection.refresh_token,
+                token=access_token,
+                refresh_token=refresh_token_decrypted,
                 token_uri='https://oauth2.googleapis.com/token',
                 client_id=GMAIL_CLIENT_ID,
                 client_secret=GMAIL_CLIENT_SECRET
@@ -1151,10 +1327,10 @@ def get_gmail_messages(request):
             
             service = build('gmail', 'v1', credentials=credentials)
             
-            # Get messages
+            # Get messages - First 15 emails
             results = service.users().messages().list(
                 userId='me',
-                maxResults=10,
+                maxResults=15,
                 q='in:inbox'
             ).execute()
             
@@ -1229,35 +1405,144 @@ def get_gmail_messages(request):
                 'save_message': 'Messages automatically saved to database' if save_result.get('success', False) else 'Failed to save messages to database'
             })
             
-        except Users.DoesNotExist:
-            logger.error(f"User with ID {user_id} not found")
-            return JsonResponse({
-                'success': False,
-                'error': f'User with ID {user_id} not found. Please check your user ID.'
-            }, status=404)
         except ExternalApplication.DoesNotExist:
             logger.error("Gmail application not found in database")
-            # Try to create the Gmail application if it doesn't exist
+            # Try to create the Gmail application if it doesn't exist and check for connection
             try:
-                gmail_app = ExternalApplication.objects.create(
-                    name='Gmail',
-                    description='Google Gmail Integration',
-                    category='Communication',
-                    type='OAuth',
-                    version='1.0',
-                    is_active=True,
-                    status='available'
+                with transaction.atomic():
+                    gmail_app, created = ExternalApplication.objects.get_or_create(
+                        name='Gmail',
+                        defaults={
+                            'description': 'Google Gmail Integration',
+                            'category': 'Communication',
+                            'type': 'OAuth',
+                            'version': '1.0',
+                            'is_active': True,
+                            'status': 'pending'
+                        }
+                    )
+                    if created:
+                        logger.info("Created Gmail application in database")
+                    else:
+                        logger.info("Gmail application already exists")
+                
+                # Now check for connection
+                connection = ExternalApplicationConnection.objects.filter(
+                    application=gmail_app,
+                    user=user,
+                    connection_status='active'
+                ).first()
+                
+                if not connection:
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Gmail not connected. Please connect your Gmail account first from the integrations page.'
+                    }, status=404)
+                
+                # If connection exists, continue with the original flow
+                # Check and refresh token if needed
+                if connection.token_expires_at and connection.token_expires_at <= timezone.now():
+                    if not refresh_gmail_token(connection):
+                        return JsonResponse({
+                            'success': False,
+                            'error': 'Gmail connection expired'
+                        }, status=401)
+                
+                # Build Gmail service (decrypt tokens if needed)
+                access_token = decrypt_data(connection.connection_token) if connection.connection_token else None
+                refresh_token_decrypted = decrypt_data(connection.refresh_token) if connection.refresh_token else None
+                
+                logger.info(f"[Exception Handler] Using decrypted access token (length: {len(access_token) if access_token else 0})")
+                logger.info(f"[Exception Handler] Using decrypted refresh token (length: {len(refresh_token_decrypted) if refresh_token_decrypted else 0})")
+                
+                credentials = Credentials(
+                    token=access_token,
+                    refresh_token=refresh_token_decrypted,
+                    token_uri='https://oauth2.googleapis.com/token',
+                    client_id=GMAIL_CLIENT_ID,
+                    client_secret=GMAIL_CLIENT_SECRET
                 )
-                logger.info("Created Gmail application in database")
+                
+                service = build('gmail', 'v1', credentials=credentials)
+                
+                # Get messages - First 15 emails
+                results = service.users().messages().list(
+                    userId='me',
+                    maxResults=15,
+                    q='in:inbox'
+                ).execute()
+                
+                messages = results.get('messages', [])
+                message_details = []
+                
+                for message in messages:
+                    msg = service.users().messages().get(
+                        userId='me',
+                        id=message['id'],
+                        format='full'
+                    ).execute()
+                    
+                    headers = msg['payload'].get('headers', [])
+                    header_dict = {h['name']: h['value'] for h in headers}
+                    
+                    subject = header_dict.get('Subject', 'No Subject')
+                    sender = header_dict.get('From', 'Unknown Sender')
+                    recipient = header_dict.get('To', 'Unknown Recipient')
+                    cc = header_dict.get('Cc', '')
+                    bcc = header_dict.get('Bcc', '')
+                    date = header_dict.get('Date', '')
+                    
+                    logger.info(f"Message {message['id']} - From: {sender}, To: {recipient}")
+                    
+                    message_info = {
+                        'id': message['id'],
+                        'subject': subject,
+                        'from': sender,
+                        'to': recipient,
+                        'cc': cc,
+                        'bcc': bcc,
+                        'date': date,
+                        'snippet': msg.get('snippet', ''),
+                        'attachments': []
+                    }
+                    
+                    # Extract attachments
+                    if include_attachments:
+                        attachments = extract_attachments_from_message(service, message['id'])
+                        message_info['attachments'] = attachments
+                        message_info['has_attachments'] = len(attachments) > 0
+                        message_info['attachment_count'] = len(attachments)
+                    else:
+                        message_info['has_attachments'] = False
+                        message_info['attachment_count'] = 0
+                    
+                    message_details.append(message_info)
+                
+                # Save message data to database
+                save_result = save_message_data_to_db(user_id, message_details)
+                if not save_result['success']:
+                    logger.warning(f"Failed to save message data: {save_result['error']}")
+                else:
+                    logger.info(f"Successfully saved {save_result['messages_saved']} messages")
+                
+                # Update last used
+                connection.last_used = timezone.now()
+                connection.save()
+                
                 return JsonResponse({
-                    'success': False,
-                    'error': 'Gmail application created but no active connection found. Please connect your Gmail account first.'
-                }, status=404)
+                    'success': True,
+                    'messages': message_details,
+                    'total_messages': len(message_details),
+                    'total_attachments': sum(msg.get('attachment_count', 0) for msg in message_details),
+                    'auto_saved': save_result.get('success', False),
+                    'save_message': 'Messages automatically saved to database' if save_result.get('success', False) else 'Failed to save messages to database'
+                })
+                
             except Exception as create_error:
-                logger.error(f"Failed to create Gmail application: {str(create_error)}")
+                logger.error(f"Failed to handle Gmail messages request: {str(create_error)}", exc_info=True)
                 return JsonResponse({
                     'success': False,
-                    'error': 'Gmail application not found and could not be created. Please contact support.'
+                    'error': f'Failed to fetch Gmail messages: {str(create_error)}'
                 }, status=500)
             
     except HttpError as e:
@@ -1295,15 +1580,33 @@ def get_calendar_events(request):
         # Get user's Gmail connection (same credentials work for Calendar)
         try:
             user = Users.objects.get(UserId=user_id)
-            gmail_app = ExternalApplication.objects.get(name='Gmail')
-            connection = ExternalApplicationConnection.objects.filter(
-                application=gmail_app,
-                user=user,
-                connection_status='active'
-            ).first()
+            
+            # Find Gmail app by decrypting application names
+            all_apps = ExternalApplication.objects.all()
+            gmail_apps = []
+            
+            for app in all_apps:
+                decrypted_name = decrypt_data(app.name) if app.name else app.name
+                if decrypted_name and 'gmail' in decrypted_name.lower():
+                    gmail_apps.append(app)
+            
+            logger.info(f"[Calendar] Found {len(gmail_apps)} Gmail application(s)")
+            
+            # Look for ANY active Gmail connection
+            connection = None
+            for app in gmail_apps:
+                conn = ExternalApplicationConnection.objects.filter(
+                    application=app,
+                    user=user,
+                    connection_status='active'
+                ).first()
+                if conn:
+                    connection = conn
+                    logger.info(f"[Calendar] Found active connection (ID: {conn.id})")
+                    break
             
             if not connection:
-                logger.error(f"No active Gmail connection found for user {user_id}")
+                logger.error(f"[Calendar] No active Gmail connection found for user {user_id}")
                 return JsonResponse({
                     'success': False,
                     'error': 'Gmail not connected. Please connect your Gmail account first.'
@@ -1322,10 +1625,15 @@ def get_calendar_events(request):
                     }, status=401)
                 logger.info(f"Token refreshed successfully for user {user_id}")
             
-            # Build Calendar service
+            # Build Calendar service (decrypt tokens if needed)
+            access_token = decrypt_data(connection.connection_token) if connection.connection_token else None
+            refresh_token_decrypted = decrypt_data(connection.refresh_token) if connection.refresh_token else None
+            
+            logger.info(f"[Calendar] Using decrypted tokens (access: {len(access_token) if access_token else 0}, refresh: {len(refresh_token_decrypted) if refresh_token_decrypted else 0})")
+            
             credentials = Credentials(
-                token=connection.connection_token,
-                refresh_token=connection.refresh_token,
+                token=access_token,
+                refresh_token=refresh_token_decrypted,
                 token_uri='https://oauth2.googleapis.com/token',
                 client_id=GMAIL_CLIENT_ID,
                 client_secret=GMAIL_CLIENT_SECRET,
@@ -1391,11 +1699,11 @@ def get_calendar_events(request):
                 'message': f'Successfully fetched {len(event_details)} calendar events'
             })
             
-        except (Users.DoesNotExist, ExternalApplication.DoesNotExist) as e:
-            logger.error(f"User or Gmail application not found: {str(e)}")
+        except Users.DoesNotExist as e:
+            logger.error(f"User not found: {str(e)}")
             return JsonResponse({
                 'success': False,
-                'error': 'User or Gmail application not found'
+                'error': 'User not found'
             }, status=404)
             
     except HttpError as e:
@@ -1454,14 +1762,32 @@ def download_attachment(request):
         # Get user's Gmail connection
         try:
             user = Users.objects.get(UserId=user_id)
-            gmail_app = ExternalApplication.objects.get(name='Gmail')
+            
+            # Find ALL Gmail applications by decrypting their names
+            gmail_apps = ExternalApplication.objects.all()
+            gmail_app_ids = []
+            for app in gmail_apps:
+                decrypted_app_name = decrypt_data(app.name)
+                if decrypted_app_name and decrypted_app_name.lower() == 'gmail':
+                    gmail_app_ids.append(app.id)
+                    logger.info(f"Download: ✅ Found Gmail app! ID={app.id}, decrypted name='{decrypted_app_name}'")
+            
+            if not gmail_app_ids:
+                logger.error("Download: ❌ No Gmail applications found in database after decryption.")
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Gmail application not found in database. Please ensure it is configured.'
+                }, status=404)
+            
+            # Search for active connection across all Gmail applications
             connection = ExternalApplicationConnection.objects.filter(
-                application=gmail_app,
+                application_id__in=gmail_app_ids,
                 user=user,
                 connection_status='active'
             ).first()
             
             if not connection:
+                logger.error(f"Download: ❌ No active Gmail connection found for user {user_id} across {len(gmail_app_ids)} Gmail apps")
                 return JsonResponse({
                     'success': False,
                     'error': 'Gmail not connected'
@@ -1475,10 +1801,13 @@ def download_attachment(request):
                         'error': 'Gmail connection expired'
                     }, status=401)
             
-            # Build Gmail service
+            # Build Gmail service (decrypt tokens if needed)
+            access_token = decrypt_data(connection.connection_token) if connection.connection_token else None
+            refresh_token_decrypted = decrypt_data(connection.refresh_token) if connection.refresh_token else None
+            
             credentials = Credentials(
-                token=connection.connection_token,
-                refresh_token=connection.refresh_token,
+                token=access_token,
+                refresh_token=refresh_token_decrypted,
                 token_uri='https://oauth2.googleapis.com/token',
                 client_id=GMAIL_CLIENT_ID,
                 client_secret=GMAIL_CLIENT_SECRET
@@ -1582,18 +1911,14 @@ def get_stored_gmail_data_formatted(request):
                     'error': 'Gmail not connected'
                 }, status=401)
             
-            # Get stored data
-            projects_data = connection.projects_data or '{}'
+            # Get stored data (decrypt if needed)
+            parsed_data = decrypt_projects_data(connection)
             
-            # Try to parse the JSON data
-            try:
-                parsed_data = json.loads(projects_data)
-            except json.JSONDecodeError as e:
+            if not parsed_data:
                 return JsonResponse({
                     'success': False,
-                    'error': f'Invalid JSON data in database: {str(e)}',
-                    'raw_data': projects_data[:500] + "..." if len(projects_data) > 500 else projects_data
-                }, status=500)
+                    'error': 'No data found in connection. projects_data is empty.',
+                }, status=404)
             
             if 'gmail_messages' not in parsed_data:
                 return JsonResponse({
@@ -1610,7 +1935,7 @@ def get_stored_gmail_data_formatted(request):
                     'metadata': gmail_data.get('metadata', {}),
                     'messages': gmail_data.get('messages', [])
                 },
-                'raw_json_size': len(projects_data),
+                'raw_json_size': len(json.dumps(parsed_data)),
                 'parsed_successfully': True
             }
             
@@ -1666,14 +1991,8 @@ def get_stored_gmail_data(request):
                     'error': 'Gmail not connected'
                 }, status=401)
             
-            # Get stored data - JSONField returns dict directly
-            projects_data = connection.projects_data or {}
-            if isinstance(projects_data, str):
-                # Handle legacy string format
-                try:
-                    projects_data = json.loads(projects_data)
-                except (json.JSONDecodeError, TypeError):
-                    projects_data = {}
+            # Get stored data (decrypt if needed)
+            projects_data = decrypt_projects_data(connection)
             
             if 'gmail_messages' not in projects_data:
                 return JsonResponse({
@@ -1944,6 +2263,146 @@ def save_gmail_message_to_integration_list(request):
         }, status=400)
     except Exception as e:
         logger.error(f"Error saving Gmail message to integration list: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def debug_gmail_database_state(request):
+    """
+    Debug endpoint to check Gmail database state
+    """
+    try:
+        user_id = request.GET.get('user_id', 1)
+        
+        # Get user
+        try:
+            user = Users.objects.get(UserId=user_id)
+        except Users.DoesNotExist:
+            return JsonResponse({'error': f'User {user_id} not found'}, status=404)
+        
+        # Get all Gmail applications
+        gmail_apps = ExternalApplication.objects.filter(name='Gmail')
+        
+        # Get all connections for this user
+        all_connections = ExternalApplicationConnection.objects.filter(user=user)
+        
+        gmail_app_data = []
+        for app in gmail_apps:
+            gmail_app_data.append({
+                'id': app.id,
+                'name': app.name,
+                'status': app.status,
+                'is_active': app.is_active,
+                'created_at': str(app.created_at) if hasattr(app, 'created_at') else 'N/A'
+            })
+        
+        connection_data = []
+        for conn in all_connections:
+            connection_data.append({
+                'id': conn.id,
+                'application_id': conn.application.id,
+                'application_name': conn.application.name,
+                'connection_status': conn.connection_status,
+                'last_used': str(conn.last_used) if conn.last_used else 'Never',
+                'has_connection_token': bool(conn.connection_token),
+                'has_refresh_token': bool(conn.refresh_token),
+                'token_expires_at': str(conn.token_expires_at) if conn.token_expires_at else 'N/A'
+            })
+        
+        # Try to find active Gmail connection
+        active_connections = []
+        for app in gmail_apps:
+            conns = ExternalApplicationConnection.objects.filter(
+                application=app,
+                user=user,
+                connection_status='active'
+            )
+            for conn in conns:
+                active_connections.append({
+                    'connection_id': conn.id,
+                    'application_id': app.id,
+                    'application_name': app.name
+                })
+        
+        return JsonResponse({
+            'success': True,
+            'user_id': user_id,
+            'total_gmail_apps': len(gmail_apps),
+            'gmail_applications': gmail_app_data,
+            'total_connections': len(all_connections),
+            'all_user_connections': connection_data,
+            'active_gmail_connections': active_connections,
+            'active_connection_count': len(active_connections)
+        })
+        
+    except Exception as e:
+        logger.error(f"Debug endpoint error: {str(e)}", exc_info=True)
+        return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def debug_decrypt_projects_data(request):
+    """
+    Debug endpoint to test decryption of projects_data
+    """
+    try:
+        # Try to get user_id from JWT token first, then from query param
+        user_id = None
+        
+        # Check if user is authenticated via JWT
+        if hasattr(request, 'user') and request.user and hasattr(request.user, 'UserId'):
+            user_id = request.user.UserId
+        else:
+            user_id = request.GET.get('user_id', 1)
+        
+        try:
+            user = Users.objects.get(UserId=user_id)
+            gmail_app = ExternalApplication.objects.get(name='Gmail')
+            connection = ExternalApplicationConnection.objects.filter(
+                application=gmail_app,
+                user=user,
+                connection_status='active'
+            ).first()
+            
+            if not connection:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Gmail not connected'
+                }, status=404)
+            
+            # Get raw projects_data
+            raw_projects_data = connection.projects_data
+            raw_type = type(raw_projects_data).__name__
+            raw_is_encrypted = is_encrypted_data(str(raw_projects_data)) if raw_projects_data else False
+            
+            # Decrypt projects_data
+            decrypted_data = decrypt_projects_data(connection)
+            
+            return JsonResponse({
+                'success': True,
+                'debug_info': {
+                    'raw_type': raw_type,
+                    'raw_is_encrypted': raw_is_encrypted,
+                    'raw_preview': str(raw_projects_data)[:200] if raw_projects_data else 'None',
+                    'decrypted_successfully': bool(decrypted_data),
+                    'decrypted_keys': list(decrypted_data.keys()) if isinstance(decrypted_data, dict) else [],
+                    'has_user_info': 'user_info' in decrypted_data if isinstance(decrypted_data, dict) else False,
+                    'has_gmail_messages': 'gmail_messages' in decrypted_data if isinstance(decrypted_data, dict) else False,
+                },
+                'decrypted_data': decrypted_data
+            })
+            
+        except (Users.DoesNotExist, ExternalApplication.DoesNotExist):
+            return JsonResponse({
+                'success': False,
+                'error': 'User or Gmail application not found'
+            }, status=404)
+            
+    except Exception as e:
+        logger.error(f"Error in debug endpoint: {str(e)}", exc_info=True)
         return JsonResponse({
             'success': False,
             'error': str(e)

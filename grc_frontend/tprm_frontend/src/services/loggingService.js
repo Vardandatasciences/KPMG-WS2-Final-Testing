@@ -96,9 +96,18 @@ class LoggingService {
       // Get JWT token from localStorage
       const token = localStorage.getItem('session_token');
 
-      // Skip logging if no session token (public/unauthenticated pages)
-      if (!token) {
-        console.warn('[LoggingService] No session token found; skipping log submission.');
+      // Skip logging if no session token or on public/standalone pages
+      const isPublicPage = typeof document !== 'undefined' && (
+        document.body.classList.contains('standalone-route') ||
+        window.location.pathname.includes('/award-response')
+      );
+      
+      if (!token || isPublicPage) {
+        if (isPublicPage) {
+          console.debug('[LoggingService] Public page detected; skipping log submission.');
+        } else {
+          console.warn('[LoggingService] No session token found; skipping log submission.');
+        }
         return null;
       }
 
@@ -115,6 +124,11 @@ class LoggingService {
       });
 
       if (!response.ok) {
+        // Silently handle 403 (Forbidden) errors for public/unauthenticated pages
+        if (response.status === 403) {
+          console.debug('[LoggingService] Logging skipped: Permission denied (403) - likely a public page');
+          return null;
+        }
         console.error('Failed to send log:', response.statusText);
         return null;
       }
@@ -122,6 +136,11 @@ class LoggingService {
       const result = await response.json();
       return result;
     } catch (error) {
+      // Silently handle 403 (Forbidden) errors for public/unauthenticated pages
+      if (error.message?.includes('403') || error.message?.includes('Forbidden') || error.message?.includes('Permission denied')) {
+        console.debug('[LoggingService] Logging skipped: Permission denied - likely a public page');
+        return null;
+      }
       console.error('Error sending log:', error);
       // Don't throw error - logging should not break the application
       return null;

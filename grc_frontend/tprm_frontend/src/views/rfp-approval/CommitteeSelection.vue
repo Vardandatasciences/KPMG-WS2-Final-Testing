@@ -689,7 +689,7 @@ const createCommitteeEvaluationWorkflow = async (rfpId, committeeMembers, respon
     console.log('Response IDs:', responseIds)
     
     // Check if workflow already exists for this RFP
-    const existingWorkflowsResponse = await fetch(getTprmApiUrl('approval/workflows/'), {
+    const existingWorkflowsResponse = await fetch(getTprmApiUrl('rfp-approval/workflows/'), {
       method: 'GET',
       headers: getAuthHeaders()
     })
@@ -741,25 +741,63 @@ const createCommitteeEvaluationWorkflow = async (rfpId, committeeMembers, respon
     console.log('Workflow data to be submitted:', workflowData)
     
     // Submit workflow to backend
-    const response = await fetch(getTprmApiUrl('approval/workflows/'), {
-      method: 'POST',
-      headers: {
-        ...getAuthHeaders(),
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify(workflowData)
-    })
+    // Use 'rfp-approval/workflows/' instead of 'approval/workflows/' for compatibility
+    let workflowUrl = getTprmApiUrl('rfp-approval/workflows/')
+    console.log('Workflow creation URL:', workflowUrl)
     
-    if (response.ok) {
-      const result = await response.json()
-      console.log('Committee evaluation workflow created successfully:', result)
-      PopupService.success(`Committee evaluation workflow created! Workflow ID: ${result.workflow_id}`, 'Workflow Created')
-      return result
-    } else {
-      const errorText = await response.text()
-      console.error('Failed to create committee evaluation workflow:', errorText)
-      throw new Error(`Failed to create workflow: ${errorText}`)
+    let response
+    try {
+      response = await fetch(workflowUrl, {
+        method: 'POST',
+        headers: {
+          ...getAuthHeaders(),
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(workflowData)
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        console.log('Committee evaluation workflow created successfully:', result)
+        PopupService.success(`Committee evaluation workflow created! Workflow ID: ${result.workflow_id}`, 'Workflow Created')
+        return result
+      } else {
+        // If primary endpoint returns error, try fallback
+        const errorText = await response.text()
+        console.warn('Primary endpoint returned error, trying fallback:', response.status, errorText)
+        throw new Error(`Primary endpoint failed: ${response.status}`)
+      }
+    } catch (primaryError) {
+      // Try fallback endpoint if primary fails
+      console.warn('Primary endpoint failed, trying fallback:', primaryError)
+      try {
+        const fallbackUrl = getTprmApiUrl('approval/workflows/')
+        console.log('Trying fallback URL:', fallbackUrl)
+        response = await fetch(fallbackUrl, {
+          method: 'POST',
+          headers: {
+            ...getAuthHeaders(),
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify(workflowData)
+        })
+        
+        if (response.ok) {
+          const result = await response.json()
+          console.log('Committee evaluation workflow created successfully (fallback):', result)
+          PopupService.success(`Committee evaluation workflow created! Workflow ID: ${result.workflow_id}`, 'Workflow Created')
+          return result
+        } else {
+          const errorText = await response.text()
+          console.error('Failed to create committee evaluation workflow (fallback):', errorText)
+          throw new Error(`Failed to create workflow: ${errorText}`)
+        }
+      } catch (fallbackError) {
+        console.error('Both endpoints failed:', fallbackError)
+        throw new Error(`Failed to create workflow: ${fallbackError.message}`)
+      }
     }
   } catch (error) {
     console.error('Error creating committee evaluation workflow:', error)

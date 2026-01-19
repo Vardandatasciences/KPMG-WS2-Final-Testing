@@ -437,43 +437,126 @@ export default {
       }
     }
 
-    // Load project tasks
+    // Load project tasks from Jira
     const loadProjectTasks = async (project) => {
       try {
         console.log('📋 Loading tasks for project:', project.project_name)
-        // For now, we'll add mock tasks. In the future, this could call an API
-        const mockTasks = [
-          {
-            id: 1,
-            summary: 'Setup project infrastructure',
-            status: 'Done',
-            assignee: { displayName: 'John Doe' },
-            priority: { name: 'High' },
-            updated: new Date().toISOString()
-          },
-          {
-            id: 2,
-            summary: 'Implement user authentication',
-            status: 'In Progress',
-            assignee: { displayName: 'Jane Smith' },
-            priority: { name: 'Medium' },
-            updated: new Date().toISOString()
-          },
-          {
-            id: 3,
-            summary: 'Create project documentation',
-            status: 'To Do',
-            assignee: null,
-            priority: { name: 'Low' },
-            updated: new Date().toISOString()
-          }
-        ]
+        console.log('📋 Project key:', project.project_key, 'Project ID:', project.project_id)
         
-        // Add tasks to the project
-        project.tasks = mockTasks
-        console.log('✅ Loaded tasks for project:', project.project_name)
+        // Get authentication token
+        const accessToken = localStorage.getItem('access_token') || sessionStorage.getItem('access_token')
+        
+        // Call Jira API to fetch issues/tasks
+        const response = await fetch(API_ENDPOINTS.JIRA_PROJECT_ISSUES, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            user_id: currentUserId.value,
+            project_key: project.project_key,
+            project_id: project.project_id,
+            max_results: 100 // Fetch up to 100 tasks
+          })
+        })
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+        
+        const data = await response.json()
+        console.log('📋 Jira API Response:', data)
+        
+        if (data.success && data.issues) {
+          // Format tasks for display
+          const formattedTasks = data.issues.map(issue => ({
+            id: issue.id,
+            key: issue.key,
+            summary: issue.summary || 'Untitled Task',
+            status: issue.status || 'To Do',
+            assignee: issue.assignee ? {
+              displayName: issue.assignee.displayName || 'Unassigned',
+              emailAddress: issue.assignee.emailAddress,
+              accountId: issue.assignee.accountId
+            } : null,
+            priority: issue.priority ? {
+              name: issue.priority.name || 'Medium'
+            } : { name: 'Medium' },
+            updated: issue.updated || new Date().toISOString(),
+            created: issue.created,
+            description: issue.description,
+            issue_type: issue.issue_type
+          }))
+          
+          // Add tasks to the project
+          project.tasks = formattedTasks
+          console.log(`✅ Loaded ${formattedTasks.length} tasks for project:`, project.project_name)
+          
+          // Save tasks to database
+          await saveTasksToDatabase(project, formattedTasks)
+        } else {
+          console.warn('⚠️ No tasks found or API error:', data.error)
+          project.tasks = []
+        }
       } catch (err) {
         console.error('❌ Error loading project tasks:', err)
+        // Set empty array on error
+        project.tasks = []
+      }
+    }
+    
+    // Save tasks to database
+    const saveTasksToDatabase = async (project, tasks) => {
+      try {
+        if (!tasks || tasks.length === 0) {
+          console.log('📋 No tasks to save')
+          return
+        }
+        
+        console.log(`💾 Saving ${tasks.length} tasks to database for project:`, project.project_name)
+        
+        // Get authentication token
+        const accessToken = localStorage.getItem('access_token') || sessionStorage.getItem('access_token')
+        
+        // Call Streamline API to save tasks
+        const response = await fetch(API_ENDPOINTS.STREAMLINE_SAVE_PROJECT_TASKS, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            user_id: currentUserId.value,
+            project: {
+              project_id: project.project_id,
+              project_name: project.project_name,
+              project_key: project.project_key
+            },
+            tasks: tasks,
+            platform: 'jira'
+          })
+        })
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+        
+        const data = await response.json()
+        console.log('💾 Save tasks response:', data)
+        
+        if (data.success) {
+          console.log(`✅ Saved ${data.saved_count} tasks, skipped ${data.skipped_count} duplicates`)
+        } else {
+          console.warn('⚠️ Failed to save tasks:', data.error)
+        }
+      } catch (err) {
+        console.error('❌ Error saving tasks to database:', err)
+        // Don't throw - this is not critical for displaying tasks
       }
     }
 
@@ -591,6 +674,7 @@ export default {
       loadUserProjects,
       viewProjectDetails,
       loadProjectTasks,
+      saveTasksToDatabase,
       getStatusClass,
       getStatusText,
       getTaskStatusClass,

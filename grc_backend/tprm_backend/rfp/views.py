@@ -13,7 +13,7 @@ from django.http import JsonResponse, HttpResponse, HttpResponseRedirect
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_http_methods, require_GET
 from django.utils.decorators import method_decorator
-from django.db import transaction, connection
+from django.db import transaction, connection, connections
 from django.core.mail import send_mail, EmailMessage
 from django.template.loader import render_to_string
 from django.conf import settings
@@ -2541,16 +2541,37 @@ class AwardResponseView(APIView):
                 }, status=status.HTTP_404_NOT_FOUND)
             
             # Update notification status
+            credentials_created = False
+            credentials_info = None
+            credentials_error = None
+            
             if response_action == 'accept':
                 notification.notification_status = 'accepted'
                
                 # Create vendor credentials and temp_vendor record
+                # CRITICAL: This must succeed - credentials are required for vendor access
                 try:
+                    print(f"[INFO] Starting credential creation for notification {notification.notification_id}, response_id: {notification.response_id}")
                     credentials = self._create_vendor_credentials(notification)
-                    print(f"[INFO] Vendor credentials created successfully for notification {notification.notification_id}")
+                    credentials_created = True
+                    credentials_info = {
+                        'user_id': credentials.get('user_id'),
+                        'username': credentials.get('username'),
+                        'temp_vendor_id': credentials.get('temp_vendor_id'),
+                        'email_sent': credentials.get('email_sent', False)  # Use actual email_sent status from credentials
+                    }
+                    print(f"[INFO] ✅ Vendor credentials created successfully for notification {notification.notification_id}")
+                    print(f"[INFO] Credentials: user_id={credentials.get('user_id')}, username={credentials.get('username')}, email={credentials.get('vendor_email')}, email_sent={credentials.get('email_sent')}")
+                    logger.info(f"Vendor credentials created: user_id={credentials.get('user_id')}, username={credentials.get('username')}, email={credentials.get('vendor_email')}")
                 except Exception as e:
-                    print(f"[ERROR] Failed to create vendor credentials: {str(e)}")
-                    # Continue anyway - we can create credentials manually later
+                    import traceback
+                    error_traceback = traceback.format_exc()
+                    credentials_error = str(e)
+                    print(f"[ERROR] ❌ Failed to create vendor credentials: {credentials_error}")
+                    print(f"[ERROR] Traceback: {error_traceback}")
+                    logger.error(f"Failed to create vendor credentials for notification {notification.notification_id}: {credentials_error}", exc_info=True)
+                    # Log the error but don't fail the acceptance - admin can create credentials manually
+                    # However, we should still try to send a notification about the issue
                    
             else:
                 notification.notification_status = 'rejected'
@@ -2570,11 +2591,34 @@ class AwardResponseView(APIView):
                 print(f"[WARN] Vendor rejected award for response {notification.response_id}")
                 # TODO: Send notification to admin about rejection
             
-            return Response({
+            # Return response with credential creation status
+            response_data = {
                 'success': True,
                 'message': f'Award {response_action}ed successfully',
                 'notification_status': notification.notification_status
-            })
+            }
+            
+            # Include credential information if award was accepted
+            if response_action == 'accept':
+                if credentials_created:
+                    response_data['credentials_created'] = True
+                    response_data['credentials_info'] = credentials_info
+                    response_data['temp_vendor_created'] = True  # Explicitly indicate temp_vendor was created
+                    response_data['temp_vendor_id'] = credentials_info.get('temp_vendor_id')  # Include temp_vendor_id
+                    if credentials_info and credentials_info.get('email_sent'):
+                        response_data['message'] = 'Award accepted successfully. Your vendor portal credentials have been sent to your email address.'
+                        response_data['credentials_email_sent'] = True
+                    else:
+                        response_data['message'] = 'Award accepted successfully. However, there was an issue sending your credentials via email. Please contact the RFP team to receive your login credentials.'
+                        response_data['credentials_email_sent'] = False
+                        response_data['email_error'] = credentials_info.get('email_error') if credentials_info else None
+                else:
+                    response_data['credentials_created'] = False
+                    response_data['temp_vendor_created'] = False
+                    response_data['credentials_error'] = credentials_error
+                    response_data['message'] = 'Award accepted successfully. However, there was an issue creating your vendor portal credentials. Please contact the RFP team.'
+            
+            return Response(response_data)
             
         except Exception as e:
             print(f"Error processing award response: {str(e)}")
@@ -2648,12 +2692,29 @@ class AwardResponseView(APIView):
         """
        
         try:
+            print(f"[INFO] 🔧 Starting vendor credential creation process...")
+            print(f"[INFO] 🔧 Notification ID: {notification.notification_id}")
+            print(f"[INFO] 🔧 Response ID: {notification.response_id}")
+            print(f"[INFO] 🔧 Recipient Email: {notification.recipient_email}")
+            
+            # Validate notification has required fields
+            if not notification.response_id:
+                raise ValueError("Notification missing response_id")
+            if not notification.recipient_email:
+                raise ValueError("Notification missing recipient_email")
+            
             # Get vendor details from RFP response
-           
             try:
                 response = RFPResponse.objects.get(response_id=notification.response_id)
+                print(f"[INFO] ✅ Found RFP response: response_id={response.response_id}")
             except RFPResponse.DoesNotExist:
-                raise Exception(f"RFP Response not found for response_id: {notification.response_id}")
+                error_msg = f"RFP Response not found for response_id: {notification.response_id}"
+                print(f"[ERROR] ❌ {error_msg}")
+                raise Exception(error_msg)
+            except Exception as e:
+                error_msg = f"Error fetching RFP response: {str(e)}"
+                print(f"[ERROR] ❌ {error_msg}")
+                raise Exception(error_msg) from e
            
             # Extract vendor information from response_documents
             vendor_name = 'Vendor'
@@ -2680,210 +2741,416 @@ class AwardResponseView(APIView):
                 except Exception as e:
                     print(f"[WARN] Failed to parse response_documents: {str(e)}")
            
+            # Validate email before proceeding
+            if not vendor_email or vendor_email.strip() == '':
+                error_msg = f"Vendor email is required but not found. Notification recipient_email: {notification.recipient_email}"
+                print(f"[ERROR] ❌ {error_msg}")
+                raise ValueError(error_msg)
+            
+            # Validate email format
+            import re
+            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            if not re.match(email_pattern, vendor_email):
+                error_msg = f"Invalid email format: {vendor_email}"
+                print(f"[ERROR] ❌ {error_msg}")
+                raise ValueError(error_msg)
+            
+            print(f"[INFO] ✅ Creating credentials for vendor: name={vendor_name}, email={vendor_email}, company={company_name}")
+            
             # Generate secure random password
             password_length = 12
             password_chars = string.ascii_letters + string.digits + "!@#$%^&*"
             generated_password = ''.join(secrets.choice(password_chars) for _ in range(password_length))
-           
+            
             # Create username from email (first part before @)
             base_username = vendor_email.split('@')[0] if vendor_email else vendor_name
             normalized_username = re.sub(r'[^a-zA-Z0-9]', '', base_username) or f"vendor{notification.response_id}"
             username = normalized_username
+            
+            print(f"[INFO] Generated credentials: username={username}, password_length={len(generated_password)}")
+            
+            # Use transaction to ensure all database operations are committed
+            # IMPORTANT: Use correct database connections
+            # - users table is in default database (grc2)
+            # - temp_vendor and rbac_tprm tables are in TPRM database (tprm_integration)
+            print(f"[INFO] 🔧 Starting database transactions...")
+            
+            # Get TPRM database connection for temp_vendor and rbac_tprm operations
+            tprm_db_connection = None
+            if 'tprm' in connections.databases:
+                tprm_db_connection = connections['tprm']
+                db_name = tprm_db_connection.settings_dict.get('NAME', 'tprm_integration')
+                print(f"[INFO] 🔧 TPRM database connection available: {db_name}")
+            else:
+                print(f"[WARN] ⚠️ TPRM database connection not found, using default connection")
+                tprm_db_connection = connection
+            
+            user_id = None
+            username = None
+            
+            try:
+                # STEP 1: Create/update user in default database (grc2)
+                print(f"[INFO] 🔧 Step 1: Creating user in default database...")
+                with transaction.atomic(using='default'):
+                    with connection.cursor() as cursor:
+                        print(f"[INFO] 🔧 Default database cursor obtained")
+                        
+                        # Check if user already exists
+                        print(f"[INFO] 🔍 Checking if user exists with email: {vendor_email}")
+                        cursor.execute("SELECT UserId, UserName FROM users WHERE Email = %s", [vendor_email])
+                        existing_user = cursor.fetchone()
+                        if existing_user:
+                            print(f"[INFO] ℹ️ User already exists: UserId={existing_user[0]}, UserName={existing_user[1]}")
+                        else:
+                            print(f"[INFO] ℹ️ User does not exist, will create new user")
+                       
+                        def get_unique_username(initial_username, current_user_id=None):
+                            candidate = initial_username
+                            counter = 1
+                            while True:
+                                cursor.execute("SELECT UserId FROM users WHERE UserName = %s", [candidate])
+                                row = cursor.fetchone()
+                                if not row or (current_user_id and row[0] == current_user_id):
+                                    return candidate
+                                candidate = f"{initial_username}{counter}"
+                                counter += 1
+
+                        if existing_user:
+                            user_id, existing_username = existing_user
+                            username = get_unique_username(normalized_username, user_id)
+                            print(f"[INFO] 🔄 User already exists with UserId: {user_id}, updating credentials...")
+                            try:
+                                cursor.execute(
+                                    """
+                                    UPDATE users
+                                    SET UserName = %s,
+                                        Password = %s,
+                                        UpdatedAt = %s
+                                    WHERE UserId = %s
+                                    """,
+                                    [
+                                        username,
+                                        generated_password,
+                                        timezone.now(),
+                                        user_id,
+                                    ],
+                                )
+                                print(f"[INFO] ✅ Updated existing user: UserId={user_id}, UserName={username}")
+                            except Exception as e:
+                                error_msg = f"Failed to update existing user: {str(e)}"
+                                print(f"[ERROR] ❌ {error_msg}")
+                                raise Exception(error_msg) from e
+                        else:
+                            # Create user in users table
+                            print(f"[INFO] 👤 Creating new user in users table...")
+                            username = get_unique_username(normalized_username)
+                            print(f"[INFO] 👤 Generated username: {username}")
+
+                            try:
+                                cursor.execute("""
+                                    INSERT INTO users (
+                                        UserName, Email, Password, FirstName, LastName,
+                                        IsActive, CreatedAt, UpdatedAt
+                                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                                """, [
+                                    username,
+                                    vendor_email,
+                                    generated_password,
+                                    vendor_name.split(' ')[0] if ' ' in vendor_name else vendor_name,
+                                    vendor_name.split(' ')[-1] if ' ' in vendor_name else '',
+                                    'Y',
+                                    timezone.now(),
+                                    timezone.now()
+                                ])
+                                user_id = cursor.lastrowid
+                                print(f"[INFO] ✅ Created user with UserId: {user_id}, UserName: {username}, Email: {vendor_email}")
+                            except Exception as e:
+                                error_msg = f"Failed to create user in users table: {str(e)}"
+                                print(f"[ERROR] ❌ {error_msg}")
+                                import traceback
+                                print(f"[ERROR] Traceback: {traceback.format_exc()}")
+                                raise Exception(error_msg) from e
+                        
+                        # Verify user was created
+                        cursor.execute("SELECT UserId, UserName, Email FROM users WHERE UserId = %s", [user_id])
+                        created_user = cursor.fetchone()
+                        if created_user:
+                            print(f"[INFO] ✅ Verified user created in database: UserId={created_user[0]}, UserName={created_user[1]}, Email={created_user[2]}")
+                        else:
+                            raise Exception(f"User was not created in database! UserId: {user_id}")
+                
+                # STEP 2: Create RBAC and temp_vendor in TPRM database (tprm_integration)
+                print(f"[INFO] 🔧 Step 2: Creating RBAC and temp_vendor in TPRM database...")
+                temp_vendor_id = None
+                
+                with transaction.atomic(using='tprm' if 'tprm' in connections.databases else 'default'):
+                    with tprm_db_connection.cursor() as tprm_cursor:
+                        print(f"[INFO] 🔧 TPRM database cursor obtained")
+                        
+                        # 2. Create RBAC permissions in rbac_tprm table
+                        rbac_table_exists = False
+                        try:
+                            tprm_cursor.execute("SELECT 1 FROM rbac_tprm LIMIT 1")
+                            rbac_table_exists = True
+                            print(f"[INFO] ✅ rbac_tprm table exists in TPRM database")
+                        except Exception as table_check_error:
+                            error_str = str(table_check_error).lower()
+                            if "doesn't exist" in error_str or "table" in error_str and "not found" in error_str:
+                                print(f"[WARN] ⚠️ rbac_tprm table does not exist - will skip RBAC creation")
+                                rbac_table_exists = False
+                            else:
+                                print(f"[WARN] Could not verify rbac_tprm table: {str(table_check_error)}")
+                                rbac_table_exists = False
+                        
+                        if rbac_table_exists:
+                            print(f"[INFO] 🔐 Creating/updating RBAC permissions for UserId: {user_id}...")
+                            try:
+                                tprm_cursor.execute("SELECT RBACId FROM rbac_tprm WHERE UserId = %s", [user_id])
+                                existing_rbac = tprm_cursor.fetchone()
+                            except Exception as e:
+                                print(f"[WARN] Could not check existing RBAC record: {str(e)}")
+                                existing_rbac = None
+                           
+                            if not existing_rbac:
+                                print(f"[INFO] 🔐 Creating new RBAC record...")
+                                try:
+                                    tprm_cursor.execute("""
+                                        INSERT INTO rbac_tprm (
+                                            UserId, UserName, Role,
+                                            ViewRFP, ViewRFPResponses, SubmitRFPResponse, WithdrawRFPResponse,
+                                            DownloadRFPDocuments, PreviewRFPDocuments, UploadDocumentsForRFP,
+                                            ViewVendors, ViewContactsDocuments, ViewQuestionnaires,
+                                            SubmitQuestionnaireResponses, ViewRiskAssessments,
+                                            ViewPerformance, ViewDashboardTrend,
+                                            CreatedAt, UpdatedAt, IsActive
+                                        ) VALUES (
+                                            %s, %s, %s,
+                                            1, 1, 1, 1,
+                                            1, 1, 1,
+                                            1, 1, 1,
+                                            1, 1,
+                                            1, 1,
+                                            %s, %s, 'Y'
+                                        )
+                                    """, [
+                                        user_id,
+                                        vendor_name,
+                                        'Vendor',
+                                        timezone.now(),
+                                        timezone.now()
+                                    ])
+                                    print(f"[INFO] ✅ Created RBAC permissions for UserId: {user_id}")
+                                except Exception as e:
+                                    error_msg = f"Failed to create RBAC record: {str(e)}"
+                                    print(f"[ERROR] ❌ {error_msg}")
+                                    import traceback
+                                    print(f"[ERROR] Traceback: {traceback.format_exc()}")
+                                    print(f"[WARN] Continuing without RBAC permissions - user can still be created")
+                            else:
+                                print(f"[INFO] ℹ️ RBAC record already exists for UserId: {user_id}, updating permissions...")
+
+                            # Ensure essential vendor permissions are enabled
+                            try:
+                                tprm_cursor.execute("""
+                                    UPDATE rbac_tprm
+                                    SET
+                                        ViewVendors = 1,
+                                        CreateVendor = 1,
+                                        UpdateVendor = 1,
+                                        SubmitVendorForApproval = 1,
+                                        ViewContactsDocuments = 1,
+                                        AddUpdateContactsDocuments = 1,
+                                        ViewQuestionnaires = 1,
+                                        SubmitQuestionnaireResponses = 1,
+                                        ViewRiskAssessments = 1,
+                                        ViewPerformance = 1,
+                                        ViewDashboardTrend = 1
+                                    WHERE UserId = %s
+                                """, [user_id])
+                                print(f"[INFO] ✅ Updated RBAC permissions for UserId: {user_id}")
+                            except Exception as e:
+                                error_msg = f"Failed to update RBAC permissions: {str(e)}"
+                                print(f"[WARN] ⚠️ {error_msg}")
+                                print(f"[WARN] Continuing despite RBAC update error...")
+                        else:
+                            print(f"[WARN] ⚠️ rbac_tprm table does not exist - skipping RBAC permissions creation")
+                            logger.warning(f"rbac_tprm table does not exist - user {user_id} created without RBAC permissions")
+                       
+                        # 3. Create temp_vendor record
+                        print(f"[INFO] 🏢 Creating/updating temp_vendor record for response_id: {notification.response_id}...")
+                        try:
+                            tprm_cursor.execute("SELECT id, UserId FROM temp_vendor WHERE response_id = %s", [notification.response_id])
+                            existing_temp_vendor = tprm_cursor.fetchone()
+                        except Exception as e:
+                            error_msg = f"Failed to check existing temp_vendor: {str(e)}"
+                            print(f"[ERROR] ❌ {error_msg}")
+                            import traceback
+                            print(f"[ERROR] Traceback: {traceback.format_exc()}")
+                            raise Exception(error_msg) from e
+                       
+                        if not existing_temp_vendor:
+                            # Generate vendor code
+                            vendor_code = f"VEN-{str(uuid.uuid4())[:8].upper()}"
+                           
+                            print(f"[INFO] 🏢 Creating new temp_vendor record...")
+                            print(f"[INFO] 🏢 Vendor details: company_name={company_name}, user_id={user_id}, vendor_code={vendor_code}")
+                           
+                            try:
+                                tprm_cursor.execute("""
+                                    INSERT INTO temp_vendor (
+                                        UserId, vendor_code, company_name, legal_name,
+                                        lifecycle_stage, status, vendor_category,
+                                        risk_level, is_critical_vendor, created_at, updated_at,
+                                        response_id
+                                    ) VALUES (
+                                        %s, %s, %s, %s,
+                                        %s, %s, %s,
+                                        %s, %s, %s, %s,
+                                        %s
+                                    )
+                                """, [
+                                    user_id,
+                                    vendor_code,
+                                    company_name,
+                                    company_name,
+                                    1,
+                                    'pending_onboarding',
+                                    'New Vendor',
+                                    'Medium',
+                                    0,
+                                    timezone.now(),
+                                    timezone.now(),
+                                    notification.response_id
+                                ])
+                                temp_vendor_id = tprm_cursor.lastrowid
+                                print(f"[INFO] ✅ Created temp_vendor record with id: {temp_vendor_id}, vendor_code: {vendor_code}")
+                                logger.info(f"Created temp_vendor: id={temp_vendor_id}, vendor_code={vendor_code}, company_name={company_name}, user_id={user_id}")
+                            except Exception as e:
+                                error_msg = f"Failed to create temp_vendor record: {str(e)}"
+                                print(f"[ERROR] ❌ {error_msg}")
+                                import traceback
+                                print(f"[ERROR] Traceback: {traceback.format_exc()}")
+                                if "Unknown column" in str(e) or "Table" in str(e):
+                                    error_msg = f"Database schema issue: {str(e)}. Please ensure temp_vendor table exists with all required columns in tprm_integration database."
+                                raise Exception(error_msg) from e
+                        else:
+                            temp_vendor_id, existing_user_id = existing_temp_vendor
+                            print(f"[INFO] ⚠️ temp_vendor record already exists with id: {temp_vendor_id}, existing_user_id: {existing_user_id}")
+                            try:
+                                tprm_cursor.execute(
+                                    """
+                                    UPDATE temp_vendor
+                                    SET UserId = %s,
+                                        company_name = %s,
+                                        legal_name = %s,
+                                        vendor_category = COALESCE(vendor_category, %s),
+                                        updated_at = %s,
+                                        status = 'pending_onboarding'
+                                    WHERE id = %s
+                                    """,
+                                    [
+                                        user_id,
+                                        company_name,
+                                        company_name,
+                                        'New Vendor',
+                                        timezone.now(),
+                                        temp_vendor_id,
+                                    ],
+                                )
+                                print(f"[INFO] ✅ Updated temp_vendor record with id: {temp_vendor_id} to link with user_id: {user_id}")
+                                logger.info(f"Updated temp_vendor: id={temp_vendor_id}, linked to user_id={user_id}, company_name={company_name}")
+                            except Exception as e:
+                                error_msg = f"Failed to update temp_vendor record: {str(e)}"
+                                print(f"[ERROR] ❌ {error_msg}")
+                                import traceback
+                                print(f"[ERROR] Traceback: {traceback.format_exc()}")
+                                raise Exception(error_msg) from e
+                        
+                        # Verify temp_vendor record
+                        tprm_cursor.execute("SELECT id FROM temp_vendor WHERE id = %s", [temp_vendor_id])
+                        temp_vendor_record = tprm_cursor.fetchone()
+                        if temp_vendor_record:
+                            print(f"[INFO] ✅ Verified temp_vendor record created: id={temp_vendor_record[0]}")
+                        else:
+                            print(f"[WARN] temp_vendor record not found: id={temp_vendor_id}")
+                        
+                        # Verify RBAC record if table exists
+                        if rbac_table_exists:
+                            try:
+                                tprm_cursor.execute("SELECT RBACId FROM rbac_tprm WHERE UserId = %s LIMIT 1", [user_id])
+                                rbac_record = tprm_cursor.fetchone()
+                                if rbac_record:
+                                    print(f"[INFO] ✅ Verified RBAC record created: RBACId={rbac_record[0]}")
+                                else:
+                                    print(f"[WARN] RBAC record not found for UserId: {user_id}")
+                            except Exception as e:
+                                print(f"[WARN] Could not verify RBAC record: {str(e)}")
+                        
+                        print(f"[INFO] ✅ TPRM database transaction completed - temp_vendor_id={temp_vendor_id}")
+                
+                print(f"[INFO] ✅ All database transactions completed successfully - user_id={user_id}, temp_vendor_id={temp_vendor_id}")
+            except Exception as transaction_error:
+                error_msg = f"Database transaction failed: {str(transaction_error)}"
+                print(f"[ERROR] ❌ {error_msg}")
+                import traceback
+                print(f"[ERROR] Transaction traceback: {traceback.format_exc()}")
+                logger.error(error_msg, exc_info=True)
+                raise Exception(error_msg) from transaction_error
            
-            with connection.cursor() as cursor:
-                # Check if user already exists
-                cursor.execute("SELECT UserId, UserName FROM users WHERE Email = %s", [vendor_email])
-                existing_user = cursor.fetchone()
-               
-                def get_unique_username(initial_username, current_user_id=None):
-                    candidate = initial_username
-                    counter = 1
-                    while True:
-                        cursor.execute("SELECT UserId FROM users WHERE UserName = %s", [candidate])
-                        row = cursor.fetchone()
-                        if not row or (current_user_id and row[0] == current_user_id):
-                            return candidate
-                        candidate = f"{initial_username}{counter}"
-                        counter += 1
-
-                if existing_user:
-                    user_id, existing_username = existing_user
-                    username = get_unique_username(normalized_username, user_id)
-                    print(f"[INFO] User already exists with UserId: {user_id}")
-                    # Update username and password for existing user with newly generated credentials
-                    cursor.execute(
-                        """
-                        UPDATE users
-                        SET UserName = %s,
-                            Password = %s,
-                            UpdatedAt = %s
-                        WHERE UserId = %s
-                        """,
-                        [
-                            username,
-                            generated_password,  # In production, hash the password
-                            timezone.now(),
-                            user_id,
-                        ],
-                    )
-                else:
-                    # 1. Create user in users table
-                    username = get_unique_username(normalized_username)
-
-                    cursor.execute("""
-                        INSERT INTO users (
-                            UserName, Email, Password, FirstName, LastName,
-                            IsActive, CreatedAt, UpdatedAt
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                    """, [
-                        username,
-                        vendor_email,
-                        generated_password,  # In production, this should be hashed
-                        vendor_name.split(' ')[0] if ' ' in vendor_name else vendor_name,
-                        vendor_name.split(' ')[-1] if ' ' in vendor_name else '',
-                        'Y',
-                        timezone.now(),
-                        timezone.now()
-                    ])
-                    user_id = cursor.lastrowid
-                    print(f"[INFO] Created user with UserId: {user_id}")
-               
-                # 2. Create RBAC permissions in rbac_tprm table
-                # Check if RBAC record already exists for this user
-                cursor.execute("SELECT RBACId FROM rbac_tprm WHERE UserId = %s", [user_id])
-                existing_rbac = cursor.fetchone()
-               
-                if not existing_rbac:
-                    # Set vendor-specific permissions (limited access)
-                    cursor.execute("""
-                        INSERT INTO rbac_tprm (
-                            UserId, UserName, Role,
-                            ViewRFP, ViewRFPResponses, SubmitRFPResponse, WithdrawRFPResponse,
-                            DownloadRFPDocuments, PreviewRFPDocuments, UploadDocumentsForRFP,
-                            ViewVendors, ViewContactsDocuments, ViewQuestionnaires,
-                            SubmitQuestionnaireResponses, ViewRiskAssessments,
-                            ViewPerformance, ViewDashboardTrend,
-                            CreatedAt, UpdatedAt, IsActive
-                        ) VALUES (
-                            %s, %s, %s,
-                            1, 1, 1, 1,
-                            1, 1, 1,
-                            1, 1, 1,
-                            1, 1,
-                            1, 1,
-                            %s, %s, 'Y'
-                        )
-                    """, [
-                        user_id,
-                        vendor_name,
-                        'Vendor',
-                        timezone.now(),
-                        timezone.now()
-                    ])
-                    print(f"[INFO] Created RBAC permissions for UserId: {user_id}")
-                else:
-                    print(f"[INFO] RBAC record already exists for UserId: {user_id}")
-
-                # Ensure essential vendor permissions are enabled
-                cursor.execute("""
-                    UPDATE rbac_tprm
-                    SET
-                        ViewVendors = 1,
-                        CreateVendor = 1,
-                        UpdateVendor = 1,
-                        SubmitVendorForApproval = 1,
-                        ViewContactsDocuments = 1,
-                        AddUpdateContactsDocuments = 1,
-                        ViewQuestionnaires = 1,
-                        SubmitQuestionnaireResponses = 1,
-                        ViewRiskAssessments = 1,
-                        ViewPerformance = 1,
-                        ViewDashboardTrend = 1
-                    WHERE UserId = %s
-                """, [user_id])
-               
-                # 3. Create temp_vendor record
-                # Check if temp_vendor record already exists
-                cursor.execute("SELECT id FROM temp_vendor WHERE response_id = %s", [notification.response_id])
-                existing_temp_vendor = cursor.fetchone()
-               
-                if not existing_temp_vendor:
-                    # Generate vendor code
-                    vendor_code = f"VEN-{str(uuid.uuid4())[:8].upper()}"
-                   
-                    cursor.execute("""
-                        INSERT INTO temp_vendor (
-                            UserId, vendor_code, company_name, legal_name,
-                            lifecycle_stage, status, vendor_category,
-                            risk_level, is_critical_vendor, created_at, updated_at,
-                            response_id
-                        ) VALUES (
-                            %s, %s, %s, %s,
-                            %s, %s, %s,
-                            %s, %s, %s, %s,
-                            %s
-                        )
-                    """, [
-                        user_id,
-                        vendor_code,
-                        company_name,
-                        company_name,
-                        1,  # Initial lifecycle stage
-                        'pending_onboarding',
-                        'New Vendor',
-                        'Medium',
-                        0,  # Not critical initially
-                        timezone.now(),
-                        timezone.now(),
-                        notification.response_id
-                    ])
-                    temp_vendor_id = cursor.lastrowid
-                    print(f"[INFO] Created temp_vendor record with id: {temp_vendor_id}")
-                else:
-                    temp_vendor_id = existing_temp_vendor[0]
-                    print(f"[INFO] temp_vendor record already exists with id: {temp_vendor_id}")
-                    # Ensure temp_vendor record is linked to the latest user and reflects key vendor info
-                    cursor.execute(
-                        """
-                        UPDATE temp_vendor
-                        SET UserId = %s,
-                            company_name = %s,
-                            legal_name = %s,
-                            vendor_category = COALESCE(vendor_category, %s),
-                            updated_at = %s
-                        WHERE id = %s
-                        """,
-                        [
-                            user_id,
-                            company_name,
-                            company_name,
-                            'New Vendor',
-                            timezone.now(),
-                            temp_vendor_id,
-                        ],
-                    )
-           
-            # 4. Send credentials email to vendor
+            # 4. Send credentials email to vendor (outside transaction to avoid blocking)
+            # CRITICAL: Email must be sent - this is the primary way vendors get their credentials
+            email_sent = False
+            email_error = None
             try:
                 self._send_credentials_email(vendor_name, vendor_email, username, generated_password)
-                print(f"[INFO] Credentials email sent to {vendor_email}")
+                email_sent = True
+                print(f"[INFO] Credentials email sent successfully to {vendor_email}")
             except Exception as e:
-                print(f"[ERROR] Failed to send credentials email: {str(e)}")
-                # Continue anyway - admin can send credentials manually
+                email_error = str(e)
+                import traceback
+                error_traceback = traceback.format_exc()
+                print(f"[ERROR] Failed to send credentials email to {vendor_email}: {email_error}")
+                print(f"[ERROR] Email error traceback: {error_traceback}")
+                # Don't raise - we'll return the credentials in the response as a fallback
+                # But log this as a critical error that needs attention
+                logger.error(f"CRITICAL: Failed to send vendor credentials email to {vendor_email}: {email_error}")
+            
+            if not email_sent:
+                # If email failed, we should still return credentials so admin can send manually
+                print(f"[WARN] Credentials created but email failed. Admin should send credentials manually to {vendor_email}")
            
             return {
                 'user_id': user_id,
                 'username': username,
                 'password': generated_password,
                 'temp_vendor_id': temp_vendor_id,
-                'vendor_email': vendor_email
+                'vendor_email': vendor_email,
+                'email_sent': email_sent,
+                'email_error': email_error
             }
            
         except Exception as e:
-            print(f"[ERROR] Failed to create vendor credentials: {str(e)}")
+            error_msg = str(e)
             import traceback
-            traceback.print_exc()
-            raise
+            error_traceback = traceback.format_exc()
+            print(f"[ERROR] ❌ Failed to create vendor credentials: {error_msg}")
+            print(f"[ERROR] Full traceback:\n{error_traceback}")
+            logger.error(f"Failed to create vendor credentials: {error_msg}", exc_info=True)
+            
+            # Provide more specific error messages
+            if "RFP Response not found" in error_msg:
+                raise Exception(f"RFP Response not found for response_id: {notification.response_id}. Please ensure the RFP response exists.")
+            elif "Vendor email is required" in error_msg or "email" in error_msg.lower():
+                raise Exception(f"Vendor email is required but not found. Please ensure the vendor has provided their email in the RFP response.")
+            elif "users" in error_msg.lower() or "user" in error_msg.lower():
+                raise Exception(f"Failed to create user account: {error_msg}")
+            elif "rbac" in error_msg.lower() or "permission" in error_msg.lower():
+                raise Exception(f"Failed to create RBAC permissions: {error_msg}")
+            elif "temp_vendor" in error_msg.lower() or "temp vendor" in error_msg.lower():
+                raise Exception(f"Failed to create temp vendor record: {error_msg}")
+            else:
+                # Generic error with more context
+                raise Exception(f"Failed to create vendor credentials: {error_msg}. Please check backend logs for details.")
    
     def _send_credentials_email(self, vendor_name, vendor_email, username, password):
         """
@@ -2894,53 +3161,133 @@ class AwardResponseView(APIView):
             vendor_email: Email address to send to
             username: Generated username
             password: Generated password
+            
+        Raises:
+            Exception: If email sending fails
         """
+        if not vendor_email:
+            raise ValueError("Vendor email is required to send credentials")
+        
         try:
             subject = 'Welcome to Vendor Portal - Your Access Credentials'
 
             portal_base_url = getattr(settings, 'FRONTEND_URL', None) or getattr(settings, 'SITE_URL', None) or 'http://localhost:3000'
             portal_login_url = f"{portal_base_url.rstrip('/')}/login"
 
-            message = f"""
-            Dear {vendor_name},
- 
-            Congratulations! Your proposal has been accepted, and we're pleased to welcome you as a partner.
- 
-            Below are your credentials to access the Vendor Portal:
- 
-            Portal URL: {portal_login_url}
-            Username: {username}
-            Email: {vendor_email}
-            Password: {password}
- 
-            For security reasons, we recommend that you change your password upon first login.
- 
-            Through the vendor portal, you will be able to:
-            - View RFP details and requirements
-            - Submit questionnaire responses
-            - Upload required documents
-            - Track your vendor lifecycle status
-            - View performance metrics
- 
-            If you have any questions or need assistance, please don't hesitate to contact our support team.
- 
-            Best regards,
-            TPRM Team
+            # Create a more professional HTML email
+            html_message = f"""
+            <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <h2 style="color: #2c3e50;">Welcome to Vendor Portal</h2>
+                    <p>Dear {vendor_name},</p>
+                    <p>Congratulations! Your proposal has been accepted, and we're pleased to welcome you as a partner.</p>
+                    <div style="background-color: #f8f9fa; border-left: 4px solid #28a745; padding: 15px; margin: 20px 0;">
+                        <h3 style="margin-top: 0; color: #28a745;">Your Access Credentials</h3>
+                        <p><strong>Portal URL:</strong> <a href="{portal_login_url}">{portal_login_url}</a></p>
+                        <p><strong>Username:</strong> {username}</p>
+                        <p><strong>Email:</strong> {vendor_email}</p>
+                        <p><strong>Password:</strong> {password}</p>
+                    </div>
+                    <p><strong>Important:</strong> For security reasons, we recommend that you change your password upon first login.</p>
+                    <p>Through the vendor portal, you will be able to:</p>
+                    <ul>
+                        <li>View RFP details and requirements</li>
+                        <li>Submit questionnaire responses</li>
+                        <li>Upload required documents</li>
+                        <li>Track your vendor lifecycle status</li>
+                        <li>View performance metrics</li>
+                    </ul>
+                    <p>If you have any questions or need assistance, please don't hesitate to contact our support team.</p>
+                    <p>Best regards,<br>TPRM Team</p>
+                </div>
+            </body>
+            </html>
+            """
+            
+            # Plain text version for email clients that don't support HTML
+            plain_message = f"""
+Dear {vendor_name},
+
+Congratulations! Your proposal has been accepted, and we're pleased to welcome you as a partner.
+
+Below are your credentials to access the Vendor Portal:
+
+Portal URL: {portal_login_url}
+Username: {username}
+Email: {vendor_email}
+Password: {password}
+
+For security reasons, we recommend that you change your password upon first login.
+
+Through the vendor portal, you will be able to:
+- View RFP details and requirements
+- Submit questionnaire responses
+- Upload required documents
+- Track your vendor lifecycle status
+- View performance metrics
+
+If you have any questions or need assistance, please don't hesitate to contact our support team.
+
+Best regards,
+TPRM Team
             """
            
-            send_mail(
+            # Use EmailMessage for HTML support
+            from_email = settings.DEFAULT_FROM_EMAIL if hasattr(settings, 'DEFAULT_FROM_EMAIL') else 'noreply@tprm.com'
+            
+            print(f"[INFO] 📧 Preparing to send credentials email to {vendor_email} from {from_email}")
+            print(f"[INFO] Email settings check: DEFAULT_FROM_EMAIL={getattr(settings, 'DEFAULT_FROM_EMAIL', 'NOT SET')}")
+            print(f"[INFO] Email backend: {getattr(settings, 'EMAIL_BACKEND', 'NOT SET')}")
+            
+            # Create email message
+            email = EmailMessage(
                 subject=subject,
-                message=message,
-                from_email=settings.DEFAULT_FROM_EMAIL if hasattr(settings, 'DEFAULT_FROM_EMAIL') else 'noreply@tprm.com',
-                recipient_list=[vendor_email],
-                fail_silently=False,
+                body=html_message,
+                from_email=from_email,
+                to=[vendor_email],
             )
-           
-            print(f"[INFO] Credentials email sent successfully to {vendor_email}")
+            email.content_subtype = "html"  # Set content type to HTML
+            
+            # Send email with explicit error handling
+            try:
+                print(f"[INFO] 📧 Sending credentials email via EmailMessage...")
+                result = email.send(fail_silently=False)
+                print(f"[INFO] ✅ Email send() returned: {result}")
+                print(f"[INFO] ✅ Credentials email sent successfully to {vendor_email}")
+                logger.info(f"Vendor credentials email sent to {vendor_email} for user {username}")
+            except Exception as send_error:
+                print(f"[ERROR] ❌ Email.send() failed: {str(send_error)}")
+                print(f"[ERROR] Error type: {type(send_error).__name__}")
+                import traceback
+                print(f"[ERROR] Email send traceback: {traceback.format_exc()}")
+                
+                # Try fallback with send_mail
+                try:
+                    print(f"[INFO] 🔄 Attempting fallback email send using send_mail...")
+                    send_mail(
+                        subject=subject,
+                        message=plain_message,
+                        from_email=from_email,
+                        recipient_list=[vendor_email],
+                        fail_silently=False,
+                    )
+                    print(f"[INFO] ✅ Fallback email sent successfully to {vendor_email}")
+                    logger.info(f"Vendor credentials email sent (fallback) to {vendor_email} for user {username}")
+                except Exception as fallback_error:
+                    error_msg = f"Both EmailMessage and send_mail failed. EmailMessage error: {str(send_error)}, send_mail error: {str(fallback_error)}"
+                    print(f"[ERROR] ❌ {error_msg}")
+                    print(f"[ERROR] Fallback error traceback: {traceback.format_exc()}")
+                    logger.error(error_msg, exc_info=True)
+                    raise Exception(error_msg) from send_error
            
         except Exception as e:
-            print(f"[ERROR] Failed to send credentials email: {str(e)}")
-            raise
+            error_msg = f"Failed to send credentials email to {vendor_email}: {str(e)}"
+            print(f"[ERROR] {error_msg}")
+            import traceback
+            print(f"[ERROR] Email error traceback: {traceback.format_exc()}")
+            logger.error(error_msg, exc_info=True)
+            raise Exception(error_msg) from e
  
 
 class VendorCredentialsView(APIView):

@@ -561,6 +561,8 @@ def get_first_time_approval_rate(request):
     try:
         from django.db.models import Count, Q
         from django.db import connection
+        from django.utils import timezone
+        from datetime import timedelta
         
         print(f"[KPI] Getting First-Time Approval Rate")
         
@@ -589,6 +591,7 @@ def get_first_time_approval_rate(request):
                 })
         
         # Query approval_request_versions table
+        # MULTI-TENANCY: Filter by tenant through approval_requests
         with connection.cursor() as cursor:
             # Get total first submissions (version_number = 1)
             cursor.execute("""
@@ -598,7 +601,8 @@ def get_first_time_approval_rate(request):
                 INNER JOIN approval_workflows aw ON ar.workflow_id = aw.workflow_id
                 WHERE arv.version_number = 1
                 AND aw.business_object_type = 'RFP'
-            """)
+                AND ar.TenantId = %s
+            """, [tenant_id])
             result = cursor.fetchone()
             total_first = result[0] if result and result[0] is not None else 0
             print(f"[KPI] Total first submissions: {total_first}")
@@ -613,7 +617,8 @@ def get_first_time_approval_rate(request):
                 WHERE arv.version_number = 1 
                 AND arv.version_type = 'FINAL'
                 AND aw.business_object_type = 'RFP'
-            """)
+                AND ar.TenantId = %s
+            """, [tenant_id])
             result = cursor.fetchone()
             first_time_approved = result[0] if result and result[0] is not None else 0
             print(f"[KPI] First-time approved: {first_time_approved}")
@@ -632,7 +637,8 @@ def get_first_time_approval_rate(request):
                 INNER JOIN approval_workflows aw ON ar.workflow_id = aw.workflow_id
                 WHERE arv.version_number = 1
                 AND aw.business_object_type = 'RFP'
-            """)
+                AND ar.TenantId = %s
+            """, [tenant_id])
             breakdown = cursor.fetchone()
             if breakdown:
                 print(f"[KPI] Breakdown - First-time approved (FINAL): {breakdown[0]}")
@@ -647,14 +653,35 @@ def get_first_time_approval_rate(request):
             approval_rate = round((first_time_approved / total_first) * 100, 1)
         else:
             approval_rate = 0.0
-            print(f"[KPI] No first submissions found, setting rate to 0%")
+            print(f"[KPI] No first submissions found for tenant {tenant_id}, setting rate to 0%")
+            # Return early with a proper response if no data
+            return JsonResponse({
+                'success': True,
+                'first_time_approval_rate': 0.0,
+                'summary': {
+                    'total_first_submissions': 0,
+                    'first_time_approved': 0,
+                    'revisions_needed': 0,
+                    'approval_rate': 0.0,
+                    'current_month_rate': 0.0,
+                    'last_month_rate': 0.0,
+                    'rate_change': 0.0,
+                    'trend': 'neutral',
+                    'message': 'No approval request versions found. First-time approval rate will be available once approval workflows are used.'
+                },
+                'calculated_at': timezone.now().isoformat(),
+                'debug': {
+                    'table_exists': True,
+                    'total_first_submissions': 0,
+                    'first_time_approved': 0,
+                    'tenant_id': tenant_id
+                }
+            })
         
         # Calculate additional metrics
         revisions_needed = total_first - first_time_approved
         
         # Get current month data for comparison
-        from django.utils import timezone
-        from datetime import timedelta
         now = timezone.now()
         current_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         last_month_start = (current_month_start - timedelta(days=1)).replace(day=1)
@@ -666,6 +693,7 @@ def get_first_time_approval_rate(request):
         
         with connection.cursor() as cursor:
             # Current month first-time approval rate
+            # MULTI-TENANCY: Filter by tenant
             cursor.execute("""
                 SELECT 
                     COUNT(DISTINCT CASE WHEN arv.version_type = 'FINAL' THEN arv.approval_id END) as approved,
@@ -676,7 +704,8 @@ def get_first_time_approval_rate(request):
                 WHERE arv.version_number = 1 
                 AND arv.created_at >= %s
                 AND aw.business_object_type = 'RFP'
-            """, [current_month_start])
+                AND ar.TenantId = %s
+            """, [current_month_start, tenant_id])
             result = cursor.fetchone()
             if result:
                 current_month_approved = result[0] if result[0] is not None else 0
@@ -684,6 +713,7 @@ def get_first_time_approval_rate(request):
                 current_month_rate = round((current_month_approved / current_month_total) * 100, 1) if current_month_total > 0 else 0.0
             
             # Last month first-time approval rate
+            # MULTI-TENANCY: Filter by tenant
             cursor.execute("""
                 SELECT 
                     COUNT(DISTINCT CASE WHEN arv.version_type = 'FINAL' THEN arv.approval_id END) as approved,
@@ -695,7 +725,8 @@ def get_first_time_approval_rate(request):
                 AND arv.created_at >= %s 
                 AND arv.created_at <= %s
                 AND aw.business_object_type = 'RFP'
-            """, [last_month_start, last_month_end])
+                AND ar.TenantId = %s
+            """, [last_month_start, last_month_end, tenant_id])
             result = cursor.fetchone()
             if result:
                 last_month_approved = result[0] if result[0] is not None else 0
@@ -1017,7 +1048,8 @@ def get_approval_stage_performance(request):
         
         for request in approval_requests:
             stages = ApprovalStages.objects.filter(
-                approval_request_id=request.approval_id
+                approval_id=request.approval_id,
+                tenant_id=tenant_id  # MULTI-TENANCY: Filter by tenant
             ).order_by('stage_order')
             
             for stage in stages:
@@ -1039,14 +1071,15 @@ def get_approval_stage_performance(request):
                     stage_data[stage_name]['total_duration'] += duration_days
                     stage_data[stage_name]['count'] += 1
                     
-                    # Track outcomes
-                    if stage.status == 'APPROVED':
+                    # Track outcomes - use stage_status field, not status
+                    if stage.stage_status == 'APPROVED':
                         stage_data[stage_name]['approved'] += 1
                         stage_data[stage_name]['completed'] += 1
-                    elif stage.status == 'REJECTED':
+                    elif stage.stage_status == 'REJECTED':
                         stage_data[stage_name]['rejected'] += 1
                         stage_data[stage_name]['completed'] += 1
-                    elif stage.status == 'COMPLETED':
+                    elif stage.stage_status in ['IN_PROGRESS', 'SKIPPED', 'CANCELLED', 'EXPIRED']:
+                        # These are also considered completed states (not pending)
                         stage_data[stage_name]['completed'] += 1
         
         # Format the data for the frontend

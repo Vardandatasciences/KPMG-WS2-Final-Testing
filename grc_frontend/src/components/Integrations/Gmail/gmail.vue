@@ -67,6 +67,7 @@
                 <tr>
                   <th class="subject-column">Subject</th>
                   <th class="from-column">From</th>
+                  <th class="to-column">To</th>
                   <th class="description-column">Description</th>
                   <th class="attachments-column">Attachments</th>
                   <th class="download-column">Download</th>
@@ -91,6 +92,14 @@
                     <div class="participant-info">
                       <strong class="participant-name">{{ message.sender_details?.name || 'Unknown' }}</strong>
                       <span class="participant-email">{{ message.sender_details?.email }}</span>
+                    </div>
+                  </td>
+                  
+                  <!-- To Column (Receiver) -->
+                  <td class="to-cell">
+                    <div class="participant-info">
+                      <strong class="participant-name">{{ message.receiver_details?.name || 'Unknown' }}</strong>
+                      <span class="participant-email">{{ message.receiver_details?.email }}</span>
                     </div>
                   </td>
                   
@@ -1323,12 +1332,17 @@ export default {
 }
 
 .from-column {
-  width: 25%;
+  width: 20%;
+  min-width: 150px;
+}
+
+.to-column {
+  width: 20%;
   min-width: 150px;
 }
 
 .description-column {
-  width: 30%;
+  width: 25%;
   min-width: 200px;
 }
 

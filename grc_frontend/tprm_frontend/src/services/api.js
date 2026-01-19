@@ -241,6 +241,7 @@ class APIService {
             status: 403,
             data: errorData
           };
+          error.status = 403; // Add status for easier checking
           throw error;
         }
         
@@ -249,6 +250,11 @@ class APIService {
       
       return await response.json();
     } catch (error) {
+      // Silently handle 403 errors - they're expected on public pages
+      if (error.status === 403 || error.message?.includes('403') || error.message?.includes('Permission denied')) {
+        // Don't log 403 errors - they're expected for public/unauthenticated pages
+        throw error; // Still throw so callers can handle it
+      }
       console.error('Notifications API request failed:', error);
       throw error;
     }

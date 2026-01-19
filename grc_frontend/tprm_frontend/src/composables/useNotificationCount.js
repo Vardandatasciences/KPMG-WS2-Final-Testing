@@ -39,6 +39,13 @@ export function useNotificationCount() {
       isInitialized.value = true
       console.log('Notification count initialized:', unreadCount.value)
     } catch (error) {
+      // Silently handle 403 (Forbidden) errors for public/unauthenticated pages
+      if (error.status === 403 || error.message?.includes('403') || error.message?.includes('Forbidden') || error.message?.includes('Permission denied')) {
+        // Don't log - this is expected on public pages
+        unreadCount.value = 0
+        isInitialized.value = true
+        return
+      }
       console.error('Failed to initialize notification count:', error)
       // Set to 0 on error to avoid showing incorrect counts
       unreadCount.value = 0
@@ -60,6 +67,11 @@ export function useNotificationCount() {
       unreadCount.value = stats.total_unread || 0
       console.log('Notification count refreshed:', unreadCount.value)
     } catch (error) {
+      // Silently handle 403 (Forbidden) errors for public/unauthenticated pages
+      if (error.status === 403 || error.message?.includes('403') || error.message?.includes('Forbidden') || error.message?.includes('Permission denied')) {
+        // Don't log - this is expected on public pages
+        return
+      }
       console.error('Failed to refresh notification count:', error)
       // Don't reset count on error to avoid flickering
     }

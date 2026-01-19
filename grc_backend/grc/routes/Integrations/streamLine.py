@@ -706,6 +706,166 @@ def save_task_action(request):
 
 
 @csrf_exempt
+@require_http_methods(["POST"])
+def save_project_tasks(request):
+    """
+    Save project tasks to the database
+    
+    Expected JSON payload:
+    {
+        "user_id": 1,
+        "project": {
+            "project_id": "10001",
+            "project_name": "Project Name",
+            "project_key": "PROJ"
+        },
+        "tasks": [
+            {
+                "id": "12345",
+                "key": "PROJ-1",
+                "summary": "Task name",
+                "status": "In Progress",
+                "assignee": {...},
+                "priority": {...},
+                ...
+            },
+            ...
+        ],
+        "platform": "jira"
+    }
+    """
+    try:
+        # Parse JSON body
+        try:
+            body = json.loads(request.body.decode('utf-8'))
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON payload'}, status=400)
+        
+        # Get user_id from payload or from authenticated user
+        user_id = body.get('user_id')
+        
+        # If no user_id in payload, try to get from authenticated user
+        if not user_id:
+            # Try to get user from JWT token
+            user = get_user_from_jwt(request)
+            if user:
+                user_id = user.UserId
+                logger.info(f"Using authenticated user ID from JWT: {user_id}")
+            elif hasattr(request, 'user') and request.user:
+                user_id = request.user.UserId
+                logger.info(f"Using authenticated user ID from request: {user_id}")
+        
+        if not user_id:
+            return JsonResponse({'error': 'user_id is required or user must be authenticated'}, status=400)
+        
+        # Get project data
+        project_data = body.get('project')
+        if not project_data:
+            return JsonResponse({'error': 'project data is required'}, status=400)
+        
+        # Get tasks array
+        tasks = body.get('tasks', [])
+        if not tasks:
+            return JsonResponse({'error': 'tasks array is required'}, status=400)
+        
+        # Get platform (default to 'jira')
+        platform = body.get('platform', 'jira')
+        
+        # Get the user
+        try:
+            user = Users.objects.get(UserId=user_id, IsActive='Y')
+        except Users.DoesNotExist:
+            return JsonResponse({'error': f'User with ID {user_id} not found or inactive'}, status=404)
+        
+        saved_count = 0
+        skipped_count = 0
+        errors = []
+        
+        # Save each task to IntegrationDataList
+        for task in tasks:
+            try:
+                task_id = task.get('id') or task.get('key')
+                task_summary = task.get('summary') or task.get('title') or 'Untitled Task'
+                
+                # Check if task already exists (same task_id, project_key, user within last 24 hours)
+                # This prevents duplicate entries when tasks are refreshed
+                twenty_four_hours_ago = timezone.now() - timezone.timedelta(hours=24)
+                
+                existing_task = IntegrationDataList.objects.filter(
+                    source=platform.lower(),
+                    username=user.UserName,
+                    metadata__task_id=str(task_id),
+                    metadata__project_key=project_data.get('project_key'),
+                    created_at__gte=twenty_four_hours_ago
+                ).first()
+                
+                if existing_task:
+                    skipped_count += 1
+                    continue
+                
+                # Prepare heading
+                heading = f"{task_summary} - {project_data.get('project_name', 'Project')}"
+                
+                # Prepare data payload
+                data_payload = {
+                    'task': task,
+                    'project': project_data,
+                    'action_type': 'Task Loaded',
+                    'platform': platform.lower(),
+                    'loaded_at': timezone.now().isoformat()
+                }
+                
+                # Prepare metadata
+                metadata = {
+                    'task_id': str(task_id),
+                    'task_key': task.get('key'),
+                    'task_status': task.get('status'),
+                    'task_priority': task.get('priority', {}).get('name') if isinstance(task.get('priority'), dict) else task.get('priority'),
+                    'project_id': project_data.get('project_id'),
+                    'project_key': project_data.get('project_key'),
+                    'project_name': project_data.get('project_name'),
+                    'platform': platform.lower(),
+                    'saved_at': timezone.now().isoformat()
+                }
+                
+                # Create IntegrationDataList entry
+                integration_record = IntegrationDataList.objects.create(
+                    heading=heading,
+                    source=platform.lower(),
+                    username=user.UserName,
+                    time=timezone.now(),
+                    data=data_payload,
+                    metadata=metadata
+                )
+                
+                saved_count += 1
+                logger.info(f"Saved task {task_id} for user {user_id} in project {project_data.get('project_key')}")
+                
+            except Exception as e:
+                error_msg = f"Error saving task {task.get('id', 'unknown')}: {str(e)}"
+                errors.append(error_msg)
+                logger.error(error_msg)
+                continue
+        
+        logger.info(f"Saved {saved_count} tasks, skipped {skipped_count} duplicates for user {user_id}")
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Saved {saved_count} tasks, skipped {skipped_count} duplicates',
+            'saved_count': saved_count,
+            'skipped_count': skipped_count,
+            'total_tasks': len(tasks),
+            'errors': errors if errors else None
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in save_project_tasks: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return JsonResponse({'error': 'Internal server error'}, status=500)
+
+
+@csrf_exempt
 @require_http_methods(["GET"])
 def get_user_task_actions(request):
     """

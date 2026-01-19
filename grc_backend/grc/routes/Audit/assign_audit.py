@@ -277,6 +277,13 @@ def create_audit(request):
         # Priority: Use data if provided, otherwise use session, otherwise None
         framework_id_to_use = framework_id_from_data if framework_id_from_data else framework_id_from_session
         
+        # For AI audits, framework is required
+        if validated_data.get('audit_type') == 'AI' and not framework_id_to_use:
+            return Response({
+                'error': 'Framework is required for AI audits',
+                'details': 'Please select a framework before creating an AI audit'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         # Fetch the Framework object if ID is provided
         framework_obj = None
         if framework_id_to_use:
@@ -456,12 +463,14 @@ def create_audit(request):
             }
 
             print(f"Audit fields for member {member_id}: {audit_fields}")
+            print(f"🔍 [AUDIT CREATE] FrameworkId being saved: {framework_obj.FrameworkId if framework_obj else 'None'} (type: {type(framework_obj)})")
 
             audit = None
             try:
                 # Create the audit instance for this team member
                 audit = Audit.objects.create(**audit_fields)
-                print(f"Created audit {audit.AuditId} for member {member_id}")
+                print(f"✅ Created audit {audit.AuditId} for member {member_id}")
+                print(f"🔍 [AUDIT CREATE] Verified FrameworkId in created audit: {audit.FrameworkId.FrameworkId if audit.FrameworkId else 'None'}")
                 created_audits.append(audit)
                 
                 # Handle AI Audit special processing

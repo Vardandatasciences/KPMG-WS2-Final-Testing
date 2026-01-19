@@ -18,6 +18,7 @@ from grc.routes.Integrations.Bamboohr.bamboohr import (
 
 # Jira Integration imports
 from grc.routes.Integrations.jira import (
+    jira_project_issues,
     jira_oauth, jira_oauth_callback, jira_projects, jira_project_details,
     jira_resources, jira_stored_data, jira_users, jira_assign_project
 )
@@ -25,7 +26,7 @@ from grc.routes.Integrations.jira import (
 # Streamline Integration imports
 from grc.routes.Integrations.streamLine import (
     get_user_projects, get_project_details, get_user_statistics,
-    save_task_action, get_user_task_actions
+    save_task_action, save_project_tasks, get_user_task_actions
 )
 
 # External Applications imports
@@ -40,12 +41,15 @@ from grc.routes.Integrations.update_integrations_db import (
 )
 
 # Gmail Integration imports
+# Gmail Integration imports
 from grc.routes.Integrations.Gmail.gmail_integration import (
     gmail_oauth_initiate, gmail_oauth_callback, get_gmail_connection_status,
     get_gmail_messages, get_calendar_events, download_attachment,
     get_stored_gmail_data, get_stored_gmail_data_formatted, save_gmail_data_to_db, disconnect_gmail,
-    test_gmail_headers, save_gmail_message_to_integration_list, save_calendar_event_to_integration_list
+    test_gmail_headers, save_gmail_message_to_integration_list, save_calendar_event_to_integration_list,
+    debug_decrypt_projects_data, debug_gmail_database_state
 )
+ 
 from grc.routes.Integrations.Sentinel.sentinel import (
     sentinel_oauth_start, sentinel_oauth_callback, sentinel_disconnect,
     sentinel_check_status, get_sentinel_alerts, get_sentinel_stats, get_sentinel_incident
@@ -91,12 +95,14 @@ urlpatterns = [
     path('api/jira/stored-data/', jira_stored_data, name='jira-stored-data'),
     path('api/jira/users/', jira_users, name='jira-users'),
     path('api/jira/assign-project/', jira_assign_project, name='jira-assign-project'),
+    path('api/jira/project-issues/', jira_project_issues, name='jira-project-issues'),
 
     # Streamline Integration URLs
     path('api/streamline/user-projects/', get_user_projects, name='streamline-user-projects'),
     path('api/streamline/project-details/', get_project_details, name='streamline-project-details'),
     path('api/streamline/user-statistics/', get_user_statistics, name='streamline-user-statistics'),
     path('api/streamline/save-task-action/', save_task_action, name='streamline-save-task-action'),
+    path('api/streamline/save-project-tasks/', save_project_tasks, name='streamline-save-project-tasks'),
     path('api/streamline/user-task-actions/', get_user_task_actions, name='streamline-user-task-actions'),
     
     # External Applications endpoints
@@ -108,6 +114,7 @@ urlpatterns = [
     re_path(r'^auth/sentinel/?$', sentinel_oauth_start, name='sentinel-oauth-start'),
     re_path(r'^auth/sentinel/callback/?$', sentinel_oauth_callback, name='sentinel-oauth-callback'),
     re_path(r'^auth/sentinel/disconnect/?$', sentinel_disconnect, name='sentinel-disconnect'),
+    # Gmail Integration URLs
     # Gmail Integration URLs
     path('api/gmail/oauth-initiate/', gmail_oauth_initiate, name='gmail-oauth-initiate'),
     path('api/gmail/oauth-callback/', gmail_oauth_callback, name='gmail-oauth-callback'),
@@ -122,10 +129,12 @@ urlpatterns = [
     path('api/gmail/test-headers/', test_gmail_headers, name='gmail-test-headers'),
     path('api/gmail/save-message-to-integration/', save_gmail_message_to_integration_list, name='gmail-save-message-to-integration'),
     path('api/gmail/save-event-to-integration/', save_calendar_event_to_integration_list, name='gmail-save-event-to-integration'),
+    path('api/gmail/debug-decrypt/', debug_decrypt_projects_data, name='gmail-debug-decrypt'),
+    path('api/gmail/debug-database/', debug_gmail_database_state, name='gmail-debug-database'),
     path('api/external-applications/connect/', connect_external_application, name='connect-external-application'),
-
+ 
     path('api/external-applications/disconnect/', disconnect_external_application, name='disconnect-external-application'),
-    
+ 
     # Integration Database Update endpoints
     path('api/integrations/disconnect/', disconnect_integration, name='disconnect-integration'),
     path('api/integrations/connect/', connect_integration, name='connect-integration'),
