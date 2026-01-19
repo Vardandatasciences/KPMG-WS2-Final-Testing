@@ -1542,9 +1542,23 @@ def accept_consent(request):
             }, status=status.HTTP_401_UNAUTHORIZED)
         
         # Update user consent status
+        # Use raw SQL to update only consent_accepted without triggering encryption
+        # This avoids "Data too long" errors for encrypted fields like FirstName
+        # The EncryptedFieldsMixin doesn't respect update_fields, so we bypass it
         logger.info(f"Updating consent for user {user.UserName} from '{user.consent_accepted}' to '1'")
-        user.consent_accepted = '1'
-        user.save()
+        from django.db import connection
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "UPDATE users SET consent_accepted = %s, UpdatedAt = NOW() WHERE UserId = %s",
+                    ['1', user.UserId]
+                )
+                logger.info(f"✅ Updated consent_accepted for user {user.UserId} using raw SQL")
+        except Exception as sql_error:
+            logger.error(f"❌ Error updating consent with raw SQL: {str(sql_error)}")
+            # Fallback to ORM save (may fail if encrypted fields are too long)
+            user.consent_accepted = '1'
+            user.save(update_fields=['consent_accepted'])
         
         logger.info(f"User {user.UserName} (ID: {user.UserId}) accepted consent successfully")
         

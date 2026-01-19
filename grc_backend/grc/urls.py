@@ -271,7 +271,10 @@ from .routes.Audit import ai_audit_views
 from .routes.Audit import ai_audit_api
 
 from .routes.Audit import ai_document_relevance
-
+from .routes.Audit import sebi_ai_auditor_api
+ 
+from .routes.Audit import compliance_job_status_api
+ 
 from .routes.Audit.ai_audit_api import (
 
     AIAuditDocumentUploadView, AIAuditDocumentsView, AIAuditStatusView
@@ -1989,7 +1992,32 @@ incident_urlpatterns = [
     # and to match the frontend call to '/api/ai-audit/<audit_id>/analyze-document-relevance/'.
 
     path('ai-audit/<str:audit_id>/analyze-document-relevance/', ai_document_relevance.analyze_document_relevance, name='api-analyze-document-relevance'),
-
+    # ========================================================================
+    # SEBI AI AUDITOR - BSE Compliance Watch Features
+    # ========================================================================
+    # Enable SEBI AI Auditor for a framework
+    path('sebi-auditor/<int:framework_id>/enable/', sebi_ai_auditor_api.enable_sebi_auditor, name='api-enable-sebi-auditor'),
+   
+    # Filing Accuracy Verification
+    path('sebi-auditor/audit/<int:audit_id>/filing-accuracy/', sebi_ai_auditor_api.verify_filing_accuracy, name='api-verify-filing-accuracy'),
+   
+    # Timeliness & SLA Monitoring
+    path('sebi-auditor/audit/<int:audit_id>/timeliness-sla/', sebi_ai_auditor_api.check_timeliness_sla, name='api-check-timeliness-sla'),
+   
+    # Risk Scoring Model
+    path('sebi-auditor/audit/<int:audit_id>/risk-score/', sebi_ai_auditor_api.calculate_risk_score, name='api-calculate-risk-score'),
+   
+    # Pattern & Behavioural Analysis
+    path('sebi-auditor/patterns/', sebi_ai_auditor_api.detect_patterns, name='api-detect-patterns'),
+    path('sebi-auditor/audit/<int:audit_id>/patterns/', sebi_ai_auditor_api.detect_patterns, name='api-detect-patterns-by-audit'),
+   
+    # Evidence Pack Generation
+    path('sebi-auditor/audit/<int:audit_id>/evidence-pack/', sebi_ai_auditor_api.generate_evidence_pack, name='api-generate-evidence-pack'),
+   
+    # SEBI Regulatory Dashboard
+    path('sebi-auditor/dashboard/', sebi_ai_auditor_api.sebi_dashboard, name='api-sebi-dashboard'),
+ 
+ 
     # ========================================================================
     # AI-POWERED INCIDENT DOCUMENT INGESTION
     # ========================================================================

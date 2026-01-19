@@ -592,7 +592,11 @@ export const API_ENDPOINTS = {
   STREAMLINE_PROJECT_DETAILS: `${API_BASE_URL}/api/streamline/project-details/`,
   STREAMLINE_USER_STATISTICS: `${API_BASE_URL}/api/streamline/user-statistics/`,
   STREAMLINE_SAVE_TASK_ACTION: `${API_BASE_URL}/api/streamline/save-task-action/`,
+  STREAMLINE_SAVE_PROJECT_TASKS: `${API_BASE_URL}/api/streamline/save-project-tasks/`,
   STREAMLINE_USER_TASK_ACTIONS: `${API_BASE_URL}/api/streamline/user-task-actions/`,
+  
+  // Jira endpoints
+  JIRA_PROJECT_ISSUES: `${API_BASE_URL}/api/jira/project-issues/`,
 
   // Audit Finding Mitigations and Review Data
   // AUDIT_FINDING_MITIGATIONS: (id) => `${API_BASE_URL}/api/audit-finding-mitigations/${id}/`,

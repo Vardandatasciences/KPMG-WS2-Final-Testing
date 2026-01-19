@@ -769,7 +769,7 @@ const getSelectedVendorEmail = () => {
                  shortlistedProposals.value.find(p => p.response_id === selectedWinner.value)
   if (!vendor) return ''
   
-  return vendor.vendor_email || vendor.contact_email || vendor.email || ''
+  return getVendorEmail(vendor)
 }
 
 // Methods
@@ -894,41 +894,95 @@ const loadConsensusData = async () => {
           response.response_id
         )
         
-        // Process proposals to ensure proper vendor names
+        // Process proposals to ensure proper vendor names and emails
         shortlistedProposals.value = shortlistedProposals.value.map((proposal, index) => {
           let vendorName = proposal.vendor_name
           let orgName = proposal.org
+          let vendorEmail = proposal.vendor_email || proposal.contact_email || proposal.email || ''
           
-          if (proposal.response_documents) {
+          // Extract vendor info from response_documents (JSON field) - this is where vendor info is stored
+          let responseDocs = proposal.response_documents || proposal.proposal_data || {}
+          
+          // Handle case where response_documents might be a string that needs parsing
+          if (typeof responseDocs === 'string') {
             try {
-              const responseDocs = typeof proposal.response_documents === 'string' 
-                ? JSON.parse(proposal.response_documents) 
-                : proposal.response_documents
-              
-              if (responseDocs.companyInfo) {
-                if (responseDocs.companyInfo.companyName) {
-                  vendorName = responseDocs.companyInfo.companyName
-                }
-                if (responseDocs.companyInfo.contactName) {
-                  orgName = responseDocs.companyInfo.contactName
-                }
-              }
-              
-              if (responseDocs.vendor_name && !vendorName) {
-                vendorName = responseDocs.vendor_name
-              }
-              if (responseDocs.company_name && !vendorName) {
-                vendorName = responseDocs.company_name
-              }
+              responseDocs = JSON.parse(responseDocs)
             } catch (e) {
-              console.log('Error parsing response_documents:', e)
+              console.warn('Failed to parse response_documents as JSON:', e)
+              responseDocs = {}
             }
+          }
+          
+          if (responseDocs && typeof responseDocs === 'object') {
+            // Extract vendor name from various possible locations
+            if (responseDocs.companyInfo) {
+              if (responseDocs.companyInfo.companyName && !vendorName) {
+                vendorName = responseDocs.companyInfo.companyName
+              }
+              if (responseDocs.companyInfo.contactName && !orgName) {
+                orgName = responseDocs.companyInfo.contactName
+              }
+              if (responseDocs.companyInfo.email && !vendorEmail) {
+                vendorEmail = responseDocs.companyInfo.email
+              }
+              if (responseDocs.companyInfo.contactEmail && !vendorEmail) {
+                vendorEmail = responseDocs.companyInfo.contactEmail
+              }
+            }
+            
+            // Try multiple possible field names for email
+            if (!vendorEmail) {
+              vendorEmail = responseDocs.contact_email 
+                || responseDocs.email
+                || responseDocs.contact?.email
+                || responseDocs.vendor?.email
+                || responseDocs.vendor_email
+                || responseDocs.companyInfo?.email
+                || responseDocs.companyInfo?.contactEmail
+                || responseDocs.companyInfo?.contact?.email
+                || responseDocs.basic_info?.email
+                || responseDocs.basic_info?.contact_email
+                || responseDocs.company?.email
+                || responseDocs.organization?.email
+                || ''
+            }
+            
+            // Extract vendor name from various possible locations
+            if (!vendorName) {
+              vendorName = responseDocs.vendor_name 
+                || responseDocs.name
+                || responseDocs.vendor?.vendor_name
+                || responseDocs.vendor?.name
+                || responseDocs.company?.name
+                || responseDocs.organization?.name
+                || responseDocs.company_name
+                || responseDocs.organization_name
+            }
+            
+            // Extract organization name from various possible locations
+            if (!orgName) {
+              orgName = responseDocs.org 
+                || responseDocs.organization_name 
+                || responseDocs.company_name
+                || responseDocs.organization?.name
+                || responseDocs.company?.name
+                || responseDocs.vendor?.org
+                || responseDocs.vendor?.organization_name
+            }
+          }
+          
+          // Fallback to direct proposal fields if still not found
+          if (!vendorEmail) {
+            vendorEmail = proposal.contact_email || proposal.email || proposal.vendor_email || ''
           }
           
           return {
             ...proposal,
             vendor_name: vendorName || `Vendor ${index + 1}`,
             org: orgName || 'Unknown Organization',
+            vendor_email: vendorEmail,
+            contact_email: vendorEmail || proposal.contact_email || '',
+            email: vendorEmail || proposal.email || '',
             proposed_value: proposal.proposed_value ? parseFloat(proposal.proposed_value) : (100000 + (index * 50000)),
             technical_score: proposal.technical_score && proposal.technical_score !== '' ? parseFloat(proposal.technical_score) : (85 + (index * 5) + Math.floor(Math.random() * 10)),
             commercial_score: proposal.commercial_score && proposal.commercial_score !== '' ? parseFloat(proposal.commercial_score) : (80 + (index * 5) + Math.floor(Math.random() * 10)),
@@ -964,6 +1018,12 @@ const loadConsensusData = async () => {
       showNotification(`🎉 ${newEvaluations} new evaluation${newEvaluations > 1 ? 's' : ''} submitted!`)
     }
     previousCompletedCount.value = currentCompletedCount
+    
+    // Stop polling if consensus is complete
+    if (isConsensusComplete.value && pollingInterval.value) {
+      console.log('✅ Consensus reached - stopping automatic polling')
+      stopPolling()
+    }
     
     lastUpdated.value = new Date().toISOString()
     
@@ -1021,10 +1081,20 @@ const calculateConsensusRanking = () => {
           ? vendor.scores.reduce((sum, score) => sum + score, 0) / vendor.scores.length 
           : 0
         
+        // Find the original proposal to get email and other details
+        const originalProposal = shortlistedProposals.value.find(p => p.response_id === vendor.response_id)
+        
         return {
           response_id: vendor.response_id,
           vendor_name: vendor.vendor_name,
           org: vendor.org,
+          vendor_email: originalProposal?.vendor_email || originalProposal?.contact_email || originalProposal?.email || '',
+          contact_email: originalProposal?.contact_email || originalProposal?.vendor_email || originalProposal?.email || '',
+          email: originalProposal?.email || originalProposal?.vendor_email || originalProposal?.contact_email || '',
+          proposed_value: originalProposal?.proposed_value,
+          technical_score: originalProposal?.technical_score,
+          commercial_score: originalProposal?.commercial_score,
+          overall_score: originalProposal?.overall_score,
           vote_count: vendor.vote_count,
           consensus_score: avgScore,
           min_score: Math.min(...vendor.scores),
@@ -1039,6 +1109,9 @@ const calculateConsensusRanking = () => {
         response_id: proposal.response_id,
         vendor_name: proposal.vendor_name,
         org: proposal.org,
+        vendor_email: proposal.vendor_email || proposal.contact_email || proposal.email || '',
+        contact_email: proposal.contact_email || proposal.vendor_email || proposal.email || '',
+        email: proposal.email || proposal.vendor_email || proposal.contact_email || '',
         proposed_value: proposal.proposed_value,
         technical_score: proposal.technical_score,
         commercial_score: proposal.commercial_score,
@@ -1105,12 +1178,10 @@ const sendAwardNotification = async () => {
     return
   }
   
-  const vendorEmail = selectedVendor.vendor_email || 
-                     selectedVendor.contact_email || 
-                     selectedVendor.email || 
-                     ''
+  // Extract email from multiple possible sources using helper function
+  let vendorEmail = getVendorEmail(selectedVendor)
   
-  if (!vendorEmail || vendorEmail === 'vendor@example.com') {
+  if (!vendorEmail || vendorEmail === 'vendor@example.com' || vendorEmail.trim() === '') {
     PopupService.error('Vendor email not found. Please ensure the vendor has provided their contact email in the RFP response.', 'Email Not Found')
     return
   }
@@ -1297,10 +1368,13 @@ const selectAndSendToNextVendor = async (rejectedResponseId) => {
   }
   
   const nextVendor = availableVendors[0]
-  const vendorEmail = nextVendor.vendor_email || nextVendor.contact_email || nextVendor.email || ''
-  if (!vendorEmail || vendorEmail === 'vendor@example.com') {
+  
+  // Extract email from multiple possible sources using helper function
+  let vendorEmail = getVendorEmail(nextVendor)
+  
+  if (!vendorEmail || vendorEmail === 'vendor@example.com' || vendorEmail.trim() === '') {
     PopupService.error(
-      `Cannot send award to ${nextVendor.vendor_name || 'next vendor'}: No valid email address found`,
+      `Cannot send award to ${nextVendor.vendor_name || 'next vendor'}: No valid email address found. Please ensure the vendor has provided their contact email in the RFP response.`,
       'Email Not Found'
     )
     return
@@ -1653,14 +1727,25 @@ const startPolling = () => {
   console.log('🔄 Starting real-time polling...')
   isPolling.value = true
   
+  // Poll every 30 seconds instead of 5 seconds to reduce frequent refreshes
+  // Only poll when consensus is not complete (evaluations still in progress)
+  const POLLING_INTERVAL = 30000 // 30 seconds
+  
   pollingInterval.value = setInterval(async () => {
     try {
+      // Check if consensus is complete - if so, stop polling
+      if (isConsensusComplete.value) {
+        console.log('✅ Consensus complete - stopping polling')
+        stopPolling()
+        return
+      }
+      
       await loadConsensusData()
       await loadNotifications()
     } catch (error) {
       console.error('Error during polling:', error)
     }
-  }, 5000)
+  }, POLLING_INTERVAL)
 }
 
 const stopPolling = () => {
@@ -1686,7 +1771,7 @@ const showNotification = (message) => {
     if (index > -1) {
       realTimeNotifications.value.splice(index, 1)
     }
-  }, 5000)
+  }, 5000) // Keep notification timeout at 5 seconds (this is for UI notifications, not polling)
 }
 
 const removeNotification = (notificationId) => {
@@ -1694,6 +1779,38 @@ const removeNotification = (notificationId) => {
   if (index > -1) {
     realTimeNotifications.value.splice(index, 1)
   }
+}
+
+// Helper function to extract email from response_documents
+const extractEmailFromResponseDocuments = (proposal) => {
+  if (!proposal || !proposal.response_documents) return ''
+  
+  try {
+    const responseDocs = typeof proposal.response_documents === 'string' 
+      ? JSON.parse(proposal.response_documents) 
+      : proposal.response_documents
+    
+    if (responseDocs && typeof responseDocs === 'object') {
+      // Try multiple possible field names for email
+      return responseDocs.contact_email 
+        || responseDocs.email
+        || responseDocs.contact?.email
+        || responseDocs.vendor?.email
+        || responseDocs.vendor_email
+        || responseDocs.companyInfo?.email
+        || responseDocs.companyInfo?.contactEmail
+        || responseDocs.companyInfo?.contact?.email
+        || responseDocs.basic_info?.email
+        || responseDocs.basic_info?.contact_email
+        || responseDocs.company?.email
+        || responseDocs.organization?.email
+        || ''
+    }
+  } catch (e) {
+    console.warn('Error parsing response_documents for email:', e)
+  }
+  
+  return ''
 }
 
 // Helper functions
@@ -1713,6 +1830,22 @@ const getOrganizationName = (item) => {
   if (proposal) return proposal.org
   
   return 'Unknown Organization'
+}
+
+// Helper function to get vendor email from multiple sources
+const getVendorEmail = (item) => {
+  // First try direct fields
+  let email = item.vendor_email || item.contact_email || item.email || ''
+  
+  // If not found, try to extract from response_documents
+  if (!email || email === 'vendor@example.com') {
+    const proposal = shortlistedProposals.value.find(p => p.response_id === item.response_id)
+    if (proposal) {
+      email = extractEmailFromResponseDocuments(proposal) || email
+    }
+  }
+  
+  return email
 }
 
 const getNotificationIcon = (status) => {

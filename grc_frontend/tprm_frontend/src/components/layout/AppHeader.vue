@@ -917,13 +917,21 @@ const handleClickOutside = (event) => {
 }
 
 onMounted(async () => {
-  // Initialize notification count on app startup
-  await initializeNotificationCount()
+  // Check if we're on a public/standalone page (like award-response)
+  // These pages don't require authentication and shouldn't initialize notifications
+  const isPublicPage = route.path.includes('/award-response') || 
+                       document.body.classList.contains('standalone-route') ||
+                       !localStorage.getItem('session_token')
   
-  // Subscribe to new notifications
-  unsubscribe = notificationService.subscribe((notification) => {
-    showNotificationPopup(notification)
-  })
+  // Only initialize notification count if we're on an authenticated page
+  if (!isPublicPage) {
+    await initializeNotificationCount()
+    
+    // Subscribe to new notifications
+    unsubscribe = notificationService.subscribe((notification) => {
+      showNotificationPopup(notification)
+    })
+  }
   
   // Add click outside listener
   document.addEventListener('click', handleClickOutside)

@@ -87,6 +87,95 @@
         <span class="audit-type">{{ auditInfo.type || 'AI Audit' }}</span>
         <span class="framework">{{ auditInfo.framework || 'Framework' }}</span>
       </div>
+      
+      <!-- SEBI AI Auditor Insights -->
+      <div v-if="sebiEnabled" class="sebi-insights-section">
+        <div class="sebi-insights-header">
+          <h4><i class="fas fa-chart-line"></i> SEBI Compliance Insights</h4>
+          <span v-if="isLoadingSEBI" class="loading-text">Loading...</span>
+        </div>
+        
+        <div v-if="!isLoadingSEBI" class="sebi-insights-grid">
+          <!-- Filing Accuracy -->
+          <div v-if="sebiInsights.filingAccuracy" class="sebi-insight-card">
+            <div class="insight-header">
+              <i class="fas fa-file-check"></i>
+              <span>Filing Accuracy</span>
+            </div>
+            <div class="insight-value">
+              <span class="score">{{ (sebiInsights.filingAccuracy.overall_score * 100).toFixed(1) }}%</span>
+            </div>
+            <div v-if="sebiInsights.filingAccuracy.arithmetic_errors?.length > 0" class="insight-warning">
+              <i class="fas fa-exclamation-triangle"></i>
+              {{ sebiInsights.filingAccuracy.arithmetic_errors.length }} arithmetic error(s)
+            </div>
+          </div>
+          
+          <!-- Timeliness SLA -->
+          <div v-if="sebiInsights.timelinessSLA" class="sebi-insight-card" 
+               :class="{ 'sla-breach': sebiInsights.timelinessSLA.sla_breach }">
+            <div class="insight-header">
+              <i class="fas fa-clock"></i>
+              <span>Timeliness SLA</span>
+            </div>
+            <div v-if="sebiInsights.timelinessSLA.sla_breach" class="insight-value">
+              <span class="breach">
+                <i class="fas fa-exclamation-circle"></i>
+                {{ sebiInsights.timelinessSLA.days_delayed || sebiInsights.timelinessSLA.hours_delayed }} 
+                {{ sebiInsights.timelinessSLA.days_delayed ? 'days' : 'hours' }} delayed
+              </span>
+            </div>
+            <div v-else class="insight-value">
+              <span class="on-time"><i class="fas fa-check-circle"></i> On Time</span>
+            </div>
+            <div v-if="sebiInsights.timelinessSLA.severity" class="insight-severity" 
+                 :class="'severity-' + sebiInsights.timelinessSLA.severity">
+              Severity: {{ sebiInsights.timelinessSLA.severity }}
+            </div>
+          </div>
+          
+          <!-- Risk Score -->
+          <div v-if="sebiInsights.riskScore" class="sebi-insight-card"
+               :class="{ 'risk-high': sebiInsights.riskScore.risk_level === 'High' }">
+            <div class="insight-header">
+              <i class="fas fa-exclamation-triangle"></i>
+              <span>Risk Score</span>
+            </div>
+            <div class="insight-value">
+              <span class="risk-level" :class="'risk-' + sebiInsights.riskScore.risk_level.toLowerCase()">
+                {{ sebiInsights.riskScore.risk_score }} ({{ sebiInsights.riskScore.risk_level }})
+              </span>
+            </div>
+            <div v-if="sebiInsights.riskScore.factors" class="insight-factors">
+              <div v-for="(factor, key) in sebiInsights.riskScore.factors" :key="key" class="factor-item">
+                <span class="factor-name">{{ key.replace('_', ' ') }}:</span>
+                <span class="factor-count">{{ factor.count || 0 }}</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Patterns -->
+          <div v-if="sebiInsights.patterns" class="sebi-insight-card">
+            <div class="insight-header">
+              <i class="fas fa-search"></i>
+              <span>Behavioral Patterns</span>
+            </div>
+            <div v-if="sebiInsights.patterns.frequent_last_day_filings?.length > 0" class="insight-pattern">
+              <i class="fas fa-calendar-times"></i>
+              {{ sebiInsights.patterns.frequent_last_day_filings.length }} last-day filing(s) detected
+            </div>
+            <div v-if="sebiInsights.patterns.recurring_disclosure_edits?.length > 0" class="insight-pattern">
+              <i class="fas fa-edit"></i>
+              {{ sebiInsights.patterns.recurring_disclosure_edits.length }} recurring edit(s) detected
+            </div>
+            <div v-if="(!sebiInsights.patterns.frequent_last_day_filings?.length && 
+                       !sebiInsights.patterns.recurring_disclosure_edits?.length)" 
+                 class="insight-pattern">
+              <i class="fas fa-check"></i> No significant patterns detected
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Suggested Documents Section - Hidden since we now do automatic processing -->
@@ -877,10 +966,18 @@
           <div v-for="(analysis, idx) in selectedDocumentForDetails.compliance_analyses" :key="idx" class="requirement-card">
             <div class="requirement-header">
               <div class="requirement-number">
-                <div v-if="selectedDocumentForDetails.isAllMappings && analysis.mapping_display" class="mapping-context" style="font-size: 0.85em; color: #666; margin-bottom: 4px;">
-                  <i class="fas fa-link"></i> {{ analysis.mapping_display }}
+                <!-- Main title: ALWAYS prioritize compliance_title (unique per compliance), show compliance_id badge -->
+                <!-- Removed mapping_display (policy → subpolicy) to avoid confusion - all cards were showing the same mapping -->
+                <span class="req-idx" style="font-weight: 600; font-size: 1.05em; display: block; margin-bottom: 4px; color: #333;" :title="analysis.requirement_title || ''">
+                  {{ analysis.compliance_title || analysis.requirement_title || `Requirement ${analysis.index}` }}
+                  <span v-if="analysis.compliance_id" class="compliance-id-badge" style="font-size: 0.7em; color: #666; margin-left: 8px; font-weight: normal;">
+                    (ID: {{ analysis.compliance_id }})
+                  </span>
+                </span>
+                <!-- Show full requirement_title as description if it's different from compliance_title -->
+                <div v-if="analysis.requirement_title && analysis.compliance_title && analysis.requirement_title !== analysis.compliance_title && analysis.requirement_title.length > analysis.compliance_title.length" class="requirement-description" style="font-size: 0.85em; color: #666; margin-top: 4px; line-height: 1.4; padding-left: 8px; border-left: 2px solid #e0e0e0;">
+                  {{ analysis.requirement_title }}
                 </div>
-                <span class="req-idx">{{ analysis.requirement_title || `Requirement ${analysis.index}` }}</span>
                 <div class="compliance-status">
                   <div class="meter-label">Compliance</div>
                   <div class="status-line">
@@ -1014,7 +1111,16 @@ export default {
       relevantDocumentsStats: null, // Statistics about documents in framework
       expandedDocumentId: null, // Which document details are expanded
       bulkDeletingDatabase: false,
-      bulkDeleting: false  // For deleting all documents
+      bulkDeleting: false,  // For deleting all documents
+      // SEBI AI Auditor data
+      sebiEnabled: false,
+      sebiInsights: {
+        filingAccuracy: null,
+        timelinessSLA: null,
+        riskScore: null,
+        patterns: null
+      },
+      isLoadingSEBI: false
     }
   },
   computed: {
@@ -1565,17 +1671,109 @@ export default {
         })
         
         analyses.forEach((a) => {
-          allAnalyses.push({
+          // Ensure compliance_title is preserved from the analysis object
+          const analysisWithMapping = {
             ...a,
             // Add mapping context so UI can show which mapping this belongs to
             mapping_display: m.mapping_display,
             mapping_policy: m.mapped_policy,
             mapping_subpolicy: m.mapped_subpolicy
-          })
+          }
+          
+          // Log to verify compliance_title is present
+          if (a.compliance_id) {
+            console.log(`📋 Analysis for compliance_id ${a.compliance_id}:`, {
+              has_compliance_title: !!a.compliance_title,
+              compliance_title: a.compliance_title,
+              requirement_title: a.requirement_title,
+              mapping_display: m.mapping_display
+            })
+          }
+          
+          allAnalyses.push(analysisWithMapping)
         })
       })
       
       console.log(`✅ Total analyses extracted: ${allAnalyses.length} from ${completedMappings.length} mapping(s)`)
+      
+      // Deduplicate by compliance_id - keep only one entry per compliance
+      const seenComplianceIds = new Map()
+      const deduplicatedAnalyses = []
+      
+      allAnalyses.forEach((analysis) => {
+        const complianceId = analysis.compliance_id
+        if (!complianceId) {
+          // If no compliance_id, keep it (might be a special case)
+          deduplicatedAnalyses.push(analysis)
+          return
+        }
+        
+        if (!seenComplianceIds.has(complianceId)) {
+          // First time seeing this compliance_id - keep it
+          seenComplianceIds.set(complianceId, analysis)
+          deduplicatedAnalyses.push(analysis)
+        } else {
+          // Duplicate found - keep the one with higher compliance_score or relevance
+          const existing = seenComplianceIds.get(complianceId)
+          const existingScore = existing.compliance_score ?? existing.relevance ?? 0
+          const currentScore = analysis.compliance_score ?? analysis.relevance ?? 0
+          
+          if (currentScore > existingScore) {
+            // Replace with better score
+            const index = deduplicatedAnalyses.findIndex(a => a.compliance_id === complianceId)
+            if (index !== -1) {
+              deduplicatedAnalyses[index] = analysis
+              seenComplianceIds.set(complianceId, analysis)
+            }
+          }
+          // Otherwise keep the existing one (higher score)
+        }
+      })
+      
+      console.log(`✅ Deduplicated: ${allAnalyses.length} → ${deduplicatedAnalyses.length} unique compliances`)
+      
+      // Ensure each analysis has a unique compliance_title
+      // The backend should have set compliance_title in each analysis object
+      deduplicatedAnalyses.forEach((analysis) => {
+        // Log current state before processing
+        console.log(`🔍 Processing analysis for compliance_id ${analysis.compliance_id}:`, {
+          compliance_title: analysis.compliance_title,
+          requirement_title: analysis.requirement_title ? analysis.requirement_title.substring(0, 50) + '...' : null,
+          has_compliance_title: !!analysis.compliance_title,
+          compliance_title_length: analysis.compliance_title ? analysis.compliance_title.length : 0
+        })
+        
+        // If compliance_title is missing or same as requirement_title, extract unique title
+        if (!analysis.compliance_title || 
+            analysis.compliance_title === analysis.requirement_title ||
+            analysis.compliance_title.trim() === '') {
+          console.warn(`⚠️ compliance_title missing or invalid for compliance_id ${analysis.compliance_id}, extracting from requirement_title`)
+          
+          if (analysis.requirement_title) {
+            // Use first sentence or first 100 chars as compliance_title
+            const firstSentence = analysis.requirement_title.split('.')[0].trim()
+            if (firstSentence.length > 10 && firstSentence.length < 150) {
+              analysis.compliance_title = firstSentence
+            } else {
+              analysis.compliance_title = analysis.requirement_title.substring(0, 100).trim()
+            }
+          } else {
+            analysis.compliance_title = `Compliance ${analysis.compliance_id || analysis.index || 'Unknown'}`
+          }
+          
+          console.log(`✅ Extracted compliance_title: "${analysis.compliance_title}"`)
+        } else {
+          console.log(`✅ Using existing compliance_title: "${analysis.compliance_title}"`)
+        }
+      })
+      
+      // Final verification: log all unique compliance titles
+      console.log(`📊 Final compliance titles:`, deduplicatedAnalyses.map(a => ({
+        compliance_id: a.compliance_id,
+        compliance_title: a.compliance_title,
+        mapping_display: a.mapping_display
+      })))
+      
       // Build document name that indicates combined check if applicable
       let displayName = fileGroup.document_name
       if (isCombinedCheck) {
@@ -1603,7 +1801,7 @@ export default {
         mappings: completedMappings,
         compliance_status: this.aggregateComplianceStatus(completedMappings),
         confidence_score: this.aggregateConfidenceScore(completedMappings),
-        compliance_analyses: allAnalyses.length > 0 ? allAnalyses : [] // Always provide array, even if empty
+        compliance_analyses: deduplicatedAnalyses.length > 0 ? deduplicatedAnalyses : [] // Always provide array, even if empty (deduplicated)
       }
       
       console.log('🔍 Showing details for fileGroup:', {
@@ -1669,6 +1867,42 @@ export default {
         return
       }
 
+      // Deduplicate by compliance_id - keep only one entry per compliance
+      const seenComplianceIds = new Map()
+      const deduplicatedAnalyses = []
+      
+      allAnalyses.forEach((analysis) => {
+        const complianceId = analysis.compliance_id
+        if (!complianceId) {
+          // If no compliance_id, keep it (might be a special case)
+          deduplicatedAnalyses.push(analysis)
+          return
+        }
+        
+        if (!seenComplianceIds.has(complianceId)) {
+          // First time seeing this compliance_id - keep it
+          seenComplianceIds.set(complianceId, analysis)
+          deduplicatedAnalyses.push(analysis)
+        } else {
+          // Duplicate found - keep the one with higher compliance_score or relevance
+          const existing = seenComplianceIds.get(complianceId)
+          const existingScore = existing.compliance_score ?? existing.relevance ?? 0
+          const currentScore = analysis.compliance_score ?? analysis.relevance ?? 0
+          
+          if (currentScore > existingScore) {
+            // Replace with better score
+            const index = deduplicatedAnalyses.findIndex(a => a.compliance_id === complianceId)
+            if (index !== -1) {
+              deduplicatedAnalyses[index] = analysis
+              seenComplianceIds.set(complianceId, analysis)
+            }
+          }
+          // Otherwise keep the existing one (higher score)
+        }
+      })
+      
+      console.log(`✅ Deduplicated database records: ${allAnalyses.length} → ${deduplicatedAnalyses.length} unique compliances`)
+
       const combinedDetails = {
         document_name: recordGroup.document_name,
         document_type: recordGroup.record_source || 'database_record',
@@ -1678,7 +1912,7 @@ export default {
         mappings: completedMappings,
         compliance_status: this.aggregateComplianceStatus(completedMappings),
         confidence_score: this.aggregateConfidenceScore(completedMappings),
-        compliance_analyses: allAnalyses
+        compliance_analyses: deduplicatedAnalyses
       }
       this.showDocumentDetails(combinedDetails)
     },
@@ -1700,16 +1934,16 @@ export default {
         console.log('📚 Using framework_id from auditInfo:', frameworkId)
         console.log('📚 Framework name:', this.auditInfo.framework)
 
-        // Validate frameworkId early
-        if (!frameworkId || (typeof frameworkId !== 'number' && isNaN(parseInt(frameworkId)))) {
-          console.warn('⚠️ No valid framework_id available on auditInfo; cannot build policy list')
+        // Validate frameworkId early - handle null, undefined, 0, empty string, etc.
+        if (frameworkId === null || frameworkId === undefined || frameworkId === '' || frameworkId === 0 || frameworkId === '0') {
+          console.warn('⚠️ No valid framework_id available on auditInfo; cannot build policy list. FrameworkId:', frameworkId)
           this.auditHierarchyPolicies = []
           return
         }
 
         const fwId = parseInt(frameworkId)
-        if (!fwId) {
-          console.warn('⚠️ Parsed framework_id is invalid:', frameworkId)
+        if (isNaN(fwId) || fwId <= 0) {
+          console.warn('⚠️ Parsed framework_id is invalid:', frameworkId, '->', fwId)
           this.auditHierarchyPolicies = []
           return
         }
@@ -1934,6 +2168,15 @@ export default {
       this.uploadedDocuments = []
       this.processingStatus = 'idle'
       this.processingResults = []
+      // Clear SEBI data
+      this.sebiEnabled = false
+      this.sebiInsights = {
+        filingAccuracy: null,
+        timelinessSLA: null,
+        riskScore: null,
+        patterns: null
+      }
+      this.isLoadingSEBI = false
       
       // Now that user selected, mark confirmed and load data for the chosen audit inline
       this.hasUserConfirmedSelection = true
@@ -1944,6 +2187,15 @@ export default {
         try {
           await this.loadAuditInfo()
           console.log('✅ loadAuditInfo completed, framework_id:', this.auditInfo.framework_id)
+          
+          // Check if SEBI AI Auditor is enabled and run checks
+          if (this.auditInfo.framework_id) {
+            try {
+              await this.checkAndRunSEBIChecks()
+            } catch (e) {
+              console.warn('⚠️ SEBI checks failed (non-critical):', e.message)
+            }
+          }
         } catch (e) {
           console.error('❌ Error in loadAuditInfo:', e)
         }
@@ -2016,15 +2268,19 @@ export default {
         
         if (response.data && !response.data.error) {
           // Extract actual audit data from the API response
+          // Handle framework_id - it might be 0, null, undefined, or empty string
+          const frameworkId = response.data.framework_id
+          const validFrameworkId = (frameworkId && frameworkId !== 0 && frameworkId !== '0' && frameworkId !== '') ? frameworkId : null
+          
           this.auditInfo = {
             title: response.data.title || `Audit ${auditId}`,
             type: 'AI Audit', // Since this is the AI audit upload page
             framework: response.data.framework_name || 'Framework Not Set',
-            framework_id: response.data.framework_id || null,
+            framework_id: validFrameworkId,
             policy: response.data.policy_name || 'Not Specified',
             subpolicy: response.data.subpolicy_name || 'Not Specified'
           }
-          console.log('✅ Stored auditInfo with framework_id:', this.auditInfo.framework_id)
+          console.log('✅ Stored auditInfo with framework_id:', this.auditInfo.framework_id, '(raw:', frameworkId, ')')
           
           // Pre-populate the selected policy and sub-policy
           this.selectedPolicyName = response.data.policy_name || 'Not Specified'
@@ -2079,6 +2335,94 @@ export default {
         }
         this.selectedPolicyName = 'Not Specified'
         this.selectedSubPolicyName = 'Not Specified'
+      }
+    },
+    async checkAndRunSEBIChecks() {
+      /**
+       * Check if SEBI AI Auditor is enabled for this framework
+       * If enabled, automatically run SEBI compliance checks
+       */
+      const auditId = this.currentAuditId
+      const frameworkId = this.auditInfo.framework_id
+      
+      if (!auditId || !frameworkId) {
+        console.log('ℹ️ SEBI check skipped: missing auditId or frameworkId')
+        return
+      }
+      
+      try {
+        this.isLoadingSEBI = true
+        console.log('🔍 Checking SEBI AI Auditor status for framework:', frameworkId)
+        
+        // Check if SEBI is enabled via dashboard endpoint
+        const dashboardResponse = await api.get(`/api/sebi-auditor/dashboard/`, {
+          params: { framework_id: frameworkId }
+        })
+        
+        if (dashboardResponse.data && dashboardResponse.data.sebi_enabled) {
+          this.sebiEnabled = true
+          console.log('✅ SEBI AI Auditor enabled - running checks for audit:', auditId)
+          
+          // Run SEBI checks in parallel (non-blocking)
+          Promise.all([
+            // 1. Filing Accuracy Verification
+            api.get(`/api/sebi-auditor/audit/${auditId}/filing-accuracy/`).then(res => {
+              this.sebiInsights.filingAccuracy = res.data
+              console.log('✅ SEBI Filing Accuracy:', res.data)
+            }).catch(e => {
+              console.warn('⚠️ SEBI Filing Accuracy check failed:', e.message)
+            }),
+            
+            // 2. Timeliness & SLA Monitoring
+            api.get(`/api/sebi-auditor/audit/${auditId}/timeliness-sla/`).then(res => {
+              this.sebiInsights.timelinessSLA = res.data
+              console.log('✅ SEBI Timeliness SLA:', res.data)
+              
+              // Show alert if SLA breach detected
+              if (res.data.sla_breach && res.data.severity === 'high') {
+                this.$popup?.warning(`SEBI SLA Breach: ${res.data.days_delayed} days delayed (${res.data.severity} severity)`)
+              }
+            }).catch(e => {
+              console.warn('⚠️ SEBI Timeliness SLA check failed:', e.message)
+            }),
+            
+            // 3. Risk Score Calculation
+            api.get(`/api/sebi-auditor/audit/${auditId}/risk-score/`).then(res => {
+              this.sebiInsights.riskScore = res.data
+              console.log('✅ SEBI Risk Score:', res.data)
+              
+              // Show alert if high risk
+              if (res.data.risk_level === 'High') {
+                this.$popup?.warning(`SEBI High Risk Detected: Risk Score ${res.data.risk_score} (${res.data.risk_level})`)
+              }
+            }).catch(e => {
+              console.warn('⚠️ SEBI Risk Score check failed:', e.message)
+            }),
+            
+            // 4. Pattern Detection
+            api.get(`/api/sebi-auditor/patterns/`, {
+              params: { audit_id: auditId }
+            }).then(res => {
+              this.sebiInsights.patterns = res.data
+              console.log('✅ SEBI Patterns:', res.data)
+            }).catch(e => {
+              console.warn('⚠️ SEBI Pattern detection failed:', e.message)
+            })
+          ]).then(() => {
+            console.log('✅ All SEBI checks completed')
+          }).catch(e => {
+            console.warn('⚠️ Some SEBI checks failed:', e.message)
+          })
+          
+        } else {
+          this.sebiEnabled = false
+          console.log('ℹ️ SEBI AI Auditor not enabled for this framework')
+        }
+      } catch (e) {
+        console.warn('⚠️ SEBI check failed (non-critical):', e.message)
+        this.sebiEnabled = false
+      } finally {
+        this.isLoadingSEBI = false
       }
     },
     // ----- Multi-select helpers -----
@@ -2907,7 +3251,7 @@ export default {
         }
 
         const response = await api.get(`/api/ai-audit/${auditId}/documents/`, {
-          timeout: 30000 // 30 second timeout to prevent hanging
+          timeout: 120000 // 2 minute timeout for large document lists
         })
         console.log('📋 Documents response:', response.data)
         console.log('📋 Response success:', response.data.success)
@@ -4958,6 +5302,19 @@ export default {
         )
         console.log('🧪 Check response:', res.status, res.data)
         
+        // Check if this is a background job (202 Accepted with job_id)
+        if (res.status === 202 && res.data?.job_id) {
+          const jobId = res.data.job_id
+          console.log(`🚀 Background job started: ${jobId}. Polling for status...`)
+          
+          // Show initial progress message
+          this.$popup?.info(`Processing ${res.data.total_requirements || 'multiple'} requirements in background. Progress will be shown...`)
+          
+          // Start polling for job status
+          this.pollJobStatus(jobId, doc, fileGroup)
+          return
+        }
+        
         if (res.data && res.data.success) {
           doc.processing_status = 'completed'
           doc.compliance_status = res.data.status || doc.compliance_status
@@ -5018,6 +5375,88 @@ export default {
           fileGroup.mappings.forEach(m => { m._checking = false })
         }
       }
+    },
+    async pollJobStatus(jobId, doc, fileGroup, pollInterval = 3000, maxPolls = 600) {
+      /**
+       * Poll for background job status
+       * @param {string} jobId - Job ID to poll
+       * @param {object} doc - Document/mapping object to update
+       * @param {object} fileGroup - File group object
+       * @param {number} pollInterval - Polling interval in ms (default: 3 seconds)
+       * @param {number} maxPolls - Maximum number of polls (default: 600 = 30 minutes)
+       */
+      let pollCount = 0
+      const poll = async () => {
+        try {
+          pollCount++
+          if (pollCount > maxPolls) {
+            console.warn(`⏱️ Max polls reached for job ${jobId}. Stopping polling.`)
+            this.$popup?.warning(`Job ${jobId} is taking longer than expected. Please check status manually.`)
+            return
+          }
+          
+          const res = await api.get(`/api/ai-audit/compliance-job/${jobId}/status/`)
+          const job = res.data
+          
+          console.log(`📊 Job ${jobId} status: ${job.status}, progress: ${job.progress_percent}% (${job.processed_requirements}/${job.total_requirements})`)
+          
+          // Update UI with progress
+          if (doc) {
+            doc._job_progress = job.progress_percent
+            doc._job_status = job.status
+            this.$forceUpdate()
+          }
+          
+          if (job.status === 'completed') {
+            console.log(`✅ Job ${jobId} completed!`)
+            // Update document status
+            if (doc) {
+              doc.processing_status = 'completed'
+              doc.compliance_status = job.results?.status || doc.compliance_status
+              doc.confidence_score = job.results?.confidence ?? doc.confidence_score
+              doc.compliance_analyses = job.results?.analyses || doc.compliance_analyses
+              doc._job_progress = 100
+              this.$forceUpdate()
+            }
+            
+            this.$popup?.success(`Compliance check completed for "${fileGroup.document_name}" - ${job.completed_requirements} requirements analyzed`)
+            
+            // Reload documents to get final status
+            setTimeout(async () => {
+              try {
+                await this.loadUploadedDocuments()
+              } catch (err) {
+                console.error('Error reloading documents after job completion:', err)
+              }
+            }, 1000)
+            
+            return // Stop polling
+          } else if (job.status === 'failed') {
+            console.error(`❌ Job ${jobId} failed: ${job.error}`)
+            if (doc) {
+              doc.processing_status = 'failed'
+              doc._job_error = job.error
+              this.$forceUpdate()
+            }
+            this.$popup?.error(`Compliance check failed: ${job.error}`)
+            return // Stop polling
+          } else {
+            // Still processing - poll again
+            setTimeout(poll, pollInterval)
+          }
+        } catch (err) {
+          console.error(`❌ Error polling job ${jobId} status:`, err)
+          // Continue polling even on error (might be temporary network issue)
+          if (pollCount < maxPolls) {
+            setTimeout(poll, pollInterval)
+          } else {
+            this.$popup?.error(`Failed to get job status after ${maxPolls} attempts. Please refresh the page.`)
+          }
+        }
+      }
+      
+      // Start polling
+      poll()
     },
     async checkAllDocumentsCompliance() {
       try {
@@ -5593,6 +6032,223 @@ export default {
   font-size: 14px;
 }
 
+.sebi-badge {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sebi-badge i {
+  font-size: 11px;
+}
+
+/* SEBI Insights Section */
+.sebi-insights-section {
+  margin-top: 20px;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.sebi-insights-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.sebi-insights-header h4 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sebi-insights-header h4 i {
+  color: #667eea;
+}
+
+.loading-text {
+  color: #6c757d;
+  font-size: 14px;
+  font-style: italic;
+}
+
+.sebi-insights-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 15px;
+}
+
+.sebi-insight-card {
+  background: white;
+  padding: 15px;
+  border-radius: 8px;
+  border: 1px solid #dee2e6;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  transition: all 0.3s ease;
+}
+
+.sebi-insight-card:hover {
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  transform: translateY(-2px);
+}
+
+.sebi-insight-card.sla-breach {
+  border-left: 4px solid #dc3545;
+  background: #fff5f5;
+}
+
+.sebi-insight-card.risk-high {
+  border-left: 4px solid #dc3545;
+  background: #fff5f5;
+}
+
+.insight-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-weight: 600;
+  color: #495057;
+  font-size: 14px;
+}
+
+.insight-header i {
+  color: #667eea;
+  font-size: 14px;
+}
+
+.insight-value {
+  margin: 10px 0;
+}
+
+.insight-value .score {
+  font-size: 24px;
+  font-weight: 700;
+  color: #28a745;
+}
+
+.insight-value .breach {
+  font-size: 18px;
+  font-weight: 600;
+  color: #dc3545;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.insight-value .on-time {
+  font-size: 16px;
+  font-weight: 600;
+  color: #28a745;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.insight-warning {
+  margin-top: 8px;
+  padding: 8px;
+  background: #fff3cd;
+  border-radius: 4px;
+  color: #856404;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.insight-severity {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.insight-severity.severity-high {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.insight-severity.severity-medium {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.insight-severity.severity-low {
+  background: #d1ecf1;
+  color: #0c5460;
+}
+
+.risk-level {
+  font-size: 18px;
+  font-weight: 700;
+  padding: 8px 12px;
+  border-radius: 6px;
+  display: inline-block;
+}
+
+.risk-level.risk-high {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.risk-level.risk-medium {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.risk-level.risk-low {
+  background: #d1ecf1;
+  color: #0c5460;
+}
+
+.insight-factors {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #e9ecef;
+}
+
+.factor-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.factor-name {
+  color: #6c757d;
+  text-transform: capitalize;
+}
+
+.factor-count {
+  font-weight: 600;
+  color: #495057;
+}
+
+.insight-pattern {
+  margin-top: 8px;
+  padding: 8px;
+  background: #e7f3ff;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #004085;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 
 /* Suggested Documents Container - System Style */
 .suggested-documents-container {

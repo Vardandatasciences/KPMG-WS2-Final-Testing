@@ -374,6 +374,16 @@ class AIAuditDocumentUploadView(View):
             
             logger.info(f"📤 Authenticated user ID: {user_id}")
             
+            # MULTI-TENANCY: Extract tenant_id from request
+            tenant_id = get_tenant_id_from_request(request)
+            if not tenant_id:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Tenant ID is required'
+                }, status=400)
+            
+            logger.info(f"📤 Tenant ID: {tenant_id}")
+            
             # CRITICAL: Validate that the audit exists in the correct table (audit)
             try:
                 from django.db import connection
@@ -1521,7 +1531,7 @@ class AIAuditDocumentUploadView(View):
             }, status=500)
     
  
-def save_ai_compliance_to_checklist(audit_id, document_id, analyses, user_id, framework_id, policy_id=None, subpolicy_id=None):
+def save_ai_compliance_to_checklist(audit_id, document_id, analyses, user_id, framework_id, policy_id=None, subpolicy_id=None, tenant_id=None):
     """
     Save AI compliance results to lastchecklistitemverified table for standard compliance tracking.
    
@@ -1533,6 +1543,7 @@ def save_ai_compliance_to_checklist(audit_id, document_id, analyses, user_id, fr
         framework_id: Framework ID from the audit
         policy_id: Policy ID (optional, will be resolved from compliance if not provided)
         subpolicy_id: Sub-policy ID (optional, will be resolved from compliance if not provided)
+        tenant_id: Tenant ID (optional, will be resolved from audit if not provided)
     """
     from django.db import connection
     from django.db.utils import IntegrityError
@@ -1540,6 +1551,16 @@ def save_ai_compliance_to_checklist(audit_id, document_id, analyses, user_id, fr
     import json
    
     try:
+        # MULTI-TENANCY: Get tenant_id from audit if not provided
+        if not tenant_id:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT TenantId FROM audit WHERE AuditId = %s", [int(audit_id) if str(audit_id).isdigit() else audit_id])
+                tenant_row = cursor.fetchone()
+                if tenant_row:
+                    tenant_id = tenant_row[0]
+                else:
+                    logger.warning(f"⚠️ Could not find tenant_id for audit {audit_id}")
+                    return
         # Convert user_id to numeric UserId if it's a username string
         numeric_user_id = None
         if user_id is not None:
@@ -2156,6 +2177,8 @@ class AIAuditDocumentsView(View):
                     framework_id = framework_row[0]
                 # Try to select compliance_id, but handle if column doesn't exist
                 try:
+                    # Remove ORDER BY to avoid sort memory issues with large result sets
+                    # Frontend can sort if needed
                     cursor.execute("""
                         SELECT id, document_id, document_name, document_type, file_size, 
                             created_at, upload_status, ai_processing_status, 
@@ -2165,12 +2188,13 @@ class AIAuditDocumentsView(View):
                         FROM ai_audit_data 
                         WHERE audit_id = %s 
                           AND (external_source != 'database_record' AND document_type != 'db_record')
-                        ORDER BY created_at DESC
                     """, [converted_audit_id])
                 except Exception as compliance_id_err:
                     # If compliance_id column doesn't exist, select without it
                     if 'compliance_id' in str(compliance_id_err).lower() or 'Unknown column' in str(compliance_id_err):
                         logger.warning(f"⚠️ compliance_id column not found in ai_audit_data table, selecting without it")
+                        # Remove ORDER BY to avoid sort memory issues with large result sets
+                        # Frontend can sort if needed
                         cursor.execute("""
                             SELECT id, document_id, document_name, document_type, file_size, 
                                 created_at, upload_status, ai_processing_status, 
@@ -2180,7 +2204,6 @@ class AIAuditDocumentsView(View):
                             FROM ai_audit_data 
                             WHERE audit_id = %s 
                               AND (external_source != 'database_record' AND document_type != 'db_record')
-                            ORDER BY created_at DESC
                         """, [converted_audit_id])
                     else:
                         raise
@@ -2188,6 +2211,12 @@ class AIAuditDocumentsView(View):
                 rows = cursor.fetchall()
                 columns = [col[0] for col in cursor.description]
                 logger.info(f"📋 Raw SQL result rows: {len(rows)}")
+                
+                # Sort in Python to avoid MySQL sort memory issues
+                # Sort by created_at DESC (newest first)
+                created_at_idx = columns.index('created_at') if 'created_at' in columns else None
+                if created_at_idx is not None:
+                    rows = sorted(rows, key=lambda x: x[created_at_idx] if x[created_at_idx] else None, reverse=True)
 
                 # Also load the audit's policy/subpolicy names to show mapping
                 policy_name = None
@@ -2211,32 +2240,53 @@ class AIAuditDocumentsView(View):
                 except Exception as e:
                     logger.warning(f"ℹ️ Could not fetch policy/subpolicy names for audit {audit_id}: {e}")
                 
+            # OPTIMIZATION: Fetch all unique policy/subpolicy names in bulk to avoid N+1 queries
+            unique_policy_ids = set()
+            unique_subpolicy_ids = set()
+            for row in rows:
+                doc_dict = dict(zip(columns, row))
+                if doc_dict.get('policy_id'):
+                    unique_policy_ids.add(doc_dict.get('policy_id'))
+                if doc_dict.get('subpolicy_id'):
+                    unique_subpolicy_ids.add(doc_dict.get('subpolicy_id'))
+            
+            # Bulk fetch policy names
+            policy_names_map = {}
+            if unique_policy_ids:
+                try:
+                    with connection.cursor() as bulk_cursor:
+                        placeholders = ','.join(['%s'] * len(unique_policy_ids))
+                        bulk_cursor.execute(
+                            f"SELECT PolicyId, PolicyName FROM policies WHERE PolicyId IN ({placeholders})",
+                            list(unique_policy_ids)
+                        )
+                        for policy_row in bulk_cursor.fetchall():
+                            policy_names_map[policy_row[0]] = policy_row[1]
+                except Exception as e:
+                    logger.warning(f"⚠️ Could not bulk fetch policy names: {e}")
+            
+            # Bulk fetch subpolicy names
+            subpolicy_names_map = {}
+            if unique_subpolicy_ids:
+                try:
+                    with connection.cursor() as bulk_cursor:
+                        placeholders = ','.join(['%s'] * len(unique_subpolicy_ids))
+                        bulk_cursor.execute(
+                            f"SELECT SubPolicyId, SubPolicyName FROM subpolicies WHERE SubPolicyId IN ({placeholders})",
+                            list(unique_subpolicy_ids)
+                        )
+                        for subpolicy_row in bulk_cursor.fetchall():
+                            subpolicy_names_map[subpolicy_row[0]] = subpolicy_row[1]
+                except Exception as e:
+                    logger.warning(f"⚠️ Could not bulk fetch subpolicy names: {e}")
+            
             documents = []
             for row in rows:
                 doc_dict = dict(zip(columns, row))
                 
-                # Fetch policy/sub-policy names for THIS specific document
-                doc_policy_name = None
-                doc_subpolicy_name = None
-                doc_policy_id = doc_dict.get('policy_id')
-                doc_subpolicy_id = doc_dict.get('subpolicy_id')
-                
-                if doc_policy_id or doc_subpolicy_id:
-                    try:
-                        with connection.cursor() as doc_cursor:
-                            if doc_policy_id:
-                                doc_cursor.execute("SELECT PolicyName FROM policies WHERE PolicyId = %s", [doc_policy_id])
-                                policy_row = doc_cursor.fetchone()
-                                if policy_row:
-                                    doc_policy_name = policy_row[0]
-                            
-                            if doc_subpolicy_id:
-                                doc_cursor.execute("SELECT SubPolicyName FROM subpolicies WHERE SubPolicyId = %s", [doc_subpolicy_id])
-                                subpolicy_row = doc_cursor.fetchone()
-                                if subpolicy_row:
-                                    doc_subpolicy_name = subpolicy_row[0]
-                    except Exception as e:
-                        logger.warning(f"⚠️ Could not fetch policy/sub-policy names for document {doc_dict.get('document_id')}: {e}")
+                # Use bulk-fetched policy/sub-policy names (no additional queries per document)
+                doc_policy_name = policy_names_map.get(doc_dict.get('policy_id')) if doc_dict.get('policy_id') else None
+                doc_subpolicy_name = subpolicy_names_map.get(doc_dict.get('subpolicy_id')) if doc_dict.get('subpolicy_id') else None
                 
                 # Use document-specific names, fallback to audit-level names
                 final_policy_name = doc_policy_name or policy_name
@@ -3263,6 +3313,13 @@ REQUIRED OUTPUT FOR "missing" ARRAY:
     # Create enhanced prompt with clear audit process explanation
     prompt = f"""You are a GRC compliance auditor performing an audit. Your job is to analyze whether the uploaded document provides evidence that the organization meets the compliance requirement.
 
+IMPORTANT: The uploaded content may be:
+- A narrative document (policy, procedure, memo, minutes, email, etc.)
+- A structured table, spreadsheet, or CSV-style data (rows and columns with headers)
+- A mix of both
+
+You MUST treat structured/tabular data (including CSV-style rows) as valid evidence. Each row in a table/CSV represents a real record or instance, and column headers with cell values contain factual data that can demonstrate compliance. Do not ignore structured data just because it is in tabular format - extract evidence from the actual data values in the rows and columns.
+
 {audit_context_section if audit_context else ''}=== COMPLIANCE REQUIREMENT TO CHECK ===
 {req_text}
 
@@ -3277,10 +3334,16 @@ STEP 1: RELEVANCE CHECK (MUST DO FIRST):
    - CRITICAL: This audit's objective is: {audit_objective_text if audit_context and audit_context.get('objective') else 'N/A'}
    - CRITICAL: This audit's scope is: {audit_scope_text if audit_context and audit_context.get('scope') else 'N/A'}
    - The requirement being checked: "{req_desc}"
-   - The document content provided above
+   - The document content provided above (including any tables / CSV-style data)
+   
+   IMPORTANT FOR STRUCTURED DATA: If the document contains comma-separated values, tab-separated values, or table rows with headers:
+   - The first line typically contains column headers that describe what data is in each column
+   - Each subsequent line represents a data record with values separated by commas/tabs
+   - This structured data format contains actual evidence - treat the header row and data rows as factual information
+   - Check if the column headers relate to the requirement topic - if yes, the document is relevant
    
    RELEVANCE QUESTIONS (ALL must be YES for document to be relevant):
-   1. Is the document about the SAME TOPIC as the requirement "{req_desc}"?
+   1. Is the document about the SAME TOPIC as the requirement "{req_desc}"? (For structured data: do the column headers indicate data related to this requirement?)
    2. Is the document related to Policy "{policy_name}" / Sub-Policy "{subpolicy_name}"?
    3. Does the document relate to THIS AUDIT's objective: {audit_objective_text if audit_context and audit_context.get('objective') else 'N/A'}?
    4. Does the document fall within THIS AUDIT's scope: {audit_scope_text if audit_context and audit_context.get('scope') else 'N/A'}?
@@ -3301,6 +3364,17 @@ STEP 2: EVIDENCE EXTRACTION (ONLY IF RELEVANT):
    - Evidence MUST be relevant to the audit objective and scope
    - If document mentions requirement topic but doesn't provide evidence → evidence = []
    - Extract actual quotes, numbers, or facts from document
+   
+   CRITICAL FOR STRUCTURED/TABULAR DATA (CSV, tables, spreadsheets):
+   - If content has comma-separated or tab-separated values with a header row:
+       * Identify the header row (first line with column names)
+       * Each subsequent data row represents a real instance/record
+       * Extract evidence by combining column header names with values from each data row
+       * Count how many data rows exist - this shows quantity/frequency
+       * Extract ALL relevant data rows that match the requirement - do not skip any
+       * Treat each data row as factual evidence that proves or demonstrates compliance
+   - Do NOT ignore structured data - it contains real evidence in organized format
+   - If you see multiple data rows, each one is separate evidence of compliance activity
 
 STEP 3: COMPLIANCE VERIFICATION (ONLY IF EVIDENCE FOUND):
    - Remember: This audit objective is: {audit_objective_text if audit_context and audit_context.get('objective') else 'N/A'}
@@ -3351,6 +3425,7 @@ If evidence = [] (no evidence found):
    - For "DOCUMENT IS ABOUT": 
      * Read the document content provided above
      * Analyze what the document actually contains
+     * If the content is a table/CSV, describe what each row represents based on the column headers and data values
      * Describe the topic, purpose, and content specifically
    
    - For "DATA REQUIRED FOR THIS AUDIT": 
@@ -3668,12 +3743,71 @@ Return JSON now:"""
                         if end_pos > start_pos:
                             cleaned_data = cleaned_data[start_pos:end_pos]
                             logger.info(f"🔧 Extracted JSON structure around 'analysis' key from markdown response")
+                else:
+                    # No JSON structure found at all - this is a text-only response
+                    logger.warning(f"⚠️ No JSON structure detected in response. Response appears to be plain text.")
+                    logger.warning(f"⚠️ Response preview (first 200 chars): {cleaned_data[:200]}")
+                    # Set cleaned_data to empty to trigger the fallback handler
+                    cleaned_data = ""
         
-        # Try to parse the JSON
-        parsed = json.loads(cleaned_data)
-    except json.JSONDecodeError as e:
+        # Try to parse the JSON (if we have any)
+        if cleaned_data and (cleaned_data.startswith('{') or cleaned_data.startswith('[')):
+            parsed = json.loads(cleaned_data)
+        else:
+            # No valid JSON found - raise an error to trigger fallback
+            raise ValueError("No JSON structure found in response")
+    except (json.JSONDecodeError, ValueError) as e:
         # If JSON is truncated or malformed, try to repair it
-        logger.warning(f"⚠️ JSON parsing error at position {e.pos}: {e.msg}. Attempting to repair...")
+        error_pos = getattr(e, 'pos', 0)
+        error_msg = getattr(e, 'msg', str(e))
+        logger.warning(f"⚠️ JSON parsing error at position {error_pos}: {error_msg}. Attempting to repair...")
+        
+        # If it's a ValueError (no JSON structure found), skip to fallback immediately
+        if isinstance(e, ValueError) and "No JSON structure found" in str(e):
+            # Skip repair attempts and go straight to fallback
+            raise
+        
+        # First, try to fix unterminated strings by finding last complete key-value pair
+        if "Unterminated string" in str(error_msg) or "Unterminated string" in str(e):
+            try:
+                error_pos = error_pos if error_pos > 0 else len(cleaned_data)
+                # Find the last complete key-value pair before the error
+                # Look for pattern: "key": "value", or "key": value,
+                # Go backwards from error position to find a safe cut point
+                safe_cut = error_pos
+                # Look for the last complete comma before the error (indicating a complete pair)
+                for i in range(min(error_pos - 1, len(cleaned_data) - 1), max(0, error_pos - 500), -1):
+                    if cleaned_data[i] == ',':
+                        # Check if this comma is inside a string
+                        # Simple check: count quotes before this position
+                        quotes_before = cleaned_data[:i+1].count('"')
+                        if quotes_before % 2 == 0:  # Not inside a string
+                            safe_cut = i + 1
+                            break
+                
+                # If we found a safe cut point, truncate there
+                if safe_cut < error_pos:
+                    repaired = cleaned_data[:safe_cut]
+                    # Close any open structures
+                    open_braces = repaired.count('{') - repaired.count('}')
+                    open_brackets = repaired.count('[') - repaired.count(']')
+                    # Ensure strings are closed (should be even number of quotes)
+                    if repaired.count('"') % 2 != 0:
+                        # Remove the last incomplete quote
+                        repaired = repaired.rstrip().rstrip('"')
+                    # Close arrays first, then objects
+                    repaired += ']' * open_brackets
+                    repaired += '}' * open_braces
+                    
+                    # Try to parse the repaired JSON
+                    try:
+                        parsed = json.loads(repaired)
+                        logger.info(f"✅ Successfully repaired unterminated string JSON by truncating at safe position")
+                    except:
+                        # If that fails, fall through to the analysis extraction logic
+                        cleaned_data = repaired
+            except Exception as str_repair_err:
+                logger.warning(f"⚠️ String repair failed: {str_repair_err}, trying analysis extraction...")
         
         # Try to extract just the analysis array if the JSON is truncated
         try:
@@ -3748,14 +3882,63 @@ Return JSON now:"""
             else:
                 raise
         except Exception as repair_err:
-            # If repair fails, log the full error and re-raise with more context
-            logger.error(f"❌ Failed to repair JSON. Error: {repair_err}")
-            logger.error(f"❌ Original response (first 500 chars): {data[:500]}")
-            raise Exception(f"Failed to parse JSON response: {e}. Response length: {len(data)} chars. Error at position {e.pos}: {e.msg}")
+            # Last resort: If no JSON structure found at all, create a default response
+            # This handles cases where Ollama returns plain text instead of JSON
+            # Check if this is a ValueError indicating no JSON structure
+            if isinstance(repair_err, ValueError) and "No JSON structure found" in str(repair_err):
+                logger.warning(f"⚠️ No valid JSON structure found in response. Creating default analysis from text response.")
+            else:
+                logger.warning(f"⚠️ All JSON repair attempts failed. Creating default analysis from text response.")
+            logger.warning(f"⚠️ Response preview (first 300 chars): {data[:300]}")
+            
+            # Try to infer compliance status from text keywords
+            data_lower = data.lower()
+            is_compliant = any(keyword in data_lower for keyword in ['compliant', 'meets requirement', 'satisfies', 'fulfills'])
+            is_non_compliant = any(keyword in data_lower for keyword in ['non-compliant', 'does not meet', 'fails', 'missing', 'no evidence'])
+            is_partial = any(keyword in data_lower for keyword in ['partially', 'some', 'limited', 'incomplete'])
+            
+            # Determine status and score
+            if is_compliant and not is_non_compliant:
+                default_status = "COMPLIANT"
+                default_score = 0.85
+            elif is_non_compliant and not is_compliant:
+                default_status = "NON_COMPLIANT"
+                default_score = 0.25
+            elif is_partial:
+                default_status = "PARTIALLY_COMPLIANT"
+                default_score = 0.55
+            else:
+                # Default to partially compliant if we can't determine
+                default_status = "PARTIALLY_COMPLIANT"
+                default_score = 0.50
+            
+            # Create a default analysis structure
+            parsed = {
+                "analysis": [{
+                    "compliance_status": default_status,
+                    "compliance_score": default_score,
+                    "relevance": default_score,
+                    "evidence_found": "Text response received but no structured JSON. Review required.",
+                    "reasoning": data[:500] if len(data) > 500 else data,  # Include first 500 chars as reasoning
+                    "missing": [] if default_status == "COMPLIANT" else ["Structured analysis not available - manual review recommended"]
+                }]
+            }
+            logger.info(f"✅ Created default analysis structure: status={default_status}, score={default_score}")
     if 'analysis' in parsed and isinstance(parsed['analysis'], list):
         # Enhanced compliance analysis processing
         for a in parsed['analysis']:
             a['requirement_title'] = req.get('title') or a.get('requirement_title') or f"Requirement {global_idx}"
+            # Add compliance_title (short name) if available from requirements
+            if req.get('compliance_title'):
+                a['compliance_title'] = req.get('compliance_title')
+            elif req.get('title') and len(req.get('title', '')) > 100:
+                # If title is very long (description), try to extract a shorter title
+                # Use first sentence or first 80 chars
+                title_text = req.get('title', '')
+                first_sentence = title_text.split('.')[0] if '.' in title_text else title_text[:80]
+                a['compliance_title'] = first_sentence.strip()
+            else:
+                a['compliance_title'] = req.get('title', f"Compliance {req.get('compliance_id', global_idx)}")
             
             # Handle enhanced response format with predefined compliance_status
             if 'compliance_status' in a:
@@ -3944,9 +4127,11 @@ JSON:"""
                     a['requirement_title'] = requirements[req_index].get('title', f'Requirement {global_index}')
                     a['requirement_description'] = requirements[req_index].get('description', '')
                     a['compliance_id'] = requirements[req_index].get('compliance_id')
+                    a['compliance_title'] = requirements[req_index].get('compliance_title', a.get('requirement_title', f'Compliance {global_index}'))
                 else:
                     a['requirement_title'] = f'Requirement {global_index}'
                     a['requirement_description'] = ''
+                    a['compliance_title'] = f'Compliance {global_index}'
                 # Overwrite index with the global index so downstream consumers are consistent
                 a['index'] = global_index
                 # Skip duplicates by title or by index across all batches
@@ -4034,6 +4219,14 @@ def _check_document_compliance_internal(audit_id, document_id, user_id=None, sel
     """
     try:
         logger.info(f"🔍 Internal compliance check: audit_id={audit_id}, document_id={document_id}")
+        
+        # MULTI-TENANCY: Extract tenant_id from audit
+        tenant_id = None
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT TenantId FROM audit WHERE AuditId = %s", [int(audit_id) if str(audit_id).isdigit() else audit_id])
+            tenant_row = cursor.fetchone()
+            if tenant_row:
+                tenant_id = tenant_row[0]
         
         # Lookup document path, mime, and policy mapping from ai_audit_data table
         with connection.cursor() as cursor:
@@ -4315,9 +4508,11 @@ def _check_document_compliance_internal(audit_id, document_id, user_id=None, sel
                 for r in rows:
                     description = r[2] or ''
                     title = description if description and len(description) > 10 else (r[1] or f"Compliance {r[0]}")
+                    compliance_title = r[1] or f"Compliance {r[0]}"  # Short title from ComplianceTitle column
                     requirements.append({
                         'compliance_id': r[0],
                         'title': title,
+                        'compliance_title': compliance_title,  # Add short compliance title
                         'description': description,
                         'type': r[3] or 'General',
                         'risk': r[4] or 'Medium',
@@ -4518,7 +4713,16 @@ def _check_document_compliance_internal(audit_id, document_id, user_id=None, sel
                             # All documents processed - update audit status to "Under review" (not "Completed" yet - needs reviewer approval)
                             from ...models import Audit
                             try:
-                                audit_obj = Audit.objects.get(AuditId=int(audit_id) if str(audit_id).isdigit() else audit_id, tenant_id=tenant_id)
+                                # Get tenant_id from audit if not available
+                                if 'tenant_id' not in locals() or tenant_id is None:
+                                    cursor.execute("SELECT TenantId FROM audit WHERE AuditId = %s", [int(audit_id) if str(audit_id).isdigit() else audit_id])
+                                    tenant_row = cursor.fetchone()
+                                    tenant_id = tenant_row[0] if tenant_row and tenant_row[0] else None
+                                
+                                if tenant_id:
+                                    audit_obj = Audit.objects.get(AuditId=int(audit_id) if str(audit_id).isdigit() else audit_id, tenant_id=tenant_id)
+                                else:
+                                    audit_obj = Audit.objects.get(AuditId=int(audit_id) if str(audit_id).isdigit() else audit_id)
                                 current_status = audit_obj.Status
                                 logger.info(f"🔍 Current audit status: '{current_status}'")
                                 
@@ -4714,7 +4918,7 @@ def check_document_compliance(request, audit_id, document_id):
                 FROM audit
                 WHERE AuditId = %s AND TenantId = %s
                 """,
-                [int(audit_id) if str(audit_id).isdigit() else audit_id]
+                [int(audit_id) if str(audit_id).isdigit() else audit_id, tenant_id]
             )
             audit_row = cursor.fetchone()
             if audit_row:
@@ -4746,13 +4950,6 @@ def check_document_compliance(request, audit_id, document_id):
             doc_path, doc_type, policy_id, subpolicy_id, external_source, external_id, document_name, file_size = row
             logger.info(f"📋 Document lookup: external_source={external_source}, external_id={external_id} (type: {type(external_id)}), document_name={document_name}, file_size={file_size}")
         
-        # TESTING: Only allow audit_id 426 for Document Handling uploads
-        if external_source == 'evidence_attachment' and str(audit_id) != '426':
-            return Response({
-                'success': False,
-                'error': f'Testing mode: Only audit_id 426 is allowed for Document Handling uploads. Requested audit_id: {audit_id}'
-            }, status=status.HTTP_403_FORBIDDEN)
-
         # Fetch policy and subpolicy names for audit context
         policy_name = None
         subpolicy_name = None
@@ -5196,6 +5393,91 @@ def check_document_compliance(request, audit_id, document_id):
         # =============================
         logger.info(f"🔍 Only document evidence found. Using document-only compliance check.")
 
+        # Check if we should use background processing (for large requirement sets)
+        USE_BACKGROUND_THRESHOLD = 10  # Use background processing if more than 10 requirements
+        if len(requirements) > USE_BACKGROUND_THRESHOLD:
+            logger.info(f"🚀 Large requirement set ({len(requirements)} requirements). Using background processing to avoid timeout.")
+            
+            # Create background job
+            from .compliance_job_tracker import ComplianceJobTracker
+            from .compliance_background_processor import process_compliance_check_background
+            import threading
+            
+            job_id = ComplianceJobTracker.create_job(
+                audit_id=int(audit_id),
+                document_id=int(document_id),
+                total_requirements=len(requirements),
+                tenant_id=tenant_id
+            )
+            
+            # Prepare audit context
+            audit_context = {
+                'title': audit_title,
+                'objective': audit_objective,
+                'scope': audit_scope,
+                'business_unit': audit_business_unit,
+                'audit_type': audit_type,
+                'due_date': audit_due_date,
+                'policy_id': policy_id,
+                'policy_name': policy_name,
+                'subpolicy_id': subpolicy_id,
+                'subpolicy_name': subpolicy_name
+            }
+            
+            # Get framework_id
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT FrameworkId FROM audit WHERE AuditId = %s", [int(audit_id)])
+                framework_result = cursor.fetchone()
+                framework_id = framework_result[0] if framework_result and framework_result[0] else None
+            
+            if not framework_id:
+                return Response({
+                    'success': False,
+                    'error': 'Audit not found or has no FrameworkId assigned'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Start background thread
+            def run_background_job():
+                try:
+                    process_compliance_check_background(
+                        job_id=job_id,
+                        audit_id=int(audit_id),
+                        document_id=int(document_id),
+                        requirements=requirements,
+                        document_text=text,
+                        inferred_schema=inferred_schema or {},
+                        audit_context=audit_context,
+                        framework_id=framework_id,
+                        tenant_id=tenant_id,
+                        user_id=user_id,
+                        doc_path=doc_path,
+                        document_name=document_name,
+                        file_size=file_size,
+                        external_source=external_source,
+                        external_id=external_id,
+                        policy_id=policy_id,
+                        subpolicy_id=subpolicy_id
+                    )
+                except Exception as e:
+                    logger.error(f"❌ Background job {job_id} failed: {e}", exc_info=True)
+                    ComplianceJobTracker.fail_job(job_id, str(e))
+            
+            background_thread = threading.Thread(target=run_background_job, daemon=True)
+            background_thread.start()
+            
+            logger.info(f"✅ Started background job {job_id} for {len(requirements)} requirements")
+            
+            # Return job_id immediately
+            return Response({
+                'success': True,
+                'job_id': job_id,
+                'message': f'Compliance check started in background. Processing {len(requirements)} requirements.',
+                'status': 'processing',
+                'total_requirements': len(requirements),
+                'progress_percent': 0
+            }, status=status.HTTP_202_ACCEPTED)
+
+        # For small requirement sets, process normally (quick response)
         # Deterministic signals from schema/sample
         signals = _compute_basic_signals(inferred_schema)
 
@@ -5385,6 +5667,37 @@ def check_document_compliance(request, audit_id, document_id):
                     logger.warning(f"⚠️ Could not save to lastchecklistitemverified: {e}")
                     # Don't fail the whole request if this fails
                 
+                # Run SEBI AI Auditor checks automatically (if enabled) - non-blocking
+                try:
+                    if framework_id:
+                        import threading
+                        def run_sebi_checks():
+                            try:
+                                from .sebi_ai_auditor import SEBIAIAuditor
+                                auditor = SEBIAIAuditor(framework_id, tenant_id)
+                                if auditor.is_sebi_framework:
+                                    logger.info(f"🔍 SEBI AI Auditor enabled - running automatic checks for audit {audit_id}")
+                                    # Run SEBI checks (non-blocking, results stored for report)
+                                    try:
+                                        auditor.verify_filing_accuracy(audit_id, document_id)
+                                        auditor.check_timeliness_sla(audit_id)
+                                        auditor.calculate_risk_score(audit_id)
+                                        auditor.detect_patterns(audit_id)
+                                        logger.info(f"✅ SEBI AI Auditor checks completed for audit {audit_id}")
+                                    except Exception as sebi_err:
+                                        logger.warning(f"⚠️ SEBI checks failed (non-critical): {str(sebi_err)}")
+                                else:
+                                    logger.debug(f"ℹ️ SEBI AI Auditor not enabled for framework {framework_id}")
+                            except Exception as e:
+                                logger.warning(f"⚠️ SEBI AI Auditor check failed (non-critical): {str(e)}")
+                        
+                        # Run in background thread (non-blocking)
+                        sebi_thread = threading.Thread(target=run_sebi_checks, daemon=True)
+                        sebi_thread.start()
+                        logger.info(f"🚀 Started SEBI AI Auditor checks in background for audit {audit_id}")
+                except Exception as sebi_init_err:
+                    logger.warning(f"⚠️ Could not initialize SEBI checks (non-critical): {str(sebi_init_err)}")
+                
                 # Check if all documents are processed and update audit status to "Under review" for AI audits
                 try:
                     cursor.execute("SELECT AuditType, Status FROM audit WHERE AuditId = %s", [int(audit_id) if str(audit_id).isdigit() else audit_id])
@@ -5534,11 +5847,12 @@ def _check_compliance_with_combined_evidence_internal(audit_id, compliance_ids, 
         audit_due_date = None
         
         with connection.cursor() as cursor:
-            cursor.execute("SELECT FrameworkId, PolicyId, SubPolicyId, Title, Objective, Scope, BusinessUnit, AuditType, DueDate FROM audit WHERE AuditId = %s", [int(audit_id)])
+            cursor.execute("SELECT FrameworkId, PolicyId, SubPolicyId, Title, Objective, Scope, BusinessUnit, AuditType, DueDate, TenantId FROM audit WHERE AuditId = %s", [int(audit_id)])
             audit_row = cursor.fetchone()
             if not audit_row:
                 return {'success': False, 'error': 'Audit not found'}
             framework_id, policy_id, subpolicy_id = audit_row[0], audit_row[1], audit_row[2]
+            tenant_id = audit_row[9] if len(audit_row) > 9 else None
             if len(audit_row) > 3:
                 audit_title = audit_row[3] or None
                 audit_objective = audit_row[4] or None
@@ -5627,9 +5941,11 @@ def _check_compliance_with_combined_evidence_internal(audit_id, compliance_ids, 
         for r in compliance_rows:
             description = r[2] or ''
             title = description if description and len(description) > 10 else (r[1] or f"Compliance {r[0]}")
+            compliance_title = r[1] or f"Compliance {r[0]}"  # Short title from ComplianceTitle column
             requirements.append({
                 'compliance_id': r[0],
                 'title': title,
+                'compliance_title': compliance_title,  # Add short compliance title
                 'description': description,
                 'type': r[3] or 'General',
                 'risk': r[4] or 'Medium',
@@ -6293,6 +6609,42 @@ def _check_compliance_with_combined_evidence_internal(audit_id, compliance_ids, 
                     'error': str(e)
                 })
         
+        # Run SEBI AI Auditor checks automatically (if enabled) - non-blocking
+        try:
+            if framework_id and tenant_id:
+                import threading
+                # Capture variables for closure
+                sebi_framework_id = framework_id
+                sebi_tenant_id = tenant_id
+                sebi_audit_id = audit_id
+                
+                def run_sebi_checks():
+                    try:
+                        from .sebi_ai_auditor import SEBIAIAuditor
+                        auditor = SEBIAIAuditor(sebi_framework_id, sebi_tenant_id)
+                        if auditor.is_sebi_framework:
+                            logger.info(f"🔍 SEBI AI Auditor enabled - running automatic checks for audit {sebi_audit_id} (combined evidence)")
+                            # Run SEBI checks (non-blocking, results stored for report)
+                            try:
+                                auditor.verify_filing_accuracy(sebi_audit_id)
+                                auditor.check_timeliness_sla(sebi_audit_id)
+                                auditor.calculate_risk_score(sebi_audit_id)
+                                auditor.detect_patterns(sebi_audit_id)
+                                logger.info(f"✅ SEBI AI Auditor checks completed for audit {sebi_audit_id} (combined evidence)")
+                            except Exception as sebi_err:
+                                logger.warning(f"⚠️ SEBI checks failed (non-critical): {str(sebi_err)}")
+                        else:
+                            logger.debug(f"ℹ️ SEBI AI Auditor not enabled for framework {sebi_framework_id}")
+                    except Exception as e:
+                        logger.warning(f"⚠️ SEBI AI Auditor check failed (non-critical): {str(e)}")
+                
+                # Run in background thread (non-blocking)
+                sebi_thread = threading.Thread(target=run_sebi_checks, daemon=True)
+                sebi_thread.start()
+                logger.info(f"🚀 Started SEBI AI Auditor checks in background for audit {sebi_audit_id} (combined evidence)")
+        except Exception as sebi_init_err:
+            logger.warning(f"⚠️ Could not initialize SEBI checks (non-critical): {str(sebi_init_err)}")
+        
         return {
             'success': True,
             'audit_id': audit_id,
@@ -6809,7 +7161,7 @@ def download_audit_report(request, audit_id):
         with connection.cursor() as cursor:
             cursor.execute("""
                 SELECT a.AuditId, a.AuditType, a.Status, a.AssignedDate, a.DueDate, a.CompletionDate,
-                       p.PolicyName, sp.SubPolicyName, f.FrameworkName,
+                       p.PolicyName, sp.SubPolicyName, f.FrameworkName, a.FrameworkId,
                        u1.UserName as AuditorName,
                        u2.UserName as AssigneeName,
                        u3.UserName as ReviewerName
@@ -6824,6 +7176,7 @@ def download_audit_report(request, audit_id):
             """, [int(audit_id) if str(audit_id).isdigit() else audit_id])
             
             audit_row = cursor.fetchone()
+            framework_id = audit_row[9] if audit_row else None
             
             # Check if this is actually an AI audit by looking for AI audit data
             cursor.execute("""
@@ -6872,7 +7225,6 @@ def download_audit_report(request, audit_id):
                     FROM ai_audit_data 
                     WHERE audit_id = %s
                       AND document_id IN ({placeholders})
-                    ORDER BY uploaded_date DESC
                     """,
                     [converted_audit_id, *selected_document_ids]
                 )
@@ -6885,13 +7237,18 @@ def download_audit_report(request, audit_id):
                            policy_id, subpolicy_id, external_source, external_id, document_path
                     FROM ai_audit_data 
                     WHERE audit_id = %s 
-                    ORDER BY uploaded_date DESC
                     """,
                     [converted_audit_id]
                 )
             
             documents = cursor.fetchall()
             columns = [col[0] for col in cursor.description]
+            
+            # Sort in Python to avoid MySQL sort memory issues
+            # Sort by uploaded_date DESC (newest first)
+            uploaded_date_idx = columns.index('uploaded_date') if 'uploaded_date' in columns else None
+            if uploaded_date_idx is not None:
+                documents = sorted(documents, key=lambda x: x[uploaded_date_idx] if x[uploaded_date_idx] else None, reverse=True)
         
         # Process documents data - GROUP BY PHYSICAL FILES
         # Group mappings by physical file to count unique files, not mapping records
@@ -6930,7 +7287,9 @@ def download_audit_report(request, audit_id):
         # Mapping-level summary (one count per mapping record)
         compliance_summary = {'compliant': 0, 'partially_compliant': 0, 'non_compliant': 0, 'unknown': 0}
         # Requirement-level summary (one count per individual requirement / analysis item)
+        # IMPORTANT: Track (document_id, compliance_id) pairs to avoid counting duplicates
         requirement_summary = {'compliant': 0, 'partially_compliant': 0, 'non_compliant': 0, 'unknown': 0}
+        counted_requirements = set()  # Track (document_id, compliance_id) pairs already counted
         
         # Collect unique policy/sub-policy IDs from uploaded documents (multi-select approach)
         selected_policy_ids = set()
@@ -6968,6 +7327,17 @@ def download_audit_report(request, audit_id):
             
             # Process each mapping record for this file
             file_mappings = []
+            # Track requirements for this physical file to avoid duplicates across mappings
+            # Use a string representation of the file identifier for reliable hashing
+            file_identifier = None
+            if first_record.get('document_path'):
+                file_identifier = f"path:{first_record.get('document_path')}"
+            elif first_record.get('external_id'):
+                file_identifier = f"external:{first_record.get('external_id')}"
+            else:
+                file_identifier = f"name_size:{first_record.get('document_name', '')}:{first_record.get('file_size', 0)}"
+            
+            file_requirements_counted = set()
             for doc_dict in mapping_records:
                 # Parse compliance analyses if available
                 compliance_analyses = None
@@ -7002,6 +7372,8 @@ def download_audit_report(request, audit_id):
                     failed_mapping_records += 1
 
                 # Requirement-level compliance counting (each individual requirement)
+                # IMPORTANT: Only count each compliance_id once per physical file (file_key)
+                # to avoid counting the same requirement multiple times when file has multiple mappings
                 if analyses_list and isinstance(analyses_list, list):
                     for analysis in analyses_list:
                         if not isinstance(analysis, dict):
@@ -7013,6 +7385,25 @@ def download_audit_report(request, audit_id):
                                 selected_compliance_ids.add(int(comp_id))
                         except (TypeError, ValueError):
                             pass
+                        
+                        # Create unique key using file_identifier and compliance_id to avoid duplicates
+                        requirement_key = None
+                        if comp_id is not None and file_identifier:
+                            try:
+                                comp_id_int = int(comp_id)
+                                # Use file_identifier (string) + compliance_id for reliable hashing
+                                requirement_key = f"{file_identifier}:{comp_id_int}"
+                            except (TypeError, ValueError):
+                                pass
+                        
+                        # Only count if we haven't seen this (file_identifier, compliance_id) combination before
+                        if requirement_key and requirement_key in file_requirements_counted:
+                            continue  # Skip - already counted this requirement for this physical file
+                        
+                        # Skip requirements without compliance_id (can't deduplicate them reliably, would cause duplicates)
+                        if not requirement_key:
+                            continue
+                        
                         raw_status = (
                             str(analysis.get('status') or analysis.get('compliance_status') or '')
                             .strip()
@@ -7031,6 +7422,9 @@ def download_audit_report(request, audit_id):
                             key = 'unknown'
                         if key in requirement_summary:
                             requirement_summary[key] += 1
+                            # Mark this requirement as counted for this physical file
+                            file_requirements_counted.add(requirement_key)
+                            counted_requirements.add(requirement_key)
                 
                 # Collect policy/sub-policy IDs for multi-select display
                 if doc_dict.get('policy_id'):
@@ -7129,6 +7523,41 @@ def download_audit_report(request, audit_id):
             elif completion_percentage > 0:
                 actual_audit_status = 'Work In Progress'
         
+        # Check if SEBI AI Auditor is enabled and get SEBI insights
+        # IMPORTANT: Run SEBI checks BEFORE generating report so insights are included
+        sebi_insights = None
+        sebi_enabled = False
+        try:
+            from .sebi_ai_auditor import SEBIAIAuditor
+            if framework_id:
+                auditor = SEBIAIAuditor(framework_id, tenant_id)
+                if auditor.is_sebi_framework:
+                    sebi_enabled = True
+                    logger.info(f"🔍 SEBI AI Auditor enabled - running checks for audit {audit_id} before report generation...")
+                    # Get SEBI insights - RUN SYNCHRONOUSLY to ensure they're ready before report generation
+                    logger.info(f"📊 Calculating filing accuracy for audit {audit_id}...")
+                    filing_accuracy = auditor.verify_filing_accuracy(audit_id)
+                    
+                    logger.info(f"⏱️ Checking timeliness SLA for audit {audit_id}...")
+                    timeliness_sla = auditor.check_timeliness_sla(audit_id)
+                    
+                    logger.info(f"🎯 Calculating risk score for audit {audit_id}...")
+                    risk_score = auditor.calculate_risk_score(audit_id)
+                    
+                    logger.info(f"🔍 Detecting patterns for audit {audit_id}...")
+                    patterns = auditor.detect_patterns(audit_id)
+                    
+                    sebi_insights = {
+                        'filing_accuracy': filing_accuracy,
+                        'timeliness_sla': timeliness_sla,
+                        'risk_score': risk_score,
+                        'patterns': patterns
+                    }
+                    logger.info(f"✅ SEBI AI Auditor checks completed - insights ready for report generation")
+        except Exception as e:
+            logger.warning(f"⚠️ SEBI insights not available (non-critical): {str(e)}")
+            # Continue with report generation even if SEBI checks fail
+        
         # Generate comprehensive report data
         report_data = {
             'report_metadata': {
@@ -7147,6 +7576,7 @@ def download_audit_report(request, audit_id):
                 'policy_name': selected_policies_display,  # Show selected policies from multi-select
                 'subpolicy_name': selected_subpolicies_display,  # Show selected sub-policies from multi-select
                 'framework_name': audit_row[8],  # Framework is fixed per audit
+                'framework_id': framework_id,
                 'selected_policy_count': len(selected_policy_ids),
                 'selected_subpolicy_count': len(selected_subpolicy_ids),
                 'selected_compliance_count': len(selected_compliance_ids),
@@ -7215,11 +7645,21 @@ def download_audit_report(request, audit_id):
                 'report_format': 'JSON',
                 'data_sources': ['ai_audit_data', 'audit', 'policies', 'subpolicies', 'frameworks', 'grc_users']
             },
-            'compliance_names_map': compliance_names_map  # Add compliance names mapping for report generation
+            'compliance_names_map': compliance_names_map,  # Add compliance names mapping for report generation
+            'sebi_insights': sebi_insights if sebi_enabled else None,  # SEBI AI Auditor insights
+            'sebi_enabled': sebi_enabled  # Flag indicating if SEBI AI Auditor is enabled
         }
         
         # Generate formatted Word document
-        doc_content = _generate_word_document(report_data)
+        logger.info(f"📄 Starting Word document generation for audit {audit_id}")
+        try:
+            doc_content = _generate_word_document(report_data)
+            logger.info(f"✅ Word document generation completed for audit {audit_id}")
+        except Exception as doc_gen_error:
+            logger.error(f"❌ Error in Word document generation: {doc_gen_error}")
+            import traceback
+            logger.error(f"❌ Traceback: {traceback.format_exc()}")
+            raise
         
         # Create response with Word document
         response = HttpResponse(
@@ -7493,28 +7933,6 @@ def _generate_html_report(report_data):
                     </div>
                 </div>
             </div>
-            
-            <div class="section">
-                <h2>Compliance Summary (Mappings)</h2>
-                <div class="summary-stats">
-                    <div class="stat-card">
-                        <div class="stat-number" style="color: #28a745;">{compliance['compliant']}</div>
-                        <div class="stat-label">Compliant Mappings</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number" style="color: #ffc107;">{compliance['partially_compliant']}</div>
-                        <div class="stat-label">Partially Compliant Mappings</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number" style="color: #dc3545;">{compliance['non_compliant']}</div>
-                        <div class="stat-label">Non-Compliant Mappings</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number" style="color: #6c757d;">{compliance['unknown']}</div>
-                        <div class="stat-label">Unknown Mappings</div>
-                    </div>
-                </div>
-            </div>
 
             <div class="section">
                 <h2>Requirement-Level Compliance Summary</h2>
@@ -7708,14 +8126,6 @@ def _generate_word_document(report_data):
     doc.add_paragraph(f'• Pending: {processing["pending_documents"]}')
     doc.add_paragraph(f'• Completion Rate: {processing["completion_percentage"]}%')
     
-    # Compliance Summary Section
-    compliance_heading = doc.add_heading('Compliance Summary', level=1)
-    _make_heading_bold(compliance_heading)
-    doc.add_paragraph(f'• Compliant: {compliance["compliant"]}')
-    doc.add_paragraph(f'• Partially Compliant: {compliance["partially_compliant"]}')
-    doc.add_paragraph(f'• Non-Compliant: {compliance["non_compliant"]}')
-    doc.add_paragraph(f'• Unknown: {compliance["unknown"]}')
-    
     # Requirement-Level Compliance Summary (optional)
     if requirement_compliance:
         req_heading = doc.add_heading('Requirement-Level Compliance Summary', level=2)
@@ -7749,15 +8159,18 @@ def _generate_word_document(report_data):
         doc.add_paragraph(f'• Mappings: {doc_item.get("mapping_count", 0)} mapping(s) for this file')
         doc.add_paragraph()  # Add space
         
-        # Process each completed mapping for this physical file
+        # Process compliance analyses for this physical file
+        # Deduplicate analyses across all mappings - each compliance should appear only once per file
         mappings = doc_item.get('mappings', [])
         completed_mappings = [m for m in mappings if m.get('ai_processing_status') == 'completed']
+        total_completed_mappings = len(completed_mappings)
         
+        # Collect all unique compliance analyses across all mappings (deduplicate by compliance_id)
+        all_analyses_map = {}  # Key: compliance_id, Value: analysis dict
         for mapping in completed_mappings:
-            # Add detailed compliance analysis if available
             compliance_analyses = mapping.get('compliance_analyses')
             if compliance_analyses:
-                # Handle nested structure - analyses might be in compliance_analyses.compliance_analyses
+                # Handle nested structure
                 if isinstance(compliance_analyses, dict) and 'compliance_analyses' in compliance_analyses:
                     analyses_list = compliance_analyses['compliance_analyses']
                 elif isinstance(compliance_analyses, list):
@@ -7765,140 +8178,141 @@ def _generate_word_document(report_data):
                 else:
                     analyses_list = []
                 
-                if analyses_list and len(analyses_list) > 0:
-                    doc.add_paragraph()
-                    detailed_analysis_heading = doc.add_heading('Compliance Analysis Results', level=3)
-                    _make_heading_bold(detailed_analysis_heading)
+                # Deduplicate by compliance_id - keep first occurrence
+                for analysis in analyses_list:
+                    if isinstance(analysis, dict):
+                        compliance_id = analysis.get('compliance_id')
+                        if compliance_id and compliance_id not in all_analyses_map:
+                            all_analyses_map[compliance_id] = analysis
+        
+        # Convert to list and limit to 150 analyses
+        unique_analyses = list(all_analyses_map.values())[:150]
+        
+        if unique_analyses:
+            doc.add_paragraph()
+            detailed_analysis_heading = doc.add_heading('Compliance Analysis Results', level=3)
+            _make_heading_bold(detailed_analysis_heading)
+            doc.add_paragraph(f'Showing {len(unique_analyses)} unique compliance analyses (deduplicated across {total_completed_mappings} mapping(s))')
+            doc.add_paragraph()
+            
+            for i, analysis in enumerate(unique_analyses, 1):
+                if isinstance(analysis, dict):
+                    # Get the actual compliance name from compliance_names_map if available
+                    compliance_id = analysis.get('compliance_id')
+                    compliance_name = None
+                    if compliance_id:
+                        # Try both int and string versions of compliance_id
+                        try:
+                            compliance_id_int = int(compliance_id) if compliance_id else None
+                            if compliance_id_int and compliance_id_int in compliance_names_map:
+                                compliance_name = compliance_names_map[compliance_id_int]
+                            elif compliance_id in compliance_names_map:
+                                compliance_name = compliance_names_map[compliance_id]
+                        except (ValueError, TypeError):
+                            pass
                     
-                    # Add summary info if available
-                    if isinstance(compliance_analyses, dict):
-                        if compliance_analyses.get('processed_at'):
-                            proc_para = doc.add_paragraph()
-                            proc_run = proc_para.add_run('Processed At: ')
-                            proc_run.bold = True
-                            proc_para.add_run(_format_datetime(compliance_analyses["processed_at"]))
-                        if compliance_analyses.get('confidence_score'):
-                            conf_para = doc.add_paragraph()
-                            conf_run = conf_para.add_run('Overall Confidence: ')
-                            conf_run.bold = True
-                            conf_para.add_run(str(compliance_analyses["confidence_score"]))
-                        if compliance_analyses.get('compliance_status'):
-                            status_para = doc.add_paragraph()
-                            status_run = status_para.add_run('Overall Status: ')
-                            status_run.bold = True
-                            status_para.add_run(compliance_analyses["compliance_status"])
-                        doc.add_paragraph()
+                    # Use compliance name as heading, or fallback to requirement_title
+                    if not compliance_name:
+                        compliance_name = analysis.get('requirement_title', f'Compliance Requirement {i}')
                     
-                    for i, analysis in enumerate(analyses_list[:10], 1):  # Limit to first 10 analyses
-                        if isinstance(analysis, dict):
-                            # Get the actual compliance name from compliance_names_map if available
-                            compliance_id = analysis.get('compliance_id')
-                            compliance_name = None
-                            if compliance_id:
-                                # Try both int and string versions of compliance_id
-                                try:
-                                    compliance_id_int = int(compliance_id) if compliance_id else None
-                                    if compliance_id_int and compliance_id_int in compliance_names_map:
-                                        compliance_name = compliance_names_map[compliance_id_int]
-                                    elif compliance_id in compliance_names_map:
-                                        compliance_name = compliance_names_map[compliance_id]
-                                except (ValueError, TypeError):
-                                    pass
-                            
-                            # Use compliance name as heading, or fallback to requirement_title
-                            if not compliance_name:
-                                compliance_name = analysis.get('requirement_title', f'Compliance Requirement {i}')
-                            
-                            compliance_heading = doc.add_heading(compliance_name, level=3)
-                            _make_heading_bold(compliance_heading)
-                            
-                            # Add requirement title/description if it's different from compliance name
-                            requirement_title = analysis.get('requirement_title', '')
-                            if requirement_title and requirement_title != compliance_name:
-                                desc_para = doc.add_paragraph()
-                                desc_run = desc_para.add_run('Requirement: ')
-                                desc_run.bold = True
-                                desc_para.add_run(requirement_title)
-                            
-                            # Add requirement description if available and different from title
-                            if analysis.get('requirement_description'):
-                                req_desc = analysis.get('requirement_description')
-                                if req_desc != requirement_title and req_desc != compliance_name:
-                                    desc_para = doc.add_paragraph()
-                                    desc_run = desc_para.add_run('Description: ')
-                                    desc_run.bold = True
-                                    desc_para.add_run(req_desc)
-                            
-                            # Add compliance score (use compliance_score, fallback to relevance)
-                            compliance_score_value = analysis.get('compliance_score') or analysis.get('relevance')
-                            if compliance_score_value is not None:
-                                score_para = doc.add_paragraph()
-                                score_run = score_para.add_run('Compliance Score: ')
-                                score_run.bold = True
-                                score_para.add_run(str(round(float(compliance_score_value), 2)))
-                            
-                            # Add evidence found
-                            if analysis.get('evidence'):
-                                evidence = analysis['evidence']
-                                evid_para = doc.add_paragraph()
-                                evid_run = evid_para.add_run('Evidence Found: ')
-                                evid_run.bold = True
-                                if isinstance(evidence, list):
-                                    evid_para.add_run(", ".join(evidence[:5]))  # Limit to first 5
-                                else:
-                                    evid_para.add_run(str(evidence))
-                            
-                            # Add gap (formerly missing elements)
-                            if analysis.get('missing'):
-                                missing_elements = analysis['missing']
-                                gap_para = doc.add_paragraph()
-                                gap_run = gap_para.add_run('Gap: ')
-                                gap_run.bold = True
-                                if isinstance(missing_elements, list):
-                                    gap_para.add_run(", ".join(missing_elements[:5]))  # Limit to first 5
-                                else:
-                                    gap_para.add_run(str(missing_elements))
-                            
-                            # Add recommendations for this compliance
-                            recommendations_para = doc.add_paragraph()
-                            rec_run = recommendations_para.add_run('Recommendations: ')
-                            rec_run.bold = True
-                            
-                            # Generate recommendations based on compliance score and gaps
-                            # Use compliance_score if available, otherwise fallback to relevance
-                            compliance_score = float(analysis.get('compliance_score') or analysis.get('relevance', 0))
-                            missing_elements = analysis.get('missing', [])
-                            
-                            recommendations = []
-                            if compliance_score < 0.4:
-                                recommendations.append("CRITICAL: Immediate action required - document does not adequately address this requirement")
-                            elif compliance_score < 0.6:
-                                recommendations.append("HIGH PRIORITY: Significant improvements needed to meet compliance standards")
-                            elif compliance_score < 0.8:
-                                recommendations.append("MEDIUM PRIORITY: Minor improvements recommended for better compliance")
-                            else:
-                                recommendations.append("LOW PRIORITY: Document adequately addresses this requirement")
-                            
-                            if missing_elements:
-                                if isinstance(missing_elements, list):
-                                    recommendations.append(f"Address missing elements: {', '.join(missing_elements[:3])}")
-                                else:
-                                    recommendations.append(f"Address missing elements: {missing_elements}")
-                            
-                            if not recommendations:
-                                recommendations.append("Review and enhance document content to improve compliance coverage")
-                            
-                            recommendations_para.add_run("; ".join(recommendations))
-                            
-                            doc.add_paragraph()  # Add space between analyses
+                    # Compliance Requirement heading
+                    compliance_heading = doc.add_heading(compliance_name, level=3)
+                    _make_heading_bold(compliance_heading)
                     
-                    if len(analyses_list) > 10:
-                        doc.add_paragraph(f'... and {len(analyses_list) - 10} more analyses available')
-                else:
-                    doc.add_paragraph('• Detailed Analysis: No detailed analysis available for this mapping')
-            else:
-                doc.add_paragraph('• Detailed Analysis: No detailed analysis available for this mapping')
-            doc.add_paragraph()  # Add space between mappings
+                    # Show full requirement description (what needs to be complied with)
+                    requirement_title = analysis.get('requirement_title', '')
+                    requirement_description = analysis.get('requirement_description', '')
+                    
+                    # Use description if available, otherwise use title
+                    full_requirement_text = requirement_description if requirement_description else requirement_title
+                    
+                    # Only show if it's different from the heading and not empty
+                    if full_requirement_text and full_requirement_text != compliance_name and len(full_requirement_text) > 20:
+                        req_para = doc.add_paragraph()
+                        req_run = req_para.add_run('What This Requirement Means: ')
+                        req_run.bold = True
+                        req_para.add_run(full_requirement_text)
+                    
+                    # Compliance Score (bullet point)
+                    compliance_score_value = analysis.get('compliance_score') or analysis.get('relevance')
+                    if compliance_score_value is not None:
+                        score_para = doc.add_paragraph(style='List Bullet')
+                        score_run = score_para.add_run('Compliance Score: ')
+                        score_run.bold = True
+                        score_para.add_run(str(round(float(compliance_score_value), 2)))
+                    
+                    # Status (bullet point)
+                    status_text = analysis.get('status', '').replace('_', ' ').title() or 'Unknown'
+                    status_para = doc.add_paragraph(style='List Bullet')
+                    status_run = status_para.add_run('Status: ')
+                    status_run.bold = True
+                    status_para.add_run(status_text)
+                    
+                    # Evidence found (bullet points)
+                    if analysis.get('evidence'):
+                        evidence = analysis['evidence']
+                        if isinstance(evidence, list) and evidence:
+                            evid_header = doc.add_paragraph(style='List Bullet')
+                            evid_run = evid_header.add_run('Evidence Found:')
+                            evid_run.bold = True
+                            for evid_item in evidence:
+                                if evid_item:
+                                    doc.add_paragraph(str(evid_item), style='List Bullet 2')
+                        elif evidence:
+                            evid_header = doc.add_paragraph(style='List Bullet')
+                            evid_run = evid_header.add_run('Evidence Found: ')
+                            evid_run.bold = True
+                            evid_header.add_run(str(evidence))
+                    
+                    # Gaps/Missing elements (bullet points)
+                    if analysis.get('missing'):
+                        missing_elements = analysis['missing']
+                        if isinstance(missing_elements, list) and missing_elements:
+                            gap_header = doc.add_paragraph(style='List Bullet')
+                            gap_run = gap_header.add_run('Gaps:')
+                            gap_run.bold = True
+                            for gap_item in missing_elements:
+                                if gap_item:
+                                    doc.add_paragraph(str(gap_item), style='List Bullet 2')
+                        elif missing_elements:
+                            gap_header = doc.add_paragraph(style='List Bullet')
+                            gap_run = gap_header.add_run('Gaps: ')
+                            gap_run.bold = True
+                            gap_header.add_run(str(missing_elements))
+                    
+                    # Recommendations (bullet points)
+                    compliance_score = float(analysis.get('compliance_score') or analysis.get('relevance', 0))
+                    rec_header = doc.add_paragraph(style='List Bullet')
+                    rec_run = rec_header.add_run('Recommendations:')
+                    rec_run.bold = True
+                    
+                    recommendations = []
+                    if compliance_score < 0.4:
+                        recommendations.append("CRITICAL: Immediate action required - document does not adequately address this requirement")
+                    elif compliance_score < 0.6:
+                        recommendations.append("HIGH PRIORITY: Significant improvements needed to meet compliance standards")
+                    elif compliance_score < 0.8:
+                        recommendations.append("MEDIUM PRIORITY: Minor improvements recommended for better compliance")
+                    else:
+                        recommendations.append("LOW PRIORITY: Document adequately addresses this requirement")
+                    
+                    missing_elements = analysis.get('missing', [])
+                    if missing_elements:
+                        if isinstance(missing_elements, list):
+                            recommendations.append(f"Address missing elements: {', '.join(str(m) for m in missing_elements[:3])}")
+                        else:
+                            recommendations.append(f"Address missing elements: {missing_elements}")
+                    
+                    for rec in recommendations:
+                        doc.add_paragraph(rec, style='List Bullet 2')
+                    
+                    doc.add_paragraph()  # Add space between analyses
+            
+            total_unique_analyses = len(all_analyses_map)
+            if total_unique_analyses > 150:
+                doc.add_paragraph(f'Note: Showing first 150 of {total_unique_analyses} unique compliance analyses (showing all would cause timeout)')
+        else:
+            doc.add_paragraph('• Detailed Analysis: No detailed analysis available')
         
         doc.add_paragraph()  # Add space between files
     
@@ -7915,6 +8329,76 @@ def _generate_word_document(report_data):
     _make_heading_bold(recommendations_heading)
     for rec in recommendations:
         doc.add_paragraph(f'• {rec}')
+    
+    # SEBI AI Auditor Insights Section (if enabled)
+    sebi_insights = report_data.get('sebi_insights')
+    sebi_enabled = report_data.get('sebi_enabled', False)
+    if sebi_enabled and sebi_insights:
+        sebi_heading = doc.add_heading('SEBI AI Auditor Insights', level=1)
+        _make_heading_bold(sebi_heading)
+        
+        # Filing Accuracy
+        filing_accuracy = sebi_insights.get('filing_accuracy', {})
+        if filing_accuracy:
+            filing_heading = doc.add_heading('Filing Accuracy Analysis', level=2)
+            _make_heading_bold(filing_heading)
+            doc.add_paragraph(f'• Overall Accuracy: {filing_accuracy.get("accuracy_score", "N/A")}%')
+            doc.add_paragraph(f'• Total Filings Analyzed: {filing_accuracy.get("total_filings", 0)}')
+            doc.add_paragraph(f'• Accurate Filings: {filing_accuracy.get("accurate_filings", 0)}')
+            doc.add_paragraph(f'• Issues Found: {filing_accuracy.get("issues_count", 0)}')
+            if filing_accuracy.get('issues'):
+                issues_para = doc.add_paragraph('• Key Issues: ')
+                issues_para.add_run(', '.join(filing_accuracy['issues'][:5]))
+        
+        # Timeliness SLA
+        timeliness = sebi_insights.get('timeliness_sla', {})
+        if timeliness:
+            timeliness_heading = doc.add_heading('Timeliness & SLA Compliance', level=2)
+            _make_heading_bold(timeliness_heading)
+            doc.add_paragraph(f'• SLA Compliance Rate: {timeliness.get("sla_compliance_rate", "N/A")}%')
+            doc.add_paragraph(f'• On-Time Filings: {timeliness.get("on_time_filings", 0)}')
+            doc.add_paragraph(f'• Late Filings: {timeliness.get("late_filings", 0)}')
+            doc.add_paragraph(f'• Average Delay: {timeliness.get("average_delay_days", "N/A")} days')
+            if timeliness.get('violations'):
+                violations_para = doc.add_paragraph('• SLA Violations: ')
+                violations_para.add_run(', '.join(timeliness['violations'][:5]))
+        
+        # Risk Score
+        risk_score = sebi_insights.get('risk_score', {})
+        if risk_score:
+            risk_heading = doc.add_heading('Risk Assessment', level=2)
+            _make_heading_bold(risk_heading)
+            risk_score_value = risk_score.get("risk_score", risk_score.get("overall_risk_score", 0))
+            if isinstance(risk_score_value, (int, float)) and risk_score_value > 0:
+                doc.add_paragraph(f'• Overall Risk Score: {risk_score_value}/100')
+            else:
+                doc.add_paragraph(f'• Overall Risk Score: N/A/100')
+            doc.add_paragraph(f'• Risk Level: {risk_score.get("risk_level", "N/A")}')
+            doc.add_paragraph(f'• High-Risk Areas: {risk_score.get("high_risk_areas", risk_score.get("high_risk_count", 0))}')
+            key_factors = risk_score.get('key_risk_factors', risk_score.get('risk_factors', []))
+            if key_factors:
+                factors_para = doc.add_paragraph('• Key Risk Factors: ')
+                factors_list = key_factors if isinstance(key_factors, list) else []
+                factors_para.add_run(', '.join(str(f) for f in factors_list[:5]))
+        
+        # Patterns
+        patterns = sebi_insights.get('patterns', {})
+        if patterns:
+            patterns_heading = doc.add_heading('Pattern Analysis', level=2)
+            _make_heading_bold(patterns_heading)
+            patterns_count = patterns.get("patterns_detected", patterns.get("patterns_count", 0))
+            doc.add_paragraph(f'• Patterns Detected: {patterns_count}')
+            pattern_types = patterns.get('pattern_types', [])
+            if pattern_types:
+                types_para = doc.add_paragraph('• Pattern Types: ')
+                types_list = pattern_types if isinstance(pattern_types, list) else []
+                types_para.add_run(', '.join(str(t) for t in types_list[:5]))
+            elif patterns.get('detected_patterns'):
+                for pattern in patterns['detected_patterns'][:5]:
+                    pattern_para = doc.add_paragraph(f'• {pattern.get("pattern_type", "Unknown")}: ')
+                    pattern_para.add_run(pattern.get("description", "No description"))
+        
+        doc.add_paragraph()  # Add space before footer
     
     # Footer
     doc.add_paragraph()

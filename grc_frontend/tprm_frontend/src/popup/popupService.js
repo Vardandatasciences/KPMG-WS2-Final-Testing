@@ -142,6 +142,20 @@ export const PopupService = {
   },
 
   /**
+   * Show info popup
+   * @param {string} message - Info message
+   * @param {string} heading - Popup heading (default: 'Info')
+   */
+  info(message, heading = 'Info') {
+    this.show({
+      type: 'info',
+      heading,
+      message,
+      buttons: [{ label: 'OK', action: 'ok', class: 'info' }]
+    });
+  },
+
+  /**
    * Show confirmation popup
    * @param {string} message - Confirmation message
    * @param {string} heading - Popup heading (default: 'Confirm')

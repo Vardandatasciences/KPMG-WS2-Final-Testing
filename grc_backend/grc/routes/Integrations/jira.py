@@ -11,8 +11,86 @@ import logging
 import urllib.parse as up
 
 from grc.models import Users, ExternalApplication, ExternalApplicationConnection, ExternalApplicationSyncLog
+from grc.utils.data_encryption import decrypt_data, is_encrypted_data
 
 logger = logging.getLogger(__name__)
+
+def decrypt_projects_data(connection):
+    """
+    Safely decrypt and parse projects_data from ExternalApplicationConnection
+    
+    Args:
+        connection: ExternalApplicationConnection instance
+        
+    Returns:
+        dict: Parsed projects_data as dictionary
+    """
+    try:
+        projects_data = connection.projects_data
+        
+        # Handle None or empty
+        if not projects_data:
+            return {}
+        
+        # If it's already a dict (JSONField returns dict), return as-is
+        if isinstance(projects_data, dict):
+            return projects_data
+        
+        # If it's a string, try to decrypt and parse
+        if isinstance(projects_data, str):
+            # First, try to decrypt if encrypted
+            if is_encrypted_data(projects_data):
+                logger.info(f"Decrypting encrypted projects_data for connection {connection.id}")
+                decrypted_str = decrypt_data(projects_data)
+                if decrypted_str:
+                    try:
+                        return json.loads(decrypted_str)
+                    except json.JSONDecodeError as e:
+                        logger.error(f"Failed to parse decrypted projects_data as JSON: {e}")
+                        return {}
+            else:
+                # Try to parse as plain JSON
+                try:
+                    return json.loads(projects_data)
+                except json.JSONDecodeError as e:
+                    logger.warning(f"projects_data is neither encrypted nor valid JSON: {e}")
+                    return {}
+        
+        # If it's neither dict nor string, return empty dict
+        logger.warning(f"projects_data is of unexpected type: {type(projects_data)}")
+        return {}
+        
+    except Exception as e:
+        logger.error(f"Error decrypting projects_data: {str(e)}")
+        return {}
+
+def get_decrypted_token(connection):
+    """
+    Safely decrypt connection_token from ExternalApplicationConnection
+    
+    Args:
+        connection: ExternalApplicationConnection instance
+        
+    Returns:
+        str: Decrypted connection token or None
+    """
+    try:
+        token = connection.connection_token
+        if not token:
+            return None
+        
+        # If it's encrypted, decrypt it
+        if isinstance(token, str) and is_encrypted_data(token):
+            logger.info(f"Decrypting encrypted connection_token for connection {connection.id}")
+            decrypted_token = decrypt_data(token)
+            return decrypted_token
+        
+        # If it's already plain text, return as-is
+        return token
+        
+    except Exception as e:
+        logger.error(f"Error decrypting connection_token: {str(e)}")
+        return None
 
 def get_or_create_jira_application():
     """
@@ -199,12 +277,12 @@ class JiraIntegration:
                 logger.warning(f"Failed to fetch versions: {str(e)}")
             
             # Get project issues (first 50) - JQL requires project key, not ID
-            # IMPORTANT: Use POST method with JSON body (GET with query params returns 410 error)
+            # IMPORTANT: Use the new /rest/api/3/search/jql endpoint (migrated from deprecated /rest/api/3/search)
             issues_data = {"issues": [], "total": 0}
             try:
-                # Use standard /rest/api/3/search endpoint with POST method
-                # The 410 error occurs when using GET - POST with JSON body is required
-                search_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/search"
+                # Use the new /rest/api/3/search/jql endpoint with POST method
+                # The old /rest/api/3/search endpoint was deprecated and removed
+                search_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/search/jql"
                 
                 if actual_project_key:
                     # Try different JQL formats - some Jira instances prefer different syntax
@@ -218,9 +296,11 @@ class JiraIntegration:
                     
                     for jql_query in jql_formats:
                         # Use POST with JSON body (required for /rest/api/3/search/jql endpoint)
+                        # Request all necessary fields
                         search_payload = {
                             'jql': jql_query,
-                            'maxResults': 50
+                            'maxResults': 50,
+                            'fields': ['summary', 'status', 'assignee', 'priority', 'updated', 'created', 'issuetype', 'description']
                         }
                         post_headers = {**self.headers, 'Content-Type': 'application/json'}
                         try:
@@ -276,6 +356,87 @@ class JiraIntegration:
                     'versions': versions_data,
                     'issues': issues_data
                 }
+            }
+            
+        except requests.RequestException as e:
+            return {
+                'success': False,
+                'error': f"Request failed: {str(e)}"
+            }
+
+    def get_project_issues(self, cloud_id, project_key=None, project_id=None, max_results=50):
+        """Get issues/tasks for a specific Jira project"""
+        try:
+            # Use the new /rest/api/3/search/jql endpoint (migrated from deprecated /rest/api/3/search)
+            search_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/search/jql"
+            issues_data = {"issues": [], "total": 0}
+            
+            # Build JQL queries to try
+            jql_queries = []
+            if project_key:
+                jql_queries = [
+                    f'project={project_key}',
+                    f'project = {project_key}',
+                    f'project = "{project_key}"',
+                    f'project="{project_key}"',
+                ]
+            elif project_id:
+                jql_queries = [
+                    f'project={project_id}',
+                    f'project = {project_id}',
+                ]
+            else:
+                return {
+                    'success': False,
+                    'error': 'project_key or project_id is required'
+                }
+            
+            # Try each JQL format until one works
+            for jql_query in jql_queries:
+                search_payload = {
+                    'jql': jql_query,
+                    'maxResults': max_results,
+                    'fields': ['summary', 'status', 'assignee', 'priority', 'updated', 'created', 'issuetype', 'description'],
+                    'startAt': 0
+                }
+                post_headers = {**self.headers, 'Content-Type': 'application/json'}
+                
+                try:
+                    issues_response = requests.post(
+                        search_url,
+                        headers=post_headers,
+                        json=search_payload,
+                        timeout=30
+                    )
+                    
+                    if issues_response.status_code == 200:
+                        issues_data = issues_response.json()
+                        logger.info(f"Successfully fetched {len(issues_data.get('issues', []))} issues using JQL: {jql_query}")
+                        break
+                    elif issues_response.status_code == 400:
+                        # Bad JQL syntax, try next format
+                        logger.debug(f"JQL format failed (400): {jql_query}, trying next format...")
+                        continue
+                    elif issues_response.status_code == 410:
+                        # API deprecated - log and try next format
+                        logger.warning(f"JQL format returned 410 (deprecated): {jql_query}, trying next format...")
+                        continue
+                    else:
+                        logger.warning(f"Failed to fetch issues with JQL '{jql_query}': {issues_response.status_code} {issues_response.text}")
+                        continue
+                except Exception as e:
+                    logger.warning(f"Exception while trying JQL '{jql_query}': {str(e)}")
+                    continue
+            
+            if not issues_data.get('issues'):
+                return {
+                    'success': False,
+                    'error': f'Failed to fetch issues for project {project_key or project_id} with all JQL formats'
+                }
+            
+            return {
+                'success': True,
+                'data': issues_data
             }
             
         except requests.RequestException as e:
@@ -645,9 +806,8 @@ def jira_oauth_callback(request):
                     ).first()
                     if verify_connection:
                         try:
-                            verify_resources = []
-                            if verify_connection.projects_data and isinstance(verify_connection.projects_data, dict):
-                                verify_resources = verify_connection.projects_data.get('resources', [])
+                            verify_projects_data = decrypt_projects_data(verify_connection)
+                            verify_resources = verify_projects_data.get('resources', []) if verify_projects_data else []
                             logger.info(f"✅ VERIFIED: Connection found in DB - ID: {verify_connection.id}, Resources count: {len(verify_resources)}")
                         except Exception as e:
                             logger.info(f"✅ VERIFIED: Connection found in DB - ID: {verify_connection.id} (error reading resources: {str(e)})")
@@ -756,13 +916,15 @@ def jira_projects(request):
                     connection_status='active'
                 )
                 
-                if connection.projects_data:
+                # Decrypt projects_data if needed
+                projects_data = decrypt_projects_data(connection)
+                if projects_data:
                     return JsonResponse({
                         'success': True,
-                        'data': connection.projects_data.get('projects', []),
-                        'resources': connection.projects_data.get('resources', []),
+                        'data': projects_data.get('projects', []),
+                        'resources': projects_data.get('resources', []),
                         'last_updated': connection.updated_at.isoformat(),
-                        'sync_status': connection.projects_data.get('sync_status', 'unknown')
+                        'sync_status': projects_data.get('sync_status', 'unknown')
                     })
                 else:
                     return JsonResponse({
@@ -794,8 +956,15 @@ def jira_projects(request):
                         user=user,
                         connection_status='active'
                     )
-                    access_token = connection.connection_token
-                    logger.info("Using stored connection token for fetching projects")
+                    # Decrypt token if needed
+                    access_token = get_decrypted_token(connection)
+                    if not access_token:
+                        logger.error("Failed to decrypt connection token")
+                        return JsonResponse({
+                            'success': False,
+                            'error': 'Failed to retrieve access token'
+                        }, status=401)
+                    logger.info("Using stored connection token for fetching projects (decrypted)")
                 except (Users.DoesNotExist, ExternalApplication.DoesNotExist, ExternalApplicationConnection.DoesNotExist):
                     return JsonResponse({
                         'success': False,
@@ -876,8 +1045,9 @@ def jira_project_details(request):
                     connection_status='active'
                 )
                 
-                # Check if project details are stored
-                project_details = connection.projects_data.get('project_details', {})
+                # Decrypt projects_data and check if project details are stored
+                projects_data = decrypt_projects_data(connection)
+                project_details = projects_data.get('project_details', {}) if projects_data else {}
                 
                 # Try to find project details - handle both string and numeric project IDs
                 project_detail = None
@@ -941,12 +1111,20 @@ def jira_project_details(request):
                         user=user,
                         connection_status='active'
                     )
-                    access_token = connection.connection_token
-                    logger.info("Using stored connection token")
+                    # Decrypt token if needed
+                    access_token = get_decrypted_token(connection)
+                    if not access_token:
+                        logger.error("Failed to decrypt connection token")
+                        return JsonResponse({
+                            'success': False,
+                            'error': 'Failed to retrieve access token'
+                        }, status=401)
+                    logger.info("Using stored connection token (decrypted)")
                     
                     # If cloud_id not provided, try to get it from stored resources
-                    if not cloud_id and connection.projects_data:
-                        resources = connection.projects_data.get('resources', [])
+                    projects_data = decrypt_projects_data(connection)
+                    if not cloud_id and projects_data:
+                        resources = projects_data.get('resources', [])
                         if resources and len(resources) > 0:
                             # Use the first resource's cloud ID
                             cloud_id = resources[0].get('id')
@@ -982,7 +1160,8 @@ def jira_project_details(request):
                     )
                     
                     # Update projects_data with project details
-                    projects_data = connection.projects_data or {}
+                    # Decrypt existing projects_data first
+                    projects_data = decrypt_projects_data(connection) or {}
                     project_details = projects_data.get('project_details', {})
                     # Normalize project_id to string for consistent key storage
                     project_id_key = str(project_id)
@@ -1026,6 +1205,246 @@ def jira_project_details(request):
         })
 
 @csrf_exempt
+@require_http_methods(["POST"])
+def jira_project_issues(request):
+    """Get issues/tasks for a specific Jira project"""
+    try:
+        data = json.loads(request.body)
+        user_id = data.get('user_id', 1)
+        project_key = data.get('project_key')
+        project_id = data.get('project_id')
+        max_results = data.get('max_results', 50)
+        
+        if not project_key and not project_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'project_key or project_id is required'
+            }, status=400)
+        
+        try:
+            user = Users.objects.get(UserId=user_id)
+            jira_app, _ = get_or_create_jira_application()
+            connection = ExternalApplicationConnection.objects.get(
+                application=jira_app,
+                user=user,
+                connection_status='active'
+            )
+            
+            # Get decrypted token
+            access_token = get_decrypted_token(connection)
+            if not access_token:
+                logger.error("Failed to decrypt connection token")
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Failed to retrieve access token'
+                }, status=401)
+            
+            # Get cloud_id from stored resources
+            projects_data = decrypt_projects_data(connection)
+            cloud_id = None
+            if projects_data:
+                resources = projects_data.get('resources', [])
+                if resources and len(resources) > 0:
+                    cloud_id = resources[0].get('id')
+            
+            if not cloud_id:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Cloud ID not found. Please reconnect to Jira.'
+                }, status=400)
+            
+            # Use JiraIntegration class method to fetch project details (which includes issues)
+            # This is the same method used successfully in jira_project_details endpoint
+            jira_integration = JiraIntegration(access_token)
+            
+            # Try to get issues using get_project_details first (it includes issues and works)
+            # This method has been tested and works successfully
+            details_result = jira_integration.get_project_details(
+                cloud_id=cloud_id,
+                project_key=project_key,
+                project_id=project_id
+            )
+            
+            issues = []
+            issues_data = {"issues": [], "total": 0}
+            
+            if details_result['success'] and details_result['data'].get('issues'):
+                issues_data = details_result['data']['issues']
+                issues = issues_data.get('issues', [])
+                logger.info(f"Successfully fetched {len(issues)} issues via get_project_details")
+            
+            # If get_project_details didn't return issues, try direct search as fallback
+            if not issues:
+                logger.info("get_project_details didn't return issues, trying direct search...")
+                issues_result = jira_integration.get_project_issues(
+                    cloud_id=cloud_id,
+                    project_key=project_key,
+                    project_id=project_id,
+                    max_results=max_results
+                )
+                
+                if issues_result['success']:
+                    issues_data = issues_result['data']
+                    issues = issues_data.get('issues', [])
+                    logger.info(f"Successfully fetched {len(issues)} issues via direct search")
+                else:
+                    logger.warning(f"Direct search also failed: {issues_result.get('error', 'Unknown error')}")
+                    # Don't return error - return empty list instead so UI can still show the project
+                    issues = []
+                    issues_data = {"issues": [], "total": 0}
+            
+            # Debug: Log first issue structure to understand the format
+            if issues and len(issues) > 0:
+                logger.info(f"DEBUG: First issue structure (full): {json.dumps(issues[0], indent=2, default=str)}")
+            
+            # Format issues for frontend - handle both raw Jira API format and already formatted
+            formatted_issues = []
+            for issue in issues:
+                # Handle case where issue might already be formatted or is raw from API
+                if isinstance(issue, dict):
+                    # Check if it's already formatted (has 'summary' at top level)
+                    if 'summary' in issue and 'fields' not in issue:
+                        # Already formatted, use as-is but ensure all fields are present
+                        formatted_issue = {
+                            'id': issue.get('id'),
+                            'key': issue.get('key'),
+                            'summary': issue.get('summary', 'Untitled'),
+                            'description': issue.get('description', ''),
+                            'status': issue.get('status', 'Unknown'),
+                            'status_id': issue.get('status_id'),
+                            'assignee': issue.get('assignee'),
+                            'priority': issue.get('priority', {'name': 'Medium'}),
+                            'issue_type': issue.get('issue_type', {'name': 'Task'}),
+                            'updated': issue.get('updated'),
+                            'created': issue.get('created'),
+                            'project_key': project_key or project_id
+                        }
+                    else:
+                        # Raw Jira API format - extract from fields
+                        fields = issue.get('fields', {})
+                        if not fields:
+                            # If fields are missing, try to fetch the full issue details
+                            issue_id = issue.get('id')
+                            issue_key = issue.get('key')
+                            if issue_id or issue_key:
+                                logger.info(f"Fetching full details for issue {issue_id or issue_key} (fields missing)")
+                                try:
+                                    issue_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/issue/{issue_key or issue_id}"
+                                    issue_headers = {
+                                        "Authorization": f"Bearer {access_token}",
+                                        "Accept": "application/json"
+                                    }
+                                    issue_response = requests.get(issue_url, headers=issue_headers, timeout=30)
+                                    if issue_response.status_code == 200:
+                                        full_issue = issue_response.json()
+                                        issue = full_issue  # Replace with full issue data
+                                        fields = issue.get('fields', {})
+                                        logger.info(f"Successfully fetched full details for issue {issue_key or issue_id}")
+                                    else:
+                                        logger.warning(f"Failed to fetch full issue details: {issue_response.status_code}")
+                                except Exception as e:
+                                    logger.warning(f"Exception fetching full issue details: {str(e)}")
+                            
+                            if not fields:
+                                logger.warning(f"Issue {issue.get('id', 'unknown')} has no fields after fetch attempt, skipping")
+                                continue
+                        
+                        status = fields.get('status', {}) or {}
+                        assignee = fields.get('assignee') or {}
+                        priority = fields.get('priority') or {}
+                        issue_type = fields.get('issuetype') or {}
+                        
+                        # Extract status name - handle both dict and string
+                        status_name = 'Unknown'
+                        if isinstance(status, dict):
+                            status_name = status.get('name', 'Unknown')
+                        elif isinstance(status, str):
+                            status_name = status
+                        
+                        # Extract priority name
+                        priority_name = 'Medium'
+                        if isinstance(priority, dict):
+                            priority_name = priority.get('name', 'Medium')
+                        elif isinstance(priority, str):
+                            priority_name = priority
+                        
+                        # Extract issue type name
+                        issue_type_name = 'Task'
+                        if isinstance(issue_type, dict):
+                            issue_type_name = issue_type.get('name', 'Task')
+                        elif isinstance(issue_type, str):
+                            issue_type_name = issue_type
+                        
+                        formatted_issue = {
+                            'id': issue.get('id'),
+                            'key': issue.get('key'),
+                            'summary': fields.get('summary') or 'Untitled',
+                            'description': fields.get('description') or '',
+                            'status': status_name,
+                            'status_id': status.get('id') if isinstance(status, dict) else None,
+                            'assignee': {
+                                'displayName': assignee.get('displayName') if assignee and isinstance(assignee, dict) else None,
+                                'emailAddress': assignee.get('emailAddress') if assignee and isinstance(assignee, dict) else None,
+                                'accountId': assignee.get('accountId') if assignee and isinstance(assignee, dict) else None
+                            } if assignee else None,
+                            'priority': {
+                                'name': priority_name,
+                                'id': priority.get('id') if isinstance(priority, dict) else None
+                            },
+                            'issue_type': {
+                                'name': issue_type_name,
+                                'id': issue_type.get('id') if isinstance(issue_type, dict) else None
+                            },
+                            'updated': fields.get('updated'),
+                            'created': fields.get('created'),
+                            'project_key': project_key or project_id
+                        }
+                    
+                    formatted_issues.append(formatted_issue)
+                else:
+                    logger.warning(f"Unexpected issue format: {type(issue)}")
+            
+            logger.info(f"Successfully fetched {len(formatted_issues)} issues for project {project_key or project_id}")
+            
+            return JsonResponse({
+                'success': True,
+                'issues': formatted_issues,
+                'total': issues_data.get('total', len(formatted_issues)),
+                'max_results': max_results
+            })
+                
+        except Users.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'User {user_id} not found'
+            }, status=404)
+        except ExternalApplicationConnection.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': 'Jira connection not found. Please reconnect to Jira.'
+            }, status=401)
+        except Exception as e:
+            logger.error(f"Error fetching Jira issues: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return JsonResponse({
+                'success': False,
+                'error': f'Server error: {str(e)}'
+            }, status=500)
+            
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON data'
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Jira project issues endpoint error: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': f'Server error: {str(e)}'
+        }, status=500)
+
+@csrf_exempt
 @require_http_methods(["GET"])
 def jira_resources(request):
     """Get Jira accessible resources"""
@@ -1057,10 +1476,13 @@ def jira_resources(request):
             )
             
             logger.info(f"✅ Jira resources request for user {user_id}, connection {connection.id}")
-            logger.info(f"📊 Connection projects_data: {connection.projects_data}")
             
-            if connection.projects_data and 'resources' in connection.projects_data:
-                resources = connection.projects_data['resources']
+            # Decrypt projects_data if needed
+            projects_data = decrypt_projects_data(connection)
+            logger.info(f"📊 Connection projects_data (decrypted): {projects_data}")
+            
+            if projects_data and 'resources' in projects_data:
+                resources = projects_data['resources']
                 logger.info(f"📊 Found {len(resources)} resources in database")
                 try:
                     resource_list = []
@@ -1082,37 +1504,55 @@ def jira_resources(request):
                 # If no resources in database, try to fetch them fresh
                 logger.info("No resources in database, attempting to fetch fresh resources")
                 
-                if connection.connection_token:
-                    jira_integration = JiraIntegration(connection.connection_token)
-                    resources_result = jira_integration.get_accessible_resources()
-                    
-                    if resources_result['success']:
-                        resources_data = resources_result['data']
-                        logger.info(f"Successfully fetched {len(resources_data)} fresh resources")
-                        
-                        # Update the connection with fresh resources
-                        projects_data = connection.projects_data or {}
-                        projects_data['resources'] = resources_data
-                        projects_data['last_sync'] = datetime.now().isoformat()
-                        connection.projects_data = projects_data
-                        connection.save()
-                        
-                        return JsonResponse({
-                            'success': True,
-                            'resources': resources_data,
-                            'count': len(resources_data)
-                        })
-                    else:
-                        logger.error(f"Failed to fetch fresh resources: {resources_result['error']}")
-                        return JsonResponse({
-                            'success': False,
-                            'error': f'Failed to fetch resources: {resources_result["error"]}'
-                        })
-                else:
-                    logger.error("No connection token available")
+                # Get decrypted token
+                decrypted_token = get_decrypted_token(connection)
+                if not decrypted_token:
+                    logger.error(f"No connection token available for connection {connection.id}")
                     return JsonResponse({
                         'success': False,
-                        'error': 'No connection token available'
+                        'error': 'No connection token available. Please reconnect to Jira.'
+                    })
+                
+                # Log token info for debugging (first 20 chars only for security)
+                logger.info(f"Using decrypted token (first 20 chars): {decrypted_token[:20] if len(decrypted_token) > 20 else decrypted_token}...")
+                
+                jira_integration = JiraIntegration(decrypted_token)
+                resources_result = jira_integration.get_accessible_resources()
+                
+                if resources_result['success']:
+                    resources_data = resources_result['data']
+                    logger.info(f"Successfully fetched {len(resources_data)} fresh resources")
+                    
+                    # Update the connection with fresh resources
+                    # Use decrypted projects_data or create new dict
+                    projects_data = decrypt_projects_data(connection) or {}
+                    projects_data['resources'] = resources_data
+                    projects_data['last_sync'] = datetime.now().isoformat()
+                    connection.projects_data = projects_data
+                    connection.save()
+                    
+                    return JsonResponse({
+                        'success': True,
+                        'resources': resources_data,
+                        'count': len(resources_data)
+                    })
+                else:
+                    error_msg = resources_result.get('error', 'Unknown error')
+                    logger.error(f"Failed to fetch fresh resources: {error_msg}")
+                    
+                    # Check if it's a 401 error - token might be expired
+                    if '401' in str(error_msg) or 'Unauthorized' in str(error_msg):
+                        logger.warning("Token appears to be expired or invalid. User may need to reconnect.")
+                        return JsonResponse({
+                            'success': False,
+                            'error': 'Authentication failed. Please reconnect to Jira.',
+                            'error_code': 'TOKEN_EXPIRED',
+                            'requires_reconnect': True
+                        })
+                    
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'Failed to fetch resources: {error_msg}'
                     })
                 
         except Users.DoesNotExist:
@@ -1220,23 +1660,26 @@ def jira_stored_data(request):
                 connection_status='active'
             )
             
-            if connection.projects_data:
-                projects = connection.projects_data.get('projects', [])
+            # Decrypt projects_data if needed
+            projects_data = decrypt_projects_data(connection)
+            
+            if projects_data:
+                projects = projects_data.get('projects', [])
                 return JsonResponse({
                     'success': True,
                     'has_data': True,
                     'data': {  # Wrap in 'data' key for frontend
                         'projects': projects,
-                        'resources': connection.projects_data.get('resources', []),
-                        'project_details': connection.projects_data.get('project_details', {}),
+                        'resources': projects_data.get('resources', []),
+                        'project_details': projects_data.get('project_details', {}),
                         'projects_count': len(projects)
                     },
-                    'projects_data': connection.projects_data,  # Keep full data for compatibility
-                    'resources': connection.projects_data.get('resources', []),
+                    'projects_data': projects_data,  # Keep full data for compatibility
+                    'resources': projects_data.get('resources', []),
                     'projects': projects,
-                    'project_details': connection.projects_data.get('project_details', {}),
+                    'project_details': projects_data.get('project_details', {}),
                     'last_updated': connection.updated_at.isoformat(),
-                    'sync_status': connection.projects_data.get('sync_status', 'unknown')
+                    'sync_status': projects_data.get('sync_status', 'unknown')
                 })
             else:
                 return JsonResponse({

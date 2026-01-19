@@ -2222,7 +2222,7 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
         try:
             # Get ALL audits in framework that are not completed (matching dropdown logic)
             # This includes AI, Internal, External, Regular, Self-Audit types
-            # FILTER: Only process audit 426 (testing mode)
+            # FILTER: Only process audit 2318 (testing mode)
             query = """
             SELECT a.AuditId as audit_id, a.FrameworkId, a.PolicyId, a.SubPolicyId,
                    a.Title as audit_title, a.Objective as audit_objective, a.Scope as audit_scope,
@@ -2234,7 +2234,7 @@ Return ONLY valid JSON (no markdown, no explanations outside the JSON) exactly i
             LEFT JOIN subpolicies sp ON a.SubPolicyId = sp.SubPolicyId
             WHERE a.FrameworkId = %s
               AND (a.Status != 'Completed' OR a.Status IS NULL)
-              AND a.AuditId = 426
+              AND a.AuditId = 2318
             ORDER BY a.AuditId DESC
             """
             cursor.execute(query, (framework_id,))
@@ -3405,17 +3405,17 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                                         mime_type = 'application/octet-stream'
                                 
                                 # Insert into ai_audit_data
+                                # Try with compliance_id and FrameworkId first
                                 insert_query = """
                                     INSERT INTO ai_audit_data 
                                     (audit_id, document_id, document_name, document_path, document_type, 
                                      file_size, mime_type, uploaded_by, ai_processing_status, uploaded_date,
-                                     policy_id, subpolicy_id, upload_status, external_source, external_id,
+                                     policy_id, subpolicy_id, compliance_id, upload_status, external_source, external_id,
                                      FrameworkId, created_at, updated_at)
                                     VALUES (%s, 0, %s, %s, %s, %s, %s, %s, 'pending', NOW(),
-                                           %s, %s, 'uploaded', 'evidence_attachment', %s, %s, NOW(), NOW())
+                                           %s, %s, %s, 'uploaded', 'evidence_attachment', %s, %s, NOW(), NOW())
                                 """
                                 
-                                # Try with FrameworkId first
                                 try:
                                     cursor.execute(insert_query, [
                                         audit_id,
@@ -3427,20 +3427,47 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                                         uploaded_by,
                                         mapping['policy_id'],
                                         mapping['subpolicy_id'],
+                                        mapping['compliance_id'],  # Store compliance_id from matched compliances
                                         external_id,
                                         framework_id
                                     ])
-                                except mysql.connector.Error as framework_err:
-                                    # Handle missing FrameworkId column
-                                    if 'Unknown column' in str(framework_err) and 'FrameworkId' in str(framework_err):
-                                        insert_query_no_framework = """
+                                except mysql.connector.Error as insert_err:
+                                    error_str = str(insert_err).lower()
+                                    # Handle missing compliance_id column
+                                    if 'unknown column' in error_str and 'compliance_id' in error_str:
+                                        insert_query_no_compliance = """
                                             INSERT INTO ai_audit_data 
                                             (audit_id, document_id, document_name, document_path, document_type, 
                                              file_size, mime_type, uploaded_by, ai_processing_status, uploaded_date,
                                              policy_id, subpolicy_id, upload_status, external_source, external_id,
+                                             FrameworkId, created_at, updated_at)
+                                            VALUES (%s, 0, %s, %s, %s, %s, %s, %s, 'pending', NOW(),
+                                                   %s, %s, 'uploaded', 'evidence_attachment', %s, %s, NOW(), NOW())
+                                        """
+                                        cursor.execute(insert_query_no_compliance, [
+                                            audit_id,
+                                            file_name,
+                                            document_path,
+                                            file_type[:50],
+                                            file_size,
+                                            mime_type,
+                                            uploaded_by,
+                                            mapping['policy_id'],
+                                            mapping['subpolicy_id'],
+                                            external_id,
+                                            framework_id
+                                        ])
+                                        print(f"        ⚠️ compliance_id column not found - inserted without it")
+                                    # Handle missing FrameworkId column
+                                    elif 'unknown column' in error_str and 'frameworkid' in error_str:
+                                        insert_query_no_framework = """
+                                            INSERT INTO ai_audit_data 
+                                            (audit_id, document_id, document_name, document_path, document_type, 
+                                             file_size, mime_type, uploaded_by, ai_processing_status, uploaded_date,
+                                             policy_id, subpolicy_id, compliance_id, upload_status, external_source, external_id,
                                              created_at, updated_at)
                                             VALUES (%s, 0, %s, %s, %s, %s, %s, %s, 'pending', NOW(),
-                                                   %s, %s, 'uploaded', 'evidence_attachment', %s, NOW(), NOW())
+                                                   %s, %s, %s, 'uploaded', 'evidence_attachment', %s, NOW(), NOW())
                                         """
                                         cursor.execute(insert_query_no_framework, [
                                             audit_id,
@@ -3452,8 +3479,34 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                                             uploaded_by,
                                             mapping['policy_id'],
                                             mapping['subpolicy_id'],
+                                            mapping['compliance_id'],
                                             external_id
                                         ])
+                                        print(f"        ⚠️ FrameworkId column not found - inserted without it")
+                                    # Handle both missing
+                                    elif 'unknown column' in error_str:
+                                        insert_query_minimal = """
+                                            INSERT INTO ai_audit_data 
+                                            (audit_id, document_id, document_name, document_path, document_type, 
+                                             file_size, mime_type, uploaded_by, ai_processing_status, uploaded_date,
+                                             policy_id, subpolicy_id, upload_status, external_source, external_id,
+                                             created_at, updated_at)
+                                            VALUES (%s, 0, %s, %s, %s, %s, %s, %s, 'pending', NOW(),
+                                                   %s, %s, 'uploaded', 'evidence_attachment', %s, NOW(), NOW())
+                                        """
+                                        cursor.execute(insert_query_minimal, [
+                                            audit_id,
+                                            file_name,
+                                            document_path,
+                                            file_type[:50],
+                                            file_size,
+                                            mime_type,
+                                            uploaded_by,
+                                            mapping['policy_id'],
+                                            mapping['subpolicy_id'],
+                                            external_id
+                                        ])
+                                        print(f"        ⚠️ Some columns not found - inserted with minimal columns")
                                     else:
                                         raise
                                 
@@ -3514,24 +3567,58 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                     # Since we process documents in order, we can track this during creation
                     doc_compliance_map = {}
                     
-                    # Re-query to get compliance_id for each document_id
+                    # Re-query to get compliance_id (if column exists) and policy/subpolicy for each document_id
                     cursor = conn.cursor(dictionary=True)
                     for doc_id in all_created_document_ids:
+                        compliance_id = None
+                        policy_id = None
+                        subpolicy_id = None
                         try:
-                            cursor.execute("SELECT compliance_id FROM ai_audit_data WHERE id = %s", (doc_id,))
+                            # Try selecting with compliance_id first (newer schema)
+                            cursor.execute("SELECT compliance_id, policy_id, subpolicy_id FROM ai_audit_data WHERE id = %s", (doc_id,))
                             doc_row = cursor.fetchone()
-                            compliance_id = doc_row.get('compliance_id') if doc_row else None
-                            doc_compliance_map[doc_id] = compliance_id
-                        except:
-                            doc_compliance_map[doc_id] = None
+                            if doc_row:
+                                compliance_id = doc_row.get('compliance_id')
+                                policy_id = doc_row.get('policy_id')
+                                subpolicy_id = doc_row.get('subpolicy_id')
+                        except Exception as e:
+                            # Older schema: compliance_id column may not exist, fall back to policy/subpolicy only
+                            if 'unknown column' in str(e).lower() and 'compliance_id' in str(e).lower():
+                                try:
+                                    cursor.execute("SELECT policy_id, subpolicy_id FROM ai_audit_data WHERE id = %s", (doc_id,))
+                                    doc_row = cursor.fetchone()
+                                    if doc_row:
+                                        policy_id = doc_row.get('policy_id')
+                                        subpolicy_id = doc_row.get('subpolicy_id')
+                                except Exception:
+                                    pass
+                            else:
+                                # Any other SQL error - log minimal info and continue
+                                print(f"      ⚠️ Error reading ai_audit_data for auto-check (id={doc_id}): {str(e)}")
+                        
+                        doc_compliance_map[doc_id] = {
+                            'compliance_id': compliance_id,
+                            'policy_id': policy_id,
+                            'subpolicy_id': subpolicy_id
+                        }
                     cursor.close()
                     
-                    def trigger_compliance_check(doc_id, audit_id_val, user_id_val, compliance_id_val):
+                    def trigger_compliance_check(doc_id, audit_id_val, user_id_val, doc_info):
                         """Run compliance check in background thread"""
                         try:
                             import time
                             # Small delay to ensure database transaction is committed
                             time.sleep(2)
+                            
+                            compliance_id_val = doc_info.get('compliance_id')
+                            policy_id_val = doc_info.get('policy_id')
+                            subpolicy_id_val = doc_info.get('subpolicy_id')
+                            
+                            # Skip auto-check if no compliance_id AND no policy/subpolicy mapping
+                            # (This means the document has no matched compliances from relevance analysis)
+                            if not compliance_id_val and not policy_id_val and not subpolicy_id_val:
+                                print(f"      ⏭️ Skipping auto-check for document_id={doc_id} - no compliance_id, policy_id, or subpolicy_id (document has no matched compliances)")
+                                return
                             
                             # Import the internal compliance check function
                             import sys
@@ -3550,6 +3637,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                             from grc.routes.Audit.ai_audit_api import _check_document_compliance_internal
                             
                             # Call internal compliance check
+                            # Pass compliance_id if available, otherwise let it use policy/subpolicy defaults
                             result = _check_document_compliance_internal(
                                 audit_id=audit_id_val,
                                 document_id=doc_id,
@@ -3558,7 +3646,7 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                             )
                             
                             if result.get('success'):
-                                print(f"      ✅ Auto-compliance check completed for document_id={doc_id}")
+                                print(f"      ✅ Auto-compliance check completed for document_id={doc_id} (compliance_id={compliance_id_val}, policy_id={policy_id_val}, subpolicy_id={subpolicy_id_val})")
                             else:
                                 print(f"      ⚠️ Auto-compliance check failed for document_id={doc_id}: {result.get('error', 'Unknown error')}")
                         except Exception as check_err:
@@ -3570,15 +3658,15 @@ IMPORTANT: Only return IDs that are present in the framework lists provided abov
                     # Use uploaded_by (resolved UserId) or raw_user_id for the compliance check
                     user_id_for_check = uploaded_by if uploaded_by else raw_user_id
                     for doc_id in all_created_document_ids:
-                        compliance_id_for_doc = doc_compliance_map.get(doc_id)
+                        doc_info = doc_compliance_map.get(doc_id, {'compliance_id': None, 'policy_id': None, 'subpolicy_id': None})
                         check_thread = threading.Thread(
                             target=trigger_compliance_check,
-                            args=(doc_id, audit_id, user_id_for_check, compliance_id_for_doc),
+                            args=(doc_id, audit_id, user_id_for_check, doc_info),
                             daemon=True,
                             name=f"AutoComplianceCheck-{doc_id}"
                         )
                         check_thread.start()
-                        print(f"      🚀 Started compliance check thread for document_id={doc_id}")
+                        print(f"      🚀 Started compliance check thread for document_id={doc_id} (compliance_id={doc_info.get('compliance_id')})")
                 
                 print(f"{'='*60}")
                 print(f"✅ AUTO-PROCESSING COMPLETED")

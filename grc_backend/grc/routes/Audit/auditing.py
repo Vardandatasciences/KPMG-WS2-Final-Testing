@@ -101,14 +101,14 @@ def get_audit_task_details(request, audit_id):
                 FROM 
                     audit a
                 LEFT JOIN
-                    frameworks f ON a.FrameworkId = f.FrameworkId
+                    frameworks f ON a.FrameworkId = f.FrameworkId AND f.TenantId = %s
                 LEFT JOIN
-                    policies p ON a.PolicyId = p.PolicyId
+                    policies p ON a.PolicyId = p.PolicyId AND p.TenantId = %s
                 LEFT JOIN
-                    subpolicies sp ON a.SubPolicyId = sp.SubPolicyId
+                    subpolicies sp ON a.SubPolicyId = sp.SubPolicyId AND sp.TenantId = %s
                 WHERE 
                     a.AuditId = %s AND a.TenantId = %s
-            """, [validated_audit_id, tenant_id])
+            """, [tenant_id, tenant_id, tenant_id, validated_audit_id, tenant_id])
             
             audit_row = cursor.fetchone()
             if not audit_row:
@@ -123,13 +123,14 @@ def get_audit_task_details(request, audit_id):
             audit_objective = audit_row[3] or 'Not Specified'
             audit_business_unit = audit_row[4] or 'Not Specified'
             audit_evidence = audit_row[5] or ''
-            framework_id = audit_row[6]
-            framework_name = audit_row[7] or 'Not Specified'
+            framework_id = audit_row[6]  # This is a.FrameworkId from the audit table
+            # Get framework_name from join, or set to 'Framework Not Set' if framework_id is None/0
+            framework_name = audit_row[7] if audit_row[7] else ('Framework Not Set' if (framework_id is None or framework_id == 0) else 'Not Specified')
             policy_name = audit_row[8] or 'Not Specified'
             subpolicy_name = audit_row[9] or 'Not Specified'
             audit_comments = audit_row[10] or ''
             
-            print(f"Found audit: {audit_title} with ID {audit_id_val}")
+            print(f"Found audit: {audit_title} with ID {audit_id_val}, FrameworkId: {framework_id}, FrameworkName: {framework_name}")
 
             # Check for the latest version in audit_version table
             cursor.execute("""
@@ -239,8 +240,8 @@ def get_audit_task_details(request, audit_id):
                         if not compliance_data and desc_row:
                             cursor.execute("""
                                 SELECT 
-                                    `Check`, Evidence, Comments, HowToVerify, Impact, 
-                                    Recommendation, DetailsOfFinding, MajorMinor
+                                    af.`Check`, af.Evidence, af.Comments, af.HowToVerify, af.Impact, 
+                                    af.Recommendation, af.DetailsOfFinding, af.MajorMinor
                                 FROM audit_findings af
                                 JOIN audit a ON af.AuditId = a.AuditId
                                 WHERE af.AuditId = %s AND a.TenantId = %s AND af.ComplianceId = %s
