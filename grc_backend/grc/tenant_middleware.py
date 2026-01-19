@@ -71,11 +71,11 @@ class TenantContextMiddleware(MiddlewareMixin):
         if tenant:
             from .tenant_context import set_current_tenant
             set_current_tenant(tenant.tenant_id)
-            logger.debug(f"[Tenant Middleware] Resolved tenant: {tenant.name} (ID: {tenant.tenant_id}) for {request.method} {path}")
+            # logger.debug(f"[Tenant Middleware] Resolved tenant: {tenant.name} (ID: {tenant.tenant_id}) for {request.method} {path}")
         else:
             from .tenant_context import clear_current_tenant
             clear_current_tenant()
-            logger.debug(f"[Tenant Middleware] No tenant resolved for {request.method} {path}")
+            # logger.debug(f"[Tenant Middleware] No tenant resolved for {request.method} {path}")
         
         return None
     
@@ -99,7 +99,7 @@ class TenantContextMiddleware(MiddlewareMixin):
                 # Look up tenant by subdomain
                 tenant = Tenant.objects.filter(subdomain=subdomain, status='active').first()
                 if tenant:
-                    logger.debug(f"[Tenant Middleware] Found tenant by subdomain: {subdomain}")
+                    # logger.debug(f"[Tenant Middleware] Found tenant by subdomain: {subdomain}")
                     return tenant
                 else:
                     logger.warning(f"[Tenant Middleware] No active tenant found for subdomain: {subdomain}")
@@ -126,7 +126,7 @@ class TenantContextMiddleware(MiddlewareMixin):
                 if tenant_id:
                     tenant = Tenant.objects.filter(tenant_id=tenant_id, status='active').first()
                     if tenant:
-                        logger.debug(f"[Tenant Middleware] Found tenant from JWT: {tenant.name}")
+                        # logger.debug(f"[Tenant Middleware] Found tenant from JWT: {tenant.name}")
                         return tenant
                     else:
                         logger.warning(f"[Tenant Middleware] No active tenant found for tenant_id: {tenant_id}")
@@ -148,7 +148,7 @@ class TenantContextMiddleware(MiddlewareMixin):
             if hasattr(user, 'tenant') and user.tenant:
                 tenant = user.tenant
                 if tenant.status == 'active':
-                    logger.debug(f"[Tenant Middleware] Found tenant from user: {tenant.name}")
+                    # logger.debug(f"[Tenant Middleware] Found tenant from user: {tenant.name}")
                     return tenant
                 else:
                     logger.warning(f"[Tenant Middleware] User's tenant is not active: {tenant.name}")
@@ -157,7 +157,7 @@ class TenantContextMiddleware(MiddlewareMixin):
             elif hasattr(user, 'UserId'):
                 db_user = Users.objects.select_related('tenant').filter(UserId=user.UserId).first()
                 if db_user and db_user.tenant and db_user.tenant.status == 'active':
-                    logger.debug(f"[Tenant Middleware] Found tenant from user query: {db_user.tenant.name}")
+                    # logger.debug(f"[Tenant Middleware] Found tenant from user query: {db_user.tenant.name}")
                     return db_user.tenant
         except Exception as e:
             logger.error(f"[Tenant Middleware] Error extracting tenant from user: {e}")

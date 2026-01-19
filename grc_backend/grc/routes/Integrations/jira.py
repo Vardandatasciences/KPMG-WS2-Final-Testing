@@ -6,6 +6,7 @@ from django.http import JsonResponse, HttpResponseRedirect
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.utils.decorators import method_decorator
+from django.utils import timezone
 from django.conf import settings
 import logging
 import urllib.parse as up
@@ -919,9 +920,30 @@ def jira_projects(request):
                 # Decrypt projects_data if needed
                 projects_data = decrypt_projects_data(connection)
                 if projects_data:
+                    projects_list = projects_data.get('projects', [])
+                    
+                    # If no projects array, try to extract from project_details
+                    if not projects_list or len(projects_list) == 0:
+                        project_details = projects_data.get('project_details', {})
+                        if project_details:
+                            # Convert project_details dict to projects array
+                            projects_list = []
+                            for project_id, project_info in project_details.items():
+                                project_obj = project_info.get('project', {})
+                                if project_obj:
+                                    projects_list.append(project_obj)
+                                else:
+                                    # If no nested project object, construct from available data
+                                    projects_list.append({
+                                        'id': project_id,
+                                        'key': project_info.get('project_key', ''),
+                                        'name': project_info.get('project_name', ''),
+                                        'projectTypeKey': project_info.get('project_type', 'software')
+                                    })
+                    
                     return JsonResponse({
                         'success': True,
-                        'data': projects_data.get('projects', []),
+                        'data': projects_list,
                         'resources': projects_data.get('resources', []),
                         'last_updated': connection.updated_at.isoformat(),
                         'sync_status': projects_data.get('sync_status', 'unknown')
@@ -987,20 +1009,185 @@ def jira_projects(request):
             jira_integration = JiraIntegration(access_token)
             
             if action == 'fetch_projects':
-                # Fetch projects data
+                # First, try to get stored data as fallback
+                stored_data = None
+                stored_resources = None
+                connection = None
+                try:
+                    user = Users.objects.get(UserId=user_id)
+                    jira_app, _ = get_or_create_jira_application()
+                    connection = ExternalApplicationConnection.objects.filter(
+                        application=jira_app,
+                        user=user,
+                        connection_status='active'
+                    ).first()
+                    
+                    if connection:
+                        projects_data = decrypt_projects_data(connection)
+                        if projects_data:
+                            stored_data = projects_data.get('projects', [])
+                            stored_resources = projects_data.get('resources', [])
+                            
+                            # If no projects array, try to extract from project_details
+                            if not stored_data or len(stored_data) == 0:
+                                project_details = projects_data.get('project_details', {})
+                                if project_details:
+                                    # Convert project_details dict to projects array
+                                    stored_data = []
+                                    for project_id, project_info in project_details.items():
+                                        project_obj = project_info.get('project', {})
+                                        if project_obj:
+                                            stored_data.append(project_obj)
+                                        else:
+                                            # If no nested project object, use the data directly
+                                            stored_data.append({
+                                                'id': project_id,
+                                                'key': project_info.get('project_key', ''),
+                                                'name': project_info.get('project_name', ''),
+                                                'projectTypeKey': project_info.get('project_type', 'software')
+                                            })
+                                    logger.info(f"📦 Extracted {len(stored_data)} projects from project_details")
+                            
+                            logger.info(f"📦 Found {len(stored_data) if stored_data else 0} stored projects to use as fallback")
+                except Exception as stored_error:
+                    logger.warning(f"Could not retrieve stored data: {str(stored_error)}")
+                
+                # Try to fetch fresh projects data from API
                 projects_result = jira_integration.get_projects(cloud_id)
                 
                 if projects_result['success']:
+                    # API succeeded - fetch and store full details for each project
+                    projects_list = projects_result['data']
+                    logger.info(f"✅ Fetched {len(projects_list)} projects from API. Now fetching full details + issues for each...")
+                    
+                    # Get connection if not already retrieved
+                    if not connection:
+                        try:
+                            user = Users.objects.get(UserId=user_id)
+                            jira_app, _ = get_or_create_jira_application()
+                            connection = ExternalApplicationConnection.objects.filter(
+                                application=jira_app,
+                                user=user,
+                                connection_status='active'
+                            ).first()
+                        except Exception as e:
+                            logger.warning(f"Could not get connection for saving: {str(e)}")
+                    
+                    # Fetch full details (including issues) for each project
+                    projects_data_stored = decrypt_projects_data(connection) or {} if connection else {}
+                    project_details_dict = projects_data_stored.get('project_details', {})
+                    total_issues_fetched = 0
+                    
+                    for project in projects_list:
+                        project_id = str(project.get('id', ''))
+                        project_key = project.get('key', '')
+                        project_name = project.get('name', '')
+                        
+                        if not project_id or not project_key:
+                            continue
+                        
+                        try:
+                            logger.info(f"🔄 Fetching full details + issues for project {project_key} (ID: {project_id})")
+                            details_result = jira_integration.get_project_details(
+                                cloud_id=cloud_id,
+                                project_id=project_id,
+                                project_key=project_key
+                            )
+                            
+                            full_details = {}
+                            issues_count = 0
+                            if details_result.get('success'):
+                                full_details = details_result.get('data', {})
+                                issues_data = full_details.get('issues', {})
+                                issues_count = len(issues_data.get('issues', [])) if isinstance(issues_data, dict) else 0
+                                total_issues_fetched += issues_count
+                                logger.info(f"✅ Fetched {issues_count} issues for project {project_key}")
+                            else:
+                                error_msg = details_result.get('error', 'Unknown error')
+                                logger.warning(f"⚠️ Failed to fetch details for {project_key}: {error_msg}")
+                            
+                            # Store complete project data
+                            complete_project_data = {
+                                'project': project,  # Basic project info
+                                'full_details': full_details,  # Full details with issues
+                                'fetched_at': timezone.now().isoformat(),
+                                'fetched_by_user_id': user_id,
+                                'fetch_success': details_result.get('success', False),
+                                'fetch_error': details_result.get('error') if not details_result.get('success') else None
+                            }
+                            
+                            project_details_dict[project_id] = complete_project_data
+                            
+                        except Exception as e:
+                            logger.error(f"❌ Error fetching details for project {project_key}: {str(e)}")
+                            # Store basic project data even if details fetch fails
+                            project_details_dict[project_id] = {
+                                'project': project,
+                                'full_details': {},
+                                'fetched_at': timezone.now().isoformat(),
+                                'fetched_by_user_id': user_id,
+                                'fetch_success': False,
+                                'fetch_error': str(e)
+                            }
+                    
+                    # Save all project details to database
+                    if connection:
+                        projects_data_stored['project_details'] = project_details_dict
+                        projects_data_stored['projects'] = projects_list
+                        projects_data_stored['last_updated'] = timezone.now().isoformat()
+                        projects_data_stored['projects_count'] = len(projects_list)
+                        
+                        connection.projects_data = projects_data_stored
+                        connection.last_used = timezone.now()
+                        connection.save()
+                        
+                        # Verify the save worked
+                        connection.refresh_from_db()
+                        verify_projects_data = decrypt_projects_data(connection) or {}
+                        verify_project_details = verify_projects_data.get('project_details', {})
+                        logger.info(f"💾 Stored {len(projects_list)} projects with full details in database. Total issues fetched: {total_issues_fetched}")
+                        logger.info(f"✅ VERIFY: After save, found {len(verify_project_details)} projects in connection {connection.id}")
+                        
+                        # Log details for each stored project
+                        for proj_id, proj_data in verify_project_details.items():
+                            full_details = proj_data.get('full_details', {})
+                            issues_data = full_details.get('issues', {})
+                            issues_count = len(issues_data.get('issues', [])) if isinstance(issues_data, dict) else 0
+                            logger.info(f"✅ VERIFY: Project {proj_id} - {issues_count} issues stored")
+                    
+                    # Return fresh data
                     return JsonResponse({
                         'success': True,
-                        'data': projects_result['data'],
-                        'message': 'Projects data fetched successfully'
+                        'data': projects_list,
+                        'message': f'Projects data fetched and stored successfully. Fetched {total_issues_fetched} total issues across {len(projects_list)} projects.',
+                        'from_cache': False,
+                        'projects_count': len(projects_list),
+                        'total_issues_fetched': total_issues_fetched
                     })
                 else:
-                    return JsonResponse({
-                        'success': False,
-                        'error': projects_result['error']
-                    })
+                    # API failed - use stored data if available
+                    api_error = projects_result.get('error', 'Unknown error')
+                    logger.warning(f"⚠️ API call failed: {api_error}. Falling back to stored data...")
+                    
+                    if stored_data is not None:
+                        logger.info(f"✅ Returning {len(stored_data)} stored projects (API unavailable)")
+                        return JsonResponse({
+                            'success': True,
+                            'data': stored_data,
+                            'resources': stored_resources or [],
+                            'message': 'Using stored projects data (API unavailable)',
+                            'from_cache': True,
+                            'api_error': api_error,
+                            'warning': f'API returned error: {api_error}. Showing cached data.'
+                        })
+                    else:
+                        # No stored data - return error
+                        logger.error(f"❌ API failed and no stored data available")
+                        return JsonResponse({
+                            'success': False,
+                            'error': api_error,
+                            'message': 'API call failed and no stored data available'
+                        }, status=401)
             
             else:
                 return JsonResponse({
@@ -1144,7 +1331,40 @@ def jira_project_details(request):
             # Initialize Jira integration
             jira_integration = JiraIntegration(access_token)
             
-            # Fetch project details
+            # First, try to get stored project details as fallback
+            stored_project_detail = None
+            try:
+                user = Users.objects.get(UserId=user_id)
+                jira_app, _ = get_or_create_jira_application()
+                connection = ExternalApplicationConnection.objects.filter(
+                    application=jira_app,
+                    user=user,
+                    connection_status='active'
+                ).first()
+                
+                if connection:
+                    projects_data = decrypt_projects_data(connection) or {}
+                    project_details = projects_data.get('project_details', {})
+                    
+                    # Try to find stored project details (handle both string and int keys)
+                    project_id_str = str(project_id)
+                    if project_id_str in project_details:
+                        stored_project_detail = project_details[project_id_str]
+                    elif project_id in project_details:
+                        stored_project_detail = project_details[project_id]
+                    else:
+                        # Try to find by iterating
+                        for key, value in project_details.items():
+                            if str(key) == project_id_str or str(key) == str(project_id):
+                                stored_project_detail = value
+                                break
+                    
+                    if stored_project_detail:
+                        logger.info(f"📦 Found stored project details for project {project_id} to use as fallback")
+            except Exception as stored_error:
+                logger.warning(f"Could not retrieve stored project details: {str(stored_error)}")
+            
+            # Fetch project details from API
             logger.info(f"Fetching project details for project_id={project_id}, project_key={project_key}, cloud_id={cloud_id}")
             details_result = jira_integration.get_project_details(cloud_id, project_id=project_id, project_key=project_key)
             
@@ -1178,7 +1398,8 @@ def jira_project_details(request):
                     return JsonResponse({
                         'success': True,
                         'data': details_result['data'],
-                        'message': 'Project details fetched and saved successfully'
+                        'message': 'Project details fetched and saved successfully',
+                        'from_cache': False
                     })
                     
                 except (Users.DoesNotExist, ExternalApplication.DoesNotExist, ExternalApplicationConnection.DoesNotExist):
@@ -1187,10 +1408,29 @@ def jira_project_details(request):
                         'error': 'Database error'
                     })
             else:
-                return JsonResponse({
-                    'success': False,
-                    'error': details_result['error']
-                })
+                # API failed - use stored data if available
+                api_error = details_result.get('error', 'Unknown error')
+                logger.warning(f"⚠️ API call failed: {api_error}. Falling back to stored data...")
+                
+                if stored_project_detail:
+                    logger.info(f"✅ Returning stored project details (API unavailable)")
+                    stored_data = stored_project_detail.get('data') or stored_project_detail.get('full_details') or stored_project_detail
+                    return JsonResponse({
+                        'success': True,
+                        'data': stored_data,
+                        'message': 'Using stored project details (API unavailable)',
+                        'from_cache': True,
+                        'api_error': api_error,
+                        'warning': f'API returned error: {api_error}. Showing cached data.'
+                    })
+                else:
+                    # No stored data - return error
+                    logger.error(f"❌ API failed and no stored project details available")
+                    return JsonResponse({
+                        'success': False,
+                        'error': api_error,
+                        'message': 'API call failed and no stored project details available'
+                    }, status=401)
     
     except json.JSONDecodeError:
         return JsonResponse({
@@ -1207,13 +1447,18 @@ def jira_project_details(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 def jira_project_issues(request):
-    """Get issues/tasks for a specific Jira project"""
+    """Get issues/tasks for a specific Jira project
+    
+    First checks stored data in ExternalApplicationConnection.projects_data,
+    then falls back to API call if not found or if refresh is needed.
+    """
     try:
         data = json.loads(request.body)
         user_id = data.get('user_id', 1)
         project_key = data.get('project_key')
         project_id = data.get('project_id')
         max_results = data.get('max_results', 50)
+        force_refresh = data.get('force_refresh', False)  # Option to force API refresh
         
         if not project_key and not project_id:
             return JsonResponse({
@@ -1230,68 +1475,184 @@ def jira_project_issues(request):
                 connection_status='active'
             )
             
-            # Get decrypted token
-            access_token = get_decrypted_token(connection)
-            if not access_token:
-                logger.error("Failed to decrypt connection token")
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Failed to retrieve access token'
-                }, status=401)
-            
-            # Get cloud_id from stored resources
-            projects_data = decrypt_projects_data(connection)
-            cloud_id = None
-            if projects_data:
-                resources = projects_data.get('resources', [])
-                if resources and len(resources) > 0:
-                    cloud_id = resources[0].get('id')
-            
-            if not cloud_id:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Cloud ID not found. Please reconnect to Jira.'
-                }, status=400)
-            
-            # Use JiraIntegration class method to fetch project details (which includes issues)
-            # This is the same method used successfully in jira_project_details endpoint
-            jira_integration = JiraIntegration(access_token)
-            
-            # Try to get issues using get_project_details first (it includes issues and works)
-            # This method has been tested and works successfully
-            details_result = jira_integration.get_project_details(
-                cloud_id=cloud_id,
-                project_key=project_key,
-                project_id=project_id
-            )
-            
-            issues = []
+            # First, try to get issues from stored projects_data
+            # Data might be in current user's connection OR in assigned_by_user's connection
+            stored_issues = []
             issues_data = {"issues": [], "total": 0}
+            from_stored = False
             
-            if details_result['success'] and details_result['data'].get('issues'):
-                issues_data = details_result['data']['issues']
-                issues = issues_data.get('issues', [])
-                logger.info(f"Successfully fetched {len(issues)} issues via get_project_details")
+            # Normalize project_id to string for consistent lookup
+            project_id_str = str(project_id) if project_id else None
             
-            # If get_project_details didn't return issues, try direct search as fallback
-            if not issues:
-                logger.info("get_project_details didn't return issues, trying direct search...")
-                issues_result = jira_integration.get_project_issues(
-                    cloud_id=cloud_id,
-                    project_key=project_key,
-                    project_id=project_id,
-                    max_results=max_results
-                )
+            # Try current user's connection first
+            projects_data = decrypt_projects_data(connection) or {}
+            project_details = projects_data.get('project_details', {})
+            
+            # Try to find stored project data (check both string and int keys)
+            stored_project = None
+            if project_id_str and project_id_str in project_details:
+                stored_project = project_details[project_id_str]
+            elif project_id and project_id in project_details:
+                stored_project = project_details[project_id]
+            elif project_details:
+                # Try to find by matching project_id as string in any key
+                for key, value in project_details.items():
+                    if str(key) == project_id_str or str(key) == str(project_id):
+                        stored_project = value
+                        break
+            
+            if stored_project:
+                full_details = stored_project.get('full_details', {})
+                if full_details:
+                    stored_issues_data = full_details.get('issues', {})
+                    if stored_issues_data:
+                        stored_issues = stored_issues_data.get('issues', [])
+                        issues_data = {
+                            'issues': stored_issues,
+                            'total': stored_issues_data.get('total', len(stored_issues))
+                        }
+                        from_stored = True
+                        logger.info(f"Found {len(stored_issues)} issues in stored data for project {project_id_str} (from current user's connection)")
+            
+            # If not found in current user's connection, search in assigned_by_user connections
+            if not from_stored and project_id_str:
+                logger.info(f"Project {project_id_str} not found in current user's connection, searching in assigned_by_user connections...")
+                try:
+                    # Find UsersProjectList entries for this project
+                    from ...models import UsersProjectList
+                    project_assignments = UsersProjectList.objects.filter(
+                        project_id=project_id_str,
+                        is_active=True
+                    ).select_related('assigned_by').distinct()
+                    
+                    for assignment in project_assignments:
+                        try:
+                            assigned_by_user = assignment.assigned_by
+                            assigned_by_connection = ExternalApplicationConnection.objects.filter(
+                                application=jira_app,
+                                user=assigned_by_user,
+                                connection_status='active'
+                            ).first()
+                            
+                            if assigned_by_connection:
+                                assigned_projects_data = decrypt_projects_data(assigned_by_connection) or {}
+                                assigned_project_details = assigned_projects_data.get('project_details', {})
+                                
+                                # Try to find project data
+                                assigned_stored_project = None
+                                if project_id_str in assigned_project_details:
+                                    assigned_stored_project = assigned_project_details[project_id_str]
+                                elif project_id and project_id in assigned_project_details:
+                                    assigned_stored_project = assigned_project_details[project_id]
+                                elif assigned_project_details:
+                                    for key, value in assigned_project_details.items():
+                                        if str(key) == project_id_str or str(key) == str(project_id):
+                                            assigned_stored_project = value
+                                            break
+                                
+                                if assigned_stored_project:
+                                    full_details = assigned_stored_project.get('full_details', {})
+                                    if full_details:
+                                        stored_issues_data = full_details.get('issues', {})
+                                        if stored_issues_data:
+                                            stored_issues = stored_issues_data.get('issues', [])
+                                            issues_data = {
+                                                'issues': stored_issues,
+                                                'total': stored_issues_data.get('total', len(stored_issues))
+                                            }
+                                            from_stored = True
+                                            logger.info(f"Found {len(stored_issues)} issues in stored data for project {project_id_str} (from assigned_by_user {assigned_by_user.UserId}'s connection)")
+                                            break
+                        except Exception as e:
+                            logger.warning(f"Error checking assigned_by_user connection: {str(e)}")
+                            continue
+                except Exception as e:
+                    logger.warning(f"Error searching assigned_by_user connections: {str(e)}")
+            
+            # If no stored data or force_refresh, fetch from API
+            if not from_stored or force_refresh:
+                logger.info(f"{'Force refresh requested' if force_refresh else 'No stored data found'}, fetching from API...")
                 
-                if issues_result['success']:
-                    issues_data = issues_result['data']
-                    issues = issues_data.get('issues', [])
-                    logger.info(f"Successfully fetched {len(issues)} issues via direct search")
+                # Get decrypted token
+                access_token = get_decrypted_token(connection)
+                if not access_token:
+                    # If no token but we have stored data, return stored data
+                    if from_stored:
+                        logger.warning("No access token but returning stored issues")
+                        stored_issues = issues_data.get('issues', [])
+                    else:
+                        logger.error("Failed to decrypt connection token and no stored data")
+                        return JsonResponse({
+                            'success': False,
+                            'error': 'Failed to retrieve access token'
+                        }, status=401)
                 else:
-                    logger.warning(f"Direct search also failed: {issues_result.get('error', 'Unknown error')}")
-                    # Don't return error - return empty list instead so UI can still show the project
-                    issues = []
-                    issues_data = {"issues": [], "total": 0}
+                    # Get cloud_id from stored resources
+                    cloud_id = None
+                    if projects_data:
+                        resources = projects_data.get('resources', [])
+                        if resources and len(resources) > 0:
+                            cloud_id = resources[0].get('id')
+                    
+                    if not cloud_id:
+                        # If no cloud_id but we have stored data, return stored data
+                        if from_stored:
+                            logger.warning("No cloud_id but returning stored issues")
+                            stored_issues = issues_data.get('issues', [])
+                        else:
+                            return JsonResponse({
+                                'success': False,
+                                'error': 'Cloud ID not found. Please reconnect to Jira.'
+                            }, status=400)
+                    else:
+                        # Use JiraIntegration class method to fetch project details (which includes issues)
+                        jira_integration = JiraIntegration(access_token)
+                        
+                        # Try to get issues using get_project_details first
+                        details_result = jira_integration.get_project_details(
+                            cloud_id=cloud_id,
+                            project_key=project_key,
+                            project_id=project_id
+                        )
+                        
+                        issues = []
+                        
+                        if details_result['success'] and details_result['data'].get('issues'):
+                            issues_data = details_result['data']['issues']
+                            issues = issues_data.get('issues', [])
+                            logger.info(f"Successfully fetched {len(issues)} issues via get_project_details")
+                        
+                        # If get_project_details didn't return issues, try direct search as fallback
+                        if not issues:
+                            logger.info("get_project_details didn't return issues, trying direct search...")
+                            issues_result = jira_integration.get_project_issues(
+                                cloud_id=cloud_id,
+                                project_key=project_key,
+                                project_id=project_id,
+                                max_results=max_results
+                            )
+                            
+                            if issues_result['success']:
+                                issues_data = issues_result['data']
+                                issues = issues_data.get('issues', [])
+                                logger.info(f"Successfully fetched {len(issues)} issues via direct search")
+                            else:
+                                logger.warning(f"Direct search also failed: {issues_result.get('error', 'Unknown error')}")
+                                # Fall back to stored data if API fails
+                                if from_stored:
+                                    logger.info("API failed, using stored issues")
+                                    issues = stored_issues
+                                else:
+                                    issues = []
+                                    issues_data = {"issues": [], "total": 0}
+                        
+                        # Use API-fetched issues
+                        stored_issues = issues
+            else:
+                # Use stored issues
+                stored_issues = issues_data.get('issues', [])
+            
+            issues = stored_issues
             
             # Debug: Log first issue structure to understand the format
             if issues and len(issues) > 0:
@@ -1665,19 +2026,49 @@ def jira_stored_data(request):
             
             if projects_data:
                 projects = projects_data.get('projects', [])
+                project_details = projects_data.get('project_details', {})
+                
+                # Calculate detailed statistics
+                project_stats = []
+                total_issues = 0
+                for proj_id, proj_data in project_details.items():
+                    full_details = proj_data.get('full_details', {})
+                    issues_data = full_details.get('issues', {})
+                    issues_list = issues_data.get('issues', []) if isinstance(issues_data, dict) else []
+                    issues_count = len(issues_list)
+                    total_issues += issues_count
+                    
+                    project_stats.append({
+                        'project_id': proj_id,
+                        'project_name': proj_data.get('project', {}).get('name', 'Unknown'),
+                        'project_key': proj_data.get('project', {}).get('key', 'Unknown'),
+                        'issues_count': issues_count,
+                        'has_full_details': bool(full_details),
+                        'fetched_at': proj_data.get('fetched_at'),
+                        'fetch_success': proj_data.get('fetch_success', False)
+                    })
+                
+                logger.info(f"📊 Stored data verification for user {user_id}: {len(project_details)} projects, {total_issues} total issues")
+                
                 return JsonResponse({
                     'success': True,
                     'has_data': True,
+                    'connection_id': connection.id,
                     'data': {  # Wrap in 'data' key for frontend
                         'projects': projects,
                         'resources': projects_data.get('resources', []),
-                        'project_details': projects_data.get('project_details', {}),
-                        'projects_count': len(projects)
+                        'project_details': project_details,
+                        'projects_count': len(projects),
+                        'project_details_count': len(project_details),
+                        'total_issues_stored': total_issues,
+                        'project_stats': project_stats
                     },
                     'projects_data': projects_data,  # Keep full data for compatibility
                     'resources': projects_data.get('resources', []),
                     'projects': projects,
-                    'project_details': projects_data.get('project_details', {}),
+                    'project_details': project_details,
+                    'project_stats': project_stats,
+                    'total_issues_stored': total_issues,
                     'last_updated': connection.updated_at.isoformat(),
                     'sync_status': projects_data.get('sync_status', 'unknown')
                 })

@@ -1,0 +1,18 @@
+{
+  "amendment_id": 1,
+  "amendment_name": "gAAAAABpbfQvCO3pYF51q0N6B-gRF44sIHMSJyIY0Uii2c9I2Ej9EXRi0BIEhmRg1egdbAExfzWAIY1VzrG78MeoJgYLJNbpOg== Amendment - 2025-08-27",
+  "amendment_date": "2025-08-27",
+  "document_path": "C:\\Users\\puttu\\Videos\\GRC_TPRM\\grc_backend\\MEDIA_ROOT\\change_management\\NIST_800-53_20260119_143703.pdf",
+  "document_relative_path": "change_management\\NIST_800-53_20260119_143703.pdf",
+  "document_name": "NIST_800-53_20260119_143703.pdf",
+  "document_url": "https://csrc.nist.gov/publications/detail/sp/800-53/rev-5/upd1/final/sp800-53r5-upd1.pdf",
+  "s3_url": "https://vardaanwebsites.s3.ap-south-1.amazonaws.com/system_1768813622085_qilw0n_NIST_800-53_20260119_143703.pdf",
+  "s3_key": "system_1768813622085_qilw0n_NIST_800-53_20260119_143703.pdf",
+  "s3_stored_name": "system_1768813622085_qilw0n_NIST_800-53_20260119_143703.pdf",
+  "downloaded_date": "2026-01-19T14:37:06.149064",
+  "processed": false,
+  "extraction_summary": {},
+  "sections": [],
+  "framework_info": {},
+  "ai_analysis": {}
+}

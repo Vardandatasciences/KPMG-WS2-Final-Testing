@@ -1461,18 +1461,20 @@ export default {
 .events-queue-container {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: calc(100vh - 80px); /* Account for top nav bar */
   padding-top: 40px;
   background: #ffffff;
   margin-left: -30px;
+  overflow: hidden; /* Prevent container overflow */
 }
 
 /* Events Queue Header */
 .events-queue-header {
   flex-shrink: 0;
-  padding: 24px 32px;
+  padding: 20px 32px;
   background: #ffffff;
   border-bottom: 1px solid #ffffff;
+  min-height: 90px; /* Ensure consistent height */
 }
 
 .events-queue-header-content {
@@ -1578,9 +1580,10 @@ export default {
 /* Events Queue Filters */
 .events-queue-filters {
   flex-shrink: 0;
-  padding: 20px 32px;
+  padding: 16px 32px;
   background: #ffffff;
   border-bottom: 1px solid #e5e7eb;
+  min-height: 60px; /* Ensure consistent height */
 }
 
 .events-queue-filters-content {
@@ -1681,16 +1684,23 @@ export default {
   background: #ffffff;
   position: relative;
   z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* Important for flexbox children to shrink */
+  margin: 16px 32px;
+  max-height: 100%; /* Ensure it doesn't exceed container */
 }
 
 .events-queue-table-wrapper {
+  flex: 1 1 auto;
   overflow-x: auto;
   overflow-y: auto;
-  max-height: calc(100vh - 200px);
   position: relative;
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+  min-height: 0; /* Critical for flexbox scrolling */
+  height: 0; /* Force flexbox to calculate available space */
 }
 
 .events-queue-table {

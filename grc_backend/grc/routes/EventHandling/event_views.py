@@ -3738,59 +3738,44 @@ def get_integration_events(request):
         integration_records = []
         
         # Fetch integration data from the grc.integration_data_list table
-        # Use a more efficient query to avoid sort memory issues
+        # IMPORTANT: Use Django ORM to get automatic decryption of encrypted fields
+        # IntegrationDataList uses EncryptedFieldsMixin, so fields like heading, source, 
+        # username, data, and metadata are encrypted and need decryption
         try:
-            # Use raw SQL with LIMIT to avoid sort memory issues
-            # This approach gets the most recent records efficiently
-            with connection.cursor() as cursor:
-                cursor.execute("""
-                    SELECT id, heading, source, username, time, data, metadata, created_at, updated_at
-                    FROM integration_data_list 
-                    ORDER BY created_at DESC 
-                    LIMIT 100
-                """)
-                
-                # Convert raw results to model-like objects
-                columns = [col[0] for col in cursor.description]
-                raw_records = cursor.fetchall()
-                
-                # Create a list of dictionaries to simulate model objects
-                integration_records = []
-                for row in raw_records:
-                    record_dict = dict(zip(columns, row))
-                    # Create a simple object with the necessary attributes
-                    class MockRecord:
-                        def __init__(self, **kwargs):
-                            for key, value in kwargs.items():
-                                setattr(self, key, value)
-                    
-                    integration_records.append(MockRecord(**record_dict))
-                
-                print(f"DEBUG: Raw SQL query succeeded, got {len(integration_records)} records")
+            # Use Django ORM - this automatically decrypts encrypted fields via EncryptedFieldsMixin
+            integration_records = IntegrationDataList.objects.only(
+                'id', 'heading', 'source', 'username', 'time', 'data', 'metadata', 'created_at', 'updated_at'
+            ).order_by('-created_at')[:100]
+            
+            print(f"DEBUG: Django ORM query succeeded, got {len(integration_records)} records (decrypted)")
+            
+            # Verify decryption is working
+            if integration_records:
+                first_record = integration_records[0]
+                print(f"DEBUG: Sample record ID {first_record.id}:")
+                print(f"  - Heading: {first_record.heading[:50] if first_record.heading else 'None'}...")
+                print(f"  - Source: {first_record.source}")
+                print(f"  - Data type: {type(first_record.data)}")
+                print(f"  - Is encrypted (heading): {isinstance(first_record.heading, str) and first_record.heading.startswith('gAAAAA') if first_record.heading else False}")
                     
         except Exception as query_error:
-            print(f"DEBUG: Raw SQL query failed: {str(query_error)}")
-            # Fallback: try with a simpler query
+            print(f"DEBUG: Django ORM query failed: {str(query_error)}")
+            import traceback
+            print(f"DEBUG: Traceback: {traceback.format_exc()}")
+            
+            # Fallback: try with a simpler query (no ordering)
             try:
                 integration_records = IntegrationDataList.objects.only(
                     'id', 'heading', 'source', 'username', 'time', 'data', 'metadata', 'created_at', 'updated_at'
-                ).order_by('-created_at')[:50]  # Reduced limit
-                print(f"DEBUG: Fallback query succeeded, got {len(integration_records)} records")
+                )[:100]
+                print(f"DEBUG: Fallback query (no ordering) succeeded, got {len(integration_records)} records")
             except Exception as fallback_error:
                 print(f"DEBUG: Fallback query failed: {str(fallback_error)}")
-                # Last resort: get records without any ordering
-                try:
-                    integration_records = IntegrationDataList.objects.only(
-                        'id', 'heading', 'source', 'username', 'time', 'data', 'metadata', 'created_at', 'updated_at'
-                    )[:50]  # Reduced limit
-                    print(f"DEBUG: Final fallback query succeeded, got {len(integration_records)} records")
-                except Exception as final_error:
-                    print(f"DEBUG: All queries failed: {str(final_error)}")
-                    return Response({
-                        'success': False,
-                        'message': f'Failed to fetch integration data: {str(final_error)}',
-                        'events': []
-                    }, status=500)
+                return Response({
+                    'success': False,
+                    'message': f'Failed to fetch integration data: {str(fallback_error)}',
+                    'events': []
+                }, status=500)
         
         # Check if we have any records
         if not integration_records:
@@ -3814,15 +3799,84 @@ def get_integration_events(request):
         
         # Transform integration records to match the events queue format
         integration_events = []
+        from grc.utils.data_encryption import decrypt_data, is_encrypted_data
+        import json
+        
         for record in integration_records:
-            # Extract data from the JSON fields
-            data = record.data or {}
-            metadata = record.metadata or {}
+            # CRITICAL: Manually decrypt ALL encrypted fields
+            # EncryptedFieldsMixin doesn't automatically decrypt when using .only() or raw access
+            # So we need to explicitly decrypt heading, source, username, data, and metadata
             
-            # Debug logging for integration records
-            if record.id in [1, 2, 14]:  # Added 14 for Microsoft Sentinel record
-                print(f"DEBUG: Record ID {record.id} - Source: {getattr(record, 'source', 'N/A')}")
-                print(f"DEBUG: Record ID {record.id} - Heading: {record.heading}")
+            # Decrypt heading
+            heading = record.heading or ''
+            if heading and isinstance(heading, str) and is_encrypted_data(heading):
+                try:
+                    heading = decrypt_data(heading)
+                    print(f"DEBUG: Decrypted heading for record {record.id}")
+                except Exception as e:
+                    print(f"DEBUG: Failed to decrypt heading for record {record.id}: {str(e)}")
+            
+            # Decrypt source
+            source = record.source or ''
+            if source and isinstance(source, str) and is_encrypted_data(source):
+                try:
+                    source = decrypt_data(source)
+                    print(f"DEBUG: Decrypted source for record {record.id}: {source}")
+                except Exception as e:
+                    print(f"DEBUG: Failed to decrypt source for record {record.id}: {str(e)}")
+            
+            # Decrypt username
+            username = record.username or ''
+            if username and isinstance(username, str) and is_encrypted_data(username):
+                try:
+                    username = decrypt_data(username)
+                    print(f"DEBUG: Decrypted username for record {record.id}")
+                except Exception as e:
+                    print(f"DEBUG: Failed to decrypt username for record {record.id}: {str(e)}")
+            
+            # Decrypt and parse data JSONField
+            data = record.data or {}
+            if isinstance(data, str):
+                try:
+                    # Check if encrypted
+                    if is_encrypted_data(data):
+                        decrypted_data_str = decrypt_data(data)
+                        data = json.loads(decrypted_data_str) if isinstance(decrypted_data_str, str) else decrypted_data_str
+                        print(f"DEBUG: Decrypted and parsed data for record {record.id}")
+                    else:
+                        # Not encrypted, just parse JSON
+                        data = json.loads(data)
+                except (json.JSONDecodeError, Exception) as e:
+                    print(f"DEBUG: Warning - Could not parse data for record {record.id}: {str(e)}")
+                    data = {}
+            elif not isinstance(data, dict):
+                # If it's not a dict or string, make it empty dict
+                data = {}
+            
+            # Decrypt and parse metadata JSONField
+            metadata = record.metadata or {}
+            if isinstance(metadata, str):
+                try:
+                    # Check if encrypted
+                    if is_encrypted_data(metadata):
+                        decrypted_meta_str = decrypt_data(metadata)
+                        metadata = json.loads(decrypted_meta_str) if isinstance(decrypted_meta_str, str) else decrypted_meta_str
+                        print(f"DEBUG: Decrypted and parsed metadata for record {record.id}")
+                    else:
+                        # Not encrypted, just parse JSON
+                        metadata = json.loads(metadata)
+                except (json.JSONDecodeError, Exception) as e:
+                    print(f"DEBUG: Warning - Could not parse metadata for record {record.id}: {str(e)}")
+                    metadata = {}
+            elif not isinstance(metadata, dict):
+                # If it's not a dict or string, make it empty dict
+                metadata = {}
+            
+            # Debug logging for integration records (use decrypted values)
+            if record.id in [1, 2, 14, 52]:  # Added 52 for the encrypted record
+                print(f"DEBUG: Record ID {record.id} - Source (decrypted): {source}")
+                print(f"DEBUG: Record ID {record.id} - Heading (decrypted): {heading[:50] if heading else 'None'}...")
+                print(f"DEBUG: Record ID {record.id} - Username (decrypted): {username}")
                 print(f"DEBUG: Record ID {record.id} - Data keys: {list(data.keys()) if data else 'None'}")
                 print(f"DEBUG: Record ID {record.id} - Metadata: {metadata}")
                 print(f"DEBUG: Record ID {record.id} - Metadata type: {type(metadata)}")
@@ -3832,16 +3886,17 @@ def get_integration_events(request):
             event_type = determine_event_type_from_integration_data(record, data, metadata)
             
             # Handle different data structures based on source
-            source = record.source or 'Integration'
+            # Use decrypted source value
+            source = source or 'Integration'
             
             # Microsoft Sentinel has different data structure
             if source == 'Microsoft Sentinel':
-                summary = data.get('title') or data.get('displayName') or record.heading
+                summary = data.get('title') or data.get('displayName') or heading
                 description = data.get('description', '')
                 status = data.get('status', 'New')
                 priority = metadata.get('severity', 'Medium') if metadata else 'Medium'
                 assignee = data.get('owner', 'Unassigned')
-                reporter = record.username or 'Unknown'
+                reporter = username or 'Unknown'
                 issue_type = 'Security Incident'
                 project_key = data.get('incidentNumber') or data.get('id', '')
                 project_name = 'Microsoft Sentinel'
@@ -3853,12 +3908,12 @@ def get_integration_events(request):
                 print(f"[SENTINEL]   - Project Key: {project_key}")
             else:
                 # Default Jira/Gmail format
-                summary = data.get('summary', record.heading)
+                summary = data.get('summary', heading)
                 description = data.get('description', '')
                 status = data.get('status', 'New')
                 priority = data.get('priority', 'Medium')
                 assignee = data.get('assignee', 'Unassigned')
-                reporter = data.get('reporter', record.username or 'Unknown')
+                reporter = data.get('reporter', username or 'Unknown')
                 issue_type = data.get('issue_type', 'Task')
                 project_key = data.get('project_key', '')
                 project_name = data.get('project_name', 'Integration Project')
@@ -3883,7 +3938,7 @@ def get_integration_events(request):
                 'framework': 'Integration',  # Default framework
                 'module': determine_module_from_integration_data(record, data, metadata),
                 'category': determine_category_from_integration_data(record, data, metadata),
-                'source': record.source or 'Integration',
+                'source': source or 'Integration',
                 'timestamp': record.time.strftime('%m/%d/%Y %H:%M') if hasattr(record, 'time') and record.time else 'N/A',
                 'status': status,
                 'linkedRecordType': 'Integration Event',
