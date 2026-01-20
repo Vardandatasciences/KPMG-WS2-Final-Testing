@@ -79,19 +79,19 @@ class TenantContextMiddleware(MiddlewareMixin):
         if tenant:
             from .tenant_context import set_current_tenant
             set_current_tenant(tenant.tenant_id)
-            logger.info(f"[Tenant Middleware] ✅ Resolved tenant: {tenant.name} (ID: {tenant.tenant_id}) for {request.method} {path}")
-            print(f"[Tenant Middleware] ✅ Resolved tenant: {tenant.name} (ID: {tenant.tenant_id}) for {request.method} {path}")
+            # logger.info(f"[Tenant Middleware] ✅ Resolved tenant: {tenant.name} (ID: {tenant.tenant_id}) for {request.method} {path}")
+            # print(f"[Tenant Middleware] ✅ Resolved tenant: {tenant.name} (ID: {tenant.tenant_id}) for {request.method} {path}")
         else:
             from .tenant_context import clear_current_tenant
             clear_current_tenant()
-            logger.warning(f"[Tenant Middleware] ⚠️ No tenant resolved for {request.method} {path}")
-            print(f"[Tenant Middleware] ⚠️ No tenant resolved for {request.method} {path}")
+            # logger.warning(f"[Tenant Middleware] ⚠️ No tenant resolved for {request.method} {path}")
+            # print(f"[Tenant Middleware] ⚠️ No tenant resolved for {request.method} {path}")
             # Log why tenant wasn't found
             auth_header = request.headers.get('Authorization', '')
             has_auth = bool(auth_header and auth_header.startswith('Bearer '))
             has_user = hasattr(request, 'user') and request.user
             is_authenticated = has_user and request.user.is_authenticated if has_user else False
-            print(f"[Tenant Middleware] Debug - Has auth header: {has_auth}, Has user: {has_user}, Is authenticated: {is_authenticated}")
+            # print(f"[Tenant Middleware] Debug - Has auth header: {has_auth}, Has user: {has_user}, Is authenticated: {is_authenticated}")
         
         return None
     
@@ -115,10 +115,11 @@ class TenantContextMiddleware(MiddlewareMixin):
                 # Look up tenant by subdomain
                 tenant = Tenant.objects.filter(subdomain=subdomain, status='active').first()
                 if tenant:
-                    logger.debug(f"[Tenant Middleware] Found tenant by subdomain: {subdomain}")
+                    # logger.debug(f"[Tenant Middleware] Found tenant by subdomain: {subdomain}")
                     return tenant
                 else:
-                    logger.warning(f"[Tenant Middleware] No active tenant found for subdomain: {subdomain}")
+                    # logger.warning(f"[Tenant Middleware] No active tenant found for subdomain: {subdomain}")
+                    pass
         except Exception as e:
             logger.error(f"[Tenant Middleware] Error extracting tenant from subdomain: {e}")
         
@@ -139,22 +140,22 @@ class TenantContextMiddleware(MiddlewareMixin):
                 payload = jwt.decode(token, secret_key, algorithms=['HS256'])
                 
                 tenant_id = payload.get('tenant_id')
-                print(f"[Tenant Middleware] JWT payload tenant_id: {tenant_id}")
+                # print(f"[Tenant Middleware] JWT payload tenant_id: {tenant_id}")
                 if tenant_id:
                     # Try to get tenant, but also allow inactive tenants for now (might be a config issue)
                     tenant = Tenant.objects.filter(tenant_id=tenant_id).first()
                     if tenant:
                         if tenant.status == 'active':
-                            logger.info(f"[Tenant Middleware] ✅ Found tenant from JWT: {tenant.name} (ID: {tenant_id})")
-                            print(f"[Tenant Middleware] ✅ Found tenant from JWT: {tenant.name} (ID: {tenant_id})")
+                            # logger.info(f"[Tenant Middleware] ✅ Found tenant from JWT: {tenant.name} (ID: {tenant_id})")
+                            # print(f"[Tenant Middleware] ✅ Found tenant from JWT: {tenant.name} (ID: {tenant_id})")
                             return tenant
                         else:
-                            logger.warning(f"[Tenant Middleware] ⚠️ Tenant found but not active: {tenant.name} (ID: {tenant_id}, status: {tenant.status})")
-                            print(f"[Tenant Middleware] ⚠️ Tenant found but not active: {tenant.name} (ID: {tenant_id}, status: {tenant.status})")
+                            # logger.warning(f"[Tenant Middleware] ⚠️ Tenant found but not active: {tenant.name} (ID: {tenant_id}, status: {tenant.status})")
+                            # print(f"[Tenant Middleware] ⚠️ Tenant found but not active: {tenant.name} (ID: {tenant_id}, status: {tenant.status})")
                             # Still return the tenant if it exists, just log the warning
                             return tenant
                     else:
-                        logger.warning(f"[Tenant Middleware] ⚠️ No tenant found for tenant_id: {tenant_id} (doesn't exist in database)")
+                        # logger.warning(f"[Tenant Middleware] ⚠️ No tenant found for tenant_id: {tenant_id} (doesn't exist in database)")
                         print(f"[Tenant Middleware] ⚠️ No tenant found for tenant_id: {tenant_id} (doesn't exist in database)")
                 else:
                     print(f"[Tenant Middleware] ⚠️ No tenant_id in JWT payload. Available keys: {list(payload.keys())}")
@@ -211,7 +212,7 @@ class TenantContextMiddleware(MiddlewareMixin):
                                 try:
                                     tenant = Tenant.objects.filter(tenant_id=tenant_id, status='active').first()
                                     if tenant:
-                                        logger.info(f"[Tenant Middleware] Found tenant from users table: {tenant.name} (ID: {tenant_id})")
+                                        # logger.info(f"[Tenant Middleware] Found tenant from users table: {tenant.name} (ID: {tenant_id})")
                                         return tenant
                                     else:
                                         # Create a minimal tenant object if not found in Tenant table
@@ -225,13 +226,13 @@ class TenantContextMiddleware(MiddlewareMixin):
                             logger.debug(f"[Tenant Middleware] No user found in users table with user_id: {user_id}")
                             
                 except Exception as db_error:
-                    logger.warning(f"[Tenant Middleware] Error querying users table: {db_error}")
+                    # logger.warning(f"[Tenant Middleware] Error querying users table: {db_error}")
                     # Fallback to model-based lookup if raw SQL fails
                     try:
                         from mfa_auth.models import User
                         db_user = User.objects.select_related('tenant').filter(userid=user_id).first()
                         if db_user and db_user.tenant and db_user.tenant.status == 'active':
-                            logger.debug(f"[Tenant Middleware] Found tenant from mfa_auth.User model: {db_user.tenant.name}")
+                            # logger.debug(f"[Tenant Middleware] Found tenant from mfa_auth.User model: {db_user.tenant.name}")
                             return db_user.tenant
                         elif db_user and db_user.tenant:
                             logger.warning(f"[Tenant Middleware] User's tenant is not active: {db_user.tenant.name}")

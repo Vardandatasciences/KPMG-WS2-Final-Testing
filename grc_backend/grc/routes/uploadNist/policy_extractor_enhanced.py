@@ -25,42 +25,18 @@ except ImportError:
 # Configuration - Use Django settings
 from django.conf import settings
 
-# Phase 1, 2, 3 Optimizations - Import shared AI utilities
+# Simple imports - use AI provider from risk_ai_doc (just for provider detection)
 from ...routes.Risk.risk_ai_doc import (
     AI_PROVIDER,
-    call_ollama_json,
-    call_openai_json,
-    _select_ollama_model_by_complexity,
+    OPENAI_API_KEY,
+    OPENAI_MODEL,
     OLLAMA_BASE_URL,
     OLLAMA_MODEL_DEFAULT,
-    OLLAMA_MODEL_FAST,
-    OLLAMA_MODEL_COMPLEX,
-    OPENAI_API_KEY,
-    OPENAI_API_URL,
-    OPENAI_MODEL,
+    OLLAMA_TIMEOUT,
+    OLLAMA_TEMPERATURE
 )
-
-# Phase 2 Optimizations
-from ...utils.document_preprocessor import preprocess_document, calculate_document_hash
-from ...utils.few_shot_prompts import get_policy_extraction_prompt
-
-# Phase 3 Optimizations
-from ...utils.rag_system import (
-    add_document_to_rag,
-    retrieve_relevant_context,
-    build_rag_prompt,
-    is_rag_available,
-    get_rag_stats
-)
-from ...utils.model_router import (
-    route_model,
-    track_system_load,
-    get_current_system_load
-)
-from ...utils.request_queue import (
-    process_with_queue,
-    get_queue_status
-)
+import requests
+import re
 
 # Clean model name - strip quotes and whitespace to avoid "invalid model ID" errors
 MODEL_NAME_RAW = getattr(settings, 'OPENAI_MODEL', 'gpt-4o-mini')
@@ -69,32 +45,25 @@ SECTIONS_DIR = "sections_out_tcfd"
 OUTPUT_DIR = "policies_extracted_tcfd_UPDATED_ENHANCED_NEW"
 
 class EnhancedPolicyExtractor:
-    def __init__(self, api_key: str = None, model: str = MODEL_NAME):
+    def __init__(self, api_key: str = None, model: str = MODEL_NAME, framework_id: int = None, amendment_date: str = None):
         """
-        Initialize the Enhanced PolicyExtractor with Phase 1, 2, 3 optimizations.
-        Uses shared AI utilities from risk_ai_doc.py for better performance.
+        Initialize the Policy Extractor with simple configuration.
+        Uses AI provider from risk_ai_doc (Ollama or OpenAI).
         """
         # Clean model name - strip quotes and whitespace
         self.model = str(model).strip().strip('"').strip("'")
         
         # Print configuration info
-        print(f"\n🤖 Policy Extractor AI Configuration (Phase 1, 2, 3 Optimized):")
-        print(f"   Selected Provider: {AI_PROVIDER.upper()}")
-        
+        print(f"\n🤖 Policy Extractor AI Configuration (Simple):")
+        print(f"   AI Provider: {AI_PROVIDER.upper()}")
         if AI_PROVIDER == 'openai':
-            if OPENAI_API_KEY:
-                print(f"🌐 OpenAI Configuration:")
-                print(f"   Model (original): '{MODEL_NAME_RAW}'")
-                print(f"   Model (cleaned): '{self.model}'")
-                print(f"   API Key: {'*' * (len(OPENAI_API_KEY) - 4) + OPENAI_API_KEY[-4:]}")
-            else:
-                print("⚠️  WARNING: OPENAI_API_KEY not found in Django settings!")
-        elif AI_PROVIDER == 'ollama':
-            print(f"🚀 Ollama Configuration (OPTIMIZED):")
-            print(f"   Base URL: {OLLAMA_BASE_URL}")
-            print(f"   Default Model: {OLLAMA_MODEL_DEFAULT}")
-            print(f"   Fast Model: {OLLAMA_MODEL_FAST}")
-            print(f"   Complex Model: {OLLAMA_MODEL_COMPLEX}")
+            print(f"   Model: {OPENAI_MODEL}")
+        else:
+            print(f"   Model: {OLLAMA_MODEL_DEFAULT}")
+
+        # For cancellation checks (best-effort)
+        self.framework_id = framework_id
+        self.amendment_date = amendment_date
         
         # Framework detection and metadata
         self.framework_metadata = {}
@@ -528,15 +497,18 @@ class EnhancedPolicyExtractor:
 
     def analyze_content_for_policies_enhanced(self, content: str, section_title: str, framework_info: Dict[str, Any], max_retries: int = 3) -> Dict[str, Any]:
         """
-        Enhanced policy analysis with comprehensive metadata generation.
-        Phase 2: Now uses few-shot prompts for better accuracy.
+        Simple policy analysis with direct AI calls - no optimizations.
         """
-        # Phase 2: Use few-shot prompt template
-        base_prompt = get_policy_extraction_prompt(
-            section_title=section_title,
-            content=content,
-            framework_info=framework_info
-        )
+        print(f"\n[AMENDMENT][POLICY] ▶️ Processing section: {section_title}")
+        # Simple base prompt - no optimizations
+        base_prompt = f"""Extract policies and subpolicies from the following section.
+
+Section Title: {section_title}
+Framework: {framework_info['framework_name']}
+Content:
+{content[:8000]}
+
+Extract all policies and subpolicies in JSON format."""
 
         # Handle large content by chunking
         content_chunks = self.chunk_content(content)
@@ -545,65 +517,138 @@ class EnhancedPolicyExtractor:
         confidences = []
         
         for i, chunk in enumerate(content_chunks):
-            # For chunked content, use the few-shot prompt with the specific chunk
-            if len(content_chunks) > 1:
-                user_prompt = get_policy_extraction_prompt(
-                    section_title=f"{section_title} (Chunk {i+1} of {len(content_chunks)})",
-                    content=chunk,
-                    framework_info=framework_info
-                )
-            else:
-                user_prompt = base_prompt
-
-            # Phase 2: Calculate document hash for caching
-            document_text = f"{section_title}\n{chunk}"
-            document_hash = calculate_document_hash(document_text)
-            
-            # Phase 3: Try to retrieve relevant context from RAG
-            rag_context = None
-            if is_rag_available():
+            # Cancellation check (best-effort)
+            if self.framework_id:
                 try:
-                    query = f"Policy extraction for section: {section_title}. Framework: {framework_info['framework_name']}"
-                    retrieved = retrieve_relevant_context(query, n_results=3)
-                    if retrieved:
-                        rag_context = retrieved
-                        print(f"   📚 Phase 3 RAG: Retrieved {len(retrieved)} relevant chunks for policy extraction")
-                except Exception as e:
-                    print(f"   ⚠️  RAG retrieval failed: {e}")
-            
-            # Build the full prompt (user_prompt already includes system prompt and examples)
-            full_prompt = user_prompt
-            
-            # Phase 3: Enhance prompt with RAG context if available
-            if rag_context:
-                full_prompt = build_rag_prompt(
-                    user_query=full_prompt,
-                    retrieved_context=rag_context,
-                    base_prompt=None
-                )
-            
-            # Phase 3: Use intelligent model routing
-            selected_model = route_model(
-                task_type="policy_extraction",
-                text_length=len(full_prompt),
-                accuracy_required="high",
-                system_load=get_current_system_load(),
-                provider=AI_PROVIDER,
-            )
-            print(f"   🧠 Phase 3 Model Routing: Selected model '{selected_model}' for policy extraction")
-            
+                    from grc.models import Framework
+                    fw = Framework.objects.get(FrameworkId=int(self.framework_id))
+                    amendments = fw.Amendment if fw.Amendment else []
+                    if isinstance(amendments, list) and amendments:
+                        for a in reversed(amendments):
+                            if not isinstance(a, dict):
+                                continue
+                            if self.amendment_date and a.get('amendment_date') != self.amendment_date:
+                                continue
+                            if a.get('cancel_requested'):
+                                print(f"[AMENDMENT][POLICY] 🛑 Cancel requested - stopping policy extraction for section: {section_title}")
+                                raise RuntimeError("Cancelled by user")
+                            break
+                except Exception:
+                    pass
+            if len(content_chunks) > 1:
+                print(f"[AMENDMENT][POLICY]   Chunk {i+1}/{len(content_chunks)} for section: {section_title}")
+            # Simple prompt - no optimizations
+            simple_prompt = f"""Extract policies and subpolicies from the following section.
+
+Section Title: {section_title}
+Framework: {framework_info['framework_name']}
+Content:
+{chunk[:8000]}
+
+Extract all policies and subpolicies in JSON format:
+{{
+  "has_policies": true,
+  "policies": [
+    {{
+      "policy_title": "Title of the policy",
+      "policy_description": "Description of the policy",
+      "policy_type": "Type of policy",
+      "scope": "Scope of the policy",
+      "objective": "Objective of the policy",
+      "subpolicies": [
+        {{
+          "subpolicy_title": "Title of subpolicy",
+          "subpolicy_description": "Description of subpolicy",
+          "control": "Control information"
+        }}
+      ]
+    }}
+  ]
+}}
+
+Return only valid JSON, no markdown formatting."""
+
             for attempt in range(max_retries):
                 try:
-                    start_time = time.time()
-                    
-                    # Phase 1, 2, 3: Use optimized AI wrappers with caching
+                    print(f"[AMENDMENT][POLICY]   Calling AI ({AI_PROVIDER}) attempt {attempt+1}/{max_retries} ...")
+                    # Simple direct API call - NO caching, NO optimizations
                     if AI_PROVIDER == 'ollama':
-                        result = call_ollama_json(full_prompt, model=selected_model, document_hash=document_hash)
+                        # Direct Ollama API call
+                        url = f"{OLLAMA_BASE_URL}/api/generate"
+                        payload = {
+                            "model": OLLAMA_MODEL_DEFAULT,
+                            "prompt": simple_prompt,
+                            "stream": False,
+                            "options": {
+                                "temperature": OLLAMA_TEMPERATURE,
+                            },
+                            "format": "json"
+                        }
+                        
+                        response = requests.post(url, json=payload, timeout=OLLAMA_TIMEOUT)
+                        response.raise_for_status()
+                        
+                        response_data = response.json()
+                        raw = response_data.get("response", "")
+                        
+                        # Parse JSON
+                        json_match = re.search(r'\{.*\}', raw, re.DOTALL)
+                        if json_match:
+                            result = json.loads(json_match.group())
+                        else:
+                            result = json.loads(raw)
                     else:
-                        result = call_openai_json(full_prompt, document_hash=document_hash)
-                    
-                    processing_time = time.time() - start_time
-                    track_system_load(processing_time, len(full_prompt))
+                        # Direct OpenAI API call
+                        headers = {
+                            "Content-Type": "application/json",
+                            "Authorization": f"Bearer {OPENAI_API_KEY}"
+                        }
+                        
+                        model_clean = str(OPENAI_MODEL).strip().strip('"').strip("'")
+                        
+                        payload = {
+                            "model": model_clean,
+                            "messages": [
+                                {"role": "system", "content": "You are a policy extraction expert. Extract policies and subpolicies from documents in JSON format."},
+                                {"role": "user", "content": simple_prompt}
+                            ],
+                            "temperature": 0.3
+                        }
+                        
+                        response = requests.post(
+                            "https://api.openai.com/v1/chat/completions",
+                            headers=headers,
+                            json=payload,
+                            timeout=120
+                        )
+                        response.raise_for_status()
+                        
+                        response_data = response.json()
+                        raw = response_data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                        
+                        # Parse JSON
+                        json_match = re.search(r'\{.*\}', raw, re.DOTALL)
+                        if json_match:
+                            result = json.loads(json_match.group())
+                        else:
+                            result = json.loads(raw)
+
+                    # ---- Live progress printing (what was generated) ----
+                    try:
+                        has_policies = bool(result.get("has_policies"))
+                        policies = result.get("policies") or []
+                        print(f"[AMENDMENT][POLICY]   ✅ Parsed result | has_policies={has_policies} | policies={len(policies)}")
+                        for p_idx, p in enumerate(policies, 1):
+                            p_title = (p.get("policy_title") or "").strip()
+                            p_type = (p.get("policy_type") or "").strip()
+                            subpols = p.get("subpolicies") or []
+                            print(f"[AMENDMENT][POLICY]      P{p_idx}: {p_title} ({p_type}) | subpolicies={len(subpols)}")
+                            for sp_idx, sp in enumerate(subpols, 1):
+                                sp_title = (sp.get("subpolicy_title") or "").strip()
+                                control = (sp.get("control") or "").strip()
+                                print(f"[AMENDMENT][POLICY]         - SP{p_idx}.{sp_idx}: {sp_title} | control={control}")
+                    except Exception as e:
+                        print(f"[AMENDMENT][POLICY]   ⚠️ Could not print generated policies/subpolicies: {e}")
                     
                     # Handle response format (already parsed JSON from wrappers)
                     try:
@@ -795,25 +840,7 @@ class EnhancedPolicyExtractor:
                 print(f"[FOUND] {len(policies)} policies, {total_subpolicies} subpolicies, {total_controls} controls in '{section_title}'")
                 print(f"[METADATA] Generated comprehensive scope, objectives, and categorization")
                 
-                # Phase 3: Store extracted policies in RAG
-                if is_rag_available():
-                    try:
-                        policy_text = json.dumps(policy_analysis, indent=2)
-                        add_document_to_rag(
-                            document_text=policy_text,
-                            document_id=f"policy_extraction_{section_path.name}_{hash(section_title)}",
-                            metadata={
-                                "type": "policy_extraction",
-                                "section_title": section_title,
-                                "framework": framework_info.get('framework_name', ''),
-                                "num_policies": len(policies),
-                                "num_subpolicies": total_subpolicies,
-                                "extracted_at": datetime.now().isoformat()
-                            }
-                        )
-                        print(f"   ✅ Phase 3 RAG: Stored policy extraction in knowledge base")
-                    except Exception as e:
-                        print(f"   ⚠️  Phase 3 RAG: Failed to store policies: {e}")
+                # No RAG storage - simplified processing
                 
                 return result
             else:
@@ -1006,6 +1033,8 @@ def extract_policies(sections_dir: str,
                     output_dir: str = OUTPUT_DIR, 
                     api_key: str = None, 
                     model: str = MODEL_NAME,
+                    framework_id: int = None,
+                    amendment_date: str = None,
                     verbose: bool = True) -> Dict[str, Any]:
     """
     Convenience function to extract policies from sections.
@@ -1037,7 +1066,7 @@ def extract_policies(sections_dir: str,
         ...     print(f"Files saved to: {results['files']}")
     """
     try:
-        extractor = EnhancedPolicyExtractor(api_key=api_key, model=model)
+        extractor = EnhancedPolicyExtractor(api_key=api_key, model=model, framework_id=framework_id, amendment_date=amendment_date)
         results = extractor.extract_policies_from_sections_enhanced(
             sections_dir=sections_dir,
             output_dir=output_dir,

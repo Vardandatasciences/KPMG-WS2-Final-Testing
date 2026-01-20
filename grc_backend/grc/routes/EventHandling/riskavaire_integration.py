@@ -48,7 +48,7 @@ def _should_show_event_for_user(user_id, linked_record_type):
     try:
         rbac_record = RBAC.objects.filter(user=user_id, is_active='Y').first()
         if not rbac_record:
-            logger.warning(f"[RBAC FILTER] No RBAC record found for user {user_id}")
+            # logger.warning(f"[RBAC FILTER] No RBAC record found for user {user_id}")
             return False
         
         # Admin roles can see all events
@@ -61,12 +61,12 @@ def _should_show_event_for_user(user_id, linked_record_type):
         ]
         
         if rbac_record.role in admin_roles:
-            logger.info(f"[RBAC FILTER] User {user_id} has admin role - showing all events")
+            # logger.info(f"[RBAC FILTER] User {user_id} has admin role - showing all events")
             return True
         
         # If user has view_all_event permission, they can see all events
         if rbac_record.view_all_event:
-            logger.info(f"[RBAC FILTER] User {user_id} has view_all_event permission - showing all events")
+            # logger.info(f"[RBAC FILTER] User {user_id} has view_all_event permission - showing all events")
             return True
         
         # Role-based filtering for specific LinkedRecordTypes
@@ -78,10 +78,10 @@ def _should_show_event_for_user(user_id, linked_record_type):
                 'Compliance Approver'
             ]
             if rbac_record.role in compliance_roles:
-                logger.info(f"[RBAC FILTER] User {user_id} with role {rbac_record.role} can see compliance events")
+                # logger.info(f"[RBAC FILTER] User {user_id} with role {rbac_record.role} can see compliance events")
                 return True
             else:
-                logger.info(f"[RBAC FILTER] User {user_id} with role {rbac_record.role} cannot see compliance events")
+                # logger.info(f"[RBAC FILTER] User {user_id} with role {rbac_record.role} cannot see compliance events")
                 return False
                 
         elif linked_record_type == 'policy':
@@ -91,10 +91,10 @@ def _should_show_event_for_user(user_id, linked_record_type):
                 'Policy Approver'
             ]
             if rbac_record.role in policy_roles:
-                logger.info(f"[RBAC FILTER] User {user_id} with role {rbac_record.role} can see policy events")
+                # logger.info(f"[RBAC FILTER] User {user_id} with role {rbac_record.role} can see policy events")
                 return True
             else:
-                logger.info(f"[RBAC FILTER] User {user_id} with role {rbac_record.role} cannot see policy events")
+                # logger.info(f"[RBAC FILTER] User {user_id} with role {rbac_record.role} cannot see policy events")
                 return False
                 
         elif linked_record_type == 'audit':
@@ -106,10 +106,10 @@ def _should_show_event_for_user(user_id, linked_record_type):
                 'Audit Reviewer'
             ]
             if rbac_record.role in audit_roles:
-                logger.info(f"[RBAC FILTER] User {user_id} with role {rbac_record.role} can see audit events")
+                # logger.info(f"[RBAC FILTER] User {user_id} with role {rbac_record.role} can see audit events")
                 return True
             else:
-                logger.info(f"[RBAC FILTER] User {user_id} with role {rbac_record.role} cannot see audit events")
+                # logger.info(f"[RBAC FILTER] User {user_id} with role {rbac_record.role} cannot see audit events")
                 return False
                 
         elif linked_record_type == 'risk':
@@ -120,10 +120,10 @@ def _should_show_event_for_user(user_id, linked_record_type):
                 'Risk Reviewer'
             ]
             if rbac_record.role in risk_roles:
-                logger.info(f"[RBAC FILTER] User {user_id} with role {rbac_record.role} can see risk events")
+                # logger.info(f"[RBAC FILTER] User {user_id} with role {rbac_record.role} can see risk events")
                 return True
             else:
-                logger.info(f"[RBAC FILTER] User {user_id} with role {rbac_record.role} cannot see risk events")
+                # logger.info(f"[RBAC FILTER] User {user_id} with role {rbac_record.role} cannot see risk events")
                 return False
                 
         elif linked_record_type == 'incident':
@@ -133,19 +133,19 @@ def _should_show_event_for_user(user_id, linked_record_type):
                 'Incident Analyst'
             ]
             if rbac_record.role in incident_roles:
-                logger.info(f"[RBAC FILTER] User {user_id} with role {rbac_record.role} can see incident events")
+                # logger.info(f"[RBAC FILTER] User {user_id} with role {rbac_record.role} can see incident events")
                 return True
             else:
-                logger.info(f"[RBAC FILTER] User {user_id} with role {rbac_record.role} cannot see incident events")
+                # logger.info(f"[RBAC FILTER] User {user_id} with role {rbac_record.role} cannot see incident events")
                 return False
         
         # For other LinkedRecordTypes or if user has view_module_event permission, 
         # let the existing module-based filtering handle it
-        logger.info(f"[RBAC FILTER] User {user_id} with role {rbac_record.role} - using module-based filtering for LinkedRecordType: {linked_record_type}")
+        # logger.info(f"[RBAC FILTER] User {user_id} with role {rbac_record.role} - using module-based filtering for LinkedRecordType: {linked_record_type}")
         return True
         
     except Exception as e:
-        logger.error(f"[RBAC FILTER] Error checking event visibility for user {user_id}: {e}")
+        # logger.error(f"[RBAC FILTER] Error checking event visibility for user {user_id}: {e}")
         return False
 
 class RiskAvaireEventTrigger:

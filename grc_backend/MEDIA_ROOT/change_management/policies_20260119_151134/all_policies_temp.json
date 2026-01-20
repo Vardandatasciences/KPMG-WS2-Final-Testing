@@ -1,0 +1,278 @@
+[
+  {
+    "section_info": {
+      "title": "NIST_800-53_20260119_143703",
+      "level": 1,
+      "start_page": 1,
+      "end_page": 2,
+      "folder_path": "full_document"
+    },
+    "analysis": {
+      "has_policies": true,
+      "framework_info": {
+        "framework_name": "NIST SP 800-53 Security and Privacy Controls",
+        "current_version": "5.0",
+        "framework_description": "NIST Special Publication 800-53 provides a catalog of security and privacy controls for federal information systems and organizations to protect organizational operations and assets, individuals, other organizations, and the Nation from a diverse set of threats including hostile attacks, human errors, natural disasters, structural failures, foreign intelligence entities, and privacy risks.",
+        "category": "Security and Privacy Controls",
+        "start_date": "2020-09-23",
+        "end_date": null
+      },
+      "policies": [
+        {
+          "policy_id": "NIST-800-53-GEN-001",
+          "policy_title": "SA-15(13) Development Process, Standards, and Tools",
+          "policy_description": "Logging Syntax",
+          "policy_text": "",
+          "scope": "New Control/Control Enhancement and Assessment Procedure",
+          "objective": "The primary objective of this policy is to establish clear requirements and guidelines for sa-15(13) development process, standards, and tools, ensuring organizational compliance and operational effectiveness. Specific objectives include: (1) establishing clear expectations and requirements for organizational behavior; (2) ensuring consistent implementation of best practices across all applicable areas; (3) minimizing operational risks and compliance gaps; (4) promoting accountability and responsibility among all stakeholders; (5) enabling effective monitoring and continuous improvement; and (6) supporting overall organizational objectives and strategic goals.",
+          "policy_type": "Control Enhancement",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-GEN-001.01",
+              "subpolicy_title": "Root Cause Analysis",
+              "subpolicy_description": "Conducting a root cause analysis",
+              "subpolicy_text": "",
+              "control": "SI-02(07) Flaw Remediation"
+            }
+          ]
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-002",
+          "policy_title": "SA-24, Design for Cyber Resiliency",
+          "policy_description": "",
+          "policy_text": "",
+          "scope": "New in final based on stakeholder feedback. Added to address cyber resiliency by design.",
+          "objective": "The primary objective of this policy is to establish clear requirements and guidelines for sa-24, design for cyber resiliency, ensuring organizational compliance and operational effectiveness. Specific objectives include: (1) establishing clear expectations and requirements for organizational behavior; (2) ensuring consistent implementation of best practices across all applicable areas; (3) minimizing operational risks and compliance gaps; (4) promoting accountability and responsibility among all stakeholders; (5) enabling effective monitoring and continuous improvement; and (6) supporting overall organizational objectives and strategic goals.",
+          "policy_type": "New Control",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-003",
+          "policy_title": "SI-02(07) Flaw Remediation",
+          "policy_description": "Conducting a root cause analysis",
+          "policy_text": "",
+          "scope": "Identified as a gap from analysis of the NIST SSDF.",
+          "objective": "The primary objective of this policy is to establish clear requirements and guidelines for si-02(07) flaw remediation, ensuring organizational compliance and operational effectiveness. Specific objectives include: (1) establishing clear expectations and requirements for organizational behavior; (2) ensuring consistent implementation of best practices across all applicable areas; (3) minimizing operational risks and compliance gaps; (4) promoting accountability and responsibility among all stakeholders; (5) enabling effective monitoring and continuous improvement; and (6) supporting overall organizational objectives and strategic goals.",
+          "policy_type": "Control Enhancement",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-004",
+          "policy_title": "SI-07(12)",
+          "policy_description": "Addressing all organization-defined software instead of only organization-defined user software",
+          "policy_text": "",
+          "scope": "Control enhancement not included in any SP 800-53B baseline.",
+          "objective": "The primary objective of this policy is to establish clear requirements and guidelines for si-07(12), ensuring organizational compliance and operational effectiveness. Specific objectives include: (1) establishing clear expectations and requirements for organizational behavior; (2) ensuring consistent implementation of best practices across all applicable areas; (3) minimizing operational risks and compliance gaps; (4) promoting accountability and responsibility among all stakeholders; (5) enabling effective monitoring and continuous improvement; and (6) supporting overall organizational objectives and strategic goals.",
+          "policy_type": "Revised existing control enhancement",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-005",
+          "policy_title": "SA-04",
+          "policy_description": "Updated discussion to address customer agreements and notification, and coordination of updates",
+          "policy_text": "",
+          "scope": "Change to discussion does not impact control requirement.",
+          "objective": "The primary objective of this policy is to establish clear requirements and guidelines for sa-04, ensuring organizational compliance and operational effectiveness. Specific objectives include: (1) establishing clear expectations and requirements for organizational behavior; (2) ensuring consistent implementation of best practices across all applicable areas; (3) minimizing operational risks and compliance gaps; (4) promoting accountability and responsibility among all stakeholders; (5) enabling effective monitoring and continuous improvement; and (6) supporting overall organizational objectives and strategic goals.",
+          "policy_type": "Revision to Existing Control/Control Enhancement Discussion",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-006",
+          "policy_title": "SA-05",
+          "policy_description": "Updated discussion to address additional considerations to include in developer artifacts and documentation",
+          "policy_text": "",
+          "scope": "Change to discussion does not impact control requirement.",
+          "objective": "The primary objective of this policy is to establish clear requirements and guidelines for sa-05, ensuring organizational compliance and operational effectiveness. Specific objectives include: (1) establishing clear expectations and requirements for organizational behavior; (2) ensuring consistent implementation of best practices across all applicable areas; (3) minimizing operational risks and compliance gaps; (4) promoting accountability and responsibility among all stakeholders; (5) enabling effective monitoring and continuous improvement; and (6) supporting overall organizational objectives and strategic goals.",
+          "policy_type": "Revision to Existing Control/Control Enhancement Discussion",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-007",
+          "policy_title": "SA-08(14)",
+          "policy_description": "Updated discussion to address limiting the functions that have access to operate with elevated privileges",
+          "policy_text": "",
+          "scope": "Change to discussion does not impact control requirement.",
+          "objective": "The primary objective of this policy is to establish clear requirements and guidelines for sa-08(14), ensuring organizational compliance and operational effectiveness. Specific objectives include: (1) establishing clear expectations and requirements for organizational behavior; (2) ensuring consistent implementation of best practices across all applicable areas; (3) minimizing operational risks and compliance gaps; (4) promoting accountability and responsibility among all stakeholders; (5) enabling effective monitoring and continuous improvement; and (6) supporting overall organizational objectives and strategic goals.",
+          "policy_type": "Revision to Existing Control/Control Enhancement Discussion",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-008",
+          "policy_title": "SI-02",
+          "policy_description": "",
+          "policy_text": "",
+          "scope": "Update to Existing Control/Control Enhancement Discussion",
+          "objective": "The primary objective of this policy is to establish clear requirements and guidelines for si-02, ensuring organizational compliance and operational effectiveness. Specific objectives include: (1) establishing clear expectations and requirements for organizational behavior; (2) ensuring consistent implementation of best practices across all applicable areas; (3) minimizing operational risks and compliance gaps; (4) promoting accountability and responsibility among all stakeholders; (5) enabling effective monitoring and continuous improvement; and (6) supporting overall organizational objectives and strategic goals.",
+          "policy_type": "Updated discussion to address flaw remediation testing",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-GEN-008.01",
+              "subpolicy_title": "Implementation Example",
+              "subpolicy_description": "",
+              "subpolicy_text": "",
+              "control": "SI-02(05) Flaw Remediation"
+            }
+          ]
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-009",
+          "policy_title": "SA-15",
+          "policy_description": "",
+          "policy_text": "",
+          "scope": "Control not included in any SP 800-53B baseline.",
+          "objective": "The primary objective of this policy is to establish clear requirements and guidelines for sa-15, ensuring organizational compliance and operational effectiveness. Specific objectives include: (1) establishing clear expectations and requirements for organizational behavior; (2) ensuring consistent implementation of best practices across all applicable areas; (3) minimizing operational risks and compliance gaps; (4) promoting accountability and responsibility among all stakeholders; (5) enabling effective monitoring and continuous improvement; and (6) supporting overall organizational objectives and strategic goals.",
+          "policy_type": "Added as related control to newly added SI-02(07)",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-010",
+          "policy_title": "SI-02(07) Flaw Remediation",
+          "policy_description": "Conducting a root cause analysis",
+          "policy_text": "",
+          "scope": "Identified as a gap from analysis of the NIST SSDF.",
+          "objective": "The primary objective of this policy is to establish clear requirements and guidelines for si-02(07) flaw remediation, ensuring organizational compliance and operational effectiveness. Specific objectives include: (1) establishing clear expectations and requirements for organizational behavior; (2) ensuring consistent implementation of best practices across all applicable areas; (3) minimizing operational risks and compliance gaps; (4) promoting accountability and responsibility among all stakeholders; (5) enabling effective monitoring and continuous improvement; and (6) supporting overall organizational objectives and strategic goals.",
+          "policy_type": "Control Enhancement",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": [
+            {
+              "subpolicy_id": "NIST-800-53-GEN-010.01",
+              "subpolicy_title": "Root Cause Analysis",
+              "subpolicy_description": "Conducting a root cause analysis",
+              "subpolicy_text": "",
+              "control": "SI-02(07) Flaw Remediation"
+            }
+          ]
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-011",
+          "policy_title": "SA-08",
+          "policy_description": "Added new references",
+          "policy_text": "",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in sa-08. The scope encompasses all relevant organizational activities, systems, and personnel as determined by the policy requirements. It includes all operational environments and applies to all stakeholders who may be affected by or responsible for policy implementation.",
+          "objective": "The primary objective of this policy is to establish clear requirements and guidelines for sa-08, ensuring organizational compliance and operational effectiveness. Specific objectives include: (1) establishing clear expectations and requirements for organizational behavior; (2) ensuring consistent implementation of best practices across all applicable areas; (3) minimizing operational risks and compliance gaps; (4) promoting accountability and responsibility among all stakeholders; (5) enabling effective monitoring and continuous improvement; and (6) supporting overall organizational objectives and strategic goals.",
+          "policy_type": "Update to Related Controls or References",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-012",
+          "policy_title": "AU-02",
+          "policy_description": "",
+          "policy_text": "",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in au-02. The scope encompasses all relevant organizational activities, systems, and personnel as determined by the policy requirements. It includes all operational environments and applies to all stakeholders who may be affected by or responsible for policy implementation.",
+          "objective": "The primary objective of this policy is to establish clear requirements and guidelines for au-02, ensuring organizational compliance and operational effectiveness. Specific objectives include: (1) establishing clear expectations and requirements for organizational behavior; (2) ensuring consistent implementation of best practices across all applicable areas; (3) minimizing operational risks and compliance gaps; (4) promoting accountability and responsibility among all stakeholders; (5) enabling effective monitoring and continuous improvement; and (6) supporting overall organizational objectives and strategic goals.",
+          "policy_type": "Added as related control to newly added SI-02(07)",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-013",
+          "policy_title": "AU-03",
+          "policy_description": "",
+          "policy_text": "",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in au-03. The scope encompasses all relevant organizational activities, systems, and personnel as determined by the policy requirements. It includes all operational environments and applies to all stakeholders who may be affected by or responsible for policy implementation.",
+          "objective": "The primary objective of this policy is to establish clear requirements and guidelines for au-03, ensuring organizational compliance and operational effectiveness. Specific objectives include: (1) establishing clear expectations and requirements for organizational behavior; (2) ensuring consistent implementation of best practices across all applicable areas; (3) minimizing operational risks and compliance gaps; (4) promoting accountability and responsibility among all stakeholders; (5) enabling effective monitoring and continuous improvement; and (6) supporting overall organizational objectives and strategic goals.",
+          "policy_type": "Added as related control to newly added SA-15(13)",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-014",
+          "policy_title": "CA-07",
+          "policy_description": "",
+          "policy_text": "",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in ca-07. The scope encompasses all relevant organizational activities, systems, and personnel as determined by the policy requirements. It includes all operational environments and applies to all stakeholders who may be affected by or responsible for policy implementation.",
+          "objective": "The primary objective of this policy is to establish clear requirements and guidelines for ca-07, ensuring organizational compliance and operational effectiveness. Specific objectives include: (1) establishing clear expectations and requirements for organizational behavior; (2) ensuring consistent implementation of best practices across all applicable areas; (3) minimizing operational risks and compliance gaps; (4) promoting accountability and responsibility among all stakeholders; (5) enabling effective monitoring and continuous improvement; and (6) supporting overall organizational objectives and strategic goals.",
+          "policy_type": "Added as related control to newly added SI-02(07)",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-015",
+          "policy_title": "IR-04",
+          "policy_description": "",
+          "policy_text": "",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in ir-04. The scope encompasses all relevant organizational activities, systems, and personnel as determined by the policy requirements. It includes all operational environments and applies to all stakeholders who may be affected by or responsible for policy implementation.",
+          "objective": "The primary objective of this policy is to establish clear requirements and guidelines for ir-04, ensuring organizational compliance and operational effectiveness. Specific objectives include: (1) establishing clear expectations and requirements for organizational behavior; (2) ensuring consistent implementation of best practices across all applicable areas; (3) minimizing operational risks and compliance gaps; (4) promoting accountability and responsibility among all stakeholders; (5) enabling effective monitoring and continuous improvement; and (6) supporting overall organizational objectives and strategic goals.",
+          "policy_type": "Added as related control to newly added SA-15(13)",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-016",
+          "policy_title": "IR-06",
+          "policy_description": "",
+          "policy_text": "",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in ir-06. The scope encompasses all relevant organizational activities, systems, and personnel as determined by the policy requirements. It includes all operational environments and applies to all stakeholders who may be affected by or responsible for policy implementation.",
+          "objective": "The primary objective of this policy is to establish clear requirements and guidelines for ir-06, ensuring organizational compliance and operational effectiveness. Specific objectives include: (1) establishing clear expectations and requirements for organizational behavior; (2) ensuring consistent implementation of best practices across all applicable areas; (3) minimizing operational risks and compliance gaps; (4) promoting accountability and responsibility among all stakeholders; (5) enabling effective monitoring and continuous improvement; and (6) supporting overall organizational objectives and strategic goals.",
+          "policy_type": "Added as related control to newly added SI-02(07)",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-017",
+          "policy_title": "IR-08",
+          "policy_description": "",
+          "policy_text": "",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in ir-08. The scope encompasses all relevant organizational activities, systems, and personnel as determined by the policy requirements. It includes all operational environments and applies to all stakeholders who may be affected by or responsible for policy implementation.",
+          "objective": "The primary objective of this policy is to establish clear requirements and guidelines for ir-08, ensuring organizational compliance and operational effectiveness. Specific objectives include: (1) establishing clear expectations and requirements for organizational behavior; (2) ensuring consistent implementation of best practices across all applicable areas; (3) minimizing operational risks and compliance gaps; (4) promoting accountability and responsibility among all stakeholders; (5) enabling effective monitoring and continuous improvement; and (6) supporting overall organizational objectives and strategic goals.",
+          "policy_type": "Added as related control to newly added SI-02(07)",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-018",
+          "policy_title": "MA-03",
+          "policy_description": "",
+          "policy_text": "",
+          "scope": "This policy applies to all organizational units, personnel, systems, and processes involved in ma-03. The scope encompasses all relevant organizational activities, systems, and personnel as determined by the policy requirements. It includes all operational environments and applies to all stakeholders who may be affected by or responsible for policy implementation.",
+          "objective": "The primary objective of this policy is to establish clear requirements and guidelines for ma-03, ensuring organizational compliance and operational effectiveness. Specific objectives include: (1) establishing clear expectations and requirements for organizational behavior; (2) ensuring consistent implementation of best practices across all applicable areas; (3) minimizing operational risks and compliance gaps; (4) promoting accountability and responsibility among all stakeholders; (5) enabling effective monitoring and continuous improvement; and (6) supporting overall organizational objectives and strategic goals.",
+          "policy_type": "Added as related control to newly added SI-02(07)",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        },
+        {
+          "policy_id": "NIST-800-53-GEN-019",
+          "policy_title": "SA-08",
+          "policy_description": "",
+          "policy_text": "",
+          "scope": "Change to discussion does not impact control requirement.",
+          "objective": "The primary objective of this policy is to establish clear requirements and guidelines for sa-08, ensuring organizational compliance and operational effectiveness. Specific objectives include: (1) establishing clear expectations and requirements for organizational behavior; (2) ensuring consistent implementation of best practices across all applicable areas; (3) minimizing operational risks and compliance gaps; (4) promoting accountability and responsibility among all stakeholders; (5) enabling effective monitoring and continuous improvement; and (6) supporting overall organizational objectives and strategic goals.",
+          "policy_type": "Updated discussion to address limiting the functions that have access to operate with elevated privileges",
+          "policy_category": "General Requirements",
+          "policy_subcategory": "General",
+          "subpolicies": []
+        }
+      ],
+      "document_type": "other",
+      "confidence": 0.0
+    }
+  }
+]
