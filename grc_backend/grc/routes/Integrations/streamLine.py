@@ -33,11 +33,13 @@ class StreamlineManager:
         """
         Get all projects assigned to a specific user
         
+        Loads project details + issues from stored ExternalApplicationConnection.projects_data
+        
         Args:
             user_id (int): User ID to get projects for
             
         Returns:
-            dict: List of projects assigned to the user
+            dict: List of projects assigned to the user with full details and issues
         """
         try:
             # Convert user_id to integer if it's a string
@@ -64,30 +66,147 @@ class StreamlineManager:
                 users_list__contains=[user_id]  # Check if user_id is in the JSON array
             ).order_by('-created_at')
             
+            # Get stored project data from ExternalApplicationConnection
+            # Try to get connection from the user who assigned (or any active connection)
+            stored_project_data = {}
+            try:
+                from ...models import ExternalApplication, ExternalApplicationConnection
+                from .jira import decrypt_projects_data
+                
+                # Get Jira application
+                jira_app = ExternalApplication.objects.filter(
+                    icon_class__in=['fas fa-tasks', 'fab fa-jira'],
+                    category='Project Management',
+                    type='Issue Tracking'
+                ).first()
+                
+                if jira_app:
+                    # Try to get connection from assigned_by users (who have the stored data)
+                    # Get unique assigned_by users from project_assignments
+                    assigned_by_user_ids = list(project_assignments.values_list('assigned_by__UserId', flat=True).distinct())
+                    self.logger.info(f"🔍 DEBUG: Looking for connections from assigned_by users: {assigned_by_user_ids}")
+                    
+                    # Collect from ALL connections, don't break early
+                    checked_connections = []
+                    
+                    for assigned_by_id in assigned_by_user_ids:
+                        try:
+                            assigned_by_user = Users.objects.get(UserId=assigned_by_id)
+                            connection = ExternalApplicationConnection.objects.filter(
+                                application=jira_app,
+                                user=assigned_by_user,
+                                connection_status='active'
+                            ).first()
+                            
+                            if connection:
+                                checked_connections.append(connection.id)
+                                # Decrypt projects_data
+                                try:
+                                    projects_data = decrypt_projects_data(connection) or {}
+                                    project_details = projects_data.get('project_details', {})
+                                    
+                                    self.logger.info(f"🔍 DEBUG: Checking connection {connection.id} for user {assigned_by_id}")
+                                    self.logger.info(f"🔍 DEBUG: Found {len(project_details)} projects in connection.projects_data")
+                                    self.logger.info(f"🔍 DEBUG: Project IDs: {list(project_details.keys()) if project_details else 'None'}")
+                                    
+                                    # Store in our lookup dict (normalize keys to strings)
+                                    for proj_id, proj_data in project_details.items():
+                                        proj_id_str = str(proj_id)
+                                        if proj_id_str not in stored_project_data:
+                                            stored_project_data[proj_id_str] = proj_data
+                                        # Also store with original key for backward compatibility
+                                        if proj_id not in stored_project_data:
+                                            stored_project_data[proj_id] = proj_data
+                                    
+                                    if project_details:
+                                        self.logger.info(f"✅ Loaded {len(project_details)} projects from connection {connection.id} (user {assigned_by_id})")
+                                except Exception as decrypt_error:
+                                    self.logger.error(f"❌ Error decrypting projects_data from connection {connection.id}: {str(decrypt_error)}")
+                                    import traceback
+                                    self.logger.error(traceback.format_exc())
+                                    continue
+                            else:
+                                self.logger.warning(f"⚠️ No active connection found for assigned_by user {assigned_by_id}")
+                        except Users.DoesNotExist:
+                            self.logger.warning(f"⚠️ Assigned_by user {assigned_by_id} does not exist")
+                        except Exception as e:
+                            self.logger.warning(f"⚠️ Error loading stored data from user {assigned_by_id}: {str(e)}")
+                            continue
+                    
+                    # Fallback: Also check current user's connection if nothing found
+                    if not stored_project_data:
+                        self.logger.info(f"🔍 DEBUG: No data found from assigned_by users, checking current user's connection...")
+                        try:
+                            current_user = Users.objects.get(UserId=user_id)
+                            current_connection = ExternalApplicationConnection.objects.filter(
+                                application=jira_app,
+                                user=current_user,
+                                connection_status='active'
+                            ).first()
+                            
+                            if current_connection:
+                                self.logger.info(f"🔍 DEBUG: Found current user's connection {current_connection.id}")
+                                projects_data = decrypt_projects_data(current_connection) or {}
+                                project_details = projects_data.get('project_details', {})
+                                self.logger.info(f"🔍 DEBUG: Found {len(project_details)} projects in current user's connection")
+                                
+                                for proj_id, proj_data in project_details.items():
+                                    proj_id_str = str(proj_id)
+                                    if proj_id_str not in stored_project_data:
+                                        stored_project_data[proj_id_str] = proj_data
+                                    if proj_id not in stored_project_data:
+                                        stored_project_data[proj_id] = proj_data
+                        except Exception as e:
+                            self.logger.warning(f"⚠️ Error checking current user's connection: {str(e)}")
+                    
+                    total_found = len(stored_project_data)
+                    self.logger.info(f"📊 Total stored projects found: {total_found} (checked {len(checked_connections)} connections)")
+                else:
+                    self.logger.warning("⚠️ Jira application not found in database")
+            except Exception as e:
+                self.logger.warning(f"Error loading stored project data: {str(e)}")
+                # Continue without stored data - will use basic project info
+            
             projects = []
             for assignment in project_assignments:
-                # Get assigned users details
-                assigned_users = assignment.get_assigned_users()
-                assigned_users_details = []
-                
-                for assigned_user in assigned_users:
-                    assigned_users_details.append({
-                        'id': assigned_user.UserId,
-                        'username': assigned_user.UserName,
-                        'email': assigned_user.Email,
-                        'full_name': assigned_user.get_full_name()
-                    })
-                
                 # Check if current user is assigned to this project
                 is_user_assigned = assignment.is_user_assigned(user_id)
                 
                 if is_user_assigned:
-                    projects.append({
+                    # Get assigned users details
+                    assigned_users = assignment.get_assigned_users()
+                    assigned_users_details = []
+                    
+                    for assigned_user in assigned_users:
+                        assigned_users_details.append({
+                            'id': assigned_user.UserId,
+                            'username': assigned_user.UserName,
+                            'email': assigned_user.Email,
+                            'full_name': assigned_user.get_full_name()
+                        })
+                    
+                    # Get stored project data (full details + issues)
+                    project_id = assignment.project_id
+                    project_id_str = str(project_id)
+                    
+                    # Try to find stored data (check both string and original key)
+                    stored_data = stored_project_data.get(project_id_str, {})
+                    if not stored_data:
+                        stored_data = stored_project_data.get(project_id, {})
+                    if not stored_data and stored_project_data:
+                        # Try to find by matching project_id as string in any key
+                        for key, value in stored_project_data.items():
+                            if str(key) == project_id_str or str(key) == str(project_id):
+                                stored_data = value
+                                break
+                    
+                    # Build project response with stored data
+                    project_response = {
                         'id': assignment.id,
-                        'project_id': assignment.project_id,
+                        'project_id': project_id,
                         'project_name': assignment.project_name,
                         'project_key': assignment.project_key,
-                        'project_details': assignment.project_details,
+                        'project_details': assignment.project_details,  # Basic project info
                         'assigned_users': assigned_users_details,
                         'assigned_users_count': assignment.get_assigned_users_count(),
                         'list_type': assignment.list_type,
@@ -99,7 +218,43 @@ class StreamlineManager:
                         'created_at': assignment.created_at.isoformat(),
                         'updated_at': assignment.updated_at.isoformat(),
                         'is_current_user_assigned': True
-                    })
+                    }
+                    
+                    # Add stored full details and issues if available
+                    if stored_data:
+                        full_details = stored_data.get('full_details', {})
+                        if full_details:
+                            project_response['full_project_details'] = full_details.get('project', {})
+                            project_response['components'] = full_details.get('components', [])
+                            project_response['versions'] = full_details.get('versions', [])
+                            
+                            # Add issues/tasks
+                            issues_data = full_details.get('issues', {})
+                            if issues_data:
+                                issues = issues_data.get('issues', [])
+                                project_response['issues'] = issues
+                                project_response['issues_total'] = issues_data.get('total', len(issues))
+                                project_response['has_issues'] = len(issues) > 0
+                                self.logger.info(f"✅ Loaded stored data for project {project_id_str}: {len(issues)} issues, {len(full_details.get('components', []))} components")
+                            else:
+                                project_response['issues'] = []
+                                project_response['issues_total'] = 0
+                                project_response['has_issues'] = False
+                                self.logger.warning(f"⚠️ Stored data found for project {project_id_str} but no issues in full_details")
+                            
+                            project_response['data_fetched_at'] = stored_data.get('fetched_at')
+                        else:
+                            project_response['issues'] = []
+                            project_response['issues_total'] = 0
+                            project_response['has_issues'] = False
+                    else:
+                        # No stored data - return empty issues
+                        project_response['issues'] = []
+                        project_response['issues_total'] = 0
+                        project_response['has_issues'] = False
+                        self.logger.warning(f"❌ No stored data found for project {project_id_str} (searched in {len(stored_project_data)} stored projects)")
+                    
+                    projects.append(project_response)
             
             self.logger.info(f"Found {len(projects)} projects assigned to user {user_id}")
             
@@ -117,6 +272,8 @@ class StreamlineManager:
             
         except Exception as e:
             self.logger.error(f"Error getting user assigned projects: {str(e)}")
+            import traceback
+            self.logger.error(traceback.format_exc())
             return {
                 'success': False,
                 'error': str(e)
@@ -131,7 +288,7 @@ class StreamlineManager:
             project_id (str): Project ID
             
         Returns:
-            dict: Detailed project information
+            dict: Detailed project information including stored issues/tasks when available
         """
         try:
             # Convert user_id to integer if it's a string
@@ -177,6 +334,7 @@ class StreamlineManager:
                     'full_name': assigned_user.get_full_name()
                 })
             
+            # Base project details (from UsersProjectList)
             project_details = {
                 'id': assignment.id,
                 'project_id': assignment.project_id,
@@ -195,7 +353,91 @@ class StreamlineManager:
                 'updated_at': assignment.updated_at.isoformat(),
                 'is_current_user_assigned': True
             }
-            
+
+            # Try to enrich with stored Jira project data (full details + issues)
+            try:
+                from ...models import ExternalApplication, ExternalApplicationConnection
+                from .jira import decrypt_projects_data
+
+                project_id_str = str(assignment.project_id)
+
+                # Find Jira application
+                jira_app = ExternalApplication.objects.filter(
+                    icon_class__in=['fas fa-tasks', 'fab fa-jira'],
+                    category='Project Management',
+                    type='Issue Tracking'
+                ).first()
+
+                if jira_app:
+                    # Use the connection of the user who assigned the project
+                    assigned_by_user = assignment.assigned_by
+                    connection = ExternalApplicationConnection.objects.filter(
+                        application=jira_app,
+                        user=assigned_by_user,
+                        connection_status='active'
+                    ).first()
+
+                    if connection:
+                        projects_data = decrypt_projects_data(connection) or {}
+                        project_details_dict = projects_data.get('project_details', {})
+
+                        # Look up stored project data (check string and original key)
+                        stored_data = project_details_dict.get(project_id_str) or project_details_dict.get(assignment.project_id)
+                        if not stored_data and project_details_dict:
+                            for key, value in project_details_dict.items():
+                                if str(key) == project_id_str or str(key) == str(assignment.project_id):
+                                    stored_data = value
+                                    break
+
+                        if stored_data:
+                            full_details = stored_data.get('full_details', {})
+                            if full_details:
+                                project_details['full_project_details'] = full_details.get('project', {})
+                                project_details['components'] = full_details.get('components', [])
+                                project_details['versions'] = full_details.get('versions', [])
+
+                                issues_data = full_details.get('issues', {})
+                                if issues_data:
+                                    issues = issues_data.get('issues', [])
+                                    project_details['issues'] = issues
+                                    project_details['issues_total'] = issues_data.get('total', len(issues))
+                                    project_details['has_issues'] = len(issues) > 0
+                                else:
+                                    project_details['issues'] = []
+                                    project_details['issues_total'] = 0
+                                    project_details['has_issues'] = False
+
+                                project_details['data_fetched_at'] = stored_data.get('fetched_at')
+                                self.logger.info(
+                                    f"Loaded stored project details for user {user_id}, project {project_id_str}: "
+                                    f"{len(project_details.get('issues', []))} issues"
+                                )
+                            else:
+                                project_details['issues'] = []
+                                project_details['issues_total'] = 0
+                                project_details['has_issues'] = False
+                        else:
+                            # No stored data for this project
+                            project_details['issues'] = []
+                            project_details['issues_total'] = 0
+                            project_details['has_issues'] = False
+                    else:
+                        # No connection found; return base details only
+                        project_details['issues'] = []
+                        project_details['issues_total'] = 0
+                        project_details['has_issues'] = False
+                else:
+                    # No Jira application found
+                    project_details['issues'] = []
+                    project_details['issues_total'] = 0
+                    project_details['has_issues'] = False
+            except Exception as e:
+                # If enrichment fails, still return base project details
+                self.logger.warning(f"Error enriching project details with stored Jira data: {str(e)}")
+                project_details.setdefault('issues', [])
+                project_details.setdefault('issues_total', 0)
+                project_details.setdefault('has_issues', False)
+
             self.logger.info(f"Retrieved project details for user {user_id}, project {project_id}")
             
             return {

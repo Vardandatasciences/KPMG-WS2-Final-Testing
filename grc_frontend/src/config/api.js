@@ -754,7 +754,8 @@ export const API_ENDPOINTS = {
   CHANGE_MGMT_SCAN_DOWNLOADS: `${API_BASE_URL}/api/change-management/scan-downloads/`,
   CHANGE_MGMT_DOCUMENT_INFO: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/document-info/`,
   CHANGE_MGMT_AUTO_CHECK_ALL: `${API_BASE_URL}/api/change-management/auto-check-frameworks/`,
-  CHANGE_MGMT_START_ANALYSIS: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/start-analysis/`
+  CHANGE_MGMT_START_ANALYSIS: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/start-analysis/`,
+  CHANGE_MGMT_CANCEL_ANALYSIS: (frameworkId) => `${API_BASE_URL}/api/change-management/framework/${frameworkId}/cancel-analysis/`
 };
  
 // Axios instance configuration with JWT authentication

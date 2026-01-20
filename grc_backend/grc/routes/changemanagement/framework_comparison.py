@@ -24,6 +24,62 @@ from rest_framework.permissions import AllowAny
 logger = logging.getLogger(__name__)
 
 
+def _set_cancel_requested(framework_obj, document_name: str = None, amendment_date: str = None) -> bool:
+    """
+    Mark latest matching amendment as cancel_requested=True.
+    Returns True if a record was updated.
+    """
+    amendments = framework_obj.Amendment if framework_obj.Amendment else []
+    if not isinstance(amendments, list) or not amendments:
+        return False
+
+    # Prefer latest amendment; optionally ensure it matches by document_name/date.
+    idx_to_update = len(amendments) - 1
+    if document_name or amendment_date:
+        for idx in range(len(amendments) - 1, -1, -1):
+            a = amendments[idx] or {}
+            if amendment_date and a.get('amendment_date') == amendment_date:
+                idx_to_update = idx
+                break
+            if document_name and a.get('document_name') == document_name:
+                idx_to_update = idx
+                break
+
+    amendments[idx_to_update] = amendments[idx_to_update] or {}
+    amendments[idx_to_update]['cancel_requested'] = True
+    framework_obj.Amendment = amendments
+    framework_obj.save(update_fields=['Amendment'])
+    return True
+
+
+def _is_cancel_requested(framework_id, document_name: str = None, amendment_date: str = None) -> bool:
+    """
+    Check whether cancel_requested has been set for the latest matching amendment.
+    """
+    try:
+        framework_obj = Framework.objects.get(FrameworkId=framework_id)
+    except Exception:
+        return False
+
+    amendments = framework_obj.Amendment if framework_obj.Amendment else []
+    if not isinstance(amendments, list) or not amendments:
+        return False
+
+    # Prefer latest amendment; optionally ensure it matches by document_name/date.
+    for a in reversed(amendments):
+        if not isinstance(a, dict):
+            continue
+        if amendment_date and a.get('amendment_date') != amendment_date:
+            continue
+        if document_name and a.get('document_name') != document_name:
+            continue
+        return bool(a.get('cancel_requested'))
+
+    # Fallback to latest amendment
+    latest = amendments[-1]
+    return bool(latest.get('cancel_requested')) if isinstance(latest, dict) else False
+
+
 def _call_openai_for_compliance_matching(amendment_compliance: dict, db_compliances: list, framework_name: str) -> dict:
     """Use OpenAI to match an amendment compliance against database compliances"""
     try:
@@ -1827,6 +1883,26 @@ def start_amendment_analysis(request, framework_id):
                 from .amendment_processor import process_downloaded_amendment
                 
                 logger.info(f"[Background] Starting processing for framework {framework_id}")
+
+                # If cancel was requested before we even start, exit early.
+                if _is_cancel_requested(framework_id, document_name=document_name, amendment_date=amendment_date_str):
+                    logger.info(f"[Background] Cancel requested before processing started (framework {framework_id}). Exiting.")
+                    try:
+                        framework_obj_local = Framework.objects.get(FrameworkId=framework_id)
+                        existing = framework_obj_local.Amendment if framework_obj_local.Amendment else []
+                        if not isinstance(existing, list):
+                            existing = []
+                        for a in existing:
+                            if isinstance(a, dict) and a.get('document_name') == document_name:
+                                a['processed'] = False
+                                a['processing_error'] = 'Cancelled by user'
+                                a['cancelled'] = True
+                                break
+                        framework_obj_local.Amendment = existing
+                        framework_obj_local.save(update_fields=['Amendment'])
+                    except Exception:
+                        pass
+                    return
                 
                 processing_result = process_downloaded_amendment(
                     pdf_path=document_path,
@@ -1924,6 +2000,37 @@ def start_amendment_analysis(request, framework_id):
                     framework_obj.latestComparisionCheckDate = timezone.now().date()
                     framework_obj.save(update_fields=['Amendment', 'latestAmmendmentDate', 'latestComparisionCheckDate'])
                     
+                    # ---- Debug printing of what was generated (can be large) ----
+                    try:
+                        from django.conf import settings as dj_settings
+                        dump_full = getattr(dj_settings, 'PRINT_AMENDMENT_OUTPUT', False)
+                    except Exception:
+                        dump_full = False
+                    
+                    try:
+                        extraction_summary = amendment_data.get('extraction_summary', {}) or {}
+                        sections = amendment_data.get('sections', []) or []
+                        total_policies = extraction_summary.get('total_policies')
+                        total_subpolicies = extraction_summary.get('total_subpolicies')
+                        total_compliances = extraction_summary.get('total_compliance_records')
+                        logger.info(
+                            "[Background] Amendment generated summary | framework_id=%s | sections=%s | policies=%s | subpolicies=%s | compliances=%s",
+                            framework_id,
+                            len(sections),
+                            total_policies,
+                            total_subpolicies,
+                            total_compliances,
+                        )
+                        
+                        # Print EVERYTHING only if explicitly enabled (avoid huge logs by default)
+                        if dump_full:
+                            import json as _json
+                            logger.info("[Background] FULL amendment output (framework_id=%s): %s", framework_id, _json.dumps(amendment_data, ensure_ascii=False))
+                        else:
+                            logger.info("[Background] (Skipping full output dump) To enable full dump set PRINT_AMENDMENT_OUTPUT=True in Django settings.")
+                    except Exception as e:
+                        logger.warning("[Background] Failed to log amendment output summary: %s", e)
+                    
                     logger.info(f"[Background] Successfully processed and saved amendment to database for framework {framework_id}")
                 else:
                     logger.error(f"[Background] Amendment processing failed for framework {framework_id}: {processing_result.get('error')}")
@@ -1992,6 +2099,42 @@ def start_amendment_analysis(request, framework_id):
             'success': False,
             'error': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def cancel_amendment_analysis(request, framework_id):
+    """
+    Request cancellation of the currently running background analysis.
+    NOTE: This does not kill an in-flight AI HTTP request, but the processor will stop
+    before the next section/subpolicy once it sees cancel_requested=True.
+    """
+    try:
+        framework_obj = Framework.objects.get(FrameworkId=framework_id)
+        amendments = framework_obj.Amendment if framework_obj.Amendment else []
+        if not isinstance(amendments, list) or not amendments:
+            return Response({'success': False, 'error': 'No amendments found to cancel'}, status=status.HTTP_404_NOT_FOUND)
+
+        latest = amendments[-1] if isinstance(amendments[-1], dict) else {}
+        document_name = latest.get('document_name')
+        amendment_date = latest.get('amendment_date')
+
+        updated = _set_cancel_requested(framework_obj, document_name=document_name, amendment_date=amendment_date)
+        if not updated:
+            return Response({'success': False, 'error': 'Unable to set cancel request'}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            'success': True,
+            'message': 'Cancel requested. Processing will stop shortly.',
+            'framework_id': framework_id
+        }, status=status.HTTP_200_OK)
+    except Framework.DoesNotExist:
+        return Response({'success': False, 'error': f'Framework with ID {framework_id} not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        logger.error(f"Error cancelling amendment analysis: {str(e)}")
+        return Response({'success': False, 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['GET'])
@@ -2128,7 +2271,11 @@ def get_amendment_document_info(request, framework_id):
                     'downloaded_date': document_info.get('downloaded_date'),
                     'processed': document_info.get('processed', False),
                     'processed_date': document_info.get('processed_date'),
-                    'extraction_summary': document_info.get('extraction_summary', {})
+                    'extraction_summary': document_info.get('extraction_summary', {}),
+                    # If background processing failed, surface error so frontend can show it.
+                    'processing_error': document_info.get('processing_error'),
+                    'cancel_requested': document_info.get('cancel_requested', False),
+                    'cancelled': document_info.get('cancelled', False),
                 }
             }, status=status.HTTP_200_OK)
         else:
