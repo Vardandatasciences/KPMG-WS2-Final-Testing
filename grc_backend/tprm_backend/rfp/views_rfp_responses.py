@@ -2110,13 +2110,18 @@ def get_rfp_details(request):
         
         # Prepare response data
         logger.info(f'[get_rfp_details] Preparing response data - response_fields present: {response_fields is not None}, evaluation_criteria count: {len(evaluation_criteria)}')
+        # Helper: return decrypted value if encryption is enabled for the field
+        def _plain(obj, field_name):
+            plain_attr = f"{field_name}_plain"
+            return getattr(obj, plain_attr, getattr(obj, field_name, None))
+
         response_data = {
             'success': True,
             'rfp': {
                 'rfp_id': rfp.rfp_id,
-                'rfp_title': rfp.rfp_title,
-                'rfp_number': rfp.rfp_number,
-                'description': rfp.description,
+                'rfp_title': _plain(rfp, 'rfp_title'),
+                'rfp_number': _plain(rfp, 'rfp_number'),
+                'description': _plain(rfp, 'description'),
                 'rfp_type': rfp_type_value,
                 'category': getattr(rfp, 'category', None),
                 'submission_deadline': rfp.submission_deadline.isoformat() if rfp.submission_deadline else None,
@@ -2243,13 +2248,18 @@ def get_open_rfp_details(request, rfp_number):
             logger.warning(f'[get_open_rfp_details] RFP {rfp.rfp_number} has no rfp_type set (rfp_type is None or empty)')
         
         logger.info(f'[get_open_rfp_details] Preparing response - response_fields present: {response_fields is not None}')
+        # Helper: return decrypted value if encryption is enabled for the field
+        def _plain(obj, field_name):
+            plain_attr = f"{field_name}_plain"
+            return getattr(obj, plain_attr, getattr(obj, field_name, None))
+
         response_data = {
             'success': True,
             'rfp': {
                 'rfp_id': rfp.rfp_id,
-                'rfp_title': rfp.rfp_title,
-                'rfp_number': rfp.rfp_number,
-                'description': rfp.description,
+                'rfp_title': _plain(rfp, 'rfp_title'),
+                'rfp_number': _plain(rfp, 'rfp_number'),
+                'description': _plain(rfp, 'description'),
                 'rfp_type': rfp_type_value,
                 'submission_deadline': rfp.submission_deadline.isoformat() if rfp.submission_deadline else None,
                 'estimated_value': float(rfp.estimated_value) if rfp.estimated_value else None,
