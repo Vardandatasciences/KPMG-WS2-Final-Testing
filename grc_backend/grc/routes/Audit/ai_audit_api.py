@@ -30,6 +30,7 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.views import APIView
 from django.core.files.base import ContentFile
 from rest_framework.response import Response
 from ...rbac.permissions import AuditConductPermission, AuditReviewPermission
@@ -347,12 +348,19 @@ def cleanup_ai_audit_temp_files(document_id, doc_id=None):
         return []
 
 @method_decorator(csrf_exempt, name='dispatch')
-class AIAuditDocumentUploadView(View):
+class AIAuditDocumentUploadView(APIView):
     """AI Audit Document Upload API - Single clean implementation"""
+    
+    parser_classes = [MultiPartParser, FormParser]
+    authentication_classes = []  # Handle auth manually via JWT
+    permission_classes = []  # Handle permissions manually
     
     def post(self, request, audit_id):
         """Upload document for AI audit processing"""
         try:
+            # Log content type early to debug parser issues
+            logger.info(f"📤 Request Content-Type: {request.content_type}")
+            logger.info(f"📤 Request META CONTENT_TYPE: {request.META.get('CONTENT_TYPE', 'N/A')}")
             print("=" * 80)
             print("AI AUDIT UPLOAD ENDPOINT CALLED - NEW CODE VERSION")
             print(f"Upload request for audit {audit_id}")
@@ -685,13 +693,63 @@ class AIAuditDocumentUploadView(View):
                 logger.info(f"📤 Creating metadata record for already uploaded file: {file_name}")
             else:
                 # Get uploaded file for new uploads
-                if 'file' not in request.FILES:
-                    return JsonResponse({
-                        'success': False,
-                        'error': 'No file provided'
-                    }, status=400)
+                # Debug: Log request details
+                logger.info(f"📤 Request method: {request.method}")
+                logger.info(f"📤 Content-Type: {request.content_type}")
+                logger.info(f"📤 Has request.data: {hasattr(request, 'data')}")
+                logger.info(f"📤 request.data keys: {list(request.data.keys()) if hasattr(request, 'data') else 'N/A'}")
+                logger.info(f"📤 request.FILES keys: {list(request.FILES.keys())}")
+                logger.info(f"📤 request.POST keys: {list(request.POST.keys())}")
+                logger.info(f"📤 Has request.FILES: {hasattr(request, 'FILES')}")
+                logger.info(f"📤 request.FILES: {dict(request.FILES) if hasattr(request, 'FILES') else 'N/A'}")
                 
-                file = request.FILES['file']
+                # Try to access request.data to trigger parser if needed
+                if hasattr(request, 'data'):
+                    logger.info(f"📤 request.data type: {type(request.data)}")
+                    # Check if file is in request.data (DRF sometimes puts files there)
+                    if 'file' in request.data:
+                        logger.info(f"📤 Found file in request.data!")
+                
+                # Check if file is in FILES
+                if 'file' not in request.FILES:
+                    # Additional check: maybe the file is being sent with a different key
+                    available_files = list(request.FILES.keys())
+                    logger.error(f"❌ File not found in request.FILES. Available keys: {available_files}")
+                    logger.error(f"❌ Request content type: {request.content_type}")
+                    logger.error(f"❌ Request META CONTENT_TYPE: {request.META.get('CONTENT_TYPE', 'N/A')}")
+                    
+                    # Try to get file with different possible keys from FILES
+                    file = None
+                    for possible_key in ['file', 'document', 'upload', 'file_upload']:
+                        if possible_key in request.FILES:
+                            file = request.FILES[possible_key]
+                            logger.info(f"📤 Found file with key '{possible_key}': {file.name}")
+                            break
+                    
+                    # Also check request.data (DRF parser might put files there)
+                    if not file and hasattr(request, 'data'):
+                        for possible_key in ['file', 'document', 'upload', 'file_upload']:
+                            if possible_key in request.data:
+                                file_obj = request.data[possible_key]
+                                # Check if it's a file-like object
+                                if hasattr(file_obj, 'read') or hasattr(file_obj, 'name'):
+                                    file = file_obj
+                                    logger.info(f"📤 Found file in request.data with key '{possible_key}': {getattr(file, 'name', 'unknown')}")
+                                    break
+                    
+                    if not file:
+                        return JsonResponse({
+                            'success': False,
+                            'error': 'No file provided. Please ensure the file is included in the upload request.',
+                            'debug_info': {
+                                'content_type': request.content_type,
+                                'available_files': available_files,
+                                'request_method': request.method
+                            }
+                        }, status=400)
+                else:
+                    file = request.FILES['file']
+                
                 logger.info(f"📤 Uploading file: {file.name} ({file.size} bytes)")
                 
                 # Generate unique file ID and path
@@ -4770,7 +4828,8 @@ def _check_document_compliance_internal(audit_id, document_id, user_id=None, sel
                                     try:
                                         from .reviewing import create_incidents_for_findings
                                         logger.info(f"🔍 Creating incidents for non-compliant findings in AI audit {audit_id}")
-                                        create_incidents_for_findings(int(audit_id) if str(audit_id).isdigit() else audit_id)
+                                        # tenant_id is already retrieved above (line 4775-4778)
+                                        create_incidents_for_findings(int(audit_id) if str(audit_id).isdigit() else audit_id, tenant_id)
                                         logger.info(f"✅ Successfully created incidents for AI audit {audit_id}")
                                     except Exception as incident_err:
                                         logger.error(f"❌ Failed to create incidents for AI audit {audit_id}: {incident_err}")

@@ -516,14 +516,25 @@ Return JSON now:"""
         # No fallback - raise the exception so caller can handle it
         raise
 
-def create_incidents_for_findings(audit_id: int) -> None:
+def create_incidents_for_findings(audit_id: int, tenant_id: int = None) -> None:
     """
     Create incidents for non-compliant and partially compliant audit findings.
     For AI audits (AuditType = 'A'), uses AI to generate comprehensive incident fields.
     For regular audits, creates incidents with basic fields only.
+    MULTI-TENANCY: Requires tenant_id parameter for data isolation
     """
     try:
         with connection.cursor() as cursor:
+            # If tenant_id not provided, get it from audit record
+            if tenant_id is None:
+                cursor.execute("SELECT TenantId FROM audit WHERE AuditId = %s", [audit_id])
+                tenant_row = cursor.fetchone()
+                if tenant_row:
+                    tenant_id = tenant_row[0]
+                else:
+                    print(f"ERROR: Could not find audit {audit_id} or determine tenant_id")
+                    return
+            
             # Get audit information including AuditType
             cursor.execute("""
                 SELECT Title, Scope, Objective, BusinessUnit, FrameworkId, AuditType
@@ -568,16 +579,22 @@ def create_incidents_for_findings(audit_id: int) -> None:
                     c.PossibleDamage,
                     c.Mitigation
                 FROM audit_findings af
-                JOIN compliance c ON af.ComplianceId = c.ComplianceId
+                JOIN compliance c ON af.ComplianceId = c.ComplianceId AND c.TenantId = %s
                 JOIN audit a ON af.AuditId = a.AuditId
-                WHERE af.AuditId = %s AND a.TenantId = %s
+                WHERE af.AuditId = %s AND af.TenantId = %s AND a.TenantId = %s
                 AND (
                     (af.Check = '0') OR  -- Not Compliant
                     (af.Check = '1')     -- Partially Compliant
                 )
-            """, [audit_id, tenant_id])
+            """, [tenant_id, audit_id, tenant_id, tenant_id])
             
             findings = cursor.fetchall()
+            
+            print(f"🔍 DEBUG: Found {len(findings)} non-compliant/partially compliant findings for audit {audit_id}")
+            if len(findings) == 0:
+                print(f"ℹ️ INFO: No findings with Check='0' or Check='1' found. No incidents will be created.")
+                print(f"   Only findings with Check='0' (Not Compliant) or Check='1' (Partially Compliant) create incidents.")
+                return
             
             current_datetime = timezone.now()
             current_date = current_datetime.date()
@@ -604,12 +621,12 @@ def create_incidents_for_findings(audit_id: int) -> None:
                 possible_damage = finding[16] or ''
                 mitigation = finding[17] or ''
                 
-                # Check if incident already exists for this finding
+                # Check if incident already exists for this finding (with tenant check)
                 cursor.execute("""
                     SELECT COUNT(*) 
                     FROM incidents 
-                    WHERE AuditId = %s AND ComplianceId = %s
-                """, [audit_id, compliance_id])
+                    WHERE AuditId = %s AND ComplianceId = %s AND TenantId = %s
+                """, [audit_id, compliance_id, tenant_id])
                 
                 if cursor.fetchone()[0] > 0:
                     print(f"Incident already exists for AuditId {audit_id} and ComplianceId {compliance_id}")
@@ -683,9 +700,10 @@ def create_incidents_for_findings(audit_id: int) -> None:
                                 ControlFailures,
                                 LessonsLearned,
                                 IncidentClassification,
-                                IdentifiedAt
+                                IdentifiedAt,
+                                TenantId
                             ) VALUES (
-                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                             )
                         """, [
                             ai_generated_fields.get('IncidentTitle', f"Non-Compliance of {compliance_title}"),
@@ -713,8 +731,31 @@ def create_incidents_for_findings(audit_id: int) -> None:
                             ai_generated_fields.get('ControlFailures'),
                             ai_generated_fields.get('LessonsLearned'),
                             ai_generated_fields.get('IncidentClassification'),
-                            current_datetime
+                            current_datetime,
+                            tenant_id  # MULTI-TENANCY: Add tenant_id
                         ])
+                        
+                        # Verify the incident was created with correct Origin
+                        cursor.execute("""
+                            SELECT IncidentId, Origin, Status, AuditId, ComplianceId 
+                            FROM incidents 
+                            WHERE AuditId = %s AND ComplianceId = %s AND TenantId = %s
+                            ORDER BY IncidentId DESC 
+                            LIMIT 1
+                        """, [audit_id, compliance_id, tenant_id])
+                        
+                        created_incident = cursor.fetchone()
+                        if created_incident:
+                            created_incident_id = created_incident[0]
+                            created_origin = created_incident[1]
+                            created_status = created_incident[2]
+                            print(f"✅ Created comprehensive incident {created_incident_id} for ComplianceId {compliance_id} in AI audit {audit_id} with AI-generated fields")
+                            print(f"   ✅ Verified Origin: '{created_origin}' (expected: 'Audit Finding')")
+                            print(f"   ✅ Verified Status: '{created_status}'")
+                            if created_origin != "Audit Finding":
+                                print(f"   ❌ ERROR: Origin mismatch! Expected 'Audit Finding' but got '{created_origin}'")
+                        else:
+                            print(f"   ⚠️ WARNING: Could not verify incident creation")
                         
                         print(f"✅ Created comprehensive incident for ComplianceId {compliance_id} in AI audit {audit_id} with AI-generated fields")
                     except Exception as ai_err:
@@ -726,12 +767,23 @@ def create_incidents_for_findings(audit_id: int) -> None:
                         continue
                 else:
                     # For non-AI audits, use basic fields only (no AI generation)
+                    origin_value = "Audit Finding"  # Ensure Origin is explicitly set
+                    status_value = "Open"
+                    
+                    print(f"🔍 DEBUG: Creating incident for non-AI audit:")
+                    print(f"   AuditId: {audit_id}, ComplianceId: {compliance_id}")
+                    print(f"   Origin will be set to: '{origin_value}'")
+                    print(f"   Status will be set to: '{status_value}'")
+                    print(f"   tenant_id: {tenant_id}")
+                    print(f"   Check status: {check_status} (0=Not Compliant, 1=Partially Compliant)")
+                    
                     cursor.execute("""
                         INSERT INTO incidents (
                             IncidentTitle,
                             Description,
                             PossibleDamage,
                             Mitigation,
+                            FrameworkId,
                             AuditId,
                             ComplianceId,
                             Date,
@@ -739,31 +791,59 @@ def create_incidents_for_findings(audit_id: int) -> None:
                             UserId,
                             Origin,
                             Comments,
-                            Status
+                            Status,
+                            TenantId
                         ) VALUES (
-                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                         )
                     """, [
                         f"Non-Compliance of {compliance_title}",
                         compliance_desc,
                         possible_damage,
                         mitigation_value,
+                        framework_id,
                         audit_id,
                         compliance_id,
                         current_date,
                         current_time,
                         user_id,
-                        "Audit Finding",
+                        origin_value,  # Use variable to ensure correct value
                         comments,
-                        "Open"
+                        status_value,
+                        tenant_id  # MULTI-TENANCY: Add tenant_id
                     ])
+                    
+                    # Verify the incident was created with correct Origin
+                    cursor.execute("""
+                        SELECT IncidentId, Origin, Status, AuditId, ComplianceId 
+                        FROM incidents 
+                        WHERE AuditId = %s AND ComplianceId = %s AND TenantId = %s
+                        ORDER BY IncidentId DESC 
+                        LIMIT 1
+                    """, [audit_id, compliance_id, tenant_id])
+                    
+                    created_incident = cursor.fetchone()
+                    if created_incident:
+                        created_incident_id = created_incident[0]
+                        created_origin = created_incident[1]
+                        created_status = created_incident[2]
+                        print(f"✅ Created incident {created_incident_id} for ComplianceId {compliance_id} in AuditId {audit_id}")
+                        print(f"   ✅ Verified Origin: '{created_origin}' (expected: 'Audit Finding')")
+                        print(f"   ✅ Verified Status: '{created_status}'")
+                        if created_origin != "Audit Finding":
+                            print(f"   ❌ ERROR: Origin mismatch! Expected 'Audit Finding' but got '{created_origin}'")
+                    else:
+                        print(f"   ⚠️ WARNING: Could not verify incident creation")
                     
                     print(f"✅ Created incident for ComplianceId {compliance_id} in AuditId {audit_id}")
                 
     except Exception as e:
-        print(f"Error creating incidents: {str(e)}")
+        print(f"❌ ERROR creating incidents for audit {audit_id}: {str(e)}")
+        print(f"   Error type: {type(e).__name__}")
         import traceback
         traceback.print_exc()
+        # Re-raise to ensure calling function knows about the error
+        raise
 @csrf_exempt
 @api_view(['POST'])
 @authentication_classes([CsrfExemptSessionAuthentication, BasicAuthentication])
@@ -1487,7 +1567,7 @@ def update_audit_review_status(request, audit_id):
                 
                 # Create incidents for non-compliant and partially compliant findings
                 print(f"DEBUG: Creating incidents for non-compliant findings in audit {audit_id}")
-                create_incidents_for_findings(audit_id)
+                create_incidents_for_findings(audit_id, tenant_id)
                 
             except Exception as e:
                 print(f"ERROR: Exception while updating lastchecklistitemverified table: {str(e)}")

@@ -57,12 +57,29 @@ class EncryptedFieldsMixin:
         Override save to encrypt sensitive fields before storing.
         Handles both new data and updates, with backward compatibility.
         """
+        # CRITICAL: If update_fields contains ONLY password fields, skip ALL encryption
+        # This prevents interference when updating passwords
+        update_fields = kwargs.get('update_fields')
+        if update_fields:
+            password_field_names_check = [
+                'password', 'Password', 'user_password', 'userPassword',
+                'OldPassword', 'NewPassword', 'old_password', 'new_password'
+            ]
+            # If all update_fields are password fields, skip encryption entirely
+            if all(field in password_field_names_check for field in update_fields):
+                logger.info(f"Skipping encryption for password-only update on {self.__class__.__name__}")
+                return super().save(*args, **kwargs)
+        
         # Get list of fields to encrypt for this model
         encrypted_fields = self.get_encrypted_fields()
         
         # CRITICAL: Never encrypt password fields - they must be hashed, not encrypted!
         # Passwords should use Django's password hashing (PBKDF2, bcrypt, etc.), not encryption
-        password_field_names = ['password', 'Password', 'user_password', 'userPassword']
+        password_field_names = [
+            'password', 'Password', 'user_password', 'userPassword',
+            'OldPassword', 'NewPassword',  # PasswordLog fields - already hashed
+            'old_password', 'new_password'  # Alternative naming conventions
+        ]
         
         if encrypted_fields:
             # Encrypt each field if it has a value and isn't already encrypted

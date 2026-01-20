@@ -423,6 +423,7 @@ class ForgotPasswordService:
             from django.contrib.auth.hashers import make_password
             from grc.models import Users, PasswordLog
             from .password_expiry_utils import check_password_history, get_password_history_count
+            from django.core.cache import cache
             
             try:
                 user = Users.objects.get(UserId=otp_validation['user_id'])
@@ -444,9 +445,48 @@ class ForgotPasswordService:
                 user.Password = make_password(new_password)
                 user.save(update_fields=['Password'])
                 
+                # ========================================
+                # CRITICAL: Clear account lockout cache after successful password reset
+                # This allows the user to login immediately with the new password
+                # ========================================
+                try:
+                    # Clear lockout cache for both JWT and session login systems
+                    username_normalized = str(user.UserName).lower().strip()
+                    userid_normalized = str(user.UserId).lower().strip()
+                    
+                    # JWT login cache keys
+                    jwt_user_cache_key = f"login_failed_attempts_{username_normalized}"
+                    jwt_lockout_cache_key = f"login_locked_until_{username_normalized}"
+                    jwt_userid_cache_key = f"login_failed_attempts_{userid_normalized}"
+                    jwt_userid_lockout_cache_key = f"login_locked_until_{userid_normalized}"
+                    
+                    # Session login cache keys
+                    session_user_cache_key = f"session_login_failed_attempts_{username_normalized}"
+                    session_lockout_cache_key = f"session_login_locked_until_{username_normalized}"
+                    session_userid_cache_key = f"session_login_failed_attempts_{userid_normalized}"
+                    session_userid_lockout_cache_key = f"session_login_locked_until_{userid_normalized}"
+                    
+                    # Clear all cache entries
+                    cache.delete(jwt_user_cache_key)
+                    cache.delete(jwt_lockout_cache_key)
+                    cache.delete(jwt_userid_cache_key)
+                    cache.delete(jwt_userid_lockout_cache_key)
+                    cache.delete(session_user_cache_key)
+                    cache.delete(session_lockout_cache_key)
+                    cache.delete(session_userid_cache_key)
+                    cache.delete(session_userid_lockout_cache_key)
+                    
+                    logger.info(f"✅ Cleared account lockout cache for user {user.UserName} (ID: {user.UserId}) after password reset")
+                except Exception as cache_error:
+                    logger.warning(f"⚠️ Failed to clear lockout cache for user {user.UserName}: {str(cache_error)}")
+                    # Don't fail password reset if cache clearing fails
+                
                 # Log password reset to password_logs
                 try:
-                    PasswordLog.objects.create(
+                    logger.info(f"🔄 Attempting to create password log for user {user.UserName} (ID: {user.UserId})")
+                    logger.info(f"🔄 Password log data: UserId={user.UserId}, UserName={user.UserName}, ActionType='reset', IPAddress={ip_address}, UserAgent={user_agent[:50] if user_agent else 'None'}...")
+                    
+                    password_log = PasswordLog.objects.create(
                         UserId=user.UserId,
                         UserName=user.UserName,
                         OldPassword=old_password_hash,  # Previous hashed password
@@ -456,9 +496,24 @@ class ForgotPasswordService:
                         UserAgent=user_agent or '',
                         AdditionalInfo={'email': email, 'reset_method': 'forgot_password_service'}
                     )
-                    logger.info(f"✅ Password log created for reset: {user.UserName}")
+                    logger.info(f"✅ Password log created successfully with LogId={password_log.LogId} for user: {user.UserName}")
+                    
+                    # Verify it was saved by querying it back
+                    try:
+                        verify_log = PasswordLog.objects.filter(UserId=user.UserId, ActionType='reset').order_by('-Timestamp').first()
+                        if verify_log:
+                            logger.info(f"✅ Password log verified in database: LogId={verify_log.LogId}, Timestamp={verify_log.Timestamp}")
+                        else:
+                            logger.warning(f"⚠️ Password log not found in verification query for user {user.UserName}")
+                    except Exception as verify_error:
+                        logger.warning(f"⚠️ Failed to verify password log: {str(verify_error)}")
+                        
                 except Exception as log_error:
                     logger.error(f"❌ Failed to create password log on reset: {str(log_error)}")
+                    logger.error(f"❌ Exception type: {type(log_error).__name__}")
+                    logger.error(f"❌ Exception details: {repr(log_error)}")
+                    import traceback
+                    logger.error(f"❌ Traceback: {traceback.format_exc()}")
                     # Don't fail password reset if logging fails
                 
                 # Also log password reset to grc_logs

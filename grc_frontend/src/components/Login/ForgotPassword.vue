@@ -19,47 +19,68 @@
       </div>
       
       <div class="modal-body">
-        <!-- Step 1: Enter Email -->
+        <!-- Step 1: Enter Username/ID or Email -->
         <div v-if="currentStep === 1" class="step-content">
           <p class="step-description">
-            Enter your email address to receive a One-Time Password (OTP) for password reset.
+            Enter your username, User ID, or email address to receive a One-Time Password (OTP) for password reset.
           </p>
           
           <div class="input-group">
-            <label for="email">Email Address</label>
+            <label for="usernameInput">Username or User ID</label>
             <div class="input-wrapper">
               <div class="input-icon">
                 <svg v-if="!isLoading" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke="currentColor" stroke-width="2"/>
+                  <circle cx="12" cy="7" r="4" stroke="currentColor" stroke-width="2"/>
+                </svg>
+                <div v-else class="spinner-small"></div>
+              </div>
+              <input 
+                type="text" 
+                id="usernameInput" 
+                v-model="usernameInput" 
+                :placeholder="isLoading ? 'Fetching email and sending OTP...' : 'Enter username or User ID'"
+                required
+                :disabled="isLoading"
+                @keyup.enter="handleUsernameSubmit"
+              >
+            </div>
+          </div>
+          
+          <div class="input-group" v-if="email">
+            <label for="email">Email Address (Auto-filled)</label>
+            <div class="input-wrapper">
+              <div class="input-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" stroke="currentColor" stroke-width="2"/>
                   <polyline points="22,6 12,13 2,6" stroke="currentColor" stroke-width="2"/>
                 </svg>
-                <div v-else class="spinner-small"></div>
               </div>
               <input 
                 type="email" 
                 id="email" 
                 v-model="email" 
-                :placeholder="isLoading ? 'Fetching email...' : 'Enter your email address'"
-                required
-                :disabled="isLoading"
+                placeholder="Email will be auto-filled"
+                readonly
+                disabled
               >
             </div>
           </div>
           
           <button 
-            @click="sendOTP" 
+            @click="handleUsernameSubmit" 
             class="action-button" 
-            :disabled="isLoading || !email"
+            :disabled="isLoading || !usernameInput"
           >
             <span v-if="!isLoading" class="button-text">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M22 2H2v16h20V2zM2 22l4-4h16" stroke="currentColor" stroke-width="2"/>
               </svg>
-              Send OTP
+              {{ email ? 'Resend OTP' : 'Send OTP' }}
             </span>
             <span v-else class="loading-content">
               <div class="spinner"></div>
-              <span>Sending OTP...</span>
+              <span>{{ email ? 'Resending OTP...' : 'Sending OTP...' }}</span>
             </span>
           </button>
         </div>
@@ -330,7 +351,9 @@ const emit = defineEmits(['close'])
 
 // Reactive data
 const currentStep = ref(1)
-const email = ref('')
+const usernameInput = ref(props.username || '')
+const email = ref('') // Masked email for display
+const fullEmail = ref('') // Full email for API calls
 const otp = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
@@ -358,25 +381,53 @@ watch(() => props.showModal, (newVal) => {
         }
       })
     } else if (props.username) {
+      // If username prop is provided, use it
+      usernameInput.value = props.username
       fetchUserEmail()
     }
   }
 })
 
-// Function to fetch user email by username
-const fetchUserEmail = async () => {
-  if (!props.username) return
+// Watch usernameInput for changes
+watch(() => usernameInput.value, (newVal) => {
+  // Clear email when username changes
+  if (newVal !== props.username) {
+    email.value = ''
+  }
+})
+
+// Function to fetch user email by username and automatically send OTP
+const fetchUserEmail = async (username = null) => {
+  const usernameToUse = username || usernameInput.value || props.username
+  if (!usernameToUse) return
   
   try {
     isLoading.value = true
     errorMessage.value = ''
     
-    const response = await axiosInstance.get(API_ENDPOINTS.GET_USER_EMAIL, {
-      params: { username: props.username }
+    // Call endpoint with auto_send_otp=true to automatically fetch email AND send OTP
+    const response = await axiosInstance.post(API_ENDPOINTS.GET_USER_EMAIL, {
+      username: usernameToUse,
+      auto_send_otp: true
     })
     
     if (response.data.success) {
+      // Use masked email for display
       email.value = response.data.email
+      // Store full email for API calls
+      fullEmail.value = response.data.full_email || response.data.email
+      
+      // Check if OTP was automatically sent
+      if (response.data.otp_sent) {
+        // OTP was sent automatically, move to step 2
+        currentStep.value = 2
+        startResendCooldown()
+        console.log('✅ Email fetched and OTP sent automatically')
+      } else {
+        // Email fetched but OTP not sent (error), show error message
+        errorMessage.value = response.data.message || 'Email found but failed to send OTP. Please try again.'
+        console.warn('⚠️ Email fetched but OTP not sent:', response.data.message)
+      }
     } else {
       errorMessage.value = response.data.message || 'Could not find user with this username'
     }
@@ -390,6 +441,16 @@ const fetchUserEmail = async () => {
   } finally {
     isLoading.value = false
   }
+}
+
+// Handle username submit - fetch email and send OTP automatically
+const handleUsernameSubmit = async () => {
+  if (!usernameInput.value) {
+    errorMessage.value = 'Please enter your username or User ID'
+    return
+  }
+  
+  await fetchUserEmail(usernameInput.value)
 }
 
 // Computed properties
@@ -408,7 +469,9 @@ const closeModal = () => {
 
 const resetForm = () => {
   currentStep.value = 1
+  usernameInput.value = props.username || ''
   email.value = ''
+  fullEmail.value = ''
   otp.value = ''
   newPassword.value = ''
   confirmPassword.value = ''
@@ -434,12 +497,28 @@ const sendOTP = async () => {
     return
   }
   
+  // Check if email is masked (contains ***) - if so, we need to get full email first
+  if (email.value.includes('***')) {
+    // Email is masked, need to fetch full email using username/ID
+    if (props.username) {
+      // Re-fetch with username to get full email
+      await fetchUserEmail()
+      return
+    } else {
+      errorMessage.value = 'Please enter your username or User ID to send OTP'
+      return
+    }
+  }
+  
   try {
     isLoading.value = true
     errorMessage.value = ''
     
+    // Use full email if available, otherwise use email (might be full if manually entered)
+    const emailToUse = fullEmail.value || email.value
+    
     const response = await axiosInstance.post(API_ENDPOINTS.SEND_OTP, {
-      Email: email.value
+      Email: emailToUse
     })
     
     if (response.data.success) {
@@ -470,8 +549,11 @@ const verifyOTP = async () => {
     isLoading.value = true
     errorMessage.value = ''
     
+    // Use full email for verification
+    const emailToUse = fullEmail.value || email.value
+    
     const response = await axiosInstance.post(API_ENDPOINTS.VERIFY_OTP, {
-      Email: email.value,
+      Email: emailToUse,
       otp: otp.value
     })
     
@@ -507,8 +589,11 @@ const resetPassword = async () => {
     isLoading.value = true
     errorMessage.value = ''
     
+    // Use full email for password reset
+    const emailToUse = fullEmail.value || email.value
+    
     const response = await axiosInstance.post(API_ENDPOINTS.RESET_PASSWORD, {
-      Email: email.value,
+      Email: emailToUse,
       new_password: newPassword.value
     })
     
@@ -532,33 +617,19 @@ const resetPassword = async () => {
 const resendOTP = async () => {
   if (resendCooldown.value > 0) return
   
-  try {
-    isLoading.value = true
-    errorMessage.value = ''
-    
-    const response = await axiosInstance.post(API_ENDPOINTS.SEND_OTP, {
-      Email: email.value
-    })
-    
-    if (response.data.success) {
-      startResendCooldown()
-      errorMessage.value = 'OTP resent successfully'
-      setTimeout(() => {
-        errorMessage.value = ''
-      }, 3000)
-    } else {
-      errorMessage.value = response.data.message || 'Failed to resend OTP'
-    }
-  } catch (error) {
-    if (error.response && error.response.data) {
-      errorMessage.value = error.response.data.message || 'Failed to resend OTP'
-    } else {
-      errorMessage.value = 'Network error. Please try again.'
-    }
-    console.error('Resend OTP error:', error)
-  } finally {
-    isLoading.value = false
+  // If we have username, use it to resend (will automatically fetch email and send OTP)
+  if (usernameInput.value) {
+    await fetchUserEmail(usernameInput.value)
+    return
   }
+  
+  // Otherwise, try to send OTP with email (if not masked)
+  if (email.value && !email.value.includes('***')) {
+    await sendOTP()
+    return
+  }
+  
+  errorMessage.value = 'Please enter your username or User ID to resend OTP'
 }
 
 const startResendCooldown = () => {

@@ -37,6 +37,128 @@ def get_user_agent(request):
     return request.META.get('HTTP_USER_AGENT', '')[:500]  # Limit to 500 chars
 
 
+def link_cookie_preferences_to_user(user, session_id=None):
+    """
+    Link existing cookie preferences to a user after login.
+    This is called when a user logs in to link any anonymous preferences they may have created.
+    
+    Args:
+        user: Users model instance
+        session_id: Optional session_id to link by (if None, links recent preferences)
+    
+    Returns:
+        int: Number of preferences linked
+    """
+    if not user or not user.UserId:
+        logger.warning(f"[Cookie] Cannot link preferences: Invalid user")
+        return 0
+    
+    logger.info(f"[Cookie] ========== Linking Cookie Preferences to User {user.UserId} ==========")
+    from django.db import connection
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    try:
+        updated_count = 0
+        
+        # Strategy 1: Link by session_id if provided (most accurate)
+        # NOTE: SessionId is encrypted, so we need to use ORM to decrypt it for matching
+        if session_id:
+            logger.info(f"[Cookie] DEBUG: Attempting to link preferences by session_id: {session_id}")
+            try:
+                # Use ORM to find preferences with matching session_id (ORM handles decryption)
+                # Filter for preferences with NULL UserId and matching SessionId
+                preferences_to_link = CookiePreferences.objects.filter(
+                    UserId__isnull=True
+                )
+                
+                # Filter by session_id using ORM (which handles decryption)
+                # We need to check each one since SessionId is encrypted
+                linked_by_session = 0
+                for pref in preferences_to_link:
+                    # Compare decrypted SessionId (accessed via ORM)
+                    if pref.SessionId == session_id:
+                        # Use raw SQL to update UserId (bypasses ORM encryption issues)
+                        with connection.cursor() as cursor:
+                            cursor.execute(
+                                "UPDATE cookie_preferences SET UserId = %s, UpdatedAt = NOW() WHERE PreferenceId = %s",
+                                [user.UserId, pref.PreferenceId]
+                            )
+                            if cursor.rowcount > 0:
+                                linked_by_session += 1
+                                logger.info(f"[Cookie] ✅ DEBUG: Linked preference {pref.PreferenceId} by session_id to user {user.UserId}")
+                
+                if linked_by_session > 0:
+                    updated_count += linked_by_session
+                    logger.info(f"[Cookie] ✅ DEBUG: Linked {linked_by_session} preference(s) by session_id to user {user.UserId}")
+                else:
+                    logger.info(f"[Cookie] DEBUG: No preferences found with session_id {session_id} and NULL UserId")
+            except Exception as session_error:
+                logger.error(f"[Cookie] ❌ ERROR: Failed to link by session_id: {str(session_error)}")
+                import traceback
+                logger.error(f"[Cookie] ERROR: Traceback: {traceback.format_exc()}")
+        
+        # Strategy 2: Link most recent preferences without UserId (within last 1 hour)
+        # This catches cases where session_id might be different but user is the same
+        # ALWAYS attempt to link recent preferences, even if user already has preferences
+        # This handles cases where user accepted cookies before login
+        logger.info(f"[Cookie] DEBUG: Attempting to link recent preferences without UserId (fallback)")
+        
+        # Get the most recent preferences without UserId (within last hour)
+        # This catches preferences created just before login
+        one_hour_ago = timezone.now() - timedelta(hours=1)
+        recent_prefs = CookiePreferences.objects.filter(
+            UserId__isnull=True,
+            CreatedAt__gte=one_hour_ago
+        ).order_by('-CreatedAt')[:10]  # Increased to 10 to catch more potential matches
+        
+        if recent_prefs:
+            logger.info(f"[Cookie] DEBUG: Found {len(recent_prefs)} recent preference(s) without UserId")
+            # Update those specific preferences using raw SQL
+            pref_ids = [pref.PreferenceId for pref in recent_prefs]
+            with connection.cursor() as cursor:
+                placeholders = ','.join(['%s'] * len(pref_ids))
+                cursor.execute(
+                    f"""
+                    UPDATE cookie_preferences 
+                    SET UserId = %s, UpdatedAt = NOW() 
+                    WHERE PreferenceId IN ({placeholders})
+                    """,
+                    [user.UserId] + pref_ids
+                )
+                updated_recent = cursor.rowcount
+                if updated_recent > 0:
+                    updated_count += updated_recent
+                    logger.info(f"[Cookie] ✅ DEBUG: Linked {updated_recent} recent preference(s) (fallback) to user {user.UserId}")
+                    
+                    # Verify the update using raw SQL
+                    for pref_id in pref_ids:
+                        cursor.execute(
+                            "SELECT UserId FROM cookie_preferences WHERE PreferenceId = %s",
+                            [pref_id]
+                        )
+                        result = cursor.fetchone()
+                        if result:
+                            db_user_id = result[0]
+                            logger.info(f"[Cookie] ✅ VERIFIED: PreferenceId {pref_id} now has UserId: {db_user_id}")
+        else:
+            logger.info(f"[Cookie] DEBUG: No recent preferences found to link (fallback)")
+        
+        if updated_count > 0:
+            logger.info(f"[Cookie] ✅ DEBUG: Total linked {updated_count} preference(s) to user {user.UserId}")
+        else:
+            logger.info(f"[Cookie] DEBUG: No preferences found to link (all already have UserId or none found)")
+        
+        logger.info(f"[Cookie] ========== End Linking Cookie Preferences ==========")
+        return updated_count
+            
+    except Exception as bulk_error:
+        logger.error(f"[Cookie] ❌ ERROR: Bulk update failed: {str(bulk_error)}")
+        import traceback
+        logger.error(f"[Cookie] ERROR: Traceback: {traceback.format_exc()}")
+        return 0
+
+
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -431,14 +553,53 @@ def save_cookie_preferences(request):
                 from django.db import connection
                 try:
                     with connection.cursor() as cursor:
+                        # Update UserId using raw SQL
                         cursor.execute(
                             "UPDATE cookie_preferences SET UserId = %s, UpdatedAt = NOW() WHERE PreferenceId = %s",
                             [user.UserId, existing.PreferenceId]
                         )
                         rows_affected = cursor.rowcount
                         logger.info(f"[Cookie] ✅ DEBUG: Used raw SQL to update UserId={user.UserId} for PreferenceId={existing.PreferenceId}, rows affected: {rows_affected}")
+                        
                         if rows_affected == 0:
                             logger.error(f"[Cookie] ❌ ERROR: Raw SQL update affected 0 rows! PreferenceId={existing.PreferenceId} may not exist")
+                        else:
+                            # CRITICAL: Verify the update using raw SQL (not ORM) to ensure it was actually saved
+                            # Use a separate query to avoid any caching issues
+                            cursor.execute(
+                                "SELECT UserId FROM cookie_preferences WHERE PreferenceId = %s",
+                                [existing.PreferenceId]
+                            )
+                            result = cursor.fetchone()
+                            if result:
+                                db_user_id = result[0]
+                                logger.info(f"[Cookie] ✅ DEBUG: Verified UserId in database via raw SQL: {db_user_id}")
+                                if db_user_id != user.UserId:
+                                    logger.error(f"[Cookie] ❌ ERROR: UserId mismatch after update! Expected {user.UserId}, got {db_user_id}")
+                                    # Try one more time with explicit connection refresh
+                                    connection.ensure_connection()
+                                    cursor.execute(
+                                        "UPDATE cookie_preferences SET UserId = %s, UpdatedAt = NOW() WHERE PreferenceId = %s",
+                                        [user.UserId, existing.PreferenceId]
+                                    )
+                                    retry_rows = cursor.rowcount
+                                    logger.info(f"[Cookie] ✅ DEBUG: Re-attempted UserId update, rows affected: {retry_rows}")
+                                    
+                                    # Verify again
+                                    cursor.execute(
+                                        "SELECT UserId FROM cookie_preferences WHERE PreferenceId = %s",
+                                        [existing.PreferenceId]
+                                    )
+                                    retry_result = cursor.fetchone()
+                                    if retry_result and retry_result[0] == user.UserId:
+                                        logger.info(f"[Cookie] ✅ VERIFIED: UserId correctly saved after retry: {retry_result[0]}")
+                                    else:
+                                        logger.error(f"[Cookie] ❌ CRITICAL: Retry also failed! UserId: {retry_result[0] if retry_result else 'None'}")
+                                else:
+                                    logger.info(f"[Cookie] ✅ VERIFIED: UserId correctly saved to database: {db_user_id}")
+                            else:
+                                logger.error(f"[Cookie] ❌ ERROR: Could not verify UserId - preference not found!")
+                            
                 except Exception as sql_error:
                     logger.error(f"[Cookie] ❌ ERROR: Raw SQL update failed: {str(sql_error)}")
                     import traceback
@@ -452,55 +613,80 @@ def save_cookie_preferences(request):
             
             logger.info(f"[Cookie] DEBUG: Preference saved to database")
             
-            # Refresh from database to confirm saved values
-            existing.refresh_from_db()
             preference = existing
             
-            # CRITICAL: Verify UserId was actually saved by querying database directly
-            try:
-                db_preference = CookiePreferences.objects.get(PreferenceId=preference.PreferenceId)
-                db_user_id = db_preference.UserId.UserId if db_preference.UserId else None
-                logger.info(f"[Cookie] ✅ DEBUG: Successfully updated preference {preference.PreferenceId}")
-                logger.info(f"[Cookie] ✅ DEBUG: Final UserId in memory object: {preference.UserId.UserId if preference.UserId else 'NULL'}")
-                logger.info(f"[Cookie] ✅ DEBUG: Final UserId from database query: {db_user_id if db_user_id else 'NULL'}")
-                logger.info(f"[Cookie] ✅ DEBUG: Final SessionId: {preference.SessionId}")
-                
-                if user and db_user_id != user.UserId:
-                    logger.error(f"[Cookie] ❌ ERROR: UserId mismatch! Expected {user.UserId}, but database has {db_user_id}")
-                    # CRITICAL: Force update using raw SQL as last resort
-                    logger.warning(f"[Cookie] DEBUG: Attempting force update using raw SQL...")
+            # CRITICAL: Verify UserId was actually saved by querying database directly with raw SQL
+            # This bypasses ORM cache and encryption mixin issues
+            if user:
+                try:
                     from django.db import connection
                     with connection.cursor() as cursor:
+                        # Use raw SQL to verify - this is the most reliable way
                         cursor.execute(
-                            "UPDATE cookie_preferences SET UserId = %s WHERE PreferenceId = %s",
-                            [user.UserId, preference.PreferenceId]
+                            "SELECT UserId FROM cookie_preferences WHERE PreferenceId = %s",
+                            [preference.PreferenceId]
                         )
-                        logger.info(f"[Cookie] DEBUG: Force updated UserId={user.UserId} using raw SQL")
-                        # Verify again
-                        preference.refresh_from_db()
-                        db_preference = CookiePreferences.objects.get(PreferenceId=preference.PreferenceId)
-                        final_user_id = db_preference.UserId.UserId if db_preference.UserId else None
-                        if final_user_id == user.UserId:
-                            logger.info(f"[Cookie] ✅ VERIFIED: UserId correctly saved after force update: {final_user_id}")
+                        result = cursor.fetchone()
+                        if result:
+                            db_user_id_raw = result[0]
+                            logger.info(f"[Cookie] ✅ DEBUG: Successfully updated preference {preference.PreferenceId}")
+                            logger.info(f"[Cookie] ✅ DEBUG: Final UserId from raw SQL query: {db_user_id_raw if db_user_id_raw else 'NULL'}")
+                            
+                            if db_user_id_raw != user.UserId:
+                                logger.error(f"[Cookie] ❌ ERROR: UserId mismatch! Expected {user.UserId}, but database has {db_user_id_raw}")
+                                # CRITICAL: Force update using raw SQL as last resort
+                                logger.warning(f"[Cookie] DEBUG: Attempting force update using raw SQL...")
+                                cursor.execute(
+                                    "UPDATE cookie_preferences SET UserId = %s, UpdatedAt = NOW() WHERE PreferenceId = %s",
+                                    [user.UserId, preference.PreferenceId]
+                                )
+                                rows_updated = cursor.rowcount
+                                logger.info(f"[Cookie] DEBUG: Force updated UserId={user.UserId} using raw SQL, rows affected: {rows_updated}")
+                                
+                                # Verify again with raw SQL
+                                cursor.execute(
+                                    "SELECT UserId FROM cookie_preferences WHERE PreferenceId = %s",
+                                    [preference.PreferenceId]
+                                )
+                                verify_result = cursor.fetchone()
+                                if verify_result:
+                                    final_user_id = verify_result[0]
+                                    if final_user_id == user.UserId:
+                                        logger.info(f"[Cookie] ✅ VERIFIED: UserId correctly saved after force update: {final_user_id}")
+                                    else:
+                                        logger.error(f"[Cookie] ❌ CRITICAL: Force update failed! UserId still {final_user_id}, expected {user.UserId}")
+                                else:
+                                    logger.error(f"[Cookie] ❌ CRITICAL: Could not verify after force update!")
+                            else:
+                                logger.info(f"[Cookie] ✅ VERIFIED: UserId correctly saved to database: {db_user_id_raw}")
                         else:
-                            logger.error(f"[Cookie] ❌ CRITICAL: Force update failed! UserId still {final_user_id}, expected {user.UserId}")
-                elif user and db_user_id == user.UserId:
-                    logger.info(f"[Cookie] ✅ VERIFIED: UserId correctly saved to database: {db_user_id}")
-            except Exception as verify_error:
-                logger.error(f"[Cookie] ERROR: Could not verify UserId in database: {str(verify_error)}")
-                # If verification fails but we have a user, try force update anyway
-                if user:
-                    logger.warning(f"[Cookie] DEBUG: Verification failed, attempting force update...")
-                    try:
-                        from django.db import connection
-                        with connection.cursor() as cursor:
-                            cursor.execute(
-                                "UPDATE cookie_preferences SET UserId = %s WHERE PreferenceId = %s",
-                                [user.UserId, preference.PreferenceId]
-                            )
-                            logger.info(f"[Cookie] DEBUG: Force updated UserId={user.UserId} using raw SQL (after verification error)")
-                    except Exception as force_error:
-                        logger.error(f"[Cookie] ERROR: Force update also failed: {str(force_error)}")
+                            logger.error(f"[Cookie] ❌ ERROR: Preference {preference.PreferenceId} not found in database!")
+                    
+                    # Now refresh from database for ORM object (after verification)
+                    preference.refresh_from_db()
+                    logger.info(f"[Cookie] ✅ DEBUG: Final UserId in ORM object: {preference.UserId.UserId if preference.UserId else 'NULL'}")
+                    logger.info(f"[Cookie] ✅ DEBUG: Final SessionId: {preference.SessionId}")
+                except Exception as verify_error:
+                    logger.error(f"[Cookie] ERROR: Could not verify UserId in database: {str(verify_error)}")
+                    import traceback
+                    logger.error(f"[Cookie] ERROR: Traceback: {traceback.format_exc()}")
+                    # If verification fails but we have a user, try force update anyway
+                    if user:
+                        logger.warning(f"[Cookie] DEBUG: Verification failed, attempting force update...")
+                        try:
+                            from django.db import connection
+                            with connection.cursor() as cursor:
+                                cursor.execute(
+                                    "UPDATE cookie_preferences SET UserId = %s, UpdatedAt = NOW() WHERE PreferenceId = %s",
+                                    [user.UserId, preference.PreferenceId]
+                                )
+                                logger.info(f"[Cookie] DEBUG: Force updated UserId={user.UserId} using raw SQL (after verification error), rows affected: {cursor.rowcount}")
+                        except Exception as force_error:
+                            logger.error(f"[Cookie] ERROR: Force update also failed: {str(force_error)}")
+            else:
+                # No user, just refresh normally
+                preference.refresh_from_db()
+                logger.info(f"[Cookie] ✅ DEBUG: Final SessionId: {preference.SessionId}")
         else:
             # Create new preference
             effective_user_id = user.UserId if user else (user_id if user_id else None)
@@ -545,37 +731,43 @@ def save_cookie_preferences(request):
                     try:
                         with connection.cursor() as cursor:
                             cursor.execute(
-                                "UPDATE cookie_preferences SET UserId = %s WHERE PreferenceId = %s",
+                                "UPDATE cookie_preferences SET UserId = %s, UpdatedAt = NOW() WHERE PreferenceId = %s",
                                 [user.UserId, preference.PreferenceId]
                             )
                             rows_affected = cursor.rowcount
                             logger.info(f"[Cookie] ✅ DEBUG: Used raw SQL to set UserId={user.UserId} for new PreferenceId={preference.PreferenceId}, rows affected: {rows_affected}")
+                            
+                            # CRITICAL: Verify using raw SQL (not ORM) to ensure it was actually saved
+                            cursor.execute(
+                                "SELECT UserId FROM cookie_preferences WHERE PreferenceId = %s",
+                                [preference.PreferenceId]
+                            )
+                            result = cursor.fetchone()
+                            if result:
+                                db_user_id_raw = result[0]
+                                logger.info(f"[Cookie] ✅ DEBUG: Verified UserId in database via raw SQL: {db_user_id_raw}")
+                                if db_user_id_raw != user.UserId:
+                                    logger.error(f"[Cookie] ❌ ERROR: UserId mismatch after create! Expected {user.UserId}, got {db_user_id_raw}")
+                                    # Try one more time
+                                    cursor.execute(
+                                        "UPDATE cookie_preferences SET UserId = %s, UpdatedAt = NOW() WHERE PreferenceId = %s",
+                                        [user.UserId, preference.PreferenceId]
+                                    )
+                                    retry_rows = cursor.rowcount
+                                    logger.info(f"[Cookie] ✅ DEBUG: Re-attempted UserId update, rows affected: {retry_rows}")
+                                else:
+                                    logger.info(f"[Cookie] ✅ VERIFIED: UserId correctly saved to database: {db_user_id_raw}")
+                            else:
+                                logger.error(f"[Cookie] ❌ ERROR: Could not verify UserId - preference not found!")
                     except Exception as sql_error:
                         logger.error(f"[Cookie] ❌ ERROR: Raw SQL update failed for new preference: {str(sql_error)}")
+                        import traceback
+                        logger.error(f"[Cookie] ERROR: Traceback: {traceback.format_exc()}")
                 
-                # Refresh to get actual database values
+                # Refresh to get actual database values (after raw SQL verification)
                 preference.refresh_from_db()
-                logger.info(f"[Cookie] DEBUG: preference.UserId after create and raw SQL: {preference.UserId.UserId if preference.UserId else 'NULL'}")
-                logger.info(f"[Cookie] DEBUG: preference.UserId_id after create: {getattr(preference, 'UserId_id', 'N/A')}")
-                
-                # Refresh from database to confirm saved values
-                preference.refresh_from_db()
-                
-                # CRITICAL: Verify UserId was actually saved by querying database directly
-                try:
-                    db_preference = CookiePreferences.objects.get(PreferenceId=preference.PreferenceId)
-                    db_user_id = db_preference.UserId.UserId if db_preference.UserId else None
-                    logger.info(f"[Cookie] ✅ DEBUG: Successfully created preference {preference.PreferenceId}")
-                    logger.info(f"[Cookie] ✅ DEBUG: Final UserId in memory object: {preference.UserId.UserId if preference.UserId else 'NULL'}")
-                    logger.info(f"[Cookie] ✅ DEBUG: Final UserId from database query: {db_user_id if db_user_id else 'NULL'}")
-                    logger.info(f"[Cookie] ✅ DEBUG: Final SessionId: {preference.SessionId}")
-                    
-                    if user and db_user_id != user.UserId:
-                        logger.error(f"[Cookie] ❌ ERROR: UserId mismatch! Expected {user.UserId}, but database has {db_user_id}")
-                    elif user and db_user_id == user.UserId:
-                        logger.info(f"[Cookie] ✅ VERIFIED: UserId correctly saved to database: {db_user_id}")
-                except Exception as verify_error:
-                    logger.error(f"[Cookie] ERROR: Could not verify UserId in database: {str(verify_error)}")
+                logger.info(f"[Cookie] ✅ DEBUG: Final UserId in ORM object: {preference.UserId.UserId if preference.UserId else 'NULL'}")
+                logger.info(f"[Cookie] ✅ DEBUG: Final SessionId: {preference.SessionId}")
             except Exception as create_error:
                 logger.error(f"[Cookie] DEBUG: Error creating preference: {str(create_error)}")
                 logger.error(f"[Cookie] DEBUG: Exception type: {type(create_error).__name__}")

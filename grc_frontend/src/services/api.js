@@ -8,6 +8,7 @@ const api = axios.create({
   },
   timeout: 300000, // 5 minutes timeout (increased for long-running operations like AI analysis)
   withCredentials: true // Include cookies in requests for session handling
+  // Note: transformRequest removed - using interceptor instead for better FormData handling
 });
  
 // Add response interceptor for error handling
@@ -59,6 +60,41 @@ api.interceptors.response.use(
 );
 // Add request interceptor to include JWT token
 api.interceptors.request.use((config) => {
+  // CRITICAL: If sending FormData, remove Content-Type header to let browser set it with boundary
+  // Manually setting 'multipart/form-data' without boundary breaks file uploads
+  if (config.data instanceof FormData) {
+    // Ensure headers object exists
+    if (!config.headers) {
+      config.headers = {};
+    }
+    
+    // Remove Content-Type header - browser will set it automatically with boundary
+    try {
+      // Delete from main headers
+      if (config.headers && typeof config.headers === 'object') {
+        delete config.headers['Content-Type'];
+      }
+      // Delete from common headers if it exists
+      if (config.headers && config.headers.common && typeof config.headers.common === 'object') {
+        delete config.headers.common['Content-Type'];
+      }
+      // Delete from method-specific headers if it exists
+      if (config.method && config.headers && config.headers[config.method] && typeof config.headers[config.method] === 'object') {
+        delete config.headers[config.method]['Content-Type'];
+      }
+    } catch (e) {
+      console.warn(`⚠️ [API] Error removing Content-Type header:`, e);
+    }
+    
+    console.log(`📤 [API] FormData detected - removed Content-Type header to let browser set it with boundary for: ${config.method?.toUpperCase()} ${config.url}`);
+    try {
+      const formDataKeys = Array.from(config.data.keys());
+      console.log(`📤 [API] FormData keys:`, formDataKeys);
+    } catch (e) {
+      // Ignore errors when reading FormData keys
+    }
+  }
+  
   // Check if this is a cookie preferences endpoint
   const isCookiePreferencesEndpoint = config.url && (
     config.url.includes('/api/cookie/preferences/') ||
@@ -131,30 +167,39 @@ api.interceptors.request.use((config) => {
     }
     // Add user_id to request body for POST/PUT requests
     else if (config.method === 'post' || config.method === 'put') {
-      // CRITICAL: Ensure config.data exists and is a proper object
-      // If data is null/undefined, create new object
-      // If data exists but isn't an object, convert it
-      if (!config.data) {
-        config.data = {};
-      } else if (typeof config.data !== 'object' || Array.isArray(config.data)) {
-        // If data is not a plain object, wrap it
-        config.data = { data: config.data };
+      // CRITICAL: Don't modify FormData - it must be sent as-is for file uploads
+      if (config.data instanceof FormData) {
+        // For FormData, append user_id as a form field instead of modifying the data object
+        config.data.append('user_id', userId);
+        if (isCookiePreferencesEndpoint) {
+          console.log(`🍪 [API] Interceptor: Added user_id=${userId} to FormData`);
+        }
       } else {
-        // Make sure we're working with a mutable object (not frozen)
-        config.data = { ...config.data };
-      }
-      
-      // ALWAYS override user_id if we found one (even if it was null/undefined in original data)
-      // This is critical for cookie preferences - we want to link them to the user
-      const originalUserId = config.data.user_id;
-      config.data.user_id = userId;
-      
-      if (isCookiePreferencesEndpoint) {
-        if (originalUserId !== userId) {
-          console.log(`🍪 [API] Interceptor: Added/Updated user_id=${userId} to request body (was: ${originalUserId})`);
-          console.log(`🍪 [API] Interceptor: Full data object after modification:`, JSON.stringify(config.data));
+        // CRITICAL: Ensure config.data exists and is a proper object
+        // If data is null/undefined, create new object
+        // If data exists but isn't an object, convert it
+        if (!config.data) {
+          config.data = {};
+        } else if (typeof config.data !== 'object' || Array.isArray(config.data)) {
+          // If data is not a plain object, wrap it
+          config.data = { data: config.data };
         } else {
-          console.log(`🍪 [API] Interceptor: user_id=${userId} already in request body`);
+          // Make sure we're working with a mutable object (not frozen)
+          config.data = { ...config.data };
+        }
+        
+        // ALWAYS override user_id if we found one (even if it was null/undefined in original data)
+        // This is critical for cookie preferences - we want to link them to the user
+        const originalUserId = config.data.user_id;
+        config.data.user_id = userId;
+        
+        if (isCookiePreferencesEndpoint) {
+          if (originalUserId !== userId) {
+            console.log(`🍪 [API] Interceptor: Added/Updated user_id=${userId} to request body (was: ${originalUserId})`);
+            console.log(`🍪 [API] Interceptor: Full data object after modification:`, JSON.stringify(config.data));
+          } else {
+            console.log(`🍪 [API] Interceptor: user_id=${userId} already in request body`);
+          }
         }
       }
     }

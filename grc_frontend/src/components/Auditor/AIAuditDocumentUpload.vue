@@ -3174,7 +3174,7 @@ export default {
             `/api/ai-audit/${auditId}/upload-document/`,
             formData,
             {
-              headers: { 'Content-Type': 'multipart/form-data' },
+              // Don't set Content-Type manually - let axios/browser set it with boundary automatically
               onUploadProgress: progressEvent => {
                 const singleFileProgress =
                   (progressEvent.loaded / progressEvent.total) || 0
@@ -4323,7 +4323,7 @@ export default {
           console.log(`📤 Uploading document ${doc.file_operation_id} with mappings:`, mappingPairs.length > 0 ? mappingPairs : 'empty (using AI-analyzed relevance)')
           
           const response = await api.post(`/api/ai-audit/${auditId}/upload-document/`, formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
+            // Don't set Content-Type manually - let axios/browser set it with boundary automatically
           })
           
           console.log(`✅ Document ${doc.file_operation_id} uploaded successfully:`, response.data)
