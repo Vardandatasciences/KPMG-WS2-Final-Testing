@@ -593,7 +593,7 @@ def create_incidents_for_findings(audit_id: int, tenant_id: int) -> None:
                 framework_row = cursor.fetchone()
                 framework_id = framework_row[0] if framework_row else None
                 
-                # Create new incident with tenant_id
+                # Create new incident with TenantId
                 cursor.execute("""
                     INSERT INTO incidents (
                         IncidentTitle,
@@ -609,7 +609,7 @@ def create_incidents_for_findings(audit_id: int, tenant_id: int) -> None:
                         Comments,
                         Status,
                         FrameworkId,
-                        tenant_id
+                        TenantId
                     ) VALUES (
                         %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                     )
@@ -627,7 +627,7 @@ def create_incidents_for_findings(audit_id: int, tenant_id: int) -> None:
                     comments,
                     "Open",
                     framework_id,
-                    tenant_id  # MULTI-TENANCY: Add tenant_id to incident
+                    tenant_id  # MULTI-TENANCY: Add TenantId to incident (note: variable is tenant_id but column is TenantId)
                 ])
                 
                 print(f"Created incident for ComplianceId {compliance_id} in AuditId {audit_id}")

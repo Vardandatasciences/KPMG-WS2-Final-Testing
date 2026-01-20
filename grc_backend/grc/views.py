@@ -77,6 +77,8 @@ def _get_client_ip(request):
 
 # Track verified emails for password reset
 verified_emails = set()
+# Map email to UserId to ensure correct user password reset
+verified_users_mapping = {}
 
 # Framework CRUD operations
 
@@ -6734,32 +6736,53 @@ def update_user_permissions(request, user_id):
             'message': str(e)
         }, status=500)
 
+@csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def send_otp(request):
     """
     Send OTP to user's Email for password reset
     """
+    logger.info("=" * 80)
+    logger.info("[SEND OTP] ========== SEND OTP ENDPOINT CALLED ==========")
+    logger.info(f"[SEND OTP] Request method: {request.method}")
+    logger.info(f"[SEND OTP] Request path: {request.path}")
+    logger.info(f"[SEND OTP] Request data: {request.data}")
     try:
         data = request.data
         Email = data.get('Email')
         
+        logger.info(f"[SEND OTP] Received request to send OTP to email: {Email}")
+        
         if not Email:
+            logger.error("[SEND OTP] No email provided in request")
             return Response({
                 'success': False,
                 'message': 'Email is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if email is masked (contains ***) - if so, we need to get full email from username/ID
+        if '***' in Email:
+            logger.warning(f"[SEND OTP] Received masked email: {Email}. Cannot use masked email to send OTP.")
+            return Response({
+                'success': False,
+                'message': 'Please use the full email address. If you entered username/ID, the system should automatically fetch and use your email.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Check if user exists with this Email (handles encrypted email fields)
         try:
             user = Users.find_by_email(Email)
             if not user:
+                logger.warning(f"[SEND OTP] No user found with email: {Email}")
                 return Response({
                     'success': False,
                     'message': 'No user found with this Email address'
                 }, status=status.HTTP_404_NOT_FOUND)
+            logger.info(f"[SEND OTP] Found user: UserId={user.UserId}, UserName={getattr(user, 'UserName_plain', None) or user.UserName}")
         except Exception as e:
-            logger.error(f"Error finding user by email: {str(e)}")
+            logger.error(f"[SEND OTP] Error finding user by email: {str(e)}")
+            import traceback
+            logger.error(f"[SEND OTP] Traceback: {traceback.format_exc()}")
             return Response({
                 'success': False,
                 'message': 'No user found with this Email address'
@@ -6874,37 +6897,159 @@ def send_otp(request):
             'message': 'An error occurred while processing your request'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-@api_view(['GET'])
+@csrf_exempt
+@api_view(['GET', 'POST'])
 @permission_classes([AllowAny])
 def get_user_email_by_username(request):
     """
-    Get user email by username for forgot password functionality
+    Get user email by username or user ID for forgot password functionality
+    Supports both encrypted and plain text username lookups
+    If auto_send_otp=true, automatically sends OTP after fetching email
     """
     try:
-        username = request.GET.get('username')
+        # Support both GET and POST
+        if request.method == 'POST':
+            username = request.data.get('username')
+            auto_send_otp = request.data.get('auto_send_otp', False)
+        else:
+            username = request.GET.get('username')
+            auto_send_otp = request.GET.get('auto_send_otp', 'false').lower() == 'true'
         
         if not username:
             return Response({
                 'success': False,
-                'message': 'Username is required'
+                'message': 'Username or User ID is required'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Check if user exists with this username
+        logger.info(f"[FORGOT PASSWORD] Looking up user with username/ID: {username}, auto_send_otp: {auto_send_otp}")
+        
+        # Try to find user by User ID first (if username is numeric)
+        user = None
         try:
-            user = Users.objects.get(UserName=username)
-            return Response({
+            # Check if username is a number (User ID)
+            user_id = int(username)
+            try:
+                user = Users.objects.get(UserId=user_id)
+                logger.info(f"[FORGOT PASSWORD] Found user by User ID: {user_id}")
+            except Users.DoesNotExist:
+                logger.info(f"[FORGOT PASSWORD] No user found with User ID: {user_id}")
+        except ValueError:
+            # Not a number, continue to username lookup
+            logger.info(f"[FORGOT PASSWORD] Username is not numeric, searching by username")
+        
+        # If not found by ID, try username lookup
+        # Need to search all users and compare decrypted UserName (since it's encrypted)
+        if not user:
+            all_users = Users.objects.all()
+            for u in all_users:
+                # Get decrypted username using the _plain property
+                decrypted_username = getattr(u, 'UserName_plain', None) or getattr(u, 'UserName', None)
+                if decrypted_username == username:
+                    user = u
+                    logger.info(f"[FORGOT PASSWORD] Found user by username: {username}")
+                    break
+        
+        if user:
+            # Get decrypted email
+            email = user.email_plain
+            
+            if not email:
+                logger.error(f"[FORGOT PASSWORD] User {username} has no email address")
+                return Response({
+                    'success': False,
+                    'message': 'No email address associated with this account'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # Mask email for security (show first 3 chars and domain)
+            # Example: user@example.com -> use***@example.com
+            email_parts = email.split('@')
+            if len(email_parts) == 2:
+                masked_email = email_parts[0][:3] + '***@' + email_parts[1]
+            else:
+                masked_email = email[:3] + '***'
+            
+            response_data = {
                 'success': True,
-                'email': user.email_plain,  # Use decrypted email
+                'email': masked_email,  # Return masked email for security
+                'full_email': email,  # Include full email for actual OTP sending
                 'message': 'User found'
-            })
-        except Users.DoesNotExist:
+            }
+            
+            # If auto_send_otp is true, automatically send OTP
+            if auto_send_otp:
+                logger.info(f"[FORGOT PASSWORD] Auto-sending OTP to {email}")
+                try:
+                    # Generate 6-digit OTP
+                    import random
+                    otp = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+                    
+                    # Store OTP in session with expiration (5 minutes)
+                    request.session['reset_otp'] = otp
+                    request.session['reset_Email'] = email
+                    request.session['reset_UserId'] = user.UserId  # Store UserId to ensure correct user
+                    request.session['otp_expiry'] = datetime.now().timestamp() + 300  # 5 minutes
+                    request.session.save()
+                    
+                    # Also store in memory as fallback
+                    otp_storage[email] = {
+                        'otp': otp,
+                        'user_id': user.UserId,  # Store UserId to ensure correct user
+                        'expiry': datetime.now().timestamp() + 300  # 5 minutes
+                    }
+                    
+                    # Send OTP via Email using Notification Service
+                    try:
+                        from .routes.Global.notification_service import NotificationService
+                        notification_service = NotificationService()
+                        
+                        user_name = user.FirstName or getattr(user, 'UserName_plain', None) or user.UserName or email.split('@')[0]
+                        platform_name = "GRC Platform"
+                        expiry_time = "5 minutes"
+                        
+                        notification_data = {
+                            'notification_type': 'passwordResetOTP',
+                            'email': email,
+                            'email_type': 'gmail',
+                            'template_data': [
+                                user_name,
+                                otp,
+                                expiry_time,
+                                platform_name
+                            ],
+                        }
+                        
+                        logger.info(f"[FORGOT PASSWORD] Sending OTP email to {email}")
+                        email_result = notification_service.send_multi_channel_notification(notification_data)
+                        
+                        if email_result.get('success'):
+                            logger.info(f"[FORGOT PASSWORD] ✅ OTP sent successfully to {email}")
+                            response_data['otp_sent'] = True
+                            response_data['message'] = 'OTP has been sent to your email address'
+                        else:
+                            logger.error(f"[FORGOT PASSWORD] ❌ Failed to send OTP: {email_result.get('error', 'Unknown error')}")
+                            response_data['otp_sent'] = False
+                            response_data['message'] = 'User found, but failed to send OTP. Please try again.'
+                    except Exception as email_error:
+                        logger.error(f"[FORGOT PASSWORD] Error sending OTP email: {str(email_error)}")
+                        response_data['otp_sent'] = False
+                        response_data['message'] = 'User found, but failed to send OTP. Please try again.'
+                except Exception as otp_error:
+                    logger.error(f"[FORGOT PASSWORD] Error generating OTP: {str(otp_error)}")
+                    response_data['otp_sent'] = False
+            
+            logger.info(f"[FORGOT PASSWORD] Returning response for user: {username}")
+            return Response(response_data)
+        else:
+            logger.warning(f"[FORGOT PASSWORD] No user found with username/ID: {username}")
             return Response({
                 'success': False,
-                'message': 'No user found with this username'
+                'message': 'No user found with this username or User ID'
             }, status=status.HTTP_404_NOT_FOUND)
             
     except Exception as e:
-        logger.error(f"Error fetching user email by username: {str(e)}")
+        logger.error(f"[FORGOT PASSWORD] Error fetching user email: {str(e)}")
+        import traceback
+        logger.error(f"[FORGOT PASSWORD] Traceback: {traceback.format_exc()}")
         return Response({
             'success': False,
             'message': 'An error occurred while fetching user information'
@@ -6930,10 +7075,11 @@ def verify_otp(request):
         # Check if OTP exists and is valid (try session first, then memory)
         stored_otp = request.session.get('reset_otp')
         stored_Email = request.session.get('reset_Email')
+        stored_UserId = request.session.get('reset_UserId')
         otp_expiry = request.session.get('otp_expiry')
         
         # Debug logging
-        logger.info(f"Verify OTP - Session data: stored_otp={stored_otp}, stored_Email={stored_Email}, otp_expiry={otp_expiry}")
+        logger.info(f"Verify OTP - Session data: stored_otp={stored_otp}, stored_Email={stored_Email}, stored_UserId={stored_UserId}, otp_expiry={otp_expiry}")
         logger.info(f"Verify OTP - Request data: Email={Email}, otp={otp}")
         logger.info(f"Verify OTP - Session ID: {request.session.session_key}")
         logger.info(f"Verify OTP - Session modified: {request.session.modified}")
@@ -6948,8 +7094,9 @@ def verify_otp(request):
             if memory_data:
                 stored_otp = memory_data['otp']
                 stored_Email = Email
+                stored_UserId = memory_data.get('user_id')
                 otp_expiry = memory_data['expiry']
-                logger.info(f"Verify OTP - Found OTP in memory: stored_otp={stored_otp}, expiry={otp_expiry}")
+                logger.info(f"Verify OTP - Found OTP in memory: stored_otp={stored_otp}, user_id={stored_UserId}, expiry={otp_expiry}")
             else:
                 logger.warning(f"Verify OTP - Missing session data: stored_otp={stored_otp}, stored_Email={stored_Email}, otp_expiry={otp_expiry}")
                 return Response({
@@ -6960,7 +7107,7 @@ def verify_otp(request):
         # Check if OTP has expired
         if datetime.now().timestamp() > otp_expiry:
             # Clear expired OTP from session (only if they exist)
-            session_keys_to_clear = ['reset_otp', 'reset_Email', 'otp_expiry']
+            session_keys_to_clear = ['reset_otp', 'reset_Email', 'reset_UserId', 'otp_expiry']
             for key in session_keys_to_clear:
                 if key in request.session:
                     del request.session[key]
@@ -6987,11 +7134,15 @@ def verify_otp(request):
         if otp == stored_otp:
             # Mark OTP as verified
             request.session['otp_verified'] = True
+            request.session['reset_UserId'] = stored_UserId  # Ensure UserId is preserved
             request.session.save()
             
-            # Add to verified emails set
+            # Add to verified emails set with UserId mapping
             verified_emails.add(Email)
-            logger.info(f"Verify OTP - Added {Email} to verified emails set")
+            if stored_UserId:
+                # Store email -> UserId mapping
+                verified_users_mapping[Email] = stored_UserId
+            logger.info(f"Verify OTP - Added {Email} to verified emails set with UserId={stored_UserId}")
             
             # Clean up memory storage
             if Email in otp_storage:
@@ -7035,9 +7186,10 @@ def reset_password(request):
         # Check if OTP was verified (try session first, then memory)
         otp_verified = request.session.get('otp_verified', False)
         stored_Email = request.session.get('reset_Email')
+        stored_UserId = request.session.get('reset_UserId')
         
         # Debug logging
-        logger.info(f"Reset Password - Session data: otp_verified={otp_verified}, stored_Email={stored_Email}")
+        logger.info(f"Reset Password - Session data: otp_verified={otp_verified}, stored_Email={stored_Email}, stored_UserId={stored_UserId}")
         logger.info(f"Reset Password - Request data: Email={Email}")
         logger.info(f"Reset Password - Session ID: {request.session.session_key}")
         logger.info(f"Reset Password - All session keys: {list(request.session.keys())}")
@@ -7050,6 +7202,9 @@ def reset_password(request):
                 logger.info(f"Reset Password - Found {Email} in verified emails set")
                 otp_verified = True
                 stored_Email = Email
+                # Get UserId from mapping
+                stored_UserId = verified_users_mapping.get(Email)
+                logger.info(f"Reset Password - Retrieved UserId from mapping: {stored_UserId}")
             else:
                 logger.warning(f"Reset Password - Email {Email} not found in verified emails set")
                 return Response({
@@ -7069,14 +7224,28 @@ def reset_password(request):
                 'message': 'Email does not match the verified OTP request.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Find and update user password (handles encrypted email fields)
+        # Find and update user password using UserId for accuracy
         try:
-            user = Users.find_by_email(Email)
-            if not user:
-                return Response({
-                    'success': False,
-                    'message': 'No user found with this Email address'
-                }, status=status.HTTP_404_NOT_FOUND)
+            # Prefer UserId lookup to avoid issues with duplicate emails
+            if stored_UserId:
+                try:
+                    user = Users.objects.get(UserId=stored_UserId)
+                    logger.info(f"Reset Password - Found user by UserId: {stored_UserId} ({user.UserName})")
+                except Users.DoesNotExist:
+                    logger.error(f"Reset Password - User not found with UserId: {stored_UserId}")
+                    return Response({
+                        'success': False,
+                        'message': 'User not found'
+                    }, status=status.HTTP_404_NOT_FOUND)
+            else:
+                # Fallback to email lookup (for backward compatibility)
+                logger.warning(f"Reset Password - No UserId available, falling back to email lookup")
+                user = Users.find_by_email(Email)
+                if not user:
+                    return Response({
+                        'success': False,
+                        'message': 'No user found with this Email address'
+                    }, status=status.HTTP_404_NOT_FOUND)
             
             # Check password history to prevent reuse
             from .routes.Global.password_expiry_utils import check_password_history, get_password_history_count
@@ -7094,6 +7263,43 @@ def reset_password(request):
             # Always store password as a secure hash
             user.Password = make_password(new_password)
             user.save(update_fields=['Password'])
+            
+            # ========================================
+            # CRITICAL: Clear account lockout cache after successful password reset
+            # This allows the user to login immediately with the new password
+            # ========================================
+            try:
+                from django.core.cache import cache
+                # Clear lockout cache for both JWT and session login systems
+                username_normalized = str(user.UserName).lower().strip()
+                userid_normalized = str(user.UserId).lower().strip()
+                
+                # JWT login cache keys
+                jwt_user_cache_key = f"login_failed_attempts_{username_normalized}"
+                jwt_lockout_cache_key = f"login_locked_until_{username_normalized}"
+                jwt_userid_cache_key = f"login_failed_attempts_{userid_normalized}"
+                jwt_userid_lockout_cache_key = f"login_locked_until_{userid_normalized}"
+                
+                # Session login cache keys
+                session_user_cache_key = f"session_login_failed_attempts_{username_normalized}"
+                session_lockout_cache_key = f"session_login_locked_until_{username_normalized}"
+                session_userid_cache_key = f"session_login_failed_attempts_{userid_normalized}"
+                session_userid_lockout_cache_key = f"session_login_locked_until_{userid_normalized}"
+                
+                # Clear all cache entries
+                cache.delete(jwt_user_cache_key)
+                cache.delete(jwt_lockout_cache_key)
+                cache.delete(jwt_userid_cache_key)
+                cache.delete(jwt_userid_lockout_cache_key)
+                cache.delete(session_user_cache_key)
+                cache.delete(session_lockout_cache_key)
+                cache.delete(session_userid_cache_key)
+                cache.delete(session_userid_lockout_cache_key)
+                
+                logger.info(f"✅ Cleared account lockout cache for user {user.UserName} (ID: {user.UserId}) after password reset")
+            except Exception as cache_error:
+                logger.warning(f"⚠️ Failed to clear lockout cache for user {user.UserName}: {str(cache_error)}")
+                # Don't fail password reset if cache clearing fails
             
             # Log password reset using utility function (to password_logs)
             try:
@@ -7141,16 +7347,19 @@ def reset_password(request):
                 # Don't fail password reset if logging fails
             
             # Clear session data (only if they exist)
-            session_keys_to_clear = ['reset_otp', 'reset_Email', 'otp_expiry', 'otp_verified']
+            session_keys_to_clear = ['reset_otp', 'reset_Email', 'reset_UserId', 'otp_expiry', 'otp_verified']
             for key in session_keys_to_clear:
                 if key in request.session:
                     del request.session[key]
             request.session.save()
             
-            # Remove from verified emails set
+            # Remove from verified emails set and mapping
             if Email in verified_emails:
                 verified_emails.remove(Email)
                 logger.info(f"Reset Password - Removed {Email} from verified emails set")
+            if Email in verified_users_mapping:
+                del verified_users_mapping[Email]
+                logger.info(f"Reset Password - Removed {Email} from verified users mapping")
             
             logger.info(f"Password reset successful for user: {user.UserName}")
             

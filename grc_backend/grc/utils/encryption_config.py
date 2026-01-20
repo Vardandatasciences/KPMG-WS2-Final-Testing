@@ -355,12 +355,16 @@ ENCRYPTED_FIELDS_CONFIG = {
     ],
     
     # Password Log
+    # NOTE: OldPassword and NewPassword are already HASHED (not encrypted)
+    # They should NOT be encrypted as they're already secure hashes
+    # Encrypting hashed passwords would break password verification and exceed field length
+    # IPAddress and UserAgent also should NOT be encrypted as they exceed column length limits
     'PasswordLog': [
-        'UserName',
-        'OldPassword',  # Already hashed, but for consistency
-        'NewPassword',  # Already hashed, but for consistency
-        'IPAddress',
-        'UserAgent',
+        # 'UserName',  # REMOVED: Encrypted username is too long and causes logging issues
+        # 'OldPassword',  # REMOVED: Already hashed, encryption breaks the save
+        # 'NewPassword',  # REMOVED: Already hashed, encryption breaks the save
+        # 'IPAddress',  # REMOVED: IPAddress column max_length=45, encryption exceeds this limit
+        # 'UserAgent',  # REMOVED: Should not be encrypted, it's metadata
     ],
     
     # Access Request

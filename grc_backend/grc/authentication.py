@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 # JWT Settings
 JWT_SECRET_KEY = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
 JWT_ALGORITHM = 'HS256'
-JWT_ACCESS_TOKEN_LIFETIME = timedelta(hours=1)  # 1 hour
+JWT_ACCESS_TOKEN_LIFETIME = timedelta(days=3)  # 3 days
 JWT_REFRESH_TOKEN_LIFETIME = timedelta(days=7)  # 7 days
 
 
@@ -505,7 +505,7 @@ def assign_default_rbac_permissions_for_google_sso(user):
 # JWT Settings
 JWT_SECRET_KEY = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
 JWT_ALGORITHM = 'HS256'
-JWT_ACCESS_TOKEN_LIFETIME = timedelta(hours=1)  # 1 hour
+JWT_ACCESS_TOKEN_LIFETIME = timedelta(days=3)  # 3 days
 JWT_REFRESH_TOKEN_LIFETIME = timedelta(days=7)  # 7 days
 
 def generate_jwt_tokens(user, login_time=None, session_token=None):
@@ -1138,6 +1138,26 @@ def jwt_login(request):
                 import traceback
                 logger.error(f"Traceback: {traceback.format_exc()}")
                 # Don't fail login if logging fails
+        
+        # CRITICAL: Link cookie preferences to user after successful login
+        # This ensures any anonymous preferences created before login are linked to the user
+        try:
+            from .routes.Cookie.cookie_views import link_cookie_preferences_to_user
+            # Try to get session_id from request body (if provided) or cookies
+            session_id = None
+            if hasattr(request, 'data') and request.data:
+                session_id = request.data.get('session_id')
+            if not session_id and hasattr(request, 'COOKIES'):
+                # Try to get from cookies if available
+                session_id = request.COOKIES.get('cookie_session_id')
+            
+            # Link preferences (will use session_id if available, otherwise link recent ones)
+            linked_count = link_cookie_preferences_to_user(user, session_id)
+            if linked_count > 0:
+                logger.info(f"✅ Linked {linked_count} cookie preference(s) to user {user.UserId} after login")
+        except Exception as cookie_link_error:
+            # Don't fail login if cookie linking fails
+            logger.warning(f"⚠️  Failed to link cookie preferences after login: {str(cookie_link_error)}")
         
         # Check if user has accepted consent
         # Handle both string and potential null/None values
