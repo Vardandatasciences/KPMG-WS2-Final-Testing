@@ -102,6 +102,10 @@ def get_subpolicies_by_policy(request, policy_id):
     """
     Get all subpolicies for a specific policy
     MULTI-TENANCY: Only returns subpolicies for user's tenant
+    
+    Query Parameters:
+    - status (optional): Filter subpolicies by status (e.g., 'Approved', 'Under Review', 'Draft')
+      If not provided, returns all subpolicies regardless of status
     """
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
@@ -115,11 +119,18 @@ def get_subpolicies_by_policy(request, policy_id):
                 'message': 'Policy not found in your organization'
             }, status=404)
         
-        subpolicies = SubPolicy.objects.filter(
+        # Optional status filter from query parameter
+        status_filter = request.GET.get('status')
+        subpolicies_query = SubPolicy.objects.filter(
             PolicyId=policy_id,
-            tenant_id=tenant_id,
-            Status='Approved'
-        ).values(
+            tenant_id=tenant_id
+        )
+        
+        # Apply status filter if provided
+        if status_filter:
+            subpolicies_query = subpolicies_query.filter(Status=status_filter)
+        
+        subpolicies = subpolicies_query.values(
             'SubPolicyId',
             'SubPolicyName',
             'Description',

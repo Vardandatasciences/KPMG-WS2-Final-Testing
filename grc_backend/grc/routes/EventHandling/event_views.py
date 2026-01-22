@@ -800,10 +800,23 @@ def create_event(request):
         # MULTI-TENANCY: Extract tenant_id from request
         tenant_id = get_tenant_id_from_request(request)
         
-        data = request.data
+        # Parse request data - handle both DRF request.data and raw JSON
+        data = request.data if hasattr(request, 'data') else {}
+        if not data and request.body:
+            try:
+                data = json.loads(request.body)
+            except (json.JSONDecodeError, TypeError):
+                data = {}
+        
+        print(f"DEBUG: Parsed data: {data}")
         
         # Get user ID from request (should be available from JWT middleware)
         user_id = data.get('user_id') or request.GET.get('user_id')
+        
+        # Try to get user_id from JWT token if not provided in request
+        if not user_id:
+            user_id = RBACUtils.get_user_id_from_request(request)
+        
         print(f"DEBUG: User ID: {user_id}")
         
         if not user_id:
@@ -812,11 +825,24 @@ def create_event(request):
                 'message': 'User ID is required'
             }, status=400)
         
+        # Support multiple field name variations for event title:
+        # 'title', 'name', 'EventTitle' (database field name)
+        # Support multiple field name variations for category:
+        # 'category', 'type'
+        title = data.get('EventTitle') or data.get('title') or data.get('name')
+        category = data.get('category') or data.get('type')
+        
+        print(f"DEBUG: Resolved title: {title}, category: {category}")
+        print(f"DEBUG: Raw data keys: {list(data.keys())}")
+        print(f"DEBUG: EventTitle from data: {data.get('EventTitle')}")
+        print(f"DEBUG: title from data: {data.get('title')}")
+        print(f"DEBUG: name from data: {data.get('name')}")
+        
         # Validate required fields
-        if not data.get('title'):
+        if not title:
             return Response({
                 'success': False,
-                'message': 'Event title is required'
+                'message': 'Event title is required. Please provide "EventTitle", "title", or "name" field.'
             }, status=400)
         
         # Get framework object if framework_id is provided
@@ -1008,7 +1034,7 @@ def create_event(request):
         
         # Extract data from request - match Django Event model field names exactly
         event_data = {
-            'EventTitle': data.get('title'),
+            'EventTitle': title,  # Use the resolved title (from 'title' or 'name')
             'Description': data.get('description'),
             'FrameworkId': framework_obj,
             'FrameworkName': data.get('framework_name'),
@@ -1016,7 +1042,7 @@ def create_event(request):
             'LinkedRecordType': data.get('linked_record_type'),
             'LinkedRecordId': linked_record_id,
             'LinkedRecordName': data.get('linked_record_name'),
-            'Category': data.get('category'),  # Keep original category field
+            'Category': category,  # Use the resolved category (from 'category' or 'type')
             'EventType': event_type_obj,  # Save event type object in EventType field
             'SubEventType': sub_event_type_name,  # Save selected sub-event type name
             'RecurrenceType': data.get('recurrence_type', 'Non-Recurring'),
@@ -1078,15 +1104,15 @@ def create_event(request):
                     # Create event data for additional record
                     additional_record_name = additional_record.get('linked_record_name', f'Additional Record {i+1}')
                     additional_event_data = {
-                        'EventTitle': f"{data.get('title')} - {additional_record_name}",
-                        'Description': f"Additional record for event: {data.get('title')} - {additional_record_name}",
+                        'EventTitle': f"{title} - {additional_record_name}",
+                        'Description': f"Additional record for event: {title} - {additional_record_name}",
                         'FrameworkId': additional_framework_obj,
                         'FrameworkName': additional_record.get('framework_name'),
                         'Module': additional_record.get('module'),
                         'LinkedRecordType': additional_record.get('linked_record_type'),
                         'LinkedRecordId': additional_record.get('linked_record_id'),
                         'LinkedRecordName': additional_record.get('linked_record_name'),
-                        'Category': data.get('category'),  # Keep original category field
+                        'Category': category,  # Use resolved category (from 'category' or 'type')
                         'EventType': event_type_obj,  # Save event type object in EventType field
                         'SubEventType': sub_event_type_name,  # Save selected sub-event type name
                         'RecurrenceType': data.get('recurrence_type', 'Non-Recurring'),
@@ -4617,28 +4643,45 @@ def s3_check_file_exists(request, s3_key, file_name):
 @require_http_methods(["POST"])
 @csrf_exempt
 @require_consent('upload_event')
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def upload_event_evidence(request, event_id):
     """Upload evidence file for a specific event"""
     try:
+        # MULTI-TENANCY: Extract tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        
         print(f"DEBUG: upload_event_evidence called for event_id: {event_id}")
         print(f"DEBUG: Request method: {request.method}")
         print(f"DEBUG: Content-Type: {request.content_type}")
         print(f"DEBUG: FILES: {list(request.FILES.keys())}")
         print(f"DEBUG: POST: {list(request.POST.keys())}")
         
-        # Get user ID from request
+        # Get user ID from request - try multiple sources
         user_id = None
+        
+        # First try POST data (form-data)
         if hasattr(request, 'POST') and request.POST:
             user_id = request.POST.get('user_id')
+        
+        # Then try GET parameters (query string)
         if not user_id and hasattr(request, 'GET') and request.GET:
             user_id = request.GET.get('user_id')
+        
+        # Then try to extract from JWT token
+        if not user_id:
+            user_id = RBACUtils.get_user_id_from_request(request)
+        
+        # Also try request.data if it's a JSON request
+        if not user_id and hasattr(request, 'data'):
+            user_id = request.data.get('user_id')
         
         print(f"DEBUG: User ID: {user_id}")
         
         if not user_id:
             return JsonResponse({
                 'success': False,
-                'message': 'User ID is required'
+                'message': 'User ID is required. Please provide it in the request body, query parameters, or ensure your JWT token is valid.'
             }, status=400)
         
         # Check if file is provided
