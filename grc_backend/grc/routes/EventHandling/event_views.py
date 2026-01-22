@@ -4625,6 +4625,12 @@ def upload_event_evidence(request, event_id):
         print(f"DEBUG: Content-Type: {request.content_type}")
         print(f"DEBUG: FILES: {list(request.FILES.keys())}")
         print(f"DEBUG: POST: {list(request.POST.keys())}")
+
+        # MULTI-TENANCY: Extract tenant_id from request so we can
+        # safely filter Event objects. This mirrors the pattern
+        # used across other event handling views and prevents
+        # NameError for undefined tenant_id.
+        tenant_id = get_tenant_id_from_request(request)
         
         # Get user ID from request
         user_id = None
@@ -4680,9 +4686,13 @@ def upload_event_evidence(request, event_id):
                 'message': f'File type {file.content_type} not supported. Allowed types: PDF, CSV, XLSX, DOC, TXT'
             }, status=400)
         
-        # Check if event exists
+        # Check if event exists (scoped by tenant when available)
         try:
-            event = Event.objects.get(EventId=event_id, tenant_id=tenant_id)
+            if tenant_id is not None:
+                event = Event.objects.get(EventId=event_id, tenant_id=tenant_id)
+            else:
+                # Fallback for environments without multi-tenancy
+                event = Event.objects.get(EventId=event_id)
             print(f"DEBUG: Found event: {event.EventTitle}")
         except Event.DoesNotExist:
             return JsonResponse({

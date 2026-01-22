@@ -1966,13 +1966,66 @@ def risk_instances_view(request):
                 
                 # Convert date objects to string to avoid utcoffset error
                 if 'MitigationDueDate' in instance_dict and instance_dict['MitigationDueDate']:
-                    instance_dict['MitigationDueDate'] = instance_dict['MitigationDueDate'].isoformat()
+                    try:
+                        if hasattr(instance_dict['MitigationDueDate'], 'isoformat'):
+                            instance_dict['MitigationDueDate'] = instance_dict['MitigationDueDate'].isoformat()
+                        elif hasattr(instance_dict['MitigationDueDate'], 'strftime'):
+                            instance_dict['MitigationDueDate'] = instance_dict['MitigationDueDate'].strftime('%Y-%m-%d')
+                        else:
+                            instance_dict['MitigationDueDate'] = str(instance_dict['MitigationDueDate'])
+                    except Exception as e:
+                        print(f"Warning: Error converting MitigationDueDate: {e}")
+                        instance_dict['MitigationDueDate'] = None
                 
                 if 'Date' in instance_dict and instance_dict['Date']:
-                    instance_dict['Date'] = instance_dict['Date'].isoformat()
+                    try:
+                        if hasattr(instance_dict['Date'], 'isoformat'):
+                            instance_dict['Date'] = instance_dict['Date'].isoformat()
+                        elif hasattr(instance_dict['Date'], 'strftime'):
+                            instance_dict['Date'] = instance_dict['Date'].strftime('%Y-%m-%d')
+                        else:
+                            instance_dict['Date'] = str(instance_dict['Date'])
+                    except Exception as e:
+                        print(f"Warning: Error converting Date: {e}")
+                        instance_dict['Date'] = None
                 
                 if 'MitigationCompletedDate' in instance_dict and instance_dict['MitigationCompletedDate']:
-                    instance_dict['MitigationCompletedDate'] = instance_dict['MitigationCompletedDate'].isoformat()
+                    try:
+                        if hasattr(instance_dict['MitigationCompletedDate'], 'isoformat'):
+                            instance_dict['MitigationCompletedDate'] = instance_dict['MitigationCompletedDate'].isoformat()
+                        elif hasattr(instance_dict['MitigationCompletedDate'], 'strftime'):
+                            instance_dict['MitigationCompletedDate'] = instance_dict['MitigationCompletedDate'].strftime('%Y-%m-%d')
+                        else:
+                            instance_dict['MitigationCompletedDate'] = str(instance_dict['MitigationCompletedDate'])
+                    except Exception as e:
+                        print(f"Warning: Error converting MitigationCompletedDate: {e}")
+                        instance_dict['MitigationCompletedDate'] = None
+                
+                # Handle CreatedAt datetime field
+                if 'CreatedAt' in instance_dict and instance_dict['CreatedAt']:
+                    try:
+                        if hasattr(instance_dict['CreatedAt'], 'isoformat'):
+                            instance_dict['CreatedAt'] = instance_dict['CreatedAt'].isoformat()
+                        elif hasattr(instance_dict['CreatedAt'], 'strftime'):
+                            instance_dict['CreatedAt'] = instance_dict['CreatedAt'].strftime('%Y-%m-%d %H:%M:%S')
+                        else:
+                            instance_dict['CreatedAt'] = str(instance_dict['CreatedAt'])
+                    except Exception as e:
+                        print(f"Warning: Error converting CreatedAt: {e}")
+                        instance_dict['CreatedAt'] = None
+                
+                # Handle FirstResponseAt datetime field
+                if 'FirstResponseAt' in instance_dict and instance_dict['FirstResponseAt']:
+                    try:
+                        if hasattr(instance_dict['FirstResponseAt'], 'isoformat'):
+                            instance_dict['FirstResponseAt'] = instance_dict['FirstResponseAt'].isoformat()
+                        elif hasattr(instance_dict['FirstResponseAt'], 'strftime'):
+                            instance_dict['FirstResponseAt'] = instance_dict['FirstResponseAt'].strftime('%Y-%m-%d %H:%M:%S')
+                        else:
+                            instance_dict['FirstResponseAt'] = str(instance_dict['FirstResponseAt'])
+                    except Exception as e:
+                        print(f"Warning: Error converting FirstResponseAt: {e}")
+                        instance_dict['FirstResponseAt'] = None
                 
                 # Assign random department if missing or N/A
                 if not instance_dict.get('DepartmentName') or instance_dict.get('DepartmentName') == 'N/A' or instance_dict.get('DepartmentName') is None:
