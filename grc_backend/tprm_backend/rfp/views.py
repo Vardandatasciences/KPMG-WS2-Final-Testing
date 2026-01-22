@@ -880,12 +880,17 @@ class RFPViewSet(RFPAuthenticationMixin, viewsets.ModelViewSet):
         rfp = self.get_object()
         
         try:
+            # Helper: return decrypted value if encryption is enabled for the field
+            def _plain(obj, field_name):
+                plain_attr = f"{field_name}_plain"
+                return getattr(obj, plain_attr, getattr(obj, field_name, None))
+
             # Build RFP payload with only data from the rfps table
             rfp_data = {
                 'rfp_id': rfp.rfp_id,
-                'rfp_number': rfp.rfp_number,
-                'rfp_title': rfp.rfp_title,
-                'description': rfp.description,
+                'rfp_number': _plain(rfp, 'rfp_number'),
+                'rfp_title': _plain(rfp, 'rfp_title'),
+                'description': _plain(rfp, 'description'),
                 'rfp_type': rfp.rfp_type,
                 'category': rfp.category,
                 'status': rfp.status,
@@ -906,7 +911,7 @@ class RFPViewSet(RFPAuthenticationMixin, viewsets.ModelViewSet):
                 # Workflow and evaluation
                 'evaluation_method': rfp.evaluation_method,
                 'criticality_level': rfp.criticality_level,
-                'geographical_scope': rfp.geographical_scope,
+                'geographical_scope': _plain(rfp, 'geographical_scope'),
                 'approval_workflow_id': rfp.approval_workflow_id,
                 
                 # Configuration
@@ -921,7 +926,7 @@ class RFPViewSet(RFPAuthenticationMixin, viewsets.ModelViewSet):
                 # Award information
                 'final_evaluation_score': float(rfp.final_evaluation_score) if rfp.final_evaluation_score else None,
                 'award_decision_date': rfp.award_decision_date.isoformat() if rfp.award_decision_date else None,
-                'award_justification': rfp.award_justification,
+                'award_justification': _plain(rfp, 'award_justification'),
                 
                 # Timestamps
                 'created_at': rfp.created_at.isoformat() if rfp.created_at else None,
