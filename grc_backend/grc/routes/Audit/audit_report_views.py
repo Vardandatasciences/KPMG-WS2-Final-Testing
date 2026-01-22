@@ -37,6 +37,10 @@ def get_audit_reports(request):
         # Get framework SQL filter
         where_clause, params = get_framework_sql_filter(request, 'a')
         
+        # Convert named placeholder to positional placeholder for compatibility
+        if where_clause and '%(framework_id)s' in where_clause:
+            where_clause = where_clause.replace('%(framework_id)s', '%s')
+        
         with connection.cursor() as cursor:
             query = f"""
                 SELECT 
@@ -76,12 +80,14 @@ def get_audit_reports(request):
                     a.CompletionDate DESC
             """
             
-            # Add tenant_id to params
-            if isinstance(params, dict):
-                params['tenant_id'] = tenant_id
-                execute_params = [tenant_id] * 7 + list(params.values())
-            else:
-                execute_params = [tenant_id] * 7 + (params if isinstance(params, list) else [])
+            # Build execute_params list with tenant_id repeated 7 times
+            execute_params = [tenant_id] * 7
+            
+            # Add framework_id if filter is active (params is a dict with framework_id)
+            if isinstance(params, dict) and 'framework_id' in params:
+                execute_params.append(params['framework_id'])
+            elif isinstance(params, list) and len(params) > 0:
+                execute_params.extend(params)
             
             cursor.execute(query, execute_params)
             columns = [col[0] for col in cursor.description]
@@ -99,8 +105,15 @@ def get_audit_reports(request):
         }, status=status.HTTP_200_OK)
     
     except Exception as e:
-        print(f"ERROR in get_audit_reports: {str(e)}")
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        import traceback
+        error_message = str(e)
+        error_traceback = traceback.format_exc()
+        print(f"ERROR in get_audit_reports: {error_message}")
+        print(f"Traceback: {error_traceback}")
+        return Response({
+            'error': error_message,
+            'message': 'Failed to retrieve audit reports'
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
 @permission_classes([AuditViewPermission])

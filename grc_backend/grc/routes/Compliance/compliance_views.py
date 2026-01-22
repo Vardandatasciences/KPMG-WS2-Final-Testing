@@ -4,7 +4,7 @@
 # type: ignore
 import logging
 from django.shortcuts import render, get_object_or_404
-from django.db.models import Count
+from django.db.models import Count, Q
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.response import Response
@@ -2140,13 +2140,17 @@ def get_compliances_by_subpolicy(request, subpolicy_id):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
  
 @csrf_exempt
-@api_view(['PUT'])
+@api_view(['PUT', 'OPTIONS'])
 @authentication_classes([])
 @permission_classes([ComplianceApprovePermission])
 @compliance_approve_required
 @require_tenant  # MULTI-TENANCY: Ensure tenant is present
 @tenant_filter   # MULTI-TENANCY: Add tenant_id to request
 def submit_compliance_review(request, approval_id):
+    # Handle OPTIONS request for CORS preflight
+    if request.method == 'OPTIONS':
+        return Response({}, status=status.HTTP_200_OK)
+    
     # MULTI-TENANCY: Extract tenant_id from request
     tenant_id = get_tenant_id_from_request(request)
     
@@ -3474,6 +3478,9 @@ def toggle_compliance_version(request, compliance_id):
     3. When active version is turned off, either deactivate or activate latest version
     """
     try:
+        # MULTI-TENANCY: Extract tenant_id from request
+        tenant_id = get_tenant_id_from_request(request)
+        
         print(f"\n=== TOGGLE_COMPLIANCE_VERSION DEBUG ===")
         print(f"Toggling compliance with ID: {compliance_id}")
         
@@ -8578,6 +8585,135 @@ def get_compliance_approvals_by_reviewer(request, user_id):
             'type': type(e).__name__
         }, status=400)
 
+@api_view(['GET'])
+@permission_classes([ComplianceViewPermission])
+@compliance_view_required
+@require_tenant  # MULTI-TENANCY: Ensure tenant is present
+@tenant_filter   # MULTI-TENANCY: Add tenant_id to request
+def get_compliance_approvals(request):
+    """
+    Get all compliance approvals
+    Supports optional query parameters:
+    - framework_id: Filter by framework
+    - status: Filter by status (pending, approved, rejected)
+    - user_id: Filter by user who created the approval
+    - reviewer_id: Filter by reviewer assigned to the approval
+    """
+    # MULTI-TENANCY: Extract tenant_id from request
+    tenant_id = get_tenant_id_from_request(request)
+
+    try:
+        from ...routes.Policy.framework_filter_helper import get_active_framework_filter
+        from ...models import Users
+        
+        # Helper function to get user name by ID
+        def get_user_name_by_id(user_id):
+            """Get user's full name or username by UserId"""
+            if not user_id:
+                return None
+            try:
+                user = Users.objects.get(UserId=user_id, tenant_id=tenant_id)
+                # Try to get full name first
+                if user.FirstName or user.LastName:
+                    full_name = f"{user.FirstName or ''} {user.LastName or ''}".strip()
+                    if full_name:
+                        return full_name
+                # Fallback to username
+                return user.UserName if user.UserName else None
+            except Users.DoesNotExist:
+                return None
+            except Exception:
+                return None
+        
+        # Get query parameters
+        framework_id = request.GET.get('framework_id', None)
+        status_filter = request.GET.get('status', None)
+        user_id = request.GET.get('user_id', None)
+        reviewer_id = request.GET.get('reviewer_id', None)
+        
+        # If no explicit framework filter, check session-based framework filter
+        if not framework_id:
+            framework_id = get_active_framework_filter(request)
+        
+        # Start with base queryset filtered by tenant
+        approvals = ComplianceApproval.objects.filter(tenant_id=tenant_id).order_by('-ApprovalId')
+        
+        # Apply filters
+        if framework_id:
+            try:
+                framework_id = int(framework_id)
+                approvals = approvals.filter(FrameworkId=framework_id)
+            except (ValueError, TypeError):
+                pass  # Invalid framework_id, skip filter
+        
+        if user_id:
+            try:
+                user_id = int(user_id)
+                approvals = approvals.filter(UserId=user_id)
+            except (ValueError, TypeError):
+                pass  # Invalid user_id, skip filter
+        
+        if reviewer_id:
+            try:
+                reviewer_id = int(reviewer_id)
+                approvals = approvals.filter(ReviewerId=reviewer_id)
+            except (ValueError, TypeError):
+                pass  # Invalid reviewer_id, skip filter
+        
+        if status_filter:
+            # Filter by status in ExtractedData
+            if status_filter.lower() == 'pending':
+                approvals = approvals.filter(
+                    Q(ExtractedData__Status='pending') | 
+                    Q(ExtractedData__Status='Pending') |
+                    Q(ExtractedData__compliance_approval__status='pending') |
+                    Q(ExtractedData__compliance_approval__status='Pending')
+                )
+            elif status_filter.lower() == 'approved':
+                approvals = approvals.filter(
+                    Q(ApprovedNot=True) |
+                    Q(ExtractedData__Status='approved') |
+                    Q(ExtractedData__Status='Approved') |
+                    Q(ExtractedData__compliance_approval__status='approved') |
+                    Q(ExtractedData__compliance_approval__status='Approved') |
+                    Q(ExtractedData__compliance_approval__approved=True)
+                )
+            elif status_filter.lower() == 'rejected':
+                approvals = approvals.filter(
+                    Q(ExtractedData__Status='rejected') |
+                    Q(ExtractedData__Status='Rejected') |
+                    Q(ExtractedData__compliance_approval__status='rejected') |
+                    Q(ExtractedData__compliance_approval__status='Rejected')
+                )
+        
+        # Serialize the approvals
+        serializer = ComplianceApprovalSerializer(approvals, many=True)
+        serialized_data = serializer.data
+        
+        # Ensure CreatedByName is present in ExtractedData for all serialized approvals
+        for approval_data in serialized_data:
+            if approval_data.get('ExtractedData'):
+                # Ensure CreatedByName is present
+                if 'CreatedByName' not in approval_data['ExtractedData'] or not approval_data['ExtractedData'].get('CreatedByName'):
+                    user_name = get_user_name_by_id(approval_data.get('UserId'))
+                    if user_name:
+                        approval_data['ExtractedData']['CreatedByName'] = user_name
+            else:
+                # If ExtractedData is None or missing, create it with CreatedByName
+                approval_data['ExtractedData'] = {}
+                user_name = get_user_name_by_id(approval_data.get('UserId'))
+                if user_name:
+                    approval_data['ExtractedData']['CreatedByName'] = user_name
+        
+        return Response(serialized_data, status=200)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response({
+            'error': str(e),
+            'type': type(e).__name__
+        }, status=400)
+
 
 # Corrupted content removed - continuing with clean content
         """Validate numeric fields with range checking"""
@@ -9453,8 +9589,8 @@ def get_all_compliances_for_audit_management(request):
                 sp.SubPolicyName,
                 c.Status,
                 c.ActiveInactive,
-                c.CreatedDate,
-                c.UpdatedDate
+                c.CreatedByDate,
+                c.ComplianceTitle
             FROM 
                 compliance c
             LEFT JOIN 
@@ -9463,12 +9599,13 @@ def get_all_compliances_for_audit_management(request):
                 policies p ON sp.PolicyId = p.PolicyId
             LEFT JOIN 
                 frameworks f ON p.FrameworkId = f.FrameworkId
+            WHERE c.TenantId = %s
         """
         
-        # Add WHERE clause if framework filter is active (using parameterized query)
-        query_params = []
+        # Add framework filter if active (using parameterized query)
+        query_params = [tenant_id]
         if framework_filter:
-            base_query += " WHERE f.FrameworkId = %s"
+            base_query += " AND f.FrameworkId = %s"
             query_params.append(framework_filter)
             print(f"DEBUG: Applying framework filter: {framework_filter}")
         
@@ -9504,10 +9641,8 @@ def get_all_compliances_for_audit_management(request):
         
         # Format dates
         for compliance in compliances:
-            if compliance.get('CreatedDate'):
-                compliance['CreatedDate'] = compliance['CreatedDate'].strftime('%Y-%m-%d')
-            if compliance.get('UpdatedDate'):
-                compliance['UpdatedDate'] = compliance['UpdatedDate'].strftime('%Y-%m-%d')
+            if compliance.get('CreatedByDate'):
+                compliance['CreatedByDate'] = compliance['CreatedByDate'].strftime('%Y-%m-%d') if compliance['CreatedByDate'] else None
         
         return Response({
             'success': True,
@@ -9635,9 +9770,10 @@ def get_all_compliances_for_audit_management_public(request):
                     users auditor ON a.auditor = auditor.UserId
                 LEFT JOIN 
                     users reviewer ON a.reviewer = reviewer.UserId
+                WHERE c.TenantId = %s
                 ORDER BY 
                     f.FrameworkName, p.PolicyName, sp.SubPolicyName, c.ComplianceId
-            """)
+            """, [tenant_id])
             columns = [col[0] for col in cursor.description]
             compliances = [dict(zip(columns, row)) for row in cursor.fetchall()]
 

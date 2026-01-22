@@ -1179,6 +1179,13 @@ compliance_urlpatterns = [
     path('compliance/<int:compliance_id>/framework-info/', compliance_views.get_compliance_framework_info, name='get-compliance-framework-info'),
 
     path('compliance/<int:compliance_id>/', compliance_views.get_compliance_details, name='get-compliance-details'),
+    
+    # API-prefixed route for compliance details (must come before other api/compliance/ routes)
+    path('api/compliance/<int:compliance_id>/', compliance_views.get_compliance_details, name='api-get-compliance-details'),
+    
+    # PATCH endpoint for partial compliance updates
+    path('api/compliances/<int:compliance_id>/', compliance_views.patch_compliance, name='api-patch-compliance'),
+    
   # Cross-Framework Mapping
     path('api/compliance/cross-framework-check/', cross_framework_mapping_views.cross_framework_check, name='cross-framework-check'),
     path('api/compliance/cross-framework-mappings/<int:document_id>/', cross_framework_mapping_views.get_cross_framework_mappings, name='get-cross-framework-mappings'),
@@ -1422,6 +1429,8 @@ compliance_urlpatterns = [
     path('test-notification/', compliance_views.test_notification, name='test-notification'),
 
     # Compliance Approvals for User Tasks
+
+    path('api/compliance-approvals/', compliance_views.get_compliance_approvals, name='get_compliance_approvals'),
 
     path('compliance-approvals/user/<int:user_id>/', compliance_views.get_compliance_approvals_by_user, name='get_compliance_approvals_by_user'),
 
