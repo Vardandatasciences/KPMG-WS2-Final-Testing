@@ -841,10 +841,10 @@ def copy_review_data_from_r_to_a(audit_id, audit_data):
             # Get the latest R version
             cursor.execute("""
                 SELECT Version, ExtractedInfo FROM audit_version 
-                WHERE AuditId = %s AND Version LIKE 'R%'
+                WHERE AuditId = %s AND Version LIKE %s
                 ORDER BY Version DESC
                 LIMIT 1
-            """, [audit_id])
+            """, [audit_id, 'R%'])
             
             r_version_row = cursor.fetchone()
             if not r_version_row:
@@ -951,7 +951,9 @@ def create_audit_version(audit_id, user_id, custom_version=None):
         
         # Format the JSON
         json_data = json.dumps(audit_data, indent=2)
-        print(f"DEBUG: Formatted JSON structure for audit version:\n{json_data}")
+        # Don't use f-string here - json_data contains {} which f-strings interpret as format placeholders
+        print("DEBUG: Formatted JSON structure for audit version:")
+        print(json_data)
         
         # Insert into the audit_version table
         with connection.cursor() as cursor:
@@ -970,11 +972,13 @@ def create_audit_version(audit_id, user_id, custom_version=None):
             framework_id = framework_row[0] if framework_row else None
             
             # Execute the query with the correct column names
-            cursor.execute(
-                f"""
-                INSERT INTO audit_version (AuditId, Version, {data_column}, UserId, Date, FrameworkId) 
+            # Use string concatenation for column name to avoid f-string issues with JSON data containing {}
+            query = """
+                INSERT INTO audit_version (AuditId, Version, """ + data_column + """, UserId, Date, FrameworkId) 
                 VALUES (%s, %s, %s, %s, %s, %s)
-                """,
+            """
+            cursor.execute(
+                query,
                 [audit_id, version, json_data, user_id_int, datetime.datetime.now(), framework_id]  # Use integer ID
             )
             
@@ -3026,7 +3030,14 @@ def submit_audit_findings(request, audit_id):
     
     try:
         print(f"DEBUG: submit_audit_findings called for audit_id: {audit_id}")
-        print(f"DEBUG: Request data: {request.data}")
+        
+        # Safely access request data - handle cases where it might not be a dict
+        try:
+            request_data = request.data if hasattr(request, 'data') and isinstance(request.data, dict) else {}
+            print(f"DEBUG: Request data: {request_data}")
+        except Exception as data_error:
+            print(f"DEBUG: Error accessing request data: {str(data_error)}")
+            request_data = {}
         
         # Find the audit
         try:
@@ -3053,8 +3064,8 @@ def submit_audit_findings(request, audit_id):
         
         print(f"DEBUG: Audit {audit_id} status set to 'Under review' and ReviewStatus set to 0 (Yet to Start)")
         
-        # Extract overall comments if provided in request
-        overall_comments = request.data.get('overall_comments', 'Overall comments about the audit process')
+        # Extract overall comments if provided in request (safely get with default)
+        overall_comments = request_data.get('overall_comments', 'Overall comments about the audit process') if isinstance(request_data, dict) else 'Overall comments about the audit process'
         
         # Get all findings for this audit and mark them as checked if not already
         findings = AuditFinding.objects.filter(AuditId=audit_id)
@@ -3075,10 +3086,10 @@ def submit_audit_findings(request, audit_id):
         with connection.cursor() as cursor:
             cursor.execute("""
                 SELECT Version FROM audit_version 
-                WHERE AuditId = %s AND Version LIKE 'A%'
+                WHERE AuditId = %s AND Version LIKE %s
                 ORDER BY Version DESC
                 LIMIT 1
-            """, [audit_id])
+            """, [audit_id, 'A%'])
             
             existing_version = cursor.fetchone()
             if existing_version:
@@ -3095,15 +3106,33 @@ def submit_audit_findings(request, audit_id):
                     version = "A1"
         
         # Get all findings in structured JSON format
-        structured_json = get_audit_findings_json(audit_id, overall_comments)
-        print("DEBUG: Formatted JSON structure for audit findings:")
-        print(json.dumps(structured_json, indent=2))
+        try:
+            print(f"DEBUG: About to call get_audit_findings_json for audit_id: {audit_id}")
+            structured_json = get_audit_findings_json(audit_id, overall_comments)
+            print("DEBUG: get_audit_findings_json completed successfully")
+            print("DEBUG: Formatted JSON structure for audit findings:")
+            if structured_json:
+                print(json.dumps(structured_json, indent=2))
+            else:
+                print("DEBUG: structured_json is None")
+        except Exception as e:
+            print(f"ERROR in get_audit_findings_json call: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            raise
         
         # Create an audit version with the new version number
         version_result = None
         if user_id:
-            print(f"DEBUG: Creating audit version {version} with user_id: {user_id}")
-            version_result = create_audit_version(audit_id, user_id, version)
+            try:
+                print(f"DEBUG: Creating audit version {version} with user_id: {user_id}")
+                version_result = create_audit_version(audit_id, user_id, version)
+                print(f"DEBUG: create_audit_version completed, result: {version_result}")
+            except Exception as e:
+                print(f"ERROR in create_audit_version call: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                raise
         
         response_data = {
             'message': 'Audit submitted for review successfully',
@@ -3128,6 +3157,9 @@ def submit_audit_findings(request, audit_id):
         
     except Exception as e:
         print(f"ERROR in submit_audit_findings: {str(e)}")
+        import traceback
+        error_traceback = traceback.format_exc()
+        print(f"ERROR TRACEBACK:\n{error_traceback}")
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
  
@@ -3576,10 +3608,10 @@ def create_review_version(audit_id, user_id, compliance_reviews=None, overall_co
         with connection.cursor() as cursor:
             cursor.execute("""
                 SELECT ExtractedInfo FROM audit_version 
-                WHERE AuditId = %s AND Version LIKE 'A%'
+                WHERE AuditId = %s AND Version LIKE %s
                 ORDER BY Version DESC, Date DESC
                 LIMIT 1
-            """, [audit_id])
+            """, [audit_id, 'A%'])
             
             version_row = cursor.fetchone()
             if version_row:
@@ -6206,7 +6238,9 @@ def save_audit_version(request, audit_id):
         json_size = len(json_data)
         max_print_size = 10000  # 10KB limit for logs
         print(f"DEBUG: Version data JSON size: {json_size} bytes")
-        print(f"DEBUG: Complete JSON data (truncated if > 10KB):\n{json_data[:max_print_size]}")
+        # Don't use f-string here - json_data contains {} which f-strings interpret as format placeholders
+        print("DEBUG: Complete JSON data (truncated if > 10KB):")
+        print(json_data[:max_print_size])
         if json_size > max_print_size:
             print("... (JSON truncated due to size)")
         
@@ -6217,11 +6251,11 @@ def save_audit_version(request, audit_id):
             cursor.execute(
                 """
                 SELECT Version FROM audit_version 
-                WHERE AuditId = %s AND Version LIKE 'A%' 
+                WHERE AuditId = %s AND Version LIKE %s
                 ORDER BY CAST(SUBSTRING(Version, 2) AS UNSIGNED) DESC, Version DESC
                 LIMIT 1
                 """,
-                [audit_id]
+                [audit_id, 'A%']
             )
             
             row = cursor.fetchone()

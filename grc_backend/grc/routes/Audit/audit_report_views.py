@@ -42,7 +42,9 @@ def get_audit_reports(request):
             where_clause = where_clause.replace('%(framework_id)s', '%s')
         
         with connection.cursor() as cursor:
-            query = f"""
+            # Use string formatting instead of f-string to avoid issues with % characters in where_clause
+            # Count: 8 %s placeholders (1 in subquery + 7 in main query)
+            query = """
                 SELECT 
                     a.AuditId,
                     f.FrameworkName as Framework,
@@ -75,13 +77,10 @@ def get_audit_reports(request):
                 WHERE
                     a.Status = 'Completed'
                     AND a.TenantId = %s
-                    {where_clause}
-                ORDER BY
-                    a.CompletionDate DESC
-            """
+            """ + (where_clause if where_clause else "")
             
-            # Build execute_params list with tenant_id repeated 7 times
-            execute_params = [tenant_id] * 7
+            # Build execute_params list with tenant_id repeated 8 times (1 for subquery + 7 for main query)
+            execute_params = [tenant_id] * 8
             
             # Add framework_id if filter is active (params is a dict with framework_id)
             if isinstance(params, dict) and 'framework_id' in params:
