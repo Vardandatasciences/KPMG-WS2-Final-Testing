@@ -4581,7 +4581,7 @@ def get_risk_heatmap_data(request):
         
         # Apply policy filter - Need to filter through ComplianceId
         if policy_id and policy_id != 'all':
-            from grc2.models import Policy, SubPolicy, Compliance
+            from ...models import Policy, SubPolicy, Compliance
             try:
                 policy = Policy.objects.get(PolicyId=policy_id)
                 subpolicy_ids = SubPolicy.objects.filter(PolicyId=policy).values_list('SubPolicyId', flat=True)
@@ -4692,7 +4692,7 @@ def get_risks_by_heatmap_coordinates(request, impact, likelihood):
         
         # Apply policy filter - Need to filter through ComplianceId
         if policy_id and policy_id != 'all':
-            from grc2.models import Policy, SubPolicy, Compliance
+            from ...models import Policy, SubPolicy, Compliance
             try:
                 policy = Policy.objects.get(PolicyId=policy_id)
                 subpolicy_ids = SubPolicy.objects.filter(PolicyId=policy).values_list('SubPolicyId', flat=True)
@@ -4827,7 +4827,7 @@ def risk_trend_over_time(request):
         
         # Apply policy filter - Need to filter through ComplianceId
         if policy_id and policy_id != 'all':
-            from grc2.models import Policy, SubPolicy, Compliance
+            from ...models import Policy, SubPolicy, Compliance
             try:
                 policy = Policy.objects.get(PolicyId=policy_id)
                 subpolicy_ids = SubPolicy.objects.filter(PolicyId=policy).values_list('SubPolicyId', flat=True)
@@ -5579,7 +5579,7 @@ def risk_metrics_by_category(request):
     
     # Apply policy filter - Need to filter through ComplianceId
     if policy_id and policy_id != 'all':
-        from grc2.models import Policy, SubPolicy, Compliance
+        from ...models import Policy, SubPolicy, Compliance
         try:
             policy = Policy.objects.get(PolicyId=policy_id)
             subpolicy_ids = SubPolicy.objects.filter(PolicyId=policy).values_list('SubPolicyId', flat=True)

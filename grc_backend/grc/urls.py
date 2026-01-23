@@ -329,9 +329,7 @@ from .routes.Audit.audit_views import (
 
     load_continuing_data, load_audit_continuing_data, save_audit_json_version,
 
-    get_audit_compliances, get_subpolicies, export_audit_compliances,
-
-    allocate_policy
+    get_audit_compliances, get_subpolicies, export_audit_compliances
 
 )
 
@@ -1185,6 +1183,9 @@ compliance_urlpatterns = [
     # API-prefixed route for compliance details (must come before other api/compliance/ routes)
     path('api/compliance/<int:compliance_id>/', compliance_views.get_compliance_details, name='api-get-compliance-details'),
     
+    # PATCH endpoint for partial compliance updates
+    # path('api/compliances/<int:compliance_id>/', compliance_views.patch_compliance, name='api-patch-compliance'),
+        
   # Cross-Framework Mapping
     path('api/compliance/cross-framework-check/', cross_framework_mapping_views.cross_framework_check, name='cross-framework-check'),
     path('api/compliance/cross-framework-mappings/<int:document_id>/', cross_framework_mapping_views.get_cross_framework_mappings, name='get-cross-framework-mappings'),
@@ -1482,8 +1483,6 @@ audit_urlpatterns = [
     path('assign-data/', get_assign_data, name='get_assign_data'),
 
     path('create-audit/', create_audit, name='create_audit'),
-
-    path('api/allocate-policy/', allocate_policy, name='allocate_policy'),
 
     
 
